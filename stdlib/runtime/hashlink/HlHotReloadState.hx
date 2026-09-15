@@ -49,8 +49,8 @@ class HlHotReloadGeneration {
 
 	This is deliberately single-threaded until atomic publication is available.
 	It stages a complete candidate, validates metadata and stable function identity,
-	then publishes both as one policy transition. Native code-address installation
-	remains a separate kernel operation.
+	then publishes both as one policy transition. Native commits retain one stable
+	dispatch target and hand code-address installation to the small kernel bridge.
 */
 class HlHotReloadState {
 	public final metadata:HlMetadataRegistry;
@@ -60,6 +60,8 @@ class HlHotReloadState {
 
 	var current:Null<HlHotReloadGeneration>;
 	final retired:Array<HlHotReloadGeneration> = [];
+	var nativePatchTarget:Null<HlNativeModule>;
+	final nativePatchOwners:Array<HlNativeModule> = [];
 	var disposed:Bool = false;
 
 	public function new(?metadata:HlMetadataRegistry) {
@@ -120,6 +122,12 @@ class HlHotReloadState {
 	public function currentLease():HlHotReloadLease
 		return currentGeneration().acquire();
 
+	/** Return the stable native dispatch target, when native commits are active. */
+	public function nativeDispatchModule():Null<HlNativeModule> {
+		requireOpen();
+		return nativePatchTarget;
+	}
+
 	/** Dispose unborrowed superseded generations and return the number reclaimed. */
 	public function disposeRetired():Int {
 		requireOpen();
@@ -147,11 +155,21 @@ class HlHotReloadState {
 		var currentGeneration = current;
 		if (currentGeneration != null && currentGeneration.borrowerCount() != 0)
 			throw "HashLink hot-reload state has a borrowed current generation";
-		for (generation in retired)
-			if (!unloadNativeModule(generation))
+		if (nativePatchTarget != null) {
+			for (index in 0...nativePatchOwners.length) {
+				var nativeModule = nativePatchOwners[nativePatchOwners.length - index - 1];
+				if (!nativeModule.unload())
+					throw "HashLink native hot-reload module could not be unloaded";
+			}
+			nativePatchOwners.resize(0);
+			nativePatchTarget = null;
+		} else {
+			for (generation in retired)
+				if (!unloadNativeModule(generation))
+					throw "HashLink native hot-reload module could not be unloaded";
+			if (currentGeneration != null && !unloadNativeModule(currentGeneration))
 				throw "HashLink native hot-reload module could not be unloaded";
-		if (currentGeneration != null && !unloadNativeModule(currentGeneration))
-			throw "HashLink native hot-reload module could not be unloaded";
+		}
 		for (generation in retired)
 			if (generation.metadata.borrowerCount() != 0)
 				throw "HashLink hot-reload state has borrowed retired metadata";
@@ -166,6 +184,8 @@ class HlHotReloadState {
 	@:allow(runtime.hashlink.HlHotReloadTransaction)
 	function commit(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, structuralReload:Bool):HlHotReloadGeneration {
 		requireOpen();
+		if (nativePatchTarget != null)
+			throw "HashLink native hot-reload state requires native commits after its dispatch target is initialized";
 		if (metadata.revision != revision)
 			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
 		var publication = structuralReload ? metadata.reload(candidate) : metadata.publish(candidate);
@@ -176,19 +196,35 @@ class HlHotReloadState {
 	function commitNative(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, flags:Int,
 			structuralReload:Bool):HlHotReloadGeneration {
 		requireOpen();
+		if (nativePatchTarget != null && structuralReload)
+			throw "HashLink native structural reload requires a new dispatch target";
 		if (metadata.revision != revision)
 			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
-		if (!candidate.isPublished())
-			candidate.publish();
-		var nativeModule:HlNativeModule;
+		var nativeModule:Null<HlNativeModule> = null;
 		try {
-			nativeModule = new HlNativeModule(candidate, flags);
+			if (!candidate.isPublished())
+				candidate.publish();
+			nativeModule = new HlNativeModule(candidate, flags | HlNativeModule.PatchableFlag);
+			if (nativePatchTarget != null && !nativePatchTarget.patchGeneration(nativeModule))
+				throw "HashLink native generation is not patch-compatible with its dispatch target";
+			nativePatchOwners.push(nativeModule);
+			if (nativePatchTarget == null)
+				nativePatchTarget = nativeModule;
+			var publication = metadata.adoptPublished(candidate);
+			return finishCommit(candidate, functions, publication, nativeModule);
 		} catch (error:Dynamic) {
+			if (nativeModule != null && !nativeModule.isLoaded())
+				nativeModule = null;
+			if (nativeModule != null) {
+				if (nativePatchOwners.length > 0 && nativePatchOwners[nativePatchOwners.length - 1] == nativeModule)
+					nativePatchOwners.pop();
+				if (nativePatchTarget == nativeModule)
+					nativePatchTarget = null;
+				nativeModule.unload();
+			}
 			candidate.dispose();
 			throw error;
 		}
-		var publication = metadata.adoptPublished(candidate);
-		return finishCommit(candidate, functions, publication, nativeModule);
 	}
 
 	function finishCommit(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, publication:HlMetadataPublication,
@@ -204,8 +240,14 @@ class HlHotReloadState {
 		return published;
 	}
 
-	static function unloadNativeModule(generation:HlHotReloadGeneration):Bool {
-		return generation.nativeModule == null || generation.nativeModule.unload();
+	function unloadNativeModule(generation:HlHotReloadGeneration):Bool {
+		var nativeModule = generation.nativeModule;
+		if (nativeModule == null)
+			return true;
+		for (owner in nativePatchOwners)
+			if (owner == nativeModule)
+				return false;
+		return nativeModule.unload();
 	}
 
 	function validateFunctionTable(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):Void {

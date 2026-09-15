@@ -169,9 +169,14 @@ function main():Int {
 		nativeNext = buildNativeGeneration(31),
 		nativeNextTransaction = nativeState.stage(nativeNext.metadata, nativeNext.functions),
 		nativeNextGeneration = nativeNextTransaction.commitNative(),
-		nativeRetired = nativeState.retiredCount == 1 && nativeState.disposeRetired() == 1 && nativeState.retiredCount == 0,
-		nativeCurrentLoaded = nativeNextGeneration.nativeModule != null && nativeNextGeneration.nativeModule.isLoaded();
+		nativeDispatchStable = nativeState.nativeDispatchModule() == nativeInitialGeneration.nativeModule,
+		nativeRetired = nativeState.retiredCount == 1 && nativeState.disposeRetired() == 0 && nativeState.retiredCount == 1,
+		nativeCurrentLoaded = nativeNextGeneration.nativeModule != null
+			&& nativeNextGeneration.nativeModule.isLoaded()
+			&& nativeState.nativeDispatchModule() != null
+			&& nativeState.nativeDispatchModule().isLoaded();
 	nativeState.dispose();
 	return appendCompatible && signatureRejected && reloadWorked && patchWorked && signatureReplacementRejected && identityRejected && transactionState
-		&& retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeRetired && nativeCurrentLoaded ? 42 : 1;
+		&& retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeDispatchStable && nativeRetired
+		&& nativeCurrentLoaded ? 42 : 1;
 }
