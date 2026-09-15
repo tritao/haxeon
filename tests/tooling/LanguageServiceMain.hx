@@ -599,6 +599,29 @@ class LanguageServiceMain {
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
+		var transitionService = new LanguageService(),
+			validEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo.knownFoo; }";
+		transitionService.update("Transition.hx", validEditorSource);
+		transitionService.analyze("Transition");
+		var validPosition = validEditorSource.indexOf("foo.knownFoo") + "foo.".length,
+			validReceiverPosition = validEditorSource.indexOf("foo.knownFoo") + 1,
+			validId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
+		if (validId == null || transitionService.completeResult("Transition.hx", validPosition).isIncomplete)
+			throw "valid editor snapshot was not complete before a recovery transition";
+		var incompleteEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo. }";
+		transitionService.update("Transition.hx", incompleteEditorSource);
+		var recoveredPosition = incompleteEditorSource.indexOf("foo.") + "foo.".length,
+			recoveredResult = transitionService.completeResult("Transition.hx", recoveredPosition),
+			recoveredId = transitionService.compiler.modules.get("Transition").recoveredSemanticModel.index.symbolIdAt(
+			incompleteEditorSource.indexOf("foo.") + 1);
+		if (!recoveredResult.isIncomplete || recoveredId == null || Std.string(recoveredId) != Std.string(validId))
+			throw 'recovery transition did not preserve the local semantic identity: valid=${Std.string(validId)} recovered=${Std.string(recoveredId)}';
+		transitionService.update("Transition.hx", validEditorSource);
+		transitionService.analyze("Transition");
+		var restored = transitionService.completeResult("Transition.hx", validPosition),
+			restoredId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
+		if (restored.isIncomplete || restoredId == null || Std.string(restoredId) != Std.string(validId))
+			throw "valid editor snapshot did not replace recovery with the original semantic identity";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

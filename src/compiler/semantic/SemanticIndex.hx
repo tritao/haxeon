@@ -99,6 +99,7 @@ class SemanticIndex {
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final recoveredFunctions:Map<String, AstFunction> = [];
+	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
@@ -271,6 +272,7 @@ class SemanticIndex {
 
 	function indexRecoveredFunction(fn:AstFunction, owner:Null<String>):Void {
 		var functionKey = (owner == null ? "" : owner + ".") + fn.name;
+		recoveredLocalNext.set(functionKey, owner != null && !fn.isStatic ? 1 : 0);
 		var functionId = recoveredDeclaredSymbol(functionKey);
 		if (functionId != null) {
 			var parameters = [for (argument in fn.arguments) argument.name + ":" + displayAstType(argument.type)];
@@ -329,7 +331,9 @@ class SemanticIndex {
 		var token = declarationToken(tokens, declaration, name);
 		if (token == null)
 			return;
-		var id = new SemanticSymbolId(module, 'local:$functionKey:$name');
+		var next = recoveredLocalNext.exists(functionKey) ? recoveredLocalNext.get(functionKey) : 0;
+		recoveredLocalNext.set(functionKey, next + 1);
+		var id = new SemanticSymbolId(module, 'local:' + functionKey + ':' + '$' + 'l' + next + ':' + name);
 		if (!symbols.exists(id)) {
 			symbols.set(id, {
 				id: id,
