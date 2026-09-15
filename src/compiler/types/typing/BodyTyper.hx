@@ -146,6 +146,9 @@ class BodyTyper {
 			});
 	}
 
+	public function recoveryDiagnostics():Array<Diagnostic>
+		return session.recoveryDiagnostics.copy();
+
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
 		var result:Map<String, CompilerType> = [];
 		for (parameter in parameters)
@@ -385,6 +388,10 @@ class BodyTyper {
 			} catch (error:Dynamic) {
 				if (Std.isOfType(error, CancellationError))
 					throw error;
+				if (Std.isOfType(error, CompileError)) {
+					var compileError:CompileError = cast error;
+					session.rememberRecoveryDiagnostic(compileError.diagnostic);
+				}
 				retainRecoveredDeclaration(statement, scope);
 				var span = statementSpan(statement);
 				output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
@@ -1239,6 +1246,7 @@ class BodyTyper {
 		} catch (error:CompileError) {
 			if (!session.tolerant)
 				throw error;
+			session.rememberRecoveryDiagnostic(error.diagnostic);
 			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
 		} catch (error:Dynamic) {
 			if (Std.isOfType(error, CancellationError) || !session.tolerant)

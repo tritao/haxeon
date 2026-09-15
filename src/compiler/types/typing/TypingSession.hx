@@ -5,6 +5,8 @@ import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstFunction;
+import compiler.Diagnostic;
+import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -54,6 +56,10 @@ class TypingSession {
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
+
+	/** Diagnostics captured when tolerant editor typing localizes a failure. */
+	public final recoveryDiagnostics:Array<Diagnostic> = [];
+
 	public var functionAdapterCounter:Int = 0;
 	public final representation:TypeRepresentation;
 
@@ -75,6 +81,18 @@ class TypingSession {
 	public inline function checkpoint():Void {
 		if (checkpointCallback != null)
 			checkpointCallback();
+	}
+
+	public function rememberRecoveryDiagnostic(diagnostic:Diagnostic):Void {
+		diagnostic.origin = DiagnosticOrigin.Semantic;
+		for (existing in recoveryDiagnostics)
+			if (existing.code == diagnostic.code
+				&& existing.span.file.path == diagnostic.span.file.path
+				&& existing.span.start == diagnostic.span.start
+				&& existing.span.end == diagnostic.span.end
+				&& existing.message == diagnostic.message)
+				return;
+		recoveryDiagnostics.push(diagnostic);
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {

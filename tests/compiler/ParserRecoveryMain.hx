@@ -584,6 +584,12 @@ class ParserRecoveryMain {
 		if (semanticDiagnostics.length == 0 || semanticDiagnostics[0].origin != DiagnosticOrigin.Semantic)
 			throw 'type diagnostics were relabeled as recovery: ${[for (diagnostic in semanticDiagnostics) diagnostic.message + "/" + Std.string(diagnostic.origin)].join(", ")}';
 
+		var immediateSemanticService = new LanguageService();
+		immediateSemanticService.update("ImmediateSemanticDiagnostic.hx", "function main():Void { var value:Int = \"wrong\"; }");
+		var immediateSemanticDiagnostics = immediateSemanticService.diagnostics("ImmediateSemanticDiagnostic.hx");
+		if (immediateSemanticDiagnostics.length == 0 || immediateSemanticDiagnostics[0].origin != DiagnosticOrigin.Semantic)
+			throw 'localized recovery typing did not publish semantic provenance immediately: ${[for (diagnostic in immediateSemanticDiagnostics) diagnostic.message + "/" + Std.string(diagnostic.origin)].join(", ")}';
+
 		var lexicalService = new LanguageService();
 		lexicalService.update("LexicalDiagnostic.hx", "function main():Void return \"");
 		var lexicalDiagnostics = lexicalService.diagnostics("LexicalDiagnostic.hx");

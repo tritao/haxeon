@@ -285,8 +285,9 @@ class LanguageService {
 		}
 		try {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
-			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
-			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint);
+			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
+				typingDiagnostics:Array<Diagnostic> = [];
+			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics);
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return resolveRecoveredSymbol(recovered.program, name),
 				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index));
@@ -295,6 +296,7 @@ class LanguageService {
 			state.recoveredSemanticModel = recoveredModel;
 			recoveredSnapshotBuilds++;
 			mergeRecoveryDiagnostics(state, recovered.diagnostics);
+			mergeRecoveryDiagnostics(state, typingDiagnostics);
 		} catch (error:CompileError) {
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			// Parser recovery itself failed. Keep the last-good semantic snapshot
