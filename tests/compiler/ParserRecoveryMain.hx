@@ -93,6 +93,7 @@ class ParserRecoveryMain {
 		assertRecoveryCancellation();
 		assertDiagnosticOrigins();
 		assertTruncationRecovery();
+		assertTolerantTruncationTyping();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
 
@@ -835,6 +836,16 @@ class ParserRecoveryMain {
 			case VarDeclaration("<missing>", _, ErrorExpression(_), _):
 			default:
 				throw "malformed local declaration did not preserve a missing name and expression";
+		}
+	}
+
+	static function assertTolerantTruncationTyping():Void {
+		var source = "class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function helper(value:Int):Int return value; function main():Int { var box:Box = new Box(); var values = [1, 2]; return box.read(";
+		for (end in 0...source.length + 1) {
+			var file = new SourceFile("TolerantTruncated.hx", source.substring(0, end)),
+				program = new Parser(new Lexer(file).tokenize()).parseProgramRecovering().program;
+			if (Typer.typeRecovered(program) == null)
+				throw 'tolerant typing abandoned ordinary prefix $end';
 		}
 	}
 }
