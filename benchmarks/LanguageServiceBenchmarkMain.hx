@@ -14,6 +14,10 @@ private typedef Sample = {
 	final definitionMs:Float;
 	final analysisMs:Float;
 	final recoveredSnapshots:Int;
+	final workspaceUpdateMs:Float;
+	final workspaceCompletionMs:Float;
+	final malformedUpdateMs:Float;
+	final malformedCompletionMs:Float;
 	final totalMs:Float;
 }
 
@@ -52,7 +56,7 @@ class LanguageServiceBenchmarkMain {
 			samples = [for (_ in 0...iterations) runIteration()],
 			after = processMemory();
 		var report = {
-			version: 2,
+			version: 3,
 			iterations: iterations,
 			warmup: warmup,
 			platform: Sys.systemName(),
@@ -65,6 +69,10 @@ class LanguageServiceBenchmarkMain {
 			hoverMs: percentiles([for (sample in samples) sample.hoverMs]),
 			definitionMs: percentiles([for (sample in samples) sample.definitionMs]),
 			analysisMs: percentiles([for (sample in samples) sample.analysisMs]),
+			workspaceUpdateMs: percentiles([for (sample in samples) sample.workspaceUpdateMs]),
+			workspaceCompletionMs: percentiles([for (sample in samples) sample.workspaceCompletionMs]),
+			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
+			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
 			recoveredSnapshots: {
 				total: sumSnapshots(samples),
 				average: sumSnapshots(samples) / samples.length
@@ -85,6 +93,10 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Hover median/p95/p99: ${format(report.hoverMs.median)}/${format(report.hoverMs.p95)}/${format(report.hoverMs.p99)} ms');
 		Sys.println('Definition median/p95/p99: ${format(report.definitionMs.median)}/${format(report.definitionMs.p95)}/${format(report.definitionMs.p99)} ms');
 		Sys.println('Analysis median/p95/p99: ${format(report.analysisMs.median)}/${format(report.analysisMs.p95)}/${format(report.analysisMs.p99)} ms');
+		Sys.println('Workspace update median/p95/p99: ${format(report.workspaceUpdateMs.median)}/${format(report.workspaceUpdateMs.p95)}/${format(report.workspaceUpdateMs.p99)} ms');
+		Sys.println('Workspace completion median/p95/p99: ${format(report.workspaceCompletionMs.median)}/${format(report.workspaceCompletionMs.p95)}/${format(report.workspaceCompletionMs.p99)} ms');
+		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
+		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
 		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
 		Sys.println('JSON: $output');
 	}
@@ -119,6 +131,7 @@ class LanguageServiceBenchmarkMain {
 			service.analyze("EditorBenchmark")
 		catch (_:Dynamic) {}
 		analysisMs = (Sys.time() - queryStarted) * 1000.0;
+		var workspace = runWorkspaceScenario();
 		return {
 			updateMs: updateMs,
 			completionMs: completionMs,
@@ -127,8 +140,53 @@ class LanguageServiceBenchmarkMain {
 			definitionMs: definitionMs,
 			analysisMs: analysisMs,
 			recoveredSnapshots: service.recoveredSnapshotBuilds,
+			workspaceUpdateMs: workspace.workspaceUpdateMs,
+			workspaceCompletionMs: workspace.workspaceCompletionMs,
+			malformedUpdateMs: workspace.malformedUpdateMs,
+			malformedCompletionMs: workspace.malformedCompletionMs,
 			totalMs: (Sys.time() - started) * 1000.0
 		};
+	}
+
+	static function runWorkspaceScenario():{
+		workspaceUpdateMs:Float,
+		workspaceCompletionMs:Float,
+		malformedUpdateMs:Float,
+		malformedCompletionMs:Float
+	} {
+		var service = new LanguageService();
+		service.update("bench/Foo.hx", "package bench; class Foo { public var knownFoo:Int; }");
+		var source = "package bench; function main():Int { var foo:Foo = new Foo(); return foo. }",
+			started = Sys.time();
+		service.update("bench/Main.hx", source);
+		var workspaceUpdateMs = (Sys.time() - started) * 1000.0;
+		started = Sys.time();
+		var completion = service.completeResult("bench/Main.hx", source.lastIndexOf("foo.") + "foo.".length);
+		var workspaceCompletionMs = (Sys.time() - started) * 1000.0;
+		if (!completion.isIncomplete || !hasLabel(completion.items, "knownFoo"))
+			throw "multi-module recovery benchmark lost current member completion";
+		var malformed = "package bench; function main():Int { var foo:Foo = new Foo(); broken.unresolved().thing; return foo. }";
+		started = Sys.time();
+		service.update("bench/Main.hx", malformed);
+		var malformedUpdateMs = (Sys.time() - started) * 1000.0;
+		started = Sys.time();
+		completion = service.completeResult("bench/Main.hx", malformed.lastIndexOf("foo.") + "foo.".length);
+		var malformedCompletionMs = (Sys.time() - started) * 1000.0;
+		if (!completion.isIncomplete || !hasLabel(completion.items, "knownFoo"))
+			throw "malformed multi-module recovery benchmark lost member completion";
+		return {
+			workspaceUpdateMs: workspaceUpdateMs,
+			workspaceCompletionMs: workspaceCompletionMs,
+			malformedUpdateMs: malformedUpdateMs,
+			malformedCompletionMs: malformedCompletionMs
+		};
+	}
+
+	static function hasLabel(items:Array<compiler.service.LanguageService.CompletionItem>, label:String):Bool {
+		for (item in items)
+			if (item.label == label)
+				return true;
+		return false;
 	}
 
 	static function percentiles(values:Array<Float>):Percentiles {
