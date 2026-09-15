@@ -148,6 +148,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
   There is no second typechecker.
+- [~] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
+  completion, signature-help latency, and process-memory growth under rapid
+  incomplete edits; representative workspace budgets remain to be defined.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).

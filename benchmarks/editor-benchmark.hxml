@@ -1,0 +1,4 @@
+-cp src
+-cp benchmarks
+-main LanguageServiceBenchmarkMain
+-hl out/editor-benchmark.hl
