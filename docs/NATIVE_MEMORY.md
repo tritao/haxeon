@@ -153,6 +153,13 @@ Consumers that retain a publication use `HlMetadataRegistry.currentLease()`;
 `disposeRetired()` skips generations with active leases and reports only actual
 disposals. Registry shutdown likewise refuses to reclaim a borrowed current or
 retired generation.
+`HlFunctionVersionTable` now keeps the Haxe-side stable-ID-to-slot mapping and
+the versioned entrypoint/signature state separate from those native arrays.
+`HlHotReloadState` stages metadata and a complete function-version snapshot as
+one single-threaded policy transaction, rejects stable slot or signature drift
+for in-place patches, and exposes borrower-aware retired generations. It still
+does not install executable addresses; that remains the deliberately small
+native JIT/kernel boundary.
 
 ## Deliberate exclusions
 
