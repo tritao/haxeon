@@ -40,10 +40,24 @@ typedef SemanticCompletionLocal = {
 	final depth:Int;
 }
 
+enum SemanticCompletionContextKind {
+	Expression;
+	Member;
+	Type;
+	Argument;
+}
+
 typedef SemanticCompletionContext = {
 	final locals:Array<SemanticCompletionLocal>;
 	final receiver:Null<CompilerType>;
 	final expected:Null<CompilerType>;
+	final kind:SemanticCompletionContextKind;
+}
+
+typedef UnresolvedSymbol = {
+	final name:String;
+	final span:SourceSpan;
+	final candidates:Array<SemanticSymbolId>;
 }
 
 typedef SemanticSignatureInfo = {
@@ -85,6 +99,7 @@ class SemanticIndex {
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final recoveredFunctions:Map<String, AstFunction> = [];
+	final unresolved:Array<UnresolvedSymbol> = [];
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
 	final module:String;
@@ -377,15 +392,23 @@ class SemanticIndex {
 			}
 	}
 
-function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType):Void {
+	function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerType):Void {
 		switch expression {
 			case ErrorExpression(span):
 				if (expected != null)
 					completionTypes.push({span: span, type: expected});
 			case Variable(name, span):
 				var separator = name.indexOf(".");
-				if (separator < 0)
-					bindRecoveredLocal(name, span);
+				if (separator < 0) {
+					var local = bindRecoveredLocal(name, span);
+					if (local == null) {
+						var declaration = recoveredDeclaredSymbol(name);
+						if (declaration != null)
+							bind(declaration, referenceToken(tokens, span, name) == null ? span : referenceToken(tokens, span, name).span);
+						else
+							recordUnresolved(name, span);
+					}
+				}
 				else {
 					var receiver = name.substring(0, separator),
 						member = name.substring(name.lastIndexOf(".") + 1);
@@ -394,7 +417,8 @@ function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerTy
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object);
-				bindRecoveredMember(object, name, span);
+				if (bindRecoveredMember(object, name, span) == null && name.length > 0)
+					recordUnresolved(name, span);
 			case Call(name, arguments, span):
 				var local = bindRecoveredLocal(name, span);
 				if (local == null) {
@@ -404,7 +428,8 @@ function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerTy
 						if (token != null)
 							bind(callee, token.span);
 						addCall(callee, span, name);
-					}
+					} else
+					recordUnresolved(name, span);
 				}
 				indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
 			case ClosureCall(callee, arguments, _):
@@ -415,6 +440,8 @@ function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerTy
 				indexRecoveredExpression(object);
 				var callee = bindRecoveredMember(object, name, span);
 				addCall(callee, span, name);
+				if (callee == null)
+					recordUnresolved(name, span);
 				var owner = memberOwner(recoveredExpressionBindingType(object));
 				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + name));
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
@@ -530,6 +557,19 @@ function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerTy
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: TUnknown;
 		};
+
+	function recordUnresolved(name:String, span:SourceSpan):Void {
+		if (name.length == 0)
+			return;
+		for (existing in unresolved)
+			if (existing.name == name && existing.span.start == span.start && existing.span.end == span.end)
+				return;
+		var candidates:Array<SemanticSymbolId> = [];
+		for (symbol in symbols)
+			if (symbol.name == name || sourceName(symbol.name) == name)
+				candidates.push(symbol.id);
+		unresolved.push({name: name, span: span, candidates: candidates});
+	}
 
 	function recoveredType(type:AstType):CompilerType {
 		return switch type {
@@ -727,7 +767,22 @@ function indexRecoveredExpression(expression:AstExpression, ?expected:CompilerTy
 					expectedWidth = width;
 				}
 			}
-		return {locals: locals, receiver: receiver, expected: expected};
+		return {
+			locals: locals,
+			receiver: receiver,
+			expected: expected,
+			kind: qualifier != null ? SemanticCompletionContextKind.Member : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression
+		};
+	}
+
+	public function unresolvedSymbols():Array<UnresolvedSymbol>
+		return unresolved.copy();
+
+	public function unresolvedAt(position:Int):Null<UnresolvedSymbol> {
+		for (symbol in unresolved)
+			if (position >= symbol.span.start && position <= symbol.span.end)
+				return symbol;
+		return null;
 	}
 
 	public function typeAt(position:Int):Null<CompilerType> {

@@ -33,11 +33,8 @@ class ParserRecoveryMain {
 			highlights = service.documentHighlights("Main.hx", boxUse + 1);
 		if (definition == null || definition.span.start != boxDeclaration || definition.stale)
 			throw 'recovered local definition did not resolve to the current declaration: ${definition == null ? "null" : definition.span.start + ":" + definition.stale} expected $boxDeclaration';
-		if (references.length < 2 || rename.length != references.length || highlights.length != references.length)
+		if (references.length < 2 || rename.length != 0 || highlights.length != references.length)
 			throw "recovered local references, rename, or highlights were incomplete";
-		for (edit in rename)
-			if (edit.stale)
-				throw "recovered rename produced stale edits";
 		var valueUse = source.lastIndexOf("value;"),
 			valueDeclaration = source.indexOf("value:Int"),
 			memberDefinition = service.definition("Main.hx", valueUse + 1);

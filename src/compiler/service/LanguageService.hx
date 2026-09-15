@@ -1199,7 +1199,7 @@ class LanguageService {
 			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
 			result:Array<TextEdit> = [];
-		if (!stableSymbol(context) || name == null || !isIdentifier(replacement) || replacement == name)
+		if (context == null || context.confidence != EditorSnapshotConfidence.Exact || name == null || !isIdentifier(replacement) || replacement == name)
 			return result;
 		var targetReferences = references(path, position);
 		if (indexedRenameCollides(indexedId, replacement, targetReferences))
@@ -1557,6 +1557,8 @@ class LanguageService {
 	}
 
 	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
+		if (actual == TUnknown || actual == TError || expected == TUnknown || expected == TError)
+			return true;
 		if (TypeRelations.equals(actual, expected))
 			return true;
 		return switch expected {
