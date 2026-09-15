@@ -287,12 +287,20 @@ class BodyTyper {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
 			var argumentValueType = argumentType(argument, substitutions);
-			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType))
-				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
+			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType)) {
+				if (!session.tolerant)
+					fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1022",
+					'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span));
+			}
 		}
 		var result = resolveType(fn.result, substitutions);
-		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
-			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
+		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result)) {
+			if (!session.tolerant)
+				fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1022",
+				'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span));
+		}
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);

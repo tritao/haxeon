@@ -160,8 +160,11 @@ class ProgramTyper {
 		for (enumDecl in typedEnums)
 			for (caseDecl in enumDecl.cases)
 				for (parameter in caseDecl.params)
-					if (NativeLayout.containsNativeLayoutType(parameter))
+					if (NativeLayout.containsNativeLayoutType(parameter)) {
+						if (!session.tolerant)
 						BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
+						rememberRecoveryDiagnostic("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
+					}
 		for (interfaceIndex in 0...typedInterfaces.length) {
 			var interfaceDecl = typedInterfaces[interfaceIndex],
 				parsed = program.interfaces[interfaceIndex];
@@ -169,10 +172,16 @@ class ProgramTyper {
 				var method = interfaceDecl.methods[methodIndex],
 					parsedMethod = parsed.methods[methodIndex];
 				for (argument in method.arguments)
-					if (NativeLayout.containsNativeLayoutType(argument))
-						BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
-				if (NativeLayout.containsNativeLayoutType(method.result))
-					BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+					if (NativeLayout.containsNativeLayoutType(argument)) {
+						if (!session.tolerant)
+							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
+						rememberRecoveryDiagnostic("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
+					}
+				if (NativeLayout.containsNativeLayoutType(method.result)) {
+					if (!session.tolerant)
+						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+					rememberRecoveryDiagnostic("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+				}
 			}
 		}
 		typedClasses = layoutNativeClasses(typedClasses);

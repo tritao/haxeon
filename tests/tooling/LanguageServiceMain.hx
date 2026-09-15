@@ -989,6 +989,16 @@ class LanguageServiceMain {
 		if (!foundUnresolvedType
 			|| unresolvedService.unresolvedSymbolAt("UnresolvedType.hx", unresolvedTypeSource.indexOf("MissingType") + 1) == null)
 			throw "recovered unresolved type references were not exposed through the language service";
+		var localRecoveredNavigationService = new LanguageService(),
+			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
+		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
+		var localRecoveredTypePosition = localRecoveredNavigationSource.indexOf(":LocalType") + 2,
+			localRecoveredTypeDefinition = localRecoveredNavigationService.definition("LocalRecovered.hx", localRecoveredTypePosition),
+			localRecoveredTypeReferences = localRecoveredNavigationService.references("LocalRecovered.hx", localRecoveredTypePosition);
+		if (localRecoveredTypeDefinition == null
+			|| localRecoveredTypeDefinition.path != "LocalRecovered.hx"
+			|| localRecoveredTypeReferences.length < 2)
+			throw "recovered same-module type identity was lost around a malformed statement";
 		var removalService = new LanguageService();
 		removalService.update("removed/Helper.hx", "package removed; class Helper { public var obsolete:Int; } function main():Void return;");
 		var removalSource = "package removed; import removed.Helper; function main():Void { var helper:Helper = new Helper(); helper.";

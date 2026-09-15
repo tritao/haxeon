@@ -722,6 +722,26 @@ class ParserRecoveryMain {
 			default:
 				throw "incomplete parameter type did not become TUnknown";
 		}
+
+		var unsupportedSignatureSource = new SourceFile("TolerantUnsupportedSignature.hx",
+			"function broken(value:Int32):Int32 return value; function usable(value:Int):Int return value;");
+		var unsupportedSignatureProgram = new Parser(new Lexer(unsupportedSignatureSource).tokenize()).parseProgramRecovering().program,
+			unsupportedSignatureTyped = Typer.typeRecovered(unsupportedSignatureProgram);
+		if (unsupportedSignatureTyped == null
+			|| unsupportedSignatureTyped.functions.length != 2
+			|| unsupportedSignatureTyped.functions[1].name != "usable")
+			throw "tolerant typing abandoned a valid function after an unsupported signature type";
+
+		var unsupportedDeclarationSource = new SourceFile("TolerantUnsupportedDeclaration.hx",
+			"interface Contract { function broken(value:Int32):Int32; function usable(value:Int):Int; } enum Choice { Broken(value:Int32); Usable; } function main():Void return;");
+		var unsupportedDeclarationProgram = new Parser(new Lexer(unsupportedDeclarationSource).tokenize()).parseProgramRecovering().program,
+			unsupportedDeclarationTyped = Typer.typeRecovered(unsupportedDeclarationProgram);
+		if (unsupportedDeclarationTyped == null
+			|| unsupportedDeclarationTyped.interfaces.length != 1
+			|| unsupportedDeclarationTyped.interfaces[0].methods.length != 2
+			|| unsupportedDeclarationTyped.enums.length != 1
+			|| unsupportedDeclarationTyped.enums[0].cases.length != 2)
+			throw "tolerant typing abandoned declarations after unsupported interface or enum layout types";
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {
