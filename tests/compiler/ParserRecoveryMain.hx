@@ -314,11 +314,26 @@ class ParserRecoveryMain {
 		if (parserDiagnostics.length == 0 || parserDiagnostics[0].origin != DiagnosticOrigin.ParserRecovery)
 			throw 'background analysis obscured parser recovery provenance: ${[for (diagnostic in parserDiagnostics) diagnostic.message + "/" + Std.string(diagnostic.origin)].join(", ")}';
 
+		var semanticService = new LanguageService();
+		semanticService.update("SemanticDiagnostic.hx", "function main():Int return \"wrong\";");
+		try
+			semanticService.analyze("SemanticDiagnostic")
+		catch (_:CompileError) {}
+		var semanticDiagnostics = semanticService.diagnostics("SemanticDiagnostic.hx");
+		if (semanticDiagnostics.length == 0 || semanticDiagnostics[0].origin != DiagnosticOrigin.Semantic)
+			throw 'type diagnostics were relabeled as recovery: ${[for (diagnostic in semanticDiagnostics) diagnostic.message + "/" + Std.string(diagnostic.origin)].join(", ")}';
+
 		var lexicalService = new LanguageService();
 		lexicalService.update("LexicalDiagnostic.hx", "function main():Void return \"");
 		var lexicalDiagnostics = lexicalService.diagnostics("LexicalDiagnostic.hx");
 		if (lexicalDiagnostics.length != 1 || lexicalDiagnostics[0].origin != DiagnosticOrigin.Lexical)
 			throw "lexical recovery diagnostics did not retain lexical provenance";
+		try
+			lexicalService.analyze("LexicalDiagnostic")
+		catch (_:CompileError) {}
+		lexicalDiagnostics = lexicalService.diagnostics("LexicalDiagnostic.hx");
+		if (lexicalDiagnostics.length != 1 || lexicalDiagnostics[0].origin != DiagnosticOrigin.Lexical)
+			throw "background analysis obscured lexical provenance";
 	}
 
 	static function assertTruncationRecovery():Void {

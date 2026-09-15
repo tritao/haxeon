@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.syntax.Ast.AstFunction;
 import compiler.Diagnostic.CompileError;
+import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.syntax.Lexer;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Parser;
@@ -55,6 +56,7 @@ class ModuleAnalyzer {
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
+			error.diagnostic.origin = error.diagnostic.code == "E0001" ? DiagnosticOrigin.Lexical : DiagnosticOrigin.ParserRecovery;
 			state.diagnostics.push(error.diagnostic);
 			throw error;
 		}

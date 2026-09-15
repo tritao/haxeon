@@ -240,7 +240,6 @@ class LanguageService {
 		try
 			return compiler.analyze(entryModule, token)
 		catch (error:CompileError) {
-			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			recoverCurrentSyntax(token);
 			throw error;
 		}
