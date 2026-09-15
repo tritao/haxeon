@@ -404,6 +404,22 @@ class HlWriter {
 					{opcode: HlOpcode.Null, operands: [destination]};
 				case LoadType(destination, type):
 					{opcode: HlOpcode.Type, operands: [destination, type]};
+				case NullCheck(value):
+					{opcode: HlOpcode.NullCheck, operands: [value]};
+				case GetType(destination, value):
+					{opcode: HlOpcode.GetType, operands: [destination, value]};
+				case GetTID(destination, value):
+					{opcode: HlOpcode.GetTID, operands: [destination, value]};
+				case Ref(destination, value):
+					{opcode: HlOpcode.Ref, operands: [destination, value]};
+				case Unref(destination, reference):
+					{opcode: HlOpcode.Unref, operands: [destination, reference]};
+				case SetRef(reference, value):
+					{opcode: HlOpcode.SetRef, operands: [reference, value]};
+				case RefData(destination, array):
+					{opcode: HlOpcode.RefData, operands: [destination, array]};
+				case RefOffset(destination, pointer, offset):
+					{opcode: HlOpcode.RefOffset, operands: [destination, pointer, offset]};
 				case ToDyn(destination, source):
 					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
 				case ToSFloat(destination, source):

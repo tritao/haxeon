@@ -50,6 +50,14 @@ enum HlInstruction {
 	LoadBool(destination:Int, value:Bool);
 	LoadNull(destination:Int);
 	LoadType(destination:Int, type:Int);
+	NullCheck(value:Int);
+	GetType(destination:Int, value:Int);
+	GetTID(destination:Int, value:Int);
+	Ref(destination:Int, value:Int);
+	Unref(destination:Int, reference:Int);
+	SetRef(reference:Int, value:Int);
+	RefData(destination:Int, array:Int);
+	RefOffset(destination:Int, pointer:Int, offset:Int);
 	ToDyn(destination:Int, source:Int);
 	ToSFloat(destination:Int, source:Int);
 	ToUFloat(destination:Int, source:Int);

@@ -186,6 +186,18 @@ class HlValidator {
 				case LoadType(destination, type):
 					requireRegister(fn, destination);
 					requireType(code, type, 'type literal in function ${fn.functionIndex}');
+				case NullCheck(value):
+					requireRegister(fn, value);
+				case GetType(destination, value), GetTID(destination, value), Ref(destination, value), Unref(destination, value), RefData(destination, value):
+					requireRegister(fn, destination);
+					requireRegister(fn, value);
+				case SetRef(reference, value):
+					requireRegister(fn, reference);
+					requireRegister(fn, value);
+				case RefOffset(destination, pointer, offset):
+					requireRegister(fn, destination);
+					requireRegister(fn, pointer);
+					requireRegister(fn, offset);
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);

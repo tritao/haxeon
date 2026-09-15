@@ -261,6 +261,14 @@ class HlReader {
 			case HlOpcode.Bytes: LoadBytes(operands[0], operands[1]);
 			case HlOpcode.String: LoadString(operands[0], operands[1]);
 			case HlOpcode.Null: LoadNull(operands[0]);
+			case HlOpcode.NullCheck: NullCheck(operands[0]);
+			case HlOpcode.GetType: GetType(operands[0], operands[1]);
+			case HlOpcode.GetTID: GetTID(operands[0], operands[1]);
+			case HlOpcode.Ref: Ref(operands[0], operands[1]);
+			case HlOpcode.Unref: Unref(operands[0], operands[1]);
+			case HlOpcode.SetRef: SetRef(operands[0], operands[1]);
+			case HlOpcode.RefData: RefData(operands[0], operands[1]);
+			case HlOpcode.RefOffset: RefOffset(operands[0], operands[1], operands[2]);
 			case HlOpcode.Add: Add(operands[0], operands[1], operands[2]);
 			case HlOpcode.Sub: Sub(operands[0], operands[1], operands[2]);
 			case HlOpcode.Mul: Mul(operands[0], operands[1], operands[2]);

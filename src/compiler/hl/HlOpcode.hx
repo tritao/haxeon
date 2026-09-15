@@ -56,10 +56,17 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var New = 82;
 	var ArraySize = 83;
 	var Type = 84;
+	var GetType = 85;
+	var GetTID = 86;
+	var Ref = 87;
+	var Unref = 88;
+	var SetRef = 89;
 	var MakeEnum = 90;
 	var EnumAlloc = 91;
 	var EnumIndex = 92;
 	var EnumField = 93;
+	var RefData = 96;
+	var RefOffset = 97;
 	var JTrue = 44;
 	var JFalse = 45;
 	var JNull = 46;
@@ -87,4 +94,5 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Trap = 72;
 	var EndTrap = 73;
 	var ToVirtual = 65;
+	var NullCheck = 71;
 }
