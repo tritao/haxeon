@@ -10,6 +10,8 @@ class HlRuntimeCallPolicy {
 
 	/** Whether one manifest identity resolves to the requested runtime ABI shape. */
 	public static function validFunction(model:HlModule, identity:HlRuntimeManifest, stableId:Int, shape:Int):Bool {
+		if (!validShape(shape))
+			return false;
 		var functionIndex = -1;
 		for (entry in identity.entries)
 			if (entry.stableId == stableId) {
