@@ -9,12 +9,80 @@ import runtime.hashlink.HlTypeObject.HlTypeVirtual;
 /**
 	Builds HashLink's derived layout and GC mark metadata in Haxe-owned storage.
 
-	The arithmetic follows HashLink's ABI helpers. Prototype method wiring remains
-	a native boundary because it publishes executable function pointers and
-	closures; the non-moving object/enum/virtual layout itself is no longer built
-	by the metadata publication loop in C.
+	The arithmetic follows HashLink's ABI helpers. Descriptor association and
+	metadata layout are Haxe-owned; prototype method wiring remains a native
+	boundary because it publishes executable function pointers and closures. The
+	non-moving object/enum/virtual layout is no longer built by the metadata
+	publication loop in C.
 */
 class HlTypeLayout {
+	/**
+		Attach Haxe-owned function descriptors to object prototypes and bindings.
+
+		This is metadata policy, not executable-memory publication: the native
+		boundary still fills method tables from the module's function pointers.
+	 */
+	public static function bindFunctionDescriptors(types:RawPtr<RawPtr<HlType>>, count:Int, functions:RawPtr<HlFunction>, functionCount:Int,
+		context:RawPtr<HlModuleContext>):Void {
+		if (count < 0 || (count > 0 && types.isNull()) || functionCount < 0 || (functionCount > 0 && functions.isNull()) || context.isNull())
+			throw "HashLink function descriptor binding requires a type table, descriptors, and module context";
+		for (index in 0...count) {
+			var type = types.offset(index).load();
+			if (type.isNull())
+				throw 'HashLink metadata contains a null type at index $index';
+			bindFunctionDescriptorsForType(type, functions, functionCount, context);
+		}
+	}
+
+	/** Attach descriptors when the type records are one contiguous native slab. */
+	public static function bindContiguousFunctionDescriptors(types:RawPtr<HlType>, count:Int, functions:RawPtr<HlFunction>, functionCount:Int,
+		context:RawPtr<HlModuleContext>):Void {
+		if (count < 0 || (count > 0 && types.isNull()) || functionCount < 0 || (functionCount > 0 && functions.isNull()) || context.isNull())
+			throw "HashLink function descriptor binding requires a contiguous type slab, descriptors, and module context";
+		for (index in 0...count)
+			bindFunctionDescriptorsForType(types.offset(index), functions, functionCount, context);
+	}
+
+	static function bindFunctionDescriptorsForType(type:RawPtr<HlType>, functions:RawPtr<HlFunction>, functionCount:Int, context:RawPtr<HlModuleContext>):Void {
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
+			return;
+		var object = type.ref.data.ref.obj;
+		if (object.isNull())
+			throw "HashLink function descriptor binding contains an invalid object";
+		if ((cast(object.ref.nproto, Int) > 0 && object.ref.proto.isNull())
+			|| (cast(object.ref.nbindings, Int) > 0 && object.ref.bindings.isNull()))
+			throw "HashLink function descriptor binding contains incomplete object metadata";
+		object.ref.module = context;
+		var descriptor:RawPtr<HlFunction> = RawPtr.nullPtr();
+		for (prototypeIndex in 0...cast(object.ref.nproto, Int)) {
+			var prototype = object.ref.proto.offset(prototypeIndex);
+			descriptor = findFunction(functions, functionCount, cast(prototype.ref.findex, Int));
+			if (descriptor.isNull())
+				throw "HashLink function descriptor binding references an unknown prototype";
+			descriptor.ref.object = object;
+			descriptor.ref.field.ref.name = prototype.ref.name;
+		}
+		for (bindingIndex in 0...cast(object.ref.nbindings, Int)) {
+			var bindingOffset = bindingIndex * 2,
+				fieldId:Int = cast object.ref.bindings.offset(bindingOffset).load(),
+				functionId:Int = cast object.ref.bindings.offset(bindingOffset + 1).load(),
+				field = objectField(type, fieldId);
+			if (field.isNull())
+				throw "HashLink function descriptor binding references an unknown field";
+			if (field.ref.type.isNull())
+				throw "HashLink function descriptor binding references a field without a type";
+			var fieldKind:HlTypeKind = cast field.ref.type.ref.kind;
+			if (fieldKind == HlTypeKind.Function || fieldKind == HlTypeKind.DynamicType) {
+				descriptor = findFunction(functions, functionCount, functionId);
+				if (descriptor.isNull())
+					throw "HashLink function descriptor binding references an unknown method";
+				descriptor.ref.object = object;
+				descriptor.ref.field.ref.name = field.ref.name;
+			}
+		}
+	}
+
 	public static function initialize(types:RawPtr<RawPtr<HlType>>, count:Int, arena:HlTypeArena):Void {
 		if (count < 0 || (count > 0 && types.isNull()) || arena == null)
 			throw "HashLink type layout initialization requires a type table and arena";
@@ -223,6 +291,35 @@ class HlTypeLayout {
 			if (cast(runtime.ref.bindings.offset(index).ref.fieldId, Int) == fieldId)
 				return index;
 		return -1;
+	}
+
+	static function findFunction(functions:RawPtr<HlFunction>, count:Int, findex:Int):RawPtr<HlFunction> {
+		for (index in 0...count) {
+			var descriptor = functions.offset(index);
+			if (cast(descriptor.ref.findex, Int) == findex)
+				return descriptor;
+		}
+		return RawPtr.nullPtr();
+	}
+
+	static function objectField(type:RawPtr<HlType>, fieldId:Int):RawPtr<HlObjectField> {
+		if (fieldId < 0)
+			return RawPtr.nullPtr();
+		var object = type.ref.data.ref.obj;
+		if (object.isNull())
+			return RawPtr.nullPtr();
+		var parent = object.ref.superType;
+		if (!parent.isNull()) {
+			var parentRuntime = parent.ref.data.ref.obj.ref.runtime;
+			if (parentRuntime.isNull())
+				throw "HashLink object field lookup requires an initialized parent runtime";
+			var parentFieldCount:Int = cast parentRuntime.ref.nfields;
+			if (fieldId < parentFieldCount)
+				return objectField(parent, fieldId);
+			fieldId -= parentFieldCount;
+		}
+		var fieldCount:Int = cast object.ref.nfields;
+		return fieldId >= fieldCount || object.ref.fields.isNull() ? RawPtr.nullPtr() : object.ref.fields.offset(fieldId);
 	}
 
 	static function initializeEnum(type:RawPtr<HlType>, arena:HlTypeArena):Void {

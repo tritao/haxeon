@@ -108,6 +108,9 @@ class HlNativeMetadataMain {
 			+
 			'&& publication.nativeCode.ref.natives == publication.nativeDescriptors && publication.nativeCode.ref.functions == publication.functionDescriptors '
 			+ '&& publication.nativeCode.ref.debugSections == publication.debugSections '
+			+ '&& object.ref.data.ref.obj.ref.module == publication.moduleContext '
+			+ '&& publication.functionDescriptors.ref.object == object.ref.data.ref.obj '
+			+ '&& publication.functionDescriptors.ref.field.ref.name.offset(0).load() == 114 '
 			+ '&& publication.functionStableIds == publication.nativeCode.ref.functionStableIds && publication.functionStableIds.load() == 73 '
 			+ '&& publication.functionNames == publication.nativeCode.ref.functionNames && publication.functionNames.offset(0).load().offset(0).load() == 66 '
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '

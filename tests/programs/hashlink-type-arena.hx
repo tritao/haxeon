@@ -209,8 +209,7 @@ function main():Int {
 	objectData.ref.name = objectName;
 	objectData.ref.fields.offset(0).ref.name = fieldName;
 	objectData.ref.proto.offset(0).ref.name = objectName;
-	HlTypeBridge.native_metadata_bind_contiguous_function_descriptors(arena.typePointer(), arena.typeCountOf(), descriptorTable.pointer(),
-		descriptorTable.length(), module);
+	HlTypeLayout.bindContiguousFunctionDescriptors(arena.typePointer(), arena.typeCountOf(), descriptorTable.pointer(), descriptorTable.length(), module);
 	var descriptorBindingCorrect = descriptor.ref.object == objectData
 		&& descriptor.ref.field.ref.name == fieldName
 		&& descriptorReference.ref.object.isNull();

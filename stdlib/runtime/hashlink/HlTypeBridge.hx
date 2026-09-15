@@ -32,12 +32,6 @@ class HlTypeBridge {
 
 	public static function native_type_initialize_object(type:RawPtr<HlType>):Void {}
 
-	public static function native_metadata_bind_function_descriptors(types:RawPtr<RawPtr<HlType>>, count:Int, functions:RawPtr<HlFunction>, functionCount:Int,
-		context:RawPtr<HlModuleContext>):Void {}
-
-	public static function native_metadata_bind_contiguous_function_descriptors(types:RawPtr<HlType>, count:Int, functions:RawPtr<HlFunction>, functionCount:Int,
-		context:RawPtr<HlModuleContext>):Void {}
-
 	public static function native_metadata_publish_prototypes(types:RawPtr<RawPtr<HlType>>, count:Int, context:RawPtr<HlModuleContext>):Void {}
 
 	public static function native_metadata_publish_contiguous_prototypes(types:RawPtr<HlType>, count:Int, context:RawPtr<HlModuleContext>):Void {}
