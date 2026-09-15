@@ -1769,6 +1769,26 @@ class BodyTyper {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
+	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType {
+		// A HashLink enum has one physical constructor layout for every source
+		// specialization. Erase all payloads of a generic enum so two uses cannot
+		// publish incompatible field representations for that shared layout.
+		if (typeParameters.length > 0)
+			return TDynamic;
+		var substitutions:Map<String, CompilerType> = [];
+		for (name in typeParameters)
+			substitutions.set(name, TDynamic);
+		var type = try session.declarations.resolve(parameter.type, parameter.span, substitutions) catch (error:Dynamic) {
+			if (!session.tolerant)
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			TUnknown;
+		};
+		return parameter.optional ? TNullable(type) : type;
+	}
+	}
+
 	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
 		return session.representation.erasedEnumParameter(declaration, parameter);
 

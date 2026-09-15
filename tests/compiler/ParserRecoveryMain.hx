@@ -581,6 +581,41 @@ class ParserRecoveryMain {
 			default:
 				throw 'invalid field type did not become TError: ${invalidFieldTypeTyped.classes[0].fields[0].type}';
 		}
+
+		var invalidInterfaceTypeSource = new SourceFile("TolerantInvalidInterfaceType.hx",
+			"interface Broken { function invalid(value:Missing):Missing; function visible():Void; } function main():Void return;");
+		var invalidInterfaceTypeProgram = new Parser(new Lexer(invalidInterfaceTypeSource).tokenize()).parseProgramRecovering().program,
+			invalidInterfaceTypeTyped = Typer.typeRecovered(invalidInterfaceTypeProgram);
+		if (invalidInterfaceTypeTyped == null
+			|| invalidInterfaceTypeTyped.interfaces.length != 1
+			|| invalidInterfaceTypeTyped.interfaces[0].methods.length != 2
+			|| invalidInterfaceTypeTyped.functions.length != 1)
+			throw "invalid interface types discarded the rest of the recovered interface";
+		switch invalidInterfaceTypeTyped.interfaces[0].methods[0].arguments[0] {
+			case TUnknown:
+			default:
+				throw 'invalid interface parameter did not become TUnknown: ${invalidInterfaceTypeTyped.interfaces[0].methods[0].arguments[0]}';
+		}
+		switch invalidInterfaceTypeTyped.interfaces[0].methods[0].result {
+			case TUnknown:
+			default:
+				throw 'invalid interface result did not become TUnknown: ${invalidInterfaceTypeTyped.interfaces[0].methods[0].result}';
+		}
+
+		var invalidEnumTypeSource = new SourceFile("TolerantInvalidEnumType.hx",
+			"enum Broken { invalid(value:Missing); visible; } function main():Void return;");
+		var invalidEnumTypeProgram = new Parser(new Lexer(invalidEnumTypeSource).tokenize()).parseProgramRecovering().program,
+			invalidEnumTypeTyped = Typer.typeRecovered(invalidEnumTypeProgram);
+		if (invalidEnumTypeTyped == null
+			|| invalidEnumTypeTyped.enums.length != 1
+			|| invalidEnumTypeTyped.enums[0].cases.length != 2
+			|| invalidEnumTypeTyped.functions.length != 1)
+			throw "invalid enum payload type discarded the rest of the recovered enum";
+		switch invalidEnumTypeTyped.enums[0].cases[0].params[0] {
+			case TUnknown:
+			default:
+				throw 'invalid enum payload type did not become TUnknown: ${invalidEnumTypeTyped.enums[0].cases[0].params[0]}';
+		}
 	}
 
 	static function assertRecoveryCancellation():Void {

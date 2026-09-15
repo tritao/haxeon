@@ -516,7 +516,14 @@ class ProgramTyper {
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
-		return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
+		try
+			return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
+		catch (error:Dynamic) {
+			if (!session.tolerant)
+				throw error;
+			rememberRecoveryError(error);
+			return TUnknown;
+		}
 	}
 
 	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
