@@ -940,22 +940,37 @@ class SemanticIndex {
 			case BoolLiteral(_, _): TBool;
 			case Variable(name, span): recoveredExpressionBindingType(Variable(name, span));
 			case Member(object, name, _): recoveredMemberType(object, name);
-			case MethodCall(object, name, _, _):
+			case MethodCall(object, name, arguments, _):
 				var receiverType = recoveredExpressionBindingType(object),
 					builtinResult = recoveredBuiltinMethodResult(receiverType, name),
 					owner = memberOwner(receiverType);
-				builtinResult != null ? builtinResult : owner == null ? TUnknown : recoveredFunctionResult(owner + "." + name, recoveredTypeSubstitutions(receiverType));
-			case Call(name, _, span):
+			if (builtinResult != null)
+				builtinResult;
+			else {
+				var method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
+				method == null ? TUnknown : recoveredCallResult(method.method, method.substitutions, arguments);
+			}
+			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
 						receiverType = recoveredExpressionBindingType(Variable(receiverName, span)),
 						builtinResult = recoveredBuiltinMethodResult(receiverType, memberName),
-						owner = memberOwner(receiverType);
-					builtinResult != null ? builtinResult : owner == null ? recoveredBuiltinCallResult(name) : recoveredFunctionResult(owner + "." + memberName,
-						recoveredTypeSubstitutions(receiverType));
-				} else recoveredBuiltinCallResult(name);
+						owner = memberOwner(receiverType),
+						method = owner == null ? null : recoveredMethodWithSubstitutions(owner, memberName, [], recoveredTypeSubstitutions(receiverType));
+					if (builtinResult != null)
+						builtinResult;
+					else if (method != null)
+						recoveredCallResult(method.method, method.substitutions, arguments);
+					else {
+						var direct = recoveredFunction(name);
+						direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments);
+					}
+				} else {
+					var direct = recoveredFunctionForCall(name);
+					direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments);
+				}
 			case ClosureCall(callee, _, _):
 				var result = functionResultType(recoveredExpressionType(callee));
 				result == null ? TUnknown : result;
@@ -1164,6 +1179,21 @@ class SemanticIndex {
 		var method = recoveredMethodWithSubstitutions(name.substring(0, separator), name.substring(separator + 1), [],
 			substitutions == null ? [] : substitutions);
 		return method == null ? TUnknown : recoveredType(method.method.result, method.substitutions);
+	}
+
+	function recoveredCallResult(fn:AstFunction, ?substitutions:Map<String, CompilerType>, arguments:Array<AstExpression>):CompilerType {
+		var inferred:Map<String, CompilerType> = [];
+		if (substitutions != null)
+			for (name => type in substitutions)
+				inferred.set(name, type);
+		if (fn.typeParameters != null)
+			for (index in 0...arguments.length)
+				if (index < fn.arguments.length) {
+					var actual = recoveredExpressionType(arguments[index]);
+					if (!isRecoveryType(actual))
+						inferRecoveredTypeParameters(fn.arguments[index].type, actual, fn.typeParameters, inferred);
+				}
+		return recoveredType(fn.result, inferred);
 	}
 
 	function recoveredFunctionType(name:String, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {

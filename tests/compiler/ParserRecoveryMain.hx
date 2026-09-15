@@ -869,6 +869,29 @@ class ParserRecoveryMain {
 		if (genericExpectedContext == null || genericExpectedContext.context.expected != TInt)
 			throw 'recovered generic call did not infer the later argument type: ${genericExpectedContext == null ? "null" : Std.string(genericExpectedContext.context.expected)}';
 
+		var genericResultSource = new SourceFile("TolerantGenericResult.hx",
+			"class Box { public var member:Int; } function identity<T>(value:T):T return value; function main():Void { var box = identity(new Box()); box. }");
+		var genericResultProgram = new Parser(new Lexer(genericResultSource).tokenize()).parseProgramRecovering().program,
+			genericResultTyped = Typer.typeRecovered(genericResultProgram),
+			genericResultMain = genericResultTyped == null ? null : [for (fn in genericResultTyped.functions) if (fn.name == "main") fn][0];
+		if (genericResultTyped == null || genericResultMain == null || genericResultMain.statements.length != 2)
+			throw "recovered generic call result discarded the following member access";
+		switch genericResultMain.statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TInstance(NominalKind.Class, "Box", _):
+					default: throw 'recovered generic call did not infer its result type: ${value.type}';
+				}
+			default: throw "recovered generic call did not retain the inferred local declaration";
+		}
+		var genericResultService = new LanguageService();
+		genericResultService.update("TolerantGenericResult.hx", genericResultSource.text);
+		var genericResultNames = [
+			for (item in genericResultService.complete("TolerantGenericResult.hx", genericResultSource.text.length)) item.label
+		];
+		if (genericResultNames.indexOf("member") < 0)
+			throw "recovered generic call result did not expose receiver members";
+
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
 		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,
