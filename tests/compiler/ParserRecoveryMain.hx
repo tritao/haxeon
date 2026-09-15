@@ -839,6 +839,29 @@ class ParserRecoveryMain {
 			default: throw "uncontextual lambda did not remain a declaration-shaped expression";
 		}
 
+		var assignmentInferenceSource = new SourceFile("TolerantAssignmentInference.hx",
+			"class Foo { public var member:Int; } function main():Void { var item = missing; item = new Foo(); item. }");
+		var assignmentInferenceProgram = new Parser(new Lexer(assignmentInferenceSource).tokenize()).parseProgramRecovering().program,
+			assignmentInferenceTyped = Typer.typeRecovered(assignmentInferenceProgram),
+			assignmentInferenceMain = assignmentInferenceTyped == null ? null : [for (fn in assignmentInferenceTyped.functions) if (fn.name == "main") fn][0];
+		if (assignmentInferenceTyped == null || assignmentInferenceMain == null || assignmentInferenceMain.statements.length != 3)
+			throw "tolerant typing discarded a local refined by a later assignment";
+		switch assignmentInferenceMain.statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TInstance(NominalKind.Class, "Foo", _):
+					default: throw 'assignment inference did not refine the initial unknown local: ${value.type}';
+				}
+			default: throw "assignment inference did not retain the local declaration";
+		}
+		var assignmentInferenceService = new LanguageService();
+		assignmentInferenceService.update("TolerantAssignmentInference.hx", assignmentInferenceSource.text);
+		var assignmentInferenceNames = [
+			for (item in assignmentInferenceService.complete("TolerantAssignmentInference.hx", assignmentInferenceSource.text.length)) item.label
+		];
+		if (assignmentInferenceNames.indexOf("member") < 0)
+			throw "recovered indexing did not expose members after assignment-based local inference";
+
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
 		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,

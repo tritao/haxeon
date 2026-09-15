@@ -1812,15 +1812,39 @@ class SemanticIndex {
 
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
 		var token = declarationToken(tokens, declaration, sourceLocalName(identity));
-		if (token != null)
-			completionLocals.push({
-				name: sourceLocalName(identity),
-				type: type,
-				declaration: token.span,
-				scope: scope,
-				depth: depth
-			});
+		if (token == null)
+			return;
+		var name = sourceLocalName(identity);
+		for (index in 0...completionLocals.length) {
+			var existing = completionLocals[index];
+			if (existing.name == name
+				&& existing.declaration.start == token.span.start
+				&& existing.declaration.end == token.span.end
+				&& existing.scope.start == scope.start
+				&& existing.scope.end == scope.end
+				&& existing.depth == depth) {
+				if (isRecoveryType(existing.type) && !isRecoveryType(type))
+					completionLocals[index] = {
+						name: name,
+						type: type,
+						declaration: token.span,
+						scope: scope,
+						depth: depth
+					};
+				return;
+			}
+		}
+		completionLocals.push({
+			name: name,
+			type: type,
+			declaration: token.span,
+			scope: scope,
+			depth: depth
+		});
 	}
+
+	static function isRecoveryType(type:CompilerType):Bool
+		return type == TUnknown || type == TError;
 
 	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
 		for (statement in statements) {

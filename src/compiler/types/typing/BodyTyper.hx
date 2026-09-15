@@ -679,9 +679,9 @@ class BodyTyper {
 					return TArray(element);
 			default:
 		}
-		if (!usesLocalExpectedType(initializer))
-			return null;
 		var expected = context.localExpectedTypes.get(name);
+		if (!usesLocalExpectedType(initializer))
+			return session.tolerant ? expected : null;
 		return expected != null && containsNullLiteral(initializer) && !isNullable(expected) ? TNullable(expected) : expected;
 	}
 
@@ -879,6 +879,7 @@ class BodyTyper {
 
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
 		return switch initializer {
+			case ErrorExpression(_): true;
 			case NullLiteral(_): true;
 			case ArrayLiteral(values, _): values.length == 0;
 			case MapLiteral(entries, _): entries.length == 0;
@@ -908,6 +909,12 @@ class BodyTyper {
 						changed = constrainLocalExpression(initializer, context.localExpectedTypes.get(name)) || changed;
 				case Return(expression, _):
 					changed = constrainLocalExpression(expression, result) || changed;
+				case Assignment(name, expression, _):
+					if (session.tolerant) {
+						var assigned = knownExpressionType(expression);
+						if (assigned != null && !isRecoveryType(assigned))
+							changed = constrainLocal(name, assigned) || changed;
+					}
 				case Expression(expression, _):
 					changed = constrainPushedExpression(expression) || changed;
 				case If(_, thenBranch, elseBranch, _):
@@ -2283,4 +2290,7 @@ class BodyTyper {
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return TypeRelations.equals(left, right);
+
+	static function isRecoveryType(type:CompilerType):Bool
+		return type == TUnknown || type == TError;
 }
