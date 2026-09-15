@@ -527,12 +527,8 @@ class HlMetadataGeneration {
 		}
 	}
 
-	function validateModulePools():Void {
-		if (modulePools.entryPoint < 0)
-			throw "HashLink module entry point must be non-negative";
-		HlTypeBridge.native_metadata_validate_module_pools(modulePools.ints, modulePools.intCount, modulePools.floats, modulePools.floatCount,
-			modulePools.strings, modulePools.stringLengths, modulePools.stringCount, modulePools.bytes, modulePools.byteCount, modulePools.bytePositions,
-			modulePools.bytePositionCount, modulePools.entryPoint);
+	public function validateModulePools():Int {
+		return modulePools.validate();
 	}
 
 	/** Validate the arena-owned source paths referenced by function debug records. */

@@ -57,4 +57,25 @@ class HlModulePools {
 
 	public inline function stringLength(index:Int):Int
 		return stringTable.lengthAt(index);
+
+	/** Validate scalar-pool storage and all byte-position references. */
+	public function validate():Int {
+		if (intCount < 0 || floatCount < 0 || stringCount < 0 || byteCount < 0 || bytePositionCount < 0 || entryPoint < 0)
+			throw "HashLink module pools contain invalid counts";
+		if ((intCount > 0 && ints.isNull()) || (floatCount > 0 && floats.isNull())
+			|| (stringCount > 0 && (strings.isNull() || stringLengths.isNull()))
+			|| (byteCount > 0 && bytes.isNull()) || (bytePositionCount > 0 && bytePositions.isNull()))
+			throw "HashLink module pools contain incomplete storage";
+		for (index in 0...stringCount) {
+			var string = strings.offset(index).load(), length:Int = cast stringLengths.offset(index).load();
+			if (string.isNull() || length < 0)
+				throw "HashLink module string pool contains invalid storage";
+		}
+		for (index in 0...bytePositionCount) {
+			var position:Int = cast bytePositions.offset(index).load();
+			if (position < 0 || position >= byteCount)
+				throw "HashLink byte position is outside the byte pool";
+		}
+		return stringCount;
+	}
 }
