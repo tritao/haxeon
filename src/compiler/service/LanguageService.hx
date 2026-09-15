@@ -361,7 +361,8 @@ class LanguageService {
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return resolveRecoveredSymbol(recovered.program, name),
 				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
-				function(name, arguments) return resolveRecoveredType(recovered.program, name, arguments));
+				function(name, arguments) return resolveRecoveredType(recovered.program, name, arguments),
+				function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program));
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;

@@ -969,6 +969,17 @@ class LanguageServiceMain {
 			|| editorContext.context.receiver == null
 			|| editorContext.revision != samePackageService.compiler.modules.get("same.Main").revision)
 			throw "completion context did not retain editor snapshot metadata or receiver type";
+		var candidateService = new LanguageService();
+		candidateService.update("candidate/a/Library.hx", "package candidate.a; function shared():Void return;");
+		candidateService.update("candidate/b/Library.hx", "package candidate.b; function shared():Void return;");
+		var candidateSource = "package candidate.app; import candidate.a.Library; import candidate.b.Library; function main():Void { shared; }";
+		candidateService.update("candidate/Main.hx", candidateSource);
+		var candidateUnresolved:Null<compiler.semantic.SemanticIndex.UnresolvedSymbol> = null;
+		for (symbol in candidateService.unresolvedSymbols("candidate/Main.hx"))
+			if (symbol.name == "shared")
+				candidateUnresolved = symbol;
+		if (candidateUnresolved == null || candidateUnresolved.candidates.length != 2)
+			throw 'recovered unresolved symbol candidates were not retained: ${candidateUnresolved == null ? "null" : Std.string(candidateUnresolved.candidates.length)}';
 		var unresolvedService = new LanguageService(),
 			unresolvedSource = "function main():Void { unknownName; }";
 		unresolvedService.update("Unresolved.hx", unresolvedSource);

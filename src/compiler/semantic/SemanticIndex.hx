@@ -121,6 +121,7 @@ class SemanticIndex {
 	var currentRecoveredFunctionKey:String = "";
 	final recoveredTypeParameterNames:Map<String, Bool> = [];
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
+	var recoveryCandidates:Null<String->Array<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
 	var recoveryResolveType:Null<(String, Array<CompilerType>) -> Null<CompilerType>>;
 	var currentCaller:Null<SemanticSymbolId>;
@@ -271,9 +272,11 @@ class SemanticIndex {
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
-			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>):Void {
+			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
+			?candidates:String->Array<SemanticSymbolId>):Void {
 		cancellation = token;
 		recoveryResolve = resolve;
+		recoveryCandidates = candidates;
 		recoveryResolveEnumCase = resolveEnumCase;
 		recoveryResolveType = resolveType;
 		if (token != null)
@@ -355,6 +358,7 @@ class SemanticIndex {
 		checkpoint();
 		cancellation = null;
 		recoveryResolve = null;
+		recoveryCandidates = null;
 		recoveryResolveEnumCase = null;
 		recoveryResolveType = null;
 	}
@@ -1116,6 +1120,11 @@ class SemanticIndex {
 		for (symbol in symbols)
 			if (symbol.name == name || sourceName(symbol.name) == name)
 				candidates.push(symbol.id);
+		if (recoveryCandidates != null)
+			for (candidate in recoveryCandidates(name))
+				if (candidates.indexOf(candidate) < 0)
+					candidates.push(candidate);
+		candidates.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
 		unresolved.push({name: name, span: span, candidates: candidates});
 	}
 

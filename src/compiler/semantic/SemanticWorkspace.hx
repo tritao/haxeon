@@ -5,6 +5,7 @@ import compiler.modules.ModuleState;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.syntax.Ast.AstProgram;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
@@ -487,17 +488,19 @@ class SemanticWorkspace {
 		return matches.length == 1 ? matches[0] : null;
 	}
 
-	function editorModuleVisible(from:ModuleState, candidate:ModuleState, packageName:Null<String>):Bool {
-		if (packageName != null) {
+	function editorModuleVisible(from:ModuleState, candidate:ModuleState, packageName:Null<String>, ?sourceProgram:AstProgram):Bool {
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram,
+			resolvedPackage = packageName == null && program != null && program.packageName != null ? Std.string(program.packageName) : packageName;
+		if (resolvedPackage != null) {
 			var candidateModel = editorModel(candidate),
 				candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
-			if (candidatePackage == packageName)
+			if (candidatePackage == resolvedPackage)
 				return true;
 		}
-		var model = editorModel(from);
-		if (model == null)
+		if (program == null)
 			return false;
-		for (importPath in model.program.imports) {
+		for (importPath in program.imports) {
 			var wildcard = StringTools.endsWith(importPath, ".*"),
 				prefix = wildcard ? importPath.substring(0, importPath.length - 2) : importPath;
 			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + "."))
@@ -710,6 +713,48 @@ class SemanticWorkspace {
 				result.push(symbol);
 			}
 		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
+	/**
+	 * Return visible top-level candidates for a recovered unresolved name.
+	 * Candidates are evidence for tooling only; callers must still require a
+	 * unique resolution before assigning an authoritative identity.
+	 */
+	public function editorSymbolCandidates(from:ModuleState, name:String, ?token:CancellationToken,
+			?sourceProgram:AstProgram):Array<SemanticSymbolId> {
+		var result:Array<SemanticSymbolId> = [],
+			seen:Map<String, Bool> = [],
+			fromModel = editorModel(from),
+			fromProgram = sourceProgram == null ? (fromModel == null ? null : fromModel.program) : sourceProgram,
+			fromPackage = fromProgram == null || fromProgram.packageName == null ? null : Std.string(fromProgram.packageName);
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			if (state != from && !editorModuleVisible(from, state, fromPackage, fromProgram))
+				continue;
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (symbol in model.index.symbols) {
+				if (token != null)
+					token.check();
+				if (symbol.kind != DeclarationKind.Function && !isTypeKind(symbol.kind))
+					continue;
+				var separator = symbol.name.lastIndexOf("."),
+					shortName = separator < 0 ? symbol.name : symbol.name.substring(separator + 1),
+					matches = symbol.name == name
+						|| shortName == name
+						|| state.name + "." + symbol.name == name
+						|| packagePrefix + symbol.name == name;
+				if (matches && !seen.exists(Std.string(symbol.id))) {
+					seen.set(Std.string(symbol.id), true);
+					result.push(symbol.id);
+				}
+			}
+		}
+		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
 		return result;
 	}
 
