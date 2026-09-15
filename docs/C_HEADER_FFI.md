@@ -31,7 +31,8 @@ parsed and laid out by Clang; only the named declarations are emitted.
 
 HashLink's type-metadata ring is checked in as
 `stdlib/runtime/hashlink/HashLinkMetadata.hxi`; regenerate it from the pinned
-HashLink header with `--only` for `hl_type_kind`, `hl_alloc`,
+HashLink header with `scripts/haxeon-hashlink-metadata-import` (the command uses
+`--only` for `hl_type_kind`, `hl_alloc`,
 `hl_module_context`, `hl_type_fun`, `hl_obj_field`, `hl_obj_proto`,
 `hl_type_obj`, `hl_type_virtual`, `hl_enum_construct`, `hl_type_enum`, and
 `hl_type`. The importer adds pointer-only dependencies as opaque declarations,
