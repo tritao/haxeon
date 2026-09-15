@@ -64,7 +64,9 @@ run_cli install --locked --project "$project_dir/haxeon.json"
 run_cli build --project "$project_dir/haxeon.json"
 test -s "$project_dir/build/host/main.hl"
 
-sed -i 's/"rev": "main"/"rev": "other"/' "$project_dir/haxeon.json"
+manifest_tmp=$(mktemp "$project_dir/haxeon.json.XXXXXX")
+sed 's/"rev": "main"/"rev": "other"/' "$project_dir/haxeon.json" > "$manifest_tmp"
+mv "$manifest_tmp" "$project_dir/haxeon.json"
 set +e
 locked_output=$(run_cli install --locked --project "$project_dir/haxeon.json" 2>&1)
 locked_status=$?
