@@ -59,9 +59,9 @@ class HlNativeMetadataMain {
 			+
 			'patchCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; patchCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; patchCode.entryPoint = 0; '
 			+
-			'var externalPatch = HlPatchWriter.encode(patchCode, haxe.io.Bytes.alloc(16), [0], [0 => 101], 1, 2, 0, 0, 2, 3); externalLoaded.patch(externalPatch); var externalPatchedValue = externalLoaded.callI32(101), externalPatchRejected = false, externalIdentityRejected = false; '
+			'var externalPatch = HlPatchWriter.encode(patchCode, haxe.io.Bytes.alloc(16), [0], [0 => 101], 1, 2, 0, 0, 2, 3); externalLoaded.patch(externalPatch); var externalPatchedValue = externalLoaded.callI32(101), externalPatchRejected = false, externalIdentityRejected = false, externalCallRejected = false; '
 			+
-			'try { externalLoaded.patch(externalPatch); } catch (error:Dynamic) externalPatchRejected = true; var wrongModuleId = haxe.io.Bytes.alloc(16); wrongModuleId.set(0, 1); '
+			'try { externalLoaded.patch(externalPatch); } catch (error:Dynamic) externalPatchRejected = true; try { externalLoaded.callI32(999); } catch (error:Dynamic) externalCallRejected = true; var wrongModuleId = haxe.io.Bytes.alloc(16); wrongModuleId.set(0, 1); '
 			+
 			'try { externalLoaded.patch(HlPatchWriter.encode(patchCode, wrongModuleId, [0], [0 => 101], 2, 3, 0, 0, 2, 3)); } catch (error:Dynamic) externalIdentityRejected = true; var externalUnloaded = externalLoaded.unload(); '
 			+
@@ -110,7 +110,7 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
-			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '

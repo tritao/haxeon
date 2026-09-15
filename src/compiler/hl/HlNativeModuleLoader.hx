@@ -85,7 +85,18 @@ class HlLoadedRuntimeModule {
 	public function callI32(stableId:Int):Int {
 		if (disposed)
 			throw "HashLink loaded runtime module has been unloaded";
+		if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 0))
+			throw 'Invalid Haxe-built runtime i32 call (stable ID $stableId)';
 		return nativeModule.callI32(stableId);
+	}
+
+	/** Invoke a Haxe-owned zero-argument void function. */
+	public function callVoid(stableId:Int):Void {
+		if (disposed)
+			throw "HashLink loaded runtime module has been unloaded";
+		if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 1))
+			throw 'Invalid Haxe-built runtime void call (stable ID $stableId)';
+		nativeModule.callVoid(stableId);
 	}
 
 	/** Haxeon preflights HLP identity/revision before native publication. */
@@ -117,7 +128,7 @@ class HlLoadedRuntimeModule {
 			if (entry.functionIndex == identity.initializerSlot) {
 				if (!HlRuntimeCallPolicy.validFunction(module, identity, entry.stableId, 1))
 					throw "HLI initializer must reference a zero-argument void function";
-				nativeModule.callVoid(entry.stableId);
+				callVoid(entry.stableId);
 				return;
 			}
 		throw "HLI initializer slot is not represented by the identity table";
