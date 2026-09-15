@@ -2,6 +2,8 @@ package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlOpcodeSchema;
+import compiler.hl.HlWriter;
 
 /** Validates an in-memory HashLink module before serialization. */
 class HlValidator {

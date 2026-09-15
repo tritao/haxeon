@@ -49,15 +49,41 @@ class HlTypeBuilder {
 		return result;
 	}
 
+	/** Copy a Haxe string into arena-owned, null-terminated UTF-8 storage. */
+	public function utf8Name(value:String):RawPtr<UInt8> {
+		var bytes = utf8Bytes(value), result = arena.allocUInt8Array(bytes.length + 1);
+		for (index in 0...bytes.length)
+			result.offset(index).store(cast bytes[index]);
+		result.offset(bytes.length).store(cast 0);
+		return result;
+	}
+
+	/** Hash a HashLink UTF-16 field name using the VM's stable name hash. */
+	public static function hashUtf16(value:String):Int {
+		var hash = 0;
+		for (index in 0...value.length)
+			hash = 223 * hash + value.charCodeAt(index);
+		return hash % 0x1FFFFF7B;
+	}
+
 	public function typeParameter(parameter:RawPtr<HlType>):RawPtr<HlType> {
-		var type = allocateType(HlTypeKind.Reference);
+		return parameterizedType(HlTypeKind.Reference, parameter);
+	}
+
+	/** Allocate any of HashLink's parameterized type forms. */
+	public function parameterizedType(kind:HlTypeKind, parameter:RawPtr<HlType>):RawPtr<HlType> {
+		if (kind != HlTypeKind.Reference && kind != HlTypeKind.Nullable && kind != HlTypeKind.Packed)
+			throw "HashLink parameterized types must be references, nullable values, or packed values";
+		var type = allocateType(kind);
 		type.ref.data.ref.typeParam = parameter;
 		return type;
 	}
 
 	/** Allocate a function type header before its signature is known. */
-	public function functionTypeSkeleton():RawPtr<HlType> {
-		var type = allocateType(HlTypeKind.Function), functionData = arena.allocTypeFunction();
+	public function functionTypeSkeleton(?kind:HlTypeKind = HlTypeKind.Function):RawPtr<HlType> {
+		if (kind != HlTypeKind.Function && kind != HlTypeKind.Method)
+			throw "HashLink function type skeletons must be functions or methods";
+		var type = allocateType(kind), functionData = arena.allocTypeFunction();
 		functionData.ref.args = RawPtr.nullPtr();
 		functionData.ref.ret = RawPtr.nullPtr();
 		functionData.ref.nargs = 0;
@@ -106,9 +132,18 @@ class HlTypeBuilder {
 		return type;
 	}
 
+	/** Construct an abstract type with its arena-owned name. */
+	public function abstractType(name:RawPtr<UInt16>):RawPtr<HlType> {
+		var type = allocateType(HlTypeKind.Abstract);
+		type.ref.data.ref.absName = name;
+		return type;
+	}
+
 	/** Allocate an object type header before its fields are known. */
-	public function objectTypeSkeleton():RawPtr<HlType> {
-		var type = allocateType(HlTypeKind.Object), objectData = arena.allocTypeObject();
+	public function objectTypeSkeleton(?kind:HlTypeKind = HlTypeKind.Object):RawPtr<HlType> {
+		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
+			throw "HashLink object type skeletons must be objects or structures";
+		var type = allocateType(kind), objectData = arena.allocTypeObject();
 		objectData.ref.nfields = 0;
 		objectData.ref.nproto = 0;
 		objectData.ref.nbindings = 0;
@@ -301,6 +336,36 @@ class HlTypeBuilder {
 		var result = arena.allocInt32Array(values.length);
 		for (index in 0...values.length)
 			result.offset(index).store(cast values[index]);
+		return result;
+	}
+
+	static function utf8Bytes(value:String):Array<Int> {
+		var result:Array<Int> = [], index = 0;
+		while (index < value.length) {
+			var code = value.charCodeAt(index++);
+			if (code >= 0xD800 && code <= 0xDBFF && index < value.length) {
+				var low = value.charCodeAt(index);
+				if (low >= 0xDC00 && low <= 0xDFFF) {
+					code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
+					index++;
+				}
+			}
+			if (code <= 0x7F)
+				result.push(code);
+			else if (code <= 0x7FF) {
+				result.push(0xC0 | (code >> 6));
+				result.push(0x80 | (code & 0x3F));
+			} else if (code <= 0xFFFF) {
+				result.push(0xE0 | (code >> 12));
+				result.push(0x80 | ((code >> 6) & 0x3F));
+				result.push(0x80 | (code & 0x3F));
+			} else {
+				result.push(0xF0 | (code >> 18));
+				result.push(0x80 | ((code >> 12) & 0x3F));
+				result.push(0x80 | ((code >> 6) & 0x3F));
+				result.push(0x80 | (code & 0x3F));
+			}
+		}
 		return result;
 	}
 

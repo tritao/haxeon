@@ -60,6 +60,7 @@ class TestCatalog {
 		"NativeLayoutMain",
 		"NativeMemoryMain",
 		"HashlinkTypeMetadataMain",
+		"HlNativeMetadataMain",
 		"HlReaderMain",
 	];
 
