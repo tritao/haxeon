@@ -54,6 +54,14 @@ non-GC `hl_function` and `hl_native` descriptors from `hlmodule.h`, including
 the named union used by a function's field reference. The corresponding Haxe
 records are `runtime.hashlink.HlFunction` and `runtime.hashlink.HlNative`.
 
+`compiler.hl.HlReader` now decodes the HLB module header, scalar pools, byte
+pool, type/global/native tables, functions, legacy source locations, constants,
+and length-delimited debug sections into the same `HlCode` model consumed by
+`HlWriter`. It validates table references and rejects truncated, trailing, or
+currently unrepresentable HLB data instead of silently discarding it. This is
+the first loader step toward letting Haxeon own module parsing and validation;
+native HashLink execution remains the consumer of the resulting model.
+
 Low-level runtime code can pass the validated model through
 `compiler.ffi.HxiNativeRecordEmitter` to generate source-declared
 `@:repr("C")` records. Pointer fields then use the same `RawPtr<T>` projections,

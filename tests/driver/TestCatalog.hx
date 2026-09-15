@@ -60,6 +60,7 @@ class TestCatalog {
 		"NativeLayoutMain",
 		"NativeMemoryMain",
 		"HashlinkTypeMetadataMain",
+		"HlReaderMain",
 	];
 
 	static final toolingMains = [
