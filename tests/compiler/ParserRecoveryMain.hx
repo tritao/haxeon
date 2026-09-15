@@ -218,6 +218,8 @@ class ParserRecoveryMain {
 			var constructorResult = new Parser(new Lexer(constructorSource).tokenize()).parseProgramRecovering();
 			if (constructorResult.program.functions.length != 1 || constructorResult.program.functions[0].statements.length != 1)
 				throw 'unfinished generic constructor discarded its enclosing function: $constructor';
+			if (Typer.typeRecovered(constructorResult.program) == null)
+				throw 'tolerant typing abandoned unfinished generic constructor: $constructor';
 		}
 
 		var memberSource = new SourceFile("Member.hx", "function main():Void return value.");
