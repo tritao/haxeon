@@ -33,7 +33,7 @@ class ArtifactCache {
 	}
 
 	public function restore(action:ExecutionAction, key:String):Bool {
-		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0)
+		if (!isShareable(action))
 			return false;
 		var directory = Path.join([cacheRoot, key]),
 			manifestPath = Path.join([directory, "manifest.json"]);
@@ -80,7 +80,7 @@ class ArtifactCache {
 	}
 
 	public function publish(action:ExecutionAction, key:String):Void {
-		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0 || !outputsExist(action))
+		if (!isShareable(action) || !outputsExist(action))
 			return;
 		var directory = Path.join([cacheRoot, key]),
 			manifestPath = Path.join([directory, "manifest.json"]);
@@ -114,6 +114,17 @@ class ArtifactCache {
 			if (!FileSystem.exists(output) || FileSystem.isDirectory(output))
 				return false;
 		return true;
+	}
+
+	static function isShareable(action:ExecutionAction):Bool {
+		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0)
+			return false;
+		return switch action.action {
+			case Process(_, _, _, _):
+				!StringTools.startsWith(action.id.key(), "cmake-configure:")
+					&& !StringTools.startsWith(action.id.key(), "native-cmake-configure:");
+			case Compiler(_, _): false;
+		};
 	}
 
 	static function ensureDirectory(path:String):Void {
