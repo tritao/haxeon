@@ -1,7 +1,12 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
+import compiler.ffi.HxiAbi;
+import compiler.ffi.HxiModel.HxiType;
+import compiler.ffi.HxiParser;
+import compiler.ffi.HxiValidator;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.types.TypedAst.TypedExpressionKind;
+import sys.io.File;
 
 /** Verifies the first Haxe-owned C-layout model for HashLink type metadata. */
 class HashlinkTypeMetadataMain {
@@ -37,6 +42,28 @@ class HashlinkTypeMetadataMain {
 			+ 'function main():Int return typeSize() + typeDataSize() + typeDataOffset() + functionSize() + objectSize();');
 		compiler.compile("HashlinkTypeMetadata");
 		var functions = compiler.lastTypedProgram.functions;
+		var imported = HxiParser.parse("HashLinkMetadata.hxi", File.getContent("stdlib/runtime/hashlink/HashLinkMetadata.hxi"));
+		HxiValidator.validate(imported, []);
+		var importedAbi = HxiAbi.forInterface(imported), layoutPairs = [
+			{nativeName: "hl_alloc", haxeName: "runtime.hashlink.HlAllocation"},
+			{nativeName: "hl_module_context", haxeName: "runtime.hashlink.HlModuleContext"},
+			{nativeName: "hl_type_fun_closure_type", haxeName: "runtime.hashlink.HlTypeClosureType"},
+			{nativeName: "hl_type_fun_closure", haxeName: "runtime.hashlink.HlTypeClosure"},
+			{nativeName: "hl_type_fun", haxeName: "runtime.hashlink.HlTypeFunction"},
+			{nativeName: "hl_obj_field", haxeName: "runtime.hashlink.HlObjectField"},
+			{nativeName: "hl_obj_proto", haxeName: "runtime.hashlink.HlObjectProto"},
+			{nativeName: "hl_type_obj", haxeName: "runtime.hashlink.HlTypeObject"},
+			{nativeName: "hl_type_virtual", haxeName: "runtime.hashlink.HlTypeVirtual"},
+			{nativeName: "hl_enum_construct", haxeName: "runtime.hashlink.HlEnumConstruct"},
+			{nativeName: "hl_type_enum", haxeName: "runtime.hashlink.HlTypeEnum"},
+			{nativeName: "hl_type", haxeName: "runtime.hashlink.HlType"}
+		];
+		for (pair in layoutPairs) {
+			var importedLayout = importedAbi.layout(HxiType.Named(pair.nativeName)),
+				haxeLayout = requireLayout(requireClass(compiler.lastTypedProgram.classes, pair.haxeName).nativeLayouts, "portable-abi64");
+			expect(importedLayout != null && importedLayout.size == haxeLayout.size && importedLayout.align == haxeLayout.alignment,
+				'${pair.haxeName} must match the header-derived HXI layout for ${pair.nativeName}');
+		}
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeSize") == 40, "hl_type must match the 64-bit C header size");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeDataSize") == 8, "hl_type's anonymous union must be pointer-sized");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeDataOffset") == 8, "hl_type's union must follow the kind field with ABI alignment");
@@ -70,6 +97,20 @@ class HashlinkTypeMetadataMain {
 					case _:
 				}
 		throw 'Missing constant-returning function "$name"';
+	}
+
+	static function requireClass(classes:Array<compiler.types.TypedAst.TypedClass>, name:String):compiler.types.TypedAst.TypedClass {
+		for (declaration in classes)
+			if (declaration.name == name)
+				return declaration;
+		throw 'Missing typed class "$name"';
+	}
+
+	static function requireLayout(layouts:Array<compiler.types.TypedAst.TypedNativeLayout>, target:String):compiler.types.TypedAst.TypedNativeLayout {
+		for (layout in layouts)
+			if (layout.target == target)
+				return layout;
+		throw 'Missing native layout for "$target"';
 	}
 
 	static function expectError(source:String, expected:String):Void {
