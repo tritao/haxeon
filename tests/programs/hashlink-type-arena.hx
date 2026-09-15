@@ -223,25 +223,26 @@ function main():Int {
 	var moduleCorrect = !module.ref.alloc.ref.current.isNull()
 		&& module.ref.functionsPtrs.offset(0).load() == RawPtr.nullPtr()
 		&& module.ref.functionsTypes.offset(0).load() == intType;
-	var nativeObjectCorrect = HlTypeBridge.native_type_data_size(builtObject) == 16
-		&& HlTypeBridge.native_type_object_field_offset(builtObject, 0) == 8
-		&& objectData.ref.module == module
-		&& !builtObject.ref.vobjProto.isNull()
-		&& !objectData.ref.runtime.isNull()
-		&& objectData.ref.runtime.ref.nmethods == 1
-		&& objectData.ref.runtime.ref.nbindings == 1
-		&& !objectData.ref.runtime.ref.bindings.offset(0).ref.pointer.isNull()
-		&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0
-		&& recursiveObjectData.ref.fields.offset(0).ref.type == recursiveObject
-		&& recursiveObjectData.ref.fields.offset(0).ref.name.offset(0).load() == 110
-		&& recursiveFunctionData.ref.args.offset(0).load() == recursiveFunction
-		&& recursiveFunctionData.ref.ret == recursiveFunction
-		&& recursiveEnumData.ref.constructs.offset(0).ref.params.offset(0).load() == recursiveEnum
-		&& recursiveVirtualData.ref.fields.offset(0).ref.type == recursiveVirtual;
+	var nativeObjectCorrect = cast(objectData.ref.runtime.ref.size, Int) == 16
+		&& cast(objectData.ref.runtime.ref.fieldIndexes.offset(0)
+			.load(), Int) == 8
+			&& objectData.ref.module == module
+			&& !builtObject.ref.vobjProto.isNull()
+			&& !objectData.ref.runtime.isNull()
+			&& objectData.ref.runtime.ref.nmethods == 1
+			&& objectData.ref.runtime.ref.nbindings == 1
+			&& !objectData.ref.runtime.ref.bindings.offset(0).ref.pointer.isNull()
+			&& objectData.ref.runtime.ref.bindings.offset(0).ref.fieldId == 0
+			&& recursiveObjectData.ref.fields.offset(0).ref.type == recursiveObject
+			&& recursiveObjectData.ref.fields.offset(0).ref.name.offset(0).load() == 110
+			&& recursiveFunctionData.ref.args.offset(0).load() == recursiveFunction
+			&& recursiveFunctionData.ref.ret == recursiveFunction
+			&& recursiveEnumData.ref.constructs.offset(0).ref.params.offset(0).load() == recursiveEnum
+			&& recursiveVirtualData.ref.fields.offset(0).ref.type == recursiveVirtual;
 	HlTypeBridge.native_type_initialize_object(recursiveObject);
 	nativeObjectCorrect = nativeObjectCorrect
 		&& !recursiveObjectData.ref.runtime.isNull()
-		&& HlTypeBridge.native_type_data_size(recursiveObject) == 16;
+		&& cast(recursiveObjectData.ref.runtime.ref.size, Int) == 16;
 	var generation = new HlMetadataGeneration(128, 1),
 		generationVoid = generation.builder.primitive(HlTypeKind.VoidType),
 		generationInt = generation.builder.primitive(HlTypeKind.Int32Type),

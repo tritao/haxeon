@@ -29,23 +29,6 @@ HL_PRIM int HL_NAME(native_pointer_size)() {
 	return (int)sizeof(void*);
 }
 
-HL_PRIM int HL_NAME(native_type_data_size)( hl_type *type ) {
-	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
-	if( type->kind != HOBJ && type->kind != HSTRUCT )
-		hl_error("HashLink type metadata pointer must reference an object type");
-	return hl_get_obj_rt(type)->size;
-}
-
-HL_PRIM int HL_NAME(native_type_object_field_offset)( hl_type *type, int field ) {
-	hl_runtime_obj *runtime;
-	if( type == NULL || (type->kind != HOBJ && type->kind != HSTRUCT) )
-		hl_error("HashLink type metadata pointer must reference an object type");
-	runtime = hl_get_obj_rt(type);
-	if( field < 0 || field >= runtime->nfields )
-		hl_error("HashLink object field index is outside the runtime layout");
-	return runtime->fields_indexes[field];
-}
-
 HL_PRIM void HL_NAME(native_type_initialize_object)( hl_type *type ) {
 	if( type == NULL || (type->kind != HOBJ && type->kind != HSTRUCT) || type->obj == NULL || type->obj->m == NULL )
 		hl_error("HashLink object metadata initialization requires an object with a module context");
