@@ -263,6 +263,13 @@ class ParserRecoveryMain {
 		var signature = signatureService.signatureHelp("SignatureRecovery.hx", signatureSource.length);
 		if (signature == null || signature.label != "take(value:Int):Void" || signature.activeParameter != 0)
 			throw "recovered call did not expose signature help context";
+
+		var interfaceService = new LanguageService(),
+			interfaceSource = "class Foo {} interface Contract { function take(value:Foo):Void; } function main():Void { var contract:Contract; contract.take(";
+		interfaceService.update("InterfaceRecovery.hx", interfaceSource);
+		var interfaceSignature = interfaceService.signatureHelp("InterfaceRecovery.hx", interfaceSource.length);
+		if (interfaceSignature == null || interfaceSignature.label != "take(value:Foo):Void" || interfaceSignature.activeParameter != 0)
+			throw "recovered interface call did not expose signature help context";
 	}
 
 	static function assertNestedRecovery(tail:String):Void {

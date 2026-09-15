@@ -268,11 +268,26 @@ class SemanticIndex {
 			for (method in owner.methods)
 				rememberRecoveredMember(owner.name, method.name, method.span);
 		}
+		for (owner in program.interfaces) {
+			checkpoint();
+			for (method in owner.methods)
+				rememberRecoveredMember(owner.name, method.name, method.span);
+		}
+		for (owner in program.abstracts) {
+			checkpoint();
+			for (method in owner.methods)
+				rememberRecoveredMember(owner.name, method.name, method.span);
+		}
 		for (fn in program.functions) {
 			checkpoint();
 			indexRecoveredFunction(fn, null);
 		}
 		for (owner in program.classes) {
+			checkpoint();
+			for (fn in owner.methods)
+				indexRecoveredFunction(fn, owner.name);
+		}
+		for (owner in program.interfaces) {
 			checkpoint();
 			for (fn in owner.methods)
 				indexRecoveredFunction(fn, owner.name);
