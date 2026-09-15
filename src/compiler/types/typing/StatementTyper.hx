@@ -66,7 +66,9 @@ typedef AssignmentTypingRules = {
 		pointer:TypedExpression,
 		type:CompilerType,
 		size:Int,
-		signed:Bool
+		signed:Bool,
+		arrayLength:Null<Int>,
+		addressOnly:Bool
 	}>,
 	abiBoundaryCast:(TypedExpression, CompilerType) -> TypedExpression,
 	arrayElementType:(CompilerType, SourceSpan) -> CompilerType,
@@ -275,6 +277,8 @@ class StatementTyper {
 			default:
 				var native = assignmentRules.nativeField(object, fieldName, span);
 				if (native != null) {
+					if (native.arrayLength != null || native.addressOnly)
+						throw new CompileError(new Diagnostic("E1022", "Native fixed array fields cannot be assigned as a whole", span));
 					var value = coerce(typeExpression(expression, scope, native.type, false), native.type, 'field "$name"', "E1002");
 					TExpression(new TypedExpression(TCall("$rawptr.store",
 						[native.pointer, value, new TypedExpression(TIntLiteral(native.size), TInt, span)]), TVoid, span),
@@ -334,6 +338,8 @@ class StatementTyper {
 			default:
 				var native = assignmentRules.nativeField(object, fieldName, span);
 				if (native != null) {
+					if (native.arrayLength != null || native.addressOnly)
+						throw new CompileError(new Diagnostic("E1022", "Native fixed array fields cannot be assigned as a whole", span));
 					value = coerce(value, native.type, 'field "$fieldName"', "E1002");
 					TExpression(new TypedExpression(TCall("$rawptr.store",
 						[native.pointer, value, new TypedExpression(TIntLiteral(native.size), TInt, span)]), TVoid, span),

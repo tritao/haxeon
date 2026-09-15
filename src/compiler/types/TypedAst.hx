@@ -228,6 +228,10 @@ typedef TypedFunction = {
 typedef TypedField = {
 	final name:String;
 	final type:CompilerType;
+
+	/** Number of inline native array elements, or null for a scalar field. */
+	final nativeArrayLength:Null<Int>;
+
 	final initializer:Null<TypedExpression>;
 
 	/** Evaluated constant retained for compile-time inline-field substitution. */

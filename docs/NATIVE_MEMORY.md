@@ -29,7 +29,9 @@ fields are fixed-width scalars, target-defined C scalar aliases, `Int`, `Float`,
 `Bool`, pointers, and nested native records. Strings, arrays, ordinary classes,
 closures, `Dynamic`, and all other GC-managed references are rejected. A native
 union can be declared with `@:union`; its fields overlap at offset zero and its
-size and alignment are the target-specific maximum of those fields.
+size and alignment are the target-specific maximum of those fields. Inline C
+arrays use `@:array(N)` on the element field and occupy `N` consecutive
+elements in the record.
 
 ```haxe
 @:value
@@ -65,6 +67,8 @@ uses HashLink's existing untyped memory opcodes; byte offsets use its existing
 offset and `RawPtr` memory load/store operations as the explicit form. It does
 not introduce a second native memory model. For a pointer-valued field, the
 field load or store uses the pointer-sized native representation.
+For a fixed array field, `p.ref.values` produces a `RawPtr<T>` to its first
+element; use `offset(index)` to access an element.
 
 Raw pointers do not own their targets, keep them alive, or prevent invalidation.
 The compiler does not infer ownership, borrowing, or lifetimes. A pointer becomes
@@ -116,7 +120,7 @@ record projections is still future work.
 
 The first foundation does not add general-purpose allocation, ownership or
 borrow checking, pinning, GC write barriers, atomics, TLS, executable memory,
-`unsafe {}` syntax, fixed arrays, arbitrary native function pointers, aggregate
+`unsafe {}` syntax, arbitrary native function pointers, aggregate
 by-value calling conventions, or changes to the HashLink fork. The first
 acceptance point is a Haxe-declared, GC-free C record whose layout agrees with
 the ABI classifier, manipulated through `RawPtr<T>` in stable aligned arena

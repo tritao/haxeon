@@ -543,6 +543,7 @@ class Parser {
 					var end = consume(TokenKind.Semicolon).span;
 					fields.push({
 						name: fieldName,
+						metadata: memberMetadata,
 						type: fieldType,
 						initializer: initializer,
 						readAccess: readAccess,

@@ -1314,6 +1314,8 @@ class BodyTyper {
 			var field = nativeField(typedObject, name, span);
 			if (field == null)
 				return null;
+			if (field.arrayLength != null || field.addressOnly)
+				return field.pointer;
 			return new TypedExpression(TCall("$rawptr.load", [
 				field.pointer,
 				new TypedExpression(TIntLiteral(field.size), TInt, span),
@@ -1393,7 +1395,9 @@ class BodyTyper {
 		pointer:TypedExpression,
 		type:CompilerType,
 		size:Int,
-		signed:Bool
+		signed:Bool,
+		arrayLength:Null<Int>,
+		addressOnly:Bool
 	}> {
 		var pointer = switch object.expression {
 			case TCall("$rawptr.ref", [pointer]): pointer;
@@ -1411,11 +1415,13 @@ class BodyTyper {
 			fail("E1022", 'Native value "$recordName" has no layout for ABI target "${session.nativeAbiTarget}"', span);
 			return null;
 		}
-		var fieldType:Null<CompilerType> = null;
+		var fieldType:Null<CompilerType> = null, arrayLength:Null<Int> = null;
 		for (candidate in declaration.fields)
-			if (candidate.name == name && !candidate.isStatic)
+			if (candidate.name == name && !candidate.isStatic) {
 				fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(recordName, candidate), candidate.span,
 					nominalSubstitutions(object.type));
+				arrayLength = NativeLayout.fixedArrayLength(candidate.metadata);
+			}
 		var fieldLayout:Null<TypedNativeFieldLayout> = null;
 		for (candidate in layout.fields)
 			if (candidate.name == name)
@@ -1424,24 +1430,40 @@ class BodyTyper {
 			fail("E1005", 'Unknown native field "$recordName.$name"', span);
 			return null;
 		}
-		if (NativeLayout.isNativeValue(fieldType)) {
-			fail("E1022", "Native records are address-only and cannot be loaded by value", span);
-			return null;
-		}
-		var access:Null<{size:Int, signed:Bool}> = null;
-		try {
-			access = NativeLayout.memoryAccess(fieldType, session.nativeAbiTarget);
-		} catch (_:Dynamic) {
-			fail("E1022", 'Native field "$recordName.$name" has no fixed native memory layout', span);
-			return null;
-		}
+		var addressOnly = NativeLayout.isNativeValue(fieldType),
+			access:Null<{size:Int, signed:Bool}> = addressOnly ? {size: fieldLayout.size, signed: false} : null;
+		if (!addressOnly)
+			try {
+				access = NativeLayout.memoryAccess(fieldType, session.nativeAbiTarget);
+			} catch (_:Dynamic) {
+				fail("E1022", 'Native field "$recordName.$name" has no fixed native memory layout', span);
+				return null;
+			}
 		return {
 			pointer: new TypedExpression(TCall("$rawptr.byteOffset", [pointer, new TypedExpression(TIntLiteral(fieldLayout.offset), TInt, span)]),
-				pointer.type, span),
+				arrayLength == null
+				&& !addressOnly ? pointer.type : rawPointerType(fieldType, span), span),
 			type: fieldType,
 			size: access.size,
-			signed: access.signed
+			signed: access.signed,
+			arrayLength: arrayLength,
+			addressOnly: addressOnly
 		};
+	}
+
+	function rawPointerType(pointee:CompilerType, span:SourceSpan):CompilerType {
+		var declarationName:Null<String> = null;
+		for (name in session.declarations.abstracts.keys())
+			if (isRawPointerAbstract(name))
+				declarationName = name;
+		var declaration = declarationName == null ? null : session.declarations.abstracts.get(declarationName);
+		if (declaration == null || declarationName == null || declaration.typeParameters.length != 1) {
+			fail("E1022", "RawPtr type declaration is unavailable", span);
+			return TDynamic;
+		}
+		var substitutions:Map<String, CompilerType> = [];
+		substitutions.set(declaration.typeParameters[0], pointee);
+		return TAbstract(declarationName, [pointee], session.declarations.resolve(declaration.underlying, declaration.span, substitutions));
 	}
 
 	static function isRawPointerRef(expression:TypedExpression):Bool

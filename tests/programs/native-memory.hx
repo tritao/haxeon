@@ -15,6 +15,18 @@ class NativePayload {
 	public var next:RawPtr<NativeNode>;
 }
 
+@:value @:repr("C")
+class NativeFixed {
+	@:array(4)
+	public var values:UInt8;
+	public var sentinel:Int32;
+}
+
+@:value @:repr("C")
+class NativeOuter {
+	public var inner:NativeNode;
+}
+
 function main():Int {
 	if (sizeof<NativeNode>() != 32 || alignof<NativeNode>() != 8 || offsetof<NativeNode>("value") != 8 || offsetof<NativeNode>("ratio") != 16
 		|| offsetof<NativeNode>("next") != 24)
@@ -41,9 +53,20 @@ function main():Int {
 	var payload:RawPtr<NativePayload> = arena.alloc();
 	payload.ref.value = 1234;
 	var payloadValue = payload.ref.value;
+	var fixed:RawPtr<NativeFixed> = arena.alloc();
+	fixed.ref.values.offset(0).store(1);
+	fixed.ref.values.offset(1).store(2);
+	fixed.ref.values.offset(2).store(3);
+	fixed.ref.values.offset(3).store(4);
+	fixed.ref.sentinel = 9001;
+	var fixedValue = fixed.ref.values.offset(2).load();
+	var fixedSentinel = fixed.ref.sentinel;
+	var outer:RawPtr<NativeOuter> = arena.alloc();
+	outer.ref.inner.ref.tag = 13;
+	var nestedTag = outer.ref.inner.ref.tag;
 	var empty:RawPtr<Int> = RawPtr.nullPtr();
 	var correct = firstTag == 7 && firstValue == 9001 && firstRatio == 1.25 && secondTagValue == 9 && !link.isNull() && linkTag.load() == 9
-		&& payloadValue == 1234 && empty.isNull();
+		&& payloadValue == 1234 && fixedValue == 3 && fixedSentinel == 9001 && nestedTag == 13 && empty.isNull();
 	var ints:RawPtr<Int32> = arena.alloc(4);
 	ints.offset(0).store(11);
 	ints.offset(1).store(22);

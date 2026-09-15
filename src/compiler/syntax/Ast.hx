@@ -49,6 +49,7 @@ enum AstFieldAccess {
 /** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
+	final metadata:Array<AstMetadata>;
 	final type:Null<AstType>;
 	final initializer:Null<AstExpression>;
 	final readAccess:Null<AstFieldAccess>;

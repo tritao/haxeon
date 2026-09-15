@@ -242,6 +242,12 @@ class ProgramTyper {
 		for (parameter in classDecl.typeParameters)
 			erasedSubstitutions.set(parameter, TDynamic);
 		for (field in classDecl.fields) {
+			var nativeArrayLength:Null<Int> = try NativeLayout.fixedArrayLength(field.metadata) catch (error:Dynamic) {
+				BodyTyper.fail("E1022", Std.string(error), field.span);
+				cast null;
+			};
+			if (nativeArrayLength != null && !isNativeValue)
+				BodyTyper.fail("E1022", "@:array fields require a native value record", field.span);
 			if (fieldNames.exists(field.name))
 				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
 			if (field.isInline && !field.isStatic)
@@ -282,6 +288,7 @@ class ProgramTyper {
 			fields.push({
 				name: field.name,
 				type: type,
+				nativeArrayLength: nativeArrayLength,
 				initializer: initializer,
 				inlineValue: inlineValue,
 				readAccess: field.readAccess,
@@ -408,7 +415,12 @@ class ProgramTyper {
 			collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
 			for (field in declaration.fields)
-				{name: field.name, type: field.type, span: field.span}
+				{
+					name: field.name,
+					type: field.type,
+					span: field.span,
+					arrayLength: field.nativeArrayLength
+				}
 		], nativeDeclarations, declaration.span,
 			declaration.isNativeUnion) catch (error:Dynamic) {
 			visiting.remove(key);
