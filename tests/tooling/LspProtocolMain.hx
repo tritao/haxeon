@@ -1120,6 +1120,25 @@ class LspProtocolMain {
 				foundUtf16Member = true;
 		if (!foundUtf16Member || !utf16Completion.result.isIncomplete)
 			throw "LSP completion did not honor UTF-16 positions in recovered source";
+		var nullableNestedSource = "class Leaf { public var value:Int; } class Root { public var child:Leaf; } function main():Void { var root:Null<Root> = null; root.child.";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 5}, contentChanges: [{text: nullableNestedSource}]}
+		}));
+		var nullableNestedDocument = new LspDocument(uri, "/workspace/Main.hx", 5, nullableNestedSource),
+			nullableNestedCompletion = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 13,
+				method: "textDocument/completion",
+				params: {textDocument: {uri: uri}, position: nullableNestedDocument.position(nullableNestedSource.length)}
+			})),
+			foundNullableNestedMember = false;
+		for (item in cast(nullableNestedCompletion.result.items, Array<Dynamic>))
+			if (item.label == "value" && item.detail == "value:Int")
+				foundNullableNestedMember = true;
+		if (!foundNullableNestedMember || !nullableNestedCompletion.result.isIncomplete)
+			throw "LSP completion did not preserve nullable nested recovered receiver typing";
 		var recoveredTypeService = new LanguageService(),
 			recoveredTypeProtocol = new LspProtocol(recoveredTypeService),
 			recoveredTypeUri = "file:///workspace/types/Foo.hx",
