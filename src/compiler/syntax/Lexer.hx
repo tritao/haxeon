@@ -195,7 +195,11 @@ class Lexer {
 					} else TokenKind.Caret;
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
-				case "?": TokenKind.Question;
+				case "?":
+					if (position < source.length && source.get(position) == "?".code) {
+						position++;
+						TokenKind.NullCoalesce;
+					} else TokenKind.Question;
 				case "@": TokenKind.At;
 				case "$": TokenKind.Dollar;
 				case "+":

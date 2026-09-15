@@ -30,6 +30,25 @@ class AbstractConversionGraph {
 				fromEdges.push({source: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters), target: owner});
 			for (type in decl.toTypes)
 				toEdges.push({source: owner, target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)});
+			for (method in decl.methods) {
+				var metadata = method.metadata;
+				if (metadata == null)
+					continue;
+				for (entry in metadata)
+					switch entry.name {
+						case "from" if (method.isStatic && method.arguments.length == 1):
+							fromEdges.push({
+								source: node(declarations.resolve(method.arguments[0].type, method.span, substitutions), decl.name, decl.typeParameters),
+								target: owner
+							});
+						case "to" if (!method.isStatic && method.arguments.length == 0):
+							toEdges.push({
+								source: owner,
+								target: node(declarations.resolve(method.result, method.span, substitutions), decl.name, decl.typeParameters)
+							});
+						default:
+					}
+			}
 		}
 		if (shouldValidate) {
 			validate();
@@ -59,6 +78,15 @@ class AbstractConversionGraph {
 		for (type in decl.fromTypes)
 			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions)))
 				return true;
+		for (method in decl.methods) {
+			var metadata = method.metadata;
+			if (metadata == null || !method.isStatic || method.arguments.length != 1)
+				continue;
+			for (entry in metadata)
+				if (entry.name == "from"
+					&& TypeRelations.equals(actual, declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+					return true;
+		}
 		return false;
 	}
 
@@ -70,6 +98,14 @@ class AbstractConversionGraph {
 		for (type in decl.toTypes)
 			if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions)))
 				return true;
+		for (method in decl.methods) {
+			var metadata = method.metadata;
+			if (metadata == null || method.isStatic || method.arguments.length != 0)
+				continue;
+			for (entry in metadata)
+				if (entry.name == "to" && TypeRelations.equals(expected, declarations.resolve(method.result, method.span, substitutions)))
+					return true;
+		}
 		return false;
 	}
 

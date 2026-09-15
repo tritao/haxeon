@@ -511,8 +511,10 @@ class WasmGcTypePlan {
 
 	function defineNamedTypes():Void {
 		for (object in orderedObjects) {
-			var fields = flattenedObjectFields.get(object.name),
-				baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
+			var fields = flattenedObjectFields.get(object.name);
+			if (fields == null)
+				throw 'Missing flattened fields for Wasm GC object "${object.name}"';
+			var baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
 				supertypes:Array<Int> = baseIndex == null ? [] : [baseIndex],
 				wasmFields:Array<WasmFieldType> = [
 					for (field in fields)
@@ -570,14 +572,16 @@ class WasmGcTypePlan {
 			{type: Value(I32), mutable: true},
 			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
 		]));
-		for (entry in [
+		var boxedEntries:Array<{key:String, type:WasmValueType}> = [
 			{key: "i32", type: I32},
 			{key: "bool", type: I32},
 			{key: "i64", type: I64},
 			{key: "f64", type: F64},
 			{key: "type-ref", type: I32}
-		])
-			setType(boxedPrimitiveTypeIndices.get(entry.key), true, [], Struct([{type: Value(entry.type), mutable: false}]));
+		];
+		for (entry in boxedEntries)
+			setType(requireIndex(boxedPrimitiveTypeIndices, entry.key, 'Missing boxed primitive type "${entry.key}"'), true, [],
+				Struct([{type: Value(entry.type), mutable: false}]));
 	}
 
 	function defineGenericTypes():Void {
@@ -614,7 +618,7 @@ class WasmGcTypePlan {
 
 	function defineFunctionTypes():Void {
 		for (key in plannedFunctionTypes.keys())
-			setType(functionTypeIndices.get(key), true, [], Func(plannedFunctionTypes.get(key)));
+			setType(requireIndex(functionTypeIndices, key, 'Missing Wasm GC function type "$key"'), true, [], Func(plannedFunctionTypes.get(key)));
 	}
 
 	function arrayPlan(element:IrType):WasmGcArrayTypePlan {

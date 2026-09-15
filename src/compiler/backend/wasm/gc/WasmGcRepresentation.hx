@@ -1456,7 +1456,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	function combineInputBytes(bytes:Array<Int>, endian:Int, wide:Bool, destination:Int):Array<WasmInstruction> {
-		var width = wide ? I64 : I32,
+		var width:WasmValueType = wide ? WasmValueType.I64 : WasmValueType.I32,
 			body:Array<WasmInstruction> = [LocalGet(endian), If(width)];
 		body = body.concat(combineInputByteOrder(bytes, wide, true));
 		body.push(Else);

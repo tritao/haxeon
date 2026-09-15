@@ -53,10 +53,12 @@ class HaxeonBuild {
 		if (!FileSystem.exists(outputDirectory))
 			FileSystem.createDirectory(outputDirectory);
 		var sources = sourceManifest();
+		var sourcesFile = path("out", "bootstrap", "compiler-sources.txt");
+		File.saveContent(sourcesFile, sources.join("\n") + "\n");
 		var checked = path("bootstrap", "compiler.hl");
 		var self = path("out", "bootstrap", "compiler-self.hl");
 		if (selfOnly) {
-			var status = compileWith(checked, self, sources);
+			var status = compileWith(checked, self, sourcesFile);
 			if (status != 0)
 				return status;
 			if (!identical(checked, self) || !identical(checked + ".functions", self + ".functions")) {
@@ -71,7 +73,7 @@ class HaxeonBuild {
 		var stageOne = path("out", "bootstrap", "compiler-stage-one.hl");
 		var stageTwo = path("out", "bootstrap", "compiler-stage-two.hl");
 		var stageThree = path("out", "bootstrap", "compiler-stage-three.hl");
-		var status = run(haxe(), ["--cwd", root(), "-cp", "src", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sources)));
+		var status = run(haxe(), ["--cwd", root(), "-cp", "src", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
 		if (status != 0)
 			return status;
 		for (stage in [
@@ -79,7 +81,7 @@ class HaxeonBuild {
 			{compiler: stageOne, output: stageTwo},
 			{compiler: stageTwo, output: stageThree}
 		]) {
-			status = compileWith(stage.compiler, stage.output, sources);
+			status = compileWith(stage.compiler, stage.output, sourcesFile);
 			if (status != 0)
 				return status;
 		}
@@ -124,20 +126,21 @@ class HaxeonBuild {
 		return failed || !FileSystem.exists(haxe()) ? 1 : 0;
 	}
 
-	static function compileWith(compiler:String, output:String, sources:Array<String>):Int {
-		var status = run(hashlink(), [compiler].concat(compilerArguments(output, sources)));
+	static function compileWith(compiler:String, output:String, sourcesFile:String):Int {
+		var status = run(hashlink(), [compiler].concat(compilerArguments(output, sourcesFile)));
 		if (status != 0)
 			Sys.stderr().writeString('HashLink compiler failed ($status): $compiler -> $output\n');
 		return status;
 	}
 
-	static function compilerArguments(output:String, sources:Array<String>):Array<String>
+	static function compilerArguments(output:String, sourcesFile:String):Array<String>
 		return [
 			'--output=$output',
 			"--entry=compiler.tools.HaxeonCompiler",
 			"--root=src",
-			"--root=stdlib"
-		].concat(sources);
+			"--root=stdlib",
+			'--sources-file=$sourcesFile'
+		];
 
 	static function sourceManifest():Array<String> {
 		var result = [];

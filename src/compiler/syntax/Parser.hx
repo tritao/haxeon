@@ -682,6 +682,9 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var methods = [];
 		while (!check(TokenKind.RightBrace)) {
+			var methodMetadata = parseMetadata();
+			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))
+				advance();
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
@@ -708,7 +711,7 @@ class Parser {
 				name: methodName,
 				isStatic: false,
 				isExtern: false,
-				metadata: [],
+				metadata: methodMetadata,
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,
 				arguments: arguments,
@@ -965,12 +968,13 @@ class Parser {
 	}
 
 	function parseAnonymousFunctionBody():Array<AstStatement> {
-		if (!check(TokenKind.LeftBrace) && match(TokenKind.Return)) {
-			var start = previous().span, value = parseExpression();
-			match(TokenKind.Semicolon);
-			return [Return(value, start.merge(expressionSpan(value)))];
-		}
-		return parseStatementOrBlock();
+		if (check(TokenKind.LeftBrace))
+			return parseStatementOrBlock();
+		var start = current().span;
+		match(TokenKind.Return);
+		var value = parseExpression();
+		match(TokenKind.Semicolon);
+		return [Return(value, start.merge(expressionSpan(value)))];
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
@@ -1019,18 +1023,11 @@ class Parser {
 			target.push(statement);
 
 	function parseExpression():AstExpression {
-		var expression = parseOr();
-		if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot) {
-			advance();
-			advance();
-			advance();
-			var end = parseOr();
-			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
-		}
+		var expression = parseNullCoalesce();
 		if (match(TokenKind.Question)) {
-			var whenTrue = parseExpression();
+			var whenTrue = parseExpressionBranch();
 			consume(TokenKind.Colon);
-			var whenFalse = parseExpression();
+			var whenFalse = parseExpressionBranch();
 			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
 		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
@@ -1041,6 +1038,26 @@ class Parser {
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
 				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
 			};
+		}
+		return expression;
+	}
+
+	function parseNullCoalesce():AstExpression {
+		var expression = parseOr();
+		if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot) {
+			advance();
+			advance();
+			advance();
+			var end = parseOr();
+			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
+		}
+		if (match(TokenKind.NullCoalesce)) {
+			var fallback = parseNullCoalesce(),
+				span = expressionSpan(expression).merge(expressionSpan(fallback)),
+				localName = '$' + 'null-coalesce:${span.start}',
+				local = Variable(localName, expressionSpan(expression));
+			return BlockExpression([VarDeclaration(localName, null, expression, expressionSpan(expression))],
+				Conditional(Equal(local, NullLiteral(expressionSpan(local)), expressionSpan(local)), fallback, local, span), span);
 		}
 		return expression;
 	}
@@ -1556,12 +1573,23 @@ class Parser {
 	}
 
 	function parseExpressionBranch():AstExpression {
-		if (!match(TokenKind.LeftBrace))
+		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
+		advance();
 		var start = previous().span, statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
+				continue;
+			}
+			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+				var result = parseExpressionBranch();
+				match(TokenKind.Semicolon);
+				if (check(TokenKind.RightBrace)) {
+					var end = consume(TokenKind.RightBrace).span;
+					return BlockExpression(statements, result, start.merge(end));
+				}
+				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
 			var saved = position, candidate = tryParseExpression();
@@ -1572,14 +1600,11 @@ class Parser {
 			position = saved;
 			appendStatements(statements, parseStatements());
 		}
-		if (statements.length > 0)
-			switch statements[statements.length - 1] {
-				case Expression(result, _):
-					statements.pop();
-					var end = consume(TokenKind.RightBrace).span;
-					return BlockExpression(statements, result, start.merge(end));
-				default:
-			}
+		var trailing = trailingBlockResult(statements);
+		if (trailing != null) {
+			var end = consume(TokenKind.RightBrace).span;
+			return BlockExpression(trailing.statements, trailing.result, start.merge(end));
+		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));
@@ -1588,6 +1613,32 @@ class Parser {
 		fail(current(), "Expression block requires a result expression");
 		return null;
 	}
+
+	static function trailingBlockResult(statements:Array<AstStatement>):Null<{statements:Array<AstStatement>, result:AstExpression}> {
+		if (statements.length == 0)
+			return null;
+		var last = statements[statements.length - 1],
+			prefix = statements.slice(0, statements.length - 1);
+		return switch last {
+			case AstStatement.Expression(result, _): {statements: prefix, result: result};
+			case AstStatement.If(predicate, whenTrue, whenFalse, span):
+				if (whenFalse.length == 0)
+					return null;
+				var trueResult = trailingBlockResult(whenTrue),
+					falseResult = trailingBlockResult(whenFalse);
+				if (trueResult == null || falseResult == null)
+					return null;
+				{
+					statements: prefix,
+					result: Conditional(predicate, blockResultExpression(trueResult), blockResultExpression(falseResult), span)
+				};
+			case _: null;
+		};
+	}
+
+	static function blockResultExpression(block:{statements:Array<AstStatement>, result:AstExpression}):AstExpression
+		return block.statements.length == 0 ? block.result : BlockExpression(block.statements, block.result,
+			statementSpan(block.statements[0]).merge(expressionSpan(block.result)));
 
 	function parseSwitchExpression(start:SourceSpan):AstExpression {
 		var subject:AstExpression;
@@ -1633,6 +1684,20 @@ class Parser {
 				var values = expandPatternAlternatives(left);
 				appendExpressions(values, expandPatternAlternatives(right));
 				values;
+			case ArrayLiteral(elements, span):
+				var combinations:Array<Array<AstExpression>> = [[]];
+				for (element in elements) {
+					var expanded = expandPatternAlternatives(element),
+						next:Array<Array<AstExpression>> = [];
+					for (combination in combinations)
+						for (alternative in expanded) {
+							var copy = combination.copy();
+							copy.push(alternative);
+							next.push(copy);
+						}
+					combinations = next;
+				}
+				[for (combination in combinations) ArrayLiteral(combination, span)];
 			case Call(name, arguments, span):
 				expandCallPattern(name, arguments, span);
 			case _: [pattern];
@@ -1691,6 +1756,8 @@ class Parser {
 	}
 
 	function parseSwitchExpressionBranch():AstExpression {
+		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseExpressionBranch();
 		var statements = [], start = current().span;
 		while (true) {
 			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
@@ -1699,6 +1766,14 @@ class Parser {
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
+				continue;
+			}
+			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+				var result = parseExpressionBranch();
+				match(TokenKind.Semicolon);
+				if (atSwitchBranchEnd())
+					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
 			var saved = position, result = tryParseExpression();
@@ -1838,6 +1913,9 @@ class Parser {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
 				var optional = false;
+				for (metadata in parseMetadata())
+					if (metadata.name == "optional")
+						optional = true;
 				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
 					if (match(TokenKind.Question)) {
 						if (optional)

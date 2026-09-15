@@ -22,6 +22,7 @@ import compiler.types.analysis.Scope;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypeRelations;
 import compiler.semantic.SemanticSignature;
 
@@ -577,6 +578,8 @@ class CallResolver {
 			var expectedEnumName = enumName(expectedType);
 			if (expectedEnumName != null)
 				enumCase = enumCaseInfo(expectedEnumName + "." + name);
+			if (enumCase == null)
+				enumCase = uniqueEnumCaseInfo(name, arguments.length);
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
@@ -603,16 +606,8 @@ class CallResolver {
 		for (index in 0...typedArguments.length)
 			typedArguments[index] = abiBoundaryCast(typedArguments[index], enumStorageParameterType(enumCase.typeParameters, enumCase.params[index]));
 		var resultType:CompilerType = TInstance(NominalKind.Enum, enumCase.enumName, []);
-		switch expectedType {
-			case TInstance(Enum, expectedName, _) if (expectedName == enumCase.enumName):
-				resultType = expectedType;
-			case TNullable(element):
-				switch element {
-					case TInstance(Enum, expectedName, _) if (expectedName == enumCase.enumName): resultType = expectedType;
-					default:
-				}
-			default:
-		}
+		if (expectedType != null && enumName(expectedType) == enumCase.enumName)
+			resultType = expectedType;
 		return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span);
 	}
 
@@ -636,16 +631,36 @@ class CallResolver {
 		return null;
 	}
 
+	function uniqueEnumCaseInfo(name:String, argumentCount:Int):Null<EnumConstructorInfo> {
+		var found:Null<EnumConstructorInfo> = null;
+		for (enumName => declaration in session.enumDecls)
+			for (index in 0...declaration.cases.length) {
+				var enumCase = declaration.cases[index];
+				if (enumCase.name != name
+					|| argumentCount < requiredEnumParameters(enumCase.params)
+					|| argumentCount > enumCase.params.length)
+					continue;
+				if (found != null)
+					return null;
+				found = {
+					enumName: enumName,
+					index: index,
+					params: enumCase.params,
+					typeParameters: declaration.typeParameters
+				};
+			}
+		return found;
+	}
+
 	function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {
 		var substitutions:Map<String, CompilerType> = [];
 		for (index in 0...typeParameters.length) {
 			var argument:CompilerType = TDynamic;
-			if (instance != null)
-				switch instance {
-					case TInstance(Enum, _, arguments) if (index < arguments.length):
-						argument = arguments[index];
-					default:
-				}
+			switch enumInstance(instance) {
+				case TInstance(Enum, _, arguments) if (index < arguments.length):
+					argument = arguments[index];
+				default:
+			}
 			substitutions.set(typeParameters[index], argument);
 		}
 		var resolved = session.declarations.resolve(parameter.type, parameter.span, substitutions);
@@ -671,9 +686,15 @@ class CallResolver {
 	}
 
 	static function enumName(type:Null<CompilerType>):Null<String>
-		return switch type {
+		return switch enumInstance(type) {
 			case TInstance(Enum, name, _): name;
-			case TNullable(inner): enumName(inner);
+			default: null;
+		};
+
+	static function enumInstance(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TInstance(Enum, _, _): type;
+			case TNullable(inner), TAbstract(_, _, inner): enumInstance(inner);
 			default: null;
 		};
 
@@ -729,6 +750,15 @@ class CallResolver {
 	}
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if (name == "Type.enumEq") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
+			var leftValue = typeExpressionValue(arguments[0], scope),
+				rightValue = typeExpression(arguments[1], scope, leftValue.type, false),
+				left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
+				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
+			return new TypedExpression(TCall("Type.enumEq", [left, right]), TBool, span);
+		}
 		if (name == "Std.isOfType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
@@ -1180,6 +1210,15 @@ class CallResolver {
 				scope.refineExpression(entryPath, mapType.value);
 			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
+		if (name == "copy") {
+			if (arguments.length != 0)
+				fail("E1008", "Map.copy expects no arguments", span);
+			var keyName = '$' + 'map-copy-key:${span.start}',
+				valueName = '$' + 'map-copy-value:${span.start}';
+			return new TypedExpression(TMapComprehension(keyName, valueName, receiver, null, new TypedExpression(TLocal(keyName), mapType.key, span),
+				new TypedExpression(TLocal(valueName), mapType.value, span)),
+				receiver.type, span);
+		}
 		if (name == "keys") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.keys expects no arguments", span);
@@ -1189,6 +1228,12 @@ class CallResolver {
 		if (name == "values") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.values expects no arguments", span);
+			var values = new TypedExpression(TCollectionCall(receiver, "values", []), TArray(mapType.value), span);
+			return iterator(values, mapType.value, span);
+		}
+		if (name == "iterator") {
+			if (arguments.length != 0)
+				fail("E1008", "Map.iterator expects no arguments", span);
 			var values = new TypedExpression(TCollectionCall(receiver, "values", []), TArray(mapType.value), span);
 			return iterator(values, mapType.value, span);
 		}

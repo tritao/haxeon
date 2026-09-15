@@ -632,7 +632,7 @@ class WasmGcModuleBuilder {
 		var arguments = switch closureType {
 			case Function(args, _): args;
 			default: throw 'Wasm GC closure has a non-function type ${Std.string(closureType)}';
-		}, resultType = switch closureType {
+		}, resultType:IrType = switch closureType {
 			case Function(_, result): result;
 			default: Void;
 		}, key = Std.string(closureType), staticType = module.typeIndex(plan.wasmFunctionType(arguments, resultType)), existing = closureTypes.get(key);

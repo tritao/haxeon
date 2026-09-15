@@ -43,7 +43,7 @@ class FlowAnalysis {
 			if (comparison.localName.length > 0)
 				scope.refine(comparison.localName, refined);
 			else
-				scope.refineExpression(comparison.path, refined);
+				scope.refineExpression(comparison.path, refined, comparison.stable);
 		}
 	}
 
@@ -103,6 +103,7 @@ class FlowAnalysis {
 		localName:String,
 		path:String,
 		nonNullType:CompilerType,
+		stable:Bool,
 		nonNullWhenTrue:Bool
 	}> {
 		return switch condition.expression {
@@ -114,6 +115,7 @@ class FlowAnalysis {
 					localName: local.localName,
 					path: local.path,
 					nonNullType: local.nonNullType,
+					stable: local.stable,
 					nonNullWhenTrue: false
 				};
 			case TNot(value):
@@ -122,22 +124,38 @@ class FlowAnalysis {
 					localName: comparison.localName,
 					path: comparison.path,
 					nonNullType: comparison.nonNullType,
+					stable: comparison.stable,
 					nonNullWhenTrue: !comparison.nonNullWhenTrue
 				};
 			default: null;
 		};
 	}
 
-	static function nullableAccess(expression:TypedExpression):Null<{localName:String, path:String, nonNullType:CompilerType}> {
+	static function nullableAccess(expression:TypedExpression):Null<{
+		localName:String,
+		path:String,
+		nonNullType:CompilerType,
+		stable:Bool
+	}> {
 		return switch expression.expression {
 			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): switch expression.type {
-					case TNullable(element): {localName: name, path: "", nonNullType: element};
+					case TNullable(element): {
+							localName: name,
+							path: "",
+							nonNullType: element,
+							stable: false
+						};
 					default: null;
 				};
 			default:
 				var path = accessPath(expression);
 				switch expression.type {
-					case TNullable(element) if (path != null): {localName: "", path: path, nonNullType: element};
+					case TNullable(element) if (path != null): {
+							localName: "",
+							path: path,
+							nonNullType: element,
+							stable: expression.stableFlowValue
+						};
 					default: null;
 				}
 		};
@@ -149,9 +167,20 @@ class FlowAnalysis {
 			case TField(object, name):
 				var parent = accessPath(object);
 				parent == null ? null : parent + "." + name;
+			case TMapGet(map, key): mapEntryPath(map, key);
 			case TCast(value), TAbiCast(value), TToDynamic(value): accessPath(value);
 			default: null;
 		};
+
+	public static function mapKeySource(expression:TypedExpression, scope:Scope):Null<TypedExpression> {
+		return switch expression.expression {
+			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _):
+				var source = scope.mapKeySource(name);
+				source == null ? expression.mapKeySource : source;
+			case TCast(value), TAbiCast(value), TToDynamic(value): mapKeySource(value, scope);
+			default: expression.mapKeySource;
+		};
+	}
 
 	static function isNullValue(expression:TypedExpression):Bool
 		return switch expression.expression {

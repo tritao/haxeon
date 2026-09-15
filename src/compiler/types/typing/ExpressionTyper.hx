@@ -27,11 +27,15 @@ import compiler.types.TypedAst.TypedObjectField;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchExpressionCase;
 import compiler.types.TypedAst.TypedSwitchPredicate;
+import compiler.types.TypedAst.TypedSwitchCoverageCase;
+import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 
 typedef ExpressionTypeCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
+typedef ExpressionSwitchArrayPatternCallback = (AstExpression, CompilerType, Scope) -> Null<TypedSwitchArrayPattern>;
+typedef ExpressionSwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
 typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> CompilerType;
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
 typedef LowerExpressionTypeCallback = AstType->CompilerType;
@@ -62,7 +66,10 @@ typedef ExpressionSwitchRules = {
 	subjectBinding:(AstExpression, CompilerType, Scope) -> Null<String>,
 	catchAll:AstExpression->Bool,
 	enumPattern:(AstExpression, CompilerType, Scope) -> Null<ExpressionSwitchPattern>,
+	arrayPattern:ExpressionSwitchArrayPatternCallback,
+	arrayPatternKey:ExpressionSwitchArrayPatternKeyCallback,
 	caseKey:(TypedExpression, Array<TypedSwitchPredicate>) -> Null<String>,
+	enumCaseCovered:(CompilerType, Int, Array<TypedSwitchCoverageCase>) -> Bool,
 	enumLiteral:TypedExpression->Null<{name:String, index:Int}>,
 	isEnum:CompilerType->Bool,
 	isNullableEnum:CompilerType->Bool,
@@ -339,6 +346,21 @@ class ExpressionTyper {
 					loopScope.define(valueName, mapValue, span);
 				default:
 			}
+		var map = valueName == null ? CallResolver.mapKeyIteratorSource(originalIterable) : null;
+		if (map == null)
+			map = valueName == null ? FlowAnalysis.mapKeySource(originalIterable, scope) : null;
+		if (valueName == null) {
+			if (map != null) {
+				var key = new TypedExpression(TLocal(loopScope.requireId(keyName)), keyType, span),
+					entryPath = FlowAnalysis.mapEntryPath(map, key);
+				if (entryPath != null)
+					switch map.type {
+						case TMap(_, value):
+							loopScope.refineExpression(entryPath, value);
+						default:
+					}
+			}
+		}
 		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
 		if (typedCondition != null && typedCondition.type != TBool)
 			fail("E1004", "Array comprehension condition must be Bool", span);
@@ -353,7 +375,7 @@ class ExpressionTyper {
 			typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
 		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
-			TArray(elementType), span);
+			TArray(elementType), span, false, map);
 	}
 
 	public function typeMapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, key:AstExpression,
@@ -455,18 +477,32 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedSubject = typeExpressionCallback(expression, scope, null, false);
-		if (!sameType(typedSubject.type, TInt) && !sameType(typedSubject.type, TString) && !switchRules.isEnum(typedSubject.type))
-			fail("E1019", "Switch requires an Int, String, or enum value", typedSubject.span);
+		if (!sameType(typedSubject.type, TInt)
+			&& !sameType(typedSubject.type, TString)
+			&& !isNullableString(typedSubject.type)
+			&& !isArraySwitchable(typedSubject.type)
+			&& !switchRules.isEnum(typedSubject.type))
+			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			seenCases:Map<String, Bool> = [],
-			resultType = expectedType;
+			resultType = expectedType,
+			typedDefault = defaultExpression == null ? null : typeExpressionCallback(defaultExpression, new Scope(scope), expectedType, false);
+		// A switch arm can need the inferred result type to resolve an enum constructor
+		// (for example, `case A: SomeConstructor(...); default: value;`). Seed that
+		// context from the fallback before typing the arms; the normal branch join below
+		// still permits widening and nullable results.
+		if (expectedType == null && typedDefault != null && typedDefault.type != TNever)
+			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
 				subjectBinding = switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope),
 				isCatchAll = switchRules.catchAll(switchCase.value),
-				pattern = subjectBinding == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
+				arrayPattern = subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope) : null,
+				pattern = subjectBinding == null
+					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
 				typedValue = isCatchAll
-					|| subjectBinding != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
+					|| subjectBinding != null
+					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
 						false), typedSubject.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
@@ -489,7 +525,7 @@ class ExpressionTyper {
 					constructorIndex = literal.index;
 				}
 			}
-			var caseKey = switchRules.caseKey(typedValue, predicates);
+			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue, predicates) : switchRules.arrayPatternKey(arrayPattern);
 			if (isCatchAll || subjectBinding != null)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
@@ -500,6 +536,8 @@ class ExpressionTyper {
 			typedCases.push({
 				value: typedValue,
 				subjectBinding: subjectBinding,
+				arrayPattern: arrayPattern,
+				span: switchCase.span,
 				isCatchAll: isCatchAll,
 				guard: typedGuard,
 				result: typedResult,
@@ -509,8 +547,6 @@ class ExpressionTyper {
 				predicates: predicates
 			});
 		}
-		var typedDefault = defaultExpression == null ? null : typeExpressionCallback(defaultExpression, scope,
-			expectedType == null ? resultType : expectedType, false);
 		if (typedDefault != null && expectedType == null && typedDefault.type != TNever) {
 			var joined = resultType == null ? typedDefault.type : commonConditionalType(resultType, typedDefault.type);
 			if (joined == null)
@@ -524,6 +560,8 @@ class ExpressionTyper {
 				{
 					value: switchCase.value,
 					subjectBinding: switchCase.subjectBinding,
+					arrayPattern: switchCase.arrayPattern,
+					span: switchCase.span,
 					isCatchAll: switchCase.isCatchAll,
 					guard: switchCase.guard,
 					result: coerce(switchCase.result, resultType, "switch branch", "E1003"),
@@ -539,11 +577,22 @@ class ExpressionTyper {
 			fail("E1021", "Switch expression requires a default branch", span);
 		if (switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(switchRules.enumName(typedSubject.type)),
-				missing:Array<String> = [];
+				missing:Array<String> = [],
+				coverageCases:Array<TypedSwitchCoverageCase> = [
+					for (switchCase in typedCases)
+						{
+							constructorIndex: switchCase.constructorIndex,
+							subjectBinding: switchCase.subjectBinding,
+							isCatchAll: switchCase.isCatchAll,
+							guard: switchCase.guard,
+							predicates: switchCase.predicates
+						}
+				];
 			if (session.enumDecls.exists(resolvedEnumName)) {
 				var enumDecl = session.enumDecls.get(resolvedEnumName);
 				for (index in 0...enumDecl.cases.length)
-					if (!seenCases.exists('enum:$resolvedEnumName:$index'))
+					if (!seenCases.exists('enum:$resolvedEnumName:$index')
+						&& !switchRules.enumCaseCovered(typedSubject.type, index, coverageCases))
 						missing.push(enumDecl.cases[index].name);
 			}
 			if (switchRules.isNullableEnum(typedSubject.type) && !seenCases.exists("null"))
@@ -553,6 +602,18 @@ class ExpressionTyper {
 		}
 		return new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 	}
+
+	static function isNullableString(type:CompilerType):Bool
+		return switch type {
+			case TNullable(TString): true;
+			default: false;
+		};
+
+	static function isArraySwitchable(type:CompilerType):Bool
+		return switch type {
+			case TArray(_): true;
+			default: false;
+		};
 
 	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, contextualExpressionType:ContextualExpressionTypeCallback):TypedExpression {
@@ -773,6 +834,10 @@ class ExpressionTyper {
 	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, left.type, false);
+		if (operation == 2
+			&& ((sameType(left.type, TNull) && !isNullable(right.type) && right.type != TNull && !TypeRelations.isReference(right.type))
+				|| (sameType(right.type, TNull) && !isNullable(left.type) && left.type != TNull && !TypeRelations.isReference(left.type))))
+			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))
 				left = coerce(left, right.type, "null comparison", "E1009");
@@ -824,8 +889,10 @@ class ExpressionTyper {
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
-		if (!isNumeric(left.type) || !isNumeric(right.type))
+		if (!isNumeric(left.type) || !isNumeric(right.type)) {
+			Sys.println('DEBUG comparison operation=$operation ${left.type} ${right.type} at ${span.file.path}:${span.start}');
 			fail("E1011", "Comparison requires matching numeric operands", span);
+		}
 		var promoted = promoteNumericOperands(left, right, span);
 		left = promoted.left;
 		right = promoted.right;

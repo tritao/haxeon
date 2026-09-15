@@ -5,6 +5,7 @@ import compiler.Source.SourceSpan;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.types.TypeRelations;
+import compiler.types.TypedAst.TypedExpression;
 
 /** Resolved local binding identity and its declared semantic type. */
 private typedef ScopeValue = {
@@ -27,6 +28,7 @@ class Scope {
 	final captures:Map<String, Bool> = [];
 	final cellCaptures:Map<String, Bool> = [];
 	final cellClasses:Map<String, String> = [];
+	final mapKeySources:Map<String, TypedExpression> = [];
 
 	public function new(?parent:Scope) {
 		this.parent = parent;
@@ -60,6 +62,26 @@ class Scope {
 			assigned.set(value.id, true);
 	}
 
+	public function setMapKeySource(name:String, source:Null<TypedExpression>):Void {
+		var value = resolveLocal(name);
+		if (value == null)
+			return;
+		if (source == null)
+			mapKeySources.remove(value.id);
+		else
+			mapKeySources.set(value.id, source);
+	}
+
+	public function mapKeySource(name:String):Null<TypedExpression> {
+		var value = resolveLocal(name);
+		if (value == null)
+			return null;
+		if (mapKeySources.exists(value.id))
+			return mapKeySources.get(value.id);
+		var outer = parent;
+		return outer == null ? null : outer.mapKeySource(name);
+	}
+
 	public function mergeAssignmentsFrom(scopes:Array<Scope>):Void {
 		if (scopes.length == 0)
 			return;
@@ -87,6 +109,27 @@ class Scope {
 				}
 			facts.refine(value.id, merged);
 		}
+		var expressionKeys:Map<String, Bool> = [],
+			expressionPrefix = '$' + 'expression:';
+		for (scope in scopes)
+			for (key in scope.facts.keys())
+				if (StringTools.startsWith(key, expressionPrefix))
+					expressionKeys.set(key, true);
+		for (key in expressionKeys.keys()) {
+			var merged = scopes[0].facts.resolve(key),
+				consistent = merged != null;
+			for (index in 1...scopes.length) {
+				var candidate = scopes[index].facts.resolve(key);
+				if (candidate == null || merged == null || !TypeRelations.equals(merged, candidate)) {
+					consistent = false;
+					break;
+				}
+			}
+			if (consistent)
+				facts.refine(key, merged);
+			else
+				facts.invalidate(key);
+		}
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String):Void {
@@ -107,8 +150,8 @@ class Scope {
 			facts.refine(local.id, type);
 	}
 
-	public function refineExpression(path:String, type:CompilerType):Void
-		facts.refine('$' + 'expression:$path', type);
+	public function refineExpression(path:String, type:CompilerType, stable:Bool = false):Void
+		facts.refine('$' + 'expression:$path', type, stable);
 
 	public function resolveExpression(path:String):Null<CompilerType>
 		return facts.resolve('$' + 'expression:$path');

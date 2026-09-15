@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.tools.CompilerRequest.PackageSourceRoot;
+import sys.io.File;
 
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
@@ -31,7 +32,15 @@ class CompilerArguments {
 				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
-			else if (StringTools.startsWith(argument, "--package-root="))
+			else if (StringTools.startsWith(argument, "--sources-file=")) {
+				var manifest = File.getContent(value(argument, "--sources-file="));
+				for (path in manifest.split("\n")) {
+					if (StringTools.endsWith(path, "\r"))
+						path = path.substr(0, path.length - 1);
+					if (path.length > 0)
+						paths.push(path);
+				}
+			} else if (StringTools.startsWith(argument, "--package-root="))
 				packageRoots.push(packageRoot(value(argument, "--package-root=")));
 			else if (StringTools.startsWith(argument, "--ffi-header="))
 				ffiHeader = value(argument, "--ffi-header=");
