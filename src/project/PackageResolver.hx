@@ -53,6 +53,8 @@ class PackageResolver {
 			var manifest = PackageManifest.parse(resolvedManifest, File.getContent(resolvedManifest)),
 				priorRoot = nameToRoot.get(manifest.packageName);
 			manifest.compatibility.validate(manifest.packageName, requestedTarget);
+			if (acquired.compatibility != null)
+				acquired.compatibility.validate(manifest.packageName, requestedTarget);
 			if (priorRoot != null && priorRoot != resolvedRoot)
 				throw 'Duplicate package name "${manifest.packageName}" in $priorRoot and $resolvedRoot';
 			nameToRoot.set(manifest.packageName, resolvedRoot);
@@ -108,7 +110,7 @@ class PackageResolver {
 				includeDirs, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
-			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, null,
+			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,
 				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
 			return resolvedPackage;
 		}

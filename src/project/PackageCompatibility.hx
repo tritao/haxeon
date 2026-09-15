@@ -22,7 +22,7 @@ class PackageCompatibility {
 	}
 
 	public function validate(packageName:String, target:Target):Void {
-		if (haxeon != null && !satisfies(haxeon, CURRENT_HAXEON))
+		if (haxeon != null && !satisfiesVersionRange(haxeon, CURRENT_HAXEON))
 			throw 'Package $packageName requires Haxeon "$haxeon" (current ${CURRENT_HAXEON})';
 		if (targets.length > 0) {
 			var matches = false;
@@ -57,7 +57,9 @@ class PackageCompatibility {
 		return new PackageCompatibility(haxeon, targets, runtimeAbi, nativeRequirements, features);
 	}
 
-	static function satisfies(range:String, actual:String):Bool {
+	public static function satisfiesVersionRange(range:String, actual:String):Bool {
+		if (StringTools.trim(range) == "*" || StringTools.trim(range) == "")
+			return true;
 		var constraints:Array<String> = [];
 		for (piece in range.split(","))
 			for (term in StringTools.trim(piece).split(" "))
@@ -77,6 +79,12 @@ class PackageCompatibility {
 			if (StringTools.startsWith(constraint, "^")) {
 				var lower = parseVersion(constraint.substr(1)), current = parseVersion(actual);
 				if (compare(current, lower) < 0 || current[0] != lower[0])
+					return false;
+				continue;
+			}
+			if (StringTools.startsWith(constraint, "~")) {
+				var lower = parseVersion(constraint.substr(1)), current = parseVersion(actual);
+				if (compare(current, lower) < 0 || current[0] != lower[0] || current[1] != lower[1])
 					return false;
 				continue;
 			}

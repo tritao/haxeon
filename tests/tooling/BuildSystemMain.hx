@@ -28,6 +28,8 @@ import project.PackageLockfile;
 import project.PackageLockfile.PackageLockEntry;
 import project.PathSourceAcquirer;
 import project.HaxelibSourceAcquirer;
+import project.RegistrySourceAcquirer;
+import haxe.crypto.Sha256;
 import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
@@ -49,6 +51,7 @@ class BuildSystemMain {
 		testPackageSourceModel();
 		testPackageCompatibility();
 		testHaxelibAdapter();
+		testRegistryAdapter();
 		testResolverDelegatesAcquisition();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
@@ -387,6 +390,34 @@ class BuildSystemMain {
 		writePackage(badApp, '{"package":{"name":"bad-app"},"dependencies":{"bad":{"haxelib":"bad","version":"1.0.0"}}}', []);
 		expectThrows(() -> new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([badApp, "haxeon.json"])),
 			"unsupported Haxelib compiler parameters should be diagnosed");
+		removeTree(root);
+	}
+
+	static function testRegistryAdapter():Void {
+		var root = temporaryDirectory("registry"),
+			app = Path.join([root, "app"]),
+			cache = Path.join([root, "cache"]),
+			registryDirectory = Path.join([cache, Sha256.encode("local")]),
+			foo = Path.join([registryDirectory, "foo", "1.1.0"]),
+			checksum = "release-checksum";
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"registry":"local","version":"^1.0"}}}', []);
+		ensureDirectory(foo);
+		File.saveContent(Path.join([foo, "haxeon.json"]), '{"package":{"name":"foo"},"sourceRoots":["src"]}\n');
+		ensureDirectory(Path.join([foo, "src"]));
+		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), checksum + "\n");
+		ensureDirectory(registryDirectory);
+		File.saveContent(Path.join([registryDirectory, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"1.2.0","checksum":"yanked","yanked":true},{"version":"1.1.0","checksum":"$checksum","targets":["host"]},{"version":"0.9.0","checksum":"old"}]}}}\n');
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(cache)),
+			project = resolver.resolve(Path.join([app, "haxeon.json"])),
+			entry = project.lockfile.get("foo");
+		expect(entry != null && entry.resolvedRevision == "1.1.0" && entry.checksum == checksum,
+			"registry resolution should select the highest non-yanked SemVer release and lock its checksum");
+		var locked = resolver.resolve(Path.join([app, "haxeon.json"]), project.lockfile, true);
+		expect(locked.packages.get("foo").source != null, "locked registry releases should resolve through the same adapter");
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "tampered\n");
+		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])), "registry source checksums should be verified on every use");
 		removeTree(root);
 	}
 

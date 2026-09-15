@@ -26,6 +26,10 @@ class PackageLockEntry {
 				if (resolvedRevision == null || resolvedRevision.length == 0)
 					throw 'Lockfile entry "${id.name}" is missing its resolved Git revision';
 				PackageSource.Git(url, resolvedRevision);
+			case PackageSource.Registry(registry, name, _):
+				if (resolvedRevision == null || resolvedRevision.length == 0)
+					throw 'Lockfile entry "${id.name}" is missing its resolved registry version';
+				PackageSource.Registry(registry, name, resolvedRevision);
 			case _: source;
 		};
 }
