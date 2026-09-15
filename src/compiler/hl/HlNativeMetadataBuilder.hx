@@ -2,18 +2,14 @@ package compiler.hl;
 
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlValidator;
+import compiler.hl.HlOpcode;
+import compiler.hl.HlWriter;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
 import runtime.memory.RawPtr;
 
-/**
-	Imports one validated HLB type table into Haxe-owned HashLink metadata.
-
-	The importer deliberately stops at the metadata/code boundary. Function
-	descriptors carry dispatch and register signature information, while the
-	native hl_opcode representation remains owned by the future code bridge.
- */
+/** Imports one validated HLB module into Haxe-owned HashLink metadata. */
 class HlNativeMetadataBuilder {
 	/**
 		Build, derive, and publish the native metadata graph for one HLB module.
@@ -168,15 +164,19 @@ class HlNativeMetadataBuilder {
 			var registers:RawPtr<RawPtr<runtime.hashlink.HlType>> = fn.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocTypePointerArray(fn.registers.length);
 			for (index in 0...fn.registers.length)
 				registers.offset(index).store(types[fn.registers[index]]);
+			var encoded = HlWriter.lower(fn),
+				ops:RawPtr<runtime.hashlink.HlOpcode> = encoded.length == 0 ? RawPtr.nullPtr() : generation.arena.allocOpcodeArray(encoded.length);
+			for (index in 0...encoded.length)
+				writeOpcode(ops.offset(index), encoded[index], generation);
 			generation.addFunctionDescriptor({
 				findex: fn.functionIndex,
 				nregs: fn.registers.length,
-				nops: 0,
+				nops: encoded.length,
 				reference: 0,
 				nassigns: 0,
 				type: types[fn.type],
 				regs: registers,
-				ops: RawPtr.nullPtr(),
+				ops: ops,
 				debug: RawPtr.nullPtr(),
 				assigns: RawPtr.nullPtr(),
 				object: RawPtr.nullPtr(),
@@ -184,6 +184,48 @@ class HlNativeMetadataBuilder {
 				fieldReference: RawPtr.nullPtr()
 			});
 		}
+	}
+
+	static function writeOpcode(destination:RawPtr<runtime.hashlink.HlOpcode>, encoded:HlEncodedInstruction, generation:HlMetadataGeneration):Void {
+		var operands = encoded.operands;
+		destination.ref.op = cast encoded.opcode;
+		destination.ref.p1 = cast operand(operands, 0);
+		destination.ref.p2 = cast operand(operands, 1);
+		destination.ref.p3 = cast operand(operands, 2);
+		destination.ref.extra = RawPtr.nullPtr();
+		switch encoded.opcode {
+			case HlOpcode.Call2 | HlOpcode.EnumField:
+				// HashLink stores the fourth fixed operand in the pointer field as an
+				// immediate register/field index, not as an address.
+				destination.ref.extra = immediatePointer(operands[3]);
+			case HlOpcode.Call3:
+				destination.ref.extra = copyOperands(generation, operands, 3, 2);
+			case HlOpcode.Call4:
+				destination.ref.extra = copyOperands(generation, operands, 3, 3);
+			case HlOpcode.CallN | HlOpcode.CallMethod | HlOpcode.CallThis | HlOpcode.CallClosure | HlOpcode.MakeEnum:
+				destination.ref.extra = copyOperands(generation, operands, 3, operands[2]);
+			case HlOpcode.Switch:
+				destination.ref.p3 = cast operands[operands[1] + 2];
+				destination.ref.extra = copyOperands(generation, operands, 2, operands[1]);
+			case _:
+		}
+	}
+
+	static function operand(operands:Array<Int>, index:Int):Int
+		return index < operands.length ? operands[index] : 0;
+
+	static function copyOperands(generation:HlMetadataGeneration, operands:Array<Int>, start:Int, count:Int):RawPtr<Int32> {
+		if (count == 0)
+			return RawPtr.nullPtr();
+		var result = generation.arena.allocInt32Array(count);
+		for (index in 0...count)
+			result.offset(index).store(cast operands[start + index]);
+		return result;
+	}
+
+	static function immediatePointer(value:Int):RawPtr<Int32> {
+		var pointer:RawPtr<Int32> = RawPtr.nullPtr();
+		return pointer.byteOffset(value);
 	}
 
 	static function addNativeDescriptors(code:HlCode, generation:HlMetadataGeneration, types:Array<RawPtr<runtime.hashlink.HlType>>):Void {

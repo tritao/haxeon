@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlOpcode;
 
 /** C-layout equivalent of HashLink's bytecode function descriptor. */
 @:value @:repr("C")
@@ -12,7 +13,7 @@ class HlFunction {
 	public var nassigns:Int32;
 	public var type:RawPtr<HlType>;
 	public var regs:RawPtr<RawPtr<HlType>>;
-	public var ops:RawPtr<UInt8>;
+	public var ops:RawPtr<HlOpcode>;
 	public var debug:RawPtr<Int32>;
 	public var assigns:RawPtr<Int32>;
 	public var object:RawPtr<HlTypeObject>;

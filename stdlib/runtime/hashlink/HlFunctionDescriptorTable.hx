@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HlOpcode;
 
 /** Input used to construct one Haxe-owned HashLink function descriptor. */
 typedef HlFunctionDescriptorSpec = {
@@ -12,7 +13,7 @@ typedef HlFunctionDescriptorSpec = {
 	final nassigns:Int;
 	final type:RawPtr<HlType>;
 	final regs:RawPtr<RawPtr<HlType>>;
-	final ops:RawPtr<UInt8>;
+	final ops:RawPtr<HlOpcode>;
 	final debug:RawPtr<Int32>;
 	final assigns:RawPtr<Int32>;
 	final object:RawPtr<HlTypeObject>;

@@ -6,8 +6,8 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
 
-/** Encoded opcode bytes paired with unresolved symbolic branch targets. */
-private typedef EncodedInstruction = {
+/** Canonical numeric opcode operands shared by HLB and native metadata emitters. */
+typedef HlEncodedInstruction = {
 	final opcode:HlOpcode;
 	final operands:Array<Int>;
 }
@@ -47,6 +47,13 @@ class HlWriter {
 		var writer = new HlWriter();
 		writer.writeFunction(fn);
 		return writer.output.getBytes();
+	}
+
+	/** Lower one function to the canonical HashLink opcode representation. */
+	public static function lower(fn:HlFunction):Array<HlEncodedInstruction> {
+		if (fn == null)
+			throw "HashLink opcode lowering requires a function";
+		return new HlWriter().lowerInstructions(fn);
 	}
 
 	function writeCode(code:HlCode):Void {
@@ -384,11 +391,11 @@ class HlWriter {
 		}
 	}
 
-	function lowerInstructions(fn:HlFunction):Array<EncodedInstruction> {
+	function lowerInstructions(fn:HlFunction):Array<HlEncodedInstruction> {
 		var labels = HlValidator.collectLabels(fn);
-		var result:Array<EncodedInstruction> = [];
+		var result:Array<HlEncodedInstruction> = [];
 		for (instruction in fn.opcodes) {
-			var encoded:EncodedInstruction = switch instruction {
+			var encoded:HlEncodedInstruction = switch instruction {
 				case Move(destination, source): {opcode: HlOpcode.Mov, operands: [destination, source]};
 				case LoadInt(destination, constant):
 					{opcode: HlOpcode.Int, operands: [destination, constant]};

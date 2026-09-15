@@ -9,6 +9,8 @@ exec "$root_dir/scripts/haxeon-ffi-import" \
   --include="$root_dir/vendor/hashlink/src" \
   --source-label=vendor/hashlink/src/hlmodule.h \
   --output="$root_dir/stdlib/runtime/hashlink/HashLinkModuleMetadata.hxi" \
+  --only=hl_op \
+  --only=hl_opcode \
   --only=hl_native \
   --only=hl_function \
   "$root_dir/vendor/hashlink/src/hlmodule.h"
