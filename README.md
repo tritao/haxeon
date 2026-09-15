@@ -354,6 +354,10 @@ resolution, planning/lowering, and execution wall-clock measurements.
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native actions are skipped on later builds.
+The current executor is selected through a replaceable backend boundary; set
+`HAXEON_EXECUTOR=native` explicitly to select it. Alternate schedulers can be
+evaluated against the same lowered `ExecutionPlan` without changing package or
+build semantics.
 The normal host build requests the shared HashLink library; static archives are
 available to other build consumers without being produced unnecessarily. Target
 and toolchain selection is centralized: examples include

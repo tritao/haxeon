@@ -15,6 +15,7 @@ import build.execution.ActionResult;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionPlan;
+import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.Executor;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
@@ -42,6 +43,7 @@ class BuildSystemMain {
 	static function main():Void {
 		testArtifactAndPlanDeterminism();
 		testExecutorOrderingAndFailure();
+		testExecutorBackendSelection();
 		testIndependentProcessActionsRunConcurrently();
 		#if (target.threaded && !eval)
 		testIndependentActionsRunConcurrently();
@@ -161,6 +163,14 @@ class BuildSystemMain {
 		expect(!dependentRan, "a failed dependency must prevent its consumer from executing");
 		expect(!deepDependentRan, "failure should block every level of dependent actions");
 		expect(independentRan, "actions unrelated to the failure should still be allowed to complete");
+		removeTree(root);
+	}
+
+	static function testExecutorBackendSelection():Void {
+		var root = temporaryDirectory("executor-backend"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			backend = ExecutionBackendFactory.create(environment, 1, _ -> {});
+		expect(backend.name() == "native", "the native executor should be selected behind a replaceable backend boundary");
 		removeTree(root);
 	}
 

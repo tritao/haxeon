@@ -1,7 +1,7 @@
 package build;
 
 import build.BuildEnvironment.BuildProfile;
-import build.execution.Executor;
+import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import haxe.io.Path;
@@ -19,7 +19,7 @@ class HaxeonNativePackageBuild {
 			Sys.print(execution.toDebugString());
 			return 0;
 		}
-		return new Executor(environment, jobs).execute(execution).exitCode;
+		return ExecutionBackendFactory.create(environment, jobs).execute(execution).exitCode;
 	}
 
 	public static function nativeRoot(project:ResolvedProject, target:Target):String {

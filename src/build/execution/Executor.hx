@@ -10,7 +10,7 @@ import sys.thread.Thread;
 #end
 
 /** Dependency-aware executor with a deterministic wavefront scheduler. */
-class Executor {
+class Executor implements ExecutionBackend {
 	final environment:BuildEnvironment;
 	final workerCount:Int;
 	final print:String->Void;
@@ -155,6 +155,9 @@ class Executor {
 		}
 		return new ExecutionResult(results, Date.now().getTime() - started);
 	}
+
+	public function name():String
+		return "native";
 
 	function failedDependency(action:ExecutionAction, completed:Map<String, ActionResult>):Null<ActionResult> {
 		for (dependency in action.dependencies) {

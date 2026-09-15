@@ -1,6 +1,6 @@
 package build;
 
-import build.execution.Executor;
+import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.BuildEnvironment.BuildProfile;
@@ -32,7 +32,7 @@ class HaxeonProjectBuild {
 				Sys.print(timings.toString());
 			return 0;
 		}
-		var result = new Executor(environment, jobs).execute(execution);
+		var result = ExecutionBackendFactory.create(environment, jobs).execute(execution);
 		timings.add("execute", result.elapsedMs);
 		if (explain)
 			Sys.print(plan.toExplainString());
