@@ -777,16 +777,20 @@ class CHeaderImporter {
 	static function parseLayouts(text:String):Map<String, CLayout> {
 		var result:Map<String, CLayout> = [],
 			current:String = null,
-			offsets:Map<String, Int> = [];
+			offsets:Map<String, Int> = [],
+			size:Null<Int> = null,
+			align:Null<Int> = null;
 		for (rawLine in text.split("\n")) {
 			// Clang emits CRLF on Windows.  Keep the layout grammar independent
 			// of the host line ending so the record marker and size trailer are
 			// still parsed before they reach the HXI model.
 			var line = StringTools.endsWith(rawLine, "\r") ? rawLine.substring(0, rawLine.length - 1) : rawLine;
-			var record = ~/^\s*0 \| struct ([A-Za-z_][A-Za-z0-9_]*)$/;
+			var record = ~/^\s*[0-9]+\s*\|\s*(?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
 			if (record.match(line)) {
 				current = record.matched(1);
 				offsets = [];
+				size = null;
+				align = null;
 				continue;
 			}
 			if (current == null)
@@ -794,9 +798,20 @@ class CHeaderImporter {
 			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (fieldLine.match(line))
 				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
-			var size = ~/sizeof=([0-9]+)/, align = ~/align=([0-9]+)/;
-			if (size.match(line) && align.match(line)) {
-				result.set(current, {size: Std.parseInt(size.matched(1)), align: Std.parseInt(align.matched(1)), offsets: offsets});
+			var sizeValue = ~/sizeof=([0-9]+)/;
+			if (sizeValue.match(line))
+				size = Std.parseInt(sizeValue.matched(1));
+			var alignValue = ~/align=([0-9]+)/;
+			if (alignValue.match(line))
+				align = Std.parseInt(alignValue.matched(1));
+			var sizeLabel = ~/\bSize:\s*([0-9]+)/;
+			if (sizeLabel.match(line))
+				size = Std.parseInt(sizeLabel.matched(1));
+			var alignLabel = ~/\bAlignment:\s*([0-9]+)/;
+			if (alignLabel.match(line))
+				align = Std.parseInt(alignLabel.matched(1));
+			if (size != null && align != null) {
+				result.set(current, {size: size, align: align, offsets: offsets});
 				current = null;
 			}
 		}

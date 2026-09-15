@@ -17,6 +17,11 @@ class CHeaderImporterMain {
 			.get("sample_options");
 		expect(windowsLayout != null && windowsLayout.size == 32 && windowsLayout.align == 8 && windowsLayout.offsets.get("title") == 8,
 			"record layout parser should accept Clang's Windows CRLF output");
+		var labeledLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\n" + "         0 | class sample_class\n"
+			+ "         0 |   uint32_t value\n" + "           | Size:32\n" + "           | Alignment:8\n")
+			.get("sample_class");
+		expect(labeledLayout != null && labeledLayout.size == 32 && labeledLayout.align == 8 && labeledLayout.offsets.get("value") == 0,
+			"record layout parser should accept labeled Clang size and alignment trailers");
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
