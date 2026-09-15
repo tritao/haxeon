@@ -1964,6 +1964,7 @@ class BodyTyper {
 		} catch (error:CompileError) {
 			if (!session.tolerant)
 				throw error;
+			session.rememberRecoveryDiagnostic(error.diagnostic);
 			return TUnknown;
 		}
 	}
@@ -1974,6 +1975,7 @@ class BodyTyper {
 		} catch (error:CompileError) {
 			if (!session.tolerant)
 				throw error;
+			session.rememberRecoveryDiagnostic(error.diagnostic);
 			return TUnknown;
 		}
 	}

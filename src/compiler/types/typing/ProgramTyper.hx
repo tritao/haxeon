@@ -257,6 +257,7 @@ class ProgramTyper {
 			var fieldType:AstType = try session.declarations.resolvedFieldType(classDecl.name, field) catch (error:Dynamic) {
 				if (!session.tolerant)
 					throw error;
+				rememberRecoveryError(error);
 				ErrorType(field.span);
 			};
 			var type = session.representation.physicalType(fieldType, field.span, erasedSubstitutions);

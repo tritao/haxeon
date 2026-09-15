@@ -616,6 +616,15 @@ class ParserRecoveryMain {
 			default:
 				throw 'invalid enum payload type did not become TUnknown: ${invalidEnumTypeTyped.enums[0].cases[0].params[0]}';
 		}
+
+		var diagnosticService = new LanguageService();
+		diagnosticService.update("TolerantTypeDiagnostics.hx", "class Broken { var missing:Missing; } function main():Void return;");
+		var foundSemanticTypeDiagnostic = false;
+		for (diagnostic in diagnosticService.diagnostics("TolerantTypeDiagnostics.hx"))
+			if (diagnostic.origin == DiagnosticOrigin.Semantic && StringTools.contains(diagnostic.message, "Unknown type"))
+				foundSemanticTypeDiagnostic = true;
+		if (!foundSemanticTypeDiagnostic)
+			throw "recovered unknown type did not produce a semantic diagnostic";
 	}
 
 	static function assertRecoveryCancellation():Void {
