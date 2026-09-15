@@ -259,6 +259,19 @@ class HlValidator {
 					requireRegister(fn, argument1);
 					requireRegister(fn, argument2);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case Call3(destination, functionIndex, argument1, argument2, argument3):
+					requireRegister(fn, destination);
+					requireRegister(fn, argument1);
+					requireRegister(fn, argument2);
+					requireRegister(fn, argument3);
+					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case Call4(destination, functionIndex, argument1, argument2, argument3, argument4):
+					requireRegister(fn, destination);
+					requireRegister(fn, argument1);
+					requireRegister(fn, argument2);
+					requireRegister(fn, argument3);
+					requireRegister(fn, argument4);
+					requireCallable(functionIndices, functionIndex, fn.functionIndex);
 				case CallN(destination, functionIndex, arguments):
 					requireRegister(fn, destination);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
@@ -271,6 +284,11 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, receiver);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);
+				case VirtualClosure(destination, object, method):
+					requireRegister(fn, destination);
+					requireRegister(fn, object);
+					if (method < 0)
+						throw 'Invalid virtual method $method in function ${fn.functionIndex}';
 				case CallClosure(destination, closure, arguments):
 					requireRegister(fn, destination);
 					requireRegister(fn, closure);
@@ -283,6 +301,12 @@ class HlValidator {
 					requireRegister(fn, destination);
 					if (method < 0)
 						throw 'Invalid object method $method in function ${fn.functionIndex}';
+					for (argument in arguments)
+						requireRegister(fn, argument);
+				case ThisCall(destination, method, arguments):
+					requireRegister(fn, destination);
+					if (method < 0)
+						throw 'Invalid this method $method in function ${fn.functionIndex}';
 					for (argument in arguments)
 						requireRegister(fn, argument);
 				case New(destination, type, _):

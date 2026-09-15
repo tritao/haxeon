@@ -281,12 +281,16 @@ class HlReader {
 			case HlOpcode.Call0: Call0(operands[0], operands[1]);
 			case HlOpcode.Call1: Call1(operands[0], operands[1], operands[2]);
 			case HlOpcode.Call2: Call2(operands[0], operands[1], operands[2], operands[3]);
+			case HlOpcode.Call3: Call3(operands[0], operands[1], operands[2], operands[3], operands[4]);
+			case HlOpcode.Call4: Call4(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5]);
 			case HlOpcode.CallN: CallN(operands[0], operands[1], operands.slice(3));
 			case HlOpcode.StaticClosure: StaticClosure(operands[0], operands[1]);
 			case HlOpcode.InstanceClosure: InstanceClosure(operands[0], operands[1], operands[2]);
+			case HlOpcode.VirtualClosure: VirtualClosure(operands[0], operands[1], operands[2]);
 			case HlOpcode.CallClosure: CallClosure(operands[0], operands[1], operands.slice(3));
 			case HlOpcode.ToVirtual: ToVirtual(operands[0], operands[1]);
 			case HlOpcode.CallMethod: CallMethod(operands[0], operands[1], operands.slice(3));
+			case HlOpcode.CallThis: ThisCall(operands[0], operands[1], operands.slice(3));
 			case HlOpcode.GetGlobal: GlobalGet(operands[0], operands[1]);
 			case HlOpcode.SetGlobal: GlobalSet(operands[0], operands[1]);
 			case HlOpcode.GetThis: ThisGet(operands[0], operands[1]);

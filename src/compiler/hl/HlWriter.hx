@@ -449,18 +449,26 @@ class HlWriter {
 					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
 				case Call2(destination, functionIndex, argument1, argument2):
 					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+				case Call3(destination, functionIndex, argument1, argument2, argument3):
+					{opcode: HlOpcode.Call3, operands: [destination, functionIndex, argument1, argument2, argument3]};
+				case Call4(destination, functionIndex, argument1, argument2, argument3, argument4):
+					{opcode: HlOpcode.Call4, operands: [destination, functionIndex, argument1, argument2, argument3, argument4]};
 				case CallN(destination, functionIndex, arguments):
 					{opcode: HlOpcode.CallN, operands: [destination, functionIndex, arguments.length].concat(arguments)};
 				case StaticClosure(destination, functionIndex):
 					{opcode: HlOpcode.StaticClosure, operands: [destination, functionIndex]};
 				case InstanceClosure(destination, functionIndex, receiver):
 					{opcode: HlOpcode.InstanceClosure, operands: [destination, functionIndex, receiver]};
+				case VirtualClosure(destination, object, method):
+					{opcode: HlOpcode.VirtualClosure, operands: [destination, object, method]};
 				case CallClosure(destination, closure, arguments):
 					{opcode: HlOpcode.CallClosure, operands: [destination, closure, arguments.length].concat(arguments)};
 				case ToVirtual(destination, source):
 					{opcode: HlOpcode.ToVirtual, operands: [destination, source]};
 				case CallMethod(destination, method, arguments):
 					{opcode: HlOpcode.CallMethod, operands: [destination, method, arguments.length].concat(arguments)};
+				case ThisCall(destination, method, arguments):
+					{opcode: HlOpcode.CallThis, operands: [destination, method, arguments.length].concat(arguments)};
 				case New(destination, _, _):
 					// ONew has no encoded type operand. HashLink derives the
 					// allocation type from the destination register's type.

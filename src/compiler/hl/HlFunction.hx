@@ -82,12 +82,16 @@ enum HlInstruction {
 	Call0(destination:Int, functionIndex:Int);
 	Call1(destination:Int, functionIndex:Int, argument:Int);
 	Call2(destination:Int, functionIndex:Int, argument1:Int, argument2:Int);
+	Call3(destination:Int, functionIndex:Int, argument1:Int, argument2:Int, argument3:Int);
+	Call4(destination:Int, functionIndex:Int, argument1:Int, argument2:Int, argument3:Int, argument4:Int);
 	CallN(destination:Int, functionIndex:Int, arguments:Array<Int>);
 	StaticClosure(destination:Int, functionIndex:Int);
 	InstanceClosure(destination:Int, functionIndex:Int, receiver:Int);
+	VirtualClosure(destination:Int, object:Int, method:Int);
 	CallClosure(destination:Int, closure:Int, arguments:Array<Int>);
 	ToVirtual(destination:Int, source:Int);
 	CallMethod(destination:Int, method:Int, arguments:Array<Int>);
+	ThisCall(destination:Int, method:Int, arguments:Array<Int>);
 	New(destination:Int, type:Int, extra:Int);
 	FieldGet(destination:Int, object:Int, field:Int);
 	FieldSet(object:Int, field:Int, source:Int);

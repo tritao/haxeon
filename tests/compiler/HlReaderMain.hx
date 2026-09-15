@@ -232,6 +232,22 @@ function main():Void {
 		numericDecoded = HlReader.decode(numericBytes);
 	expect(HlWriter.encode(numericDecoded).compare(numericBytes) == 0 && numericDecoded.functions[0].opcodes.length == 9,
 		"HLB scalar opcode extensions did not round trip");
+	var calls = new HlCode();
+	calls.types = [Simple(HlType.I32)];
+	calls.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [
+			Call3(0, 0, 0, 0, 0),
+			Call4(0, 0, 0, 0, 0, 0),
+			VirtualClosure(0, 0, 0),
+			ThisCall(0, 0, [0, 0]),
+			Return(0)
+		])
+	];
+	calls.entryPoint = 0;
+	var callBytes = HlWriter.encode(calls),
+		callDecoded = HlReader.decode(callBytes);
+	expect(HlWriter.encode(callDecoded).compare(callBytes) == 0 && callDecoded.functions[0].opcodes.length == 5,
+		"HLB call and closure opcode extensions did not round trip");
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
 	var compiler = new Compiler();

@@ -180,8 +180,8 @@ class HlPatchWriter {
 			switch op {
 				case Label(_):
 					instruction++;
-				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _), StaticClosure(_, target),
-					InstanceClosure(_, target, _):
+				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), Call3(_, target, _, _, _), Call4(_, target, _, _, _, _),
+					CallN(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
 					if (stableIdsBySlot.exists(target))
 						result.push({instruction: instruction, stableId: stableIdsBySlot.get(target)});
 					instruction++;

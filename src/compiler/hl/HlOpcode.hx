@@ -30,12 +30,15 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var Call0 = 24;
 	var Call1 = 25;
 	var Call2 = 26;
+	var Call3 = 27;
+	var Call4 = 28;
 	var CallN = 29;
 	var CallMethod = 30;
 	var CallThis = 31;
 	var CallClosure = 32;
 	var StaticClosure = 33;
 	var InstanceClosure = 34;
+	var VirtualClosure = 35;
 	var GetGlobal = 36;
 	var SetGlobal = 37;
 	var Field = 38;
