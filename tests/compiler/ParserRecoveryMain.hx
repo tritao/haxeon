@@ -852,6 +852,21 @@ class ParserRecoveryMain {
 		if (!hasLambdaValue || !hasLambdaLocal || lambdaNames.indexOf("member") < 0)
 			throw 'recovered lambda scope lost its parameter or local: locals=${[for (local in lambdaContext.context.locals) local.name].join(",")}, items=${lambdaNames.join(",")}';
 
+		var captureService = new LanguageService(),
+			captureSource = "class CaptureFoo { public var member:Int; } function main():Void { var foo:CaptureFoo = new CaptureFoo(); var callback:(value:Int)->Void = (value) -> { var result:Int = value + foo.member; foo. }; }";
+		captureService.update("TolerantCapture.hx", captureSource);
+		var capturePosition = captureSource.indexOf("foo. }") + "foo.".length,
+			captureContext = captureService.completionContext("TolerantCapture.hx", capturePosition),
+			captureNames = [for (item in captureService.complete("TolerantCapture.hx", capturePosition)) item.label],
+			hasCapturedFoo = false;
+		if (captureContext == null)
+			throw "recovered lambda capture did not expose a completion context";
+		for (local in captureContext.context.locals)
+			if (local.name == "foo")
+				hasCapturedFoo = true;
+		if (!hasCapturedFoo || captureNames.indexOf("member") < 0)
+			throw 'recovered lambda scope lost its captured local: locals=${[for (local in captureContext.context.locals) local.name].join(",")}, items=${captureNames.join(",")}';
+
 		var uncontextualLambdaSource = new SourceFile("TolerantUncontextualLambda.hx",
 			"function main():Void { var callback = (value) -> value; var after:Int = 1; }");
 		var uncontextualLambdaProgram = new Parser(new Lexer(uncontextualLambdaSource).tokenize()).parseProgramRecovering().program,
