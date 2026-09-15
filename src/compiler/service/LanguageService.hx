@@ -407,11 +407,41 @@ class LanguageService {
 
 	/** Rebuild all non-valid snapshots after a module disappears from the workspace. */
 	function refreshAllRecovery():Void {
-		var states:Array<ModuleState> = [for (state in compiler.modules) if (state.ast == null) state];
-		for (state in states)
-			clearRecoveredSnapshot(state);
-		for (state in states)
-			recoverSyntax(state);
+		var pending:Array<ModuleState> = [for (state in compiler.modules) if (state.ast == null) state],
+			oldPrograms:Map<String, AstProgram> = [];
+		for (state in pending) {
+			var program = effectiveAst(state);
+			if (program != null)
+				oldPrograms.set(state.name, program);
+		}
+		while (pending.length > 0) {
+			var progressed = false, index = 0;
+			while (index < pending.length) {
+				var state = pending[index],
+					program = oldPrograms.get(state.name),
+					waitsForDependency = false;
+				if (program != null)
+					for (dependency in pending)
+						if (dependency != state && oldPrograms.exists(dependency.name)
+							&& recoveryModuleVisible(program, dependency, oldPrograms.get(dependency.name))) {
+							waitsForDependency = true;
+							break;
+						}
+				if (waitsForDependency) {
+					index++;
+					continue;
+				}
+				clearRecoveredSnapshot(state);
+				recoverSyntax(state);
+				pending.splice(index, 1);
+				progressed = true;
+			}
+			if (!progressed) {
+				var state = pending.shift();
+				clearRecoveredSnapshot(state);
+				recoverSyntax(state);
+			}
+		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
