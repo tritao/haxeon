@@ -374,6 +374,7 @@ Git dependencies can be added and installed reproducibly:
 ./scripts/haxeon tree
 ./scripts/haxeon why foo
 ./scripts/haxeon publish --registry local --version 1.0.0
+./scripts/haxeon package check
 ```
 
 `install` records the requested source and resolved Git commit in

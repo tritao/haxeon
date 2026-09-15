@@ -97,6 +97,7 @@ class HaxeonCli {
 				case "tree": tree(arguments);
 				case "why": why(arguments);
 				case "publish": publish(arguments);
+				case "package": packageCommand(arguments);
 				case "doctor": doctor(arguments);
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
@@ -320,6 +321,26 @@ class HaxeonCli {
 			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
 			checksum = RegistryPublisher.publish(manifestPath, options.registry, options.version, SourceCache.registryRoot());
 		Sys.println('Published ${options.version} from $manifestPath to ${options.registry} (checksum $checksum)');
+		return 0;
+	}
+
+	static function packageCommand(arguments:Array<String>):Int {
+		if (arguments.length == 0 || arguments[0] != "check")
+			throw 'Usage: haxeon package check [--project PATH]';
+		var options = parsePackageOptions(arguments.slice(1), false, "package check"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = discoverProject(manifestPath),
+			target = Target.parse(project.manifest.target);
+		NativeTargetSupport.validate(project, target);
+		Sys.println('Package graph for ${project.rootPackage.name} [${target.toString()}]');
+		for (resolvedPackage in project.packages.packages) {
+			var native = resolvedPackage.manifest.native == null ? "none" : resolvedPackage.manifest.native.cmake != null ? "cmake" : "sources";
+			Sys.println('  ${resolvedPackage.name} ${PackageSourceTools.describe(resolvedPackage.source)} native:$native');
+		}
+		if (FileSystem.exists(lockfilePath(manifestPath)))
+			Sys.println("  lockfile: validated");
+		else
+			Sys.println("  lockfile: not present");
 		return 0;
 	}
 
@@ -1026,6 +1047,7 @@ class HaxeonCli {
 		Sys.println("  install [--locked]              Resolve dependencies and write haxeon.lock");
 		Sys.println("  update                          Re-resolve refs and rewrite haxeon.lock");
 		Sys.println("  publish --registry NAME --version VERSION  Publish an immutable local release");
+		Sys.println("  package check [--project PATH]     Validate the resolved package graph");
 		Sys.println("  tree                            Show the resolved package graph");
 		Sys.println("  why PACKAGE                     Explain a dependency path");
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");

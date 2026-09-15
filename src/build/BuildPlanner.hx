@@ -33,13 +33,14 @@ class BuildPlanner {
 		for (resolvedPackage in project.packages.packages)
 			if (resolvedPackage.nativeSources.length > 0 || (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
 				var objects:Array<ArtifactId> = [];
-				for (source in resolvedPackage.nativeSources) {
-					var relative = relativePath(resolvedPackage.root, source),
-						id = new ArtifactId(resolvedPackage.name, NativeObject, target, relative),
-						details:Map<String, String> = ["source" => relative];
-					artifacts.push(new Artifact(id, [], details));
-					objects.push(id);
-				}
+				if (NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary) || NativeArtifactDemands.includes(nativeDemand, NativeSharedLibrary))
+					for (source in resolvedPackage.nativeSources) {
+						var relative = relativePath(resolvedPackage.root, source),
+							id = new ArtifactId(resolvedPackage.name, NativeObject, target, relative),
+							details:Map<String, String> = ["source" => relative];
+						artifacts.push(new Artifact(id, [], details));
+						objects.push(id);
+					}
 				if (resolvedPackage.nativeSources.length > 0 && NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
 					var staticId = new ArtifactId(resolvedPackage.name, NativeStaticLibrary, target);
 					nativeStatic.set(resolvedPackage.name, staticId);
