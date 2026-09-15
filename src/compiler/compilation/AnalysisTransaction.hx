@@ -82,6 +82,8 @@ class AnalysisTransaction {
 			for (diagnostic in diagnostics)
 				diagnostic.code
 				+ ":"
+				+ Std.string(diagnostic.origin)
+				+ ":"
 				+ diagnostic.span.file.path
 				+ ":"
 				+ diagnostic.span.start

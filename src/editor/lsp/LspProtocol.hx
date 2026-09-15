@@ -556,6 +556,8 @@ class LspProtocol {
 			for (diagnostic in diagnostics)
 				diagnostic.code
 				+ ":"
+				+ Std.string(diagnostic.origin)
+				+ ":"
 				+ diagnostic.span.start
 				+ ":"
 				+ diagnostic.span.end
