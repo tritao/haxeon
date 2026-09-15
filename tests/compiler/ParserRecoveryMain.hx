@@ -94,7 +94,28 @@ class ParserRecoveryMain {
 		assertDiagnosticOrigins();
 		assertTruncationRecovery();
 		assertTolerantTruncationTyping();
+		assertRecoveredTypeNavigation();
 		Sys.println("PASS: incomplete member and type recovery support completion");
+	}
+
+	static function assertRecoveredTypeNavigation():Void {
+		var service = new LanguageService(),
+			targetSource = "package types; class Foo {} function main():Void return;";
+		service.update("types/Foo.hx", targetSource);
+		service.analyze("types.Foo");
+		var source = "package use; import types.Foo; function main(value:Foo):Foo { return value;";
+		service.update("use/Main.hx", source);
+		var position = source.indexOf(":Foo") + 1,
+			definition = service.definition("use/Main.hx", position),
+			references = service.references("use/Main.hx", position),
+			currentReferences = 0;
+		for (reference in references)
+			if (reference.path == "use/Main.hx" && !reference.stale)
+				currentReferences++;
+		if (definition == null
+			|| definition.path != "types/Foo.hx"
+			|| currentReferences < 3)
+			throw 'recovered type navigation did not bind the authoritative identity: definition=${definition == null ? "null" : definition.path}, references=${references.length}, current=${currentReferences}';
 	}
 
 	static function assertIncompleteDeclarations():Void {

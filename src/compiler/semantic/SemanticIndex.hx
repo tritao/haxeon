@@ -334,6 +334,11 @@ class SemanticIndex {
 				indexTypedFunction(fn, resolveRecoveredSymbol, resolveRecoveredEnumCase, token, true);
 				cancellation = token;
 			}
+		// Bind type annotations from the current recovered source as well as
+		// expression uses. Resolved names retain authoritative identities when
+		// available, while declarations from this module remain editor-local.
+		indexTypeReferences(function(name:String):Null<SemanticSymbolId> return resolvedRecoveredSymbol(name), token);
+		cancellation = token;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
