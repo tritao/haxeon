@@ -140,6 +140,10 @@ before switching publication; `reload()` is the explicit structural path.
 Both paths retire the previous generation without disposing it. Retired arenas
 are drained explicitly, leaving atomic publication and concurrent borrower
 tracking for the synchronization phase.
+`HlMetadataTransaction` stages that decision against the registry revision:
+commit transfers the candidate to the registry, while a stale or rejected
+candidate remains disposable through rollback. This is the Haxe-side
+transaction boundary that a future native JIT staging API can attach to.
 
 ## Deliberate exclusions
 

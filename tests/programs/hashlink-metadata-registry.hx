@@ -3,6 +3,8 @@ import runtime.hashlink.HlMetadataRegistry;
 import runtime.hashlink.HlMetadataCompatibility;
 import runtime.hashlink.HlMetadataCompatibility.HlMetadataDecision;
 import runtime.hashlink.HlTypeKind;
+import runtime.hashlink.HlMetadataTransaction;
+import runtime.hashlink.HlMetadataTransaction.HlMetadataTransactionState;
 import runtime.memory.RawPtr;
 
 function buildPrimitiveGeneration(extra:Bool):HlMetadataGeneration {
@@ -107,6 +109,29 @@ function main():Int {
 		functionChanged = requiresReload(HlMetadataCompatibility.check(functionBefore, functionAfter));
 	functionBefore.dispose();
 	functionAfter.dispose();
+	var reloadCandidate = buildObjectGeneration(HlTypeKind.Int32Type),
+		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true),
+		reloadPublication = reloadTransaction.commit(),
+		transactionReloaded = requiresReload(reloadTransaction.decision)
+			&& reloadTransaction.state == HlMetadataTransactionState.Committed
+			&& registry.revision == 4
+			&& reloadPublication.types.offset(2).load() == reloadCandidate.type(2),
+		reloadRetiredDisposed = registry.disposeRetired() == 1 && registry.retiredCount == 0;
+	var transactionRegistry = new HlMetadataRegistry(),
+		transaction = new HlMetadataTransaction(transactionRegistry, buildPrimitiveGeneration(false)),
+		staleTransaction = new HlMetadataTransaction(transactionRegistry, buildPrimitiveGeneration(false));
+	transaction.commit();
+	var staleRejected = false;
+	try
+		staleTransaction.commit()
+	catch (error:Dynamic)
+		staleRejected = true;
+	staleTransaction.rollback();
+	var transactionStates = transaction.state == HlMetadataTransactionState.Committed
+		&& staleRejected
+		&& staleTransaction.state == HlMetadataTransactionState.RolledBack;
+	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged ? 42 : 1;
+	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged && transactionReloaded
+		&& reloadRetiredDisposed && transactionStates ? 42 : 1;
 }
