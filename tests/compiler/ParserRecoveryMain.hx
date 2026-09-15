@@ -207,6 +207,38 @@ class ParserRecoveryMain {
 				throw 'array literal did not retain expected Foo element type: $collectionExpected';
 		}
 
+		var objectService = new LanguageService(),
+			objectSource = "class Foo {} typedef Options = { value:Foo }; function main():Void { var options:Options = { value: ";
+		objectService.update("ExpectedObject.hx", objectSource);
+		var objectModel = objectService.compiler.modules.get("ExpectedObject").recoveredSemanticModel;
+		if (objectModel == null)
+			throw "missing recovered semantic model for object-field expected-type test";
+		var objectContext = objectModel.index.completionContext(objectSource.length);
+		if (objectContext.kind != SemanticCompletionContextKind.ObjectField)
+			throw 'object literal was classified as ${objectContext.kind} instead of ObjectField';
+		switch objectContext.expected {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'object field did not retain expected Foo type: ${objectContext.expected}';
+		}
+
+		var importService = new LanguageService();
+		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
+		try
+			importService.analyze("lib.Widget")
+		catch (_:CompileError) {}
+		var importSource = "import Wid";
+		importService.update("ImportRecovery.hx", importSource);
+		var importModel = importService.compiler.modules.get("ImportRecovery").recoveredSemanticModel;
+		if (importModel == null || importModel.index.completionContext(importSource.length).kind != SemanticCompletionContextKind.Import)
+			throw "unfinished import did not expose an import completion context";
+		var importNames = [
+			for (item in importService.complete("ImportRecovery.hx", importSource.length))
+				item.label
+		];
+		if (importNames.indexOf("Widget") < 0)
+			throw "unfinished import did not expose an importable declaration";
+
 		var errorService = new LanguageService(),
 			errorSource = "function main():Void { var broken =";
 		errorService.update("ErrorType.hx", errorSource);

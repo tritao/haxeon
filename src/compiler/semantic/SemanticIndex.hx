@@ -45,6 +45,8 @@ enum SemanticCompletionContextKind {
 	Member;
 	Type;
 	Argument;
+	Import;
+	ObjectField;
 }
 
 typedef SemanticCompletionContext = {
@@ -907,7 +909,8 @@ class SemanticIndex {
 					expectedWidth = width;
 				}
 			}
-		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isTypeContext(position) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
+		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isImportContext(position) ? SemanticCompletionContextKind.Import : expected != null
+			&& isObjectFieldContext(position) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
 			receiver: receiver,
@@ -929,6 +932,63 @@ class SemanticIndex {
 			case TokenKind.Colon, TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
 			default: false;
 		};
+	}
+
+	function isImportContext(position:Int):Bool {
+		var previous:Null<Token> = null, previousIndex = -1;
+		for (index in 0...tokens.length) {
+			if (tokens[index].kind == TokenKind.Eof || tokens[index].span.end > position)
+				break;
+			previous = tokens[index];
+			previousIndex = index;
+		}
+		if (previous == null)
+			return false;
+		if (previous.kind == TokenKind.Import)
+			return true;
+		if (previous.kind != TokenKind.Identifier && previous.kind != TokenKind.Dot)
+			return false;
+		var index = previousIndex - 1;
+		while (index >= 0) {
+			var kind = tokens[index].kind;
+			if (kind == TokenKind.Import)
+				return true;
+			if (kind == TokenKind.Semicolon || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
+				return false;
+			index--;
+		}
+		return false;
+	}
+
+	function isObjectFieldContext(position:Int):Bool {
+		var previous:Null<Token> = null;
+		for (token in tokens) {
+			if (token.kind == TokenKind.Eof || token.span.end > position)
+				break;
+			previous = token;
+		}
+		if (previous == null || previous.kind != TokenKind.Colon)
+			return false;
+		var depth = 0;
+		var index = tokens.length - 1;
+		while (index >= 0) {
+			var token = tokens[index];
+			if (token.span.start >= position) {
+				index--;
+				continue;
+			}
+			switch token.kind {
+				case TokenKind.RightBrace:
+					depth++;
+				case TokenKind.LeftBrace:
+					if (depth == 0)
+						return true;
+					depth--;
+				default:
+			}
+			index--;
+		}
+		return false;
 	}
 
 	public function unresolvedSymbols():Array<UnresolvedSymbol>

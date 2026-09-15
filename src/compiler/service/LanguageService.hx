@@ -780,6 +780,17 @@ class LanguageService {
 		var qualifier = memberQualifier(state.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
+		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Import) {
+			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token))
+				addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 0,
+					candidate.importPath == null ? null : candidate.symbol.name, candidate.symbol.id, candidate.importPath);
+			for (candidate in compiler.modules)
+				if (candidate.name != state.name)
+					addMember(candidate.name, "module", candidate.name, prefix, result, 1);
+			sortCompletion(result);
+			tagResults(result, state);
+			return completionResult(result, incompleteSnapshot);
+		}
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Type) {
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token))
