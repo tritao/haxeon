@@ -2083,7 +2083,7 @@ class LanguageService {
 		switch type {
 			case TNullable(element):
 				addInstanceMembers(element, prefix, result, token);
-			case TInstance(Class, name, []):
+			case TInstance(Class, name, _):
 				for (state in compiler.modules) {
 					if (token != null)
 						token.check();
@@ -2109,7 +2109,7 @@ class LanguageService {
 									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result, token);
 							}
 				}
-			case TInstance(Interface, name, []):
+			case TInstance(Interface, name, _):
 				for (state in compiler.modules) {
 					if (token != null)
 						token.check();
