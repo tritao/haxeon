@@ -1139,6 +1139,23 @@ class LspProtocolMain {
 				foundNullableNestedMember = true;
 		if (!foundNullableNestedMember || !nullableNestedCompletion.result.isIncomplete)
 			throw "LSP completion did not preserve nullable nested recovered receiver typing";
+		var recoveredCallableSource = "class Bound {} function identity<T:Bound>(value:T):T return value; function main():Void { var callback = identity; callback(";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 6}, contentChanges: [{text: recoveredCallableSource}]}
+		}));
+		var recoveredCallableDocument = new LspDocument(uri, "/workspace/Main.hx", 6, recoveredCallableSource),
+			recoveredCallableSignature = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 14,
+				method: "textDocument/signatureHelp",
+				params: {textDocument: {uri: uri}, position: recoveredCallableDocument.position(recoveredCallableSource.length)}
+			}));
+		if (recoveredCallableSignature.result == null
+			|| recoveredCallableSignature.result.signatures[0].label != "callback(arg0:Bound):Bound"
+			|| recoveredCallableSignature.result.activeParameter != 0)
+			throw "LSP signature help did not use the recovered callable local type";
 		var recoveredTypeService = new LanguageService(),
 			recoveredTypeProtocol = new LspProtocol(recoveredTypeService),
 			recoveredTypeUri = "file:///workspace/types/Foo.hx",
