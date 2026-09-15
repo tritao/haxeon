@@ -116,6 +116,10 @@ class HlTypeBridge {
 	/** Invoke a stable zero-argument void function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_void(module:RawPtr<UInt8>, stableId:Int):Void {}
 
+	/** Apply one HLP transaction to an externally loaded runtime wrapper. */
+	public static function native_runtime_module_patch(module:RawPtr<UInt8>, bytes:haxe.io.Bytes, length:Int):Int
+		return -1;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

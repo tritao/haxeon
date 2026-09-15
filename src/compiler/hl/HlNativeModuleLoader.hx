@@ -3,6 +3,7 @@ package compiler.hl;
 import haxe.io.Bytes;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+import compiler.hl.patch.HlPatchHeaderReader;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimeModule;
@@ -56,6 +57,7 @@ class HlLoadedRuntimeModule {
 	public final identity:HlRuntimeManifest;
 	public final metadata:HlMetadataGeneration;
 	public final nativeModule:HlRuntimeModule;
+	public var revision(default, null):Int;
 
 	var disposed:Bool = false;
 
@@ -65,6 +67,7 @@ class HlLoadedRuntimeModule {
 		this.identity = identity;
 		this.metadata = metadata;
 		this.nativeModule = nativeModule;
+		revision = identity.revision;
 	}
 
 	/** Retire the runtime wrapper and then release its Haxe-owned metadata arena. */
@@ -83,6 +86,26 @@ class HlLoadedRuntimeModule {
 		if (disposed)
 			throw "HashLink loaded runtime module has been unloaded";
 		return nativeModule.callI32(stableId);
+	}
+
+	/** Haxeon preflights HLP identity/revision before native publication. */
+	public function patch(bytes:Bytes):Void {
+		if (disposed)
+			throw "HashLink loaded runtime module has been unloaded";
+		var patch:{moduleId:Bytes, baseRevision:Int, revision:Int} = null;
+		try {
+			patch = HlPatchHeaderReader.decode(bytes);
+		} catch (error:Dynamic) {
+			throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
+		}
+		if (patch.moduleId.compare(identity.moduleId) != 0)
+			throw "Haxeon rejected an HLP patch for another module";
+		if (patch.baseRevision != revision)
+			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
+		var status = nativeModule.patch(bytes);
+		if (status != 0)
+			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
+		revision = patch.revision;
 	}
 
 	/** Execute the manifest initializer through the Haxe-owned runtime policy. */

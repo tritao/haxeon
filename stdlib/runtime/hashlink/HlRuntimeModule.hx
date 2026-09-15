@@ -43,6 +43,13 @@ class HlRuntimeModule {
 		HlTypeBridge.native_runtime_module_call_void(module, stableId);
 	}
 
+	/** Apply an HLP transaction; policy validation belongs to the owning loader. */
+	public function patch(bytes:Bytes):Int {
+		if (!isLoaded() || bytes == null)
+			throw "HashLink external runtime patch requires a loaded module and patch bytes";
+		return HlTypeBridge.native_runtime_module_patch(module, bytes, bytes.length);
+	}
+
 	/** Retire the wrapper, preserving the metadata lease if native borrowers block it. */
 	public function unload():Bool {
 		if (!isLoaded())

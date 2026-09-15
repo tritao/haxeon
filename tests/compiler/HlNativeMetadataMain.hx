@@ -13,6 +13,7 @@ class HlNativeMetadataMain {
 		compiler.addSourceRoot("src");
 		compiler.update("HlNativeMetadataAdapter.hx",
 			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlWriter; '
+			+ 'import compiler.hl.patch.HlPatchWriter; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
 			+
 			'import runtime.hashlink.HlFunctionVersionTable; import runtime.hashlink.HlHotReloadState; import runtime.hashlink.HlMetadataGeneration; import runtime.hashlink.HlNativeModule; import runtime.memory.RawPtr; '
@@ -49,7 +50,7 @@ class HlNativeMetadataMain {
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
 			'var externalIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["main" => 0], ["main" => 101]), externalLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), externalIdentity), '
-			+ 'externalValue = externalLoaded.callI32(101), externalUnloaded = externalLoaded.unload(); '
+			+ 'externalValue = externalLoaded.callI32(101); '
 			+
 			'var initializerIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["__init" => 0], ["__init" => 101]), initializerRejected = false; '
 			+ 'try { HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), initializerIdentity); } catch (error:Dynamic) initializerRejected = true; '
@@ -57,6 +58,12 @@ class HlNativeMetadataMain {
 			'var patchCode = new HlCode(); patchCode.strings = ["haxeon_runtime", "native_pointer_size"]; patchCode.ints = [42]; patchCode.types = [Simple(HlType.I32), Function([], 0), Function([], 0)]; '
 			+
 			'patchCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; patchCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; patchCode.entryPoint = 0; '
+			+
+			'var externalPatch = HlPatchWriter.encode(patchCode, haxe.io.Bytes.alloc(16), [0], [0 => 101], 1, 2, 0, 0, 2, 3); externalLoaded.patch(externalPatch); var externalPatchedValue = externalLoaded.callI32(101), externalPatchRejected = false, externalIdentityRejected = false; '
+			+
+			'try { externalLoaded.patch(externalPatch); } catch (error:Dynamic) externalPatchRejected = true; var wrongModuleId = haxe.io.Bytes.alloc(16); wrongModuleId.set(0, 1); '
+			+
+			'try { externalLoaded.patch(HlPatchWriter.encode(patchCode, wrongModuleId, [0], [0 => 101], 2, 3, 0, 0, 2, 3)); } catch (error:Dynamic) externalIdentityRejected = true; var externalUnloaded = externalLoaded.unload(); '
 			+
 			'var patchTarget = HlNativeModuleLoader.load(HlWriter.encode(loadCode), null, HlNativeModule.PatchableFlag), patchOne = HlNativeModuleLoader.load(HlWriter.encode(patchCode), null, HlNativeModule.PatchableFlag), '
 			+
@@ -103,7 +110,7 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
-			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '

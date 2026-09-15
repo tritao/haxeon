@@ -119,6 +119,7 @@ DEFINE_PRIM(_BYTES,native_runtime_module_load_code,_BYTES _ABSTRACT(realtime_byt
 DEFINE_PRIM(_BOOL,native_runtime_module_unload,_BYTES);
 DEFINE_PRIM(_I32,native_runtime_module_call_i32,_BYTES _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_call_void,_BYTES _I32);
+DEFINE_PRIM(_I32,native_runtime_module_patch,_BYTES _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
