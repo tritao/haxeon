@@ -809,6 +809,8 @@ class CHeaderImporter {
 			if (annotation.indexOf("hxi:utf8") >= 0)
 				return "utf8";
 		}
+		if (functionPointer(qualifiedType) != null)
+			return "ptr<void>";
 		return mapType(qualifiedType);
 	}
 

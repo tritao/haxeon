@@ -38,6 +38,8 @@ class HashlinkTypeMetadataMain {
 			+ 'function enumConstructSize():Int return sizeof<HlEnumConstruct>(); '
 			+ 'function moduleContextSize():Int return sizeof<HlModuleContext>(); '
 			+ 'function runtimeObjectSize():Int return sizeof<HlRuntimeObject>(); '
+			+ 'function runtimeObjectLookupOffset():Int return offsetof<HlRuntimeObject>("lookup"); '
+			+ 'function runtimeObjectInterfacesOffset():Int return offsetof<HlRuntimeObject>("interfaces"); '
 			+ 'function runtimeBindingSize():Int return sizeof<HlRuntimeBinding>(); '
 			+ 'function main():Int return typeSize() + typeDataSize() + typeDataOffset() + functionSize() + objectSize();');
 		compiler.compile("HashlinkTypeMetadata");
@@ -103,6 +105,42 @@ class HashlinkTypeMetadataMain {
 					{nativeName: "findex", haxeName: "findex"},
 					{nativeName: "pindex", haxeName: "pindex"},
 					{nativeName: "hashed_name", haxeName: "hashedName"}
+				]
+			},
+			{
+				nativeName: "hl_runtime_binding",
+				haxeName: "runtime.hashlink.HlRuntimeBinding",
+				fields: [
+					{nativeName: "ptr", haxeName: "pointer"},
+					{nativeName: "closure", haxeName: "closure"},
+					{nativeName: "fid", haxeName: "functionId"}
+				]
+			},
+			{
+				nativeName: "hl_runtime_obj",
+				haxeName: "runtime.hashlink.HlRuntimeObject",
+				fields: [
+					{nativeName: "t", haxeName: "type"},
+					{nativeName: "nfields", haxeName: "nfields"},
+					{nativeName: "nproto", haxeName: "nproto"},
+					{nativeName: "size", haxeName: "size"},
+					{nativeName: "nmethods", haxeName: "nmethods"},
+					{nativeName: "nbindings", haxeName: "nbindings"},
+					{nativeName: "pad_size", haxeName: "padSize"},
+					{nativeName: "largest_field", haxeName: "largestField"},
+					{nativeName: "hasPtr", haxeName: "hasPtr"},
+					{nativeName: "methods", haxeName: "methods"},
+					{nativeName: "fields_indexes", haxeName: "fieldIndexes"},
+					{nativeName: "bindings", haxeName: "bindings"},
+					{nativeName: "parent", haxeName: "parent"},
+					{nativeName: "toStringFun", haxeName: "toStringFun"},
+					{nativeName: "compareFun", haxeName: "compareFun"},
+					{nativeName: "castFun", haxeName: "castFun"},
+					{nativeName: "getFieldFun", haxeName: "getFieldFun"},
+					{nativeName: "nlookup", haxeName: "nlookup"},
+					{nativeName: "ninterfaces", haxeName: "ninterfaces"},
+					{nativeName: "lookup", haxeName: "lookup"},
+					{nativeName: "interfaces", haxeName: "interfaces"}
 				]
 			},
 			{
@@ -193,7 +231,10 @@ class HashlinkTypeMetadataMain {
 		expect(constantReturn(functions, "HashlinkTypeMetadata.enumSize") == 32, "hl_type_enum must preserve global value alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.enumConstructSize") == 40, "hl_enum_construct must preserve bool padding");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.moduleContextSize") == 24, "hl_module_context must preserve pointer slots");
-		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeObjectSize") == 104, "hl_runtime_obj must preserve callback slots");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeObjectSize") == 120, "hl_runtime_obj must preserve callback slots and trailing tables");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeObjectLookupOffset") == 104, "hl_runtime_obj.lookup must follow the callback slots");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeObjectInterfacesOffset") == 112,
+			"hl_runtime_obj.interfaces must preserve the trailing pointer slot");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeBindingSize") == 24, "hl_runtime_binding must preserve tail padding");
 		expectError('import runtime.hashlink.HlType; import runtime.memory.RawPtr; function bad(pointer:RawPtr<HlType>):Int return pointer.ref.missing; function main():Int return 0;',
 			"Unknown native field");

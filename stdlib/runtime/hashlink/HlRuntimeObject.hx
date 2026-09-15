@@ -25,6 +25,8 @@ class HlRuntimeObject {
 	public var getFieldFun:RawPtr<UInt8>;
 	public var nlookup:Int32;
 	public var ninterfaces:Int32;
+	public var lookup:RawPtr<UInt8>;
+	public var interfaces:RawPtr<Int32>;
 }
 
 /** C-layout equivalent of HashLink's runtime binding metadata. */

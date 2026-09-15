@@ -146,6 +146,9 @@ class CHeaderImporterMain {
 		expect(documentedProjection.indexOf("Number of entries to reserve.") >= 0, "structure field documentation should reach generated Haxe accessors");
 		var hashlinkNames = [
 			"hl_type_kind",
+			"hl_field_lookup",
+			"hl_runtime_binding",
+			"hl_runtime_obj",
 			"hl_alloc",
 			"hl_module_context",
 			"hl_type_fun",
@@ -168,7 +171,8 @@ class CHeaderImporterMain {
 			&& hashlinkSource.indexOf("struct hl_type @layout(40, 8)") >= 0
 			&& hashlinkSource.indexOf("abs_name: ptr<const<u16>> @offset(8) @union") >= 0
 			&& hashlinkSource.indexOf("struct hl_type_fun @layout(80, 8)") >= 0
-			&& hashlinkSource.indexOf("opaque hl_runtime_obj") >= 0
+			&& hashlinkSource.indexOf("struct hl_runtime_obj @layout(120, 8)") >= 0
+			&& hashlinkSource.indexOf("toStringFun: ptr<void> @offset(64)") >= 0
 			&& hashlinkSource.indexOf("extern fn") < 0,
 			"HashLink metadata should import from the real header while keeping machine-sensitive dependencies opaque");
 		var nativeRecordSource = HxiNativeRecordEmitter.emit(parsedHashlink, "runtime.hashlink.generated", "Native"),

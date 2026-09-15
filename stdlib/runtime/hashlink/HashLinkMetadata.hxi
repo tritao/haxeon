@@ -30,7 +30,6 @@ interface HashLinkMetadata @target("x86_64-linux-gnu") @library("haxeon_runtime"
 	}
 	opaque hl_alloc_block;
 	opaque hl_field_lookup;
-	opaque hl_runtime_obj;
 	struct hl_alloc @layout(8, 8) {
 		cur: ptr<hl_alloc_block> @offset(0);
 	}
@@ -57,6 +56,34 @@ interface HashLinkMetadata @target("x86_64-linux-gnu") @library("haxeon_runtime"
 		findex: c_int @offset(8);
 		pindex: c_int @offset(12);
 		hashed_name: c_int @offset(16);
+	}
+	struct hl_runtime_binding @layout(24, 8) {
+		ptr: ptr<void> @offset(0);
+		closure: ptr<hl_type> @offset(8);
+		fid: c_int @offset(16);
+	}
+	struct hl_runtime_obj @layout(120, 8) {
+		t: ptr<hl_type> @offset(0);
+		nfields: c_int @offset(8);
+		nproto: c_int @offset(12);
+		size: c_int @offset(16);
+		nmethods: c_int @offset(20);
+		nbindings: c_int @offset(24);
+		pad_size: c_uchar @offset(28);
+		largest_field: c_uchar @offset(29);
+		hasPtr: c_bool @offset(30);
+		methods: ptr<ptr<void>> @offset(32);
+		fields_indexes: ptr<c_int> @offset(40);
+		bindings: ptr<hl_runtime_binding> @offset(48);
+		parent: ptr<hl_runtime_obj> @offset(56);
+		toStringFun: ptr<void> @offset(64);
+		compareFun: ptr<void> @offset(72);
+		castFun: ptr<void> @offset(80);
+		getFieldFun: ptr<void> @offset(88);
+		nlookup: c_int @offset(96);
+		ninterfaces: c_int @offset(100);
+		lookup: ptr<hl_field_lookup> @offset(104);
+		interfaces: ptr<c_int> @offset(112);
 	}
 	struct hl_type @layout(40, 8) {
 		kind: hl_type_kind @offset(0);
