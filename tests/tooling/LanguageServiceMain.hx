@@ -452,6 +452,7 @@ class LanguageServiceMain {
 		cancelled.cancel();
 		var completionCancelled = false,
 			referencesCancelled = false,
+			recoveredReferencesCancelled = false,
 			symbolsCancelled = false,
 			foldingCancelled = false,
 			selectionCancelled = false;
@@ -463,6 +464,13 @@ class LanguageServiceMain {
 			service.references("Main.hx", methodPosition, cancelled)
 		catch (_:compiler.service.CancellationError)
 			referencesCancelled = true;
+		var recoveredCancellationService = new LanguageService(),
+			recoveredCancellationSource = "function main():Int { var value:Int = 1; value;";
+		recoveredCancellationService.update("RecoveredCancellation.hx", recoveredCancellationSource);
+		try
+			recoveredCancellationService.references("RecoveredCancellation.hx", recoveredCancellationSource.lastIndexOf("value;") + 1, cancelled)
+		catch (_:compiler.service.CancellationError)
+			recoveredReferencesCancelled = true;
 		try
 			largeService.documentSymbols("Large.hx", cancelled)
 		catch (_:compiler.service.CancellationError)
@@ -475,7 +483,7 @@ class LanguageServiceMain {
 			largeService.selectionRanges("Large.hx", [largeText.length], cancelled)
 		catch (_:compiler.service.CancellationError)
 			selectionCancelled = true;
-		if (!completionCancelled || !referencesCancelled || !symbolsCancelled || !foldingCancelled || !selectionCancelled)
+		if (!completionCancelled || !referencesCancelled || !recoveredReferencesCancelled || !symbolsCancelled || !foldingCancelled || !selectionCancelled)
 			throw "language-service queries ignored cancellation";
 		var configuredService = new LanguageService();
 		configuredService.update("Configured.hx", "function main():Int return 42;");

@@ -204,11 +204,15 @@ class SemanticWorkspace {
 
 	/** Collect references from the current editor model without using its data as workspace state. */
 	public function editorLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
-		if (state.ast == null && state.recoveredSemanticModel != null && state.recoveredSemanticModel.index.symbol(id) != null)
-			return [
-				for (span in state.recoveredSemanticModel.index.locations(id))
-					{state: state, span: span}
-			];
+		if (state.ast == null && state.recoveredSemanticModel != null && state.recoveredSemanticModel.index.symbol(id) != null) {
+			var result:Array<{state:ModuleState, span:SourceSpan}> = [];
+			for (span in state.recoveredSemanticModel.index.locations(id)) {
+				if (token != null)
+					token.check();
+				result.push({state: state, span: span});
+			}
+			return result;
+		}
 		return indexedLocations(id, token);
 	}
 
