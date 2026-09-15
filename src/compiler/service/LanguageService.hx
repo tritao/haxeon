@@ -757,7 +757,7 @@ class LanguageService {
 					addInstanceMembers(recoveredReceiver, prefix, result);
 			}
 			if (model != null)
-				for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token)) {
+				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
 					var separator = symbol.name.lastIndexOf(".");
 					if (symbol.kind == DeclarationKind.EnumCase
 						&& separator > 0
@@ -806,7 +806,7 @@ class LanguageService {
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
 		if (model != null)
-			for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token))
+			for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token))
 				if (symbol.name.indexOf(".") < 0) {
 					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
 					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
@@ -860,10 +860,10 @@ class LanguageService {
 				edits: edits
 			};
 		}
-		var resolved = compiler.semanticWorkspace.indexedSymbol(cast identity);
+		var resolved = compiler.semanticWorkspace.editorSymbol(state, cast identity);
 		if (resolved == null)
 			return null;
-		var signature = compiler.semanticWorkspace.indexedSignature(cast identity),
+		var signature = compiler.semanticWorkspace.editorSignature(state, cast identity),
 			edits:Array<TextEdit> = [];
 		if (importPath != null) {
 			var edit = importEdit(state, importPath);
@@ -949,7 +949,7 @@ class LanguageService {
 			return null;
 		var model = effectiveSemanticModel(state),
 			indexedId = model == null ? null : model.index.symbolIdAt(position),
-			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.indexedSignature(indexedId);
+				indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
@@ -993,7 +993,7 @@ class LanguageService {
 		var context = semanticQuery(path, position);
 		if (context == null || context.symbol == null)
 			return null;
-		var resolved = compiler.semanticWorkspace.indexedSymbol(context.symbol);
+		var resolved = compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
 		return resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 	}
 
@@ -1012,7 +1012,7 @@ class LanguageService {
 		if (callee < 0)
 			return null;
 		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
-			signature = id == null ? null : compiler.semanticWorkspace.indexedSignature(id);
+			signature = id == null ? null : compiler.semanticWorkspace.editorSignature(state, id);
 		if (signature == null)
 			return null;
 		var active = activeCallParameter(tokens, open, position);
@@ -1023,7 +1023,7 @@ class LanguageService {
 			parameters: signature.parameters,
 			activeParameter: active
 		};
-		var resolved = compiler.semanticWorkspace.indexedSymbol(id),
+		var resolved = compiler.semanticWorkspace.editorSymbol(state, id),
 			documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 		if (documentation != null) {
 			Reflect.setField(result, "documentation", documentation.markdown);
@@ -1091,7 +1091,7 @@ class LanguageService {
 		if (context == null)
 			return null;
 		var target:Null<SemanticSymbolId> = null,
-			symbol = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
+			symbol = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
 		if (symbol != null && isTypeDeclaration(symbol.symbol.kind))
 			target = symbol.symbol.id;
 		else {
@@ -1101,7 +1101,7 @@ class LanguageService {
 		}
 		if (target == null)
 			return null;
-		var resolved = compiler.semanticWorkspace.indexedSymbol(target);
+		var resolved = target == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, target);
 		return resolved == null ? null : {
 			path: resolved.symbol.declaration.file.path,
 			span: resolved.symbol.declaration,
@@ -1140,7 +1140,7 @@ class LanguageService {
 		var context = semanticQuery(path, position);
 		if (context == null)
 			return null;
-		var resolved = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
+		var resolved = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
 		return resolved == null ? null : {
 			path: resolved.symbol.declaration.file.path,
 			span: resolved.symbol.declaration,
@@ -1162,7 +1162,7 @@ class LanguageService {
 		if (id == null)
 			return null;
 		var result:Array<SymbolLocation> = [
-			for (location in compiler.semanticWorkspace.indexedLocations(id, token))
+			for (location in compiler.semanticWorkspace.editorLocations(context.state, id, token))
 				{
 					path: location.span.file.path,
 					span: location.span,

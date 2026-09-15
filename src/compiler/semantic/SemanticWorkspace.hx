@@ -159,6 +159,16 @@ class SemanticWorkspace {
 		return null;
 	}
 
+	/** Resolve a symbol for an editor query without publishing recovery globally. */
+	public function editorSymbol(state:ModuleState, id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {
+		if (state.ast == null && state.recoveredSemanticModel != null) {
+			var symbol = state.recoveredSemanticModel.index.symbol(id);
+			if (symbol != null)
+				return {state: state, symbol: symbol};
+		}
+		return indexedSymbol(id);
+	}
+
 	public function indexedSignature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
 		for (state in orderedStates()) {
 			var model = effectiveModel(state),
@@ -167,6 +177,16 @@ class SemanticWorkspace {
 				return signature;
 		}
 		return null;
+	}
+
+	/** Read a signature from the current editor model when it exists. */
+	public function editorSignature(state:ModuleState, id:SemanticSymbolId):Null<SemanticSignatureInfo> {
+		if (state.ast == null && state.recoveredSemanticModel != null) {
+			var signature = state.recoveredSemanticModel.index.signature(id);
+			if (signature != null)
+				return signature;
+		}
+		return indexedSignature(id);
 	}
 
 	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
@@ -180,6 +200,13 @@ class SemanticWorkspace {
 					result.push({state: state, span: span});
 		}
 		return result;
+	}
+
+	/** Collect references from the current editor model without using its data as workspace state. */
+	public function editorLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
+		if (state.ast == null && state.recoveredSemanticModel != null && state.recoveredSemanticModel.index.symbol(id) != null)
+			return [for (span in state.recoveredSemanticModel.index.locations(id)) {state: state, span: span}];
+		return indexedLocations(id, token);
 	}
 
 	public function indexedCalls(?token:CancellationToken):Array<{state:ModuleState, edge:SemanticCallEdge}> {
@@ -435,6 +462,24 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	/** Visible symbols for an editor query; recovered declarations are local to the query. */
+	public function editorVisibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
+		var result:Array<IndexedSemanticSymbol> = [],
+			seen:Map<String, Bool> = [];
+		if (from.ast == null && from.recoveredSemanticModel != null)
+			for (symbol in from.recoveredSemanticModel.index.symbols) {
+				seen.set(Std.string(symbol.id), true);
+				result.push(symbol);
+			}
+		for (symbol in visibleSymbols(from, token))
+			if (!seen.exists(Std.string(symbol.id))) {
+				seen.set(Std.string(symbol.id), true);
+				result.push(symbol);
+			}
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
 	/** Unique top-level declarations outside the current module's visibility set. */
 	public function importableSymbols(from:ModuleState, ?token:CancellationToken):Array<ImportableSymbol> {
 		var visible:Map<String, Bool> = [from.name => true],
@@ -599,5 +644,5 @@ class SemanticWorkspace {
 	}
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+		return state.ast != null ? state.semanticModel : state.lastGoodSemanticModel;
 }

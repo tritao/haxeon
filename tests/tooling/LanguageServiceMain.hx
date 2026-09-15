@@ -519,6 +519,8 @@ class LanguageServiceMain {
 		if (immediateService.compiler.modules.get("Immediate").recoveredAst == null
 			|| immediateService.documentSymbols("Immediate.hx").length != 1)
 			throw "editor update did not publish an immediate recovered snapshot";
+		if (immediateService.compiler.semanticWorkspace.resolveSymbolId("unfinished") != null)
+			throw "recovered declaration contaminated the authoritative semantic workspace";
 		var partialService = new LanguageService();
 		partialService.update("Partial.hx", "function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
 		try {
