@@ -1319,6 +1319,29 @@ class LanguageServiceMain {
 		};
 		if (!foundNestedMember || nestedReceiverName != "Leaf")
 			throw "recovered completion did not resolve a nested member receiver";
+		var nestedSignatureSource = "class Leaf { public function run(value:String):String return value; } class Root { public var child:Leaf; } function main():Void { var root:Root = new Root(); root.child.run(";
+		nestedMemberService.update("NestedSignature.hx", nestedSignatureSource);
+		var nestedSignature = nestedMemberService.signatureHelp("NestedSignature.hx", nestedSignatureSource.length);
+		if (nestedSignature == null || nestedSignature.label != "run(value:String):String")
+			throw 'recovered signature help did not resolve a nested member receiver: ${nestedSignature == null ? "null" : nestedSignature.label}';
+		var nestedNavigationSource = "class Leaf { public function run(value:String):String return value; } class Root { public var child:Leaf; } function main():Void { var root:Root = new Root(); root.child.run; }";
+		nestedMemberService.update("NestedNavigation.hx", nestedNavigationSource);
+		var nestedUse = nestedNavigationSource.lastIndexOf("run;"),
+			nestedDefinition = nestedMemberService.definition("NestedNavigation.hx", nestedUse + 1),
+			nestedReferences = nestedMemberService.references("NestedNavigation.hx", nestedUse + 1);
+		if (nestedDefinition == null || nestedDefinition.path != "NestedNavigation.hx" || nestedReferences.length != 2)
+			throw 'recovered navigation did not resolve a nested member identity: definition=${nestedDefinition == null ? "null" : nestedDefinition.path}, references=${nestedReferences.length}';
+		var nullableMemberService = new LanguageService(),
+			nullableMemberSource = "class Leaf { public var value:Int; } class Root { public var child:Leaf; } function main():Void { var root:Null<Root> = null; root.child.";
+		nullableMemberService.update("NullableMember.hx", nullableMemberSource);
+		var nullableContext = nullableMemberService.completionContext("NullableMember.hx", nullableMemberSource.length),
+			nullableReceiver = nullableContext == null ? null : nullableContext.context.receiver,
+			foundNullableMember = false;
+		for (item in nullableMemberService.completeResult("NullableMember.hx", nullableMemberSource.length).items)
+			if (item.label == "value" && item.detail == "value:Int")
+				foundNullableMember = true;
+		if (!foundNullableMember || nullableReceiver == null)
+			throw "recovered completion did not retain a nullable nested member receiver";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

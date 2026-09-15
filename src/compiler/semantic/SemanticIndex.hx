@@ -2549,6 +2549,7 @@ class SemanticIndex {
 
 	static function memberOwner(type:CompilerType):Null<String>
 		return switch type {
+			case TNullable(element): memberOwner(element);
 			case TInstance(_, name, _), TAbstract(name, _, _): name;
 			default: null;
 		};
