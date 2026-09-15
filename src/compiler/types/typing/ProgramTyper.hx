@@ -237,22 +237,40 @@ class ProgramTyper {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue;
-		if ((isValue || isNativeValue) && classDecl.base != null)
-			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
-		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
-			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
-		if (isNativeValue && classDecl.typeParameters.length > 0)
-			BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
+		if ((isValue || isNativeValue) && classDecl.base != null) {
+			if (!session.tolerant)
+				BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
+			rememberRecoveryDiagnostic("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
+		}
+		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0) {
+			if (!session.tolerant)
+				BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
+			rememberRecoveryDiagnostic("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
+		}
+		if (isNativeValue && classDecl.typeParameters.length > 0) {
+			if (!session.tolerant)
+				BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
+			rememberRecoveryDiagnostic("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
+		}
 		if (isNativeValue) {
 			for (field in classDecl.fields) {
-				if (field.isStatic)
-					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields', field.span);
-				if (field.initializer != null)
-					BodyTyper.fail("E1022", 'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
+				if (field.isStatic) {
+					if (!session.tolerant)
+						BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields', field.span);
+					rememberRecoveryDiagnostic("E1022", 'Native value record "${classDecl.name}" cannot declare static fields', field.span);
+				}
+				if (field.initializer != null) {
+					if (!session.tolerant)
+						BodyTyper.fail("E1022", 'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
+					rememberRecoveryDiagnostic("E1022", 'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
+				}
 			}
 			for (method in classDecl.methods)
-				if (!method.isStatic)
-					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare instance methods or constructors', method.span);
+				if (!method.isStatic) {
+					if (!session.tolerant)
+						BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare instance methods or constructors', method.span);
+					rememberRecoveryDiagnostic("E1022", 'Native value record "${classDecl.name}" cannot declare instance methods or constructors', method.span);
+				}
 		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
@@ -350,11 +368,14 @@ class ProgramTyper {
 				classSemanticSubstitutions) catch (error:Dynamic) {
 				if (!session.tolerant)
 					throw error;
+				rememberRecoveryError(error);
 				null;
 			};
 			if (!session.interfaceDecls.exists(interfaceName)) {
 				if (!session.tolerant)
 					BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
+				if (interfaceInstance != null)
+					rememberRecoveryDiagnostic("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 				continue;
 			}
 			if (interfaceInstance != null)
@@ -363,6 +384,7 @@ class ProgramTyper {
 				catch (error:Dynamic) {
 					if (!session.tolerant)
 						throw error;
+					rememberRecoveryError(error);
 				};
 		}
 		var typedMethods:Array<TypedFunction> = [],
@@ -445,6 +467,7 @@ class ProgramTyper {
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
 		var byName:Map<String, TypedClass> = [],
 			layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [],
+			failedLayouts:Map<String, Bool> = [],
 			targets = ["portable-abi32", "portable-abi64"];
 		if (targets.indexOf(session.nativeAbiTarget) < 0)
 			targets.push(session.nativeAbiTarget);
@@ -454,16 +477,24 @@ class ProgramTyper {
 			var layouts:Map<String, TypedNativeLayout> = [];
 			for (classDecl in classes)
 				if (classDecl.isNativeValue)
-					computeNativeLayout(classDecl.name, target, byName, layouts, []);
+					try {
+						computeNativeLayout(classDecl.name, target, byName, layouts, []);
+					}
+					catch (error:Dynamic) {
+						if (!session.tolerant)
+							throw error;
+						failedLayouts.set(classDecl.name, true);
+						rememberRecoveryError(error);
+					}
 			layoutsByTarget.set(target, layouts);
 		}
 		return [
 			for (classDecl in classes) {
-				var nativeLayouts:Array<TypedNativeLayout> = classDecl.isNativeValue ? [
+				var nativeLayouts:Array<TypedNativeLayout> = classDecl.isNativeValue && !failedLayouts.exists(classDecl.name) ? [
 					for (target in targets)
 						requiredNativeLayout(layoutsByTarget, target, classDecl.name)
 				] : [];
-				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name,
+				if (classDecl.isNativeValue && !failedLayouts.exists(classDecl.name)) session.nativeLayoutsByName.set(classDecl.name,
 					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
 				{
 					name: classDecl.name,
@@ -558,26 +589,40 @@ class ProgramTyper {
 		var hasRepresentation = false;
 		for (entry in metadata)
 			if (entry.name == "repr") {
-				if (hasRepresentation)
-					BodyTyper.fail("E1022", 'Duplicate @:repr metadata', entry.span);
-				hasRepresentation = true;
-				if (entry.arguments.length != 1)
-					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+				if (hasRepresentation) {
+					recoverMetadataError("E1022", 'Duplicate @:repr metadata', entry.span);
+					continue;
+				}
+				if (entry.arguments.length != 1) {
+					recoverMetadataError("E1022", '@:repr requires exactly one string argument', entry.span);
+					continue;
+				}
 				var representation:Null<String> = null;
 				switch entry.arguments[0] {
 					case StringLiteral(value, _):
 						representation = value;
 					case _:
-						BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+						recoverMetadataError("E1022", '@:repr requires exactly one string argument', entry.span);
 				}
 				if (representation == null)
-					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
-				if (representation != "C")
-					BodyTyper.fail("E1022", 'Unsupported native representation "$representation"', entry.span);
-				if (!isValue)
-					BodyTyper.fail("E1022", '@:repr("C") requires @:value', entry.span);
+					continue;
+				if (representation != "C") {
+					recoverMetadataError("E1022", 'Unsupported native representation "$representation"', entry.span);
+					continue;
+				}
+				if (!isValue) {
+					recoverMetadataError("E1022", '@:repr("C") requires @:value', entry.span);
+					continue;
+				}
+				hasRepresentation = true;
 			}
 		return hasRepresentation;
+	}
+
+	function recoverMetadataError(code:String, message:String, span:SourceSpan):Void {
+		if (!session.tolerant)
+			BodyTyper.fail(code, message, span);
+		rememberRecoveryDiagnostic(code, message, span);
 	}
 
 	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction {

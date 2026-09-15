@@ -780,6 +780,33 @@ class ParserRecoveryMain {
 			|| duplicateDeclarationTyped.functions.length != 3
 			|| duplicateDeclarationDiagnostics.length == 0)
 			throw "tolerant typing did not report and retain duplicate top-level declarations";
+
+		var invalidValueClassSource = new SourceFile("TolerantInvalidValueClass.hx",
+			"class Base {} @:value class Broken extends Base {} class Usable { public function read():Void return; } function main():Void return;");
+		var invalidValueClassProgram = new Parser(new Lexer(invalidValueClassSource).tokenize()).parseProgramRecovering().program,
+			invalidValueClassTyped = Typer.typeRecovered(invalidValueClassProgram);
+		if (invalidValueClassTyped == null
+			|| invalidValueClassTyped.classes.length != 3
+			|| invalidValueClassTyped.classes[2].name != "Usable")
+			throw "tolerant typing abandoned a class after an invalid value-class relationship";
+
+		var invalidNativeValueSource = new SourceFile("TolerantInvalidNativeValue.hx",
+			"@:value @:repr(\"C\") class Broken {} class Usable { public function read():Void return; } function main():Void return;");
+		var invalidNativeValueProgram = new Parser(new Lexer(invalidNativeValueSource).tokenize()).parseProgramRecovering().program,
+			invalidNativeValueTyped = Typer.typeRecovered(invalidNativeValueProgram);
+		if (invalidNativeValueTyped == null
+			|| invalidNativeValueTyped.classes.length != 2
+			|| invalidNativeValueTyped.classes[1].name != "Usable")
+			throw "tolerant typing abandoned a program after an invalid native value layout";
+
+		var invalidMetadataSource = new SourceFile("TolerantInvalidMetadata.hx",
+			"@:repr(\"unsupported\") class Broken {} class Usable { public function read():Void return; } function main():Void return;");
+		var invalidMetadataProgram = new Parser(new Lexer(invalidMetadataSource).tokenize()).parseProgramRecovering().program,
+			invalidMetadataTyped = Typer.typeRecovered(invalidMetadataProgram);
+		if (invalidMetadataTyped == null
+			|| invalidMetadataTyped.classes.length != 2
+			|| invalidMetadataTyped.classes[1].name != "Usable")
+			throw "tolerant typing abandoned a program after invalid representation metadata";
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {
