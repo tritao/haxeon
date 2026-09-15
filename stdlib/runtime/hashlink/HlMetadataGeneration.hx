@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlTypeBridge;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {

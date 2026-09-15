@@ -131,6 +131,10 @@ it owns the arena, appends the type table, defines the module context, lets
 HashLink initialize derived metadata, and returns a stable publication view.
 The view is ready for a future VM publication bridge; it does not yet replace
 the native module's contiguous `hl_code.types` array.
+`HlMetadataRegistry` adds the policy ring around generations: publishing a
+candidate first seals and validates it, then retires the previous generation
+without disposing it. Retired arenas are drained explicitly, leaving atomic
+publication and concurrent borrower tracking for the synchronization phase.
 
 ## Deliberate exclusions
 
