@@ -1368,8 +1368,8 @@ class LanguageService {
 				if (token != null)
 					token.check();
 				if (symbol.name.indexOf(".") < 0) {
-					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
-					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
+					var signature = compiler.semanticWorkspace.editorSignature(state, symbol.id);
+					addMember(symbol.name, completionDeclarationKind(symbol.kind), signature == null ? symbol.name : signature.label, prefix, result, 3,
 						signature == null ? null : symbol.name + "(", Std.string(symbol.id));
 				}
 			}

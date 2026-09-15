@@ -913,6 +913,18 @@ class LanguageServiceMain {
 				hasUnclosedFold = true;
 		if (!hasUnclosedFold)
 			throw "unmatched recovered blocks did not produce an end-of-source fold";
+		var recoveredTopLevelService = new LanguageService(),
+			recoveredTopLevelSource = "function complete(value:Int):String return \"\"; function main():Void { compl";
+		recoveredTopLevelService.update("RecoveredTopLevel.hx", recoveredTopLevelSource);
+		var recoveredTopLevelCompletion = recoveredTopLevelService.complete("RecoveredTopLevel.hx", recoveredTopLevelSource.length),
+			hasRecoveredTopLevelSignature = false;
+		for (item in recoveredTopLevelCompletion)
+			if (item.label == "complete"
+				&& item.detail == "complete(value:Int):String"
+				&& item.insertText == "complete(")
+				hasRecoveredTopLevelSignature = true;
+		if (!hasRecoveredTopLevelSignature)
+			throw "recovered top-level completion lost signature metadata before analysis";
 		var cacheOrderService = new LanguageService(),
 			initialCacheSource = "package cache; import cache.Types; function main():Void { var value:Types = new Types(); value.";
 		cacheOrderService.update("cache/Types.hx", "package cache; class Types { public var oldValue:Int; }");
