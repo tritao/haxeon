@@ -286,8 +286,12 @@ class ProgramTyper {
 						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
 							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
-						bodyTyper.leaveBody(initializerContext);
-						throw error;
+						if (!session.tolerant) {
+							bodyTyper.leaveBody(initializerContext);
+							throw error;
+						}
+						rememberRecoveryError(error);
+						initializer = new TypedExpression(TNullLiteral, TError, field.span);
 					}
 					bodyTyper.leaveBody(initializerContext);
 				}
@@ -382,6 +386,13 @@ class ProgramTyper {
 			methods: typedMethods,
 			span: classDecl.span
 		};
+	}
+
+	function rememberRecoveryError(error:Dynamic):Void {
+		if (Std.isOfType(error, compiler.Diagnostic.CompileError)) {
+			var compileError:compiler.Diagnostic.CompileError = cast error;
+			session.rememberRecoveryDiagnostic(compileError.diagnostic);
+		}
 	}
 
 	function inheritanceName(type:AstType):Null<String> {

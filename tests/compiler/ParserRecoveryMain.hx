@@ -535,6 +535,24 @@ class ParserRecoveryMain {
 			default:
 				throw 'invalid field type was not represented as TUnknown: ${fieldTyped.classes[0].fields[0].type}';
 		}
+
+		var initializerSource = new SourceFile("TolerantFieldInitializer.hx",
+			"class Broken { var bad:Int = \"wrong\"; var good:String = \"ok\"; public function visible():Void return; } function main():Void return;");
+		var initializerProgram = new Parser(new Lexer(initializerSource).tokenize()).parseProgramRecovering().program,
+			initializerTyped = Typer.typeRecovered(initializerProgram);
+		if (initializerTyped == null
+			|| initializerTyped.classes.length != 1
+			|| initializerTyped.classes[0].fields.length != 2
+			|| initializerTyped.classes[0].methods.length != 2
+			|| initializerTyped.functions.length != 3)
+			throw "tolerant typing discarded fields or methods after an invalid field initializer";
+		switch initializerTyped.classes[0].fields[0].initializer {
+			case null:
+				throw "invalid field initializer was discarded instead of becoming a typed error";
+			case value if (value.type == TError):
+			default:
+				throw 'invalid field initializer did not become TError: ${initializerTyped.classes[0].fields[0].initializer}';
+		}
 	}
 
 	static function assertRecoveryCancellation():Void {
