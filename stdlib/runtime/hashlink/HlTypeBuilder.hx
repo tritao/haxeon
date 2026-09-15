@@ -15,6 +15,11 @@ typedef HlObjectProtoSpec = {
 	final hashedName:Int;
 }
 
+typedef HlObjectBindingSpec = {
+	final fieldIndex:Int;
+	final functionIndex:Int;
+}
+
 typedef HlEnumConstructSpec = {
 	final name:RawPtr<UInt16>;
 	final parameters:Array<RawPtr<HlType>>;
@@ -77,7 +82,7 @@ class HlTypeBuilder {
 	}
 
 	public function objectType(name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
-			bindings:Array<Int>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
+			bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
 		var objectData = arena.allocTypeObject();
 		objectData.ref.nfields = cast fields.length;
 		objectData.ref.nproto = cast prototypes.length;
@@ -86,7 +91,7 @@ class HlTypeBuilder {
 		objectData.ref.superType = superType;
 		objectData.ref.fields = objectFields(fields);
 		objectData.ref.proto = objectPrototypes(prototypes);
-		objectData.ref.bindings = int32Values(bindings);
+		objectData.ref.bindings = objectBindings(bindings);
 		objectData.ref.globalValue = globalValue;
 		objectData.ref.module = module;
 		objectData.ref.runtime = runtime;
@@ -182,6 +187,18 @@ class HlTypeBuilder {
 			destination.ref.findex = cast source.findex;
 			destination.ref.pindex = cast source.pindex;
 			destination.ref.hashedName = cast source.hashedName;
+		}
+		return result;
+	}
+
+	function objectBindings(values:Array<HlObjectBindingSpec>):RawPtr<Int32> {
+		if (values.length == 0)
+			return RawPtr.nullPtr();
+		var result = arena.allocInt32Array(values.length * 2);
+		for (index in 0...values.length) {
+			var source = values[index];
+			result.offset(index * 2).store(cast source.fieldIndex);
+			result.offset(index * 2 + 1).store(cast source.functionIndex);
 		}
 		return result;
 	}

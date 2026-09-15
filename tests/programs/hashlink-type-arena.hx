@@ -58,8 +58,8 @@ function main():Int {
 			pindex: 4,
 			hashedName: 19
 		}
-	], [7],
-		RawPtr.nullPtr(), module, RawPtr.nullPtr()),
+	],
+		[{fieldIndex: 7, functionIndex: 8}], RawPtr.nullPtr(), module, RawPtr.nullPtr()),
 		objectData = builtObject.ref.data.ref.obj,
 		builtEnum = builder.enumType(RawPtr.nullPtr(), [
 			{
@@ -82,7 +82,9 @@ function main():Int {
 		&& objectData.ref.fields.offset(0).ref.type == intType
 		&& objectData.ref.fields.offset(0).ref.hashedName == 17
 		&& objectData.ref.proto.offset(0).ref.findex == 3
+		&& objectData.ref.nbindings == 1
 		&& objectData.ref.bindings.offset(0).load() == 7
+		&& objectData.ref.bindings.offset(1).load() == 8
 		&& HlTypeBridge.native_type_kind(builtEnum) == 18
 		&& HlTypeBridge.native_type_enum_constructor_count(builtEnum) == 1
 		&& enumData.ref.nconstructs == 1
