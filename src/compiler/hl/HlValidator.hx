@@ -171,6 +171,10 @@ class HlValidator {
 				case LoadString(destination, constant):
 					requireRegister(fn, destination);
 					requireString(code, constant, 'function ${fn.functionIndex}');
+				case LoadBytes(destination, constant):
+					requireRegister(fn, destination);
+					if (constant < 0 || constant >= code.bytePositions.length)
+						throw 'Invalid byte constant $constant in function ${fn.functionIndex}';
 				case LoadBool(destination, _):
 					requireRegister(fn, destination);
 				case LoadNull(destination):

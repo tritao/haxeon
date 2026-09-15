@@ -46,6 +46,7 @@ enum HlInstruction {
 	LoadInt(destination:Int, constant:Int);
 	LoadFloat(destination:Int, constant:Int);
 	LoadString(destination:Int, constant:Int);
+	LoadBytes(destination:Int, constant:Int);
 	LoadBool(destination:Int, value:Bool);
 	LoadNull(destination:Int);
 	LoadType(destination:Int, type:Int);

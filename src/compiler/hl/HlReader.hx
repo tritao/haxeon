@@ -257,6 +257,7 @@ class HlReader {
 			case HlOpcode.Int: LoadInt(operands[0], operands[1]);
 			case HlOpcode.Float: LoadFloat(operands[0], operands[1]);
 			case HlOpcode.Bool: LoadBool(operands[0], operands[1] != 0);
+			case HlOpcode.Bytes: LoadBytes(operands[0], operands[1]);
 			case HlOpcode.String: LoadString(operands[0], operands[1]);
 			case HlOpcode.Null: LoadNull(operands[0]);
 			case HlOpcode.Add: Add(operands[0], operands[1], operands[2]);

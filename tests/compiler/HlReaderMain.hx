@@ -51,7 +51,7 @@ function main():Void {
 	];
 	code.functions = [
 		new compiler.hl.HlFunction(1, 1, [0], [
-			HlInstruction.LoadInt(0, 0),
+			HlInstruction.LoadBytes(0, 1),
 			HlInstruction.JumpTrue(0, "done"),
 			HlInstruction.LoadInt(0, 0),
 			HlInstruction.Label("done"),
@@ -139,6 +139,12 @@ function main():Void {
 			expect(target == "L3", "HLB relative jump did not become a symbolic label");
 		case _:
 			throw "HLB jump opcode did not decode as JumpTrue";
+	}
+	switch decoded.functions[0].opcodes[0] {
+		case HlInstruction.LoadBytes(_, constant):
+			expect(constant == 1, "HLB byte opcode did not preserve its byte-pool index");
+		case _:
+			throw "HLB byte opcode did not decode as LoadBytes";
 	}
 	expect(decoded.functions[0].debugLocations.length == 5
 		&& decoded.functions[0].debugLocations[4].line == 5, "HLB debug locations did not decode");

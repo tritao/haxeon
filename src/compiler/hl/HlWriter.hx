@@ -388,6 +388,8 @@ class HlWriter {
 					{opcode: HlOpcode.Float, operands: [destination, constant]};
 				case LoadString(destination, constant):
 					{opcode: HlOpcode.String, operands: [destination, constant]};
+				case LoadBytes(destination, constant):
+					{opcode: HlOpcode.Bytes, operands: [destination, constant]};
 				case LoadBool(destination, value):
 					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
 				case LoadNull(destination):
