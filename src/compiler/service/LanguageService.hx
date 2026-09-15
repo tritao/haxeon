@@ -219,7 +219,8 @@ class LanguageService {
 
 	public function update(path:String, source:String):ModuleState {
 		var state = compiler.update(path, source);
-		recoverSyntax(state);
+		if (state.ast == null && (state.recoveredSemanticModel == null || state.recoveredSemanticModel.revision != state.revision))
+			recoverSyntax(state);
 		compiler.semanticWorkspace.invalidateResolutionCache();
 		return state;
 	}

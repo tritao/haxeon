@@ -626,6 +626,10 @@ class LanguageServiceMain {
 			throw "editor update did not publish an immediate recovered snapshot";
 		if (immediateService.editorSnapshotConfidence("Immediate.hx") != EditorSnapshotConfidence.RecoveredPartial)
 			throw "recovered input did not select partial snapshot confidence";
+		var immediateRecoveryBuilds = immediateService.recoveredSnapshotBuilds;
+		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
+		if (immediateService.recoveredSnapshotBuilds != immediateRecoveryBuilds)
+			throw "duplicate editor updates rebuilt an unchanged recovery snapshot";
 		if (immediateService.compiler.semanticWorkspace.resolveSymbolId("unfinished") != null)
 			throw "recovered declaration contaminated the authoritative semantic workspace";
 		var partialService = new LanguageService();
