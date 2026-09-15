@@ -348,11 +348,12 @@ class CHeaderImporter {
 
 	static function importRecord(name:String, node:Dynamic, layouts:Map<String, CLayout>, documentation:Map<String, HxiDocumentation>,
 			additionalDeclarations:Array<HxiDeclaration>):Null<HxiDeclaration> {
-		var entries:Array<{entry:Dynamic, union:Bool}> = [];
+		var recordIsUnion = field(node, "tagUsed") == "union",
+			entries:Array<{entry:Dynamic, union:Bool}> = [];
 		for (child in children(node)) {
 			if (field(child, "kind") == "FieldDecl" && field(child, "name") != null)
-				entries.push({entry: child, union: false});
-			else if (field(child, "kind") == "RecordDecl" && field(child, "tagUsed") == "union")
+				entries.push({entry: child, union: recordIsUnion});
+			else if (field(child, "kind") == "RecordDecl" && field(child, "tagUsed") == "union" && !isNamedUnionRecord(child, node))
 				for (entry in children(child))
 					if (field(entry, "kind") == "FieldDecl" && field(entry, "name") != null)
 						entries.push({entry: entry, union: true});
@@ -491,6 +492,20 @@ class CHeaderImporter {
 	static function isAnonymous(node:Dynamic):Bool {
 		var name:String = field(node, "name");
 		return name == null || name.length == 0;
+	}
+
+	/** Named anonymous unions have a parent field and must remain nested records. */
+	static function isNamedUnionRecord(record:Dynamic, parent:Dynamic):Bool {
+		var recordLocation:Dynamic = field(record, "loc");
+		if (recordLocation == null)
+			return false;
+		for (child in children(parent))
+			if (field(child, "kind") == "FieldDecl" && field(child, "name") != null) {
+				var location = anonymousLocation(field(field(child, "type"), "qualType"));
+				if (location != null && field(recordLocation, "line") == location.line && field(recordLocation, "col") == location.col)
+					return true;
+			}
+		return false;
 	}
 
 	static function anonymousRecordForType(type:String, records:Array<Dynamic>):Dynamic {

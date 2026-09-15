@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root_dir=$(cd "$(dirname "$0")/.." && pwd)
+exec "$root_dir/scripts/haxeon-ffi-import" \
+  --target=x86_64-linux-gnu \
+  --interface=HashLinkModuleMetadata \
+  --library=haxeon_runtime \
+  --include="$root_dir/vendor/hashlink/src" \
+  --source-label=vendor/hashlink/src/hlmodule.h \
+  --output="$root_dir/stdlib/runtime/hashlink/HashLinkModuleMetadata.hxi" \
+  --only=hl_native \
+  --only=hl_function \
+  "$root_dir/vendor/hashlink/src/hlmodule.h"

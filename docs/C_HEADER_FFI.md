@@ -47,6 +47,13 @@ optional library name becomes interface-level `@library` metadata. Use
 the provenance comment is stable across machines; the input header itself may
 still be an absolute path.
 
+The next module-metadata ring is checked in as
+`stdlib/runtime/hashlink/HashLinkModuleMetadata.hxi`; regenerate it with
+`scripts/haxeon-hashlink-module-metadata-import`. It currently covers the
+non-GC `hl_function` and `hl_native` descriptors from `hlmodule.h`, including
+the named union used by a function's field reference. The corresponding Haxe
+records are `runtime.hashlink.HlFunction` and `runtime.hashlink.HlNative`.
+
 Low-level runtime code can pass the validated model through
 `compiler.ffi.HxiNativeRecordEmitter` to generate source-declared
 `@:repr("C")` records. Pointer fields then use the same `RawPtr<T>` projections,
