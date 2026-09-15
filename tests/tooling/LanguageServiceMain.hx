@@ -645,6 +645,25 @@ class LanguageServiceMain {
 			throw "recoverable edit did not identify current semantic query results";
 		if (staleReferences.length != 0 || staleRename.length != 0)
 			throw "reference or rename unexpectedly used a symbol from the previous source revision";
+		var speculativeService = new LanguageService(),
+			speculativeSource = "function speculative():Int return 1;",
+			speculativePosition = speculativeSource.indexOf("speculative") + 2;
+		speculativeService.update("Speculative.hx", speculativeSource);
+		if (speculativeService.definition("Speculative.hx", speculativePosition) != null
+			|| speculativeService.references("Speculative.hx", speculativePosition).length != 0)
+			throw "navigation used a speculative recovered declaration identity";
+		var foldingService = new LanguageService(),
+			foldingSource = "function main():Int { if (true) { return 1;",
+			unclosedBrace = foldingSource.indexOf("{", foldingSource.indexOf("if")),
+			unclosedFolds = foldingService.foldingRanges("Unclosed.hx");
+		foldingService.update("Unclosed.hx", foldingSource);
+		unclosedFolds = foldingService.foldingRanges("Unclosed.hx");
+		var hasUnclosedFold = false;
+		for (fold in unclosedFolds)
+			if (fold.span.start == unclosedBrace && fold.span.end == foldingSource.length)
+				hasUnclosedFold = true;
+		if (!hasUnclosedFold)
+			throw "unmatched recovered blocks did not produce an end-of-source fold";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);

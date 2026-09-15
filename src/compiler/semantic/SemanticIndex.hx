@@ -113,6 +113,7 @@ class SemanticIndex {
 	var cancellation:Null<CancellationToken>;
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
+	var recoveryResolveType:Null<(String, Array<CompilerType>) -> Null<CompilerType>>;
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
@@ -245,10 +246,11 @@ class SemanticIndex {
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
-			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>):Void {
 		cancellation = token;
 		recoveryResolve = resolve;
 		recoveryResolveEnumCase = resolveEnumCase;
+		recoveryResolveType = resolveType;
 		if (token != null)
 			token.check();
 		for (fn in program.functions) {
@@ -319,6 +321,7 @@ class SemanticIndex {
 		cancellation = null;
 		recoveryResolve = null;
 		recoveryResolveEnumCase = null;
+		recoveryResolveType = null;
 	}
 
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
@@ -729,18 +732,23 @@ class SemanticIndex {
 	}
 
 	function recoveredExternalType(name:String, arguments:Array<CompilerType>):CompilerType {
-		if (recoveryResolve == null)
-			return TUnknown;
-		var id = recoveryResolve(name);
-		if (id == null)
-			return TUnknown;
-		var identity = Std.string(id);
-		if (identity.indexOf(":class:") >= 0)
-			return TInstance(compiler.types.Type.NominalKind.Class, name, arguments);
-		if (identity.indexOf(":interface:") >= 0)
-			return TInstance(compiler.types.Type.NominalKind.Interface, name, arguments);
-		if (identity.indexOf(":enum:") >= 0)
-			return TInstance(compiler.types.Type.NominalKind.Enum, name, arguments);
+		if (recoveryResolve != null) {
+			var id = recoveryResolve(name);
+			if (id != null) {
+				var identity = Std.string(id);
+				if (identity.indexOf(":class:") >= 0)
+					return TInstance(compiler.types.Type.NominalKind.Class, name, arguments);
+				if (identity.indexOf(":interface:") >= 0)
+					return TInstance(compiler.types.Type.NominalKind.Interface, name, arguments);
+				if (identity.indexOf(":enum:") >= 0)
+					return TInstance(compiler.types.Type.NominalKind.Enum, name, arguments);
+			}
+		}
+		if (recoveryResolveType != null) {
+			var recovered = recoveryResolveType(name, arguments);
+			if (recovered != null)
+				return recovered;
+		}
 		return TUnknown;
 	}
 
