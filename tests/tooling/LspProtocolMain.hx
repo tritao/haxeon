@@ -1100,6 +1100,26 @@ class LspProtocolMain {
 				foundRecoveredMember = true;
 		if (!foundRecoveredMember || !recoveredMemberCompletion.result.isIncomplete)
 			throw "LSP completion did not use the current recovered member context";
+		var utf16RecoverySource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); var emoji:String = \"😀\"; foo. }";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 4}, contentChanges: [{text: utf16RecoverySource}]}
+		}));
+		var utf16RecoveryDocument = new LspDocument(uri, "/workspace/Main.hx", 4, utf16RecoverySource),
+			utf16RecoverySourceFile = new compiler.Source.SourceFile("/workspace/Main.hx", utf16RecoverySource),
+			utf16Completion = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 10,
+				method: "textDocument/completion",
+				params: {textDocument: {uri: uri}, position: utf16RecoveryDocument.position(utf16RecoverySourceFile.bytes.length)}
+			})),
+			foundUtf16Member = false;
+		for (item in cast(utf16Completion.result.items, Array<Dynamic>))
+			if (item.label == "knownFoo")
+				foundUtf16Member = true;
+		if (!foundUtf16Member || !utf16Completion.result.isIncomplete)
+			throw "LSP completion did not honor UTF-16 positions in recovered source";
 		var immediateProtocol = new LspProtocol();
 		immediateProtocol.enableDeferredDiagnostics();
 		var immediateUri = "file:///workspace/ImmediateRecovery.hx",

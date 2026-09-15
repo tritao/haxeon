@@ -53,7 +53,36 @@ class InteractiveEditMain {
 			seen.set(key, true);
 		}
 
-		Sys.println('PASS: ${tails.length} interactive edits retained recovery queries');
+		var boundaryCases:Array<{prefix:String, tails:Array<String>, symbols:Array<String>}> = [
+			{
+				prefix: "class Foo { public function existing():Void {} }\n",
+				tails: ["function test(a:Int,", "class Child extends"],
+				symbols: ["Foo", "existing"]
+			},
+			{
+				prefix: "class Foo {}\nfunction main():Void { ",
+				tails: [
+					"var value:",
+					"var value:Foo = new Foo(",
+					"if (true) {",
+					"new Foo(",
+					"var values:Array<Int> = ["
+				],
+				symbols: ["Foo", "main"]
+			}
+		];
+		for (testCase in boundaryCases)
+			for (tail in testCase.tails) {
+				var source = testCase.prefix + tail;
+				service.update("Interactive.hx", source);
+				assertHealthySnapshot(service, source, tail);
+				for (name in testCase.symbols)
+					assertSymbol(service.documentSymbols("Interactive.hx"), name, tail);
+				if (!service.completeResult("Interactive.hx", source.length).isIncomplete)
+					throw 'boundary edit "$tail" was not marked as incomplete';
+			}
+
+		Sys.println('PASS: ${tails.length + 7} interactive edits retained recovery queries');
 	}
 
 	static function assertHealthySnapshot(service:LanguageService, source:String, tail:String):Void {
@@ -73,6 +102,13 @@ class InteractiveEditMain {
 			if (item.label == name)
 				return;
 		throw 'completion for "$tail" did not contain "$name"';
+	}
+
+	static function assertSymbol(symbols:Array<compiler.service.LanguageService.DocumentSymbol>, name:String, tail:String):Void {
+		for (symbol in symbols)
+			if (symbol.name == name)
+				return;
+		throw 'edit "$tail" did not retain symbol "$name"';
 	}
 
 	static function assertSpan(span:SourceSpan, length:Int, kind:String, tail:String):Void {
