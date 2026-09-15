@@ -387,6 +387,18 @@ class ParserRecoveryMain {
 				throw "tolerant typer did not retain the local after an expression error";
 		}
 
+		var expectedAssignmentSource = new SourceFile("TolerantExpectedAssignment.hx",
+			"function main():Int { var value:Int = broken.unresolved(); return value; }");
+		var expectedAssignmentProgram = new Parser(new Lexer(expectedAssignmentSource).tokenize()).parseProgramRecovering().program,
+			expectedAssignmentTyped = Typer.typeRecovered(expectedAssignmentProgram);
+		if (expectedAssignmentTyped == null || expectedAssignmentTyped.functions.length != 1)
+			throw "tolerant typing discarded a declaration with a broken initializer";
+		switch expectedAssignmentTyped.functions[0].statements[0] {
+			case TVar(_, value, _) if (value.type == TInt):
+			default:
+				throw "tolerant coercion did not preserve the declared type after an initializer error";
+		}
+
 		var callSource = new SourceFile("TolerantCall.hx", "function take(value:Int):Void return; function main():Void return take(");
 		var callProgram = new Parser(new Lexer(callSource).tokenize()).parseProgramRecovering().program,
 			callTyped = Typer.typeRecovered(callProgram);
@@ -399,7 +411,7 @@ class ParserRecoveryMain {
 		if (callExpression == null || callExpression.type != TVoid)
 			throw "unfinished call did not retain its resolved result type";
 		switch callExpression.expression {
-			case TCall(name, arguments) if (name == "take" && arguments.length == 1 && arguments[0].type == TError):
+			case TCall(name, arguments) if (name == "take" && arguments.length == 1 && arguments[0].type == TInt):
 			default:
 				throw "unfinished call did not retain a typed callee";
 		}
