@@ -18,6 +18,8 @@ import compiler.types.Type.CompilerType;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
+import compiler.service.EditorSnapshot.EditorSnapshot;
+import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -61,14 +63,6 @@ typedef SymbolDocumentation = Documentation;
 typedef CompletionResult = {
 	final items:Array<CompletionItem>;
 	final isIncomplete:Bool;
-}
-
-/** Confidence attached to an editor semantic snapshot or query. */
-enum EditorSnapshotConfidence {
-	Exact;
-	RecoveredStable;
-	RecoveredPartial;
-	LastGood;
 }
 
 /** A same-document semantic occurrence, classified for LSP highlighting. */
@@ -199,17 +193,6 @@ private typedef SemanticQueryContext = {
 	final symbol:Null<SemanticSymbolId>;
 	final completion:SemanticCompletionContext;
 	final stale:Bool;
-	final confidence:EditorSnapshotConfidence;
-}
-
-private typedef EditorSnapshot = {
-	final source:SourceFile;
-	final tokens:Array<compiler.syntax.Token>;
-	final ast:compiler.syntax.Ast.AstProgram;
-	final semanticModel:Null<SemanticModel>;
-	final revision:Int;
-	final stale:Bool;
-	final recovered:Bool;
 	final confidence:EditorSnapshotConfidence;
 }
 
