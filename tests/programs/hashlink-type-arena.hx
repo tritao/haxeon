@@ -28,11 +28,13 @@ function main():Int {
 		&& nativeSize == 8 && nativeArity == 2;
 	arena.reset();
 	var voidType = builder.primitive(HlTypeKind.VoidType),
-		builtFunction = builder.functionType(voidType, 3),
+		intType = builder.primitive(HlTypeKind.Int32Type),
+		builtFunction = builder.functionType([voidType, intType, voidType], voidType),
 		builtParameter = builder.typeParameter(voidType),
 		builtData = builtFunction.ref.data.ref.fun;
 	var builtCorrect = builtData.ref.ret == voidType
 		&& builtData.ref.args.offset(0).load() == voidType
+		&& builtData.ref.args.offset(1).load() == intType
 		&& builtData.ref.closure.ref.ret == voidType
 		&& builtData.ref.closure.ref.args.offset(2).load() == voidType
 		&& builtParameter.ref.data.ref.typeParam == voidType

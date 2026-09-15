@@ -20,23 +20,24 @@ class HlTypeBuilder {
 		return type;
 	}
 
-	public function functionType(returnType:RawPtr<HlType>, nargs:Int):RawPtr<HlType> {
+	public function functionType(arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):RawPtr<HlType> {
+		var nargs = arguments.length;
 		var functionData = arena.allocTypeFunction();
-		var arguments:RawPtr<RawPtr<HlType>>;
+		var nativeArguments:RawPtr<RawPtr<HlType>>;
 		if (nargs == 0)
-			arguments = RawPtr.nullPtr();
+			nativeArguments = RawPtr.nullPtr();
 		else {
-			arguments = arena.allocTypePointerArray(nargs);
+			nativeArguments = arena.allocTypePointerArray(nargs);
 			for (index in 0...nargs)
-				arguments.offset(index).store(returnType);
+				nativeArguments.offset(index).store(arguments[index]);
 		}
-		functionData.ref.args = arguments;
+		functionData.ref.args = nativeArguments;
 		functionData.ref.ret = returnType;
 		functionData.ref.nargs = cast nargs;
 		functionData.ref.parent = RawPtr.nullPtr();
 		functionData.ref.closureType.ref.kind = cast HlTypeKind.VoidType;
 		functionData.ref.closureType.ref.pointer = RawPtr.nullPtr();
-		functionData.ref.closure.ref.args = arguments;
+		functionData.ref.closure.ref.args = nativeArguments;
 		functionData.ref.closure.ref.ret = returnType;
 		functionData.ref.closure.ref.nargs = cast nargs;
 		functionData.ref.closure.ref.parent = RawPtr.nullPtr();
