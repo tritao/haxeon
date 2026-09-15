@@ -332,6 +332,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 		}
 		if( strcmp(name,"realtime_bytes") == 0 && callback->pointer_sizes[index] > 0 ) {
 			realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+			memset(wrapped,0,sizeof(*wrapped));
 			wrapped->finalize = haxeon_native_scoped_bytes_finalize;
 			wrapped->data = (vbyte *)pointer;
 			wrapped->length = callback->pointer_sizes[index];
@@ -348,6 +349,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 			return NULL;
 		}
 		realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+		memset(wrapped,0,sizeof(*wrapped));
 		wrapped->finalize = haxeon_native_scoped_bytes_finalize;
 		wrapped->data = (vbyte *)value;
 		wrapped->length = callback->argument_sizes[index];
