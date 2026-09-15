@@ -891,6 +891,17 @@ class ParserRecoveryMain {
 		];
 		if (genericResultNames.indexOf("member") < 0)
 			throw "recovered generic call result did not expose receiver members";
+		var expectedResultService = new LanguageService(),
+			expectedResultSource = "class Expected { public var member:Int; } function identity<T>(value:T):T return value; function main():Expected return identity(";
+		expectedResultService.update("TolerantGenericExpectedResult.hx", expectedResultSource);
+		var expectedResultContext = expectedResultService.completionContext("TolerantGenericExpectedResult.hx", expectedResultSource.length),
+			expectedResultType = expectedResultContext == null ? null : expectedResultContext.context.expected;
+		if (expectedResultContext == null || expectedResultContext.context.kind != SemanticCompletionContextKind.Argument)
+			throw "recovered generic result call did not expose an argument completion context";
+		switch expectedResultType {
+			case TInstance(NominalKind.Class, "Expected", _):
+			default: throw 'recovered generic result call lost its expected argument type: ${expectedResultType == null ? "null" : Std.string(expectedResultType)}';
+		}
 
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");

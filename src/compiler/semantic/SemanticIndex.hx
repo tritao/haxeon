@@ -793,7 +793,7 @@ class SemanticIndex {
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
 					indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
-						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null, activeFunctionKey);
+						method == null ? recoveredBuiltinMethodArguments(receiverType, memberName) : null, activeFunctionKey, expected);
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -806,7 +806,7 @@ class SemanticIndex {
 						} else
 							recordUnresolved(name, span);
 					}
-					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey);
+					indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey, expected);
 				}
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee, null, activeFunctionKey);
@@ -822,7 +822,7 @@ class SemanticIndex {
 					owner = memberOwner(receiverType),
 					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
 				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
-					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null, activeFunctionKey);
+					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null, activeFunctionKey, expected);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -1015,7 +1015,7 @@ class SemanticIndex {
 			default: recoveredExpressionType(expression);
 		};
 
-	function recoveredExpressionType(expression:AstExpression):CompilerType
+	function recoveredExpressionType(expression:AstExpression, ?expected:CompilerType):CompilerType
 		return switch expression {
 			case ErrorExpression(_): TError;
 			case IntegerLiteral(_, _): TInt;
@@ -1032,7 +1032,7 @@ class SemanticIndex {
 				builtinResult;
 			else {
 				var method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
-				method == null ? TUnknown : recoveredCallResult(method.method, method.substitutions, arguments);
+				method == null ? TUnknown : recoveredCallResult(method.method, method.substitutions, arguments, expected);
 			}
 			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
@@ -1046,14 +1046,14 @@ class SemanticIndex {
 					if (builtinResult != null)
 						builtinResult;
 					else if (method != null)
-						recoveredCallResult(method.method, method.substitutions, arguments);
+						recoveredCallResult(method.method, method.substitutions, arguments, expected);
 					else {
 						var direct = recoveredFunction(name);
-						direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments);
+						direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
 					}
 				} else {
 					var direct = recoveredFunctionForCall(name);
-					direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments);
+					direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
 				}
 			case ClosureCall(callee, _, _):
 				var result = functionResultType(recoveredExpressionType(callee));
@@ -1270,18 +1270,22 @@ class SemanticIndex {
 		return method == null ? TUnknown : recoveredType(method.method.result, method.substitutions);
 	}
 
-	function recoveredCallResult(fn:AstFunction, ?substitutions:Map<String, CompilerType>, arguments:Array<AstExpression>):CompilerType {
+	function recoveredCallResult(fn:AstFunction, ?substitutions:Map<String, CompilerType>, arguments:Array<AstExpression>,
+			?expected:CompilerType):CompilerType {
 		var inferred:Map<String, CompilerType> = [];
 		if (substitutions != null)
 			for (name => type in substitutions)
 				inferred.set(name, type);
-		if (fn.typeParameters != null)
+		if (fn.typeParameters != null) {
 			for (index in 0...arguments.length)
 				if (index < fn.arguments.length) {
 					var actual = recoveredExpressionType(arguments[index]);
 					if (!isRecoveryType(actual))
 						inferRecoveredTypeParameters(fn.arguments[index].type, actual, fn.typeParameters, inferred);
 				}
+			if (expected != null && !isRecoveryType(expected))
+				inferRecoveredTypeParameters(fn.result, expected, fn.typeParameters, inferred);
+		}
 		return recoveredType(fn.result, inferred);
 	}
 
@@ -1408,18 +1412,21 @@ class SemanticIndex {
 	}
 
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,
-			?explicitExpected:Array<CompilerType>, ?functionKey:String):Void {
+			?explicitExpected:Array<CompilerType>, ?functionKey:String, ?resultExpected:CompilerType):Void {
 		var inferredSubstitutions:Map<String, CompilerType> = [];
 		if (substitutions != null)
 			for (name => type in substitutions)
 				inferredSubstitutions.set(name, type);
-		if (fn != null && fn.typeParameters != null)
+		if (fn != null && fn.typeParameters != null) {
 			for (index in 0...arguments.length)
 				if (index < fn.arguments.length) {
 					var actual = recoveredExpressionType(arguments[index]);
 					if (!isRecoveryType(actual))
 						inferRecoveredTypeParameters(fn.arguments[index].type, actual, fn.typeParameters, inferredSubstitutions);
 				}
+			if (resultExpected != null && !isRecoveryType(resultExpected))
+				inferRecoveredTypeParameters(fn.result, resultExpected, fn.typeParameters, inferredSubstitutions);
+		}
 		for (index in 0...arguments.length) {
 			checkpoint();
 			var argument = arguments[index];
