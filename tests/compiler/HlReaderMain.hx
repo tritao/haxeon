@@ -4,6 +4,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlReader;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 
 function expect(condition:Bool, message:String):Void {
@@ -145,5 +146,12 @@ function main():Void {
 		"HLB debug assignments did not decode");
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
+	var compiler = new Compiler();
+	compiler.update("Main.hx", "function main():Int return 42;");
+	var compiled = compiler.compile("Main").module,
+		compiledBytes = HlWriter.encode(compiled),
+		compiledDecoded = HlReader.decode(compiledBytes);
+	expect(compiledDecoded.functions.length == compiled.functions.length && HlWriter.encode(compiledDecoded).compare(compiledBytes) == 0,
+		"HLB reader could not consume a compiler-produced module");
 	Sys.println("PASS: HLB reader owns complete module metadata and rejects malformed input");
 }
