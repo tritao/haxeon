@@ -32,7 +32,9 @@ function main():Int {
 		builtParameter = builder.typeParameter(voidType),
 		builtData = builtFunction.ref.data.ref.fun;
 	var builtCorrect = builtData.ref.ret == voidType
+		&& builtData.ref.args.offset(0).load() == voidType
 		&& builtData.ref.closure.ref.ret == voidType
+		&& builtData.ref.closure.ref.args.offset(2).load() == voidType
 		&& builtParameter.ref.data.ref.typeParam == voidType
 		&& HlTypeBridge.native_type_kind(voidType) == 0
 		&& HlTypeBridge.native_type_kind(builtFunction) == 10
