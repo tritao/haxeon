@@ -44,6 +44,13 @@ optional library name becomes interface-level `@library` metadata. Use
 the provenance comment is stable across machines; the input header itself may
 still be an absolute path.
 
+Low-level runtime code can pass the validated model through
+`compiler.ffi.HxiNativeRecordEmitter` to generate source-declared
+`@:repr("C")` records. Pointer fields then use the same `RawPtr<T>` projections,
+field access, and layout queries as hand-written native records. Anonymous HXI
+union members become one nested `@:union` record so their C storage remains
+overlapping without introducing a second memory model.
+
 NativeKit-style C handles are annotated with `hxi:handle` and must have a
 fixed unsigned 32-bit representation. The importer emits them as nominal raw
 HXI declarations rather than ordinary structs:

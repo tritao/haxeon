@@ -1,9 +1,12 @@
+import compiler.Compiler;
 import compiler.ffi.CHeaderImporter;
+import compiler.ffi.HxiNativeRecordEmitter;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiWriter;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiValidator;
+import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -168,6 +171,19 @@ class CHeaderImporterMain {
 			&& hashlinkSource.indexOf("opaque hl_runtime_obj") >= 0
 			&& hashlinkSource.indexOf("extern fn") < 0,
 			"HashLink metadata should import from the real header while keeping machine-sensitive dependencies opaque");
+		var nativeRecordSource = HxiNativeRecordEmitter.emit(parsedHashlink, "runtime.hashlink.generated", "Native"),
+			nativeRecordCompiler = new Compiler();
+		CompilerIntrinsics.register(nativeRecordCompiler);
+		nativeRecordCompiler.addSourceRoot("stdlib");
+		nativeRecordCompiler.update("runtime/hashlink/generated/HashLinkNativeRecords.hx",
+			nativeRecordSource +
+			'function main():Int { var arena = new runtime.memory.Arena(); var pointer:RawPtr<NativeHlType> = arena.alloc(); pointer.ref.kind = 3; return pointer.ref.kind == 3 ? 42 : 1; }');
+		nativeRecordCompiler.compile("runtime.hashlink.generated.HashLinkNativeRecords");
+		expect(nativeRecordSource.indexOf("class NativeHlType") >= 0
+			&& nativeRecordSource.indexOf("class NativeHlTypeUnionData") >= 0
+			&& nativeRecordSource.indexOf("public var unionData:NativeHlTypeUnionData") >= 0
+			&& nativeRecordSource.indexOf("public var vobj_proto:RawPtr<RawPtr<UInt8>>") >= 0,
+			"HXI structures should project into source-declared native records with RawPtr fields");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
 	}
 
