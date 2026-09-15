@@ -1352,6 +1352,17 @@ class LanguageServiceMain {
 				foundGenericMember = true;
 		if (!foundGenericMember || genericContext == null || genericContext.context.receiver == null)
 			throw "recovered completion did not preserve generic nested member substitution";
+		var expectedArgumentService = new LanguageService(),
+			expectedArgumentSource = "class Foo {} function take(value:Foo):Void return; function main():Void { take(";
+		expectedArgumentService.update("ExpectedArgument.hx", expectedArgumentSource);
+		var expectedArgumentContext = expectedArgumentService.completionContext("ExpectedArgument.hx", expectedArgumentSource.length),
+			expectedArgument = expectedArgumentContext == null ? null : expectedArgumentContext.context.expected,
+			expectedArgumentName = switch expectedArgument {
+			case TInstance(_, name, _): Std.string(name);
+			default: null;
+		};
+		if (expectedArgumentName != "Foo")
+			throw 'recovered call did not retain the expected argument type: ${expectedArgument == null ? "null" : Std.string(expectedArgument)}';
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
