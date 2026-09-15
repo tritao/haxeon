@@ -24,9 +24,11 @@ overlapping fields marked `@union`; pointer-only types outside a filtered
 declaration set are emitted as opaque dependencies.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
-Function-pointer fields are currently imported as `ptr<void>`: their address
-and layout are preserved while callable signatures remain part of the future
-restricted native-function-pointer layer.
+Function-pointer fields retain their callback declaration, address, and layout.
+When source-declared native records are emitted, callback-typed fields use the
+restricted `NativeFunctionPointer<Signature>` projection described below; the
+value remains a non-owning pointer slot and indirect invocation is not exposed
+through that record field yet.
 Output is sorted so the same header and target produce byte-identical results.
 Use repeatable `--only=<declaration>` options when a large public header contains
 unrelated declarations outside the ABI ring being imported. The header is still
@@ -38,8 +40,9 @@ HashLink header with `scripts/haxeon-hashlink-metadata-import` (the command uses
 `--only` for `hl_type_kind`, `hl_runtime_binding`, `hl_runtime_obj`,
 `hl_alloc`, `hl_module_context`, `hl_type_fun`, `hl_obj_field`, `hl_obj_proto`,
 `hl_type_obj`, `hl_type_virtual`, `hl_enum_construct`, `hl_type_enum`, and
-`hl_type`. The importer adds pointer-only dependencies as opaque declarations,
-while runtime callback slots remain layout-only `ptr<void>` values.
+`hl_type`. The importer adds pointer-only dependencies as opaque declarations;
+callback declarations remain available to native-record projection, while
+opaque and `void *` slots continue to use raw pointer projections.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
 optional library name becomes interface-level `@library` metadata. Use

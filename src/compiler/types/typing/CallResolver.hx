@@ -139,7 +139,9 @@ class CallResolver {
 
 	public function typeRawPointerNullCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			expectedType:Null<CompilerType>):Null<TypedExpression> {
-		if (name != "RawPtr.nullPtr" && !StringTools.endsWith(name, ".RawPtr.nullPtr"))
+		if (name != "RawPtr.nullPtr"
+			&& !StringTools.endsWith(name, ".RawPtr.nullPtr")
+			&& !StringTools.endsWith(name, ".NativeFunctionPointer.nullPtr"))
 			return null;
 		if (arguments.length != 0)
 			fail("E1008", 'RawPtr.nullPtr expects no arguments, got ${arguments.length}', span);
@@ -236,7 +238,7 @@ class CallResolver {
 		};
 
 	static function isRawPointerAbstract(declaration:String):Bool
-		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
+		return NativeLayout.isNativePointerDeclaration(declaration);
 
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return typeExpression(expression, scope, expectedType, false);

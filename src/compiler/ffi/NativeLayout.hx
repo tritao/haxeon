@@ -56,6 +56,17 @@ class NativeLayout {
 			case _: false;
 		};
 
+	/** Whether an abstract is a non-owning machine pointer representation. */
+	public static function isNativePointerDeclaration(declaration:String):Bool
+		return StringTools.endsWith(declaration, "RawPtr") || StringTools.endsWith(declaration, "NativeFunctionPointer");
+
+	/** Whether a compiler type lowers to an unmanaged pointer-sized value. */
+	public static function isNativePointer(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(declaration, _, _): isNativePointerDeclaration(Std.string(declaration));
+			case _: false;
+		};
+
 	public static function containsNativeLayoutType(type:CompilerType):Bool
 		return switch type {
 			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
@@ -84,7 +95,7 @@ class NativeLayout {
 			case TBool: Primitive("c_bool");
 			case TFloat: Primitive("f64");
 			case TNativeScalar(name): Primitive(name);
-			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): Pointer(Primitive("void"));
+			case TAbstract(_, _, _) if (isNativePointer(type)): Pointer(Primitive("void"));
 			case TAbstract(_, _, representation): fieldType(representation);
 			case TInstance(NominalKind.NativeValue, name, _): Named(name);
 			case _: throw 'Type $type is not an unmanaged native field type';

@@ -188,6 +188,19 @@ class CHeaderImporterMain {
 			&& nativeRecordSource.indexOf("public var unionData:NativeHlTypeUnionData") >= 0
 			&& nativeRecordSource.indexOf("public var vobj_proto:RawPtr<RawPtr<UInt8>>") >= 0,
 			"HXI structures should project into source-declared native records with RawPtr fields");
+		var callbackRecord = HxiParser.parse("callback-record.hxi",
+			'interface CallbackRecord @target("x86_64-linux-gnu") @library("callback") { callback binary = fn(left: i32, right: i32) -> i32; struct slot @layout(8, 8) { callback: binary @offset(0); } }'),
+			callbackRecordSource = HxiNativeRecordEmitter.emit(callbackRecord, "runtime.ffi.generated", "Native");
+		expect(callbackRecordSource.indexOf("typedef NativeBinary = (left:Int32, right:Int32)->Int32;") >= 0
+			&& callbackRecordSource.indexOf("public var callback:NativeFunctionPointer<NativeBinary>") >= 0,
+			"HXI callback declarations should project into typed native function-pointer slots");
+		var callbackRecordCompiler = new Compiler();
+		CompilerIntrinsics.register(callbackRecordCompiler);
+		callbackRecordCompiler.addSourceRoot("stdlib");
+		callbackRecordCompiler.update("runtime/ffi/generated/CallbackRecords.hx",
+			callbackRecordSource +
+			'function main():Int { var arena = new runtime.memory.Arena(); var slot:RawPtr<NativeSlot> = arena.alloc(); var callback:runtime.memory.NativeFunctionPointer<NativeBinary> = runtime.memory.NativeFunctionPointer.nullPtr(); slot.ref.callback = callback; return slot.ref.callback.isNull() && slot.ref.callback.raw().isNull() ? 42 : 1; }');
+		callbackRecordCompiler.compile("runtime.ffi.generated.CallbackRecords");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
 	}
 

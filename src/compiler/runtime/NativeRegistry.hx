@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
+import compiler.ffi.NativeLayout;
 
 /** Source signature and HashLink binding for one immutable host native. */
 typedef NativeDefinition = {
@@ -96,7 +97,7 @@ class NativeRegistry {
 
 	static function irType(type:CompilerType):IrType
 		return switch type {
-			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): RawPtr;
+			case TAbstract(declaration, _, _) if (NativeLayout.isNativePointerDeclaration(Std.string(declaration))): RawPtr;
 			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;
 			case TInt64: I64;

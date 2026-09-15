@@ -74,6 +74,19 @@ Raw pointers do not own their targets, keep them alive, or prevent invalidation.
 The compiler does not infer ownership, borrowing, or lifetimes. A pointer becomes
 invalid when its owning arena is reset or disposed.
 
+## Native function-pointer slots
+
+HXI callback declarations used by generated native records project to
+`runtime.memory.NativeFunctionPointer<S>`. `S` is a phantom Haxe function
+signature, so two callback slots with different signatures are not silently
+interchanged in source code. The value has the same non-owning, pointer-sized
+ABI representation as `RawPtr<UInt8>` and uses the same layout, null, and SSA
+memory rules. It exposes only `isNull()` and `raw()`; it does not own a closure,
+root a Haxe function, or invoke through the address. Use the separate managed
+callback-handle projection for callbacks that enter Haxe, and keep the native
+function-pointer slot for runtime tables and callback storage until an explicit
+calling-convention-aware invocation layer is added.
+
 ## Layout queries
 
 These operations resolve against the selected target ABI and become integer
@@ -201,7 +214,8 @@ native JIT/kernel boundary.
 
 The first foundation does not add general-purpose allocation, ownership or
 borrow checking, pinning, GC write barriers, atomics, TLS, executable memory,
-`unsafe {}` syntax, arbitrary native function pointers, aggregate
+`unsafe {}` syntax, indirect invocation through native function pointers,
+aggregate
 by-value calling conventions, or changes to the HashLink fork. The first
 acceptance point is a Haxe-declared, GC-free C record whose layout agrees with
 the ABI classifier, manipulated through `RawPtr<T>` in stable aligned arena

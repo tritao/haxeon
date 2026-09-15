@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
+import compiler.ffi.NativeLayout;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedProgram;
@@ -1635,7 +1636,7 @@ class IrGenerator {
 		};
 
 	static function isRawPointer(declaration:compiler.types.DeclarationIndex.DeclarationId):Bool
-		return StringTools.endsWith(Std.string(declaration), "RawPtr");
+		return NativeLayout.isNativePointerDeclaration(Std.string(declaration));
 
 	static function unreachableValue(type:IrType, builder:CfgBuilder):CfgValue
 		return switch type {

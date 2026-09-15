@@ -1479,7 +1479,7 @@ class BodyTyper {
 		};
 
 	static function isRawPointerAbstract(declaration:String):Bool
-		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
+		return NativeLayout.isNativePointerDeclaration(declaration);
 
 	function isGenericNominal(type:CompilerType):Bool
 		return switch type {
