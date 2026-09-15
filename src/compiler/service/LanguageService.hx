@@ -444,7 +444,7 @@ class LanguageService {
 				var name = tokens[index + 1],
 					after = index + 2 < tokens.length ? tokens[index + 2] : null;
 				if (name.span.end >= start && name.span.end <= end && (after == null || after.kind != Colon)) {
-					var context = model.index.completionContext(name.span.end),
+					var context = model.index.completionContext(name.span.end, null, token),
 						localType:Null<CompilerType> = null;
 					for (local in context.locals)
 						if (local.name == name.text)
@@ -460,14 +460,16 @@ class LanguageService {
 				}
 			}
 			if (current.kind == LeftParen && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
-				addParameterHints(path, tokens, index, start, end, result);
+				addParameterHints(path, tokens, index, start, end, result, token);
 		}
 		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
 		return result;
 	}
 
-	public function prepareCallHierarchy(path:String, position:Int):Null<CallHierarchyItem> {
-		var context = semanticQuery(path, position);
+	public function prepareCallHierarchy(path:String, position:Int, ?token:CancellationToken):Null<CallHierarchyItem> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position, null, token);
 		if (context == null || context.symbol == null)
 			return null;
 		return callHierarchyItem(context.symbol);
@@ -484,8 +486,10 @@ class LanguageService {
 		return item != null && item.revision == revision;
 	}
 
-	public function prepareTypeHierarchy(path:String, position:Int):Null<TypeHierarchyItem> {
-		var context = semanticQuery(path, position);
+	public function prepareTypeHierarchy(path:String, position:Int, ?token:CancellationToken):Null<TypeHierarchyItem> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position, null, token);
 		if (context == null || context.symbol == null)
 			return null;
 		return typeHierarchyItem(context.symbol);
@@ -854,14 +858,17 @@ class LanguageService {
 		var prefix = identifierPrefix(snapshot.source, position);
 		var qualifier = memberQualifier(snapshot.source, position),
 			model = effectiveSemanticModel(state),
-			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
+			semanticContext = model == null ? null : model.index.completionContext(position, qualifier, token);
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Import) {
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token))
 				addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 0,
 					candidate.importPath == null ? null : candidate.symbol.name, candidate.symbol.id, candidate.importPath);
-			for (candidate in compiler.modules)
+			for (candidate in compiler.modules) {
+				if (token != null)
+					token.check();
 				if (candidate.name != state.name)
 					addMember(candidate.name, "module", candidate.name, prefix, result, 1);
+			}
 			sortCompletion(result);
 			tagResults(result, state);
 			return completionResult(result, incompleteSnapshot);
@@ -878,7 +885,7 @@ class LanguageService {
 				if (isTypeCompletionKind(candidate.symbol.kind))
 					addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 1,
 						candidate.importPath == null ? null : candidate.symbol.name, candidate.symbol.id, candidate.importPath);
-			for (symbol in documentSymbols(path))
+			for (symbol in documentSymbols(path, token))
 				if (symbol.kind == "class" || symbol.kind == "interface" || symbol.kind == "enum" || symbol.kind == "type" || symbol.kind == "abstract")
 					addMember(symbol.name, symbol.kind, symbol.detail, prefix, result, 2);
 			sortCompletion(result);
@@ -889,7 +896,7 @@ class LanguageService {
 			if (semanticContext != null && semanticContext.receiver != null)
 				addInstanceMembers(semanticContext.receiver, prefix, result, token);
 			if (state.ast == null && state.recoveredAst != null) {
-				var recoveredReceiver = recoveredQualifierType(state.recoveredAst, qualifier, position);
+				var recoveredReceiver = recoveredQualifierType(state.recoveredAst, qualifier, position, token);
 				if (recoveredReceiver != null)
 					addInstanceMembers(recoveredReceiver, prefix, result, token);
 			}
@@ -902,28 +909,43 @@ class LanguageService {
 						&& sourceName(symbol.name.substring(0, separator)) == qualifier)
 						addMember(symbol.name.substring(separator + 1), "enumCase", symbol.name, prefix, result);
 				}
-			for (enumDecl in ast.enums)
+			for (enumDecl in ast.enums) {
+				if (token != null)
+					token.check();
 				if (enumDecl.name == qualifier)
-					for (caseDecl in enumDecl.cases)
+					for (caseDecl in enumDecl.cases) {
+						if (token != null)
+							token.check();
 						if (prefix.length == 0 || StringTools.startsWith(caseDecl.name, prefix))
 							result.push({
 								label: caseDecl.name,
 								kind: "enumCase",
 								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})'
 							});
-			for (classDecl in ast.classes)
+					}
+			}
+			for (classDecl in ast.classes) {
+				if (token != null)
+					token.check();
 				if (classDecl.name == qualifier) {
-					for (field in classDecl.fields)
+					for (field in classDecl.fields) {
+						if (token != null)
+							token.check();
 						if (field.isStatic && (prefix.length == 0 || StringTools.startsWith(field.name, prefix)))
 							result.push({label: field.name, kind: "field", detail: '${field.name}:${typeName(field.type)}'});
-					for (method in classDecl.methods)
+					}
+					for (method in classDecl.methods) {
+						if (token != null)
+							token.check();
 						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
 							result.push({
 								label: method.name,
 								kind: "method",
 								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
 							});
+					}
 				}
+			}
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
@@ -931,27 +953,37 @@ class LanguageService {
 			}
 		}
 		if (semanticContext != null)
-			for (local in semanticContext.locals)
+			for (local in semanticContext.locals) {
+				if (token != null)
+					token.check();
 				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
 					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
+			}
 		if (state.ast == null && state.recoveredAst != null)
-			addRecoveredLocals(state.recoveredAst, position, prefix, result);
+			addRecoveredLocals(state.recoveredAst, position, prefix, result, token);
 		if (semanticContext != null && semanticContext.expected != null)
 			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected, token)) {
+				if (token != null)
+					token.check();
 				var label = sourceName(symbol.name),
 					signature = compiler.semanticWorkspace.indexedSignature(symbol.id),
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
 		if (model != null)
-			for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token))
+			for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
+				if (token != null)
+					token.check();
 				if (symbol.name.indexOf(".") < 0) {
 					var signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
 					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
 						signature == null ? null : symbol.name + "(", Std.string(symbol.id));
 				}
+			}
 		if (qualifier == null)
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
+				if (token != null)
+					token.check();
 				var symbol = candidate.symbol,
 					signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
 				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4, signature == null ? null : symbol.name + "(",
@@ -960,10 +992,15 @@ class LanguageService {
 		if (qualifier == null) {
 			var candidates = workspaceSymbols(prefix, token),
 				counts:Map<String, Int> = [];
-			for (candidate in candidates)
+			for (candidate in candidates) {
+				if (token != null)
+					token.check();
 				if (candidate.container == null && isImportableCompletionKind(candidate.kind))
 					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
+			}
 			for (candidate in candidates) {
+				if (token != null)
+					token.check();
 				var module = ModulePath.fromFile(candidate.path);
 				if (candidate.container == null
 					&& isImportableCompletionKind(candidate.kind)
@@ -972,7 +1009,7 @@ class LanguageService {
 					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
 			}
 		}
-		for (symbol in documentSymbols(path))
+		for (symbol in documentSymbols(path, token))
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
@@ -1019,7 +1056,7 @@ class LanguageService {
 	public function documentHighlights(path:String, position:Int, ?token:CancellationToken):Array<DocumentHighlight> {
 		if (token != null)
 			token.check();
-		var context = semanticQuery(path, position),
+		var context = semanticQuery(path, position, null, token),
 			result:Array<DocumentHighlight> = [];
 		if (context == null || context.symbol == null)
 			return result;
@@ -1081,20 +1118,22 @@ class LanguageService {
 		return result;
 	}
 
-	public function hover(path:String, position:Int):Null<String> {
+	public function hover(path:String, position:Int, ?token:CancellationToken):Null<String> {
+		if (token != null)
+			token.check();
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
 			ast = snapshot == null ? null : snapshot.ast;
 		if (state == null || ast == null)
 			return null;
 		var model = snapshot.semanticModel,
-			indexedId = model == null ? null : model.index.symbolIdAt(position),
+			indexedId = model == null ? null : model.index.symbolIdAt(position, token),
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
 			var indexed = model.index.symbol(indexedId),
-				indexedType = model.index.typeAt(position);
+				indexedType = model.index.typeAt(position, token);
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
@@ -1103,59 +1142,78 @@ class LanguageService {
 			return null;
 		var qualifier = memberQualifier(snapshot.source, position);
 		if (qualifier != null) {
-			for (enumDecl in ast.enums)
+			for (enumDecl in ast.enums) {
+				if (token != null)
+					token.check();
 				if (enumDecl.name == qualifier)
-					for (caseDecl in enumDecl.cases)
+					for (caseDecl in enumDecl.cases) {
+						if (token != null)
+							token.check();
 						if (caseDecl.name == name)
 							return
 								'${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})';
-			for (classDecl in ast.classes)
+					}
+			}
+			for (classDecl in ast.classes) {
+				if (token != null)
+					token.check();
 				if (classDecl.name == qualifier)
-					for (field in classDecl.fields)
+					for (field in classDecl.fields) {
+						if (token != null)
+							token.check();
 						if (field.name == name && field.isStatic)
 							return '${field.name}:${typeName(field.type)}';
+					}
+			}
 			var model = snapshot.semanticModel,
-				context = model == null ? null : model.index.completionContext(position, qualifier),
+				context = model == null ? null : model.index.completionContext(position, qualifier, token),
 				members:Array<CompletionItem> = [];
 			if (context != null && context.receiver != null) {
-				addInstanceMembers(context.receiver, name, members, null);
+				addInstanceMembers(context.receiver, name, members, token);
 				if (members.length > 0)
 					return members[0].detail;
 			}
 		}
-		for (symbol in documentSymbols(path))
+		for (symbol in documentSymbols(path, token))
 			if (symbol.name == name)
 				return symbol.detail;
 		return null;
 	}
 
-	public function hoverDocumentation(path:String, position:Int):Null<SymbolDocumentation> {
-		var context = semanticQuery(path, position);
+	public function hoverDocumentation(path:String, position:Int, ?token:CancellationToken):Null<SymbolDocumentation> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position, null, token);
 		if (context == null || context.symbol == null)
 			return null;
 		var resolved = compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
 		return resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 	}
 
-	public function signatureHelp(path:String, position:Int):Null<SignatureHelp> {
+	public function signatureHelp(path:String, position:Int, ?token:CancellationToken):Null<SignatureHelp> {
+		if (token != null)
+			token.check();
 		var state = stateFor(path),
 			tokens = state == null ? null : effectiveTokens(state),
 			model = state == null ? null : effectiveSemanticModel(state);
 		if (state == null || tokens == null || model == null)
 			return null;
-		var open = callOpenToken(tokens, position);
+		var open = callOpenToken(tokens, position, token);
 		if (open < 1)
 			return null;
 		var callee = open - 1;
-		while (callee >= 0 && tokens[callee].kind != Identifier)
+		while (callee >= 0 && tokens[callee].kind != Identifier) {
+			if (token != null)
+				token.check();
 			callee--;
+		}
 		if (callee < 0)
 			return null;
 		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
 			signature = id == null ? null : compiler.semanticWorkspace.editorSignature(state, id);
 		if (signature == null)
 			return null;
-		var active = activeCallParameter(tokens, open, position);
+		var active = activeCallParameter(tokens, open, position, token);
 		if (signature.parameters.length > 0 && active >= signature.parameters.length)
 			active = signature.parameters.length - 1;
 		var result:SignatureHelp = {
@@ -1179,12 +1237,17 @@ class LanguageService {
 		return result;
 	}
 
-	static function callOpenToken(tokens:Array<compiler.syntax.Token>, position:Int):Int {
+	static function callOpenToken(tokens:Array<compiler.syntax.Token>, position:Int, ?cancellation:CancellationToken):Int {
 		var depth = 0;
 		var index = tokens.length - 1;
-		while (index >= 0 && tokens[index].span.start >= position)
+		while (index >= 0 && tokens[index].span.start >= position) {
+			if (cancellation != null)
+				cancellation.check();
 			index--;
+		}
 		while (index >= 0) {
+			if (cancellation != null)
+				cancellation.check();
 			switch tokens[index].kind {
 				case RightParen:
 					depth++;
@@ -1199,13 +1262,15 @@ class LanguageService {
 		return -1;
 	}
 
-	static function activeCallParameter(tokens:Array<compiler.syntax.Token>, open:Int, position:Int):Int {
+	static function activeCallParameter(tokens:Array<compiler.syntax.Token>, open:Int, position:Int, ?cancellation:CancellationToken):Int {
 		var depth = 0, active = 0;
 		for (index in open + 1...tokens.length) {
-			var token = tokens[index];
-			if (token.span.start >= position)
+			if (cancellation != null)
+				cancellation.check();
+			var lexical = tokens[index];
+			if (lexical.span.start >= position)
 				break;
-			switch token.kind {
+			switch lexical.kind {
 				case LeftParen, LeftBracket, LeftBrace:
 					depth++;
 				case RightParen, RightBracket, RightBrace:
@@ -1220,14 +1285,14 @@ class LanguageService {
 		return active;
 	}
 
-	public function definition(path:String, position:Int):Null<SymbolLocation> {
-		return indexedDefinition(path, position);
+	public function definition(path:String, position:Int, ?token:CancellationToken):Null<SymbolLocation> {
+		return indexedDefinition(path, position, token);
 	}
 
 	public function typeDefinition(path:String, position:Int, ?token:CancellationToken):Null<SymbolLocation> {
 		if (token != null)
 			token.check();
-		var context = semanticQuery(path, position);
+		var context = semanticQuery(path, position, null, token);
 		if (context == null)
 			return null;
 		var target:Null<SemanticSymbolId> = null,
@@ -1235,7 +1300,7 @@ class LanguageService {
 		if (symbol != null && isTypeDeclaration(symbol.symbol.kind))
 			target = symbol.symbol.id;
 		else {
-			var declaration = typeDeclaration(context.model.index.typeAt(position));
+			var declaration = typeDeclaration(context.model.index.typeAt(position, token));
 			if (declaration != null)
 				target = compiler.semanticWorkspace.resolveTypeSymbolId(declaration);
 		}
@@ -1251,7 +1316,7 @@ class LanguageService {
 	}
 
 	public function implementations(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
-		var context = semanticQuery(path, position);
+		var context = semanticQuery(path, position, null, token);
 		if (context == null || context.symbol == null)
 			return [];
 		return [
@@ -1276,8 +1341,10 @@ class LanguageService {
 		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
 			|| kind == DeclarationKind.Class;
 
-	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
-		var context = semanticQuery(path, position);
+	function indexedDefinition(path:String, position:Int, ?token:CancellationToken):Null<SymbolLocation> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position, null, token);
 		if (context == null)
 			return null;
 		var resolved = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
@@ -1295,7 +1362,7 @@ class LanguageService {
 	}
 
 	function indexedReferences(path:String, position:Int, ?token:CancellationToken):Null<Array<SymbolLocation>> {
-		var context = semanticQuery(path, position);
+		var context = semanticQuery(path, position, null, token);
 		if (context == null || context.confidence == EditorSnapshotConfidence.LastGood)
 			return null;
 		var id = context.symbol;
@@ -1317,8 +1384,10 @@ class LanguageService {
 		return result.length > MAX_REFERENCE_RESULTS ? result.slice(0, MAX_REFERENCE_RESULTS) : result;
 	}
 
-	public function rename(path:String, position:Int, replacement:String):Array<TextEdit> {
-		var context = semanticQuery(path, position),
+	public function rename(path:String, position:Int, replacement:String, ?token:CancellationToken):Array<TextEdit> {
+		if (token != null)
+			token.check();
+		var context = semanticQuery(path, position, null, token),
 			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
 			result:Array<TextEdit> = [];
@@ -1328,8 +1397,8 @@ class LanguageService {
 			|| !isIdentifier(replacement)
 			|| replacement == name)
 			return result;
-		var targetReferences = references(path, position);
-		if (indexedRenameCollides(indexedId, replacement, targetReferences))
+		var targetReferences = references(path, position, token);
+		if (indexedRenameCollides(indexedId, replacement, targetReferences, token))
 			return result;
 		for (reference in targetReferences)
 			result.push({
@@ -1342,22 +1411,30 @@ class LanguageService {
 		return result;
 	}
 
-	function indexedRenameCollides(target:SemanticSymbolId, replacement:String, affected:Array<SymbolLocation>):Bool {
+	function indexedRenameCollides(target:SemanticSymbolId, replacement:String, affected:Array<SymbolLocation>, ?token:CancellationToken):Bool {
 		var affectedPaths:Map<String, Bool> = [];
-		for (location in affected)
+		for (location in affected) {
+			if (token != null)
+				token.check();
 			affectedPaths.set(location.path, true);
+		}
 		for (state in compiler.modules) {
+			if (token != null)
+				token.check();
 			if (!affectedPaths.exists(state.source.path))
 				continue;
 			var tokens = effectiveTokens(state),
 				model = effectiveSemanticModel(state);
 			if (tokens != null && model != null)
-				for (token in tokens)
-					if (token.kind == Identifier && token.text == replacement) {
-						var existing = model.index.symbolIdAt(token.span.start + 1);
+				for (lexical in tokens) {
+					if (token != null)
+						token.check();
+					if (lexical.kind == Identifier && lexical.text == replacement) {
+						var existing = model.index.symbolIdAt(lexical.span.start + 1);
 						if (existing != null && Std.string(existing) != Std.string(target) && semanticNamesCollide(target, existing))
 							return true;
 					}
+				}
 		}
 		return false;
 	}
@@ -1409,11 +1486,13 @@ class LanguageService {
 		return true;
 	}
 
-	function semanticQuery(path:String, position:Int, ?qualifier:String):Null<SemanticQueryContext> {
+	function semanticQuery(path:String, position:Int, ?qualifier:String, ?token:CancellationToken):Null<SemanticQueryContext> {
+		if (token != null)
+			token.check();
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
 			model = snapshot == null ? null : snapshot.semanticModel;
-		var symbol = model == null ? null : model.index.symbolIdAt(position),
+		var symbol = model == null ? null : model.index.symbolIdAt(position, token),
 			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial
 				&& symbol != null ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
 		return state == null || snapshot == null || model == null ? null : {
@@ -1421,7 +1500,7 @@ class LanguageService {
 			snapshot: snapshot,
 			model: model,
 			symbol: symbol,
-			completion: model.index.completionContext(position, qualifier),
+			completion: model.index.completionContext(position, qualifier, token),
 			stale: snapshot.stale,
 			confidence: confidence
 		};
@@ -1540,28 +1619,45 @@ class LanguageService {
 				continue;
 			var importedPrefix = importPath + ".";
 			for (fn in importedAst.functions) {
+				if (token != null)
+					token.check();
 				var id = compiler.semanticWorkspace.resolveSymbolId(importedPrefix + fn.name);
 				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}',
 					prefix, result, 1, fn.name + "(", id == null ? null : Std.string(id), importPath);
 			}
 			var importedName = sourceName(importPath);
-			for (classDecl in importedAst.classes)
+			for (classDecl in importedAst.classes) {
+				if (token != null)
+					token.check();
 				if (classDecl.name == importedName) {
-					for (field in classDecl.fields)
+					for (field in classDecl.fields) {
+						if (token != null)
+							token.check();
 						if (field.isStatic)
 							addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result, 1);
-					for (method in classDecl.methods)
+					}
+					for (method in classDecl.methods) {
+						if (token != null)
+							token.check();
 						if (method.isStatic)
 							addMember(method.name, "method",
 								'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 								prefix, result, 1, method.name + "(");
+					}
 				}
-			for (enumDecl in importedAst.enums)
+			}
+			for (enumDecl in importedAst.enums) {
+				if (token != null)
+					token.check();
 				if (enumDecl.name == importedName)
-					for (caseDecl in enumDecl.cases)
+					for (caseDecl in enumDecl.cases) {
+						if (token != null)
+							token.check();
 						addMember(caseDecl.name, "enumCase",
 							'${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})',
 							prefix, result, 1, caseDecl.params.length == 0 ? null : caseDecl.name + "(");
+					}
+			}
 		}
 	}
 
@@ -1763,12 +1859,17 @@ class LanguageService {
 		};
 	}
 
-	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int, result:Array<InlayHint>):Void {
-		var signature = signatureHelp(path, tokens[open].span.end);
+	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int, result:Array<InlayHint>,
+			token:Null<CancellationToken>):Void {
+		if (token != null)
+			token.check();
+		var signature = signatureHelp(path, tokens[open].span.end, token);
 		if (signature == null || signature.parameters.length == 0)
 			return;
 		var depth = 1, argument = 0, cursor = open + 1, argumentStart = cursor;
 		while (cursor < tokens.length && depth > 0) {
+			if (token != null)
+				token.check();
 			var kind = tokens[cursor].kind;
 			switch kind {
 				case LeftParen, LeftBracket, LeftBrace:
@@ -2083,12 +2184,20 @@ class LanguageService {
 		return snapshot == null ? null : snapshot.semanticModel;
 	}
 
-	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
-		for (fn in ast.functions)
+	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>,
+			token:Null<CancellationToken>):Void {
+		for (fn in ast.functions) {
+			if (token != null)
+				token.check();
 			if (position >= fn.span.start && position <= fn.span.end) {
-				for (argument in fn.arguments)
+				for (argument in fn.arguments) {
+					if (token != null)
+						token.check();
 					addMember(argument.name, "variable", argument.name + ":" + typeName(argument.type), prefix, result, 2);
-				for (statement in fn.statements)
+				}
+				for (statement in fn.statements) {
+					if (token != null)
+						token.check();
 					switch statement {
 						case UninitializedDeclaration(name, type, span) if (span.start <= position):
 							addMember(name, "variable", name + ":" + typeName(type), prefix, result, 2);
@@ -2096,35 +2205,52 @@ class LanguageService {
 							addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix, result, 2);
 						default:
 					}
+				}
 			}
+		}
 	}
 
-	static function recoveredQualifierType(ast:compiler.syntax.Ast.AstProgram, qualifier:String, position:Int):Null<CompilerType> {
+	static function recoveredQualifierType(ast:compiler.syntax.Ast.AstProgram, qualifier:String, position:Int,
+			token:Null<CancellationToken>):Null<CompilerType> {
 		for (fn in ast.functions) {
-			var found = recoveredFunctionLocalType(fn, qualifier, position);
+			if (token != null)
+				token.check();
+			var found = recoveredFunctionLocalType(fn, qualifier, position, token);
 			if (found != null)
 				return found;
 		}
-		for (owner in ast.classes)
-			for (fn in owner.methods)
+		for (owner in ast.classes) {
+			if (token != null)
+				token.check();
+			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				if (position >= fn.span.start && position <= fn.span.end) {
 					if (qualifier == "this")
 						return TInstance(compiler.types.Type.NominalKind.Class, owner.name, []);
-					var found = recoveredFunctionLocalType(fn, qualifier, position);
+					var found = recoveredFunctionLocalType(fn, qualifier, position, token);
 					if (found != null)
 						return found;
 				}
+			}
+		}
 		return null;
 	}
 
-	static function recoveredFunctionLocalType(fn:compiler.syntax.Ast.AstFunction, name:String, position:Int):Null<CompilerType> {
+	static function recoveredFunctionLocalType(fn:compiler.syntax.Ast.AstFunction, name:String, position:Int,
+			token:Null<CancellationToken>):Null<CompilerType> {
 		if (position < fn.span.start || position > fn.span.end)
 			return null;
-		for (argument in fn.arguments)
+		for (argument in fn.arguments) {
+			if (token != null)
+				token.check();
 			if (argument.name == name)
 				return recoveredCompilerType(argument.type);
+		}
 		var found:Null<CompilerType> = null;
-		for (statement in fn.statements)
+		for (statement in fn.statements) {
+			if (token != null)
+				token.check();
 			switch statement {
 				case UninitializedDeclaration(local, type, span) if (local == name && span.start <= position):
 					found = recoveredCompilerType(type);
@@ -2132,6 +2258,7 @@ class LanguageService {
 					found = type == null ? recoveredExpressionType(initializer) : recoveredCompilerType(type);
 				default:
 			}
+		}
 		return found;
 	}
 

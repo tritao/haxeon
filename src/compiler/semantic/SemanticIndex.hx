@@ -820,10 +820,13 @@ class SemanticIndex {
 		return fn == null ? recoveredFunctions.get(name + ".new") : fn;
 	}
 
-	public function symbolIdAt(position:Int):Null<SemanticSymbolId> {
-		for (binding in bindings)
+	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {
+		for (binding in bindings) {
+			if (token != null)
+				token.check();
 			if (position >= binding.span.start && position <= binding.span.end)
 				return binding.symbol;
+		}
 		return null;
 	}
 
@@ -924,9 +927,11 @@ class SemanticIndex {
 		return result == null ? [] : result.copy();
 	}
 
-	public function completionContext(position:Int, ?qualifier:String):SemanticCompletionContext {
+	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext {
 		var visible:Map<String, SemanticCompletionLocal> = [];
-		for (local in completionLocals)
+		for (local in completionLocals) {
+			if (token != null)
+				token.check();
 			if (position >= local.declaration.start && position <= local.scope.end) {
 				var existing = visible.get(local.name);
 				if (existing == null
@@ -934,21 +939,30 @@ class SemanticIndex {
 					|| (local.depth == existing.depth && local.declaration.start > existing.declaration.start))
 					visible.set(local.name, local);
 			}
+		}
 		var locals = [for (local in visible) local];
 		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		var receiver:Null<CompilerType> = null;
 		if (qualifier != null) {
 			if (qualifier == "this")
-				for (candidate in functionReceivers)
+				for (candidate in functionReceivers) {
+					if (token != null)
+						token.check();
 					if (position >= candidate.span.start && position <= candidate.span.end)
 						receiver = candidate.type;
+				}
 			if (receiver == null)
-				for (local in locals)
+				for (local in locals) {
+					if (token != null)
+						token.check();
 					if (local.name == qualifier)
 						receiver = local.type;
+				}
 		}
 		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
-		for (candidate in completionTypes)
+		for (candidate in completionTypes) {
+			if (token != null)
+				token.check();
 			if (position >= candidate.span.start && position <= candidate.span.end) {
 				var width = candidate.span.end - candidate.span.start;
 				if (width < expectedWidth) {
@@ -956,8 +970,12 @@ class SemanticIndex {
 					expectedWidth = width;
 				}
 			}
-		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isImportContext(position) ? SemanticCompletionContextKind.Import : expected != null
-			&& isObjectFieldContext(position) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
+		}
+		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isImportContext(position,
+			token) ? SemanticCompletionContextKind.Import : expected != null
+			&& isObjectFieldContext(position,
+				token) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position,
+				token) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
 			receiver: receiver,
@@ -966,14 +984,16 @@ class SemanticIndex {
 		};
 	}
 
-	function isTypeContext(position:Int):Bool {
+	function isTypeContext(position:Int, ?token:CancellationToken):Bool {
 		var previous:Null<Token> = null;
-		for (token in tokens) {
-			if (token.kind == TokenKind.Eof)
+		for (lexical in tokens) {
+			if (token != null)
+				token.check();
+			if (lexical.kind == TokenKind.Eof)
 				break;
-			if (token.span.end > position)
+			if (lexical.span.end > position)
 				break;
-			previous = token;
+			previous = lexical;
 		}
 		return previous != null && switch previous.kind {
 			case TokenKind.Colon, TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
@@ -981,9 +1001,11 @@ class SemanticIndex {
 		};
 	}
 
-	function isImportContext(position:Int):Bool {
+	function isImportContext(position:Int, ?cancellation:CancellationToken):Bool {
 		var previous:Null<Token> = null, previousIndex = -1;
 		for (index in 0...tokens.length) {
+			if (cancellation != null)
+				cancellation.check();
 			if (tokens[index].kind == TokenKind.Eof || tokens[index].span.end > position)
 				break;
 			previous = tokens[index];
@@ -997,6 +1019,8 @@ class SemanticIndex {
 			return false;
 		var index = previousIndex - 1;
 		while (index >= 0) {
+			if (cancellation != null)
+				cancellation.check();
 			var kind = tokens[index].kind;
 			if (kind == TokenKind.Import)
 				return true;
@@ -1007,9 +1031,11 @@ class SemanticIndex {
 		return false;
 	}
 
-	function isObjectFieldContext(position:Int):Bool {
+	function isObjectFieldContext(position:Int, ?cancellation:CancellationToken):Bool {
 		var previous:Null<Token> = null;
 		for (token in tokens) {
+			if (cancellation != null)
+				cancellation.check();
 			if (token.kind == TokenKind.Eof || token.span.end > position)
 				break;
 			previous = token;
@@ -1019,6 +1045,8 @@ class SemanticIndex {
 		var depth = 0;
 		var index = tokens.length - 1;
 		while (index >= 0) {
+			if (cancellation != null)
+				cancellation.check();
 			var token = tokens[index];
 			if (token.span.start >= position) {
 				index--;
@@ -1048,19 +1076,25 @@ class SemanticIndex {
 		return null;
 	}
 
-	public function typeAt(position:Int):Null<CompilerType> {
+	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType> {
 		var result:Null<CompilerType> = null, width = 0x3fffffff;
-		for (candidate in completionTypes)
+		for (candidate in completionTypes) {
+			if (token != null)
+				token.check();
 			if (position >= candidate.span.start && position <= candidate.span.end && candidate.span.end - candidate.span.start < width) {
 				result = candidate.type;
 				width = candidate.span.end - candidate.span.start;
 			}
-		for (local in completionLocals)
+		}
+		for (local in completionLocals) {
+			if (token != null)
+				token.check();
 			if (position >= local.declaration.start && position <= local.declaration.end)
 				return local.type;
+		}
 		if (result != null)
 			return result;
-		var symbol = symbolIdAt(position);
+		var symbol = symbolIdAt(position, token);
 		return symbol == null ? null : declarationTypes.get(symbol);
 	}
 

@@ -497,7 +497,11 @@ class LanguageServiceMain {
 			recoveredReferencesCancelled = false,
 			symbolsCancelled = false,
 			foldingCancelled = false,
-			selectionCancelled = false;
+			selectionCancelled = false,
+			hoverCancelled = false,
+			signatureCancelled = false,
+			definitionCancelled = false,
+			renameCancelled = false;
 		try
 			largeService.complete("Large.hx", largeText.length, cancelled)
 		catch (_:compiler.service.CancellationError)
@@ -525,7 +529,24 @@ class LanguageServiceMain {
 			largeService.selectionRanges("Large.hx", [largeText.length], cancelled)
 		catch (_:compiler.service.CancellationError)
 			selectionCancelled = true;
-		if (!completionCancelled || !referencesCancelled || !recoveredReferencesCancelled || !symbolsCancelled || !foldingCancelled || !selectionCancelled)
+		try
+			service.hover("Main.hx", hoverPosition, cancelled)
+		catch (_:compiler.service.CancellationError)
+			hoverCancelled = true;
+		try
+			service.signatureHelp("Main.hx", source.indexOf("Editor.make") + "Editor.make(".length, cancelled)
+		catch (_:compiler.service.CancellationError)
+			signatureCancelled = true;
+		try
+			service.definition("Main.hx", methodPosition, cancelled)
+		catch (_:compiler.service.CancellationError)
+			definitionCancelled = true;
+		try
+			service.rename("Main.hx", methodPosition, "show", cancelled)
+		catch (_:compiler.service.CancellationError)
+			renameCancelled = true;
+		if (!completionCancelled || !referencesCancelled || !recoveredReferencesCancelled || !symbolsCancelled || !foldingCancelled || !selectionCancelled
+			|| !hoverCancelled || !signatureCancelled || !definitionCancelled || !renameCancelled)
 			throw "language-service queries ignored cancellation";
 		var configuredService = new LanguageService();
 		configuredService.update("Configured.hx", "function main():Int return 42;");

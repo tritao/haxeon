@@ -879,7 +879,7 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var item = service.prepareCallHierarchy(compilerPath(document), positionOffset(document, position(request)));
+		var item = service.prepareCallHierarchy(compilerPath(document), positionOffset(document, position(request)), token);
 		return item == null ? null : [callHierarchyItem(item)];
 	}
 
@@ -925,7 +925,7 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var item = service.prepareTypeHierarchy(compilerPath(document), positionOffset(document, position(request)));
+		var item = service.prepareTypeHierarchy(compilerPath(document), positionOffset(document, position(request)), token);
 		return item == null ? null : [typeHierarchyItem(item)];
 	}
 
@@ -1042,8 +1042,8 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		var offset = positionOffset(document, position(request)),
-			value = service.hover(compilerPath(document), offset),
-			documentation = service.hoverDocumentation(compilerPath(document), offset);
+			value = service.hover(compilerPath(document), offset, token),
+			documentation = service.hoverDocumentation(compilerPath(document), offset, token);
 		return value == null ? null : documentation == null
 			|| documentation.markdown.length == 0 ? {contents: {kind: "plaintext", value: value}} : {
 				contents: {kind: "markdown", value: "```haxe\n" + value + "\n```\n\n" + documentation.markdown}
@@ -1053,7 +1053,7 @@ class LspProtocol {
 	function signatureHelp(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		var value = service.signatureHelp(compilerPath(document), positionOffset(document, position(request)));
+		var value = service.signatureHelp(compilerPath(document), positionOffset(document, position(request)), token);
 		return value == null ? null : {
 			signatures: [
 				{
@@ -1080,7 +1080,7 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
+		var location = service.definition(compilerPath(document), positionOffset(document, position(request)), token);
 		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
 	}
 
@@ -1211,7 +1211,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token, true);
 		requireExact(document);
 		var params:Dynamic = required(request, "params"),
-			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName")),
+			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName"), token),
 			grouped:Map<String, Array<Dynamic>> = [],
 			targets:Map<String, LspDocument> = [];
 		for (edit in edits) {
