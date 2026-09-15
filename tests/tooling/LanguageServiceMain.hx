@@ -1409,6 +1409,11 @@ class LanguageServiceMain {
 			};
 		if (recoveredFunctionValueExpectedName != "Bound")
 			throw 'recovered function values did not retain a bounded callable parameter type: ${recoveredFunctionValueExpected == null ? "null" : Std.string(recoveredFunctionValueExpected)}';
+		var recoveredFunctionValueSignature = recoveredFunctionValueService.signatureHelp("RecoveredFunctionValue.hx", recoveredFunctionValueSource.length);
+		if (recoveredFunctionValueSignature == null
+			|| recoveredFunctionValueSignature.label != "callback(arg0:Bound):Bound"
+			|| recoveredFunctionValueSignature.activeParameter != 0)
+			throw 'recovered function values did not provide signature help: ${recoveredFunctionValueSignature == null ? "null" : recoveredFunctionValueSignature.label}';
 		var objectFieldService = new LanguageService(),
 			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
 		objectFieldService.update("ObjectField.hx", objectFieldSource);

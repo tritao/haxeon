@@ -540,6 +540,22 @@ class SemanticIndex {
 		};
 	}
 
+	/** Build a display signature for a callable local recovered from an expression. */
+	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo> {
+		return switch type {
+			case TFunction(arguments, result):
+				var parameters = [for (index in 0...arguments.length) "arg" + index + ":" + displayType(arguments[index])],
+					resultName = displayType(result);
+				{
+					label: name + "(" + parameters.join(",") + "):" + resultName,
+					parameters: parameters,
+					result: resultName
+				};
+			case TNullable(element): callableSignature(element, name);
+			default: null;
+		};
+	}
+
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
 		for (symbol in symbols)
 			if (sourceName(symbol.name) == name && symbol.declaration.start >= span.start && symbol.declaration.end <= span.end) {
@@ -2129,6 +2145,9 @@ class SemanticIndex {
 	}
 
 	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType> {
+		var symbol = symbolIdAt(position, token);
+		if (symbol != null && declarationTypes.exists(symbol))
+			return declarationTypes.get(symbol);
 		var result:Null<CompilerType> = null, width = 0x3fffffff;
 		for (candidate in completionTypes) {
 			if (token != null)
@@ -2146,7 +2165,6 @@ class SemanticIndex {
 		}
 		if (result != null)
 			return result;
-		var symbol = symbolIdAt(position, token);
 		return symbol == null ? null : declarationTypes.get(symbol);
 	}
 

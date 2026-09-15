@@ -2159,6 +2159,8 @@ class LanguageService {
 			context = qualifier == null ? null : model.index.completionContext(position, qualifier, token);
 		if (snapshot.recovered)
 			signature = model.index.recoveredSignature(recoveredName, context == null ? null : context.receiver);
+		if (signature == null && snapshot.recovered && id != null)
+			signature = model.index.callableSignature(model.index.typeAt(tokens[callee].span.start + 1, token), calleeName);
 		if (signature == null && qualifier != null) {
 			var owner = context == null ? null : typeDeclaration(context.receiver);
 			if (owner != null)
