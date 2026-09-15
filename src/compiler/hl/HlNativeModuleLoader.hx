@@ -99,6 +99,13 @@ class HlLoadedRuntimeModule {
 		nativeModule.callVoid(stableId);
 	}
 
+	/** Stage an external HLP update under Haxe-owned revision state. */
+	public function stagePatch(bytes:Bytes):HlRuntimePatchTransaction {
+		if (disposed)
+			throw "HashLink loaded runtime module has been unloaded";
+		return new HlRuntimePatchTransaction(this, bytes);
+	}
+
 	/** Haxeon preflights HLP identity/revision before native publication. */
 	public function patch(bytes:Bytes):Void {
 		if (disposed)
