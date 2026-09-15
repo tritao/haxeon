@@ -38,15 +38,17 @@ class HlHotReloadTransaction {
 	/** Commit only if no newer generation was published after staging. */
 	public function commit():HlHotReloadGeneration {
 		requireStaged();
-		if (stateOwner.revision != baseRevision)
-			throw 'HashLink hot-reload transaction is stale (expected revision $baseRevision, got ${stateOwner.revision})';
-		if (!structuralReload)
-			switch decision {
-				case Compatible:
-				case RequiresReload(reason):
-					throw 'HashLink hot-reload transaction requires a structural reload: $reason';
-			}
+		validateCommit();
 		var result = stateOwner.commit(candidate, functions, structuralReload);
+		state = Committed;
+		return result;
+	}
+
+	/** Commit after initializing a native HashLink module for the candidate. */
+	public function commitNative(?flags:Int = 0):HlHotReloadGeneration {
+		requireStaged();
+		validateCommit();
+		var result = stateOwner.commitNative(candidate, functions, flags, structuralReload);
 		state = Committed;
 		return result;
 	}
@@ -67,5 +69,16 @@ class HlHotReloadTransaction {
 			case RolledBack:
 				throw "HashLink hot-reload transaction has already rolled back";
 		}
+	}
+
+	function validateCommit():Void {
+		if (stateOwner.revision != baseRevision)
+			throw 'HashLink hot-reload transaction is stale (expected revision $baseRevision, got ${stateOwner.revision})';
+		if (!structuralReload)
+			switch decision {
+				case Compatible:
+				case RequiresReload(reason):
+					throw 'HashLink hot-reload transaction requires a structural reload: $reason';
+			}
 	}
 }

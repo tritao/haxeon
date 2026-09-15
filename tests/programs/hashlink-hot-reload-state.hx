@@ -31,6 +31,38 @@ function buildGeneration(changed:Bool, extraType:Bool, stableId:Int = 7):BuiltHo
 	};
 }
 
+function buildNativeGeneration(stableId:Int):BuiltHotReloadGeneration {
+	var built = buildGeneration(false, false, stableId),
+		metadata = built.metadata,
+		intType = metadata.type(0),
+		functionType = metadata.type(2),
+		registers = metadata.arena.allocTypePointerArray(1),
+		ops = metadata.arena.allocOpcodeArray(1);
+	registers.store(intType);
+	ops.ref.op = 67;
+	ops.ref.p1 = 0;
+	ops.ref.p2 = 0;
+	ops.ref.p3 = 0;
+	ops.ref.extra = RawPtr.nullPtr();
+	metadata.addFunctionDescriptor({
+		findex: 0,
+		nregs: 1,
+		nops: 1,
+		reference: 0,
+		nassigns: 0,
+		type: functionType,
+		regs: registers,
+		ops: ops,
+		debug: RawPtr.nullPtr(),
+		assigns: RawPtr.nullPtr(),
+		object: RawPtr.nullPtr(),
+		fieldName: RawPtr.nullPtr(),
+		fieldReference: RawPtr.nullPtr()
+	});
+	metadata.defineFunctionIdentities([stableId], ["Native.main"]);
+	return built;
+}
+
 function isCompatible(decision:HlHotReloadDecision):Bool
 	return switch decision {
 		case Compatible:
@@ -129,6 +161,17 @@ function main():Int {
 		disposeBlocked = true;
 	currentLease.release();
 	state.dispose();
+	var nativeState = new HlHotReloadState(),
+		nativeInitial = buildNativeGeneration(31),
+		nativeInitialTransaction = nativeState.stage(nativeInitial.metadata, nativeInitial.functions),
+		nativeInitialGeneration = nativeInitialTransaction.commitNative(),
+		nativeInitialLoaded = nativeInitialGeneration.nativeModule != null && nativeInitialGeneration.nativeModule.isLoaded(),
+		nativeNext = buildNativeGeneration(31),
+		nativeNextTransaction = nativeState.stage(nativeNext.metadata, nativeNext.functions),
+		nativeNextGeneration = nativeNextTransaction.commitNative(),
+		nativeRetired = nativeState.retiredCount == 1 && nativeState.disposeRetired() == 1 && nativeState.retiredCount == 0,
+		nativeCurrentLoaded = nativeNextGeneration.nativeModule != null && nativeNextGeneration.nativeModule.isLoaded();
+	nativeState.dispose();
 	return appendCompatible && signatureRejected && reloadWorked && patchWorked && signatureReplacementRejected && identityRejected && transactionState
-		&& retiredBorrowed && disposedBeforeRelease && released && disposeBlocked ? 42 : 1;
+		&& retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeRetired && nativeCurrentLoaded ? 42 : 1;
 }

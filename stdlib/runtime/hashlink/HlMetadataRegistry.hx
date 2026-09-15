@@ -59,7 +59,18 @@ class HlMetadataRegistry {
 	function commit(candidate:HlMetadataGeneration):HlMetadataPublication {
 		if (candidate == current)
 			throw "HashLink metadata generation is already current";
-		var publication = candidate.publish(), previous = current;
+		candidate.publish();
+		return adoptPublished(candidate);
+	}
+
+	/** Adopt a pre-published candidate after another policy layer has prepared it. */
+	@:allow(runtime.hashlink.HlHotReloadState)
+	function adoptPublished(candidate:HlMetadataGeneration):HlMetadataPublication {
+		if (candidate == current)
+			throw "HashLink metadata generation is already current";
+		if (!candidate.isPublished())
+			throw "HashLink metadata generation must be published before adoption";
+		var publication = candidate.snapshot(), previous = current;
 		current = candidate;
 		if (previous != null)
 			retired.push(previous);

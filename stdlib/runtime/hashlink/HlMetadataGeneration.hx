@@ -365,6 +365,12 @@ class HlMetadataGeneration {
 	}
 
 	/** Return the immutable publication view after {@link publish}. */
+	public inline function isPublished():Bool {
+		requireOpen();
+		return published;
+	}
+
+	/** Return the immutable publication view after {@link publish}. */
 	public function snapshot():HlMetadataPublication {
 		requireOpen();
 		if (!published)

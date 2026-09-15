@@ -12,14 +12,17 @@ class HlHotReloadGeneration {
 	public final metadata:HlMetadataGeneration;
 	public final publication:HlMetadataPublication;
 	public final functions:HlFunctionVersionTable;
+	public final nativeModule:Null<HlNativeModule>;
 	var borrowers:Int = 0;
 
 	@:allow(runtime.hashlink.HlHotReloadState)
-	function new(revision:Int, metadata:HlMetadataGeneration, publication:HlMetadataPublication, functions:HlFunctionVersionTable) {
+	function new(revision:Int, metadata:HlMetadataGeneration, publication:HlMetadataPublication, functions:HlFunctionVersionTable,
+			nativeModule:Null<HlNativeModule>) {
 		this.revision = revision;
 		this.metadata = metadata;
 		this.publication = publication;
 		this.functions = functions;
+		this.nativeModule = nativeModule;
 	}
 
 	/** Borrow this generation until the lease is released. */
@@ -122,7 +125,7 @@ class HlHotReloadState {
 		requireOpen();
 		var count = 0, remaining:Array<HlHotReloadGeneration> = [];
 		for (generation in retired) {
-			if (generation.borrowerCount() == 0 && generation.metadata.borrowerCount() == 0) {
+			if (generation.borrowerCount() == 0 && unloadNativeModule(generation) && generation.metadata.borrowerCount() == 0) {
 				count++;
 			} else
 				remaining.push(generation);
@@ -139,11 +142,21 @@ class HlHotReloadState {
 		if (disposed)
 			return;
 		for (generation in retired)
-			if (generation.borrowerCount() != 0 || generation.metadata.borrowerCount() != 0)
+			if (generation.borrowerCount() != 0)
 				throw "HashLink hot-reload state has borrowed retired generations";
 		var currentGeneration = current;
-		if (currentGeneration != null && (currentGeneration.borrowerCount() != 0 || currentGeneration.metadata.borrowerCount() != 0))
+		if (currentGeneration != null && currentGeneration.borrowerCount() != 0)
 			throw "HashLink hot-reload state has a borrowed current generation";
+		for (generation in retired)
+			if (!unloadNativeModule(generation))
+				throw "HashLink native hot-reload module could not be unloaded";
+		if (currentGeneration != null && !unloadNativeModule(currentGeneration))
+			throw "HashLink native hot-reload module could not be unloaded";
+		for (generation in retired)
+			if (generation.metadata.borrowerCount() != 0)
+				throw "HashLink hot-reload state has borrowed retired metadata";
+		if (currentGeneration != null && currentGeneration.metadata.borrowerCount() != 0)
+			throw "HashLink hot-reload state has borrowed current metadata";
 		metadata.dispose();
 		retired.resize(0);
 		current = null;
@@ -155,16 +168,43 @@ class HlHotReloadState {
 		requireOpen();
 		if (metadata.revision != revision)
 			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
+		var publication = structuralReload ? metadata.reload(candidate) : metadata.publish(candidate);
+		return finishCommit(candidate, functions, publication, null);
+	}
+
+	@:allow(runtime.hashlink.HlHotReloadTransaction)
+	function commitNative(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, flags:Int,
+			structuralReload:Bool):HlHotReloadGeneration {
+		requireOpen();
+		if (metadata.revision != revision)
+			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
+		candidate.publish();
+		var nativeModule:HlNativeModule;
+		try {
+			nativeModule = new HlNativeModule(candidate, flags);
+		} catch (error:Dynamic) {
+			candidate.dispose();
+			throw error;
+		}
+		var publication = metadata.adoptPublished(candidate);
+		return finishCommit(candidate, functions, publication, nativeModule);
+	}
+
+	function finishCommit(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, publication:HlMetadataPublication,
+			nativeModule:Null<HlNativeModule>):HlHotReloadGeneration {
 		var nextRevision = revision + 1,
 			publishedFunctions = functions.withGeneration(nextRevision),
-			publication = structuralReload ? metadata.reload(candidate) : metadata.publish(candidate),
-			published = new HlHotReloadGeneration(metadata.revision, candidate, publication, publishedFunctions),
+			published = new HlHotReloadGeneration(metadata.revision, candidate, publication, publishedFunctions, nativeModule),
 			previous = current;
 		current = published;
 		revision = metadata.revision;
 		if (previous != null)
 			retired.push(previous);
 		return published;
+	}
+
+	static function unloadNativeModule(generation:HlHotReloadGeneration):Bool {
+		return generation.nativeModule == null || generation.nativeModule.unload();
 	}
 
 	function validateFunctionTable(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):Void {
