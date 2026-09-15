@@ -161,6 +161,7 @@ DEFINE_PRIM(_I32,native_metadata_validate_global_types,_BYTES _I32 _BYTES);
 DEFINE_PRIM(_I32,native_metadata_validate_constants,_BYTES _I32 _I32);
 DEFINE_PRIM(_I32,native_metadata_validate_module_pools,_BYTES _I32 _BYTES _I32 _BYTES _BYTES _I32 _BYTES _I32 _BYTES _I32 _I32);
 DEFINE_PRIM(_I32,native_metadata_validate_debug_sections,_BYTES _I32);
+DEFINE_PRIM(_I32,native_metadata_validate_code,_BYTES);
 DEFINE_PRIM(_I32,native_type_function_arity,_BYTES);
 DEFINE_PRIM(_I32,native_type_object_field_count,_BYTES);
 DEFINE_PRIM(_I32,native_type_enum_constructor_count,_BYTES);

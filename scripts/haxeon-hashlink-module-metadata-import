@@ -13,6 +13,8 @@ exec "$root_dir/scripts/haxeon-ffi-import" \
   --only=hl_opcode \
   --only=hl_constant \
   --only=hl_debug_section \
+  --only=hl_code \
+  --only=hl_alloc \
   --only=hl_native \
   --only=hl_function \
   "$root_dir/vendor/hashlink/src/hlmodule.h"

@@ -105,8 +105,49 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 		OCatch = 101;
 		OLast = 102;
 	}
+	opaque hl_alloc_block;
 	opaque hl_type;
 	opaque hl_type_obj;
+	struct hl_alloc @layout(8, 8) {
+		cur: ptr<hl_alloc_block> @offset(0);
+	}
+	struct hl_code @layout(224, 8) {
+		version: c_int @offset(0);
+		nints: c_int @offset(4);
+		nfloats: c_int @offset(8);
+		nstrings: c_int @offset(12);
+		nbytes: c_int @offset(16);
+		ntypes: c_int @offset(20);
+		types_capacity: c_int @offset(24);
+		nglobals: c_int @offset(28);
+		nnatives: c_int @offset(32);
+		nfunctions: c_int @offset(36);
+		nconstants: c_int @offset(40);
+		ndebugsections: c_int @offset(44);
+		entrypoint: c_int @offset(48);
+		ndebugfiles: c_int @offset(52);
+		hasdebug: c_bool @offset(56);
+		ints: ptr<c_int> @offset(64);
+		floats: ptr<f64> @offset(72);
+		strings: ptr<ptr<c_char>> @offset(80);
+		strings_lens: ptr<c_int> @offset(88);
+		bytes: ptr<c_char> @offset(96);
+		bytes_pos: ptr<c_int> @offset(104);
+		debugfiles: ptr<ptr<c_char>> @offset(112);
+		debugfiles_lens: ptr<c_int> @offset(120);
+		ustrings: ptr<ptr<u16>> @offset(128);
+		types: ptr<hl_type> @offset(136);
+		globals: ptr<ptr<hl_type>> @offset(144);
+		natives: ptr<hl_native> @offset(152);
+		functions: ptr<hl_function> @offset(160);
+		function_stable_ids: ptr<c_int> @offset(168);
+		function_names: ptr<ptr<c_char>> @offset(176);
+		function_names_lens: ptr<c_int> @offset(184);
+		constants: ptr<hl_constant> @offset(192);
+		debugsections: ptr<hl_debug_section> @offset(200);
+		alloc: hl_alloc @offset(208);
+		falloc: hl_alloc @offset(216);
+	}
 	struct hl_constant @layout(16, 8) {
 		global: c_int @offset(0);
 		nfields: c_int @offset(4);

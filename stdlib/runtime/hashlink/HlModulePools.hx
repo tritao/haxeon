@@ -12,6 +12,7 @@ class HlModulePools {
 	public final floatCount:Int;
 	public final strings:RawPtr<RawPtr<UInt8>>;
 	public final stringLengths:RawPtr<Int32>;
+	public final ustrings:RawPtr<RawPtr<UInt16>>;
 	public final stringCount:Int;
 	public final bytes:RawPtr<UInt8>;
 	public final byteCount:Int;
@@ -35,9 +36,11 @@ class HlModulePools {
 		stringCount = stringValues.length;
 		strings = stringCount == 0 ? RawPtr.nullPtr() : arena.allocNativePointerArray(stringCount);
 		stringLengths = stringCount == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(stringCount);
+		ustrings = stringCount == 0 ? RawPtr.nullPtr() : arena.allocUInt16PointerArray(stringCount);
 		for (index in 0...stringCount) {
 			strings.offset(index).store(builder.utf8Name(stringValues[index]));
 			stringLengths.offset(index).store(cast HlTypeBuilder.utf8Length(stringValues[index]));
+			ustrings.offset(index).store(RawPtr.nullPtr());
 		}
 		byteCount = byteValues.length;
 		bytes = byteCount == 0 ? RawPtr.nullPtr() : arena.allocUInt8Array(byteCount);

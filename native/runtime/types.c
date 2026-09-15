@@ -238,6 +238,25 @@ HL_PRIM int HL_NAME(native_metadata_validate_debug_sections)( hl_debug_section *
 	return count;
 }
 
+HL_PRIM int HL_NAME(native_metadata_validate_code)( hl_code *code ) {
+	if( code == NULL )
+		hl_error("HashLink native code metadata must not be null");
+	if( code->version <= 1 || code->version > 7 || code->nints < 0 || code->nfloats < 0 || code->nstrings < 0
+		|| code->nbytes < 0 || code->ntypes < 0 || code->types_capacity < code->ntypes || code->nglobals < 0
+		|| code->nnatives < 0 || code->nfunctions < 0 || code->nconstants < 0 || code->ndebugsections < 0
+		|| code->entrypoint < 0 || code->ndebugfiles < 0 )
+		hl_error("HashLink native code metadata contains invalid counts");
+	if( (code->nints > 0 && code->ints == NULL) || (code->nfloats > 0 && code->floats == NULL)
+		|| (code->nstrings > 0 && (code->strings == NULL || code->strings_lens == NULL || code->ustrings == NULL))
+		|| (code->nbytes > 0 && (code->bytes == NULL || code->bytes_pos == NULL))
+		|| (code->ntypes > 0 && code->types == NULL) || (code->nglobals > 0 && code->globals == NULL)
+		|| (code->nnatives > 0 && code->natives == NULL) || (code->nfunctions > 0 && code->functions == NULL)
+		|| (code->nconstants > 0 && code->constants == NULL) || (code->ndebugsections > 0 && code->debugsections == NULL)
+		|| (code->ndebugfiles > 0 && (code->debugfiles == NULL || code->debugfiles_lens == NULL)) )
+		hl_error("HashLink native code metadata contains incomplete tables");
+	return code->ntypes;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);
