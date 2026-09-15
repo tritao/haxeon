@@ -471,11 +471,39 @@ class SemanticWorkspace {
 		for (dependency in from.dependencies)
 			if (modules.exists(dependency)) {
 				var state = modules.get(dependency);
-				for (declaration in declarationsIn(state, name))
+				for (declaration in editorDeclarationsIn(state, name))
 					if (!contains(matches, declaration))
 						matches.push(declaration);
 			}
+		var fromModel = editorModel(from),
+			packageName = fromModel == null || fromModel.program.packageName == null ? null : Std.string(fromModel.program.packageName);
+		for (state in orderedStates()) {
+			if (state == from || !editorModuleVisible(from, state, packageName))
+				continue;
+			for (declaration in editorDeclarationsIn(state, name))
+				if (!contains(matches, declaration))
+					matches.push(declaration);
+		}
 		return matches.length == 1 ? matches[0] : null;
+	}
+
+	function editorModuleVisible(from:ModuleState, candidate:ModuleState, packageName:Null<String>):Bool {
+		if (packageName != null) {
+			var candidateModel = editorModel(candidate),
+				candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
+			if (candidatePackage == packageName)
+				return true;
+		}
+		var model = editorModel(from);
+		if (model == null)
+			return false;
+		for (importPath in model.program.imports) {
+			var wildcard = StringTools.endsWith(importPath, ".*"),
+				prefix = wildcard ? importPath.substring(0, importPath.length - 2) : importPath;
+			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + "."))
+				return true;
+		}
+		return false;
 	}
 
 	function editorDeclarationsIn(state:ModuleState, name:String):Array<WorkspaceDeclaration> {

@@ -647,6 +647,19 @@ class LanguageServiceMain {
 			|| recoveredOutgoing.length != 1
 			|| recoveredOutgoing[0].item.name != "add")
 			throw "language service hierarchy queries did not consume current recovered calls and types";
+		var recoveredCrossModuleHierarchy = new LanguageService(),
+			recoveredCrossModuleRoot = "package recovered.types; class Root {}",
+			recoveredCrossModuleBranch = "package recovered; import recovered.types.Root; class Branch extends Root {}";
+		recoveredCrossModuleHierarchy.update("recovered/types/Root.hx", recoveredCrossModuleRoot);
+		recoveredCrossModuleHierarchy.update("recovered/Branch.hx", recoveredCrossModuleBranch);
+		var recoveredCrossModuleBranchItem = recoveredCrossModuleHierarchy.prepareTypeHierarchy("recovered/Branch.hx",
+			recoveredCrossModuleBranch.indexOf("Branch") + 2);
+		if (recoveredCrossModuleBranchItem == null)
+			throw "language service did not prepare a cross-module recovered type hierarchy item";
+		var recoveredCrossModuleSupers = recoveredCrossModuleHierarchy.typeSupertypes(recoveredCrossModuleBranchItem.identity,
+			recoveredCrossModuleBranchItem.revision);
+		if (recoveredCrossModuleSupers.length != 1 || recoveredCrossModuleSupers[0].name != "Root")
+			throw "language service did not resolve an imported recovered type hierarchy parent";
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
 		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";
