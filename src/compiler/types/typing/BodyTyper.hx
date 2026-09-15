@@ -401,8 +401,13 @@ class BodyTyper {
 					session.rememberRecoveryDiagnostic(compileError.diagnostic);
 				}
 				retainRecoveredDeclaration(statement, scope);
-				var span = statementSpan(statement);
-				output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
+				var recovered = recoverCompoundStatement(statement, scope, result);
+				if (recovered != null)
+					output.push(recovered);
+				else {
+					var span = statementSpan(statement);
+					output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
+				}
 			}
 		}
 		return output;
@@ -415,6 +420,48 @@ class BodyTyper {
 					scope.define(name, TUnknown, span);
 				} catch (_:Dynamic) {}
 			default:
+		}
+	}
+
+	/** Preserve nested scopes when a compound statement fails before its body is typed. */
+	function recoverCompoundStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>):Null<TypedStatement> {
+		var errorCondition = function(expression:AstExpression):TypedExpression
+			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
+		switch statement {
+			case If(predicate, thenBranch, elseBranch, span):
+				return TIf(errorCondition(predicate), typeStatements(thenBranch, new Scope(scope), result),
+					typeStatements(elseBranch, new Scope(scope), result), span);
+			case While(predicate, body, span):
+				var context = session.currentContext;
+				context.loopEarlyExits[context.loopDepth] = true;
+				context.loopDepth++;
+				var typedBody = typeStatements(body, new Scope(scope), result);
+				context.loopDepth--;
+				return TWhile(errorCondition(predicate), typedBody, span);
+			case DoWhile(body, predicate, span):
+				var context = session.currentContext;
+				context.loopEarlyExits[context.loopDepth] = false;
+				context.loopDepth++;
+				var typedBody = typeStatements(body, new Scope(scope), result);
+				context.loopDepth--;
+				return TDoWhile(typedBody, errorCondition(predicate), span);
+			case ForIn(name, valueName, _, body, span):
+				var loopScope = new Scope(scope);
+				loopScope.define(name, TUnknown, span);
+				bindCell(name, span, loopScope, TUnknown);
+				if (valueName != null) {
+					loopScope.define(valueName, TUnknown, span);
+					bindCell(valueName, span, loopScope, TUnknown);
+				}
+				var context = session.currentContext;
+				context.loopEarlyExits[context.loopDepth] = true;
+				context.loopDepth++;
+				var typedBody = typeStatements(body, loopScope, result);
+				context.loopDepth--;
+				return TForIn(loopScope.requireId(name), valueName == null ? null : loopScope.requireId(valueName),
+					new TypedExpression(TNullLiteral, TError, span), typedBody, span);
+			default:
+				return null;
 		}
 	}
 

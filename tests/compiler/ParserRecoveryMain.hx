@@ -553,6 +553,24 @@ class ParserRecoveryMain {
 			|| errorStatementTyped.functions[0].statements.length < 2)
 			throw "tolerant typing discarded a valid declaration after an ErrorStatement";
 
+		var compoundErrorSource = new SourceFile("CompoundErrorTyping.hx",
+			"function main():Void { if (broken) { var inside:Int = 1; } var after:Int = 2; }");
+		var compoundErrorProgram = new Parser(new Lexer(compoundErrorSource).tokenize()).parseProgramRecovering().program,
+			compoundErrorTyped = Typer.typeRecovered(compoundErrorProgram);
+		var retainedCompoundLocal = false;
+		if (compoundErrorTyped != null && compoundErrorTyped.functions.length == 1)
+			switch compoundErrorTyped.functions[0].statements[0] {
+				case TIf(_, thenBranch, _, _):
+					for (statement in thenBranch)
+						switch statement {
+							case TVar(_, _, _): retainedCompoundLocal = true;
+							default:
+						}
+				default:
+			}
+		if (!retainedCompoundLocal)
+			throw "tolerant typing discarded a valid local inside a conditionally malformed branch";
+
 		var signatureService = new LanguageService(),
 			signatureSource = "function take(value:Int):Void return; function main():Void return take(";
 		signatureService.update("SignatureRecovery.hx", signatureSource);
