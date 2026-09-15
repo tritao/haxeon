@@ -449,7 +449,8 @@ class BodyTyper {
 				if (Std.isOfType(error, CompileError)) {
 					var compileError:CompileError = cast error;
 					session.rememberRecoveryDiagnostic(compileError.diagnostic);
-				}
+				} else
+					rememberRecoveryError(error, statementSpan(statement));
 				var recovered = recoverDeclaration(statement, scope);
 				if (recovered == null)
 					recovered = recoverCompoundStatement(statement, scope, result);
@@ -1436,6 +1437,7 @@ class BodyTyper {
 		} catch (error:Dynamic) {
 			if (Std.isOfType(error, CancellationError) || !session.tolerant)
 				throw error;
+			rememberRecoveryError(error, expressionSpan(expression));
 			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
 		}
 	}
