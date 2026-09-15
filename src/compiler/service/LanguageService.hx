@@ -306,6 +306,11 @@ class LanguageService {
 		structuralIndex.clear();
 		recoveredCompletionPrograms.clear();
 		recoveredTypingModules.clear();
+		// Conditional compilation can change a recovered body without changing
+		// its raw source span. Do not carry typed predecessors across editor
+		// configuration revisions.
+		for (state in compiler.modules)
+			state.previousEditorSemanticModel = null;
 		compiler.configure(identity, scopeIdentity, defines);
 	}
 
