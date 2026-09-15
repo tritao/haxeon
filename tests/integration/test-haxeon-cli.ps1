@@ -57,6 +57,7 @@ try {
     & $Cli run --project (Join-Path $ProjectDir "haxeon.json") -- hello
     if ($LASTEXITCODE -ne 42) { throw "haxeon run returned $LASTEXITCODE; expected 42" }
     Write-Output "PASS: project CLI init, doctor, target listing, host run, wasm32 build, and Android asset generation"
+    exit 0
 } finally {
     while ((Get-Location).Path -like "$ProjectDir*") { Pop-Location }
     if (Test-Path $ProjectDir) { Remove-Item -LiteralPath $ProjectDir -Recurse -Force }
