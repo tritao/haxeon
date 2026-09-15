@@ -328,7 +328,7 @@ class HxiParser {
 			var fieldStart = current().span, fieldName = identifier();
 			expect(":");
 			var type = parseType(),
-				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field", "struct_size"]),
+				fieldMetadata = parseMetadata(["offset", "borrowed", "owned", "length_field", "struct_size", "union"]),
 				offset = metadataInteger(fieldMetadata, "offset", true),
 				borrowed = metadataFlag(fieldMetadata, "borrowed"),
 				ownership = metadataOwnership(fieldMetadata, "owned"),

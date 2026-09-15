@@ -18,10 +18,16 @@ the input header and those include roots are imported; declarations from system
 headers are excluded.
 
 The importer supports C typedefs, annotated opaque handles, anonymous integer enum constants, named enums, fixed-width
-enum aliases, structs, fixed-size arrays, pointers, `const`, and non-variadic function declarations.
+enum aliases, structs (including anonymous `typedef struct` records), fixed-size arrays, pointers, `const`, and
+non-variadic function declarations. Anonymous union members are emitted as
+overlapping fields marked `@union`; pointer-only types outside a filtered
+declaration set are emitted as opaque dependencies.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
 Output is sorted so the same header and target produce byte-identical results.
+Use repeatable `--only=<declaration>` options when a large public header contains
+unrelated declarations outside the ABI ring being imported. The header is still
+parsed and laid out by Clang; only the named declarations are emitted.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
 optional library name becomes interface-level `@library` metadata. Use

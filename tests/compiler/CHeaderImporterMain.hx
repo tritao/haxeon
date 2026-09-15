@@ -3,6 +3,7 @@ import compiler.ffi.HxiParser;
 import compiler.ffi.HxiWriter;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiValidator;
 import sys.FileSystem;
 
 class CHeaderImporterMain {
@@ -139,6 +140,31 @@ class CHeaderImporterMain {
 			&& documentedProjection.indexOf("@param options Creation options") >= 0,
 			"C documentation should reach the generated Haxe projection");
 		expect(documentedProjection.indexOf("Number of entries to reserve.") >= 0, "structure field documentation should reach generated Haxe accessors");
+		var hashlinkNames = [
+			"hl_type_kind",
+			"hl_alloc",
+			"hl_module_context",
+			"hl_type_fun",
+			"hl_obj_field",
+			"hl_obj_proto",
+			"hl_type_obj",
+			"hl_type_virtual",
+			"hl_enum_construct",
+			"hl_type_enum",
+			"hl_type"
+		];
+		var hashlinkModel = CHeaderImporter.importHeader("vendor/hashlink/src/hl.h", "x86_64-linux-gnu", ["vendor/hashlink/src"], "clang", null,
+			"HashLinkMetadata", null, null, hashlinkNames),
+			hashlinkSource = HxiWriter.write(hashlinkModel, generatedHeader("vendor/hashlink/src/hl.h", "x86_64-linux-gnu")),
+			parsedHashlink = HxiParser.parse("hashlink.hxi", hashlinkSource);
+		HxiValidator.validate(parsedHashlink, []);
+		expect(hashlinkSource.indexOf("enum hl_type_kind : c_int") >= 0
+			&& hashlinkSource.indexOf("struct hl_type @layout(40, 8)") >= 0
+			&& hashlinkSource.indexOf("abs_name: ptr<const<u16>> @offset(8) @union") >= 0
+			&& hashlinkSource.indexOf("struct hl_type_fun @layout(80, 8)") >= 0
+			&& hashlinkSource.indexOf("opaque hl_runtime_obj") >= 0
+			&& hashlinkSource.indexOf("extern fn") < 0,
+			"HashLink metadata should import from the real header while keeping machine-sensitive dependencies opaque");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
 	}
 

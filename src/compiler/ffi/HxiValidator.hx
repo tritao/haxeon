@@ -146,7 +146,8 @@ class HxiValidator {
 				case Structure(name, size, align, fields, span):
 					if (size <= 0 || align <= 0 || (align & (align - 1)) != 0 || size % align != 0)
 						fail('Struct "$name" has invalid layout', span);
-					var fieldNames:Map<String, Bool> = [];
+					var fieldNames:Map<String, Bool> = [],
+						unionFields:Map<String, Bool> = [];
 					var structSizeFields = 0;
 					var ranges:Array<{start:Int, end:Int, name:String}> = [];
 					for (field in fields) {
@@ -156,6 +157,8 @@ class HxiValidator {
 						if (fieldNames.exists(field.name))
 							fail('Duplicate field "${field.name}" in struct "$name"', field.span);
 						fieldNames.set(field.name, true);
+						if (field.metadata.exists("union"))
+							unionFields.set(field.name, true);
 						if (field.structSize) {
 							structSizeFields++;
 							switch abi.classify(field.type) {
@@ -172,7 +175,9 @@ class HxiValidator {
 							|| field.offset > size - layout.size)
 							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
 						for (range in ranges)
-							if (field.offset < range.end && field.offset + layout.size > range.start)
+							if (field.offset < range.end
+								&& field.offset + layout.size > range.start
+								&& !(unionFields.exists(range.name) && field.metadata.exists("union")))
 								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);

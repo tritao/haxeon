@@ -106,7 +106,7 @@ class HxiWriter {
 			if (field.structSize)
 				output.add(" @struct_size");
 		} else
-			writeMetadata(output, field.metadata, ["offset", "borrowed", "owned", "length_field", "struct_size"]);
+			writeMetadata(output, field.metadata, ["offset", "borrowed", "owned", "length_field", "struct_size", "union"]);
 		output.add(";\n");
 	}
 

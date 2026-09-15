@@ -31,18 +31,22 @@ class CHeaderImporter {
 	static final sourceFiles:Map<String, SourceFile> = [];
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
-		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders);
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?onlyDeclarations:Array<String>):HxiInterface {
+		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders, onlyDeclarations);
 	}
 
 	static function importHeaderModel(header:String, target:String, includes:Array<String>, clang:String, ?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?onlyDeclarations:Array<String>):HxiInterface {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
 		if (dependencies != null)
 			for (dependency in dependencies)
 				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
 					throw 'Invalid HXI dependency name "$dependency"';
+		if (onlyDeclarations != null)
+			for (declaration in onlyDeclarations)
+				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(declaration))
+					throw 'Invalid HXI declaration filter "$declaration"';
 		// Keep failures bounded for Haxe's eval Process implementation; warnings are not part of the importer result.
 		var base = [
 			"-x",
@@ -76,7 +80,14 @@ class CHeaderImporter {
 				excluded.push(FileSystem.fullPath(excludedHeader));
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
-		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded);
+		var only:Null<Map<String, Bool>> = null;
+		if (onlyDeclarations != null && onlyDeclarations.length > 0) {
+			only = [];
+			for (declaration in onlyDeclarations)
+				only.set(declaration, true);
+		}
+		var nodesById:Map<String, Dynamic> = [];
+		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded, only, nodesById);
 		for (declaration in declarations) {
 			if (field(declaration, "kind") != "EnumDecl")
 				continue;
@@ -99,6 +110,12 @@ class CHeaderImporter {
 			Reflect.setField(alias, "_hxiEnumAlias", true);
 		}
 		declarations.sort(function(left, right) return Reflect.compare(key(left), key(right)));
+		var definedRecords:Map<String, Bool> = [];
+		for (declaration in declarations)
+			if (field(declaration, "kind") == "RecordDecl"
+				&& field(declaration, "name") != null
+				&& field(declaration, "completeDefinition") == true)
+				definedRecords.set(field(declaration, "name"), true);
 		var handleNames:Map<String, Bool> = [],
 			handleRecords:Map<String, Dynamic> = [],
 			handleDestroySymbols:Map<String, String> = [];
@@ -118,12 +135,17 @@ class CHeaderImporter {
 				handleRecords.set(name, declaration);
 		}
 		var hxiDeclarations:Array<HxiDeclaration> = [],
+			additionalDeclarations:Array<HxiDeclaration> = [],
 			documentation:Map<String, HxiDocumentation> = [];
 		for (declaration in declarations) {
-			var imported = importDeclaration(declaration, layouts, handleNames, handleRecords, handleDestroySymbols, documentation);
+			var imported = importDeclaration(declaration, layouts, handleNames, handleRecords, handleDestroySymbols, documentation, additionalDeclarations,
+				nodesById, definedRecords);
 			if (imported != null)
 				hxiDeclarations.push(imported);
 		}
+		for (declaration in additionalDeclarations)
+			hxiDeclarations.push(declaration);
+		addOpaquePointerDependencies(hxiDeclarations);
 		var source = sourceFile(FileSystem.fullPath(header));
 		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library, dependencies == null ? [] : dependencies.copy(),
 			hxiDeclarations, source.span(0, source.bytes.length), documentation);
@@ -132,9 +154,13 @@ class CHeaderImporter {
 	static function diagnostics(text:String, truncated:Bool):String
 		return truncated ? '$text\n[Clang diagnostics truncated after ${ProcessOutputCapture.defaultDiagnosticLimit} bytes]' : text;
 
-	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>):String {
+	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>,
+			only:Null<Map<String, Bool>>, nodesById:Map<String, Dynamic>):String {
 		if (node == null)
 			return currentFile;
+		var id:String = field(node, "id");
+		if (id != null)
+			nodesById.set(id, node);
 		var locationFile:String = locationPath(node);
 		if (locationFile != null)
 			currentFile = FileSystem.fullPath(locationFile);
@@ -154,17 +180,24 @@ class CHeaderImporter {
 			|| (name != null
 				&& !StringTools.startsWith(name, "__")
 				&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
-		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(currentFile) < 0)
+		var selected = only == null || (name != null && only.exists(name));
+		if (kind == "EnumConstantDecl" && only != null)
+			selected = false;
+		if (userDeclaration
+			&& selected
+			&& (only != null || isUserDeclaration(node, roots, currentFile))
+			&& excluded.indexOf(currentFile) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
 		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
 			for (child in inner)
-				currentFile = collect(child, output, roots, currentFile, excluded);
+				currentFile = collect(child, output, roots, currentFile, excluded, only, nodesById);
 		return currentFile;
 	}
 
 	static function importDeclaration(node:Dynamic, layouts:Map<String, CLayout>, handleNames:Map<String, Bool>, handleRecords:Map<String, Dynamic>,
-			handleDestroySymbols:Map<String, String>, documentation:Map<String, HxiDocumentation>):Null<HxiDeclaration> {
+			handleDestroySymbols:Map<String, String>, documentation:Map<String, HxiDocumentation>, additionalDeclarations:Array<HxiDeclaration>,
+			nodesById:Map<String, Dynamic>, definedRecords:Map<String, Bool>):Null<HxiDeclaration> {
 		var kind:String = field(node, "kind"),
 			name:String = field(node, "name"),
 			type:Dynamic = field(node, "type");
@@ -205,6 +238,12 @@ class CHeaderImporter {
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType"),
 					callback = functionPointer(qualified);
+				var anonymousRecord = typedefTag(node, "RecordDecl", nodesById);
+				if (anonymousRecord != null && isAnonymous(anonymousRecord) && field(anonymousRecord, "completeDefinition") == true)
+					return importRecord(name, anonymousRecord, layouts, documentation, additionalDeclarations);
+				var anonymousEnum = typedefTag(node, "EnumDecl", nodesById);
+				if (anonymousEnum != null && isAnonymous(anonymousEnum) && children(anonymousEnum).length > 0)
+					return importEnumeration(name, anonymousEnum, "c_int", documentation);
 				if (hasAnnotation(node, "hxi:bool32")) {
 					if (mapType(qualified) != "u32")
 						throw '${declarationLocation(node)}: ABI bool typedef "$name" must use uint32_t storage';
@@ -238,50 +277,15 @@ class CHeaderImporter {
 					addDocumentation(documentation, name, node);
 					return Alias(name, typeFromProjection(mapType(qualified)), sourceSpan(node));
 				}
+				if (!definedRecords.exists(name)) {
+					addDocumentation(documentation, name, node);
+					return Opaque(name, sourceSpan(node));
+				}
 				return null;
 			case "RecordDecl":
 				if (handleNames.exists(name))
 					return null;
-				var fields:Array<Dynamic> = [for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
-				if (fields.length == 0)
-					return null;
-				var layout = layouts.get(name),
-					modelFields:Array<HxiField> = [];
-				addDocumentation(documentation, name, node);
-				for (entry in fields) {
-					var fieldName:String = field(entry, "name"),
-						fieldType:Dynamic = field(entry, "type"),
-						qualifiedType:String = field(fieldType, "qualType"),
-						offset = layout == null ? null : layout.offsets.get(fieldName);
-					if (StringTools.endsWith(qualifiedType, "[]"))
-						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
-					addDocumentation(documentation, '$name.$fieldName', entry);
-					var typeName = fieldTypeProjection(entry, qualifiedType),
-						borrowed = hasAnnotation(entry, "hxi:borrowed"),
-						lengthField = fieldLengthField(entry),
-						structSize = hasAnnotation(entry, "hxi:struct_size"),
-						metadata:Map<String, Array<String>> = [];
-					if (offset != null)
-						metadata.set("offset", [Std.string(offset)]);
-					if (borrowed)
-						metadata.set("borrowed", []);
-					if (lengthField != null)
-						metadata.set("length_field", ['"$lengthField"']);
-					if (structSize)
-						metadata.set("struct_size", []);
-					modelFields.push({
-						name: fieldName,
-						type: typeFromProjection(typeName),
-						offset: offset,
-						ownership: borrowed ? Borrowed : Unspecified,
-						handleDisposition: Unspecified,
-						lengthField: lengthField,
-						structSize: structSize,
-						metadata: metadata,
-						span: sourceSpan(entry)
-					});
-				}
-				return Structure(name, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, modelFields, sourceSpan(node));
+				return importRecord(name, node, layouts, documentation, additionalDeclarations);
 			case "FunctionDecl":
 				if (field(node, "variadic") == true)
 					throw '${declarationLocation(node)}: unsupported variadic function "$name"';
@@ -319,6 +323,206 @@ class CHeaderImporter {
 				return null;
 		}
 	}
+
+	static function importEnumeration(name:String, node:Dynamic, representation:String, documentation:Map<String, HxiDocumentation>):HxiDeclaration {
+		var entries:Array<compiler.ffi.HxiModel.HxiEnumValue> = [],
+			nextValue = Int64.parseString("0");
+		addDocumentation(documentation, name, node);
+		for (entry in [
+			for (child in children(node))
+				if (field(child, "kind") == "EnumConstantDecl") child
+		]) {
+			var entryName:String = field(entry, "name"),
+				rawValue = constantValue(entry);
+			if (rawValue == null)
+				rawValue = Int64.toStr(nextValue);
+			var projectedValue = projectedIntegerValue(entry, rawValue);
+			if (field(entry, "_hxiFile") == null)
+				Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
+			addDocumentation(documentation, '$name.$entryName', entry);
+			entries.push({name: entryName, value: Int64.parseString(projectedValue), span: sourceSpan(entry)});
+			nextValue = Int64.add(Int64.parseString(projectedValue), Int64.parseString("1"));
+		}
+		return Enumeration(name, typeFromProjection(representation), false, entries, sourceSpan(node));
+	}
+
+	static function importRecord(name:String, node:Dynamic, layouts:Map<String, CLayout>, documentation:Map<String, HxiDocumentation>,
+			additionalDeclarations:Array<HxiDeclaration>):Null<HxiDeclaration> {
+		var entries:Array<{entry:Dynamic, union:Bool}> = [];
+		for (child in children(node)) {
+			if (field(child, "kind") == "FieldDecl" && field(child, "name") != null)
+				entries.push({entry: child, union: false});
+			else if (field(child, "kind") == "RecordDecl" && field(child, "tagUsed") == "union")
+				for (entry in children(child))
+					if (field(entry, "kind") == "FieldDecl" && field(entry, "name") != null)
+						entries.push({entry: entry, union: true});
+		}
+		if (entries.length == 0)
+			return null;
+		var layout = recordLayout(name, node, layouts),
+			modelFields:Array<HxiField> = [],
+			nestedRecords = [
+				for (child in children(node))
+					if (field(child, "kind") == "RecordDecl" && field(child, "name") == null) child
+			];
+		addDocumentation(documentation, name, node);
+		for (item in entries) {
+			var entry = item.entry,
+				fieldName:String = field(entry, "name"),
+				fieldType:Dynamic = field(entry, "type"),
+				qualifiedType:String = field(fieldType, "qualType"),
+				offset = layout == null ? null : layout.offsets.get(fieldName);
+			if (StringTools.endsWith(qualifiedType, "[]"))
+				throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
+			addDocumentation(documentation, '$name.$fieldName', entry);
+			var nested = anonymousRecordForType(qualifiedType, nestedRecords),
+				typeName:String;
+			if (nested == null)
+				typeName = fieldTypeProjection(entry, qualifiedType);
+			else {
+				var nestedName = name + "_" + fieldName;
+				typeName = nestedName;
+				if (!hasDeclaration(additionalDeclarations, nestedName))
+					additionalDeclarations.push(importRecord(nestedName, nested, layouts, documentation, additionalDeclarations));
+			}
+			var borrowed = hasAnnotation(entry, "hxi:borrowed"),
+				lengthField = fieldLengthField(entry),
+				structSize = hasAnnotation(entry, "hxi:struct_size"),
+				metadata:Map<String, Array<String>> = [];
+			if (offset != null)
+				metadata.set("offset", [Std.string(offset)]);
+			if (item.union)
+				metadata.set("union", []);
+			if (borrowed)
+				metadata.set("borrowed", []);
+			if (lengthField != null)
+				metadata.set("length_field", ['"$lengthField"']);
+			if (structSize)
+				metadata.set("struct_size", []);
+			modelFields.push({
+				name: fieldName,
+				type: typeFromProjection(typeName),
+				offset: offset,
+				ownership: borrowed ? Borrowed : Unspecified,
+				handleDisposition: Unspecified,
+				lengthField: lengthField,
+				structSize: structSize,
+				metadata: metadata,
+				span: sourceSpan(entry)
+			});
+		}
+		return Structure(name, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, modelFields, sourceSpan(node));
+	}
+
+	static function hasDeclaration(declarations:Array<HxiDeclaration>, name:String):Bool {
+		for (declaration in declarations)
+			switch declaration {
+				case Opaque(value, _) | Alias(value, _, _) | Handle(value, _, _, _) | Constant(value, _, _) | Structure(value, _, _, _, _) |
+					Enumeration(value, _, _, _, _) | Callback(value, _, _, _, _) | Function(value, _, _, _, _, _, _, _):
+					if (value == name)
+						return true;
+			}
+		return false;
+	}
+
+	/** Keep filtered imports self-contained when selected records point at intentionally opaque runtime types. */
+	static function addOpaquePointerDependencies(declarations:Array<HxiDeclaration>):Void {
+		var declared:Map<String, Bool> = [], missing:Map<String, Bool> = [];
+		for (declaration in declarations)
+			switch declaration {
+				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
+					Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _):
+					declared.set(name, true);
+			}
+		for (declaration in declarations)
+			switch declaration {
+				case Alias(_, type, _) | Handle(_, type, _, _) | Enumeration(_, type, _, _, _):
+					collectMissingType(type, false, declared, missing);
+				case Structure(_, _, _, fields, _):
+					for (field in fields)
+						collectMissingType(field.type, false, declared, missing);
+				case Callback(_, parameters, result, _, _):
+					for (parameter in parameters)
+						collectMissingType(parameter.type, false, declared, missing);
+					collectMissingType(result, false, declared, missing);
+				case Function(_, parameters, result, _, _, _, _, _):
+					for (parameter in parameters)
+						collectMissingType(parameter.type, false, declared, missing);
+					collectMissingType(result, false, declared, missing);
+				case _:
+			}
+		var span = declarations.length == 0 ? sourceFile("<header>").span(0, 0) : declarationSpan(declarations[0]);
+		for (name in missing.keys())
+			declarations.push(Opaque(name, span));
+	}
+
+	static function collectMissingType(type:HxiType, behindPointer:Bool, declared:Map<String, Bool>, missing:Map<String, Bool>):Void
+		switch type {
+			case Pointer(element):
+				collectMissingType(element, true, declared, missing);
+			case Nullable(element) | Const(element):
+				collectMissingType(element, behindPointer, declared, missing);
+			case Array(element, _):
+				collectMissingType(element, false, declared, missing);
+			case Named(name):
+				if (behindPointer && !declared.exists(name))
+					missing.set(name, true);
+			case _:
+		}
+
+	static function declarationSpan(declaration:HxiDeclaration):SourceSpan
+		return switch declaration {
+			case Opaque(_, span) | Alias(_, _, span) | Handle(_, _, _, span) | Constant(_, _, span) | Structure(_, _, _, _, span) |
+				Enumeration(_, _, _, _, span) | Callback(_, _, _, _, span) | Function(_, _, _, _, _, _, _, span): span;
+		};
+
+	static function typedefTag(node:Dynamic, kind:String, nodesById:Map<String, Dynamic>):Dynamic {
+		for (child in children(node)) {
+			var owned = field(child, "ownedTagDecl");
+			if (owned != null && field(owned, "kind") == kind) {
+				var id:String = field(owned, "id"),
+					resolved = id == null ? null : nodesById.get(id);
+				return resolved == null ? owned : resolved;
+			}
+		}
+		return null;
+	}
+
+	static function isAnonymous(node:Dynamic):Bool {
+		var name:String = field(node, "name");
+		return name == null || name.length == 0;
+	}
+
+	static function anonymousRecordForType(type:String, records:Array<Dynamic>):Dynamic {
+		var location = anonymousLocation(type);
+		if (location == null)
+			return null;
+		for (record in records) {
+			var loc:Dynamic = field(record, "loc");
+			if (loc != null && field(loc, "line") == location.line && field(loc, "col") == location.col)
+				return record;
+		}
+		return null;
+	}
+
+	static function anonymousLocation(type:String):Null<{line:Int, col:Int}> {
+		var pattern = ~/:([0-9]+):([0-9]+)\)$/;
+		if (!pattern.match(type))
+			return null;
+		return {line: Std.parseInt(pattern.matched(1)), col: Std.parseInt(pattern.matched(2))};
+	}
+
+	static function recordLayout(name:String, node:Dynamic, layouts:Map<String, CLayout>):CLayout {
+		var named = layouts.get(name);
+		if (named != null)
+			return named;
+		var loc:Dynamic = field(node, "loc"),
+			key = loc == null ? null : anonymousLayoutKey(field(node, "tagUsed"), field(loc, "line"), field(loc, "col"));
+		return key == null ? null : layouts.get(key);
+	}
+
+	static function anonymousLayoutKey(tag:String, line:Dynamic, col:Dynamic):String
+		return 'anonymous:$tag:${Std.string(line)}:${Std.string(col)}';
 
 	static function parameterModel(parameter:Dynamic):HxiParameter {
 		var direction = parameterDirection(parameter),
@@ -744,6 +948,13 @@ class CHeaderImporter {
 			case "hxi_utf8": "utf8";
 			case "hxi_nullable_utf8": "nullable<utf8>";
 			case "void": "void";
+			case "uchar": "u16";
+			case "char16_t": "u16";
+			case "char32_t": "u32";
+			case "wchar_t": "c_wchar";
+			case "bool": "c_bool";
+			case "int64": "i64";
+			case "uint64": "u64";
 			case "char": "c_char";
 			case "signed char": "c_schar";
 			case "unsigned char": "c_uchar";
@@ -784,10 +995,16 @@ class CHeaderImporter {
 				offsets = [];
 				continue;
 			}
+			var anonymous = ~/^\s*0 \| (struct|union) .*:([0-9]+):([0-9]+)\)\s*$/;
+			if (anonymous.match(line)) {
+				current = anonymousLayoutKey(anonymous.matched(1), Std.parseInt(anonymous.matched(2)), Std.parseInt(anonymous.matched(3)));
+				offsets = [];
+				continue;
+			}
 			if (current == null)
 				continue;
 			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
-			if (fieldLine.match(line))
+			if (fieldLine.match(line) && !offsets.exists(fieldLine.matched(2)))
 				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
 			var end = ~/\[sizeof=([0-9]+), align=([0-9]+)\]/;
 			if (end.match(line)) {
