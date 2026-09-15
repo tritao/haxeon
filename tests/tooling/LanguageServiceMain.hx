@@ -297,6 +297,33 @@ class LanguageServiceMain {
 					}
 		if (!inferredExternalResult)
 			throw "recovered typing did not infer an external function's result type";
+		var inferredCompletionSource = "package editor; import editor.util.Inferred; function main():String { return val";
+		inferredExternalService.update("editor/InferredCompletion.hx", inferredCompletionSource);
+		var inferredCompletion = inferredExternalService.completeResult("editor/InferredCompletion.hx", inferredCompletionSource.length),
+			hasRecoveredImportedFunction = false;
+		for (item in inferredCompletion.items)
+			if (item.label == "value" && item.detail == "value():String")
+				hasRecoveredImportedFunction = true;
+		if (!hasRecoveredImportedFunction || !inferredCompletion.isIncomplete)
+			throw "completion did not expose a recovered imported function";
+		var recoveredTypeCompletionSource = "package editor; import editor.util.Widget; function main():Void { var item:Wid";
+		importService.update("editor/RecoveredTypeCompletion.hx", recoveredTypeCompletionSource);
+		var recoveredTypeCompletion = importService.completeResult("editor/RecoveredTypeCompletion.hx", recoveredTypeCompletionSource.length),
+			hasRecoveredImportedType = false;
+		for (item in recoveredTypeCompletion.items)
+			if (item.label == "Widget" && item.kind == "class")
+				hasRecoveredImportedType = true;
+		if (!hasRecoveredImportedType || !recoveredTypeCompletion.isIncomplete)
+			throw "type completion did not expose a recovered imported class";
+		var recoveredWildcardTypeSource = "package editor; import editor.util.*; function main():Void { var item:Wid";
+		importService.update("editor/RecoveredWildcardTypeCompletion.hx", recoveredWildcardTypeSource);
+		var recoveredWildcardTypeCompletion = importService.completeResult("editor/RecoveredWildcardTypeCompletion.hx", recoveredWildcardTypeSource.length),
+			hasRecoveredWildcardType = false;
+		for (item in recoveredWildcardTypeCompletion.items)
+			if (item.label == "Widget" && item.kind == "class")
+				hasRecoveredWildcardType = true;
+		if (!hasRecoveredWildcardType)
+			throw "wildcard type completion did not expose a recovered imported class";
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");

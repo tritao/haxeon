@@ -1210,6 +1210,7 @@ class LanguageService {
 				if (isTypeCompletionKind(candidate.symbol.kind))
 					addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 1,
 						candidate.importPath == null ? null : candidate.symbol.name, candidate.symbol.id, candidate.importPath);
+			addRecoveredVisibleCompletions(state, ast, prefix, result, token, true);
 			for (symbol in documentSymbols(path, token))
 				if (symbol.kind == "class" || symbol.kind == "interface" || symbol.kind == "enum" || symbol.kind == "type" || symbol.kind == "abstract")
 					addMember(symbol.name, symbol.kind, symbol.detail, prefix, result, 2);
@@ -1298,6 +1299,7 @@ class LanguageService {
 						signature == null ? null : symbol.name + "(", Std.string(symbol.id));
 				}
 			}
+		addRecoveredVisibleCompletions(state, ast, prefix, result, token);
 		if (qualifier == null)
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
 				if (token != null)
@@ -1332,6 +1334,79 @@ class LanguageService {
 		sortCompletion(result);
 		tagResults(result, state);
 		return completionResult(result, incompleteSnapshot);
+	}
+
+	/** Add top-level declarations visible through current editor snapshots. */
+	function addRecoveredVisibleCompletions(state:ModuleState, program:AstProgram, prefix:String, result:Array<CompletionItem>,
+			token:Null<CancellationToken>, typesOnly:Bool = false):Void {
+		for (candidate in compiler.modules) {
+			if (token != null)
+				token.check();
+			if (candidate == state)
+				continue;
+			var candidateAst = effectiveAst(candidate);
+			if (candidateAst == null || !recoveryModuleVisible(program, candidate, candidateAst))
+				continue;
+			var completionAst = SignatureInference.inferProgram(candidateAst);
+			var identityFor = function(name:String):Null<String> {
+				var identity = compiler.semanticWorkspace.resolveSymbolId(candidate.name + "." + name);
+				return identity == null ? null : Std.string(identity);
+			};
+			for (alias in completionAst.aliases) {
+				if (token != null)
+					token.check();
+				var name = recoveredCompletionName(program, candidate, alias.name);
+				addMember(name, "type", 'typedef ${alias.name}=${typeName(alias.type)}', prefix, result, 2, name, identityFor(alias.name));
+			}
+			for (decl in completionAst.enums) {
+				if (token != null)
+					token.check();
+				addMember(recoveredCompletionName(program, candidate, decl.name), "enum", 'enum ${decl.name}', prefix, result, 2, null,
+					identityFor(decl.name));
+			}
+			for (decl in completionAst.enumAbstracts) {
+				if (token != null)
+					token.check();
+				addMember(recoveredCompletionName(program, candidate, decl.name), "abstract", 'abstract ${decl.name}', prefix, result, 2, null,
+					identityFor(decl.name));
+			}
+			for (decl in completionAst.abstracts) {
+				if (token != null)
+					token.check();
+				addMember(recoveredCompletionName(program, candidate, decl.name), "abstract", 'abstract ${decl.name}', prefix, result, 2, null,
+					identityFor(decl.name));
+			}
+			for (decl in completionAst.interfaces) {
+				if (token != null)
+					token.check();
+				addMember(recoveredCompletionName(program, candidate, decl.name), "interface", 'interface ${decl.name}', prefix, result, 2, null,
+					identityFor(decl.name));
+			}
+			for (decl in completionAst.classes) {
+				if (token != null)
+					token.check();
+				addMember(recoveredCompletionName(program, candidate, decl.name), "class", 'class ${decl.name}', prefix, result, 2, null,
+					identityFor(decl.name));
+			}
+			if (typesOnly)
+				continue;
+			for (fn in completionAst.functions) {
+				if (token != null)
+					token.check();
+				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}', prefix, result, 2,
+					fn.name + "(", identityFor(fn.name));
+			}
+		}
+	}
+
+	static function recoveredCompletionName(program:AstProgram, candidate:ModuleState, name:String):String {
+		for (importPath in program.imports)
+			if (!StringTools.endsWith(importPath, ".*")
+				&& modulePathMatches(candidate.name, importPath)
+				&& importQualifier(program, importPath) != sourceName(importPath)
+				&& name == sourceName(importPath))
+				return importQualifier(program, importPath);
+		return name;
 	}
 
 	public function resolveCompletion(path:String, identity:String, revision:Int, ?importPath:String):Null<ResolvedCompletion> {
