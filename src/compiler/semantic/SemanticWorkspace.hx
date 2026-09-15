@@ -936,7 +936,7 @@ class SemanticWorkspace {
 				addEditorMember(result, seen, "values", "method", "values():Array");
 				addEditorMember(result, seen, "remove", "method", "remove(key):Bool");
 				addEditorMember(result, seen, "clear", "method", "clear():Void");
-				addEditorMember(result, seen, "size", "field", "size:Int");
+				addEditorMember(result, seen, "size", "method", "size():Int");
 			case TString:
 				addEditorMember(result, seen, "length", "field", "length:Int");
 				addEditorMember(result, seen, "indexOf", "method", "indexOf(needle):Int");
