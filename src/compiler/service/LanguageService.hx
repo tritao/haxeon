@@ -184,10 +184,21 @@ typedef SignatureHelp = {
 
 private typedef SemanticQueryContext = {
 	final state:ModuleState;
+	final snapshot:EditorSnapshot;
 	final model:SemanticModel;
 	final symbol:Null<SemanticSymbolId>;
 	final completion:SemanticCompletionContext;
 	final stale:Bool;
+}
+
+private typedef EditorSnapshot = {
+	final source:SourceFile;
+	final tokens:Array<compiler.syntax.Token>;
+	final ast:compiler.syntax.Ast.AstProgram;
+	final semanticModel:Null<SemanticModel>;
+	final revision:Int;
+	final stale:Bool;
+	final recovered:Bool;
 }
 
 /** Read-only editor queries backed by the persistent compiler state. */
@@ -245,23 +256,27 @@ class LanguageService {
 				state.recoveredAst = recovered.program;
 				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
 				state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
-				for (diagnostic in recovered.diagnostics) {
-					var duplicate = -1;
-					for (index in 0...state.diagnostics.length) {
-						var existing = state.diagnostics[index];
-						if (existing.span.start == diagnostic.span.start && existing.message == diagnostic.message) {
-							duplicate = index;
-							break;
-						}
-					}
-					if (duplicate < 0)
-						state.diagnostics.push(diagnostic);
-					else if (state.diagnostics[duplicate].fixes.length == 0 && diagnostic.fixes.length > 0)
-						state.diagnostics[duplicate] = diagnostic;
-				}
+				mergeRecoveryDiagnostics(state, recovered.diagnostics);
 			} catch (_:CompileError) {}
 		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
+	}
+
+	function mergeRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {
+		for (diagnostic in diagnostics) {
+			var duplicate = -1;
+			for (index in 0...state.diagnostics.length) {
+				var existing = state.diagnostics[index];
+				if (existing.span.start == diagnostic.span.start && existing.message == diagnostic.message) {
+					duplicate = index;
+					break;
+				}
+			}
+			if (duplicate < 0)
+				state.diagnostics.push(diagnostic);
+			else if (state.diagnostics[duplicate].fixes.length == 0 && diagnostic.fixes.length > 0)
+				state.diagnostics[duplicate] = diagnostic;
+		}
 	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
@@ -331,8 +346,9 @@ class LanguageService {
 
 	public function inlayHints(path:String, start:Int, end:Int, ?token:CancellationToken):Array<InlayHint> {
 		var state = stateFor(path),
-			model = state == null ? null : effectiveSemanticModel(state),
-			tokens = state == null ? null : effectiveTokens(state),
+			snapshot = state == null ? null : editorSnapshot(state),
+			model = snapshot == null ? null : snapshot.semanticModel,
+			tokens = snapshot == null ? null : snapshot.tokens,
 			result:Array<InlayHint> = [];
 		if (state == null || model == null || tokens == null)
 			return result;
@@ -468,7 +484,8 @@ class LanguageService {
 
 	public function documentLinks(path:String, ?token:CancellationToken):Array<DocumentLink> {
 		var state = stateFor(path),
-			tokens = state == null ? null : effectiveTokens(state),
+			snapshot = state == null ? null : editorSnapshot(state),
+			tokens = snapshot == null ? null : snapshot.tokens,
 			result:Array<DocumentLink> = [];
 		if (state == null || tokens == null)
 			return result;
@@ -495,7 +512,7 @@ class LanguageService {
 			var importPath = parts.join("."),
 				target = importedModule(importPath);
 			if (target != null)
-				result.push({span: state.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
+				result.push({span: snapshot.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
 		}
 		return result;
 	}
@@ -620,6 +637,12 @@ class LanguageService {
 	public function isCurrent(path:String):Bool {
 		var state = stateFor(path);
 		return state != null && state.ast != null && state.lastGoodRevision == state.revision;
+	}
+
+	/** Whether the latest source has either a valid or recovered editor snapshot. */
+	public function isEditorSnapshotCurrent(path:String):Bool {
+		var state = stateFor(path), snapshot = state == null ? null : editorSnapshot(state);
+		return snapshot != null && !snapshot.stale;
 	}
 
 	public function documentSymbols(path:String):Array<DocumentSymbol> {
@@ -1233,13 +1256,15 @@ class LanguageService {
 
 	function semanticQuery(path:String, position:Int, ?qualifier:String):Null<SemanticQueryContext> {
 		var state = stateFor(path),
-			model = state == null ? null : effectiveSemanticModel(state);
-		return state == null || model == null ? null : {
+			snapshot = state == null ? null : editorSnapshot(state),
+			model = snapshot == null ? null : snapshot.semanticModel;
+		return state == null || snapshot == null || model == null ? null : {
 			state: state,
+			snapshot: snapshot,
 			model: model,
 			symbol: model.index.symbolIdAt(position),
 			completion: model.index.completionContext(position, qualifier),
-			stale: snapshotRevision(state) != state.revision
+			stale: snapshot.stale
 		};
 	}
 
@@ -1712,8 +1737,9 @@ class LanguageService {
 	}
 
 	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {
-		var revision = snapshotRevision(state),
-			stale = revision != state.revision;
+		var snapshot = editorSnapshot(state),
+			revision = snapshot == null ? state.lastGoodRevision : snapshot.revision,
+			stale = snapshot == null || snapshot.stale;
 		for (result in results) {
 			Reflect.setField(result, "revision", revision);
 			Reflect.setField(result, "stale", stale);
@@ -1721,19 +1747,62 @@ class LanguageService {
 	}
 
 	static function snapshotRevision(state:ModuleState):Int
-		return state.ast != null || state.recoveredSemanticModel != null ? state.revision : state.lastGoodRevision;
+		return editorSnapshot(state) == null ? state.lastGoodRevision : editorSnapshot(state).revision;
 
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));
 
-	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram>
-		return state.ast != null ? state.ast : state.recoveredAst != null ? state.recoveredAst : state.lastGoodAst;
+	static function editorSnapshot(state:ModuleState):Null<EditorSnapshot> {
+		if (state.ast != null)
+			return {
+				source: state.source,
+				tokens: state.tokens,
+				ast: state.ast,
+				semanticModel: state.semanticModel,
+				revision: state.revision,
+				stale: false,
+				recovered: false
+			};
 
-	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
-		return state.ast != null ? state.tokens : state.recoveredAst != null ? state.recoveredTokens : state.lastGoodTokens;
+		if (state.recoveredAst != null)
+			return {
+				source: state.source,
+				tokens: state.recoveredTokens,
+				ast: state.recoveredAst,
+				semanticModel: state.recoveredSemanticModel,
+				revision: state.revision,
+				stale: false,
+				recovered: true
+			};
 
-	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+		if (state.lastGoodAst != null && state.lastGoodSource != null && state.lastGoodSemanticModel != null)
+			return {
+				source: state.lastGoodSource,
+				tokens: state.lastGoodTokens,
+				ast: state.lastGoodAst,
+				semanticModel: state.lastGoodSemanticModel,
+				revision: state.lastGoodRevision,
+				stale: true,
+				recovered: false
+			};
+
+		return null;
+	}
+
+	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram> {
+		var snapshot = editorSnapshot(state);
+		return snapshot == null ? null : snapshot.ast;
+	}
+
+	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>> {
+		var snapshot = editorSnapshot(state);
+		return snapshot == null ? null : snapshot.tokens;
+	}
+
+	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel> {
+		var snapshot = editorSnapshot(state);
+		return snapshot == null ? null : snapshot.semanticModel;
+	}
 
 	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
 		for (fn in ast.functions)
