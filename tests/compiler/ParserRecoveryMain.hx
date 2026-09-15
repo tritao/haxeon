@@ -665,7 +665,20 @@ class ParserRecoveryMain {
 		switch expectedAssignmentTyped.functions[0].statements[0] {
 			case TVar(_, value, _) if (value.type == TInt):
 			default:
-				throw "tolerant coercion did not preserve the declared type after an initializer error";
+			throw "tolerant coercion did not preserve the declared type after an initializer error";
+		}
+
+		var failedDeclarationSource = new SourceFile("TolerantFailedDeclaration.hx",
+			"function main():Void { var broken = missing + 1; var after:Int = 1; }");
+		var failedDeclarationProgram = new Parser(new Lexer(failedDeclarationSource).tokenize()).parseProgramRecovering().program,
+			failedDeclarationTyped = Typer.typeRecovered(failedDeclarationProgram);
+		if (failedDeclarationTyped == null || failedDeclarationTyped.functions.length != 1
+			|| failedDeclarationTyped.functions[0].statements.length != 2)
+			throw "tolerant typing discarded a declaration after an invalid initializer expression";
+		switch failedDeclarationTyped.functions[0].statements[0] {
+			case TVar(_, value, _) if (value.type == TUnknown || value.type == TError):
+			default:
+				throw "failed initializer did not retain a declaration-shaped recovery node";
 		}
 
 		var callSource = new SourceFile("TolerantCall.hx", "function take(value:Int):Void return; function main():Void return take(");

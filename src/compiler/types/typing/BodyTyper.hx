@@ -450,17 +450,56 @@ class BodyTyper {
 					var compileError:CompileError = cast error;
 					session.rememberRecoveryDiagnostic(compileError.diagnostic);
 				}
-				retainRecoveredDeclaration(statement, scope);
-				var recovered = recoverCompoundStatement(statement, scope, result);
+				var recovered = recoverDeclaration(statement, scope);
+				if (recovered == null)
+					recovered = recoverCompoundStatement(statement, scope, result);
 				if (recovered != null)
 					output.push(recovered);
 				else {
+					retainRecoveredDeclaration(statement, scope);
 					var span = statementSpan(statement);
 					output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
 				}
 			}
 		}
 		return output;
+	}
+
+	/** Keep a declaration-shaped typed node when its initializer failed locally. */
+	function recoverDeclaration(statement:AstStatement, scope:Scope):Null<TypedStatement> {
+		return switch statement {
+			case UninitializedDeclaration(name, declared, span):
+				var type = recoveredDeclarationType(name, declared, scope),
+					id = recoverDeclarationBinding(name, type, span, scope);
+				TDeclare(id, type, span);
+			case VarDeclaration(name, declared, _, span):
+				var type = recoveredDeclarationType(name, declared, scope),
+					id = recoverDeclarationBinding(name, type, span, scope),
+					value = new TypedExpression(TNullLiteral, type, span);
+				TVar(id, value, span);
+			default: null;
+		};
+	}
+
+	function recoveredDeclarationType(name:String, declared:Null<AstType>, scope:Scope):CompilerType {
+		if (declared != null)
+			return resolveType(declared);
+		var existing = scope.resolveDeclared(name);
+		return existing == null ? TUnknown : existing;
+	}
+
+	function recoverDeclarationBinding(name:String, type:CompilerType, span:SourceSpan, scope:Scope):String {
+		var id = scope.resolveId(name);
+		if (id == null) {
+			try {
+				scope.define(name, type, span);
+			}
+			catch (_:Dynamic) {}
+			id = scope.resolveId(name);
+		}
+		if (id == null)
+			throw 'Missing recovered binding for "$name"';
+		return id;
 	}
 
 	function retainRecoveredDeclaration(statement:AstStatement, scope:Scope):Void {
