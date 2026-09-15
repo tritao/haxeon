@@ -59,6 +59,7 @@ class TestCatalog {
 		"HxiAbiMain",
 		"NativeLayoutMain",
 		"NativeMemoryMain",
+		"HashlinkTypeMetadataMain",
 	];
 
 	static final toolingMains = [
