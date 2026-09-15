@@ -3,6 +3,8 @@ package tools;
 import haxe.Json;
 import haxe.io.Path;
 import build.HaxeonProjectBuild;
+import build.HaxeonNativePackageBuild;
+import build.Target;
 import build.execution.ProcessRunner;
 import project.PackageLockfile;
 import project.PackageResolver;
@@ -126,8 +128,11 @@ class HaxeonCli {
 		}
 		if (entry.length == 0)
 			throw 'Option "--entry" requires a value';
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw 'Unsupported init target "$target"';
+		try {
+			Target.parse(target);
+		} catch (error:Dynamic) {
+			throw 'Unsupported init target "$target": ${Std.string(error)}';
+		}
 
 		var projectDirectory = Sys.getCwd(),
 			configPath = Path.join([projectDirectory, CONFIG_FILE]);
@@ -401,10 +406,9 @@ class HaxeonCli {
 		var resolveStarted = Date.now().getTime(),
 			project = discoverProject(projectConfigPath),
 			resolutionMs = Date.now().getTime() - resolveStarted,
-			target = options.target == null ? project.manifest.target : options.target;
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw 'Unsupported CLI target "$target". Supported targets are "host", "wasm32", and "android".';
-		if (launch && target == "wasm32")
+			target = options.target == null ? project.manifest.target : options.target,
+			targetInfo = Target.parse(target);
+		if (launch && targetInfo.isWasm())
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
 		if (options.plan && launch)
 			throw 'Option "--plan" is only valid with "haxeon build"';
@@ -412,13 +416,13 @@ class HaxeonCli {
 			throw 'Option "--explain" is only valid with "haxeon build"';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
-		if (target != "android" && options.device != null)
+		if (!targetInfo.isAndroid() && options.device != null)
 			throw 'Option "--device" requires "--target android"';
-		if ((options.plan || options.explain || options.timings) && !(target == "host" && project.manifest.target == "host"))
+		if ((options.plan || options.explain || options.timings) && !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
 
 		var home = haxeonHome();
-		if (target == "host" && project.manifest.target == "host") {
+		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain,
@@ -439,12 +443,16 @@ class HaxeonCli {
 		if (options.plan)
 			throw 'Plan output is currently available for host builds only';
 		for (resolvedPackage in project.packages.packages)
-			if (resolvedPackage.nativeSources.length > 0)
-				throw 'Native C package "${resolvedPackage.name}" requires target "host"; target "$target" is not supported yet';
+			if (resolvedPackage.nativeSources.length > 0 && !targetInfo.isAndroid())
+				throw 'Native C package "${resolvedPackage.name}" requires target "host" or an Android NDK provider; target "$target" is not supported yet';
 		var config = loadConfig(projectConfigPath);
-		if (target == "android") {
+		if (targetInfo.isAndroid()) {
+			configureAndroidEnvironment(home);
+			var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
+			if (nativeStatus != 0)
+				return nativeStatus;
 			var androidOutput = options.output == null ? defaultOutput(config, projectDirectory, "android") : resolvePath(options.output, projectDirectory);
-			var status = buildAndroid(home, projectConfigPath, config, androidOutput);
+			var status = buildAndroid(home, projectConfigPath, config, androidOutput, HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
 			if (status != 0 || !launch)
 				return status;
 			return installAndLaunchAndroid(home, androidOutput, config.androidApplicationId, options.device);
@@ -498,7 +506,7 @@ class HaxeonCli {
 		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
 	}
 
-	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String):Int {
+	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String, nativeRoot:String):Int {
 		configureAndroidEnvironment(home);
 		var sdk = Path.join([home, ".tools", "android-sdk"]),
 			ndk = Path.join([sdk, "ndk", "30.0.16248370"]);
@@ -517,6 +525,7 @@ class HaxeonCli {
 			androidDirectory,
 			"assembleDebug",
 			"-PhaxeonProject=" + projectConfigPath,
+			"-PhaxeonNativeRoot=" + nativeRoot,
 			"-PhaxeonApplicationId=" + config.androidApplicationId,
 			"-PhaxeonAppLabel=" + config.androidAppLabel
 		];
@@ -850,8 +859,11 @@ class HaxeonCli {
 			throw '$path must list at least one source in "sources"';
 		if (sourceRoots.length == 0)
 			throw '$path must list at least one path in "sourceRoots"';
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw '$path target must be "host", "wasm32", or "android"';
+		try {
+			Target.parse(target);
+		} catch (error:Dynamic) {
+			throw '$path has an invalid target "$target": ${Std.string(error)}';
+		}
 		return {
 			entry: entry,
 			sources: sources,

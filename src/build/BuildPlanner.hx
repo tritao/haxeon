@@ -75,6 +75,21 @@ class BuildPlanner {
 		return new BuildPlan([moduleId], artifacts);
 	}
 
+	/** Native-only request used by package consumers such as Android packaging. */
+	public static function nativePackages(project:ResolvedProject, target:Target,
+		nativeDemand:NativeArtifactDemand):BuildPlan {
+		var full = BuildPlanner.project(project, BuildIntent.Build, target, nativeDemand),
+			artifacts:Array<Artifact> = [
+				for (artifact in full.artifacts)
+					if (artifact.id.kind == NativeObject || artifact.id.kind == NativeStaticLibrary || artifact.id.kind == NativeSharedLibrary) artifact
+			],
+			requested:Array<ArtifactId> = [
+				for (artifact in artifacts)
+					if (artifact.id.kind == NativeStaticLibrary || artifact.id.kind == NativeSharedLibrary) artifact.id
+			];
+		return new BuildPlan(requested, artifacts);
+	}
+
 	static function relativePath(root:String, path:String):String {
 		var normalizedRoot = haxe.io.Path.addTrailingSlash(haxe.io.Path.normalize(root)),
 			normalizedPath = haxe.io.Path.normalize(path);

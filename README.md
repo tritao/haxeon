@@ -355,8 +355,10 @@ resolution, planning/lowering, and execution wall-clock measurements.
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native actions are skipped on later builds.
 The normal host build requests the shared HashLink library; static archives are
-available to other build consumers without being produced unnecessarily. This
-local-package/native-provider path currently targets the host platform.
+available to other build consumers without being produced unnecessarily. Target
+and toolchain selection is centralized: examples include
+`windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-aarch64`, `android-aarch64`,
+and `wasm32`.
 
 Git dependencies can be added and installed reproducibly:
 
@@ -389,6 +391,12 @@ provider:
   "cmake": { "source": "native", "target": "foo" }
 }
 ```
+
+Android builds resolve the same package graph, compile `native.sources` with the
+Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
+under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
+rebuilt and repackaged when its C sources change; Haxe-only edits continue to
+use the Android HLB asset path.
 
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected

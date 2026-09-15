@@ -7,8 +7,14 @@ import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import compiler.tools.SourceManifestLoader;
+import compiler.tools.CompilerRequest.PackageSourceRoot;
 import haxe.Json;
 import haxe.io.Path;
+import project.PackageLockfile;
+import project.PackageResolver;
+import project.ProjectSourceAcquirer;
+import project.ResolvedProject;
+import project.SourceCache;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -30,33 +36,31 @@ class AndroidBuild {
 	}
 
 	static function buildProject(projectPath:String, outputPath:String):Void {
-		var absoluteProjectPath = FileSystem.fullPath(projectPath), projectDirectory = Path.directory(absoluteProjectPath), raw:Dynamic;
-		try {
-			raw = Json.parse(File.getContent(absoluteProjectPath));
-		} catch (error:Dynamic) {
-			throw 'Could not parse $absoluteProjectPath: ${Std.string(error)}';
-		}
-		if (raw == null || !Reflect.isObject(raw))
-			throw '$absoluteProjectPath must contain a JSON object';
-		var entryValue:Dynamic = Reflect.field(raw, "entry");
-		if (!Std.isOfType(entryValue, String) || (cast entryValue : String).length == 0)
-			throw '$absoluteProjectPath requires a non-empty "entry" string';
-		var entries = readStringArray(raw, "sources", absoluteProjectPath, []),
-			roots = readStringArray(raw, "sourceRoots", absoluteProjectPath, ["src"]),
-			defines = readStringArray(raw, "defines", absoluteProjectPath, []);
-		if (entries.length == 0)
-			throw '$absoluteProjectPath must list at least one source in "sources"';
-		if (roots.length == 0)
-			throw '$absoluteProjectPath must list at least one path in "sourceRoots"';
-		var absoluteRoots = [for (root in roots) resolvePath(root, projectDirectory)],
-			absoluteSources = [for (source in entries) resolvePath(source, projectDirectory)];
-		for (source in absoluteSources)
-			if (!FileSystem.exists(source))
-				throw 'Android project source does not exist: $source';
-		build(absoluteSources, absoluteRoots, cast entryValue, defines, outputPath);
+		var absoluteProjectPath = FileSystem.fullPath(projectPath),
+			lockPath = Path.join([Path.directory(absoluteProjectPath), "haxeon.lock"]),
+			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null,
+			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath, lockfile, lockfile != null);
+		buildResolved(project, outputPath);
 	}
 
-	static function build(sources:Array<String>, roots:Array<String>, entry:String, projectDefines:Array<String>, outputPath:String):Void {
+	static function buildResolved(project:ResolvedProject, outputPath:String):Void {
+		var roots = [for (resolvedPackage in project.packages.packages) for (root in resolvedPackage.sourceRoots) root],
+			sources = [for (resolvedPackage in project.packages.packages) for (source in resolvedPackage.sources) source],
+			packageRoots:Array<PackageSourceRoot> = [],
+			defines = project.manifest.defines.copy();
+		for (resolvedPackage in project.packages.packages) {
+			var shouldScopeRoot = resolvedPackage.name != project.rootPackage.name
+				|| project.manifest.entry == resolvedPackage.name
+				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + ".");
+			if (shouldScopeRoot)
+				for (sourceRoot in resolvedPackage.sourceRoots)
+					packageRoots.push({packageName: resolvedPackage.name, path: sourceRoot});
+		}
+		build(sources, roots, project.manifest.entry, defines, outputPath, packageRoots);
+	}
+
+	static function build(sources:Array<String>, roots:Array<String>, entry:String, projectDefines:Array<String>, outputPath:String,
+		?packageRoots:Array<PackageSourceRoot>):Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		var defines = CompilerDriver.targetDefines("hl");
@@ -67,7 +71,7 @@ class AndroidBuild {
 		compiler.addSourceRoot(FileSystem.fullPath("stdlib"));
 		for (root in roots)
 			compiler.addSourceRoot(root);
-		SourceManifestLoader.load(compiler, roots, sources);
+		SourceManifestLoader.load(compiler, roots, sources, packageRoots);
 		var result = compiler.compile(entry),
 			mainFunction:Null<compiler.ir.IrFunction> = null;
 		for (fn in result.ir.functions)
@@ -89,21 +93,6 @@ class AndroidBuild {
 		compiler.acknowledgePublication(result.revision);
 		File.saveBytes(sidecar(output, ".hcs"), compiler.exportIdentityState());
 		Sys.println('compiled Android entry $entry -> $output');
-	}
-
-	static function readStringArray(raw:Dynamic, field:String, path:String, fallback:Array<String>):Array<String> {
-		var value:Dynamic = Reflect.field(raw, field);
-		if (value == null)
-			return fallback.copy();
-		if (Type.getClassName(Type.getClass(value)) != "Array")
-			throw '$path "$field" must be an array of strings';
-		var result:Array<String> = [];
-		for (item in (cast value : Array<Dynamic>)) {
-			if (Type.getClassName(Type.getClass(item)) != "String" || (cast item : String).length == 0)
-				throw '$path "$field" must contain only non-empty strings';
-			result.push(cast item);
-		}
-		return result;
 	}
 
 	static function resolvePath(path:String, base:String):String
