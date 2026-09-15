@@ -211,10 +211,13 @@ class HlHotReloadState {
 	function validateFunctionTable(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):Void {
 		if (candidate == null || functions == null)
 			throw "HashLink hot-reload candidates require metadata and function versions";
-		if (candidate.functionCount() != functions.length())
-			throw "HashLink metadata and stable function tables have different lengths";
+		var bytecodeCount = candidate.bytecodeFunctionCount();
+		if (bytecodeCount > 0 && bytecodeCount != functions.length())
+			throw "HashLink metadata and stable function tables have different bytecode lengths";
+		if (bytecodeCount == 0 && functions.length() > candidate.functionCount())
+			throw "HashLink stable function table is larger than the native dispatch table";
 		for (version in functions.entries()) {
-			if (version.slot < 0 || version.slot >= functions.length())
+			if (version.slot < 0 || version.slot >= candidate.functionCount() || bytecodeCount > 0 && !candidate.isBytecodeFunctionSlot(version.slot))
 				throw 'HashLink function slot ${version.slot} is outside the native table';
 			if (version.typeIndex >= candidate.typeCount())
 				throw 'HashLink function type index ${version.typeIndex} is outside the metadata table';

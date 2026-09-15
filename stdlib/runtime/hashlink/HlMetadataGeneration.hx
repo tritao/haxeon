@@ -225,6 +225,29 @@ class HlMetadataGeneration {
 		return requireFunctionTable().length();
 	}
 
+	/** Number of bytecode function descriptors, excluding native dispatch slots. */
+	public function bytecodeFunctionCount():Int {
+		requireOpen();
+		return functionDescriptors.length();
+	}
+
+	/** Dispatch slot of one bytecode function descriptor in descriptor order. */
+	public function bytecodeFunctionSlot(index:Int):Int {
+		requireOpen();
+		return cast functionDescriptors.get(index).ref.findex;
+	}
+
+	/** Whether a dispatch slot is backed by a bytecode function descriptor. */
+	public function isBytecodeFunctionSlot(slot:Int):Bool {
+		requireOpen();
+		for (index in 0...functionDescriptors.length()) {
+			var findex:Int = cast functionDescriptors.get(index).ref.findex;
+			if (findex == slot)
+				return true;
+		}
+		return false;
+	}
+
 	/** Read one module function signature slot. */
 	public function functionType(index:Int):RawPtr<HlType> {
 		requireOpen();

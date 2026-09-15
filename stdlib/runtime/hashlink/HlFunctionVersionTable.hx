@@ -76,10 +76,19 @@ class HlFunctionVersionTable {
 	public static function fromMetadata(metadata:HlMetadataGeneration, stableIds:Array<Int>, ?generation:Int = 0):HlFunctionVersionTable {
 		if (metadata == null || stableIds == null)
 			throw "HashLink function versions require metadata and stable IDs";
-		if (stableIds.length != metadata.functionCount())
+		var slots:Array<Int> = [];
+		if (stableIds.length == metadata.functionCount()) {
+			for (slot in 0...stableIds.length)
+				slots.push(slot);
+		} else if (stableIds.length == metadata.bytecodeFunctionCount()) {
+			for (index in 0...stableIds.length)
+				slots.push(metadata.bytecodeFunctionSlot(index));
+		} else {
 			throw "HashLink stable IDs and metadata function slots have different lengths";
+		}
 		var entries:Array<HlFunctionVersionEntry> = [];
-		for (slot in 0...stableIds.length) {
+		for (index in 0...stableIds.length) {
+			var slot = slots[index];
 			var signature = metadata.functionType(slot), typeIndex = metadata.typeIndex(signature);
 			if (typeIndex < 0)
 				throw 'HashLink function signature at slot $slot is external to its metadata generation';

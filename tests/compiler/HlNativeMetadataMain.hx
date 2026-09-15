@@ -15,7 +15,7 @@ class HlNativeMetadataMain {
 			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlWriter; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
 			+
-			'import runtime.hashlink.HlHotReloadState; import runtime.hashlink.HlMetadataGeneration; import runtime.hashlink.HlNativeModule; import runtime.memory.RawPtr; '
+			'import runtime.hashlink.HlFunctionVersionTable; import runtime.hashlink.HlHotReloadState; import runtime.hashlink.HlMetadataGeneration; import runtime.hashlink.HlNativeModule; import runtime.memory.RawPtr; '
 			+ 'function main():Int { '
 			+ 'var code = new HlCode(); '
 			+ 'code.strings = ["Abstract", "BuilderObject", "value", "run", "BuilderEnum", "BuilderStruct", "Value", "std✓", "native"]; '
@@ -47,15 +47,9 @@ class HlNativeMetadataMain {
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
-			'var reloadCode = new HlCode(); reloadCode.ints = [42]; reloadCode.types = [Simple(HlType.I32), Function([], 0)]; reloadCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; '
+			'var hotState = new HlHotReloadState(), stagedReload = HlHotReloadLoader.stage(hotState, HlWriter.encode(loadCode)), hotGeneration = stagedReload.commitNative(), '
 			+
-			'reloadCode.functionIdentities = [{stableId: 202, functionIndex: 0, qualifiedName: "Reloaded.main", displayName: "main", sourcePath: "reloaded.hx", start: 0, end: 0, line: 1, flags: 0}]; '
-			+
-			'reloadCode.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(reloadCode.functionIdentities)}]; reloadCode.entryPoint = 0; '
-			+
-			'var hotState = new HlHotReloadState(), stagedReload = HlHotReloadLoader.stage(hotState, HlWriter.encode(reloadCode)), hotGeneration = stagedReload.commitNative(), '
-			+
-			'hotValue = hotGeneration.nativeModule == null ? -1 : hotGeneration.nativeModule.callI32(0), hotLoaded = hotGeneration.nativeModule != null && hotGeneration.nativeModule.isLoaded(); hotState.dispose(); '
+			'hotValue = hotGeneration.nativeModule == null ? -1 : hotGeneration.nativeModule.callI32(0), hotLoaded = hotGeneration.nativeModule != null && hotGeneration.nativeModule.isLoaded(), bytecodeVersions = HlFunctionVersionTable.fromMetadata(stagedReload.metadata, [101]); hotState.dispose(); '
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
 			+ 'var kernel = new HlMetadataGeneration(128, 1), kernelInt = kernel.builder.primitive(HlTypeKind.Int32Type), '
@@ -90,7 +84,8 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
-			+ '&& loadedValue == 8 && loadedModuleUnloaded && hotValue == 42 && hotLoaded '
+			+
+			'&& loadedValue == 8 && loadedModuleUnloaded && hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '
