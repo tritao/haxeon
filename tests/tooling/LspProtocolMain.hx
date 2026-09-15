@@ -1083,6 +1083,23 @@ class LspProtocolMain {
 		}));
 		if (staleRename.length != 1 || Json.parse(staleRename[0]).error.code != -32801)
 			throw "LSP rename did not reject a stale semantic snapshot";
+		var recoveredMemberSource = "// 😀\nclass Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); foo. }";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {textDocument: {uri: uri, version: 3}, contentChanges: [{text: recoveredMemberSource}]}
+		}));
+		var recoveredMemberCompletion = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 8,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: uri}, position: {line: 1, character: recoveredMemberSource.split("\n")[1].length}}
+		})), foundRecoveredMember = false;
+		for (item in cast(recoveredMemberCompletion.result.items, Array<Dynamic>))
+			if (item.label == "knownFoo")
+				foundRecoveredMember = true;
+		if (!foundRecoveredMember || !recoveredMemberCompletion.result.isIncomplete)
+			throw "LSP completion did not use the current recovered member context";
 		var deltaProtocol = new LspProtocol(),
 			deltaUri = "file:///workspace/Delta.hx",
 			deltaSource = "function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
