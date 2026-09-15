@@ -36,7 +36,9 @@ class HlNativeMetadataMain {
 			+ 'code.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(code.functionIdentities)}]; '
 			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.constants = [{global: 0, fields: [0, 1]}]; code.entryPoint = 0; '
 			+
-			'var loadCode = new HlCode(); loadCode.ints = [42]; loadCode.types = [Simple(HlType.I32), Function([], 0)]; loadCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; '
+			'var loadCode = new HlCode(); loadCode.strings = ["haxeon_runtime", "native_pointer_size"]; loadCode.types = [Simple(HlType.I32), Function([], 0), Function([], 0)]; '
+			+
+			'loadCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; loadCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [Call0(0, 1), Return(0)])]; '
 			+
 			'loadCode.functionIdentities = [{stableId: 101, functionIndex: 0, qualifiedName: "Loaded.main", displayName: "main", sourcePath: "loaded.hx", start: 0, end: 0, line: 1, flags: 0}]; '
 			+
@@ -77,7 +79,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
-			+ '&& loadedValue == 42 && loadedModuleUnloaded '
+			+ '&& loadedValue == 8 && loadedModuleUnloaded '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '
