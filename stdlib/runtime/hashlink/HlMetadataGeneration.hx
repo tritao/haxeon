@@ -9,6 +9,10 @@ typedef HlMetadataPublication = {
 	final types:RawPtr<RawPtr<HlType>>;
 	final typeCount:Int;
 	final typeCapacity:Int;
+	final contiguousTypes:RawPtr<HlType>;
+	final contiguousTypeCount:Int;
+	final contiguousTypeCapacity:Int;
+	final usesContiguousTypes:Bool;
 	final functions:RawPtr<RawPtr<UInt8>>;
 	final functionTypes:RawPtr<RawPtr<HlType>>;
 	final functionCount:Int;
@@ -23,6 +27,8 @@ class HlMetadataGeneration {
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
 	var published:Bool = false;
+	var publishedContiguousTypeCount:Int = 0;
+	var publishedUsesContiguousTypes:Bool = false;
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
@@ -105,10 +111,13 @@ class HlMetadataGeneration {
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
-		if (typeTable.isContiguousPrefix(arena.typePointer()))
-			HlTypeBridge.native_metadata_publish_contiguous_prototypes(arena.typePointer(), typeTable.length(), moduleContext);
+		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
+		if (usesContiguousTypes)
+			HlTypeBridge.native_metadata_publish_contiguous_prototypes(contiguousTypes, typeTable.length(), moduleContext);
 		else
 			HlTypeBridge.native_metadata_publish_prototypes(typeTable.pointer(), typeTable.length(), moduleContext);
+		publishedContiguousTypeCount = arena.typeCountOf();
+		publishedUsesContiguousTypes = usesContiguousTypes;
 		published = true;
 		return snapshot();
 	}
@@ -122,6 +131,10 @@ class HlMetadataGeneration {
 			types: typeTable.pointer(),
 			typeCount: typeTable.length(),
 			typeCapacity: typeTable.capacityOf(),
+			contiguousTypes: arena.typePointer(),
+			contiguousTypeCount: publishedContiguousTypeCount,
+			contiguousTypeCapacity: arena.typeCapacityOf(),
+			usesContiguousTypes: publishedUsesContiguousTypes,
 			functions: requireFunctionTable().functionPointer(),
 			functionTypes: requireFunctionTable().typePointer(),
 			functionCount: requireFunctionTable().length(),

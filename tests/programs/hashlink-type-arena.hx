@@ -187,6 +187,10 @@ function main():Int {
 	var publication = generation.publish();
 	var generationCorrect = publication.typeCount == 3
 		&& publication.typeCapacity == 4
+		&& publication.contiguousTypes == generation.contiguousTypePointer()
+		&& publication.contiguousTypeCount == 4
+		&& publication.contiguousTypeCapacity == 65536
+		&& !publication.usesContiguousTypes
 		&& publication.functionCount == 1
 		&& publication.moduleContext == generationModule
 		&& publication.functions.offset(0).load() == RawPtr.nullPtr()

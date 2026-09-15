@@ -127,7 +127,10 @@ previous table storage remains owned by the arena, allowing publication code to
 stage a replacement before exposing it. `HlMetadataGeneration` exposes the
 type-record slab bounds for the loader handoff and selects the direct contiguous
 publication bridge whenever its public table is an exact slab prefix; arbitrary
-subset tables continue through the pointer-table adapter.
+subset tables continue through the pointer-table adapter. The immutable
+`HlMetadataPublication` records both views, the reserved slab bounds, and whether
+the direct contiguous path was selected, so a future loader does not have to
+reconstruct ownership facts from raw pointers.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows

@@ -50,7 +50,7 @@ function main():Int {
 	generation.addType(object);
 	generation.addType(enumType);
 	generation.addType(virtualType);
-	generation.publish();
+	var publication = generation.publish();
 
 	var objectData = object.ref.data.ref.obj,
 		objectRuntime = objectData.ref.runtime,
@@ -64,6 +64,7 @@ function main():Int {
 		virtualHeaderSize = sizeof<HlVirtualValue>(),
 		virtualBase = virtualHeaderSize + pointerSize * 2;
 	var objectCorrect = !objectRuntime.isNull()
+		&& publication.usesContiguousTypes
 		&& intType == typeBase
 		&& dynamicType == typeBase.offset(1)
 		&& object == typeBase.offset(2)
