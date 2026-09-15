@@ -19,6 +19,8 @@ class GitSourceAcquirer implements SourceAcquirer {
 					destination = Path.join([sourceRoot, "git", Sha256.encode(url + "\n" + resolvedRevision)]);
 				if (!FileSystem.exists(destination))
 					checkout(url, resolvedRevision, destination, packageId);
+				else
+					validateCheckout(destination, resolvedRevision, packageId);
 				new AcquiredSource(destination, PackageSource.Git(url, resolvedRevision), resolvedRevision);
 			case _:
 				throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the Git acquirer';
@@ -51,6 +53,12 @@ class GitSourceAcquirer implements SourceAcquirer {
 		if (checkoutStatus != 0)
 			throw 'Could not check out Git dependency "$packageId" at $revision';
 		FileSystem.rename(temporary, destination);
+	}
+
+	function validateCheckout(destination:String, revision:String, packageId:PackageId):Void {
+		var result = ProcessRunner.capture("git", ["-C", destination, "rev-parse", "HEAD"]);
+		if (result.status != 0 || StringTools.trim(result.output) != revision)
+			throw 'Cached Git source for "$packageId" is not immutable at $revision';
 	}
 
 	static function isSha(value:String):Bool {

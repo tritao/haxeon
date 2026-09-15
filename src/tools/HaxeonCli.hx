@@ -10,6 +10,7 @@ import project.PackageSourceTools;
 import project.ProjectSourceAcquirer;
 import project.ResolvedPackage;
 import project.ResolvedProject;
+import project.SourceCache;
 import sys.FileSystem;
 import sys.io.File;
 import compiler.formatter.Formatter;
@@ -765,8 +766,7 @@ class HaxeonCli {
 	}
 
 	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool):ResolvedProject {
-		var root = Path.directory(manifestPath), sourceRoot = Path.join([root, ".haxeon", "sources"]);
-		return new PackageResolver(new ProjectSourceAcquirer(sourceRoot)).resolve(manifestPath, lockfile, locked);
+		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile, locked);
 	}
 
 	static function lockfilePath(manifestPath:String):String

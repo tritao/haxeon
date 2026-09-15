@@ -6,8 +6,10 @@ home=${HAXEON_HOME:-$repo_dir}
 haxe=${HAXEON_HAXE:-"$home/.tools/haxe/haxe"}
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-git-project.XXXXXX")
 package_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-git-package.XXXXXX")
+second_project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-git-project-second.XXXXXX")
+source_cache=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-source-cache.XXXXXX")
 lock_before=$(mktemp "${TMPDIR:-/tmp}/haxeon-git-lock.XXXXXX")
-trap 'rm -rf -- "$project_dir" "$package_dir" "$lock_before"' EXIT
+trap 'rm -rf -- "$project_dir" "$second_project_dir" "$package_dir" "$source_cache" "$lock_before"' EXIT
 
 if [[ ! -x "$haxe" ]]; then
 	echo "missing Haxe executable: $haxe" >&2
@@ -29,7 +31,7 @@ printf '%s\n' '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots
 printf '%s\n' 'package app;' '' 'import foo.Foo;' '' 'function main():Int' '    return Foo.answer();' > "$project_dir/src/Main.hx"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
+	HAXEON_HOME="$home" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
 }
 
 run_cli add --project "$project_dir/haxeon.json" --git "$package_url" --rev main foo
@@ -38,7 +40,15 @@ run_cli install --project "$project_dir/haxeon.json"
 test -s "$project_dir/haxeon.lock"
 revision=$(git -C "$package_dir" rev-parse HEAD)
 grep -q "$revision" "$project_dir/haxeon.lock"
+test "$(find "$source_cache/git" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
 cp "$project_dir/haxeon.lock" "$lock_before"
+
+mkdir -p "$second_project_dir/src"
+cp "$project_dir/haxeon.json" "$second_project_dir/haxeon.json"
+cp "$project_dir/src/Main.hx" "$second_project_dir/src/Main.hx"
+second_install_output=$(run_cli install --project "$second_project_dir/haxeon.json")
+[[ "$second_install_output" == *"Installed 2 packages"* ]]
+test "$(find "$source_cache/git" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 1
 
 run_cli install --locked --project "$project_dir/haxeon.json"
 cmp -s "$lock_before" "$project_dir/haxeon.lock"
