@@ -401,6 +401,9 @@ class Parser {
 		} else if (recoveringAtEnd()) {
 			missingFunctionBody();
 			end = current().span;
+		} else if (recovering && isDeclarationBoundary(current())) {
+			missingFunctionBody();
+			end = current().span;
 		} else {
 			appendStatements(statements, parseStatements());
 			end = statementSpan(statements[statements.length - 1]);
@@ -2137,7 +2140,8 @@ class Parser {
 				|| check(TokenKind.Colon)
 				|| check(TokenKind.Semicolon)
 				|| check(TokenKind.Arrow)
-				|| check(TokenKind.Eof);
+				|| check(TokenKind.Eof)
+				|| isDeclarationBoundary(current());
 			case TokenKind.RightBracket:
 				check(TokenKind.Assign)
 				|| check(TokenKind.Semicolon)

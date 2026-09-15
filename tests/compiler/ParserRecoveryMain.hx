@@ -95,6 +95,14 @@ class ParserRecoveryMain {
 			|| parameterResult.program.functions[0].arguments.length != 1)
 			throw "unfinished parameter list discarded the function declaration";
 
+		var adjacentParameterSource = new SourceFile("AdjacentParameter.hx", "function first(a:Int, function second():Void return;");
+		var adjacentParameterResult = new Parser(new Lexer(adjacentParameterSource).tokenize()).parseProgramRecovering();
+		if (adjacentParameterResult.program.functions.length != 2
+			|| adjacentParameterResult.program.functions[0].name != "first"
+			|| adjacentParameterResult.program.functions[0].arguments.length != 1
+			|| adjacentParameterResult.program.functions[1].name != "second")
+			throw "unfinished parameter list absorbed an adjacent function declaration";
+
 		var classSource = new SourceFile("Class.hx", "class Child extends");
 		var classResult = new Parser(new Lexer(classSource).tokenize()).parseProgramRecovering();
 		if (classResult.program.classes.length != 1 || classResult.program.classes[0].base == null)
