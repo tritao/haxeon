@@ -292,6 +292,16 @@ class Parser {
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consumeDeclarationName("enum"), typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints), cases = [];
+		if (recovering && isDeclarationBoundary(current())) {
+			recordExpected("enum body");
+			return {
+				name: name,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				cases: cases,
+				span: start.merge(previous().span)
+			};
+		}
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var caseMetadata = parseMetadata(),

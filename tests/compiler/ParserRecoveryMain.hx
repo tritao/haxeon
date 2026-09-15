@@ -190,6 +190,13 @@ class ParserRecoveryMain {
 		if (enumResult.program.enums.length != 1)
 			throw "unfinished enum declaration was abandoned at EOF";
 
+		var enumBoundarySource = new SourceFile("EnumBoundary.hx", "enum Choice\nfunction visible():Void return;");
+		var enumBoundaryResult = new Parser(new Lexer(enumBoundarySource).tokenize()).parseProgramRecovering();
+		if (enumBoundaryResult.program.enums.length != 1
+			|| enumBoundaryResult.program.functions.length != 1
+			|| enumBoundaryResult.program.functions[0].name != "visible")
+			throw "unfinished enum header discarded the following declaration";
+
 		var controlSource = new SourceFile("Control.hx", "function main():Void { try { return; } for (");
 		var controlResult = new Parser(new Lexer(controlSource).tokenize()).parseProgramRecovering();
 		if (controlResult.program.functions.length != 1 || controlResult.program.functions[0].statements.length != 2)
