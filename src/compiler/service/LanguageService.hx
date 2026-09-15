@@ -2026,9 +2026,10 @@ class LanguageService {
 				continue;
 			var importedPath = wildcard ? importPath.substr(0, importPath.length - 2) + "." + qualifier : importPath,
 				imported = importedModule(importedPath),
-				importedAst = imported == null ? null : effectiveAst(imported);
-			if (imported == null || importedAst == null)
+				rawAst = imported == null ? null : effectiveAst(imported);
+			if (imported == null || rawAst == null)
 				continue;
+			var importedAst = SignatureInference.inferProgram(rawAst);
 			var importedPrefix = importedPath + ".";
 			for (fn in importedAst.functions) {
 				if (token != null)
