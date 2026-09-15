@@ -884,11 +884,11 @@ class LanguageService {
 		}
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
-				addInstanceMembers(semanticContext.receiver, prefix, result);
+				addInstanceMembers(semanticContext.receiver, prefix, result, token);
 			if (state.ast == null && state.recoveredAst != null) {
 				var recoveredReceiver = recoveredQualifierType(state.recoveredAst, qualifier, position);
 				if (recoveredReceiver != null)
-					addInstanceMembers(recoveredReceiver, prefix, result);
+					addInstanceMembers(recoveredReceiver, prefix, result, token);
 			}
 			addImportedMembers(ast, qualifier, prefix, result, token);
 			if (model != null)
@@ -1115,7 +1115,7 @@ class LanguageService {
 				context = model == null ? null : model.index.completionContext(position, qualifier),
 				members:Array<CompletionItem> = [];
 			if (context != null && context.receiver != null) {
-				addInstanceMembers(context.receiver, name, members);
+				addInstanceMembers(context.receiver, name, members, null);
 				if (members.length > 0)
 					return members[0].detail;
 			}
@@ -1451,38 +1451,53 @@ class LanguageService {
 			default: false;
 		};
 
-	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
+	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>, token:Null<CancellationToken>):Void {
+		if (token != null)
+			token.check();
 		switch type {
 			case TNullable(element):
-				addInstanceMembers(element, prefix, result);
+				addInstanceMembers(element, prefix, result, token);
 			case TInstance(Class, name, []):
 				for (state in compiler.modules) {
+					if (token != null)
+						token.check();
 					var ast = effectiveAst(state);
 					if (ast != null)
 						for (classDecl in ast.classes)
 							if (classDecl.name == name) {
-								for (field in classDecl.fields)
+								for (field in classDecl.fields) {
+									if (token != null)
+										token.check();
 									if (!field.isStatic)
 										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result);
-								for (method in classDecl.methods)
+								}
+								for (method in classDecl.methods) {
+									if (token != null)
+										token.check();
 									if (!method.isStatic)
 										addMember(method.name, "method",
 											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 											prefix, result);
+								}
 								if (classDecl.base != null)
-									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result);
+									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result, token);
 							}
 				}
 			case TInstance(Interface, name, []):
 				for (state in compiler.modules) {
+					if (token != null)
+						token.check();
 					var ast = effectiveAst(state);
 					if (ast != null)
 						for (interfaceDecl in ast.interfaces)
 							if (interfaceDecl.name == name)
-								for (method in interfaceDecl.methods)
+								for (method in interfaceDecl.methods) {
+									if (token != null)
+										token.check();
 									addMember(method.name, "method",
 										'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 										prefix, result);
+								}
 				}
 			case TArray(_):
 				addMember("length", "field", "length:Int", prefix, result);
