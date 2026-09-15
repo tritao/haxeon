@@ -1477,6 +1477,54 @@ class LspProtocolMain {
 			|| rootSubtypes.result.length != 1
 			|| rootSubtypes.result[0].name != "Branch")
 			throw 'LSP type hierarchy did not map direct class and interface relationships: super=${Json.stringify(branchSupertypes.result)}, branch=${Json.stringify(branchSubtypes.result)}, root=${Json.stringify(rootSubtypes.result)}';
+		var recoveredHierarchyProtocol = new LspProtocol();
+		recoveredHierarchyProtocol.enableDeferredDiagnostics();
+		var recoveredHierarchyUri = "file:///workspace/RecoveredHierarchy.hx",
+			recoveredHierarchySource = "class Root {} class Branch extends Root {} function add(value:Int):Int return value; function main():Int return add(1);",
+			recoveredHierarchyDocument = new LspDocument(recoveredHierarchyUri, "/workspace/RecoveredHierarchy.hx", 1, recoveredHierarchySource);
+		recoveredHierarchyProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: recoveredHierarchyUri,
+					languageId: "haxe",
+					version: 1,
+					text: recoveredHierarchySource
+				}
+			}
+		}));
+		var recoveredBranchType = request(recoveredHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 901,
+			method: "textDocument/prepareTypeHierarchy",
+			params: {textDocument: {uri: recoveredHierarchyUri}, position: recoveredHierarchyDocument.position(recoveredHierarchySource.indexOf("Branch") + 2)}
+		})),
+			recoveredAddCall = request(recoveredHierarchyProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 902,
+				method: "textDocument/prepareCallHierarchy",
+				params: {textDocument: {uri: recoveredHierarchyUri}, position: recoveredHierarchyDocument.position(recoveredHierarchySource.indexOf("add") + 1)}
+			}));
+		if (recoveredBranchType.result == null || recoveredAddCall.result == null)
+			throw "LSP did not prepare hierarchy items from a current recovered snapshot";
+		var recoveredBranchSuper = request(recoveredHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 903,
+			method: "typeHierarchy/supertypes",
+			params: {item: recoveredBranchType.result[0]}
+		})),
+			recoveredAddIncoming = request(recoveredHierarchyProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 904,
+				method: "callHierarchy/incomingCalls",
+				params: {item: recoveredAddCall.result[0]}
+			}));
+		if (recoveredBranchSuper.result.length != 1
+			|| recoveredBranchSuper.result[0].name != "Root"
+			|| recoveredAddIncoming.result.length != 1
+			|| recoveredAddIncoming.result[0].from.name != "main")
+			throw 'LSP recovered hierarchy queries did not use the editor snapshot: super=${Json.stringify(recoveredBranchSuper.result)}, incoming=${Json.stringify(recoveredAddIncoming.result)}';
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),
