@@ -61,8 +61,9 @@ class CHeaderImporter {
 			ProcessOutputCapture.defaultDiagnosticLimit);
 		if (astProcess.exitCode != 0)
 			throw 'Clang could not import $header:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
-		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]),
-			ProcessOutputCapture.defaultDiagnosticLimit);
+		// Record layouts are semantic ABI data, not diagnostics. Keep the complete dump so
+		// large platform headers cannot truncate the records needed by the importer.
+		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]), null);
 		if (layoutProcess.exitCode != 0)
 			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
 		var astText = astProcess.stdout,

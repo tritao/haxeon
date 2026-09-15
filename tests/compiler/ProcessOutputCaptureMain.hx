@@ -17,7 +17,11 @@ class ProcessOutputCaptureMain {
 		expect(result.exitCode == 0, 'flood child should exit successfully: ${result.exitCode}');
 		expect(result.stdout.length == 256 * 1024, "stdout should be completely drained while stderr is full");
 		expect(result.stderr.length == 4096 && result.stderrTruncated, "stderr capture should be bounded while excess bytes are still drained");
-		Sys.println("PASS: subprocess output capture drains both pipes and bounds diagnostics");
+		var complete = ProcessOutputCapture.capture(runtime, [program, "--emit-pipe-flood"], null, 10);
+		expect(complete.exitCode == 0, 'unbounded flood child should exit successfully: ${complete.exitCode}');
+		expect(complete.stderr.length == 256 * 1024
+			&& !complete.stderrTruncated, "semantic subprocess output should be retained without a diagnostic cap");
+		Sys.println("PASS: subprocess output capture drains both pipes and supports complete semantic output");
 	}
 
 	static function testIterators():Void {

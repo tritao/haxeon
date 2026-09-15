@@ -25,7 +25,7 @@ typedef ProcessCaptureResult = {
 	final exitCode:Int;
 }
 
-/** Captures both subprocess streams and caps the diagnostic text retained in memory. */
+/** Captures both subprocess streams, optionally capping retained diagnostic text. */
 class ProcessOutputCapture {
 	public static inline final defaultDiagnosticLimit = 64 * 1024;
 
@@ -38,8 +38,6 @@ class ProcessOutputCapture {
 		return captureHaxeon(command, arguments, stderrLimit, timeoutSeconds);
 		#elseif eval
 		// Haxe eval can stall when both blocking Process pipes are read from separate threads.
-		if (stderrLimit == null)
-			throw "Haxe eval process capture requires a stderr limit";
 		if (timeoutSeconds != null)
 			throw "Haxe eval process capture does not support timeouts";
 		return captureSequential(command, arguments, stderrLimit);
@@ -183,7 +181,7 @@ class ProcessOutputCapture {
 	#end
 
 	#if eval
-	static function captureSequential(command:String, arguments:Array<String>, stderrLimit:Int):ProcessCaptureResult {
+	static function captureSequential(command:String, arguments:Array<String>, stderrLimit:Null<Int>):ProcessCaptureResult {
 		var process = new Process(command, arguments),
 			stdoutBytes:Null<Bytes> = null,
 			stderrResult:Null<CapturedBytes> = null,
