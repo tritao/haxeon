@@ -2275,7 +2275,7 @@ class LanguageService {
 		if (!navigableSymbol(context))
 			return [];
 		return [
-			for (implementation in compiler.semanticWorkspace.implementations(context.symbol, token))
+			for (implementation in compiler.semanticWorkspace.editorImplementations(context.symbol, token))
 				{
 					path: implementation.span.file.path,
 					span: implementation.span,

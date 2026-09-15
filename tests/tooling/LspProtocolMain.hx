@@ -1458,6 +1458,37 @@ class LspProtocolMain {
 		}));
 		if (implementationLocations.result.length != 2 || implementationLocations.result[0].uri != implementationUri)
 			throw "LSP implementation navigation did not map multiple compiler locations";
+		var recoveredImplementationService = new LanguageService(),
+			recoveredImplementationProtocol = new LspProtocol(recoveredImplementationService),
+			recoveredImplementationContractUri = "file:///workspace/recovered/api/Contract.hx",
+			recoveredImplementationUri = "file:///workspace/recovered/impl/Current.hx",
+			recoveredImplementationContract = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
+			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(",
+		recoveredImplementationContractDocument = new LspDocument(recoveredImplementationContractUri,
+			"/workspace/recovered/api/Contract.hx", 1, recoveredImplementationContract),
+			recoveredImplementationDocument = new LspDocument(recoveredImplementationUri,
+			"/workspace/recovered/impl/Current.hx", 1, recoveredImplementationSource);
+		recoveredImplementationProtocol.enableDeferredDiagnostics();
+		recoveredImplementationProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: recoveredImplementationContractUri, languageId: "haxe", version: 1, text: recoveredImplementationContract}}
+		}));
+		recoveredImplementationProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: recoveredImplementationUri, languageId: "haxe", version: 1, text: recoveredImplementationSource}}
+		}));
+		recoveredImplementationService.analyze("workspace.recovered.api.Contract");
+		var recoveredImplementationLocations = request(recoveredImplementationProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 905,
+			method: "textDocument/implementation",
+			params: {textDocument: {uri: recoveredImplementationContractUri}, position: recoveredImplementationContractDocument.position(recoveredImplementationContract.indexOf("Contract") + 2)}
+		}));
+		if (recoveredImplementationLocations.result.length != 1
+			|| recoveredImplementationLocations.result[0].uri != recoveredImplementationUri)
+			throw 'LSP implementation navigation did not use the current recovered candidate: ${Json.stringify(recoveredImplementationLocations.result)}';
 		var typeHierarchyProtocol = new LspProtocol(),
 			typeHierarchyUri = "file:///workspace/TypeHierarchy.hx",
 			typeHierarchySource = "class Root {} interface Named {} class Branch extends Root implements Named {} class Leaf extends Branch {} function main():Int return 0;",

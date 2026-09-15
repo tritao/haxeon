@@ -685,14 +685,31 @@ class SemanticWorkspace {
 	}
 
 	public function implementations(id:SemanticSymbolId, ?token:CancellationToken):Array<WorkspaceDeclaration> {
-		var resolved = indexedSymbol(id);
+		return collectImplementations(id, false, token);
+	}
+
+	/**
+	 * Collect implementations for an editor query. The target must already be
+	 * authoritative, but candidate classes may come from their current
+	 * recovered editor models. This keeps edited implementation locations
+	 * visible without publishing speculative declarations to the workspace.
+	 */
+	public function editorImplementations(id:SemanticSymbolId, ?token:CancellationToken):Array<WorkspaceDeclaration> {
+		return collectImplementations(id, true, token);
+	}
+
+	function collectImplementations(id:SemanticSymbolId, editor:Bool, ?token:CancellationToken):Array<WorkspaceDeclaration> {
+		var indexed = indexedSymbol(id);
+		if (indexed == null)
+			return [];
+		var resolved = editor ? editorSymbolById(id) : indexed;
 		if (resolved == null)
 			return [];
 		var owner:Null<String> = null,
 			member:Null<String> = null,
 			targetIsType = false;
 		for (state in orderedStates()) {
-			var model = effectiveModel(state);
+			var model = editor ? editorModel(state) : effectiveModel(state);
 			if (model == null)
 				continue;
 			for (decl in model.program.classes)
@@ -723,12 +740,13 @@ class SemanticWorkspace {
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
-			var model = effectiveModel(state);
+			var model = editor ? editorModel(state) : effectiveModel(state);
 			if (model == null)
 				continue;
 			for (decl in model.program.classes) {
 				var identity = qualifiedType(model, decl.name);
-				if (identity == owner || !inheritsFrom(identity, owner, []))
+				var derived = editor ? editorInheritsFrom(state, identity, owner, [], token) : inheritsFrom(identity, owner, []);
+				if (identity == owner || !derived)
 					continue;
 				if (targetIsType)
 					addImplementation(result, seen, state, 'class:${decl.name}', decl.span);
@@ -743,6 +761,63 @@ class SemanticWorkspace {
 			return path == 0 ? left.span.start - right.span.start : path;
 		});
 		return result;
+	}
+
+	function editorInheritsFrom(from:ModuleState, candidate:String, target:String, visiting:Map<String, Bool>,
+		?token:CancellationToken):Bool {
+		if (candidate == target)
+			return true;
+		if (visiting.exists(candidate))
+			return false;
+		visiting.set(candidate, true);
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes)
+				if (qualifiedType(model, decl.name) == candidate) {
+					var parents = decl.interfaces.copy();
+					if (decl.base != null)
+						parents.push(decl.base);
+					for (parent in parents) {
+						if (token != null)
+							token.check();
+						var parentName = ModuleCanonicalizer.astTypeName(parent),
+							parentIdentity = resolveEditorTypeIdentity(state, parentName);
+						if (parentIdentity == target || editorInheritsFrom(state, parentIdentity, target, visiting, token))
+							return true;
+					}
+				}
+			for (decl in model.program.interfaces)
+				if (qualifiedType(model, decl.name) == candidate)
+					for (base in decl.bases) {
+						if (token != null)
+							token.check();
+						var baseName = ModuleCanonicalizer.astTypeName(base),
+							baseIdentity = resolveEditorTypeIdentity(state, baseName);
+						if (baseIdentity == target || editorInheritsFrom(state, baseIdentity, target, visiting, token))
+							return true;
+					}
+		}
+		return false;
+	}
+
+	function resolveEditorTypeIdentity(from:ModuleState, name:String):String {
+		var declaration = editorGlobal(from, name);
+		if (declaration == null)
+			return name;
+		var model = editorModel(declaration.state);
+		if (model == null)
+			return name;
+		for (decl in model.program.classes)
+			if (sameSpan(decl.span, declaration.span))
+				return qualifiedType(model, decl.name);
+		for (decl in model.program.interfaces)
+			if (sameSpan(decl.span, declaration.span))
+				return qualifiedType(model, decl.name);
+		return name;
 	}
 
 	function inheritsFrom(candidate:String, target:String, visiting:Map<String, Bool>):Bool {

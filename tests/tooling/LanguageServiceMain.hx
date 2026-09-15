@@ -601,6 +601,26 @@ class LanguageServiceMain {
 			|| leafImplementations.length != 0
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
+		var recoveredImplementationService = new LanguageService(),
+			recoveredContractSource = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
+			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(";
+		recoveredImplementationService.update("recovered/api/Contract.hx", recoveredContractSource);
+		recoveredImplementationService.compile("recovered.api.Contract");
+		recoveredImplementationService.update("recovered/impl/Current.hx", recoveredImplementationSource);
+		var recoveredImplementations = recoveredImplementationService.implementations("recovered/api/Contract.hx",
+			recoveredContractSource.indexOf("Contract") + 2);
+		if (recoveredImplementations.length != 1
+			|| recoveredImplementations[0].path != "recovered/impl/Current.hx"
+			|| recoveredImplementations[0].stale)
+			throw 'language service implementation navigation did not use the current recovered candidate: count=${recoveredImplementations.length}';
+		recoveredImplementationService.update("recovered/other/Contract.hx",
+			"package recovered.other; interface Contract { function run():Int; } function main():Int return 0;");
+		recoveredImplementationService.update("recovered/impl/Ambiguous.hx",
+			"package recovered.impl; import recovered.api.Contract; import recovered.other.Contract; class Ambiguous implements Contract { function run():Int return 2; function unfinished(");
+		var ambiguousImplementations = recoveredImplementationService.implementations("recovered/api/Contract.hx",
+			recoveredContractSource.indexOf("Contract") + 2);
+		if (ambiguousImplementations.length != 1 || ambiguousImplementations[0].path != "recovered/impl/Current.hx")
+			throw 'language service implementation navigation accepted an ambiguous recovered parent: ${[for (location in ambiguousImplementations) location.path].join(", ")}';
 		var hierarchyTypeService = new LanguageService(),
 			rootTypeSource = "package types; class Root {}",
 			namedTypeSource = "package types; interface Named {}",
