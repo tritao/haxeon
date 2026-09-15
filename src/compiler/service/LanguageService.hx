@@ -226,7 +226,12 @@ class LanguageService {
 		return compiler.remove(path);
 
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
-		editorDefines = [for (define in defines) define => "1"];
+		editorDefines = [];
+		for (define in defines) {
+			var separator = define.indexOf("="),
+				name = separator < 0 ? define : define.substr(0, separator);
+			editorDefines.set(name, separator < 0 ? "1" : define.substr(separator + 1));
+		}
 		workspaceIndex.clear();
 		documentationIndex.clear();
 		structuralIndex.clear();
@@ -261,10 +266,12 @@ class LanguageService {
 		try
 			conditional = ConditionalCompilation.process(state.source, editorDefines)
 		catch (error:CompileError) {
+			state.conditionalDefines = [];
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			mergeRecoveryDiagnostics(state, [error.diagnostic]);
 			return;
 		}
+		state.conditionalDefines = conditional.defines;
 		var checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
 			tokens:Array<compiler.syntax.Token>;
 		try

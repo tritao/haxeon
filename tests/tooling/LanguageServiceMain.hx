@@ -1,4 +1,5 @@
 import compiler.service.LanguageService;
+import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
 import compiler.Diagnostic.CompileError;
@@ -486,6 +487,17 @@ class LanguageServiceMain {
 		configuredService.analyze("Configured");
 		if (defaultIndex == configuredService.compiler.modules.get("Configured").semanticModel.index)
 			throw "semantic index was reused across build configurations";
+		var immediateDefineService = new LanguageService();
+		immediateDefineService.configure("editor-defines", "shared-scope", ["feature", "version=3.0"]);
+		immediateDefineService.update("ImmediateConditional.hx",
+			"#if feature && version >= 2.5\nfunction featureOnly():Int return 1;\n#else\nfunction fallbackOnly():Int return 2;\n#end\nfunction main():Int return 0;");
+		var immediateState = immediateDefineService.compiler.modules.get("ImmediateConditional"),
+			immediateSymbols = immediateDefineService.documentSymbols("ImmediateConditional.hx");
+		if (immediateState.conditionalDefines.indexOf("feature") < 0
+			|| immediateState.conditionalDefines.indexOf("version") < 0
+			|| !containsDocumentSymbol(immediateSymbols, "featureOnly")
+			|| containsDocumentSymbol(immediateSymbols, "fallbackOnly"))
+			throw "immediate recovery did not honor valued conditional defines";
 		var defineService = new LanguageService();
 		defineService.update("Stable.hx", "function stable():Int return 1;");
 		defineService.update("Conditional.hx",
@@ -639,5 +651,12 @@ class LanguageServiceMain {
 		if (restored.isIncomplete || restoredId == null || Std.string(restoredId) != Std.string(validId))
 			throw "valid editor snapshot did not replace recovery with the original semantic identity";
 		Sys.println("PASS: compiler-backed language service snapshot works");
+	}
+
+	static function containsDocumentSymbol(symbols:Array<DocumentSymbol>, name:String):Bool {
+		for (symbol in symbols)
+			if (symbol.name == name)
+				return true;
+		return false;
 	}
 }

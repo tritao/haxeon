@@ -98,6 +98,7 @@ class ModuleState {
 		recoveredTokens = [];
 		recoveredSemanticModel = null;
 		semanticModel = null;
+		conditionalDefines = [];
 		diagnostics = [];
 		dirty = true;
 	}
