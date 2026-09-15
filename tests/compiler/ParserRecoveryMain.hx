@@ -128,6 +128,15 @@ class ParserRecoveryMain {
 			default:
 				throw "unfinished member access did not retain a missing member node";
 		}
+		var memberBoundarySource = new SourceFile("MemberBoundary.hx", "function main():Void return value.\nfunction next():Void return;");
+		var memberBoundaryResult = new Parser(new Lexer(memberBoundarySource).tokenize()).parseProgramRecovering().program;
+		if (memberBoundaryResult.functions.length != 2 || memberBoundaryResult.functions[0].statements.length != 1)
+			throw "unfinished member access discarded an adjacent declaration";
+		switch memberBoundaryResult.functions[0].statements[0] {
+			case Return(Member(_, "", _), _):
+			default:
+				throw "unfinished member access at a declaration boundary lost its recovery node";
+		}
 
 		var blockSource = new SourceFile("Block.hx", "function main():Void if (condition) {");
 		var blockResult = new Parser(new Lexer(blockSource).tokenize()).parseProgramRecovering();

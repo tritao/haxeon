@@ -337,12 +337,10 @@ class Parser {
 			return "";
 		}
 		var name = consumeName().text;
-		while (match(TokenKind.Dot)) {
-			if (recovering && isExpressionTerminator(current().kind)) {
-				var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-				recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
+		while (check(TokenKind.Dot)) {
+			if (recovering && (isExpressionTerminator(peekKind(1)) || isDeclarationBoundary(tokens[position + 1])))
 				break;
-			}
+			advance();
 			name += "." + consumeName().text;
 		}
 		return name;
@@ -1524,7 +1522,9 @@ class Parser {
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot && !(recovering && isExpressionTerminator(peekKind(1)))) {
+			while (check(TokenKind.Dot)
+				&& peekKind(1) != TokenKind.Dot
+				&& !(recovering && (isExpressionTerminator(peekKind(1)) || isDeclarationBoundary(tokens[position + 1])))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1554,7 +1554,9 @@ class Parser {
 			return parseNativeLayoutQuery();
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot && !(recovering && isExpressionTerminator(peekKind(1)))) {
+			while (check(TokenKind.Dot)
+				&& peekKind(1) != TokenKind.Dot
+				&& !(recovering && (isExpressionTerminator(peekKind(1)) || isDeclarationBoundary(tokens[position + 1])))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1927,7 +1929,7 @@ class Parser {
 				continue;
 			}
 			if (match(TokenKind.Dot)) {
-				if (recovering && isExpressionTerminator(current().kind)) {
+				if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()))) {
 					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 					recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected member name", span));
 					expression = Member(expression, "", expressionSpan(expression).merge(span));
