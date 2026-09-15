@@ -292,9 +292,11 @@ HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
 HL_PRIM int HL_NAME(native_metadata_module_call_i32)( vbyte *module, int findex ) {
 	hl_module *m = (hl_module*)module;
 	hl_function *function;
-	vclosure closure;
-	vdynamic *result;
-	bool exception;
+	vclosure closure = {0};
+	vclosure *cl = &closure;
+	hl_trap_ctx trap;
+	vdynamic *exception;
+	int result;
 
 	if( m == NULL || m->code == NULL )
 		hl_error("HashLink native module call requires an initialized module");
@@ -309,12 +311,14 @@ HL_PRIM int HL_NAME(native_metadata_module_call_i32)( vbyte *module, int findex 
 	closure.t = function->type;
 	closure.fun = m->functions_ptrs[findex];
 	closure.hasValue = 0;
-	result = hl_dyn_call_safe(&closure,NULL,0,&exception);
-	if( exception )
-		hl_error("HashLink native module function raised an exception");
-	if( result == NULL || result->t == NULL || result->t->kind != HI32 )
-		hl_error("HashLink native module function did not return i32");
-	return result->v.i;
+	hl_trap(trap,exception,on_exception);
+	result = hl_call0(int,cl);
+	hl_endtrap(trap);
+	return result;
+on_exception:
+	hl_endtrap(trap);
+	hl_error("HashLink native module function raised an exception");
+	return 0;
 }
 
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
