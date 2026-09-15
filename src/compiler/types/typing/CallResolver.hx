@@ -281,6 +281,11 @@ class CallResolver {
 		return typeCallArguments(arguments, expected, scope, name);
 	}
 
+	function recoveredMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expected:Array<CompilerType>, result:CompilerType):TypedExpression {
+		return new TypedExpression(TMethodCall(receiver, name, typeCallArguments(arguments, expected, scope, name)), result, span);
+	}
+
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return typeExpression(expression, scope, expectedType, false);
 
@@ -1057,6 +1062,19 @@ class CallResolver {
 			scope:Scope):Null<TypedExpression> {
 		if (!sameType(receiver.type, TString))
 			return null;
+		if (session.tolerant) {
+			var recovered = switch name {
+				case "toLowerCase" | "toUpperCase": recoveredMethodCall(receiver, name, arguments, span, scope, [], TString);
+				case "indexOf" | "lastIndexOf": recoveredMethodCall(receiver, name, arguments, span, scope, [TString, TInt], TInt);
+				case "substring" | "substr": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt, TInt], TString);
+				case "charCodeAt": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt], TInt);
+				case "charAt": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt], TString);
+				case "split": recoveredMethodCall(receiver, name, arguments, span, scope, [TString], TArray(TString));
+				default: null;
+			};
+			if (recovered != null)
+				return recovered;
+		}
 		if (name == "toLowerCase") {
 			if (arguments.length != 0)
 				fail("E1008", 'Function "String.toLowerCase" expects no arguments, got ${arguments.length}', span);
@@ -1121,6 +1139,28 @@ class CallResolver {
 			case TArray(value): value;
 			default: throw "Not an array";
 		};
+		if (session.tolerant) {
+			var recovered = switch name {
+				case "push" | "add": recoveredMethodCall(receiver, name, arguments, span, scope, [element], TInt);
+				case "iterator": recoveredMethodCall(receiver, name, arguments, span, scope, [], TIterator(element));
+				case "unshift": recoveredMethodCall(receiver, name, arguments, span, scope, [element], TInt);
+				case "pop" | "shift": recoveredMethodCall(receiver, name, arguments, span, scope, [], element);
+				case "resize": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt], TVoid);
+				case "remove": recoveredMethodCall(receiver, name, arguments, span, scope, [element], TBool);
+				case "insert": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt, element], TVoid);
+				case "reverse": recoveredMethodCall(receiver, name, arguments, span, scope, [], TVoid);
+				case "copy": recoveredMethodCall(receiver, name, arguments, span, scope, [], TArray(element));
+				case "concat": recoveredMethodCall(receiver, name, arguments, span, scope, [TArray(element)], TArray(element));
+				case "slice": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt, TInt], TArray(element));
+				case "splice": recoveredMethodCall(receiver, name, arguments, span, scope, [TInt, TInt], TArray(element));
+				case "sort": recoveredMethodCall(receiver, name, arguments, span, scope, [TFunction([element, element], TInt)], TVoid);
+				case "join": recoveredMethodCall(receiver, name, arguments, span, scope, [TString], TString);
+				case "indexOf" | "contains": recoveredMethodCall(receiver, name, arguments, span, scope, [element], name == "contains" ? TBool : TInt);
+				default: null;
+			};
+			if (recovered != null)
+				return recovered;
+		}
 		if (RuntimeType.arrayName(element) == null)
 			fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
 		if (name == "push" || name == "add") {
@@ -1290,6 +1330,20 @@ class CallResolver {
 			case TMap(key, value): {key: key, value: value};
 			default: throw "Not a map";
 		};
+		if (session.tolerant) {
+			var recovered = switch name {
+				case "set": recoveredMethodCall(receiver, name, arguments, span, scope, [mapType.key, mapType.value], TVoid);
+				case "keys": recoveredMethodCall(receiver, name, arguments, span, scope, [], TIterator(mapType.key));
+				case "values": recoveredMethodCall(receiver, name, arguments, span, scope, [], TIterator(mapType.value));
+				case "clear": recoveredMethodCall(receiver, name, arguments, span, scope, [], TVoid);
+				case "size": recoveredMethodCall(receiver, name, arguments, span, scope, [], TInt);
+				case "exists" | "remove": recoveredMethodCall(receiver, name, arguments, span, scope, [mapType.key], TBool);
+				case "get": recoveredMethodCall(receiver, name, arguments, span, scope, [mapType.key], nullableMapValue(mapType.value));
+				default: null;
+			};
+			if (recovered != null)
+				return recovered;
+		}
 		if (session.mapName(mapType.key, mapType.value) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		if (name == "set") {

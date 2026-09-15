@@ -796,6 +796,39 @@ class ParserRecoveryMain {
 		if (methodExpression == null || methodExpression.type != TInt)
 			throw "unfinished method call did not retain its resolved result type";
 
+		var builtinMethodSource = new SourceFile("TolerantBuiltinMethods.hx",
+			"function stringUse(value:String):Void { value.indexOf(; var afterString:Int = 1; }\n"
+			+ "function arrayUse(values:Array<Int>):Void { values.push(; var afterArray:Int = 1; }\n"
+			+ "function mapUse(values:Map<String,Int>):Void { values.get(; var afterMap:Int = 1; }");
+		var builtinMethodProgram = new Parser(new Lexer(builtinMethodSource).tokenize()).parseProgramRecovering().program,
+			builtinMethodTyped = Typer.typeRecovered(builtinMethodProgram);
+		if (builtinMethodTyped == null || builtinMethodTyped.functions.length != 3)
+			throw "tolerant typing discarded functions around incomplete built-in method calls";
+		for (functionBody in [for (fn in builtinMethodTyped.functions) fn.statements])
+			if (functionBody.length != 2)
+				throw "an incomplete built-in method call discarded the following declaration";
+		var stringCall = switch builtinMethodTyped.functions[0].statements[0] {
+			case TExpression(expression, _): expression;
+			default: null;
+		};
+		if (stringCall == null || stringCall.type != TInt)
+			throw "incomplete String method call did not retain its known result type";
+		var arrayCall = switch builtinMethodTyped.functions[1].statements[0] {
+			case TExpression(expression, _): expression;
+			default: null;
+		};
+		if (arrayCall == null || arrayCall.type != TInt)
+			throw "incomplete Array method call did not retain its known result type";
+		var mapCall = switch builtinMethodTyped.functions[2].statements[0] {
+			case TExpression(expression, _): expression;
+			default: null;
+		};
+		switch mapCall == null ? null : mapCall.type {
+			case TNullable(TInt):
+			default:
+				throw "incomplete Map method call did not retain its nullable result type";
+		}
+
 		var genericAritySource = new SourceFile("TolerantGenericArity.hx",
 			"function identity<T>(value:T):T return value; function main():Int return identity(1, 2);");
 		var genericArityProgram = new Parser(new Lexer(genericAritySource).tokenize()).parseProgramRecovering().program,
