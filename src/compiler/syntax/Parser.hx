@@ -1678,6 +1678,13 @@ class Parser {
 			if (check(TokenKind.Identifier) && current().text == "List") {
 				advance();
 				var typeArguments = check(TokenKind.Less) ? parseTypeArguments() : [];
+				if (isRecoveryBoundary()) {
+					recordExpected("left parenthesis");
+					var missingEnd = current().span;
+					return parsePostfix(typeArguments.length > 0
+						? NewArray(typeArguments[0], IntegerLiteral(0, missingEnd), start.merge(missingEnd))
+						: ArrayLiteral([], start.merge(missingEnd)));
+				}
 				consume(TokenKind.LeftParen);
 				var end = consume(TokenKind.RightParen).span;
 				if (typeArguments.length > 0) {
@@ -1693,9 +1700,19 @@ class Parser {
 					var end = consume(TokenKind.RightParen).span;
 					return parsePostfix(ArrayLiteral([], start.merge(end)));
 				}
+				if (isRecoveryBoundary()) {
+					recordExpected("type arguments or left parenthesis");
+					var missingEnd = current().span;
+					return parsePostfix(ArrayLiteral([], start.merge(missingEnd)));
+				}
 				consume(TokenKind.Less);
 				var element = parseType();
 				consume(TokenKind.Greater);
+				if (isRecoveryBoundary()) {
+					recordExpected("left parenthesis");
+					var missingEnd = current().span;
+					return parsePostfix(NewArray(element, ErrorExpression(missingEnd), start.merge(missingEnd)));
+				}
 				consume(TokenKind.LeftParen);
 				var length = parseExpression();
 				var end = consume(TokenKind.RightParen).span;
@@ -1707,11 +1724,28 @@ class Parser {
 					var end = consume(TokenKind.RightParen).span;
 					return parsePostfix(MapLiteral([], start.merge(end)));
 				}
+				if (isRecoveryBoundary()) {
+					recordExpected("type arguments or left parenthesis");
+					var missingEnd = current().span;
+					return parsePostfix(MapLiteral([], start.merge(missingEnd)));
+				}
 				consume(TokenKind.Less);
 				var key = parseType();
-				consume(TokenKind.Comma);
-				var value = parseType();
+				var value = if (match(TokenKind.Comma))
+					parseType();
+				else if (isRecoveryBoundary() || check(TokenKind.Greater)) {
+					recordExpected("comma");
+					missingType("map value");
+				} else {
+					consume(TokenKind.Comma);
+					parseType();
+				};
 				consume(TokenKind.Greater);
+				if (isRecoveryBoundary()) {
+					recordExpected("left parenthesis");
+					var missingEnd = current().span;
+					return parsePostfix(NewMap(key, value, start.merge(missingEnd)));
+				}
 				consume(TokenKind.LeftParen);
 				var end = consume(TokenKind.RightParen).span;
 				return parsePostfix(NewMap(key, value, start.merge(end)));
@@ -2306,8 +2340,15 @@ class Parser {
 				advance();
 				consume(TokenKind.Less);
 				var key = parseType();
-				consume(TokenKind.Comma);
-				var value = parseType();
+				var value = if (match(TokenKind.Comma))
+					parseType();
+				else if (isRecoveryBoundary() || check(TokenKind.Greater)) {
+					recordExpected("comma");
+					missingType("map value");
+				} else {
+					consume(TokenKind.Comma);
+					parseType();
+				};
 				consume(TokenKind.Greater);
 				return MapType(key, value);
 			} else if (current().text == "Null") {
@@ -2376,6 +2417,10 @@ class Parser {
 
 	function recoveringAtEnd():Bool
 		return recovering && check(TokenKind.Eof);
+
+	/** Whether the current token is a safe synchronization point for recovery. */
+	function isRecoveryBoundary():Bool
+		return recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()));
 
 	function canInsert(kind:TokenKind):Bool
 		return switch kind {

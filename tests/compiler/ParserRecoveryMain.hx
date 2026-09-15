@@ -200,6 +200,25 @@ class ParserRecoveryMain {
 		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering();
 		if (genericResult.program.functions.length != 1 || genericResult.program.functions[0].statements.length != 1)
 			throw "unfinished generic type discarded the enclosing function";
+		var mapTypeSource = new SourceFile("MapTypePrefix.hx", "function main():Void { var values:Map<");
+		var mapTypeResult = new Parser(new Lexer(mapTypeSource).tokenize()).parseProgramRecovering();
+		if (mapTypeResult.program.functions.length != 1 || mapTypeResult.program.functions[0].statements.length != 1)
+			throw "unfinished map type discarded the enclosing function";
+		switch mapTypeResult.program.functions[0].statements[0] {
+			case UninitializedDeclaration(_, type, _):
+				switch type {
+					case MapType(_, _):
+					default: throw 'unfinished map type lost its type shape: $type';
+				}
+			default:
+				throw "unfinished map type did not retain a declaration-shaped recovery node";
+		}
+		for (constructor in ["new Array", "new Array<", "new Map", "new Map<", "new List<"]) {
+			var constructorSource = new SourceFile("Constructor.hx", "function main():Void return " + constructor);
+			var constructorResult = new Parser(new Lexer(constructorSource).tokenize()).parseProgramRecovering();
+			if (constructorResult.program.functions.length != 1 || constructorResult.program.functions[0].statements.length != 1)
+				throw 'unfinished generic constructor discarded its enclosing function: $constructor';
+		}
 
 		var memberSource = new SourceFile("Member.hx", "function main():Void return value.");
 		var memberResult = new Parser(new Lexer(memberSource).tokenize()).parseProgramRecovering();
