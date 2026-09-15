@@ -70,6 +70,7 @@ function main():Int {
 		first = buildPrimitiveGeneration(false),
 		firstPublication = registry.publish(first),
 		firstType = firstPublication.types.offset(0).load(),
+		firstLease = registry.currentLease(),
 		second = buildPrimitiveGeneration(true),
 		appendDecision = registry.compatibility(second),
 		secondPublication = registry.publish(second),
@@ -92,13 +93,7 @@ function main():Int {
 		reloaded = requiresReload(structuralDecision)
 			&& registry.revision == 3
 			&& registry.retiredCount == 2
-			&& structuralPublication.types.offset(2).load() == structural.type(2),
-		disposed = registry.disposeRetired() == 2 && registry.retiredCount == 0,
-		firstReleased = false;
-	try
-		first.type(0)
-	catch (error:Dynamic)
-		firstReleased = true;
+			&& structuralPublication.types.offset(2).load() == structural.type(2);
 	var objectBefore = buildObjectGeneration(HlTypeKind.Int32Type),
 		objectAfter = buildObjectGeneration(HlTypeKind.Float32Type),
 		objectChanged = requiresReload(HlMetadataCompatibility.check(objectBefore, objectAfter));
@@ -118,13 +113,26 @@ function main():Int {
 	functionAfter.dispose();
 	equivalentFunction.dispose();
 	var reloadCandidate = buildObjectGeneration(HlTypeKind.Int32Type),
-		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true),
-		reloadPublication = reloadTransaction.commit(),
-		transactionReloaded = requiresReload(reloadTransaction.decision)
-			&& reloadTransaction.state == HlMetadataTransactionState.Committed
-			&& registry.revision == 4
-			&& reloadPublication.types.offset(2).load() == reloadCandidate.type(2),
-		reloadRetiredDisposed = registry.disposeRetired() == 1 && registry.retiredCount == 0;
+		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true);
+	var reloadPublication = reloadTransaction.commit();
+	var transactionReloaded = requiresReload(reloadTransaction.decision)
+		&& reloadTransaction.state == HlMetadataTransactionState.Committed
+		&& registry.revision == 4
+		&& reloadPublication.types.offset(2).load() == reloadCandidate.type(2);
+	var retiredBorrowedBefore = registry.retiredBorrowedCount;
+	var retiredDisposedCount = registry.disposeRetired();
+	var retiredCountAfter = registry.retiredCount;
+	var reloadRetiredDisposed = retiredBorrowedBefore == 1 && retiredDisposedCount == 2 && retiredCountAfter == 1;
+	firstLease.release();
+	var releasedRetiredDisposed = firstLease.isReleased();
+	releasedRetiredDisposed = releasedRetiredDisposed && registry.retiredBorrowedCount == 0;
+	var releasedDisposedCount = registry.disposeRetired();
+	releasedRetiredDisposed = releasedRetiredDisposed && releasedDisposedCount == 1 && registry.retiredCount == 0;
+	var disposed = releasedRetiredDisposed, firstReleased = false;
+	try
+		first.type(0)
+	catch (error:Dynamic)
+		firstReleased = true;
 	var transactionRegistry = new HlMetadataRegistry(),
 		transaction = new HlMetadataTransaction(transactionRegistry, buildPrimitiveGeneration(false)),
 		staleTransaction = new HlMetadataTransaction(transactionRegistry, buildPrimitiveGeneration(false));
@@ -138,8 +146,15 @@ function main():Int {
 	var transactionStates = transaction.state == HlMetadataTransactionState.Committed
 		&& staleRejected
 		&& staleTransaction.state == HlMetadataTransactionState.RolledBack;
+	var currentLease = transactionRegistry.currentLease(),
+		disposeBlocked = false;
+	try
+		transactionRegistry.dispose()
+	catch (error:Dynamic)
+		disposeBlocked = true;
+	currentLease.release();
 	transactionRegistry.dispose();
 	registry.dispose();
 	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && functionChanged && derivedStateIgnored
-		&& transactionReloaded && reloadRetiredDisposed && transactionStates ? 42 : 1;
+		&& transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
 }

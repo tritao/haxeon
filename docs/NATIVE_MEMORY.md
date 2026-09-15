@@ -149,6 +149,10 @@ tracking for the synchronization phase.
 commit transfers the candidate to the registry, while a stale or rejected
 candidate remains disposable through rollback. This is the Haxe-side
 transaction boundary that a future native JIT staging API can attach to.
+Consumers that retain a publication use `HlMetadataRegistry.currentLease()`;
+`disposeRetired()` skips generations with active leases and reports only actual
+disposals. Registry shutdown likewise refuses to reclaim a borrowed current or
+retired generation.
 
 ## Deliberate exclusions
 

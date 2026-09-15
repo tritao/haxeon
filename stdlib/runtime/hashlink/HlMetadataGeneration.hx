@@ -23,6 +23,7 @@ class HlMetadataGeneration {
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
 	var published:Bool = false;
 	var disposed:Bool = false;
+	var borrowers:Int = 0;
 
 	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8) {
 		arena = new HlTypeArena(blockSize);
@@ -105,10 +106,26 @@ class HlMetadataGeneration {
 		};
 	}
 
+	/** Borrow the published view until the returned lease is released. */
+	public function acquire():HlMetadataLease {
+		requireOpen();
+		if (!published)
+			throw "HashLink metadata generation has not been published";
+		return new HlMetadataLease(this);
+	}
+
+	/** Number of active metadata leases. */
+	public function borrowerCount():Int {
+		requireOpen();
+		return borrowers;
+	}
+
 	/** Release HashLink-derived and arena-owned metadata. Repeated disposal is safe. */
 	public function dispose():Void {
 		if (disposed)
 			return;
+		if (borrowers != 0)
+			throw 'HashLink metadata generation has $borrowers active lease(s)';
 		disposed = true;
 		arena.dispose();
 		moduleContext = RawPtr.nullPtr();
@@ -123,6 +140,19 @@ class HlMetadataGeneration {
 	function requireOpen():Void {
 		if (disposed)
 			throw "HashLink metadata generation has been disposed";
+	}
+
+	@:allow(runtime.hashlink.HlMetadataLease)
+	function retainBorrow():Void {
+		requireOpen();
+		borrowers++;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataLease)
+	function releaseBorrow():Void {
+		if (borrowers == 0)
+			throw "HashLink metadata generation lease count is already zero";
+		borrowers--;
 	}
 
 	function requireFunctionTable():HlFunctionTable {

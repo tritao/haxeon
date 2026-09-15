@@ -8,6 +8,7 @@ package runtime.hashlink;
 class HlMetadataRegistry {
 	public var revision(default, null):Int = 0;
 	public var retiredCount(get, never):Int;
+	public var retiredBorrowedCount(get, never):Int;
 
 	var current:Null<HlMetadataGeneration>;
 	final retired:Array<HlMetadataGeneration> = [];
@@ -15,6 +16,13 @@ class HlMetadataRegistry {
 
 	function get_retiredCount():Int
 		return retired.length;
+
+	function get_retiredBorrowedCount():Int {
+		var count = 0;
+		for (generation in retired)
+			count += generation.borrowerCount();
+		return count;
+	}
 
 	/** Check whether a candidate can replace the current generation in place. */
 	public function compatibility(candidate:HlMetadataGeneration):HlMetadataDecision {
@@ -67,13 +75,29 @@ class HlMetadataRegistry {
 		return current.snapshot();
 	}
 
-	/** Dispose all generations that have been superseded and return their count. */
+	/** Borrow the current publication until the returned lease is released. */
+	public function currentLease():HlMetadataLease {
+		requireOpen();
+		if (current == null)
+			throw "HashLink metadata registry has no published generation";
+		return current.acquire();
+	}
+
+	/** Dispose unborrowed generations that have been superseded and return their count. */
 	public function disposeRetired():Int {
 		requireOpen();
-		var count = retired.length;
-		for (generation in retired)
-			generation.dispose();
+		var count = 0, remaining:Array<HlMetadataGeneration> = [];
+		for (generation in retired) {
+			var borrowerCount = generation.borrowerCount();
+			if (borrowerCount == 0) {
+				generation.dispose();
+				count++;
+			} else
+				remaining.push(generation);
+		}
 		retired.resize(0);
+		for (generation in remaining)
+			retired.push(generation);
 		return count;
 	}
 
@@ -81,6 +105,11 @@ class HlMetadataRegistry {
 	public function dispose():Void {
 		if (disposed)
 			return;
+		for (generation in retired)
+			if (generation.borrowerCount() != 0)
+				throw "HashLink metadata registry has borrowed retired generations";
+		if (current != null && current.borrowerCount() != 0)
+			throw "HashLink metadata registry has a borrowed current generation";
 		for (generation in retired)
 			generation.dispose();
 		retired.resize(0);
