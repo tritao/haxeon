@@ -209,14 +209,17 @@ class CHeaderImporterMain {
 			{native: "hl_enum_construct", haxe: "runtime.hashlink.HlEnumConstruct"}
 		])
 			nativeTypeNames.set(binding.native, binding.haxe);
+		var nativeFieldNames = hashlinkNativeFieldNames();
 		var boundRecordSource = HxiNativeRecordEmitter.emit(parsedHashlink, "runtime.hashlink.bound", "Native", null, nativeTypeNames),
 			boundRecordCompiler = new Compiler();
 		CompilerIntrinsics.register(boundRecordCompiler);
 		boundRecordCompiler.addSourceRoot("stdlib");
 		boundRecordCompiler.update("runtime/hashlink/bound/HashLinkNativeBindings.hx",
-			boundRecordSource +
-			'function main():Int { var arena = new runtime.memory.Arena(); var pointer:RawPtr<NativeHlType> = arena.alloc(); pointer.ref.kind = 3; return sizeof<NativeHlType>() == 40 && offsetof<NativeHlType>("data") == 8 && pointer.ref.kind == 3 ? 42 : 1; }');
+			boundRecordSource + emitHashlinkBindingLayoutQueries(parsedHashlink, nativeTypeNames,
+				nativeFieldNames) +
+			'function main():Int { var arena = new runtime.memory.Arena(); var pointer:RawPtr<NativeHlType> = arena.alloc(); pointer.ref.kind = 3; return pointer.ref.kind == 3 ? 42 : 1; }');
 		boundRecordCompiler.compile("runtime.hashlink.bound.HashLinkNativeBindings");
+		verifyHashlinkBindingLayouts(boundRecordCompiler.lastTypedProgram.functions, parsedHashlink, nativeTypeNames, nativeFieldNames);
 		expect(boundRecordSource.indexOf("typedef NativeHlType = runtime.hashlink.HlType;") >= 0
 			&& boundRecordSource.indexOf("class NativeHlType {") < 0,
 			"HXI records should bind to the canonical Haxe native record without duplicating it");
@@ -236,6 +239,157 @@ class CHeaderImporterMain {
 			'function main():Int { var arena = new runtime.memory.Arena(); var slot:RawPtr<NativeSlot> = arena.alloc(); var callback:runtime.memory.NativeFunctionPointer<NativeBinary> = runtime.memory.NativeFunctionPointer.nullPtr(); slot.ref.callback = callback; return slot.ref.callback.isNull() && slot.ref.callback.raw().isNull() ? 42 : 1; }');
 		callbackRecordCompiler.compile("runtime.ffi.generated.CallbackRecords");
 		Sys.println("PASS: Clang C headers import into deterministic raw HXI");
+	}
+
+	static function hashlinkNativeFieldNames():Map<String, String> {
+		var result:Map<String, String> = [];
+		for (mapping in [
+			{owner: "hl_alloc", native: "cur", haxe: "current"},
+			{owner: "hl_enum_construct", native: "name", haxe: "name"},
+			{owner: "hl_enum_construct", native: "nparams", haxe: "nparams"},
+			{owner: "hl_enum_construct", native: "params", haxe: "params"},
+			{owner: "hl_enum_construct", native: "size", haxe: "size"},
+			{owner: "hl_enum_construct", native: "hasptr", haxe: "hasPtr"},
+			{owner: "hl_enum_construct", native: "offsets", haxe: "offsets"},
+			{owner: "hl_module_context", native: "alloc", haxe: "alloc"},
+			{owner: "hl_module_context", native: "functions_ptrs", haxe: "functionsPtrs"},
+			{owner: "hl_module_context", native: "functions_types", haxe: "functionsTypes"},
+			{owner: "hl_obj_field", native: "name", haxe: "name"},
+			{owner: "hl_obj_field", native: "t", haxe: "type"},
+			{owner: "hl_obj_field", native: "hashed_name", haxe: "hashedName"},
+			{owner: "hl_obj_proto", native: "name", haxe: "name"},
+			{owner: "hl_obj_proto", native: "findex", haxe: "findex"},
+			{owner: "hl_obj_proto", native: "pindex", haxe: "pindex"},
+			{owner: "hl_obj_proto", native: "hashed_name", haxe: "hashedName"},
+			{owner: "hl_runtime_binding", native: "ptr", haxe: "pointer"},
+			{owner: "hl_runtime_binding", native: "closure", haxe: "closure"},
+			{owner: "hl_runtime_binding", native: "fid", haxe: "fieldId"},
+			{owner: "hl_runtime_obj", native: "t", haxe: "type"},
+			{owner: "hl_runtime_obj", native: "nfields", haxe: "nfields"},
+			{owner: "hl_runtime_obj", native: "nproto", haxe: "nproto"},
+			{owner: "hl_runtime_obj", native: "size", haxe: "size"},
+			{owner: "hl_runtime_obj", native: "nmethods", haxe: "nmethods"},
+			{owner: "hl_runtime_obj", native: "nbindings", haxe: "nbindings"},
+			{owner: "hl_runtime_obj", native: "pad_size", haxe: "padSize"},
+			{owner: "hl_runtime_obj", native: "largest_field", haxe: "largestField"},
+			{owner: "hl_runtime_obj", native: "hasPtr", haxe: "hasPtr"},
+			{owner: "hl_runtime_obj", native: "methods", haxe: "methods"},
+			{owner: "hl_runtime_obj", native: "fields_indexes", haxe: "fieldIndexes"},
+			{owner: "hl_runtime_obj", native: "bindings", haxe: "bindings"},
+			{owner: "hl_runtime_obj", native: "parent", haxe: "parent"},
+			{owner: "hl_runtime_obj", native: "toStringFun", haxe: "toStringFun"},
+			{owner: "hl_runtime_obj", native: "compareFun", haxe: "compareFun"},
+			{owner: "hl_runtime_obj", native: "castFun", haxe: "castFun"},
+			{owner: "hl_runtime_obj", native: "getFieldFun", haxe: "getFieldFun"},
+			{owner: "hl_runtime_obj", native: "nlookup", haxe: "nlookup"},
+			{owner: "hl_runtime_obj", native: "ninterfaces", haxe: "ninterfaces"},
+			{owner: "hl_runtime_obj", native: "lookup", haxe: "lookup"},
+			{owner: "hl_runtime_obj", native: "interfaces", haxe: "interfaces"},
+			{owner: "hl_type", native: "kind", haxe: "kind"},
+			{owner: "hl_type", native: "abs_name", haxe: "data"},
+			{owner: "hl_type", native: "fun", haxe: "data"},
+			{owner: "hl_type", native: "obj", haxe: "data"},
+			{owner: "hl_type", native: "tenum", haxe: "data"},
+			{owner: "hl_type", native: "virt", haxe: "data"},
+			{owner: "hl_type", native: "tparam", haxe: "data"},
+			{owner: "hl_type", native: "vobj_proto", haxe: "vobjProto"},
+			{owner: "hl_type", native: "mark_bits", haxe: "markBits"},
+			{owner: "hl_type", native: "gc_owner", haxe: "gcOwner"},
+			{owner: "hl_type_enum", native: "name", haxe: "name"},
+			{owner: "hl_type_enum", native: "nconstructs", haxe: "nconstructs"},
+			{owner: "hl_type_enum", native: "constructs", haxe: "constructs"},
+			{owner: "hl_type_enum", native: "global_value", haxe: "globalValue"},
+			{owner: "hl_type_fun", native: "args", haxe: "args"},
+			{owner: "hl_type_fun", native: "ret", haxe: "ret"},
+			{owner: "hl_type_fun", native: "nargs", haxe: "nargs"},
+			{owner: "hl_type_fun", native: "parent", haxe: "parent"},
+			{owner: "hl_type_fun", native: "closure_type", haxe: "closureType"},
+			{owner: "hl_type_fun", native: "closure", haxe: "closure"},
+			{owner: "hl_type_fun_closure", native: "args", haxe: "args"},
+			{owner: "hl_type_fun_closure", native: "ret", haxe: "ret"},
+			{owner: "hl_type_fun_closure", native: "nargs", haxe: "nargs"},
+			{owner: "hl_type_fun_closure", native: "parent", haxe: "parent"},
+			{owner: "hl_type_fun_closure_type", native: "kind", haxe: "kind"},
+			{owner: "hl_type_fun_closure_type", native: "p", haxe: "pointer"},
+			{owner: "hl_type_obj", native: "nfields", haxe: "nfields"},
+			{owner: "hl_type_obj", native: "nproto", haxe: "nproto"},
+			{owner: "hl_type_obj", native: "nbindings", haxe: "nbindings"},
+			{owner: "hl_type_obj", native: "name", haxe: "name"},
+			{owner: "hl_type_obj", native: "super", haxe: "superType"},
+			{owner: "hl_type_obj", native: "fields", haxe: "fields"},
+			{owner: "hl_type_obj", native: "proto", haxe: "proto"},
+			{owner: "hl_type_obj", native: "bindings", haxe: "bindings"},
+			{owner: "hl_type_obj", native: "global_value", haxe: "globalValue"},
+			{owner: "hl_type_obj", native: "m", haxe: "module"},
+			{owner: "hl_type_obj", native: "rt", haxe: "runtime"},
+			{owner: "hl_type_virtual", native: "fields", haxe: "fields"},
+			{owner: "hl_type_virtual", native: "nfields", haxe: "nfields"},
+			{owner: "hl_type_virtual", native: "dataSize", haxe: "dataSize"},
+			{owner: "hl_type_virtual", native: "indexes", haxe: "indexes"},
+			{owner: "hl_type_virtual", native: "lookup", haxe: "lookup"}
+		])
+			result.set(mapping.owner + "." + mapping.native, mapping.haxe);
+		return result;
+	}
+
+	static function emitHashlinkBindingLayoutQueries(model:HxiInterface, nativeTypeNames:Map<String, String>, fieldNames:Map<String, String>):String {
+		var output = new StringBuf();
+		for (declaration in model.declarations)
+			switch declaration {
+				case compiler.ffi.HxiModel.HxiDeclaration.Structure(name, _, _, fields, _) if (nativeTypeNames.exists(name)):
+					var projectedName = nativeRecordClassName(name);
+					output.add('function hxiLayout_${projectedName}_size():Int return sizeof<$projectedName>();\n');
+					output.add('function hxiLayout_${projectedName}_align():Int return alignof<$projectedName>();\n');
+					for (field in fields) {
+						var haxeName = fieldNames.get(name + "." + field.name);
+						if (haxeName == null)
+							throw 'Missing canonical HashLink field mapping for "$name.${field.name}"';
+						output.add('function hxiLayout_${projectedName}_${field.name}_offset():Int return offsetof<$projectedName>("$haxeName");\n');
+					}
+				case _:
+			}
+		return output.toString();
+	}
+
+	static function verifyHashlinkBindingLayouts(functions:Array<compiler.types.TypedAst.TypedFunction>, model:HxiInterface,
+			nativeTypeNames:Map<String, String>, fieldNames:Map<String, String>):Void {
+		for (declaration in model.declarations)
+			switch declaration {
+				case compiler.ffi.HxiModel.HxiDeclaration.Structure(name, size, align, fields, _) if (nativeTypeNames.exists(name)):
+					var projectedName = nativeRecordClassName(name),
+						functionPrefix = "runtime.hashlink.bound.HashLinkNativeBindings.hxiLayout_" + projectedName;
+					expect(constantReturn(functions, functionPrefix + "_size") == size, '${projectedName} binding must preserve the imported size for $name');
+					expect(constantReturn(functions, functionPrefix + "_align") == align,
+						'${projectedName} binding must preserve the imported alignment for $name');
+					for (field in fields) {
+						var haxeName = fieldNames.get(name + "." + field.name);
+						expect(constantReturn(functions, functionPrefix + "_" + field.name + "_offset") == field.offset,
+							'${projectedName}.$haxeName binding must preserve the imported offset for $name.${field.name}');
+					}
+				case _:
+			}
+	}
+
+	static function nativeRecordClassName(name:String):String {
+		var result = "Native";
+		for (part in name.split("_"))
+			if (part.length > 0)
+				result += part.substr(0, 1).toUpperCase() + part.substr(1);
+		return result;
+	}
+
+	static function constantReturn(functions:Array<compiler.types.TypedAst.TypedFunction>, name:String):Int {
+		for (fn in functions)
+			if (fn.name == name && fn.statements.length == 1)
+				switch fn.statements[0] {
+					case compiler.types.TypedAst.TypedStatement.TReturn(expression, _):
+						switch expression.expression {
+							case compiler.types.TypedAst.TypedExpressionKind.TIntLiteral(value): return value;
+							case _:
+						}
+					case _:
+				}
+		throw 'Missing constant-returning function "$name"';
 	}
 
 	static function importHeaderText(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
