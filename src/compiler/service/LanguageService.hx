@@ -2204,7 +2204,7 @@ class LanguageService {
 		else {
 			var declaration = typeDeclaration(context.model.index.typeAt(position, token));
 			if (declaration != null)
-				target = compiler.semanticWorkspace.resolveTypeSymbolId(declaration);
+				target = compiler.semanticWorkspace.editorResolveTypeSymbolId(context.state, declaration, context.model.program, token);
 		}
 		if (target == null)
 			return null;

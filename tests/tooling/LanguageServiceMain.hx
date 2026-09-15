@@ -1233,6 +1233,14 @@ class LanguageServiceMain {
 			invisibleTypeDefinition = visibilityService.typeDefinition("visible/TypeUse.hx", invisibleTypePosition);
 		if (invisibleTypeDefinition != null)
 			throw "recovered type resolution bound a type from an invisible module";
+		visibilityService.update("other/Target.hx", "package other; function target():Int return 2; function main():Void return;");
+		visibilityService.analyze("other.Target");
+		var importedVisibilitySource = "package visible; import unrelated.Target; function main():Void { target(); }";
+		visibilityService.update("visible/ImportedUse.hx", importedVisibilitySource);
+		var importedVisibilityPosition = importedVisibilitySource.indexOf("target") + 1,
+			importedVisibilityDefinition = visibilityService.definition("visible/ImportedUse.hx", importedVisibilityPosition);
+		if (importedVisibilityDefinition == null || importedVisibilityDefinition.path != "unrelated/Target.hx")
+			throw "recovered resolution discarded the uniquely imported symbol among duplicate names";
 		var transitionService = new LanguageService(),
 			validEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo.knownFoo; }";
 		transitionService.update("Transition.hx", validEditorSource);
