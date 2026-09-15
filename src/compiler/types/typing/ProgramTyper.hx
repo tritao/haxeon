@@ -68,33 +68,68 @@ class ProgramTyper {
 		}
 		var typedNatives:Array<TypedNative> = [];
 		for (fn in program.functions) {
-			if (session.externals.exists(fn.name))
-				BodyTyper.fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
-			if (fn.isExtern == true)
-				typedNatives.push(externTyper.typeExtern(fn));
+			if (session.externals.exists(fn.name)) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
+				rememberRecoveryDiagnostic("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
+			} else if (fn.isExtern == true)
+				try
+					typedNatives.push(externTyper.typeExtern(fn))
+				catch (error:Dynamic) {
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error, fn.span);
+				}
 		}
 		for (classDecl in program.classes) {
-			var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata);
+			var defaultLibrary:Null<String> = try externTyper.nativeLibrary(classDecl.name, classDecl.metadata) catch (error:Dynamic) {
+				if (!session.tolerant)
+					throw error;
+				rememberRecoveryError(error, classDecl.span);
+				null;
+			};
 			if (classDecl.isExtern == true || defaultLibrary != null) {
 				for (method in classDecl.methods) {
-					if (!method.isStatic)
-						BodyTyper.fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
+					if (!method.isStatic) {
+						if (!session.tolerant)
+							BodyTyper.fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
+						rememberRecoveryDiagnostic("E1021",
+							'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
+						continue;
+					}
 					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
-					typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null));
+					try
+						typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null))
+					catch (error:Dynamic) {
+						if (!session.tolerant)
+							throw error;
+						rememberRecoveryError(error, method.span);
+					}
 				}
 			}
 		}
 		for (abstractDecl in program.abstracts)
 			if (abstractDecl.isExtern == true) {
-				var defaultLibrary = externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata);
+				var defaultLibrary:Null<String> = try externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata) catch (error:Dynamic) {
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error, abstractDecl.span);
+					null;
+				};
 				for (method in abstractDecl.methods) {
-					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
-					var receiverType = method.isStatic
-						|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-					var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-						BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
-					typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
+					try {
+						var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
+						var receiverType = method.isStatic
+							|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+								BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
+						var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
+						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
+					} catch (error:Dynamic) {
+						if (!session.tolerant)
+							throw error;
+						rememberRecoveryError(error, method.span);
+					}
 				}
 			}
 		for (native in typedNatives)
@@ -460,11 +495,12 @@ class ProgramTyper {
 		};
 	}
 
-	function rememberRecoveryError(error:Dynamic):Void {
+	function rememberRecoveryError(error:Dynamic, ?span:SourceSpan):Void {
 		if (Std.isOfType(error, compiler.Diagnostic.CompileError)) {
 			var compileError:compiler.Diagnostic.CompileError = cast error;
 			session.rememberRecoveryDiagnostic(compileError.diagnostic);
-		}
+		} else if (span != null)
+			session.rememberRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Unable to type recovered declaration", span));
 	}
 
 	function rememberRecoveryDiagnostic(code:String, message:String, span:SourceSpan):Void

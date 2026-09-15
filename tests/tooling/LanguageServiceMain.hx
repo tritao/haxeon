@@ -1193,6 +1193,19 @@ class LanguageServiceMain {
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
+		var nativeRecoveryService = new LanguageService(),
+			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
+		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
+		var nativeRecoveryModel = nativeRecoveryService.compiler.modules.get("NativeRecovery").recoveredSemanticModel,
+			foundNativeRecoveryFunction = false;
+		if (nativeRecoveryModel == null || nativeRecoveryModel.partialTypedProgram == null)
+			throw "invalid extern declaration aborted the recovered typed program";
+		for (fn in nativeRecoveryModel.partialTypedProgram.functions)
+			if (fn.name == "visible")
+				foundNativeRecoveryFunction = true;
+		if (!foundNativeRecoveryFunction
+			|| nativeRecoveryService.diagnostics("NativeRecovery.hx").length == 0)
+			throw "recovered typing did not localize an invalid native declaration";
 		var contextualRecoveryService = new LanguageService(),
 			contextualRecoverySource = "class ExpectedValue { public var member:Int; } function take(value:ExpectedValue):Void return; function produce():ExpectedValue { return ",
 			contextualRecoveryPosition = contextualRecoverySource.length;
