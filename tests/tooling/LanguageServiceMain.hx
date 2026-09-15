@@ -911,6 +911,16 @@ class LanguageServiceMain {
 			throw "language-service removal did not invalidate deleted dependency state";
 		if ([for (item in removalService.complete("removed/Main.hx", removalSource.length)) item.label].indexOf("obsolete") >= 0)
 			throw "language-service removal retained a deleted member in the consumer recovery snapshot";
+		var removalChainService = new LanguageService(),
+			removalChainSource = "package removed.chain; import removed.chain.Middle; function main():Void { var middle:Middle = new Middle(); middle.";
+		removalChainService.update("removed/chain/Base.hx", "package removed.chain; class Base { public var obsolete:Int; }");
+		removalChainService.update("removed/chain/Middle.hx", "package removed.chain; import removed.chain.Base; class Middle extends Base {}");
+		removalChainService.update("removed/chain/Main.hx", removalChainSource);
+		if ([for (item in removalChainService.complete("removed/chain/Main.hx", removalChainSource.length)) item.label].indexOf("obsolete") < 0)
+			throw "recovery removal chain setup did not expose the inherited member";
+		if (!removalChainService.remove("removed/chain/Base.hx")
+			|| [for (item in removalChainService.complete("removed/chain/Main.hx", removalChainSource.length)) item.label].indexOf("obsolete") >= 0)
+			throw "ordered recovery rebuild retained a deleted transitive member";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
