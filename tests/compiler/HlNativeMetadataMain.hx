@@ -47,6 +47,16 @@ class HlNativeMetadataMain {
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
+			'var patchCode = new HlCode(); patchCode.strings = ["haxeon_runtime", "native_pointer_size"]; patchCode.ints = [42]; patchCode.types = [Simple(HlType.I32), Function([], 0), Function([], 0)]; '
+			+
+			'patchCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; patchCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; patchCode.entryPoint = 0; '
+			+
+			'var patchTarget = HlNativeModuleLoader.load(HlWriter.encode(loadCode), null, HlNativeModule.PatchableFlag), patchOne = HlNativeModuleLoader.load(HlWriter.encode(patchCode), null, HlNativeModule.PatchableFlag), '
+			+ 'patchFirst = patchTarget.nativeModule.patchGeneration(patchOne.nativeModule), patchValue = patchTarget.callI32(0); '
+			+
+			'patchCode.ints[0] = 43; var patchTwo = HlNativeModuleLoader.load(HlWriter.encode(patchCode), null, HlNativeModule.PatchableFlag), patchSecond = patchTarget.nativeModule.patchGeneration(patchTwo.nativeModule), '
+			+ 'patchValueAgain = patchTarget.callI32(0), patchesUnloaded = patchTarget.unload() && patchOne.unload() && patchTwo.unload(); '
+			+
 			'var hotState = new HlHotReloadState(), stagedReload = HlHotReloadLoader.stage(hotState, HlWriter.encode(loadCode)), hotGeneration = stagedReload.commitNative(), '
 			+
 			'hotValue = hotGeneration.nativeModule == null ? -1 : hotGeneration.nativeModule.callI32(0), hotLoaded = hotGeneration.nativeModule != null && hotGeneration.nativeModule.isLoaded(), bytecodeVersions = HlFunctionVersionTable.fromMetadata(stagedReload.metadata, [101]); hotState.dispose(); '
@@ -84,8 +94,8 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
-			+
-			'&& loadedValue == 8 && loadedModuleUnloaded && hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
+			+ '&& loadedValue == 8 && loadedModuleUnloaded && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '

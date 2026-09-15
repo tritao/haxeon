@@ -285,6 +285,12 @@ HL_PRIM bool HL_NAME(native_metadata_module_unload)( vbyte *module ) {
 	return hl_module_unload((hl_module*)module) != 0;
 }
 
+HL_PRIM bool HL_NAME(native_metadata_module_patch_generation)( vbyte *target, vbyte *generation ) {
+	if( target == NULL || generation == NULL )
+		hl_error("HashLink native module patch requires two modules");
+	return hl_module_patch_generation((hl_module*)target,(hl_module*)generation) != 0;
+}
+
 HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
 	if( module != NULL ) hl_module_free_shutdown((hl_module*)module);
 }

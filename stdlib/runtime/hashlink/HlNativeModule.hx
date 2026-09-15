@@ -4,6 +4,9 @@ import runtime.memory.RawPtr;
 
 /** Owns one initialized native HashLink module and its metadata lease. */
 class HlNativeModule {
+	/** HashLink flag that installs stable entries for native generation patches. */
+	public static inline final PatchableFlag:Int = 8;
+
 	public final metadata:HlMetadataGeneration;
 	public final publication:HlMetadataPublication;
 	final lease:HlMetadataLease;
@@ -49,6 +52,15 @@ class HlNativeModule {
 		if (!isLoaded())
 			throw "HashLink native module is no longer loaded";
 		return HlTypeBridge.native_metadata_module_call_i32(module, functionIndex);
+	}
+
+	/** Redirect this patchable module to the compatible function generation. */
+	public function patchGeneration(generation:HlNativeModule):Bool {
+		if (!isLoaded() || generation == null || !generation.isLoaded())
+			throw "HashLink native module patch requires two loaded modules";
+		if (generation == this)
+			throw "HashLink native module cannot patch itself";
+		return HlTypeBridge.native_metadata_module_patch_generation(module, generation.module);
 	}
 
 	/** Try to retire the module; a failed retirement keeps its lease and handle alive. */
