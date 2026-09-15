@@ -249,6 +249,9 @@ typedef TypedClass = {
 	/** C-layout record with no HashLink object or value-structure representation. */
 	final isNativeValue:Bool;
 
+	/** Native record whose fields occupy one overlapping C union storage slot. */
+	final isNativeUnion:Bool;
+
 	/** Portable and selected-target layouts retained for compile-time layout queries. */
 	final nativeLayouts:Array<TypedNativeLayout>;
 

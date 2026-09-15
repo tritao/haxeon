@@ -215,7 +215,10 @@ class ProgramTyper {
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
-			isValue = requestedValue && !isNativeValue;
+			isValue = requestedValue && !isNativeValue,
+			isNativeUnion = hasMetadata(classDecl.metadata, "union");
+		if (isNativeUnion && !isNativeValue)
+			BodyTyper.fail("E1022", '@:union requires @:repr("C") on a native value record', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
@@ -339,6 +342,7 @@ class ProgramTyper {
 			name: classDecl.name,
 			isValue: isValue,
 			isNativeValue: isNativeValue,
+			isNativeUnion: isNativeUnion,
 			nativeLayouts: [],
 			base: baseName,
 			interfaces: [
@@ -374,6 +378,7 @@ class ProgramTyper {
 					name: classDecl.name,
 					isValue: classDecl.isValue,
 					isNativeValue: classDecl.isNativeValue,
+					isNativeUnion: classDecl.isNativeUnion,
 					nativeLayouts: nativeLayouts,
 					base: classDecl.base,
 					interfaces: classDecl.interfaces,
@@ -404,7 +409,8 @@ class ProgramTyper {
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
 			for (field in declaration.fields)
 				{name: field.name, type: field.type, span: field.span}
-		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
+		], nativeDeclarations, declaration.span,
+			declaration.isNativeUnion) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid native value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;

@@ -73,24 +73,25 @@ class NativeLayout {
 	public static function nestedDeclaration(name:String, layout:TypedNativeLayout, span:SourceSpan):HxiDeclaration
 		return Structure(name, layout.size, layout.alignment, [], span);
 
-	/** Calculate a source-declared record by aligning each field as the ABI does. */
+	/** Calculate a source-declared record or union using the same ABI facts as HXI. */
 	public static function record(target:String, name:String, fields:Array<{name:String, type:CompilerType, span:SourceSpan}>,
-			declarations:Map<String, HxiDeclaration>, span:SourceSpan):TypedNativeLayout {
+			declarations:Map<String, HxiDeclaration>, span:SourceSpan, isUnion:Bool = false):TypedNativeLayout {
 		var abi = HxiAbi.forTarget(target, declarations), placed:Array<TypedNativeFieldLayout> = [], cursor = 0, recordAlignment = 1;
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
 			if (layout == null || layout.size <= 0 || layout.align <= 0)
 				throw 'Field "${field.name}" in native record "$name" has no fixed C layout';
-			cursor = alignUp(cursor, layout.align);
+			if (!isUnion)
+				cursor = alignUp(cursor, layout.align);
 			placed.push({
 				name: field.name,
-				offset: cursor,
+				offset: isUnion ? 0 : cursor,
 				size: layout.size,
 				alignment: layout.align
 			});
 			if (cursor > 0x7FFFFFFF - layout.size)
 				throw 'Native record "$name" exceeds the supported layout size';
-			cursor += layout.size;
+			cursor = isUnion ? Std.int(Math.max(cursor, layout.size)) : cursor + layout.size;
 			recordAlignment = Std.int(Math.max(recordAlignment, layout.align));
 		}
 		return {

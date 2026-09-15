@@ -9,6 +9,12 @@ class NativeNode {
 	public var next:RawPtr<NativeNode>;
 }
 
+@:value @:repr("C") @:union
+class NativePayload {
+	public var value:Int64;
+	public var next:RawPtr<NativeNode>;
+}
+
 function main():Int {
 	if (sizeof<NativeNode>() != 32 || alignof<NativeNode>() != 8 || offsetof<NativeNode>("value") != 8 || offsetof<NativeNode>("ratio") != 16
 		|| offsetof<NativeNode>("next") != 24)
@@ -32,8 +38,12 @@ function main():Int {
 	var link = first.ref.next;
 	var secondTagValue = second.ref.tag;
 	var linkTag:RawPtr<UInt8> = link.byteOffset(offsetof<NativeNode>("tag")).castTo();
+	var payload:RawPtr<NativePayload> = arena.alloc();
+	payload.ref.value = 1234;
+	var payloadValue = payload.ref.value;
 	var empty:RawPtr<Int> = RawPtr.nullPtr();
-	var correct = firstTag == 7 && firstValue == 9001 && firstRatio == 1.25 && secondTagValue == 9 && !link.isNull() && linkTag.load() == 9 && empty.isNull();
+	var correct = firstTag == 7 && firstValue == 9001 && firstRatio == 1.25 && secondTagValue == 9 && !link.isNull() && linkTag.load() == 9
+		&& payloadValue == 1234 && empty.isNull();
 	var ints:RawPtr<Int32> = arena.alloc(4);
 	ints.offset(0).store(11);
 	ints.offset(1).store(22);

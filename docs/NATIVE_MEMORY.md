@@ -27,8 +27,19 @@ Native records can be used only through pointers. They cannot be constructed,
 passed, returned, or stored by value as Haxe runtime values. Supported record
 fields are fixed-width scalars, target-defined C scalar aliases, `Int`, `Float`,
 `Bool`, pointers, and nested native records. Strings, arrays, ordinary classes,
-closures, `Dynamic`, and all other GC-managed references are rejected. Fixed
-arrays and unions are not implemented yet.
+closures, `Dynamic`, and all other GC-managed references are rejected. A native
+union can be declared with `@:union`; its fields overlap at offset zero and its
+size and alignment are the target-specific maximum of those fields.
+
+```haxe
+@:value
+@:repr("C")
+@:union
+class Payload {
+	public var integer:Int64;
+	public var pointer:RawPtr<Vec2>;
+}
+```
 
 ## Raw pointers
 

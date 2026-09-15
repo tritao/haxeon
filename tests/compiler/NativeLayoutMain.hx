@@ -16,6 +16,7 @@ class NativeLayoutMain {
 	static function main():Void {
 		var source = '@:value @:repr("C") class Pair { public var tag:UInt8; public var value:Int64; public var ratio:Float32; } '
 			+ '@:value @:repr("C") class Outer { public var first:Pair; public var second:Pair; } '
+			+ '@:value @:repr("C") @:union class Payload { public var value:Int64; public var tag:UInt8; } '
 			+ '@:value @:repr("C") class LongValue { public var value:CLong; } '
 			+ 'function pairSize():Int return sizeof<Pair>(); '
 			+ 'function pairAlignment():Int return alignof<Pair>(); '
@@ -25,6 +26,7 @@ class NativeLayoutMain {
 			typed = Typer.typeLibrary(program),
 			pair = requireClass(typed.classes, "Pair"),
 			outer = requireClass(typed.classes, "Outer"),
+			payload = requireClass(typed.classes, "Payload"),
 			longValue = requireClass(typed.classes, "LongValue");
 		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length != 2)
 			throw "C-represented values must be distinct typed declarations with per-ABI layouts";
@@ -36,7 +38,9 @@ class NativeLayoutMain {
 		var pair32 = requireLayout(pair.nativeLayouts, "portable-abi32"),
 			pair64 = requireLayout(pair.nativeLayouts, "portable-abi64"),
 			outer32 = requireLayout(outer.nativeLayouts, "portable-abi32"),
-			outer64 = requireLayout(outer.nativeLayouts, "portable-abi64");
+			outer64 = requireLayout(outer.nativeLayouts, "portable-abi64"),
+			payload32 = requireLayout(payload.nativeLayouts, "portable-abi32"),
+			payload64 = requireLayout(payload.nativeLayouts, "portable-abi64");
 		expect(pair32.size == 16
 			&& pair32.alignment == 4
 			&& field(pair32.fields, "value").offset == 4
@@ -55,6 +59,16 @@ class NativeLayoutMain {
 		expect(requireLayout(longValue.nativeLayouts, "portable-abi32").size == 4
 			&& requireLayout(longValue.nativeLayouts, "portable-abi64").size == 8,
 			"C long fields must follow the target ABI integer width");
+		expect(payload.isNativeUnion
+			&& payload32.size == 8
+			&& payload32.alignment == 4
+			&& field(payload32.fields, "value").offset == 0
+			&& field(payload32.fields, "tag").offset == 0
+			&& payload64.size == 8
+			&& payload64.alignment == 8
+			&& field(payload64.fields, "value").offset == 0
+			&& field(payload64.fields, "tag").offset == 0,
+			"native unions must overlap fields and use target-specific maximum size and alignment");
 		var typed32 = Typer.typeLibrary(program, "portable-abi32"),
 			typed64 = Typer.typeLibrary(program, "portable-abi64"),
 			windows64 = Typer.typeLibrary(program, "x86_64-pc-windows-msvc");
@@ -117,6 +131,7 @@ class NativeLayoutMain {
 		}
 		expectError('@:value @:repr("C") class Bad { public var label:String; }', "not an unmanaged native field type");
 		expectError('@:value @:repr("C") class Bad { public var values:Array<Int>; }', "not an unmanaged native field type");
+		expectError('@:union class Bad { public var value:Int32; }', '@:union requires @:repr("C")');
 		expectError('@:value @:repr("C") class Bad { public function new() {} }', "instance methods or constructors");
 		expectError('@:value @:repr("C") class Bad { public var self:Bad; }', "by-value layout cycle");
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function consume(value:Pair):Void {}',
