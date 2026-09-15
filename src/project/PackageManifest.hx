@@ -6,10 +6,22 @@ import haxe.io.Path;
 class NativeManifest {
 	public final sources:Array<String>;
 	public final includeDirs:Array<String>;
+	public final cmake:Null<NativeCMakeManifest>;
 
-	public function new(sources:Array<String>, includeDirs:Array<String>) {
+	public function new(sources:Array<String>, includeDirs:Array<String>, ?cmake:NativeCMakeManifest) {
 		this.sources = sources.copy();
 		this.includeDirs = includeDirs.copy();
+		this.cmake = cmake;
+	}
+}
+
+class NativeCMakeManifest {
+	public final source:String;
+	public final target:String;
+
+	public function new(source:String, target:String) {
+		this.source = source;
+		this.target = target;
 	}
 }
 
@@ -95,10 +107,20 @@ class PackageManifest {
 			if (!isObject(nativeData))
 				throw '$path "native" must be an object';
 			var nativeSources = stringArray(nativeData, "sources", path, []),
-				includeDirs = stringArray(nativeData, "includeDirs", path, []);
-			if (nativeSources.length == 0)
-				throw '$path "native.sources" must contain at least one C source';
-			native = new NativeManifest(nativeSources, includeDirs);
+				includeDirs = stringArray(nativeData, "includeDirs", path, []),
+				cmakeData:Dynamic = Reflect.field(nativeData, "cmake"),
+				cmake:Null<NativeCMakeManifest> = null;
+			if (cmakeData != null) {
+				if (!isObject(cmakeData))
+					throw '$path "native.cmake" must be an object';
+				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
+					requiredString(cmakeData, "target", '$path native.cmake'));
+			}
+			if (nativeSources.length == 0 && cmake == null)
+				throw '$path "native" requires "sources" or "cmake"';
+			if (nativeSources.length > 0 && cmake != null)
+				throw '$path "native" cannot combine "sources" and "cmake"';
+			native = new NativeManifest(nativeSources, includeDirs, cmake);
 		}
 		var android:Dynamic = Reflect.field(raw, "android"),
 			androidApplicationId = "org.haxeon.android",

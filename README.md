@@ -381,6 +381,15 @@ package identity:
 "workspace": ["packages/core", "packages/editor"]
 ```
 
+Native packages may instead delegate an existing CMake project as one coarse
+provider:
+
+```json
+"native": {
+  "cmake": { "source": "native", "target": "foo" }
+}
+```
+
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the

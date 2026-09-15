@@ -66,6 +66,8 @@ class PackageResolver {
 					for (includeDir in manifest.native.includeDirs)
 						resolveDirectory(resolvedRoot, includeDir, "native include directory", manifest.packageName)
 				];
+				if (manifest.native.cmake != null)
+					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
 			}
 
 			var dependencyNames = [for (name in manifest.dependencies.keys()) name];

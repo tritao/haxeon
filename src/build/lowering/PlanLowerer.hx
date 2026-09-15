@@ -5,6 +5,7 @@ import build.BuildPlan;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
+import build.native.NativeCMakeProvider;
 import build.native.NativeSourcesProvider;
 import build.provider.CompilerProvider;
 import build.provider.RuntimeProvider;
@@ -24,11 +25,13 @@ class PlanLowerer {
 		var project = context.project;
 		if (project != null) {
 			for (resolvedPackage in project.packages.packages)
-				if (resolvedPackage.nativeSources.length > 0) {
+				if (resolvedPackage.nativeSources.length > 0 || (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
 					var packageArtifacts = [
 						for (artifact in plan.artifacts)
 							if (artifact.id.packageId == resolvedPackage.name) artifact
-					], lowered = NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
+					], lowered = resolvedPackage.nativeSources.length > 0
+						? NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts, context)
+						: NativeCMakeProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
 					actions = actions.concat(lowered.actions);
 					for (key in lowered.artifactActions.keys())
 						artifactActions.set(key, lowered.artifactActions.get(key));

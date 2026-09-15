@@ -30,7 +30,7 @@ class BuildPlanner {
 			nativeShared = new Map<String, ArtifactId>(),
 			nativeStatic = new Map<String, ArtifactId>();
 		for (resolvedPackage in project.packages.packages)
-			if (resolvedPackage.nativeSources.length > 0) {
+			if (resolvedPackage.nativeSources.length > 0 || (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
 				var objects:Array<ArtifactId> = [];
 				for (source in resolvedPackage.nativeSources) {
 					var relative = relativePath(resolvedPackage.root, source),
@@ -39,7 +39,7 @@ class BuildPlanner {
 					artifacts.push(new Artifact(id, [], details));
 					objects.push(id);
 				}
-				if (NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
+				if (resolvedPackage.nativeSources.length > 0 && NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
 					var staticId = new ArtifactId(resolvedPackage.name, NativeStaticLibrary, target);
 					nativeStatic.set(resolvedPackage.name, staticId);
 					artifacts.push(new Artifact(staticId, objects, ["library" => resolvedPackage.name]));
@@ -47,7 +47,12 @@ class BuildPlanner {
 				if (NativeArtifactDemands.includes(nativeDemand, NativeSharedLibrary)) {
 					var sharedId = new ArtifactId(resolvedPackage.name, NativeSharedLibrary, target);
 					nativeShared.set(resolvedPackage.name, sharedId);
-					artifacts.push(new Artifact(sharedId, objects, ["library" => resolvedPackage.name]));
+					var sharedDetails:Map<String, String> = ["library" => resolvedPackage.name];
+					if (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null) {
+						sharedDetails.set("cmake.source", resolvedPackage.manifest.native.cmake.source);
+						sharedDetails.set("cmake.target", resolvedPackage.manifest.native.cmake.target);
+					}
+					artifacts.push(new Artifact(sharedId, objects, sharedDetails));
 				}
 			}
 
