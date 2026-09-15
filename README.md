@@ -358,6 +358,21 @@ The normal host build requests the shared HashLink library; static archives are
 available to other build consumers without being produced unnecessarily. This
 local-package/native-provider path currently targets the host platform.
 
+Git dependencies can be added and installed reproducibly:
+
+```sh
+./scripts/haxeon add --git https://github.com/example/foo.git --rev main foo
+./scripts/haxeon install
+./scripts/haxeon install --locked
+./scripts/haxeon update
+./scripts/haxeon tree
+./scripts/haxeon why foo
+```
+
+`install` records the requested source and resolved Git commit in
+`haxeon.lock`; `install --locked` rejects manifest changes and checks out the
+exact recorded revision.
+
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the

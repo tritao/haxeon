@@ -4,7 +4,12 @@ import haxe.Json;
 import haxe.io.Path;
 import build.HaxeonProjectBuild;
 import build.execution.ProcessRunner;
-import project.ProjectDiscovery;
+import project.PackageLockfile;
+import project.PackageResolver;
+import project.PackageSourceTools;
+import project.ProjectSourceAcquirer;
+import project.ResolvedPackage;
+import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
 import compiler.formatter.Formatter;
@@ -43,6 +48,18 @@ private typedef FormatOptions = {
 	final paths:Array<String>;
 }
 
+private typedef PackageOptions = {
+	final projectPath:String;
+	final locked:Bool;
+}
+
+private typedef AddOptions = {
+	final projectPath:String;
+	final name:Null<String>;
+	final git:String;
+	final rev:String;
+}
+
 private typedef CommandCapture = {
 	final status:Int;
 	final output:String;
@@ -63,6 +80,11 @@ class HaxeonCli {
 		try {
 			var status = switch command {
 				case "init": init(arguments);
+				case "add": add(arguments);
+				case "install": install(arguments);
+				case "update": update(arguments);
+				case "tree": tree(arguments);
+				case "why": why(arguments);
 				case "doctor": doctor(arguments);
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
@@ -224,6 +246,95 @@ class HaxeonCli {
 		return parsed;
 	}
 
+	static function add(arguments:Array<String>):Int {
+		var options = parseAddOptions(arguments),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd());
+		if (!FileSystem.exists(manifestPath))
+			throw 'Project file not found: $manifestPath';
+		var name = options.name == null ? inferPackageName(options.git) : options.name;
+		if (name == null || name.length == 0)
+			throw 'Git dependencies require a package name (pass it as the final argument or with --name)';
+		var raw:Dynamic;
+		try {
+			raw = Json.parse(File.getContent(manifestPath));
+		} catch (error:Dynamic) {
+			throw 'Could not parse $manifestPath: ${Std.string(error)}';
+		}
+		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
+			throw '$manifestPath must contain a JSON object';
+		var dependencies:Dynamic = Reflect.field(raw, "dependencies");
+		if (dependencies == null) {
+			dependencies = {};
+			Reflect.setField(raw, "dependencies", dependencies);
+		}
+		if (!Reflect.isObject(dependencies) || Std.isOfType(dependencies, Array))
+			throw '$manifestPath "dependencies" must be an object';
+		if (Reflect.hasField(dependencies, name))
+			throw 'Dependency "$name" is already declared in $manifestPath';
+		Reflect.setField(dependencies, name, {git: options.git, rev: options.rev});
+		File.saveContent(manifestPath, Json.stringify(raw, null, "\t") + "\n");
+		Sys.println('Added Git dependency ${name}@${options.rev}');
+		return 0;
+	}
+
+	static function install(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, true, "install"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			lockPath = lockfilePath(manifestPath),
+			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
+		if (options.locked && lockfile == null)
+			throw 'haxeon.lock is required for "haxeon install --locked"';
+		var project = resolveProject(manifestPath, lockfile, options.locked);
+		if (!options.locked)
+			project.lockfile.save(lockPath);
+		Sys.println('${options.locked ? "Validated" : "Installed"} ${project.packages.packages.length} packages');
+		return 0;
+	}
+
+	static function update(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, false, "update"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = resolveProject(manifestPath, null, false);
+		project.lockfile.save(lockfilePath(manifestPath));
+		Sys.println('Updated ${project.packages.packages.length} packages');
+		return 0;
+	}
+
+	static function tree(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, false, "tree"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = discoverProject(manifestPath);
+		printTree(project.rootPackage, project, "", new Map());
+		return 0;
+	}
+
+	static function why(arguments:Array<String>):Int {
+		var projectPath = CONFIG_FILE, packageName:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "--project" requires a value';
+				projectPath = arguments[index++];
+			} else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else if (StringTools.startsWith(argument, "--"))
+				throw 'Unknown why option "$argument"';
+			else if (packageName == null)
+				packageName = argument;
+			else
+				throw 'Unexpected why argument "$argument"';
+		}
+		if (packageName == null || packageName.length == 0)
+			throw 'Usage: haxeon why <package> [--project PATH]';
+		var project = discoverProject(resolvePath(projectPath, Sys.getCwd())),
+			path = packagePath(project.rootPackage, packageName, project, new Map());
+		if (path == null)
+			throw 'Package "$packageName" is not reachable from ${project.rootPackage.name}';
+		Sys.println(path.join(" -> "));
+		return 0;
+	}
+
 	static function doctor(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw 'Unexpected doctor argument "${arguments[0]}"';
@@ -287,7 +398,7 @@ class HaxeonCli {
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
 		var resolveStarted = Date.now().getTime(),
-			project = ProjectDiscovery.discover(projectConfigPath),
+			project = discoverProject(projectConfigPath),
 			resolutionMs = Date.now().getTime() - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target;
 		if (target != "host" && target != "wasm32" && target != "android")
@@ -589,6 +700,123 @@ class HaxeonCli {
 		};
 	}
 
+	static function parsePackageOptions(arguments:Array<String>, allowLocked:Bool, command:String):PackageOptions {
+		var projectPath = CONFIG_FILE, locked = false, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--locked") {
+				if (!allowLocked)
+					throw 'Unknown $command option "--locked"';
+				locked = true;
+			} else if (argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "--project" requires a value';
+				projectPath = arguments[index++];
+			} else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else
+				throw 'Unknown $command option "$argument"';
+		}
+		return {projectPath: projectPath, locked: locked};
+	}
+
+	static function parseAddOptions(arguments:Array<String>):AddOptions {
+		var projectPath = CONFIG_FILE, name:Null<String> = null, git:Null<String> = null, rev:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--git" || argument == "--rev" || argument == "--name" || argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				switch argument {
+					case "--git": git = value;
+					case "--rev": rev = value;
+					case "--name": name = value;
+					case "--project": projectPath = value;
+					case _:
+				}
+			} else if (StringTools.startsWith(argument, "--git="))
+				git = argument.substr("--git=".length);
+			else if (StringTools.startsWith(argument, "--rev="))
+				rev = argument.substr("--rev=".length);
+			else if (StringTools.startsWith(argument, "--name="))
+				name = argument.substr("--name=".length);
+			else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else if (StringTools.startsWith(argument, "--"))
+				throw 'Unknown add option "$argument"';
+			else if (name == null)
+				name = argument;
+			else
+				throw 'Unexpected add argument "$argument"';
+		}
+		if (git == null || git.length == 0)
+			throw 'Option "--git" requires a non-empty URL';
+		if (rev == null || rev.length == 0)
+			throw 'Option "--rev" requires a non-empty ref';
+		return {projectPath: projectPath, name: name, git: git, rev: rev};
+	}
+
+	static function discoverProject(manifestPath:String):ResolvedProject {
+		var lockPath = lockfilePath(manifestPath), lockfile = FileSystem.exists(lockPath)
+			? PackageLockfile.parse(lockPath, File.getContent(lockPath))
+			: null;
+		return resolveProject(manifestPath, lockfile, lockfile != null);
+	}
+
+	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool):ResolvedProject {
+		var root = Path.directory(manifestPath), sourceRoot = Path.join([root, ".haxeon", "sources"]);
+		return new PackageResolver(new ProjectSourceAcquirer(sourceRoot)).resolve(manifestPath, lockfile, locked);
+	}
+
+	static function lockfilePath(manifestPath:String):String
+		return Path.join([Path.directory(manifestPath), "haxeon.lock"]);
+
+	static function inferPackageName(url:String):String {
+		var value = url;
+		while (StringTools.endsWith(value, "/"))
+			value = value.substr(0, value.length - 1);
+		var slash = value.lastIndexOf("/");
+		value = slash < 0 ? value : value.substr(slash + 1);
+		return StringTools.endsWith(value, ".git") ? value.substr(0, value.length - 4) : value;
+	}
+
+	static function printTree(packageValue:ResolvedPackage, project:ResolvedProject, prefix:String, active:Map<String, Bool>):Void {
+		Sys.println('$prefix${packageValue.name} [${projectPackageSource(packageValue)}]');
+		if (active.exists(packageValue.name))
+			return;
+		active.set(packageValue.name, true);
+		for (dependency in packageValue.dependencies) {
+			var child = project.packages.get(dependency);
+			if (child != null)
+				printTree(child, project, prefix + "  ", active);
+		}
+		active.remove(packageValue.name);
+	}
+
+	static function projectPackageSource(packageValue:ResolvedPackage):String
+		return PackageSourceTools.describe(packageValue.source);
+
+	static function packagePath(current:ResolvedPackage, target:String, project:ResolvedProject, active:Map<String, Bool>):Null<Array<String>> {
+		if (current.name == target)
+			return [current.name];
+		if (active.exists(current.name))
+			return null;
+		active.set(current.name, true);
+		for (dependency in current.dependencies) {
+			var child = project.packages.get(dependency);
+			if (child != null) {
+				var path = packagePath(child, target, project, active);
+				if (path != null) {
+					active.remove(current.name);
+					return [current.name].concat(path);
+				}
+			}
+		}
+		active.remove(current.name);
+		return null;
+	}
+
 	static function loadConfig(path:String):ProjectConfig {
 		var raw:Dynamic;
 		try {
@@ -733,6 +961,11 @@ class HaxeonCli {
 	static function usage(status:Int = 0):Int {
 		Sys.println("Usage: haxeon <command> [options]");
 		Sys.println("  init [--entry Main] [--target host|wasm32|android]");
+		Sys.println("  add --git URL --rev REF [NAME]  Add a Git package dependency");
+		Sys.println("  install [--locked]              Resolve dependencies and write haxeon.lock");
+		Sys.println("  update                          Re-resolve refs and rewrite haxeon.lock");
+		Sys.println("  tree                            Show the resolved package graph");
+		Sys.println("  why PACKAGE                     Explain a dependency path");
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");
