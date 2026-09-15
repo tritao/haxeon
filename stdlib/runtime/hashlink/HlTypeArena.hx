@@ -94,6 +94,9 @@ class HlTypeArena {
 	public inline function allocInt32Array(count:Int):RawPtr<Int32>
 		return storage.alloc(count);
 
+	public inline function allocFloat64Array(count:Int):RawPtr<Float>
+		return storage.alloc(count);
+
 	public inline function allocUInt32Array(count:Int):RawPtr<UInt32>
 		return storage.alloc(count);
 

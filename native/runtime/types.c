@@ -207,6 +207,24 @@ HL_PRIM int HL_NAME(native_metadata_validate_constants)( hl_constant *constants,
 	return count;
 }
 
+HL_PRIM int HL_NAME(native_metadata_validate_module_pools)( int *ints, int int_count, double *floats, int float_count, char **strings, int *string_lengths,
+	int string_count, uchar *bytes, int byte_count, int *byte_positions, int byte_position_count, int entrypoint ) {
+	int i;
+	if( int_count < 0 || float_count < 0 || string_count < 0 || byte_count < 0 || byte_position_count < 0 || entrypoint < 0 )
+		hl_error("HashLink module pools contain invalid counts");
+	if( (int_count > 0 && ints == NULL) || (float_count > 0 && floats == NULL)
+		|| (string_count > 0 && (strings == NULL || string_lengths == NULL))
+		|| (byte_count > 0 && bytes == NULL) || (byte_position_count > 0 && byte_positions == NULL) )
+		hl_error("HashLink module pools contain incomplete storage");
+	for( i = 0; i < string_count; i++ )
+		if( strings[i] == NULL || string_lengths[i] < 0 )
+			hl_error("HashLink module string pool contains invalid storage");
+	for( i = 0; i < byte_position_count; i++ )
+		if( byte_positions[i] < 0 || byte_positions[i] >= byte_count )
+			hl_error("HashLink byte position is outside the byte pool");
+	return string_count;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

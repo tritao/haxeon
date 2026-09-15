@@ -32,6 +32,8 @@ class HlNativeMetadataBuilder {
 				functionTypes = dispatchTypes(code, typePointers, functionCount),
 				module = generation.defineModule(pointers, functionTypes),
 				globals = generation.defineGlobalTypes([for (global in code.globals) typePointers[global]]);
+			generation.defineModulePools(new runtime.hashlink.HlModulePools(generation.arena, generation.builder, code.ints, code.floats, code.strings,
+				code.bytes, code.bytePositions, code.entryPoint));
 			generation.defineDebugFiles(debugFilePaths(code));
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
@@ -293,8 +295,8 @@ class HlNativeMetadataBuilder {
 	static function addNativeDescriptors(code:HlCode, generation:HlMetadataGeneration, types:Array<RawPtr<runtime.hashlink.HlType>>):Void {
 		for (native in code.natives)
 			generation.addNativeDescriptor({
-				library: generation.builder.utf8Name(code.strings[native.library]),
-				name: generation.builder.utf8Name(code.strings[native.name]),
+				library: generation.stringPointer(native.library),
+				name: generation.stringPointer(native.name),
 				type: types[native.type],
 				findex: native.functionIndex
 			});

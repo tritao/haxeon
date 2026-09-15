@@ -6,6 +6,7 @@ import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlNative;
 import runtime.hashlink.HlConstant;
+import runtime.hashlink.HlModulePools;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -25,6 +26,18 @@ typedef HlMetadataPublication = {
 	final constants:RawPtr<HlConstant>;
 	final constantCount:Int;
 	final constantCapacity:Int;
+	final ints:RawPtr<Int32>;
+	final intCount:Int;
+	final floats:RawPtr<Float>;
+	final floatCount:Int;
+	final strings:RawPtr<RawPtr<UInt8>>;
+	final stringLengths:RawPtr<Int32>;
+	final stringCount:Int;
+	final bytes:RawPtr<UInt8>;
+	final byteCount:Int;
+	final bytePositions:RawPtr<Int32>;
+	final bytePositionCount:Int;
+	final entryPoint:Int;
 	final debugFiles:RawPtr<RawPtr<UInt8>>;
 	final debugFileLengths:RawPtr<Int32>;
 	final debugFileCount:Int;
@@ -44,6 +57,7 @@ class HlMetadataGeneration {
 	public final functionDescriptors:HlFunctionDescriptorTable;
 	public final nativeDescriptors:HlNativeDescriptorTable;
 	public final constantDescriptors:HlConstantTable;
+	var modulePools:Null<HlModulePools>;
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
@@ -127,6 +141,23 @@ class HlMetadataGeneration {
 	public function addConstant(spec:HlConstantDescriptorSpec):RawPtr<HlConstant> {
 		requireBuilding();
 		return constantDescriptors.add(spec);
+	}
+
+	/** Attach the arena-owned scalar pools for one HLB module. */
+	public function defineModulePools(pools:HlModulePools):Void {
+		requireBuilding();
+		if (pools == null || pools.arena != arena)
+			throw "HashLink module pools must share the metadata arena";
+		if (modulePools != null)
+			throw "HashLink module pools are already defined";
+		modulePools = pools;
+	}
+
+	public function stringPointer(index:Int):RawPtr<UInt8> {
+		requireOpen();
+		if (modulePools == null)
+			throw "HashLink metadata has no module string pool";
+		return modulePools.string(index);
 	}
 
 	/** Number of function dispatch slots in the module context. */
@@ -253,6 +284,7 @@ class HlMetadataGeneration {
 		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
 		constantDescriptors.validate(globalCount);
 		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
+		validateModulePools();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
 		if (usesContiguousTypes)
@@ -291,6 +323,18 @@ class HlMetadataGeneration {
 			constants: constantDescriptors.pointer(),
 			constantCount: constantDescriptors.length(),
 			constantCapacity: constantDescriptors.capacityOf(),
+			ints: modulePools == null ? RawPtr.nullPtr() : modulePools.ints,
+			intCount: modulePools == null ? 0 : modulePools.intCount,
+			floats: modulePools == null ? RawPtr.nullPtr() : modulePools.floats,
+			floatCount: modulePools == null ? 0 : modulePools.floatCount,
+			strings: modulePools == null ? RawPtr.nullPtr() : modulePools.strings,
+			stringLengths: modulePools == null ? RawPtr.nullPtr() : modulePools.stringLengths,
+			stringCount: modulePools == null ? 0 : modulePools.stringCount,
+			bytes: modulePools == null ? RawPtr.nullPtr() : modulePools.bytes,
+			byteCount: modulePools == null ? 0 : modulePools.byteCount,
+			bytePositions: modulePools == null ? RawPtr.nullPtr() : modulePools.bytePositions,
+			bytePositionCount: modulePools == null ? 0 : modulePools.bytePositionCount,
+			entryPoint: modulePools == null ? 0 : modulePools.entryPoint,
 			debugFiles: debugFiles,
 			debugFileLengths: debugFileLengths,
 			debugFileCount: debugFileCount,
@@ -302,6 +346,16 @@ class HlMetadataGeneration {
 			functionCount: requireFunctionTable().length(),
 			moduleContext: moduleContext
 		};
+	}
+
+	function validateModulePools():Void {
+		if (modulePools == null)
+			return;
+		if (modulePools.entryPoint < 0)
+			throw "HashLink module entry point must be non-negative";
+		HlTypeBridge.native_metadata_validate_module_pools(modulePools.ints, modulePools.intCount, modulePools.floats, modulePools.floatCount,
+			modulePools.strings, modulePools.stringLengths, modulePools.stringCount, modulePools.bytes, modulePools.byteCount, modulePools.bytePositions,
+			modulePools.bytePositionCount, modulePools.entryPoint);
 	}
 
 	/** Borrow the published view until the returned lease is released. */
