@@ -1213,6 +1213,21 @@ class LanguageServiceMain {
 			secondIntroducedIdentity = stableIdentityService.compiler.modules.get("StableIdentity").recoveredSemanticModel.index.symbolIdAt(secondIntroducedPosition + 1);
 		if (secondIntroducedIdentity == null || Std.string(secondIntroducedIdentity) != Std.string(introducedIdentity))
 			throw 'consecutive recovery edits churned a recovered local identity: first=${Std.string(introducedIdentity)} second=${Std.string(secondIntroducedIdentity)}';
+		var lambdaIdentityService = new LanguageService(),
+			lambdaIdentitySource = "class StableLambdaType { public var member:Int; } function main():Void { var callback = (value:StableLambdaType) -> { var item:StableLambdaType = value; item.member; }; }";
+		lambdaIdentityService.update("StableLambda.hx", lambdaIdentitySource);
+		lambdaIdentityService.analyze("StableLambda");
+		var lambdaUse = lambdaIdentitySource.indexOf("item.member"),
+			lambdaIdentity = lambdaIdentityService.compiler.modules.get("StableLambda").semanticModel.index.symbolIdAt(lambdaUse + 1);
+		if (lambdaIdentity == null)
+			throw "baseline lambda local identity was not indexed";
+		var recoveredLambdaSource = "class StableLambdaType { public var member:Int; } function main():Void { var inserted:Int = 0; var callback = (value:StableLambdaType) -> { var item:StableLambdaType = value; item.; }";
+		lambdaIdentityService.update("StableLambda.hx", recoveredLambdaSource);
+		var recoveredLambdaUse = recoveredLambdaSource.indexOf("item."),
+			recoveredLambdaIdentity = lambdaIdentityService.compiler.modules.get("StableLambda")
+				.recoveredSemanticModel.index.symbolIdAt(recoveredLambdaUse + 1);
+		if (recoveredLambdaIdentity == null || Std.string(recoveredLambdaIdentity) != Std.string(lambdaIdentity))
+			throw 'recovery churned an unaffected lambda local identity: baseline=${Std.string(lambdaIdentity)} recovered=${Std.string(recoveredLambdaIdentity)}';
 		var noSnapshotCompletionService = new LanguageService();
 		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
 		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)

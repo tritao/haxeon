@@ -127,6 +127,8 @@ class SemanticIndex {
 	var recoveryPreviousLocalIds:Map<String, Array<SemanticSymbolId>> = [];
 	var recoveryPreviousLocalSpans:Map<String, SourceSpan> = [];
 	var recoveryUsedLocalIds:Map<String, Bool> = [];
+	var recoveryPreviousLambdaKeys:Map<String, Array<String>> = [];
+	var recoveryCurrentLambdaOrdinals:Map<String, Int> = [];
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
@@ -350,6 +352,11 @@ class SemanticIndex {
 		if (typedProgram != null)
 			for (fn in typedProgram.functions) {
 				checkpoint();
+				// Generated lambda bodies were already indexed from the recovered AST
+				// above. Indexing the typed copy as well would recreate its locals from
+				// the current source offset and shadow the stable recovery identity.
+				if (StringTools.startsWith(fn.name, "$lambda:"))
+					continue;
 				indexTypedFunction(fn, resolveRecoveredSymbol, resolveRecoveredEnumCase, token, true);
 				cancellation = token;
 			}
@@ -368,6 +375,8 @@ class SemanticIndex {
 		recoveryPreviousLocalIds = [];
 		recoveryPreviousLocalSpans = [];
 		recoveryUsedLocalIds = [];
+		recoveryPreviousLambdaKeys = [];
+		recoveryCurrentLambdaOrdinals = [];
 	}
 
 	/**
@@ -380,6 +389,8 @@ class SemanticIndex {
 		recoveryPreviousLocalIds = [];
 		recoveryPreviousLocalSpans = [];
 		recoveryUsedLocalIds = [];
+		recoveryPreviousLambdaKeys = [];
+		recoveryCurrentLambdaOrdinals = [];
 		if (previous == null)
 			return;
 		for (symbol in previous.symbols) {
@@ -400,12 +411,31 @@ class SemanticIndex {
 			}
 			ids.push(symbol.id);
 			recoveryPreviousLocalSpans.set(Std.string(symbol.id), symbol.declaration);
+			if (StringTools.startsWith(functionKey, "$lambda:")) {
+				var separator = functionKey.lastIndexOf(":");
+				if (separator > "$lambda:".length) {
+					var parent = functionKey.substring("$lambda:".length, separator),
+						lambdaKeys = recoveryPreviousLambdaKeys.get(parent);
+					if (lambdaKeys == null)
+						recoveryPreviousLambdaKeys.set(parent, lambdaKeys = []);
+					if (lambdaKeys.indexOf(functionKey) < 0)
+						lambdaKeys.push(functionKey);
+				}
+			}
 		}
 		for (ids in recoveryPreviousLocalIds)
 			ids.sort(function(left, right) {
 				var leftSpan = recoveryPreviousLocalSpans.get(Std.string(left)),
 					rightSpan = recoveryPreviousLocalSpans.get(Std.string(right));
 				return Reflect.compare(leftSpan.start, rightSpan.start);
+			});
+		for (keys in recoveryPreviousLambdaKeys)
+			keys.sort(function(left, right) {
+				var leftSeparator = left.lastIndexOf(":"),
+					rightSeparator = right.lastIndexOf(":"),
+					leftStart = Std.parseInt(left.substring(leftSeparator + 1)),
+					rightStart = Std.parseInt(right.substring(rightSeparator + 1));
+				return leftStart == null || rightStart == null ? Reflect.compare(left, right) : Reflect.compare(leftStart, rightStart);
 			});
 	}
 
@@ -884,8 +914,12 @@ class SemanticIndex {
 	/** Index a lambda as a nested lexical scope in the recovered editor model. */
 	function indexRecoveredLambda(parentFunctionKey:String, arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<AstStatement>,
 			span:SourceSpan, expected:Null<CompilerType>):Void {
-		var lambdaKey = parentFunctionKey + ":lambda:" + span.start,
-			expectedArguments:Array<CompilerType> = switch expected {
+		var ordinal = recoveryCurrentLambdaOrdinals.exists(parentFunctionKey) ? recoveryCurrentLambdaOrdinals.get(parentFunctionKey) : 0,
+			previousKeys = recoveryPreviousLambdaKeys.get(parentFunctionKey),
+			currentKey = "$lambda:" + parentFunctionKey + ":" + span.start,
+			lambdaKey = previousKeys != null && ordinal < previousKeys.length ? previousKeys[ordinal] : currentKey;
+		recoveryCurrentLambdaOrdinals.set(parentFunctionKey, ordinal + 1);
+		var expectedArguments:Array<CompilerType> = switch expected {
 				case TFunction(values, _): values;
 				case TNullable(TFunction(values, _)): values;
 				default: [];
