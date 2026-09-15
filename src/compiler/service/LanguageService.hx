@@ -356,7 +356,8 @@ class LanguageService {
 		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
-	function recoverSyntax(state:ModuleState, ?token:CancellationToken):Void {
+	function recoverSyntax(state:ModuleState, ?token:CancellationToken, ?externalChangedBodies:Map<String, Bool>,
+		forceNoReuse:Bool = false):Void {
 		if (token != null)
 			token.check();
 		state.recoveryDiagnostics = [];
@@ -384,7 +385,7 @@ class LanguageService {
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
 				typingDiagnostics:Array<Diagnostic> = [],
 				typingModules = recoveryTypingModules(state, recovered.program, token),
-				reusedFunctions = recoveredTypedFunctionReuse(state, recovered.program);
+				reusedFunctions = recoveredTypedFunctionReuse(state, recovered.program, externalChangedBodies, forceNoReuse);
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules,
 				reusedFunctions);
 			if (recoveredModel.partialTypedProgram != null)
@@ -429,9 +430,10 @@ class LanguageService {
 	 * retyping it. The declaration context check covers changes after the body
 	 * that could alter its meaning (imports, signatures, fields, or inheritance).
 	 */
-	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram):Map<String, TypedFunction> {
+	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram, ?externalChangedBodies:Map<String, Bool>,
+		forceNoReuse:Bool = false):Map<String, TypedFunction> {
 		var previous = state.previousEditorSemanticModel;
-		if (previous == null || previous.partialTypedProgram == null)
+		if (forceNoReuse || previous == null || previous.partialTypedProgram == null)
 			return [];
 		if (SemanticSignature.recoveryContext(previous.program) != SemanticSignature.recoveryContext(current))
 			return [];
@@ -504,6 +506,9 @@ class LanguageService {
 					!= fn.span.file.slice(fn.span.start, fn.span.end))
 				changedBodies.set(name, true);
 		}
+		if (externalChangedBodies != null)
+			for (name in externalChangedBodies.keys())
+				changedBodies.set(name, true);
 
 		var consider = function(name:String, fn:AstFunction):Void {
 			if (fn.isExtern == true || (fn.typeParameters != null && fn.typeParameters.length > 0))
@@ -622,12 +627,59 @@ class LanguageService {
 		return result;
 	}
 
+	static function recoveredFunctionMap(program:AstProgram):Map<String, AstFunction> {
+		var result:Map<String, AstFunction> = [];
+		for (fn in program.functions)
+			result.set(fn.name, fn);
+		for (owner in program.classes)
+			for (fn in owner.methods)
+				result.set(owner.name + "." + fn.name, fn);
+		for (owner in program.abstracts)
+			for (fn in owner.methods)
+				result.set(owner.name + "." + fn.name, fn);
+		return result;
+	}
+
+	static function sameRecoveredFunctionSource(left:AstFunction, right:AstFunction):Bool
+		return left.span.start == right.span.start
+			&& left.span.end == right.span.end
+			&& left.span.file.path == right.span.file.path
+			&& left.span.file.slice(left.span.start, left.span.end) == right.span.file.slice(right.span.start, right.span.end);
+
+	/** Names of function bodies that changed between two editor snapshots. */
+	static function changedRecoveredFunctionBodies(previous:Null<SemanticModel>, current:AstProgram):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		if (previous == null)
+			return result;
+		var oldFunctions = recoveredFunctionMap(previous.program), currentFunctions = recoveredFunctionMap(current);
+		for (name in currentFunctions.keys()) {
+			var oldFunction = oldFunctions.get(name), currentFunction = currentFunctions.get(name);
+			if (oldFunction == null || !sameRecoveredFunctionSource(oldFunction, currentFunction))
+				result.set(name, true);
+		}
+		return result;
+	}
+
+	/** Propagate affected recovered declarations through a dependency chain. */
+	static function addRecoveredBodyDependents(program:AstProgram, changedBodies:Map<String, Bool>):Void {
+		for (name => fn in recoveredFunctionMap(program))
+			if (recoveredBodyReferencesChanged(fn, changedBodies))
+				changedBodies.set(name, true);
+	}
+
 	/**
 	 * Rebuild recovered snapshots that import or share a package with a changed
 	 * editor module. Valid compiler snapshots remain authoritative and are left
 	 * for normal analysis invalidation.
 	 */
 	function refreshDependentRecovery(changed:ModuleState):Void {
+		var changedProgram = effectiveAst(changed),
+			changedBodies:Map<String, Bool> = [],
+			forceNoReuse = changedProgram != null && changed.previousEditorSemanticModel != null
+				&& SemanticSignature.recoveryContext(changed.previousEditorSemanticModel.program)
+					!= SemanticSignature.recoveryContext(changedProgram);
+		if (changedProgram != null)
+			changedBodies = changedRecoveredFunctionBodies(changed.previousEditorSemanticModel, changedProgram);
 		var pending:Array<ModuleState> = [changed],
 			refreshed:Map<String, Bool> = [changed.name => true],
 			pendingIndex = 0;
@@ -642,8 +694,10 @@ class LanguageService {
 				var candidateProgram = effectiveAst(candidate);
 				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram))
 					continue;
+				if (!forceNoReuse)
+					addRecoveredBodyDependents(candidateProgram, changedBodies);
 				clearRecoveredSnapshot(candidate);
-				recoverSyntax(candidate);
+				recoverSyntax(candidate, null, changedBodies, forceNoReuse);
 				refreshed.set(candidate.name, true);
 				pending.push(candidate);
 			}
@@ -677,20 +731,25 @@ class LanguageService {
 					continue;
 				}
 				clearRecoveredSnapshot(state);
-				recoverSyntax(state);
+				recoverSyntax(state, null, null, true);
 				pending.splice(index, 1);
 				progressed = true;
 			}
 			if (!progressed) {
 				var state = pending.shift();
 				clearRecoveredSnapshot(state);
-				recoverSyntax(state);
+				recoverSyntax(state, null, null, true);
 			}
 		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
 	function clearRecoveredSnapshot(state:ModuleState):Void {
+		// Dependency refreshes rebuild the current source without going through
+		// ModuleState.update(). Preserve that current recovered model as the
+		// predecessor so unchanged declarations can still be considered for reuse.
+		if (state.recoveredSemanticModel != null)
+			state.previousEditorSemanticModel = state.recoveredSemanticModel;
 		for (previous in state.recoveryDiagnostics) {
 			for (index in 0...state.diagnostics.length)
 				if (sameDiagnostic(state.diagnostics[index], previous)) {

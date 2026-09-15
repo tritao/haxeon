@@ -1331,6 +1331,47 @@ class LanguageServiceMain {
 			throw "recovered typing reused stale no-return semantics from a changed dependency";
 		if (dependentIncrementalService.recoveredTypedFunctionReuses != 0)
 			throw "recovered typing reused a body whose callee changed";
+		var externalDependencyService = new LanguageService(),
+			externalDependencySource = "package external; function changed():Void { throw  1; }",
+			externalConsumerSource = "package external.app; import external.Dependency; function stable():Void { changed(); return; } function independent():Int return 1;";
+		externalDependencyService.update("external/Dependency.hx", externalDependencySource);
+		externalDependencyService.update("external/Consumer.hx", externalConsumerSource);
+		var externalReuseBefore = externalDependencyService.recoveredTypedFunctionReuses;
+		var initialExternalModel = externalDependencyService.compiler.modules.get("external.Consumer").recoveredSemanticModel,
+			initialExternalNoReturn = false;
+		if (initialExternalModel != null && initialExternalModel.partialTypedProgram != null)
+			for (fn in initialExternalModel.partialTypedProgram.functions)
+				if (fn.name == "stable")
+					for (statement in fn.statements)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+								case TNoReturn(_): initialExternalNoReturn = true;
+								default:
+							}
+							default:
+						}
+		if (!initialExternalNoReturn)
+			throw "recovered typing did not resolve the initial imported callee control flow";
+		externalDependencyService.update("external/Dependency.hx", "package external; function changed():Void { return ; }");
+		var externalModel = externalDependencyService.compiler.modules.get("external.Consumer").recoveredSemanticModel,
+			staleExternalNoReturn = false;
+		if (externalModel != null && externalModel.partialTypedProgram != null)
+			for (fn in externalModel.partialTypedProgram.functions)
+				if (fn.name == "stable")
+					for (statement in fn.statements)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+								case TNoReturn(_): staleExternalNoReturn = true;
+								default:
+							}
+							default:
+						}
+		if (staleExternalNoReturn)
+			throw "recovered typing reused a body after an imported callee changed";
+		if (externalDependencyService.recoveredTypedFunctionReuses <= externalReuseBefore)
+			throw 'cross-module recovery regression did not exercise recovered body reuse: before=$externalReuseBefore after=${externalDependencyService.recoveredTypedFunctionReuses}';
 		var contextRecoveryService = new LanguageService(),
 			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
 		contextRecoveryService.update("ContextRecovery.hx", contextSource);
