@@ -106,6 +106,68 @@ class SemanticProgram {
 			lifecycleMetrics);
 	}
 
+	/**
+	 * Make another module's declarations available to tolerant typing without
+	 * adding its symbols to the editor module's semantic index.
+	 */
+	public function includeRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>):Void {
+		for (name => declaration in external.aliases)
+			if (!declarations.aliases.exists(name))
+				declarations.aliases.set(name, declaration);
+		for (name => declaration in external.enums)
+			if (!declarations.enums.exists(name))
+				declarations.enums.set(name, declaration);
+		for (name => declaration in external.enumAbstracts)
+			if (!declarations.enumAbstracts.exists(name))
+				declarations.enumAbstracts.set(name, declaration);
+		for (name => declaration in external.abstracts)
+			if (!declarations.abstracts.exists(name))
+				declarations.abstracts.set(name, declaration);
+		for (name => declaration in external.interfaces)
+			if (!declarations.interfaces.exists(name))
+				declarations.interfaces.set(name, declaration);
+		for (name => declaration in external.classes)
+			if (!declarations.classes.exists(name))
+				declarations.classes.set(name, declaration);
+
+		for (fn in program.functions) {
+			addRecoveredSignature(fn.name, fn, true);
+			for (qualifier in qualifiers)
+				addRecoveredSignature(qualifier + "." + fn.name, fn, true);
+		}
+		for (decl in program.interfaces) {
+			for (method in decl.methods)
+				addRecoveredMethod(decl.name, method, false, false, qualifiers);
+		}
+		for (decl in program.classes) {
+			for (method in decl.methods)
+				addRecoveredMethod(decl.name, method, method.isStatic, method.name == "new", qualifiers);
+		}
+		for (decl in program.abstracts) {
+			for (method in decl.methods)
+				addRecoveredMethod(decl.name, withOwnerTypeParameters(method, decl.typeParameters), method.isStatic, method.name == "new", qualifiers);
+		}
+	}
+
+	function addRecoveredMethod(owner:String, method:AstFunction, isStatic:Bool, isConstructor:Bool, qualifiers:Array<String>):Void {
+		var key = owner + "." + method.name;
+		addRecoveredSignature(key, method, false, owner, isStatic, isConstructor);
+		for (qualifier in qualifiers)
+			addRecoveredSignature(qualifier + "." + key, method, false, owner, isStatic, isConstructor);
+	}
+
+	function addRecoveredSignature(key:String, method:AstFunction, topLevel:Bool, ?owner:String, ?isStatic:Bool, ?isConstructor:Bool):Void {
+		if (signatures.exists(key))
+			return;
+		signatures.set(key, method);
+		if (!topLevel)
+			methodInfo.set(key, {
+				owner: owner,
+				isStatic: isStatic,
+				isConstructor: isConstructor
+			});
+	}
+
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction
 		return {
 			name: signature.name,

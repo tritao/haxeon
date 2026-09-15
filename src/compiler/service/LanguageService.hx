@@ -21,6 +21,7 @@ import compiler.types.Type.NominalKind;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
+import compiler.types.Typer.RecoveryTypingModule;
 import compiler.service.EditorSnapshot.EditorSnapshot;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.runtime.CompilerIntrinsics;
@@ -314,7 +315,8 @@ class LanguageService {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
 				typingDiagnostics:Array<Diagnostic> = [];
-			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics);
+			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics,
+				recoveryTypingModules(state, recovered.program, token));
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return resolveRecoveredSymbol(recovered.program, name),
 				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
@@ -339,6 +341,69 @@ class LanguageService {
 					DiagnosticOrigin.ParserRecovery)
 			]);
 		}
+	}
+
+	/**
+	 * Supply tolerant typing with declarations from modules already known to the
+	 * editor. These declarations are copied into the temporary semantic program
+	 * only; the authoritative workspace index remains unchanged.
+	 */
+	function recoveryTypingModules(state:ModuleState, program:AstProgram, ?token:CancellationToken):Array<RecoveryTypingModule> {
+		var result:Array<RecoveryTypingModule> = [];
+		for (candidate in compiler.modules) {
+			if (token != null)
+				token.check();
+			if (candidate == state)
+				continue;
+			var model = effectiveSemanticModel(candidate);
+			if (model == null || !recoveryModuleVisible(program, candidate, model.program))
+				continue;
+			result.push({
+				program: model.program,
+				declarations: model.declarations,
+				qualifiers: recoveryModuleQualifiers(program, candidate, model.program)
+			});
+		}
+		return result;
+	}
+
+	static function recoveryModuleVisible(program:AstProgram, candidate:ModuleState, candidateProgram:AstProgram):Bool {
+		if (program.packageName != null && program.packageName == candidateProgram.packageName)
+			return true;
+		for (importPath in program.imports)
+			if (modulePathMatches(candidate.name, importPath))
+				return true;
+		for (_ => importPath in program.importAliases)
+			if (modulePathMatches(candidate.name, importPath))
+				return true;
+		return false;
+	}
+
+	static function recoveryModuleQualifiers(program:AstProgram, candidate:ModuleState, candidateProgram:AstProgram):Array<String> {
+		var result:Array<String> = [], add = function(value:String):Void {
+			if (value.length > 0 && result.indexOf(value) < 0)
+				result.push(value);
+		};
+		add(sourceName(candidate.name));
+		add(candidate.name);
+		if (candidateProgram.packageName != null)
+			add(candidateProgram.packageName);
+		for (importPath in program.imports)
+			if (modulePathMatches(candidate.name, importPath))
+				add(importQualifier(program, importPath));
+		for (alias => importPath in program.importAliases)
+			if (modulePathMatches(candidate.name, importPath))
+				add(alias);
+		return result;
+	}
+
+	static function modulePathMatches(moduleName:String, importPath:String):Bool {
+		if (moduleName == importPath)
+			return true;
+		var wildcard = importPath.length > 2 && StringTools.endsWith(importPath, ".*");
+		if (wildcard)
+			return StringTools.startsWith(moduleName, importPath.substr(0, importPath.length - 2) + ".");
+		return StringTools.startsWith(importPath, moduleName + ".") || StringTools.startsWith(moduleName, importPath + ".");
 	}
 
 	function publishRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {

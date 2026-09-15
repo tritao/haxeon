@@ -4,6 +4,8 @@ import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
+import compiler.types.Type.NominalKind;
+import compiler.types.TypedAst.TypedStatement;
 
 class LanguageServiceMain {
 	static function main():Void {
@@ -235,6 +237,23 @@ class LanguageServiceMain {
 		}
 		if (!hasImportedField || !hasImportedMethod)
 			throw "recovered imported class typing did not expose instance members";
+		var importedTypedSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); return; }";
+		importService.update("editor/TypedClassMain.hx", importedTypedSource);
+		var importedTypedModel = importService.compiler.modules.get("editor.TypedClassMain").recoveredSemanticModel,
+			importedConstructorType = false;
+		if (importedTypedModel != null && importedTypedModel.partialTypedProgram != null)
+			for (fn in importedTypedModel.partialTypedProgram.functions)
+				for (statement in fn.statements)
+					switch statement {
+						case TVar(_, initializer, _):
+							switch initializer.type {
+								case TInstance(NominalKind.Class, "Widget", _): importedConstructorType = true;
+								default:
+							}
+						default:
+					}
+		if (!importedConstructorType)
+			throw "recovered typing did not resolve a class imported from another editor module";
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);
