@@ -3,6 +3,11 @@ HL_PRIM hl_runtime_module *HL_NAME(load)( vbyte *bytes, int length, vbyte *ident
 	return hl_runtime_module_load(bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
 }
 
+HL_PRIM hl_runtime_module *HL_NAME(load_code)( vbyte *code, vbyte *bytes, int length, vbyte *identity, int identity_length ) {
+	hl_runtime_module *runtime = NULL;
+	return hl_runtime_module_load_code((hl_code*)code,bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;
