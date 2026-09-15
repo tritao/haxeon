@@ -135,7 +135,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.debugSectionCount == 1 && publication.debugSections.ref.kind == 1 && publication.debugSections.ref.version == 1 '
 			+ '&& publication.debugSections.ref.flags == 0 '
 			+ '&& publication.debugSections.ref.data.load() == 1 '
-			+ '&& HlTypeBridge.native_metadata_validate_debug_sections(publication.debugSections, publication.debugSectionCount) == 1 '
+			+ '&& generation.debugSectionDescriptors.validate() == 1 '
 			+ '&& generation.functionDescriptors.validateDebugAt(0, publication.debugFileCount) == 1 '
 			+ '&& publication.functionDescriptors.ref.debug.load() == 0 && publication.functionDescriptors.ref.debug.offset(1).load() == 42 '
 			+ '&& publication.functionDescriptors.ref.debug.offset(2).load() == 0 && publication.functionDescriptors.ref.debug.offset(3).load() == 42 '

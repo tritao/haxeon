@@ -38,9 +38,6 @@ class HlTypeBridge {
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
-	public static function native_metadata_validate_debug_sections(sections:RawPtr<HlDebugSection>, count:Int):Int
-		return 0;
-
 	public static function native_metadata_validate_code(code:RawPtr<HlNativeCode>):Int
 		return 0;
 

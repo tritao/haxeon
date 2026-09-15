@@ -393,7 +393,7 @@ class HlMetadataGeneration {
 		}
 		validateGlobalTypes();
 		constantDescriptors.validate(globalCount);
-		HlTypeBridge.native_metadata_validate_debug_sections(debugSectionDescriptors.pointer(), debugSectionDescriptors.length());
+		debugSectionDescriptors.validate();
 		validateModulePools();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);

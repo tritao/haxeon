@@ -48,6 +48,17 @@ class HlDebugSectionTable {
 	public inline function capacityOf():Int
 		return capacity;
 
+	/** Validate section headers and payload storage before native publication. */
+	public function validate():Int {
+		for (index in 0...count) {
+			var section = entries.offset(index), kind:Int = cast section.ref.kind, version:Int = cast section.ref.version,
+				flags:Int = cast section.ref.flags, size:Int = cast section.ref.size;
+			if (kind <= 0 || version <= 0 || flags < 0 || size < 0 || (size > 0 && section.ref.data.isNull()))
+				throw 'HashLink debug section $index contains invalid storage metadata';
+		}
+		return count;
+	}
+
 	public function get(index:Int):RawPtr<HlDebugSection> {
 		if (index < 0 || index >= count)
 			throw 'HashLink debug section index $index is outside 0...$count';
