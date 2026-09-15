@@ -19,6 +19,7 @@ class HlModulePools {
 	public final bytePositions:RawPtr<Int32>;
 	public final bytePositionCount:Int;
 	public final entryPoint:Int;
+	public final stringTable:HlStringTable;
 
 	public function new(arena:HlTypeArena, builder:HlTypeBuilder, intValues:Array<Int>, floatValues:Array<Float>, stringValues:Array<String>,
 		byteValues:Bytes, bytePositionValues:Array<Int>, entryPoint:Int) {
@@ -33,15 +34,11 @@ class HlModulePools {
 		floats = floatCount == 0 ? RawPtr.nullPtr() : arena.allocFloat64Array(floatCount);
 		for (index in 0...floatCount)
 			floats.offset(index).store(floatValues[index]);
-		stringCount = stringValues.length;
-		strings = stringCount == 0 ? RawPtr.nullPtr() : arena.allocNativePointerArray(stringCount);
-		stringLengths = stringCount == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(stringCount);
-		ustrings = stringCount == 0 ? RawPtr.nullPtr() : arena.allocUInt16PointerArray(stringCount);
-		for (index in 0...stringCount) {
-			strings.offset(index).store(builder.utf8Name(stringValues[index]));
-			stringLengths.offset(index).store(cast HlTypeBuilder.utf8Length(stringValues[index]));
-			ustrings.offset(index).store(RawPtr.nullPtr());
-		}
+		stringTable = new HlStringTable(arena, stringValues);
+		stringCount = stringTable.count;
+		strings = stringTable.pointers;
+		stringLengths = stringTable.lengths;
+		ustrings = stringTable.ustrings;
 		byteCount = byteValues.length;
 		bytes = byteCount == 0 ? RawPtr.nullPtr() : arena.allocUInt8Array(byteCount);
 		for (index in 0...byteCount)
@@ -55,8 +52,9 @@ class HlModulePools {
 
 	/** Return one arena-owned UTF-8 string pointer from the module string pool. */
 	public function string(index:Int):RawPtr<UInt8> {
-		if (index < 0 || index >= stringCount)
-			throw 'HashLink module string index $index is outside 0...$stringCount';
-		return strings.offset(index).load();
+		return stringTable.pointer(index);
 	}
+
+	public inline function stringLength(index:Int):Int
+		return stringTable.lengthAt(index);
 }

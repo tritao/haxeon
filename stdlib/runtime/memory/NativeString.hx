@@ -8,8 +8,6 @@ class NativeString {
 	var disposed:Bool = false;
 
 	public function new(value:String) {
-		if (value == null)
-			throw "Native string value must be non-null";
 		arena = new Arena();
 		var bytes = utf8Bytes(value);
 		length = bytes.length;
@@ -44,7 +42,7 @@ class NativeString {
 	}
 
 	public function equalsUtf8(value:String):Bool {
-		if (disposed || value == null)
+		if (disposed)
 			return false;
 		var bytes = utf8Bytes(value);
 		if (bytes.length != length)
@@ -70,8 +68,6 @@ class NativeString {
 
 	/** Encode a Haxe UTF-16 string as Unicode UTF-8 bytes. */
 	public static function utf8Bytes(value:String):Array<Int> {
-		if (value == null)
-			throw "Native string value must be non-null";
 		var result:Array<Int> = [], index = 0;
 		while (index < value.length) {
 			var code = value.charCodeAt(index++);
