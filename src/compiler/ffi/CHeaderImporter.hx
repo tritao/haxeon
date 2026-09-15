@@ -29,6 +29,8 @@ typedef CLayout = {
 class CHeaderImporter {
 	static final sourceCache:Map<String, String> = [];
 	static final sourceFiles:Map<String, SourceFile> = [];
+	@:noCompletion
+	static var lastLayoutText:Null<String>;
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
@@ -68,6 +70,7 @@ class CHeaderImporter {
 			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
 		var astText = astProcess.stdout,
 			layoutText = layoutProcess.stdout + layoutProcess.stderr;
+		lastLayoutText = layoutText;
 		var layouts = parseLayouts(layoutText),
 			declarations:Array<Dynamic> = [],
 			roots = [FileSystem.fullPath(Path.directory(header))];

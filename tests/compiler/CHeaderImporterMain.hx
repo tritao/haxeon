@@ -28,7 +28,14 @@ class CHeaderImporterMain {
 		expect(Std.isOfType(firstModel, HxiInterface)
 			&& firstModel.name == "import_fixture_h", "C header importer should return a typed HXI interface");
 		expect(first == second, "C header import must be deterministic");
-		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
+		if (first.indexOf("struct sample_options @layout(32, 8)") < 0) {
+			var layoutText = CHeaderImporter.lastLayoutText,
+				marker = layoutText == null ? -1 : layoutText.indexOf("sample_options"),
+				preview = layoutText == null ? "<null>" : marker < 0 ? layoutText.substring(0,
+					Std.int(Math.min(512,
+						layoutText.length))) : layoutText.substring(Std.int(Math.max(0, marker - 128)), Std.int(Math.min(layoutText.length, marker + 512)));
+			throw 'record layout should come from Clang (captured ${layoutText == null ? -1 : layoutText.length} bytes, marker $marker): $preview';
+		}
 		expect(first.indexOf("title: nullable<utf8> @offset(8)") >= 0, "annotated UTF-8 field offsets should be preserved");
 		expect(first.indexOf('data: ptr<const<void>> @offset(0) @borrowed @length_field("data_size")') >= 0,
 			"borrowed buffer field annotations should retain their length contract");
