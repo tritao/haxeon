@@ -149,6 +149,14 @@ class BodyTyper {
 	public function recoveryDiagnostics():Array<Diagnostic>
 		return session.recoveryDiagnostics.copy();
 
+	function rememberRecoveryError(error:Dynamic, span:SourceSpan):Void {
+		if (Std.isOfType(error, CompileError)) {
+			var compileError:CompileError = cast error;
+			session.rememberRecoveryDiagnostic(compileError.diagnostic);
+		} else
+			session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered function", span));
+	}
+
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
 		var result:Map<String, CompilerType> = [];
 		for (parameter in parameters)
@@ -283,6 +291,48 @@ class BodyTyper {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
+			?abstractReceiver:CompilerType):TypedFunction {
+		if (!session.tolerant)
+			return typeFunctionBody(fn, owner, isStatic, substitutions, specializedName, abstractReceiver);
+		var contextDepth = session.bodyContexts.length;
+		try {
+			return typeFunctionBody(fn, owner, isStatic, substitutions, specializedName, abstractReceiver);
+		}
+		catch (error:Dynamic) {
+			while (session.bodyContexts.length > contextDepth)
+				session.leaveBody(session.currentContext);
+			if (Std.isOfType(error, CancellationError))
+				throw error;
+			rememberRecoveryError(error, fn.span);
+			return recoveredFunctionSkeleton(fn, owner, isStatic, substitutions, specializedName);
+		}
+	}
+
+	function recoveredFunctionSkeleton(fn:AstFunction, owner:Null<String>, isStatic:Bool,
+			substitutions:Null<Map<String, CompilerType>>, specializedName:Null<String>):TypedFunction {
+		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName,
+			arguments = [
+				for (argument in fn.arguments)
+					{name: argument.name, type: argumentType(argument, substitutions)}
+			],
+			result = resolveType(fn.result, substitutions),
+			isConstructor = owner != null && session.classDecls.exists(owner) && fn.name == "new";
+		return {
+			name: functionName,
+			genericOrigin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
+			owner: owner,
+			isStatic: isStatic,
+			isConstructor: isConstructor,
+			arguments: arguments,
+			result: result,
+			statements: [],
+			cells: [],
+			cellCaptures: [],
+			span: fn.span
+		};
+	}
+
+	function typeFunctionBody(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType):TypedFunction {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
@@ -460,6 +510,40 @@ class BodyTyper {
 				context.loopDepth--;
 				return TForIn(loopScope.requireId(name), valueName == null ? null : loopScope.requireId(valueName),
 					new TypedExpression(TNullLiteral, TError, span), typedBody, span);
+			case Try(tryBranch, catches, span):
+				var typedCatches = [],
+					typedTry = typeStatements(tryBranch, new Scope(scope), result);
+				for (caught in catches) {
+					var catchScope = new Scope(scope);
+					catchScope.define(caught.name, TUnknown, caught.span);
+					bindCell(caught.name, caught.span, catchScope, TUnknown);
+					typedCatches.push({
+						name: catchScope.requireId(caught.name),
+						type: TUnknown,
+						statements: typeStatements(caught.statements, catchScope, result),
+						span: caught.span
+					});
+				}
+				return TTry(typedTry, typedCatches, span);
+			case Switch(_, cases, defaultBranch, hasDefault, span):
+				var typedCases = [];
+				for (switchCase in cases) {
+					var caseScope = new Scope(scope);
+					typedCases.push({
+						value: new TypedExpression(TNullLiteral, TError, switchCase.span),
+						subjectBinding: null,
+						isCatchAll: false,
+						guard: null,
+						statements: typeStatements(switchCase.statements, caseScope, result),
+						enumName: null,
+						constructorIndex: -1,
+						bindings: [],
+						predicates: [],
+						span: switchCase.span
+					});
+				}
+				return TSwitch(new TypedExpression(TNullLiteral, TError, span), typedCases,
+					typeStatements(defaultBranch, new Scope(scope), result), hasDefault, span);
 			default:
 				return null;
 		}

@@ -316,11 +316,27 @@ class ProgramTyper {
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {
 				if (field.isInline) {
-					var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
-					if (resolved == null)
-						BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
-					initializer = resolved.initializer;
-					inlineValue = resolved.value;
+					var resolved:Null<compiler.types.typing.TypingSession.ResolvedInlineConstant> = null,
+						inlineResolutionFailed = false;
+					try {
+						resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
+					} catch (error:Dynamic) {
+						if (!session.tolerant)
+							throw error;
+						inlineResolutionFailed = true;
+						rememberRecoveryError(error);
+					}
+					if (resolved == null) {
+						if (!inlineResolutionFailed) {
+							if (!session.tolerant)
+								BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+							rememberRecoveryDiagnostic("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+						}
+						initializer = new TypedExpression(TNullLiteral, TError, field.span);
+					} else {
+						initializer = resolved.initializer;
+						inlineValue = resolved.value;
+					}
 				} else {
 					var initializerContext = bodyTyper.enterBody(classDecl.name + ".__init", erasedSubstitutions),
 						scope = new Scope();

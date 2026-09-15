@@ -571,6 +571,25 @@ class ParserRecoveryMain {
 		if (!retainedCompoundLocal)
 			throw "tolerant typing discarded a valid local inside a conditionally malformed branch";
 
+		var switchErrorSource = new SourceFile("SwitchErrorTyping.hx",
+			"function main():Void { switch (broken) { case 1: var inside:Int = 1; default: var fallback:Int = 2; } var after:Int = 3; }");
+		var switchErrorProgram = new Parser(new Lexer(switchErrorSource).tokenize()).parseProgramRecovering().program,
+			switchErrorTyped = Typer.typeRecovered(switchErrorProgram);
+		var retainedSwitchLocal = false;
+		if (switchErrorTyped != null && switchErrorTyped.functions.length == 1)
+			switch switchErrorTyped.functions[0].statements[0] {
+				case TSwitch(_, cases, _, _, _):
+					for (switchCase in cases)
+						for (statement in switchCase.statements)
+							switch statement {
+								case TVar(_, _, _): retainedSwitchLocal = true;
+								default:
+							}
+				default:
+			}
+		if (!retainedSwitchLocal)
+			throw "tolerant typing discarded valid locals inside a malformed switch";
+
 		var signatureService = new LanguageService(),
 			signatureSource = "function take(value:Int):Void return; function main():Void return take(";
 		signatureService.update("SignatureRecovery.hx", signatureSource);
@@ -807,6 +826,15 @@ class ParserRecoveryMain {
 			|| invalidMetadataTyped.classes.length != 2
 			|| invalidMetadataTyped.classes[1].name != "Usable")
 			throw "tolerant typing abandoned a program after invalid representation metadata";
+
+		var invalidInlineSource = new SourceFile("TolerantInvalidInline.hx",
+			"class Broken { public static inline var value:Int = unknown; public function visible():Void return; } function main():Void return;");
+		var invalidInlineProgram = new Parser(new Lexer(invalidInlineSource).tokenize()).parseProgramRecovering().program,
+			invalidInlineTyped = Typer.typeRecovered(invalidInlineProgram);
+		if (invalidInlineTyped == null
+			|| invalidInlineTyped.classes.length != 1
+			|| invalidInlineTyped.classes[0].methods.length != 1)
+			throw "tolerant typing abandoned a class after an invalid inline initializer";
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {
