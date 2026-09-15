@@ -238,30 +238,34 @@ class LanguageService {
 		try
 			return compiler.analyze(entryModule, token)
 		catch (error:CompileError) {
-			recoverCurrentSyntax();
+			recoverCurrentSyntax(token);
 			throw error;
 		}
 	}
 
-	function recoverCurrentSyntax():Void {
+	function recoverCurrentSyntax(?token:CancellationToken):Void {
 		for (state in compiler.modules) {
 			if (state.ast != null)
 				continue;
-			recoverSyntax(state);
+			recoverSyntax(state, token);
 		}
 		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
-	function recoverSyntax(state:ModuleState):Void {
+	function recoverSyntax(state:ModuleState, ?token:CancellationToken):Void {
 		try {
+			if (token != null)
+				token.check();
 			var conditional = ConditionalCompilation.process(state.source, editorDefines);
-			var tokens = new Lexer(state.source, conditional.text).tokenize();
-			var recovered = new Parser(tokens).parseProgramRecovering();
+			var checkpoint:Null<Void -> Void> = token == null ? null : function() token.check();
+			var tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize();
+			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
+			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
+			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint);
+			recoveredModel.index.indexRecoveredSyntax(recovered.program, token);
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
-			state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
-			state.recoveredSemanticModel.partialTypedProgram = Typer.typeRecovered(recovered.program);
-			state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
+			state.recoveredSemanticModel = recoveredModel;
 			mergeRecoveryDiagnostics(state, recovered.diagnostics);
 		} catch (_:CompileError) {
 			// Lexer/parser recovery itself failed. Keep the last-good semantic

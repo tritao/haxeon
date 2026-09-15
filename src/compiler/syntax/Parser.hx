@@ -29,12 +29,14 @@ class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 
 	final tokens:Array<Token>;
+	final checkpointCallback:Null<Void -> Void>;
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
-	public function new(tokens:Array<Token>) {
+	public function new(tokens:Array<Token>, ?checkpoint:Void -> Void) {
 		this.tokens = tokens;
+		this.checkpointCallback = checkpoint;
 	}
 
 	public function parseProgram():AstProgram {
@@ -2060,6 +2062,7 @@ class Parser {
 	inline function match(kind:TokenKind):Bool {
 		if (tokens[position].kind != kind)
 			return false;
+		checkpoint();
 		position++;
 		return true;
 	}
@@ -2067,6 +2070,7 @@ class Parser {
 	function consume(kind:TokenKind):Token {
 		var token = tokens[position];
 		if (token.kind == kind) {
+			checkpoint();
 			position++;
 			return token;
 		}
@@ -2134,6 +2138,11 @@ class Parser {
 			recoveryDiagnostics.push(diagnostic);
 	}
 
+	inline function checkpoint():Void {
+		if (checkpointCallback != null)
+			checkpointCallback();
+	}
+
 	static function tokenText(kind:TokenKind):String
 		return switch kind {
 			case TokenKind.Semicolon: ";";
@@ -2198,8 +2207,10 @@ class Parser {
 	inline function check(kind:TokenKind):Bool
 		return tokens[position].kind == kind;
 
-	function advance():Token
+	function advance():Token {
+		checkpoint();
 		return tokens[position++];
+	}
 
 	inline function current():Token
 		return tokens[position];

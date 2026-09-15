@@ -8,6 +8,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.BodyTyper;
 import compiler.types.typing.ProgramTyper;
 import compiler.Diagnostic.CompileError;
+import compiler.service.CancellationError;
 
 typedef TyperPhaseMetrics = compiler.types.typing.TypingMetrics.TyperPhaseMetrics;
 typedef MeasuredTypedProgram = compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
@@ -22,13 +23,15 @@ class Typer {
 		return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget)).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 
 	/** Type a recovery tree while keeping failures local to the smallest body. */
-	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String):Null<TypedProgram> {
+	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String, ?checkpoint:Void -> Void):Null<TypedProgram> {
 		try {
-			return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget, true))
+			return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget, true, checkpoint))
 				.typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 		} catch (_:CompileError) {
 			return null;
-		} catch (_:Dynamic) {
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
 			return null;
 		}
 	}

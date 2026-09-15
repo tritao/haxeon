@@ -63,8 +63,9 @@ class BodyTyper {
 		session.leaveBody(body);
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false) {
-		this.session = new TypingSession(externals, specializations, nativeAbiTarget, tolerant);
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false,
+			?checkpoint:Void -> Void) {
+		this.session = new TypingSession(externals, specializations, nativeAbiTarget, tolerant, checkpoint);
 		this.conversionResolver = new ConversionResolver(session);
 		this.inlineConstantResolver = new InlineConstantResolver(session, function(owner, name) return this.findStaticFieldNullable(owner, name),
 			function(expression, owner, name, expected, typeParameters) return this.typeInlineInitializer(expression, owner, name, expected, typeParameters),
@@ -368,6 +369,7 @@ class BodyTyper {
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
+		session.checkpoint();
 		if (session.tolerant)
 			return typeStatementsRecovering(statements, scope, result);
 		return typeStatementsStrict(statements, scope, result);
@@ -1227,6 +1229,7 @@ class BodyTyper {
 		};
 
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression {
+		session.checkpoint();
 		try {
 			return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
 		} catch (error:CompileError) {

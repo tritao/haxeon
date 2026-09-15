@@ -9,16 +9,19 @@ import compiler.Diagnostic.DiagnosticSeverity;
 class Lexer {
 	final file:SourceFile;
 	final source:haxe.io.Bytes;
+	final checkpointCallback:Null<Void -> Void>;
 	var position:Int = 0;
 
-	public function new(file:SourceFile, ?source:String) {
+	public function new(file:SourceFile, ?source:String, ?checkpoint:Void -> Void) {
 		this.file = file;
 		this.source = source == null || source == file.text ? file.bytes : haxe.io.Bytes.ofString(source);
+		this.checkpointCallback = checkpoint;
 	}
 
 	public function tokenize():Array<Token> {
 		var tokens = [];
 		while (position < source.length) {
+			checkpoint();
 			var code = source.get(position);
 			if (isWhitespace(code)) {
 				position++;
@@ -258,6 +261,7 @@ class Lexer {
 	/** Advances over a string body, including complete expressions embedded in single-quoted strings. */
 	function scanString(quote:Int):Bool {
 		while (position < source.length) {
+			checkpoint();
 			var current = source.get(position++);
 			if (current == "\\".code) {
 				if (position < source.length)
@@ -280,6 +284,7 @@ class Lexer {
 	function scanInterpolation():Bool {
 		var depth = 1;
 		while (position < source.length) {
+			checkpoint();
 			var current = source.get(position++);
 			if (current == "\"".code || current == "'".code) {
 				if (!scanString(current))
@@ -317,6 +322,11 @@ class Lexer {
 
 	inline function text(start:Int, end:Int):String
 		return source.getString(start, end - start);
+
+	inline function checkpoint():Void {
+		if (checkpointCallback != null)
+			checkpointCallback();
+	}
 
 	static inline function utf8Width(code:Int):Int
 		return code < 0xE0 ? 2 : code < 0xF0 ? 3 : 4;

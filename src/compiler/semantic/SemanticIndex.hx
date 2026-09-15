@@ -236,33 +236,53 @@ class SemanticIndex {
 	}
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
-	public function indexRecoveredSyntax(program:AstProgram):Void {
-		for (fn in program.functions)
+	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken):Void {
+		cancellation = token;
+		if (token != null)
+			token.check();
+		for (fn in program.functions) {
+			checkpoint();
 			recoveredFunctions.set(fn.name, fn);
-		for (owner in program.classes)
-			for (fn in owner.methods)
-				recoveredFunctions.set(owner.name + "." + fn.name, fn);
-		for (owner in program.interfaces)
-			for (fn in owner.methods)
-				recoveredFunctions.set(owner.name + "." + fn.name, fn);
-		for (owner in program.abstracts)
-			for (fn in owner.methods)
-				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		}
 		for (owner in program.classes) {
+			checkpoint();
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		}
+		for (owner in program.interfaces) {
+			checkpoint();
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		}
+		for (owner in program.abstracts) {
+			checkpoint();
+			for (fn in owner.methods)
+				recoveredFunctions.set(owner.name + "." + fn.name, fn);
+		}
+		for (owner in program.classes) {
+			checkpoint();
 			for (field in owner.fields)
 				rememberRecoveredMember(owner.name, field.name, field.span);
 			for (method in owner.methods)
 				rememberRecoveredMember(owner.name, method.name, method.span);
 		}
-		for (fn in program.functions)
+		for (fn in program.functions) {
+			checkpoint();
 			indexRecoveredFunction(fn, null);
-		for (owner in program.classes)
+		}
+		for (owner in program.classes) {
+			checkpoint();
 			for (fn in owner.methods)
 				indexRecoveredFunction(fn, owner.name);
-		for (owner in program.abstracts)
+		}
+		for (owner in program.abstracts) {
+			checkpoint();
 			for (fn in owner.methods)
 				indexRecoveredFunction(fn, owner.name);
+		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		checkpoint();
+		cancellation = null;
 	}
 
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void

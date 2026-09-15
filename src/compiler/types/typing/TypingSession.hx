@@ -42,6 +42,7 @@ class TypingSession {
 	public final nativeAbiTarget:String;
 	/** Keep typing local when the input is an editor recovery tree. */
 	public final tolerant:Bool;
+	final checkpointCallback:Null<Void -> Void>;
 	public final nativeLayoutsByName:Map<String, TypedNativeLayout> = [];
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
@@ -59,12 +60,19 @@ class TypingSession {
 		return bodyContexts[bodyContexts.length - 1];
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false) {
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false,
+			?checkpoint:Void -> Void) {
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
 		this.representation = new TypeRepresentation(this);
 		this.tolerant = tolerant;
+		this.checkpointCallback = checkpoint;
+	}
+
+	public inline function checkpoint():Void {
+		if (checkpointCallback != null)
+			checkpointCallback();
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {

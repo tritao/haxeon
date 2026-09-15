@@ -1,4 +1,6 @@
 import compiler.service.LanguageService;
+import compiler.service.CancellationError;
+import compiler.service.CancellationToken;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
@@ -64,6 +66,7 @@ class ParserRecoveryMain {
 		assertIncompleteDeclarations();
 		assertPartialTypeFacts();
 		assertTolerantTypedSnapshot();
+		assertRecoveryCancellation();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
@@ -229,6 +232,31 @@ class ParserRecoveryMain {
 			default:
 				throw "incomplete parameter type did not become TUnknown";
 		}
+	}
+
+	static function assertRecoveryCancellation():Void {
+		var source = new SourceFile("CancelledRecovery.hx", "function main():Void { var first:Int = 1; var second:Int = first; }");
+		var token = new CancellationToken();
+		token.cancel();
+		var cancelled = false;
+		try
+			Typer.typeRecovered(new Parser(new Lexer(source).tokenize()).parseProgramRecovering().program, null, token.check)
+		catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled)
+			throw "partial typing swallowed a cancelled recovery request";
+
+		var checkpoints = 0;
+		cancelled = false;
+		try {
+			new Parser(new Lexer(source).tokenize(), function() {
+				if (++checkpoints == 2)
+					throw new CancellationError();
+			}).parseProgramRecovering();
+		} catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled)
+			throw "parser recovery did not honor its cancellation checkpoint";
 	}
 
 	static function assertTruncationRecovery():Void {
