@@ -257,6 +257,14 @@ class ParserRecoveryMain {
 		if (!foundError)
 			throw "incomplete initializer did not retain an explicit error type";
 
+		var errorStatementSource = new SourceFile("ErrorStatementTyping.hx", "function main():Void { if () return; var after:Int = 1; }");
+		var errorStatementProgram = new Parser(new Lexer(errorStatementSource).tokenize()).parseProgramRecovering().program,
+			errorStatementTyped = Typer.typeRecovered(errorStatementProgram);
+		if (errorStatementTyped == null
+			|| errorStatementTyped.functions.length != 1
+			|| errorStatementTyped.functions[0].statements.length < 2)
+			throw "tolerant typing discarded a valid declaration after an ErrorStatement";
+
 		var signatureService = new LanguageService(),
 			signatureSource = "function take(value:Int):Void return; function main():Void return take(";
 		signatureService.update("SignatureRecovery.hx", signatureSource);

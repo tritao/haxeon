@@ -37,6 +37,7 @@ import compiler.types.TypedAst.TypedSwitchObjectFieldAccess;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.service.CancellationError;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -381,7 +382,9 @@ class BodyTyper {
 		for (statement in statements) {
 			try {
 				output = output.concat(typeStatementsStrict([statement], scope, result));
-			} catch (_:CompileError) {
+			} catch (error:Dynamic) {
+				if (Std.isOfType(error, CancellationError))
+					throw error;
 				retainRecoveredDeclaration(statement, scope);
 				var span = statementSpan(statement);
 				output.push(TExpression(new TypedExpression(TNullLiteral, TError, span), span));
@@ -1235,6 +1238,10 @@ class BodyTyper {
 			return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
 		} catch (error:CompileError) {
 			if (!session.tolerant)
+				throw error;
+			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError) || !session.tolerant)
 				throw error;
 			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
 		}
