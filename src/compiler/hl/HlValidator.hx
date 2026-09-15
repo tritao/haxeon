@@ -8,6 +8,18 @@ class HlValidator {
 	public static function validate(code:HlCode):Void {
 		if (code.types.length == 0)
 			throw "HL module has no types";
+		if (code.bytes == null || code.bytePositions == null || code.constants == null)
+			throw "HL module byte and constant tables must be initialized";
+		for (position in code.bytePositions)
+			if (position < 0 || position >= code.bytes.length)
+				throw 'Invalid byte blob position $position';
+		for (constant in code.constants) {
+			if (constant == null || constant.fields == null || constant.global < 0 || constant.global >= code.globals.length)
+				throw "Invalid HL constant descriptor";
+			for (field in constant.fields)
+				if (field < 0)
+					throw 'Invalid constant field index $field';
+		}
 
 		for (type in code.types) {
 			switch type {

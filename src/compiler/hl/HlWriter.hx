@@ -57,12 +57,12 @@ class HlWriter {
 		writeUnsignedIndex(code.ints.length);
 		writeUnsignedIndex(code.floats.length);
 		writeUnsignedIndex(code.strings.length);
-		writeUnsignedIndex(0); // byte blobs
+		writeUnsignedIndex(code.bytePositions.length);
 		writeUnsignedIndex(code.types.length);
 		writeUnsignedIndex(code.globals.length);
 		writeUnsignedIndex(code.natives.length);
 		writeUnsignedIndex(code.functions.length);
-		writeUnsignedIndex(0); // constants
+		writeUnsignedIndex(code.constants.length);
 		writeUnsignedIndex(code.entryPoint);
 
 		for (value in code.ints)
@@ -70,7 +70,10 @@ class HlWriter {
 		for (value in code.floats)
 			output.writeDouble(value);
 		writeStrings(code.strings);
-		output.writeInt32(0); // byte blob storage size
+		output.writeInt32(code.bytes.length);
+		output.write(code.bytes);
+		for (position in code.bytePositions)
+			writeUnsignedIndex(position);
 		if (hasDebug) {
 			writeUnsignedIndex(debugFiles.length);
 			writeStrings(debugFiles);
@@ -89,6 +92,12 @@ class HlWriter {
 		}
 		for (fn in code.functions)
 			writeFunction(fn);
+		for (constant in code.constants) {
+			writeUnsignedIndex(constant.global);
+			writeUnsignedIndex(constant.fields.length);
+			for (field in constant.fields)
+				writeUnsignedIndex(field);
+		}
 		writeDebugSections(code);
 	}
 

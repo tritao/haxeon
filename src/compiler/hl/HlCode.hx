@@ -1,5 +1,7 @@
 package compiler.hl;
 
+import haxe.io.Bytes;
+
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
 	public static inline final VERSION = 7;
@@ -7,10 +9,13 @@ class HlCode {
 	public var ints:Array<Int> = [];
 	public var floats:Array<Float> = [];
 	public var strings:Array<String> = [];
+	public var bytes:Bytes = Bytes.alloc(0);
+	public var bytePositions:Array<Int> = [];
 	public var types:Array<HlTypeDef> = [];
 	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
+	public var constants:Array<HlConstant> = [];
 	public var debugSections:Array<HlDebugSection> = [];
 	public var sourceSnapshots:Array<HlSourceSnapshot> = [];
 	public var entryPoint:Int = 0;
@@ -25,6 +30,12 @@ typedef HlDebugSection = {final kind:Int; final version:Int; final flags:Int; fi
 typedef HlSourceSnapshot = {
 	final sourceHash:Int;
 	final content:haxe.io.Bytes;
+}
+
+/** Constant aggregate initialized from the module's global constant pools. */
+typedef HlConstant = {
+	final global:Int;
+	final fields:Array<Int>;
 }
 
 /** Stable debugger identity for a compiled function. */
