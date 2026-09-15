@@ -108,6 +108,8 @@ class SemanticIndex {
 	final tokens:Array<Token>;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
+	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
+	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
@@ -239,8 +241,11 @@ class SemanticIndex {
 	}
 
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
-	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram):Void {
+	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
+			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		cancellation = token;
+		recoveryResolve = resolve;
+		recoveryResolveEnumCase = resolveEnumCase;
 		if (token != null)
 			token.check();
 		for (fn in program.functions) {
@@ -307,6 +312,8 @@ class SemanticIndex {
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
+		recoveryResolve = null;
+		recoveryResolveEnumCase = null;
 	}
 
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
@@ -348,13 +355,18 @@ class SemanticIndex {
 	}
 
 	function resolveRecoveredSymbol(name:String):Null<SemanticSymbolId>
-		return recoveredDeclaredSymbol(name);
+		return resolvedRecoveredSymbol(name);
 
 	function resolveRecoveredEnumCase(name:String, index:Int):Null<SemanticSymbolId> {
 		for (declaration in declarations.enums)
 			if (declaration.name == name && index >= 0 && index < declaration.cases.length)
 				return recoveredDeclaredSymbol(name + "." + declaration.cases[index].name);
-		return null;
+		return recoveryResolveEnumCase == null ? null : recoveryResolveEnumCase(name, index);
+	}
+
+	function resolvedRecoveredSymbol(name:String):Null<SemanticSymbolId> {
+		var local = recoveredDeclaredSymbol(name);
+		return local == null && recoveryResolve != null ? recoveryResolve(name) : local;
 	}
 
 	function indexRecoveredStatements(functionKey:String, statements:Array<AstStatement>, scope:SourceSpan, depth:Int):Void {
@@ -470,7 +482,7 @@ class SemanticIndex {
 				if (separator < 0) {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
-						var declaration = recoveredDeclaredSymbol(name);
+						var declaration = resolvedRecoveredSymbol(name);
 						if (declaration != null)
 							bind(declaration, referenceToken(tokens, span, name) == null ? span : referenceToken(tokens, span, name).span);
 						else
@@ -480,7 +492,8 @@ class SemanticIndex {
 					var receiver = name.substring(0, separator),
 						member = name.substring(name.lastIndexOf(".") + 1);
 					bindRecoveredLocal(receiver, span);
-					bindRecoveredMember(Variable(receiver, span), member, span);
+					if (bindRecoveredMember(Variable(receiver, span), member, span) == null)
+						bindNamed(resolveRecoveredSymbol, name, span);
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object);
@@ -492,8 +505,10 @@ class SemanticIndex {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
 						receiver = Variable(receiverName, span),
-						callee = bindRecoveredMember(receiver, memberName, span),
-						owner = memberOwner(recoveredExpressionBindingType(receiver));
+						callee = bindRecoveredMember(receiver, memberName, span);
+					if (callee == null)
+						callee = bindNamed(resolveRecoveredSymbol, name, span);
+					var owner = memberOwner(recoveredExpressionBindingType(receiver));
 					if (callee == null)
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
@@ -501,7 +516,7 @@ class SemanticIndex {
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
-						var callee = recoveredDeclaredSymbol(name);
+						var callee = resolvedRecoveredSymbol(name);
 						if (callee != null) {
 							var token = referenceToken(tokens, span, sourceName(name));
 							if (token != null)

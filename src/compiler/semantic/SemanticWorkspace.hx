@@ -204,16 +204,27 @@ class SemanticWorkspace {
 
 	/** Collect references from the current editor model without using its data as workspace state. */
 	public function editorLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
-		if (state.ast == null && state.recoveredSemanticModel != null && state.recoveredSemanticModel.index.symbol(id) != null) {
-			var result:Array<{state:ModuleState, span:SourceSpan}> = [];
+		var recovered:Array<{state:ModuleState, span:SourceSpan}> = [];
+		if (state.ast == null && state.recoveredSemanticModel != null)
 			for (span in state.recoveredSemanticModel.index.locations(id)) {
 				if (token != null)
 					token.check();
-				result.push({state: state, span: span});
+				recovered.push({state: state, span: span});
 			}
-			return result;
+		if (state.recoveredSemanticModel == null || state.recoveredSemanticModel.index.symbol(id) != null)
+			return recovered.length == 0 ? indexedLocations(id, token) : recovered;
+		var result = indexedLocations(id, token);
+		for (location in recovered) {
+			var duplicate = false;
+			for (existing in result)
+				if (sameSpan(existing.span, location.span)) {
+					duplicate = true;
+					break;
+				}
+			if (!duplicate)
+				result.push(location);
 		}
-		return indexedLocations(id, token);
+		return result;
 	}
 
 	public function indexedCalls(?token:CancellationToken):Array<{state:ModuleState, edge:SemanticCallEdge}> {

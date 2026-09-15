@@ -2,6 +2,7 @@ package compiler.service;
 
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstProgram;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
@@ -285,7 +286,9 @@ class LanguageService {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint);
-			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram);
+			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
+				function(name) return resolveRecoveredSymbol(recovered.program, name),
+				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index));
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
@@ -318,6 +321,45 @@ class LanguageService {
 					existing.origin = diagnostic.origin;
 			}
 		}
+	}
+
+	function resolveRecoveredSymbol(program:AstProgram, name:String):Null<SemanticSymbolId> {
+		var direct = compiler.semanticWorkspace.resolveSymbolId(name);
+		if (direct != null)
+			return direct;
+		var separator = name.indexOf(".");
+		if (separator < 1)
+			return null;
+		var qualifier = name.substring(0, separator),
+			suffix = name.substring(separator + 1, name.length);
+		for (importPath in program.imports) {
+			var importedName = importPath.substring(importPath.lastIndexOf(".") + 1, importPath.length),
+				alias = importedName;
+			for (candidate in program.importAliases.keys())
+				if (candidate == qualifier)
+					alias = candidate;
+			if (alias == qualifier) {
+				var imported = compiler.semanticWorkspace.resolveSymbolId(importPath + "." + suffix);
+				if (imported != null)
+					return imported;
+			}
+		}
+		return null;
+	}
+
+	function resolveRecoveredEnumCase(program:AstProgram, name:String, index:Int):Null<SemanticSymbolId> {
+		var direct = compiler.semanticWorkspace.resolveEnumCaseId(name, index);
+		if (direct != null)
+			return direct;
+		for (importPath in program.imports) {
+			var importedName = importPath.substring(importPath.lastIndexOf(".") + 1, importPath.length);
+			if (importedName == name) {
+				var imported = compiler.semanticWorkspace.resolveEnumCaseId(importPath, index);
+				if (imported != null)
+					return imported;
+			}
+		}
+		return null;
 	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult

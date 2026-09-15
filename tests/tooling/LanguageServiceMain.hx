@@ -210,6 +210,15 @@ class LanguageServiceMain {
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
 			throw "language service imported symbol resolution failed";
+		var importedRecoverySource = "package editor; import editor.util.Math; function main():Int { return Math.add(20,";
+		importService.update("editor/Main.hx", importedRecoverySource);
+		var importedRecoveryPosition = importedRecoverySource.lastIndexOf("add") + 1,
+			importedRecoveryDefinition = importService.definition("editor/Main.hx", importedRecoveryPosition),
+			importedRecoveryReferences = importService.references("editor/Main.hx", importedRecoveryPosition);
+		if (importedRecoveryDefinition == null
+			|| importedRecoveryDefinition.path != "editor/util/Math.hx"
+			|| importedRecoveryReferences.length < 1)
+			throw "recovered imported symbol resolution failed";
 		var enumService = new LanguageService();
 		enumService.update("model/Kind.hx", "package model; enum Kind { One; Two(value:Int); }");
 		var enumSource = "package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";
