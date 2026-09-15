@@ -258,6 +258,7 @@ class LanguageService {
 		structuralIndex.remove(name);
 		recoveredCompletionPrograms.remove(name);
 		compiler.semanticWorkspace.invalidateResolutionCache();
+		refreshAllRecovery();
 		return true;
 	}
 
@@ -402,6 +403,16 @@ class LanguageService {
 				pending.push(candidate);
 			}
 		}
+	}
+
+	/** Rebuild all non-valid snapshots after a module disappears from the workspace. */
+	function refreshAllRecovery():Void {
+		var states:Array<ModuleState> = [for (state in compiler.modules) if (state.ast == null) state];
+		for (state in states)
+			clearRecoveredSnapshot(state);
+		for (state in states)
+			recoverSyntax(state);
+		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
 	function clearRecoveredSnapshot(state:ModuleState):Void {

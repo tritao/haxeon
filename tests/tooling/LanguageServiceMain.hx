@@ -909,6 +909,8 @@ class LanguageServiceMain {
 			|| removalService.workspaceSymbols("obsolete").length != 0
 			|| removalService.compiler.semanticWorkspace.resolveTypeSymbolId("removed.Helper") != null)
 			throw "language-service removal did not invalidate deleted dependency state";
+		if ([for (item in removalService.complete("removed/Main.hx", removalSource.length)) item.label].indexOf("obsolete") >= 0)
+			throw "language-service removal retained a deleted member in the consumer recovery snapshot";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
