@@ -125,10 +125,16 @@ class HlLoadedRuntimeModule {
 		return new HlRuntimePatchTransaction(this, bytes);
 	}
 
-	/** Haxeon preflights HLP identity/revision before native publication. */
+	/** Apply an external HLP update through the Haxe-owned transaction policy. */
 	public function patch(bytes:Bytes):Void {
 		if (disposed)
 			throw "HashLink loaded runtime module has been unloaded";
+		new HlRuntimePatchTransaction(this, bytes).commit();
+	}
+
+	/** Haxeon preflights HLP identity/revision before native publication. */
+	@:allow(compiler.hl.HlRuntimePatchTransaction)
+	function commitPatch(bytes:Bytes):Void {
 		var patch:{moduleId:Bytes, baseRevision:Int, revision:Int} = null;
 		try {
 			patch = HlPatchHeaderReader.decode(bytes);

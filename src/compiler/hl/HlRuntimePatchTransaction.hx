@@ -50,7 +50,7 @@ class HlRuntimePatchTransaction {
 			throw 'HashLink runtime patch transaction is stale (expected revision $baseRevision, got ${owner.revision})';
 		if (patchBaseRevision != baseRevision)
 			throw 'HashLink runtime patch transaction has the wrong base revision (expected $baseRevision, got $patchBaseRevision)';
-		owner.patch(bytes);
+		owner.commitPatch(bytes);
 		state = Committed;
 	}
 

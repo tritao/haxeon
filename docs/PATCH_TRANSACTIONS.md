@@ -23,8 +23,10 @@ HashLink remains the final quiescence authority during retirement.
 
 `HlRuntimePatchTransaction` snapshots the HLP header when staging: it owns a
 copy of the patch bytes, records the base and target revisions, and rejects a
-foreign module identity before native staging. Commit still rechecks the live
-revision, so two transactions staged from one generation cannot both publish.
+foreign module identity before native staging. Both `patch(bytes)` and explicit
+stage/commit callers use this same transaction path. Commit still rechecks the
+live revision, so two transactions staged from one generation cannot both
+publish.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
