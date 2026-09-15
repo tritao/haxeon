@@ -8,6 +8,7 @@ import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
+import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -1441,6 +1442,23 @@ class ParserRecoveryMain {
 			cancelled = true;
 		if (!cancelled)
 			throw "partial typing swallowed a cancelled recovery request";
+
+		var inferenceSource = new SourceFile("CancelledInference.hx", [for (index in 0...32)
+			"function candidate" + index + "() return " + index + ";"].join("")),
+			inferenceProgram = new Parser(new Lexer(inferenceSource).tokenize()).parseProgramRecovering().program,
+			inferenceCheckpoints = 0;
+		cancelled = false;
+		try {
+			SignatureInference.inferProgram(inferenceProgram, function() {
+				inferenceCheckpoints++;
+				if (inferenceCheckpoints == 6)
+					throw new CancellationError();
+			});
+		}
+		catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled || inferenceCheckpoints < 6)
+			throw "signature inference did not honor its cancellation checkpoint";
 
 		var checkpoints = 0;
 		cancelled = false;

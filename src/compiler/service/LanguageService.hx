@@ -527,7 +527,7 @@ class LanguageService {
 				recoveredProgram = cached.program;
 				declarations = cached.declarations;
 			} else {
-				recoveredProgram = recoveredCompletionProgram(candidate, model.program);
+				recoveredProgram = recoveredCompletionProgram(candidate, model.program, token);
 				declarations = DeclarationIndex.forModule(recoveredProgram, candidate.source);
 				recoveredTypingModules.set(candidate.name, {
 					revision: candidate.revision,
@@ -1488,7 +1488,7 @@ class LanguageService {
 			var candidateAst = effectiveAst(candidate);
 			if (candidateAst == null || !recoveryModuleVisible(program, candidate, candidateAst))
 				continue;
-			var completionAst = recoveredCompletionProgram(candidate, candidateAst);
+			var completionAst = recoveredCompletionProgram(candidate, candidateAst, token);
 			var identityFor = function(name:String):Null<String> {
 				var identity = compiler.semanticWorkspace.resolveSymbolId(candidate.name + "." + name);
 				return identity == null ? null : Std.string(identity);
@@ -1553,7 +1553,7 @@ class LanguageService {
 			var ast = effectiveAst(candidate);
 			if (ast == null)
 				continue;
-			var completionAst = recoveredCompletionProgram(candidate, ast),
+			var completionAst = recoveredCompletionProgram(candidate, ast, token),
 				add = function(name:String, kind:String, detail:String, insertText:Null<String>):Void {
 					if (name.length == 0)
 						return;
@@ -1585,12 +1585,12 @@ class LanguageService {
 			}
 	}
 
-	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram):AstProgram {
+	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram, ?token:CancellationToken):AstProgram {
 		var cached = recoveredCompletionPrograms.get(state.name),
 			valid = state.ast != null;
 		if (cached != null && cached.revision == state.revision && cached.valid == valid)
 			return cached.program;
-		var program = SignatureInference.inferProgram(ast);
+		var program = SignatureInference.inferProgram(ast, token == null ? null : token.check);
 		recoveredCompletionPrograms.set(state.name, {revision: state.revision, valid: valid, program: program});
 		return program;
 	}
@@ -2285,7 +2285,7 @@ class LanguageService {
 				rawAst = imported == null ? null : effectiveAst(imported);
 			if (imported == null || rawAst == null)
 				continue;
-			var importedAst = recoveredCompletionProgram(imported, rawAst);
+			var importedAst = recoveredCompletionProgram(imported, rawAst, token);
 			var importedPrefix = importedPath + ".";
 			for (fn in importedAst.functions) {
 				if (token != null)

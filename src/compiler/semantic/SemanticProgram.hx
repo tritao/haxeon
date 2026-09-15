@@ -34,8 +34,8 @@ class SemanticProgram {
 	}
 
 	/** Build editor declarations without allowing incomplete inheritance to abort body typing. */
-	public static function analyzeRecovered(program:AstProgram):SemanticProgram {
-		return analyzeThroughMode(program, SignatureTyped, true);
+	public static function analyzeRecovered(program:AstProgram, ?checkpoint:Void->Void):SemanticProgram {
+		return analyzeThroughMode(program, SignatureTyped, true, checkpoint);
 	}
 
 	/** Build a semantic snapshot only through the requested declaration stage. */
@@ -43,11 +43,11 @@ class SemanticProgram {
 		return analyzeThroughMode(program, through, false);
 	}
 
-	static function analyzeThroughMode(program:AstProgram, through:DeclarationStage, recovered:Bool):SemanticProgram {
+	static function analyzeThroughMode(program:AstProgram, through:DeclarationStage, recovered:Bool, ?checkpoint:Void->Void):SemanticProgram {
 		if ((through : Int) > (SignatureTyped : Int))
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
-		var inferred = SignatureInference.inferProgram(program);
+		var inferred = SignatureInference.inferProgram(program, checkpoint);
 		var declarations = recovered ? DeclarationIndex.registeredRecovered(inferred) : DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
 			lifecycle = new DeclarationLifecycle(declarations),

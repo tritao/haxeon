@@ -32,20 +32,26 @@ private class InferenceEnvironment {
 
 /** Collects declaration-level constraints before body typing. */
 class SignatureInference {
-	public static function inferProgram(program:AstProgram):AstProgram {
+	public static function inferProgram(program:AstProgram, ?checkpoint:Void->Void):AstProgram {
 		var enums:Map<String, AstEnum> = [];
-		for (enumDecl in program.enums)
+		for (enumDecl in program.enums) {
+			tick(checkpoint);
 			enums.set(enumDecl.name, enumDecl);
+		}
 		var constructors:Map<String, AstFunction> = [];
 		var classes:Map<String, AstClass> = [];
 		for (classDecl in program.classes) {
+			tick(checkpoint);
 			classes.set(classDecl.name, classDecl);
-			for (method in classDecl.methods)
+			for (method in classDecl.methods) {
+				tick(checkpoint);
 				if (method.name == "new")
-					constructors.set(classDecl.name, inferFieldBoundArguments(method, classDecl));
+					constructors.set(classDecl.name, inferFieldBoundArguments(method, classDecl, checkpoint));
+			}
 		}
 		var inferredClasses:Array<AstClass> = [];
 		for (classDecl in program.classes) {
+			tick(checkpoint);
 			inferredClasses.push({
 				name: classDecl.name,
 				isExtern: classDecl.isExtern,
@@ -56,13 +62,14 @@ class SignatureInference {
 				base: classDecl.base,
 				interfaces: classDecl.interfaces,
 				fields: classDecl.fields,
-				methods: inferClassMethods(classDecl, enums, constructors, classes),
+				methods: inferClassMethods(classDecl, enums, constructors, classes, checkpoint),
 				span: classDecl.span
 			});
 		}
 		var inferredFunctions:Array<AstFunction> = [];
 		for (fn in program.functions) {
-			inferredFunctions.push(inferFunction(inferDefaultBoundArguments(fn), enums));
+			tick(checkpoint);
+			inferredFunctions.push(inferFunction(inferDefaultBoundArguments(fn, checkpoint), enums, null, null, checkpoint));
 		}
 		return {
 			packageName: program.packageName,
@@ -78,40 +85,57 @@ class SignatureInference {
 		};
 	}
 
+	static inline function tick(checkpoint:Null<Void->Void>):Void {
+		if (checkpoint != null)
+			checkpoint();
+	}
+
 	static function inferClassMethods(classDecl:AstClass, enums:Map<String, AstEnum>, constructors:Map<String, AstFunction>,
-			classes:Map<String, AstClass>):Array<AstFunction> {
+			classes:Map<String, AstClass>, ?checkpoint:Void->Void):Array<AstFunction> {
 		var methods:Array<AstFunction> = [],
 			byName:Map<String, AstFunction> = [];
 		for (method in classDecl.methods) {
-			methods.push(inferFieldBoundArguments(method, classDecl));
+			tick(checkpoint);
+			methods.push(inferFieldBoundArguments(method, classDecl, checkpoint));
 		}
-		for (method in methods)
+		for (method in methods) {
+			tick(checkpoint);
 			byName.set(method.name, method);
+		}
 		for (_ in 0...methods.length) {
+			tick(checkpoint);
 			var calleeConstraints:Map<String, Map<String, AstType>> = [];
 			for (method in methods) {
+				tick(checkpoint);
 				var environment = new InferenceEnvironment();
-				for (argument in method.arguments)
+				for (argument in method.arguments) {
+					tick(checkpoint);
 					if (argument.type != InferredType)
 						environment.set(argument.name, argument.type);
-				collectCallConstraints(method.statements, environment, byName, calleeConstraints);
+				}
+				collectCallConstraints(method.statements, environment, byName, calleeConstraints, checkpoint);
 			}
 			methods = [
 				for (method in methods)
 					replaceArguments(method, constraintsFor(calleeConstraints, method.name))
 			];
-			for (method in methods)
+			for (method in methods) {
+				tick(checkpoint);
 				byName.set(method.name, method);
+			}
 		}
 		var constrained = [
 			for (method in methods)
-				inferCallBoundArguments(method, classDecl, byName, constructors, classes)
+				inferCallBoundArguments(method, classDecl, byName, constructors, classes, checkpoint)
 		];
-		for (method in constrained)
+		for (method in constrained) {
+			tick(checkpoint);
 			byName.set(method.name, method);
+		}
 		var inferred:Array<AstFunction> = [];
 		for (method in constrained) {
-			inferred.push(inferFunction(method, enums, byName, classDecl));
+			tick(checkpoint);
+			inferred.push(inferFunction(method, enums, byName, classDecl, checkpoint));
 		}
 		return inferred;
 	}
@@ -120,40 +144,47 @@ class SignatureInference {
 		return constraints.exists(name) ? constraints.get(name) : [];
 
 	static function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
-			constraints:Map<String, Map<String, AstType>>):Void
-		for (statement in statements)
+			constraints:Map<String, Map<String, AstType>>, ?checkpoint:Void->Void):Void
+		for (statement in statements) {
+			tick(checkpoint);
 			switch statement {
 				case VarDeclaration(name, type, initializer, _):
 					var valueType = type == null ? inferSimpleExpression(initializer, environment) : type;
 					if (valueType != null)
 						environment.set(name, valueType);
-					collectExpressionCallConstraint(initializer, environment, methods, constraints);
+					collectExpressionCallConstraint(initializer, environment, methods, constraints, checkpoint);
 				case Return(expression, _), Expression(expression, _), Throw(expression, _):
-					collectExpressionCallConstraint(expression, environment, methods, constraints);
+					collectExpressionCallConstraint(expression, environment, methods, constraints, checkpoint);
 				case If(predicate, yes, no, _):
-					collectExpressionCallConstraint(predicate, environment, methods, constraints);
-					collectCallConstraints(yes, environment.fork(), methods, constraints);
-					collectCallConstraints(no, environment.fork(), methods, constraints);
+					collectExpressionCallConstraint(predicate, environment, methods, constraints, checkpoint);
+					collectCallConstraints(yes, environment.fork(), methods, constraints, checkpoint);
+					collectCallConstraints(no, environment.fork(), methods, constraints, checkpoint);
 				case While(predicate, body, _), DoWhile(body, predicate, _):
-					collectExpressionCallConstraint(predicate, environment, methods, constraints);
-					collectCallConstraints(body, environment.fork(), methods, constraints);
+					collectExpressionCallConstraint(predicate, environment, methods, constraints, checkpoint);
+					collectCallConstraints(body, environment.fork(), methods, constraints, checkpoint);
 				case ForIn(_, _, iterable, body, _):
-					collectExpressionCallConstraint(iterable, environment, methods, constraints);
-					collectCallConstraints(body, environment.fork(), methods, constraints);
+					collectExpressionCallConstraint(iterable, environment, methods, constraints, checkpoint);
+					collectCallConstraints(body, environment.fork(), methods, constraints, checkpoint);
 				case Try(body, catches, _):
-					collectCallConstraints(body, environment.fork(), methods, constraints);
-					for (clause in catches)
-						collectCallConstraints(clause.statements, environment.fork(), methods, constraints);
+					collectCallConstraints(body, environment.fork(), methods, constraints, checkpoint);
+					for (clause in catches) {
+						tick(checkpoint);
+						collectCallConstraints(clause.statements, environment.fork(), methods, constraints, checkpoint);
+					}
 				case Switch(expression, cases, fallback, _, _):
-					collectExpressionCallConstraint(expression, environment, methods, constraints);
-					for (switchCase in cases)
-						collectCallConstraints(switchCase.statements, environment.fork(), methods, constraints);
-					collectCallConstraints(fallback, environment.fork(), methods, constraints);
+					collectExpressionCallConstraint(expression, environment, methods, constraints, checkpoint);
+					for (switchCase in cases) {
+						tick(checkpoint);
+						collectCallConstraints(switchCase.statements, environment.fork(), methods, constraints, checkpoint);
+					}
+					collectCallConstraints(fallback, environment.fork(), methods, constraints, checkpoint);
 				default:
 			}
+		}
 
 	static function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
-			constraints:Map<String, Map<String, AstType>>):Void
+			constraints:Map<String, Map<String, AstType>>, ?checkpoint:Void->Void):Void {
+		tick(checkpoint);
 		switch expression {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
 				var methodName = localMethodName(name);
@@ -166,20 +197,23 @@ class SignatureInference {
 						inferred = [];
 						constraints.set(methodName, inferred);
 					}
-					for (index in 0...arguments.length)
+					for (index in 0...arguments.length) {
+						tick(checkpoint);
 						if (index < callee.arguments.length && callee.arguments[index].type == InferredType)
 							switch arguments[index] {
 								case Variable(argumentName, _):
 									if (environment.exists(argumentName)) inferred.set(callee.arguments[index].name, environment.get(argumentName));
 								default:
 							}
+					}
 				}
 			case ClosureCall(callee, arguments, _):
-				collectExpressionCallConstraint(callee, environment, methods, constraints);
+				collectExpressionCallConstraint(callee, environment, methods, constraints, checkpoint);
 				for (argument in arguments)
-					collectExpressionCallConstraint(argument, environment, methods, constraints);
+					collectExpressionCallConstraint(argument, environment, methods, constraints, checkpoint);
 			default:
 		}
+	}
 
 	static function inferSimpleExpression(expression:AstExpression, environment:InferenceEnvironment):Null<AstType>
 		return switch expression {
@@ -198,25 +232,27 @@ class SignatureInference {
 		};
 
 	static function inferCallBoundArguments(fn:AstFunction, owner:AstClass, methods:Map<String, AstFunction>, constructors:Map<String, AstFunction>,
-			classes:Map<String, AstClass>):AstFunction {
+			classes:Map<String, AstClass>, ?checkpoint:Void->Void):AstFunction {
 		var inferred:Map<String, AstType> = [];
-		for (statement in fn.statements)
+		for (statement in fn.statements) {
+			tick(checkpoint);
 			switch statement {
 				case Assignment(path, value, _):
 					switch value {
-						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes, inferred);
+						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes, inferred, checkpoint);
 						default:
 					}
 				case Return(expression, _), Expression(expression, _):
-					inferExpressionBoundArguments(expression, owner, methods, constructors, classes, inferred);
+					inferExpressionBoundArguments(expression, owner, methods, constructors, classes, inferred, checkpoint);
 				default:
 			}
+		}
 		return replaceArguments(fn, inferred);
 	}
 
 	static function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass, classes:Map<String, AstClass>,
-			inferred:Map<String, AstType>):Void {
-		var fieldType = resolveMemberPath(path, owner, classes);
+			inferred:Map<String, AstType>, ?checkpoint:Void->Void):Void {
+		var fieldType = resolveMemberPath(path, owner, classes, checkpoint);
 		if (fieldType == null)
 			return;
 		switch fieldType {
@@ -228,13 +264,14 @@ class SignatureInference {
 	}
 
 	static function inferExpressionBoundArguments(expression:AstExpression, owner:AstClass, methods:Map<String, AstFunction>,
-			constructors:Map<String, AstFunction>, classes:Map<String, AstClass>, inferred:Map<String, AstType>):Void
+			constructors:Map<String, AstFunction>, classes:Map<String, AstClass>, inferred:Map<String, AstType>, ?checkpoint:Void->Void):Void {
+		tick(checkpoint);
 		switch expression {
 			case Call(name, arguments, _):
-				inferArgumentsFromCallable(methods, localMethodName(name), arguments, inferred);
+				inferArgumentsFromCallable(methods, localMethodName(name), arguments, inferred, checkpoint);
 				if (StringTools.endsWith(name, ".push") && arguments.length == 1) {
 					var receiverPath = name.substring(0, name.length - ".push".length),
-						receiverType = resolveMemberPath(receiverPath, owner, classes);
+						receiverType = resolveMemberPath(receiverPath, owner, classes, checkpoint);
 					if (receiverType != null)
 						switch receiverType {
 							case ArrayType(element):
@@ -246,32 +283,38 @@ class SignatureInference {
 						}
 				}
 			case MethodCall(_, name, arguments, _):
-				inferArgumentsFromCallable(methods, name, arguments, inferred);
+				inferArgumentsFromCallable(methods, name, arguments, inferred, checkpoint);
 			case New(name, arguments, _), NewGeneric(name, _, arguments, _):
-				inferArgumentsFromCallable(constructors, name, arguments, inferred);
+				inferArgumentsFromCallable(constructors, name, arguments, inferred, checkpoint);
 			default:
 		}
+	}
 
 	static function inferArgumentsFromCallable(callables:Map<String, AstFunction>, name:String, arguments:Array<AstExpression>,
-			inferred:Map<String, AstType>):Void {
+			inferred:Map<String, AstType>, ?checkpoint:Void->Void):Void {
 		if (!callables.exists(name))
 			return;
 		var callable = callables.get(name);
-		for (index in 0...arguments.length)
+		for (index in 0...arguments.length) {
+			tick(checkpoint);
 			if (index < callable.arguments.length && callable.arguments[index].type != InferredType)
 				switch arguments[index] {
 					case Variable(argumentName, _):
 						inferred.set(argumentName, callable.arguments[index].type);
 					default:
 				}
+		}
 	}
 
-	static function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>):Null<AstType> {
+	static function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>, ?checkpoint:Void->Void):Null<AstType> {
 		var parts = splitPath(path), current:Null<AstType> = null;
-		for (field in owner.fields)
+		for (field in owner.fields) {
+			tick(checkpoint);
 			if (field.name == parts[0])
 				current = field.type;
+		}
 		for (index in 1...parts.length) {
+			tick(checkpoint);
 			var resolved = current;
 			if (resolved == null)
 				return null;
@@ -280,9 +323,11 @@ class SignatureInference {
 					current = null;
 					if (classes.exists(className)) {
 						var classDecl = classes.get(className);
-						for (field in classDecl.fields)
+						for (field in classDecl.fields) {
+							tick(checkpoint);
 							if (field.name == parts[index])
 								current = field.type;
+						}
 					}
 				default:
 					current = null;
@@ -295,18 +340,23 @@ class SignatureInference {
 		return compiler.QualifiedName.split(path);
 	}
 
-	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
+	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass,
+			?checkpoint:Void->Void):AstFunction {
 		if (fn.result != InferredType)
 			return fn;
 		var environment = new InferenceEnvironment();
-		for (argument in fn.arguments)
+		for (argument in fn.arguments) {
+			tick(checkpoint);
 			if (argument.type != InferredType)
 				environment.set(argument.name, argument.type);
+		}
 		if (owner != null)
-			for (field in owner.fields)
+			for (field in owner.fields) {
+				tick(checkpoint);
 				environment.set(field.name, field.type);
+			}
 		var candidates:Array<AstType> = [];
-		var hasValueReturn = collectReturnTypes(fn.statements, environment, enums, methods, candidates);
+		var hasValueReturn = collectReturnTypes(fn.statements, environment, enums, methods, candidates, checkpoint);
 		if (candidates.length == 0)
 			return hasValueReturn ? fn : withResult(fn, VoidType);
 		var inferred:Null<AstType> = candidates[0];
@@ -331,35 +381,42 @@ class SignatureInference {
 		};
 
 	static function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
-			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
+			methods:Null<Map<String, AstFunction>>, output:Array<AstType>, ?checkpoint:Void->Void):Bool {
 		var found = false;
-		for (statement in statements)
+		for (statement in statements) {
+			tick(checkpoint);
 			switch statement {
 				case Return(expression, _):
 					found = true;
-					var candidate = inferExpression(expression, environment, enums, methods);
+					var candidate = inferExpression(expression, environment, enums, methods, checkpoint);
 					if (candidate != null)
 						output.push(candidate);
 				case If(_, yes, no, _):
-					found = collectReturnTypes(yes, environment, enums, methods, output) || found;
-					found = collectReturnTypes(no, environment, enums, methods, output) || found;
+					found = collectReturnTypes(yes, environment, enums, methods, output, checkpoint) || found;
+					found = collectReturnTypes(no, environment, enums, methods, output, checkpoint) || found;
 				case Try(body, catches, _):
-					found = collectReturnTypes(body, environment, enums, methods, output) || found;
-					for (clause in catches)
-						found = collectReturnTypes(clause.statements, environment, enums, methods, output) || found;
+					found = collectReturnTypes(body, environment, enums, methods, output, checkpoint) || found;
+					for (clause in catches) {
+						tick(checkpoint);
+						found = collectReturnTypes(clause.statements, environment, enums, methods, output, checkpoint) || found;
+					}
 				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					found = collectReturnTypes(body, environment, enums, methods, output) || found;
+					found = collectReturnTypes(body, environment, enums, methods, output, checkpoint) || found;
 				case Switch(_, cases, fallback, _, _):
-					for (switchCase in cases)
-						found = collectReturnTypes(switchCase.statements, environment, enums, methods, output) || found;
-					found = collectReturnTypes(fallback, environment, enums, methods, output) || found;
+					for (switchCase in cases) {
+						tick(checkpoint);
+						found = collectReturnTypes(switchCase.statements, environment, enums, methods, output, checkpoint) || found;
+					}
+					found = collectReturnTypes(fallback, environment, enums, methods, output, checkpoint) || found;
 				default:
 			}
+		}
 		return found;
 	}
 
 	static function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
-			?methods:Map<String, AstFunction>):Null<AstType>
+			?methods:Map<String, AstFunction>, ?checkpoint:Void->Void):Null<AstType> {
+		tick(checkpoint);
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
@@ -375,29 +432,31 @@ class SignatureInference {
 			case Call(name, _, _):
 				var method = methods == null ? null : methods.get(localMethodName(name));
 				if (method != null && method.result != InferredType) method.result; else inferQualifiedCollectionCall(name, environment);
-			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods) {
+			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods, checkpoint) {
 					case FunctionType(_, result): result;
 					default: null;
 				};
-			case MethodCall(object, name, _, _): inferCollectionMethod(inferExpression(object, environment, enums, methods), name);
+			case MethodCall(object, name, _, _): inferCollectionMethod(inferExpression(object, environment, enums, methods, checkpoint), name);
 			case SwitchExpression(subject, cases, fallback, _):
-				var subjectType = inferExpression(subject, environment, enums, methods),
+				var subjectType = inferExpression(subject, environment, enums, methods, checkpoint),
 					inferred:Null<AstType> = null;
 				for (switchCase in cases) {
+					tick(checkpoint);
 					var caseEnvironment = environment.fork();
-					bindPattern(switchCase.value, subjectType, caseEnvironment, enums);
-					var candidate = inferExpression(switchCase.result, caseEnvironment, enums, methods);
+					bindPattern(switchCase.value, subjectType, caseEnvironment, enums, checkpoint);
+					var candidate = inferExpression(switchCase.result, caseEnvironment, enums, methods, checkpoint);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
 						inferred = candidate;
 				}
 				if (fallback != null) {
-					var candidate = inferExpression(fallback, environment, enums, methods);
+					var candidate = inferExpression(fallback, environment, enums, methods, checkpoint);
 					if (candidate != null && (inferred == null || sameType(inferred, candidate)))
 						inferred = candidate;
 				}
 				inferred;
 			default: null;
 		};
+	}
 
 	static function inferQualifiedCollectionCall(name:String, environment:InferenceEnvironment):Null<AstType> {
 		var parts = splitPath(name);
@@ -417,7 +476,8 @@ class SignatureInference {
 			default: null;
 		};
 
-	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>):Void {
+	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
+			?checkpoint:Void->Void):Void {
 		if (subjectType == null)
 			return;
 		var enumName = switch subjectType {
@@ -430,14 +490,18 @@ class SignatureInference {
 		switch pattern {
 			case Call(name, arguments, _):
 				var caseName = lastPathSegment(name);
-				for (caseDecl in enumDecl.cases)
+				for (caseDecl in enumDecl.cases) {
+					tick(checkpoint);
 					if (caseDecl.name == caseName)
-						for (index in 0...arguments.length)
+						for (index in 0...arguments.length) {
+							tick(checkpoint);
 							switch arguments[index] {
 								case Variable(binding, _) if (binding != "_" && index < caseDecl.params.length):
 									environment.set(binding, caseDecl.params[index].type);
-								default:
+							default:
 							}
+						}
+				}
 			default:
 		}
 	}
@@ -533,51 +597,60 @@ class SignatureInference {
 	static function localMethodName(name:String):String
 		return lastPathSegment(name);
 
-	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction {
-		fn = inferDefaultBoundArguments(fn);
+	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass, ?checkpoint:Void->Void):AstFunction {
+		fn = inferDefaultBoundArguments(fn, checkpoint);
 		var inferred:Map<String, AstType> = [];
-		for (statement in fn.statements)
+		for (statement in fn.statements) {
+			tick(checkpoint);
 			switch statement {
 				case FieldAssignment(object, fieldName, value, _):
 					switch object {
 						case Variable(objectName, _) if (objectName == "this"):
-							constrainExpressionFromField(inferred, value, fieldName, classDecl);
+							constrainExpressionFromField(inferred, value, fieldName, classDecl, checkpoint);
 						default:
 					}
 				case Assignment(fieldPath, value, _) if (StringTools.startsWith(fieldPath, "this.")):
-					constrainExpressionFromField(inferred, value, fieldPath.substring("this.".length, fieldPath.length), classDecl);
+					constrainExpressionFromField(inferred, value, fieldPath.substring("this.".length, fieldPath.length), classDecl, checkpoint);
 				default:
 			}
+		}
 		return replaceArguments(fn, inferred);
 	}
 
-	static function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass):Void
+	static function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass,
+			?checkpoint:Void->Void):Void {
+		tick(checkpoint);
 		switch expression {
 			case Variable(argumentName, _):
 				constrainFromField(inferred, argumentName, fieldName, classDecl);
 			case Conditional(_, whenTrue, whenFalse, _):
-				constrainExpressionFromField(inferred, whenTrue, fieldName, classDecl);
-				constrainExpressionFromField(inferred, whenFalse, fieldName, classDecl);
+				constrainExpressionFromField(inferred, whenTrue, fieldName, classDecl, checkpoint);
+				constrainExpressionFromField(inferred, whenFalse, fieldName, classDecl, checkpoint);
 			case BlockExpression(_, result, _):
-				constrainExpressionFromField(inferred, result, fieldName, classDecl);
+				constrainExpressionFromField(inferred, result, fieldName, classDecl, checkpoint);
 			case Cast(value, null, _):
-				constrainExpressionFromField(inferred, value, fieldName, classDecl);
+				constrainExpressionFromField(inferred, value, fieldName, classDecl, checkpoint);
 			case SwitchExpression(_, cases, defaultExpression, _):
-				for (switchCase in cases)
-					constrainExpressionFromField(inferred, switchCase.result, fieldName, classDecl);
+				for (switchCase in cases) {
+					tick(checkpoint);
+					constrainExpressionFromField(inferred, switchCase.result, fieldName, classDecl, checkpoint);
+				}
 				if (defaultExpression != null)
-					constrainExpressionFromField(inferred, defaultExpression, fieldName, classDecl);
+					constrainExpressionFromField(inferred, defaultExpression, fieldName, classDecl, checkpoint);
 			default:
 		}
+	}
 
-	static function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
+	static function inferDefaultBoundArguments(fn:AstFunction, ?checkpoint:Void->Void):AstFunction {
 		var inferred:Map<String, AstType> = [];
-		for (argument in fn.arguments)
+		for (argument in fn.arguments) {
+			tick(checkpoint);
 			if (argument.type == InferredType && argument.defaultValue != null) {
 				var defaultType = inferSimpleExpression(argument.defaultValue, new InferenceEnvironment());
 				if (defaultType != null)
 					inferred.set(argument.name, defaultType);
 			}
+		}
 		return replaceArguments(fn, inferred);
 	}
 
