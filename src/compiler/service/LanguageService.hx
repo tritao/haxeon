@@ -13,6 +13,7 @@ import compiler.modules.ModuleState;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
+import compiler.semantic.SemanticIndex.UnresolvedSymbol;
 import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
@@ -463,6 +464,30 @@ class LanguageService {
 	public function diagnostics(path:String):Array<Diagnostic> {
 		var state = stateFor(path);
 		return state == null ? [] : state.diagnostics.copy();
+	}
+
+	/** Return unresolved names recorded by the effective editor snapshot. */
+	public function unresolvedSymbols(path:String, ?token:CancellationToken):Array<UnresolvedSymbol> {
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (model == null)
+			return [];
+		var result = model.index.unresolvedSymbols();
+		if (token != null)
+			for (_ in result)
+				token.check();
+		return result;
+	}
+
+	/** Return the unresolved fact covering a source position, if any. */
+	public function unresolvedSymbolAt(path:String, position:Int, ?token:CancellationToken):Null<UnresolvedSymbol> {
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
+		if (model == null)
+			return null;
+		if (token != null)
+			token.check();
+		return model.index.unresolvedAt(position);
 	}
 
 	public function codeActions(path:String, start:Int, end:Int):Array<CodeAction> {

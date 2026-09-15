@@ -681,6 +681,16 @@ class LanguageServiceMain {
 		];
 		if (samePackageNames.indexOf("current") < 0)
 			throw "same-package recovery did not resolve the current type shape";
+		var unresolvedService = new LanguageService(),
+			unresolvedSource = "function main():Void { unknownName; }";
+		unresolvedService.update("Unresolved.hx", unresolvedSource);
+		var unresolved = unresolvedService.unresolvedSymbols("Unresolved.hx"),
+			foundUnresolved = false;
+		for (symbol in unresolved)
+			if (symbol.name == "unknownName")
+				foundUnresolved = true;
+		if (!foundUnresolved || unresolvedService.unresolvedSymbolAt("Unresolved.hx", unresolvedSource.indexOf("unknownName") + 1) == null)
+			throw "recovered unresolved symbols were not exposed through the language service";
 		var unrecoverableService = new LanguageService(),
 			unrecoverableSource = "function target():Int return 1; function main():Int return target();";
 		unrecoverableService.update("Unrecoverable.hx", unrecoverableSource);
