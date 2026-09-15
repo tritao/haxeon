@@ -71,6 +71,15 @@ typedef CompletionResult = {
 	final isIncomplete:Bool;
 }
 
+/** Compiler-owned completion context selected from one editor snapshot. */
+typedef EditorCompletionContext = {
+	final context:SemanticCompletionContext;
+	final revision:Int;
+	final stale:Bool;
+	final recovered:Bool;
+	final confidence:EditorSnapshotConfidence;
+}
+
 /** A same-document semantic occurrence, classified for LSP highlighting. */
 typedef DocumentHighlight = {
 	final span:SourceSpan;
@@ -974,6 +983,24 @@ class LanguageService {
 	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>
 		return completeResult(path, position, token).items;
 
+	public function completionContext(path:String, position:Int, ?qualifier:String, ?token:CancellationToken):Null<EditorCompletionContext> {
+		if (token != null)
+			token.check();
+		var state = stateFor(path),
+			snapshot = state == null ? null : editorSnapshot(state),
+			model = snapshot == null ? null : snapshot.semanticModel;
+		if (state == null || snapshot == null || model == null)
+			return null;
+		var resolvedQualifier = qualifier == null ? memberQualifier(snapshot.source, position) : qualifier;
+		return {
+			context: model.index.completionContext(position, resolvedQualifier, token),
+			revision: snapshot.revision,
+			stale: snapshot.stale,
+			recovered: snapshot.recovered,
+			confidence: snapshot.confidence
+		};
+	}
+
 	public function completeResult(path:String, position:Int, ?token:CancellationToken):CompletionResult {
 		if (token != null)
 			token.check();
@@ -986,8 +1013,9 @@ class LanguageService {
 		var incompleteSnapshot = snapshot.recovered || snapshot.stale;
 		var prefix = identifierPrefix(snapshot.source, position);
 		var qualifier = memberQualifier(snapshot.source, position),
-			model = effectiveSemanticModel(state),
-			semanticContext = model == null ? null : model.index.completionContext(position, qualifier, token);
+			model = snapshot.semanticModel,
+			editorContext = completionContext(path, position, qualifier, token),
+			semanticContext = editorContext == null ? null : editorContext.context;
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Override) {
 			var owner = typeDeclaration(semanticContext.receiver);
 			if (owner != null)

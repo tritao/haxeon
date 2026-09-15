@@ -681,6 +681,13 @@ class LanguageServiceMain {
 		];
 		if (samePackageNames.indexOf("current") < 0)
 			throw "same-package recovery did not resolve the current type shape";
+		var editorContext = samePackageService.completionContext("same/Main.hx", samePackageSource.length);
+		if (editorContext == null
+			|| editorContext.recovered != true
+			|| editorContext.stale
+			|| editorContext.context.receiver == null
+			|| editorContext.revision != samePackageService.compiler.modules.get("same.Main").revision)
+			throw "completion context did not retain editor snapshot metadata or receiver type";
 		var unresolvedService = new LanguageService(),
 			unresolvedSource = "function main():Void { unknownName; }";
 		unresolvedService.update("Unresolved.hx", unresolvedSource);
