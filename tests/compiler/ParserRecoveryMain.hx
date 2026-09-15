@@ -471,6 +471,15 @@ class ParserRecoveryMain {
 		}
 		if (genericInheritanceValue != "value:Int" || genericInheritanceGet != "get():Int")
 			throw 'generic inherited member types were not substituted: value=$genericInheritanceValue, get=$genericInheritanceGet';
+		var genericNavigationSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.value;",
+			genericNavigationPosition = genericNavigationSource.lastIndexOf("child.value") + "child.".length + 1;
+		genericInheritanceService.update("GenericInheritance.hx", genericNavigationSource);
+		var genericNavigationDefinition = genericInheritanceService.definition("GenericInheritance.hx", genericNavigationPosition),
+			genericNavigationReferences = genericInheritanceService.references("GenericInheritance.hx", genericNavigationPosition);
+		if (genericNavigationDefinition == null || genericNavigationDefinition.stale
+			|| genericNavigationDefinition.span.start != genericNavigationSource.indexOf("var value")
+			|| genericNavigationReferences.length < 2)
+			throw "recovered inherited member navigation did not retain its current semantic identity";
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");

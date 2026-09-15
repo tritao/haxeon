@@ -803,13 +803,14 @@ class SemanticIndex {
 	}
 
 	function bindRecoveredMember(object:AstExpression, name:String, span:SourceSpan):Null<SemanticSymbolId> {
-		var owner = switch recoveredExpressionBindingType(object) {
-			case TNullable(element): memberOwner(element);
-			case type: memberOwner(type);
-		};
+		var receiverType = recoveredExpressionBindingType(object),
+			owner = switch receiverType {
+				case TNullable(element): memberOwner(element);
+				case type: memberOwner(type);
+			};
 		if (owner == null)
 			return null;
-		var id = recoveredMembers.get(owner + "." + name);
+		var id = recoveredMemberSymbol(receiverType, name, []);
 		if (id == null && recoveryResolve != null)
 			id = recoveryResolve(owner + "." + name);
 		if (id == null)
@@ -821,14 +822,50 @@ class SemanticIndex {
 	}
 
 	function isKnownRecoveredMember(object:AstExpression, name:String):Bool {
-		var owner = switch recoveredExpressionBindingType(object) {
-			case TNullable(element): memberOwner(element);
-			case type: memberOwner(type);
-		};
+		var receiverType = recoveredExpressionBindingType(object),
+			owner = switch receiverType {
+				case TNullable(element): memberOwner(element);
+				case type: memberOwner(type);
+			};
 		return owner != null
-			&& (knownRecoveredMembers.exists(owner + "." + name)
+			&& (recoveredMemberSymbol(receiverType, name, []) != null
+				|| knownRecoveredMembers.exists(owner + "." + name)
 				|| recoveredFieldType(owner, name, []) != null
 				|| recoveredMethod(owner, name, []) != null);
+	}
+
+	function recoveredMemberSymbol(type:CompilerType, name:String, visiting:Array<String>):Null<SemanticSymbolId> {
+		var owner = switch type {
+			case TNullable(element): memberOwner(element);
+			case value: memberOwner(value);
+		};
+		if (owner == null || visiting.indexOf(owner) >= 0)
+			return null;
+		var direct = recoveredMembers.get(owner + "." + name);
+		if (direct != null)
+			return direct;
+		direct = recoveredDeclaredSymbol(owner + "." + name);
+		if (direct != null)
+			return direct;
+		var nextVisiting = visiting.copy();
+		nextVisiting.push(owner);
+		var substitutions = recoveredTypeSubstitutions(type),
+			classDecl = declarations.classes.get(owner);
+		if (classDecl != null && classDecl.base != null) {
+			var baseType = recoveredType(classDecl.base, substitutions),
+				inherited = recoveredMemberSymbol(baseType, name, nextVisiting);
+			if (inherited != null)
+				return inherited;
+		}
+		var interfaceDecl = declarations.interfaces.get(owner);
+		if (interfaceDecl != null)
+			for (base in interfaceDecl.bases) {
+				var baseType = recoveredType(base, substitutions),
+					inherited = recoveredMemberSymbol(baseType, name, nextVisiting);
+				if (inherited != null)
+					return inherited;
+			}
+		return null;
 	}
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
