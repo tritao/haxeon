@@ -578,6 +578,16 @@ class LanguageServiceMain {
 			memberRunReferences = callPrecisionService.references("CallPrecision.hx", memberRunPosition);
 		if (topLevelRunReferences.length != 2 || memberRunReferences.length != 2)
 			throw 'language service call reference precision failed: top=${topLevelRunReferences.length}, member=${memberRunReferences.length}';
+		var shadowedCallService = new LanguageService(),
+			shadowedCallSource = "function run():Int return 1; function main():Int { var run = function() { return 2; }; return run(); }";
+		shadowedCallService.update("ShadowedCall.hx", shadowedCallSource);
+		shadowedCallService.compile("ShadowedCall");
+		var shadowedRunPosition = shadowedCallSource.indexOf("function run") + "function ".length + 1,
+			shadowedRunReferences = shadowedCallService.references("ShadowedCall.hx", shadowedRunPosition),
+			shadowedLocalPosition = shadowedCallSource.lastIndexOf("run()") + 1,
+			shadowedLocalReferences = shadowedCallService.references("ShadowedCall.hx", shadowedLocalPosition);
+		if (shadowedRunReferences.length != 1 || shadowedLocalReferences.length != 2)
+			throw 'language service call indexing crossed a local closure shadow: global=${shadowedRunReferences.length}, local=${shadowedLocalReferences.length}';
 		var implementationService = new LanguageService(),
 			contractSource = "package api; interface Plugin { function run():Int; }",
 			baseSource = "package base; import api.Plugin; class Base implements Plugin { public function run():Int return 1; }",

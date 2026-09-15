@@ -2384,7 +2384,12 @@ class SemanticIndex {
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TCall(name, arguments), TCNativeCall(name, arguments):
-				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
+				var shadowed = localBindingAt(fn, name, expression.span.start);
+				if (shadowed != null) {
+					bind(shadowed, referenceToken(tokens, expression.span, sourceLocalName(name)) == null ? expression.span
+						: referenceToken(tokens, expression.span, sourceLocalName(name)).span);
+				} else
+					addCall(bindNamed(resolve, name, expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):
@@ -2457,6 +2462,7 @@ class SemanticIndex {
 				|| index > 1 && tokens[index - 2].kind == TokenKind.Dot
 				|| index >= tokens.length
 				|| tokens[index].kind != TokenKind.LeftParen
+				|| symbolIdAt(token.span.start) != null
 				|| declaration != null
 				&& token.span.start == declaration.span.start)
 				continue;
@@ -2588,6 +2594,43 @@ class SemanticIndex {
 			token = referenceToken(tokens, span, sourceLocalName(identity));
 		if (symbols.exists(id) && token != null)
 			bind(id, token.span);
+	}
+
+	/**
+	 * Recover a lexical local when a typed call was lowered to a qualified
+	 * function name. This is needed for tolerant typing paths that preserve the
+	 * callable result but lose the original TClosureCall wrapper.
+	 */
+	function localBindingAt(fn:TypedFunction, name:String, position:Int):Null<SemanticSymbolId> {
+		var localName = name,
+			separator = name.lastIndexOf(".");
+		if (separator >= 0) {
+			if (name.substring(0, separator) != module)
+				return null;
+			localName = name.substring(separator + 1);
+		}
+		var selected:Null<SemanticCompletionLocal> = null;
+		for (local in completionLocals) {
+			if (local.name != sourceLocalName(localName)
+				|| position < local.declaration.end
+				|| position < local.scope.start
+				|| position > local.scope.end)
+				continue;
+			if (selected == null
+				|| local.depth > selected.depth
+				|| local.depth == selected.depth && local.declaration.start > selected.declaration.start)
+				selected = local;
+		}
+		if (selected == null)
+			return null;
+		for (symbol in symbols)
+			if (StringTools.startsWith(Std.string(symbol.id), module + ":local:" + fn.name + ":")
+				&& symbol.name == selected.name
+				&& symbol.declaration.file.path == selected.declaration.file.path
+				&& symbol.declaration.start == selected.declaration.start
+				&& symbol.declaration.end == selected.declaration.end)
+				return symbol.id;
+		return null;
 	}
 
 	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {
