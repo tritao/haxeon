@@ -1387,6 +1387,17 @@ class LanguageServiceMain {
 			|| appliedBoundedGenericExpectedName.indexOf("Box") < 0
 			|| appliedBoundedGenericExpectedName.indexOf("Bound") < 0)
 			throw 'recovered applied generic constraint did not provide its bounded argument type: ${appliedBoundedGenericExpected == null ? "null" : Std.string(appliedBoundedGenericExpected)}';
+		var anonymousBoundedGenericService = new LanguageService(),
+			anonymousBoundedGenericSource = "class Bound {} function take<T:Bound>(value:{inner:T}):Void return; function main():Void { take({inner:";
+		anonymousBoundedGenericService.update("AnonymousBoundedGeneric.hx", anonymousBoundedGenericSource);
+		var anonymousBoundedGenericContext = anonymousBoundedGenericService.completionContext("AnonymousBoundedGeneric.hx", anonymousBoundedGenericSource.length),
+			anonymousBoundedGenericExpected = anonymousBoundedGenericContext == null ? null : anonymousBoundedGenericContext.context.expected,
+			anonymousBoundedGenericExpectedName = switch anonymousBoundedGenericExpected {
+				case TInstance(_, name, _): Std.string(name);
+				default: null;
+			};
+		if (anonymousBoundedGenericExpectedName == null || anonymousBoundedGenericExpectedName.indexOf("Bound") < 0)
+			throw 'recovered anonymous generic constraint did not provide its bounded field type: ${anonymousBoundedGenericExpected == null ? "null" : Std.string(anonymousBoundedGenericExpected)}';
 		var objectFieldService = new LanguageService(),
 			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
 		objectFieldService.update("ObjectField.hx", objectFieldSource);

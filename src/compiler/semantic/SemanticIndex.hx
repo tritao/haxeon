@@ -1395,7 +1395,8 @@ class SemanticIndex {
 					for (field in fields)
 						{
 							name: field.name,
-							type: field.optional ? TNullable(recoveredType(field.type, substitutions)) : recoveredType(field.type, substitutions),
+							type: field.optional ? TNullable(recoveredExpectedType(field.type, fn, substitutions, active))
+								: recoveredExpectedType(field.type, fn, substitutions, active),
 							optional: field.optional
 						}
 				];
