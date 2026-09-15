@@ -316,7 +316,8 @@ class ModuleAnalyzer {
 		var root = QualifiedName.first(path);
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
 			|| root == "Std" || root == "StringTools" || root == "Type" || root == "Dynamic" || root == "Any" || root == "Int" || root == "Float"
-			|| root == "Bool" || root == "Void" || root == "UInt";
+			|| root == "Bool" || root == "Void" || root == "UInt" || root == "Int8" || root == "UInt8" || root == "Int16" || root == "UInt16"
+			|| root == "Int32" || root == "UInt32" || root == "Int64" || root == "Float32" || root == "Float64";
 	}
 
 	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void
