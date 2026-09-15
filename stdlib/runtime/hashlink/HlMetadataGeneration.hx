@@ -4,6 +4,7 @@ import runtime.memory.RawPtr;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HlNative;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -17,6 +18,9 @@ typedef HlMetadataPublication = {
 	final functionDescriptors:RawPtr<HlFunction>;
 	final functionDescriptorCount:Int;
 	final functionDescriptorCapacity:Int;
+	final nativeDescriptors:RawPtr<HlNative>;
+	final nativeDescriptorCount:Int;
+	final nativeDescriptorCapacity:Int;
 	final functions:RawPtr<RawPtr<UInt8>>;
 	final functionTypes:RawPtr<RawPtr<HlType>>;
 	final functionCount:Int;
@@ -28,6 +32,7 @@ class HlMetadataGeneration {
 	public final arena:HlTypeArena;
 	public final builder:HlTypeBuilder;
 	public final functionDescriptors:HlFunctionDescriptorTable;
+	public final nativeDescriptors:HlNativeDescriptorTable;
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
@@ -37,10 +42,12 @@ class HlMetadataGeneration {
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
-	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8) {
+	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8,
+		?nativeDescriptorCapacity:Int = 8) {
 		arena = new HlTypeArena(blockSize, typeCapacity);
 		builder = new HlTypeBuilder(arena);
 		functionDescriptors = new HlFunctionDescriptorTable(arena, functionDescriptorCapacity);
+		nativeDescriptors = new HlNativeDescriptorTable(arena, nativeDescriptorCapacity);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
 	}
 
@@ -87,6 +94,12 @@ class HlMetadataGeneration {
 	public function addFunctionDescriptor(spec:HlFunctionDescriptorSpec):RawPtr<HlFunction> {
 		requireBuilding();
 		return functionDescriptors.add(spec);
+	}
+
+	/** Append one Haxe-owned HashLink native binding descriptor. */
+	public function addNativeDescriptor(spec:HlNativeDescriptorSpec):RawPtr<HlNative> {
+		requireBuilding();
+		return nativeDescriptors.add(spec);
 	}
 
 	/** Number of function dispatch slots in the module context. */
@@ -154,6 +167,9 @@ class HlMetadataGeneration {
 			functionDescriptors: functionDescriptors.pointer(),
 			functionDescriptorCount: functionDescriptors.length(),
 			functionDescriptorCapacity: functionDescriptors.capacityOf(),
+			nativeDescriptors: nativeDescriptors.pointer(),
+			nativeDescriptorCount: nativeDescriptors.length(),
+			nativeDescriptorCapacity: nativeDescriptors.capacityOf(),
 			functions: requireFunctionTable().functionPointer(),
 			functionTypes: requireFunctionTable().typePointer(),
 			functionCount: requireFunctionTable().length(),

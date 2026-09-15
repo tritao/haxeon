@@ -135,6 +135,9 @@ Function descriptors follow the same pattern: `HlFunctionDescriptorTable` reserv
 a stable contiguous `hl_function` array in the generation arena, while bytecode,
 debug, register, and assignment pointers remain opaque until the Haxe loader owns
 those representations.
+Native bindings use the same ownership rule: `HlNativeDescriptorTable` reserves
+a contiguous `hl_native` array and keeps its library/name pointers explicit, so
+native symbol resolution can remain a later kernel operation.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows

@@ -9,6 +9,7 @@ import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlFunctionTable;
 import runtime.hashlink.HlFunctionDescriptorTable;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HlNativeDescriptorTable;
 import runtime.memory.RawPtr;
 
 function main():Int {
@@ -93,6 +94,22 @@ function main():Int {
 		&& descriptorReference.ref.findex == 8
 		&& descriptorReference.ref.reference == 1
 		&& descriptorReference.ref.field.ref.reference == descriptor;
+	var nativeLibrary:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
+		nativeName:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
+		nativeTable = new HlNativeDescriptorTable(arena, 2),
+		nativeDescriptor = nativeTable.add({
+			library: nativeLibrary,
+			name: nativeName,
+			type: builtFunction,
+			findex: 9
+		});
+	var nativeDescriptorCorrect = nativeTable.length() == 1
+		&& nativeTable.capacityOf() == 2
+		&& nativeTable.pointer() == nativeDescriptor
+		&& nativeDescriptor.ref.library == nativeLibrary
+		&& nativeDescriptor.ref.name == nativeName
+		&& nativeDescriptor.ref.type == builtFunction
+		&& nativeDescriptor.ref.findex == 9;
 	var module = builder.moduleContext([
 		RawPtr.nullPtr(),
 		RawPtr.nullPtr(),
@@ -261,6 +278,12 @@ function main():Int {
 		fieldName: RawPtr.nullPtr(),
 		fieldReference: RawPtr.nullPtr()
 	});
+	var generationNativeDescriptor = generation.addNativeDescriptor({
+		library: RawPtr.nullPtr(),
+		name: RawPtr.nullPtr(),
+		type: generationFunction,
+		findex: 0
+	});
 	var publication = generation.publish();
 	var generationCorrect = publication.typeCount == 3
 		&& publication.typeCapacity == 4
@@ -273,6 +296,9 @@ function main():Int {
 		&& publication.functionDescriptorCapacity == 8
 		&& generationDescriptor.ref.object == generationObjectData
 		&& generationDescriptor.ref.field.ref.name == generationMethodName
+		&& publication.nativeDescriptors == generationNativeDescriptor
+		&& publication.nativeDescriptorCount == 1
+		&& publication.nativeDescriptorCapacity == 8
 		&& publication.functionCount == 1
 		&& publication.moduleContext == generationModule
 		&& publication.functions.offset(0).load() == RawPtr.nullPtr()

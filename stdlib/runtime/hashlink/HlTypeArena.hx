@@ -15,6 +15,7 @@ import runtime.hashlink.HlModuleContext;
 import runtime.hashlink.HlRuntimeObject;
 import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HlNative;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
@@ -59,6 +60,9 @@ class HlTypeArena {
 		return storage.alloc();
 
 	public inline function allocFunctionArray(count:Int):RawPtr<HlFunction>
+		return storage.alloc(count);
+
+	public inline function allocNativeDescriptorArray(count:Int):RawPtr<HlNative>
 		return storage.alloc(count);
 
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>
