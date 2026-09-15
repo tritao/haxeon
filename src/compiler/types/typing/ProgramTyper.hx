@@ -6,6 +6,7 @@ import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstType;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
@@ -337,7 +338,7 @@ class ProgramTyper {
 			});
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
-			baseName = BodyTyper.inheritanceName(parsedBase);
+			baseName = inheritanceName(parsedBase);
 		return {
 			name: classDecl.name,
 			isValue: isValue,
@@ -351,6 +352,14 @@ class ProgramTyper {
 			fields: fields,
 			methods: typedMethods,
 			span: classDecl.span
+		};
+	}
+
+	function inheritanceName(type:AstType):Null<String> {
+		return switch type {
+			case NamedType(name), AppliedType(name, _): name;
+			default:
+				if (session.tolerant) null; else BodyTyper.inheritanceName(type);
 		};
 	}
 

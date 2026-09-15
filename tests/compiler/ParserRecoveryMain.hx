@@ -67,6 +67,7 @@ class ParserRecoveryMain {
 		assertIncompleteDeclarations();
 		assertPartialTypeFacts();
 		assertTolerantTypedSnapshot();
+		assertTolerantDeclarationSnapshot();
 		assertRecoveryCancellation();
 		assertDiagnosticOrigins();
 		assertTruncationRecovery();
@@ -321,6 +322,18 @@ class ParserRecoveryMain {
 			default:
 				throw "incomplete parameter type did not become TUnknown";
 		}
+	}
+
+	static function assertTolerantDeclarationSnapshot():Void {
+		var source = new SourceFile("TolerantDeclaration.hx", "class Child extends\nfunction main():Void return;");
+		var recovered = new Parser(new Lexer(source).tokenize()).parseProgramRecovering().program,
+			typed = Typer.typeRecovered(recovered);
+		if (recovered.classes.length != 1)
+			throw 'parser did not retain the incomplete class: classes=${recovered.classes.length}, functions=${recovered.functions.length}';
+		if (typed == null)
+			throw "tolerant typing abandoned a program with an incomplete inheritance clause";
+		if (typed.classes.length != 1 || typed.functions.length != 1 || typed.functions[0].name != "main")
+			throw 'tolerant typing discarded a valid declaration: classes=${typed.classes.length}, functions=${typed.functions.length}';
 	}
 
 	static function assertRecoveryCancellation():Void {

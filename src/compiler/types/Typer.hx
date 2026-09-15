@@ -26,7 +26,7 @@ class Typer {
 	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String, ?checkpoint:Void->Void):Null<TypedProgram> {
 		try {
 			return new ProgramTyper(new BodyTyper(null, null, nativeAbiTarget, true,
-				checkpoint)).typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
+				checkpoint)).typeProgramMeasured(SemanticProgram.analyzeRecovered(program), null, false, null).program;
 		} catch (_:CompileError) {
 			return null;
 		} catch (error:Dynamic) {

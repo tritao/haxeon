@@ -504,11 +504,29 @@ class Parser {
 			base:Null<AstType> = null,
 			interfaces = [];
 		if (match(TokenKind.Extends))
-			base = parseType();
+			base = recovering && (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base type") : parseType();
 		while (match(TokenKind.Implements)) {
-			interfaces.push(parseType());
+			interfaces.push(recovering
+				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseType());
 			while (match(TokenKind.Comma))
-				interfaces.push(parseType());
+				interfaces.push(recovering
+					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseType());
+		}
+		if (recovering && isDeclarationBoundary(current())) {
+			recordExpected("class body");
+			return {
+				name: name,
+				isExtern: isExtern,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				isPrivate: isPrivate,
+				metadata: metadata,
+				base: base,
+				interfaces: interfaces,
+				fields: [],
+				methods: [],
+				span: start.merge(previous().span)
+			};
 		}
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [], bodyStart = position;
@@ -702,9 +720,22 @@ class Parser {
 		var start = consume(TokenKind.Interface).span, name = consumeDeclarationName("interface"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [], typeParameters = parseTypeParameters(typeConstraints), bases = [];
 		if (match(TokenKind.Extends)) {
-			bases.push(parseType());
+			bases.push(recovering
+				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseType());
 			while (match(TokenKind.Comma))
-				bases.push(parseType());
+				bases.push(recovering
+					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseType());
+		}
+		if (recovering && isDeclarationBoundary(current())) {
+			recordExpected("interface body");
+			return {
+				name: name,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				bases: bases,
+				methods: [],
+				span: start.merge(previous().span)
+			};
 		}
 		consume(TokenKind.LeftBrace);
 		var methods = [];
@@ -1576,6 +1607,9 @@ class Parser {
 			default: false;
 		};
 
+	static function isDeclarationBoundary(token:Token):Bool
+		return isTopLevelStart(token) || token.kind == TokenKind.RightBrace;
+
 	function parenthesizedLambdaAhead():Bool {
 		var depth = 0, cursor = position;
 		while (cursor < tokens.length) {
@@ -1957,7 +1991,7 @@ class Parser {
 		};
 
 	function parseAtomicType():AstType {
-		if (recovering && isExpressionTerminator(current().kind)) {
+		if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()))) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected type", span));
 			return ErrorType(span);
