@@ -246,6 +246,15 @@ class LanguageServiceMain {
 				hasImportedStaticMethod = true;
 		if (!hasImportedStaticMethod)
 			throw "recovered imported class typing did not expose static members";
+		var wildcardStaticRecoverySource = "package editor; import editor.util.*; function main():Void { return Widget.";
+		importService.update("editor/WildcardStaticMain.hx", wildcardStaticRecoverySource);
+		var wildcardStaticCompletion = importService.complete("editor/WildcardStaticMain.hx", wildcardStaticRecoverySource.length),
+			hasWildcardStaticMethod = false;
+		for (item in wildcardStaticCompletion)
+			if (item.label == "create")
+				hasWildcardStaticMethod = true;
+		if (!hasWildcardStaticMethod)
+			throw "recovered wildcard import did not expose static members";
 		var importedTypedSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); return; }";
 		importService.update("editor/TypedClassMain.hx", importedTypedSource);
 		var importedTypedModel = importService.compiler.modules.get("editor.TypedClassMain").recoveredSemanticModel,

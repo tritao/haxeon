@@ -143,6 +143,12 @@ class ParserRecoveryMain {
 			|| importResult.program.functions.length != 1
 			|| importResult.program.functions[0].name != "visible")
 			throw "unfinished import path discarded the following declaration";
+		var wildcardImportSource = new SourceFile("WildcardImport.hx", "import model.*; function visible():Void return;");
+		var wildcardImportResult = new Parser(new Lexer(wildcardImportSource).tokenize()).parseProgramRecovering();
+		if (wildcardImportResult.program.imports.length != 1
+			|| wildcardImportResult.program.imports[0] != "model.*"
+			|| wildcardImportResult.program.functions.length != 1)
+			throw "wildcard import path was not retained by recovery";
 
 		var genericSource = new SourceFile("Generic.hx", "function main():Void { var values:Array<");
 		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering();

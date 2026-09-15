@@ -47,7 +47,7 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		while (match(TokenKind.Import)) {
-			var path = parseQualifiedName();
+			var path = parseQualifiedName(true);
 			if (recovering && check(TokenKind.Dot)) {
 				advance();
 				recordExpected("import name");
@@ -425,7 +425,7 @@ class Parser {
 		};
 	}
 
-	function parseQualifiedName():String {
+	function parseQualifiedName(allowWildcard:Bool = false):String {
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
@@ -433,6 +433,11 @@ class Parser {
 		}
 		var name = consumeName().text;
 		while (check(TokenKind.Dot)) {
+			if (allowWildcard && peekKind(1) == TokenKind.Star) {
+				advance();
+				advance();
+				return name + ".*";
+			}
 			if (recovering && (isExpressionTerminator(peekKind(1)) || isDeclarationBoundary(tokens[position + 1])))
 				break;
 			advance();

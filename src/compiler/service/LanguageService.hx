@@ -1943,13 +1943,16 @@ class LanguageService {
 		for (importPath in program.imports) {
 			if (token != null)
 				token.check();
-			if (importQualifier(program, importPath) != qualifier)
+			var wildcard = importPath.length > 2 && StringTools.endsWith(importPath, ".*"),
+				matches = importQualifier(program, importPath) == qualifier || wildcard;
+			if (!matches)
 				continue;
-			var imported = importedModule(importPath),
+			var importedPath = wildcard ? importPath.substr(0, importPath.length - 2) + "." + qualifier : importPath,
+				imported = importedModule(importedPath),
 				importedAst = imported == null ? null : effectiveAst(imported);
 			if (imported == null || importedAst == null)
 				continue;
-			var importedPrefix = importPath + ".";
+			var importedPrefix = importedPath + ".";
 			for (fn in importedAst.functions) {
 				if (token != null)
 					token.check();
@@ -1957,7 +1960,7 @@ class LanguageService {
 				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}',
 					prefix, result, 1, fn.name + "(", id == null ? null : Std.string(id), importPath);
 			}
-			var importedName = sourceName(importPath);
+			var importedName = sourceName(importedPath);
 			for (classDecl in importedAst.classes) {
 				if (token != null)
 					token.check();
