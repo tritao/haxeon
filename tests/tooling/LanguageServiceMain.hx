@@ -1102,6 +1102,10 @@ class LanguageServiceMain {
 			restoredId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
 		if (restored.isIncomplete || restoredId == null || Std.string(restoredId) != Std.string(validId))
 			throw "valid editor snapshot did not replace recovery with the original semantic identity";
+		var noSnapshotCompletionService = new LanguageService();
+		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
+		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)
+			throw "completion did not request a retry when no editor snapshot was available";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 

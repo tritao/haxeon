@@ -1230,7 +1230,7 @@ class LanguageService {
 			snapshot = state == null ? null : editorSnapshot(state),
 			ast = snapshot == null ? null : snapshot.ast;
 		if (state == null || ast == null)
-			return completionResult(result);
+			return completionResult(result, state != null);
 		var incompleteSnapshot = snapshot.recovered || snapshot.stale;
 		var prefix = identifierPrefix(snapshot.source, position);
 		var qualifier = memberQualifier(snapshot.source, position),
