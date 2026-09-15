@@ -22,22 +22,15 @@ class CHeaderImporterMain {
 			.get("sample_class");
 		expect(labeledLayout != null && labeledLayout.size == 32 && labeledLayout.align == 8 && labeledLayout.offsets.get("value") == 0,
 			"record layout parser should accept labeled Clang size and alignment trailers");
+		expect(CHeaderImporter.isUserDeclaration({loc: {}}, ["D:/project/include"], "D:\\project\\include\\fixture.h"),
+			"C header declaration filtering should normalize Windows path separators");
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
 		expect(Std.isOfType(firstModel, HxiInterface)
 			&& firstModel.name == "import_fixture_h", "C header importer should return a typed HXI interface");
 		expect(first == second, "C header import must be deterministic");
-		if (first.indexOf("struct sample_options @layout(32, 8)") < 0) {
-			var layoutText = CHeaderImporter.lastLayoutText,
-				parsedLayouts = layoutText == null ? null : CHeaderImporter.parseLayouts(layoutText),
-				parsedKeys = parsedLayouts == null ? "<null>" : [for (key in parsedLayouts.keys()) key].join(","),
-				marker = layoutText == null ? -1 : layoutText.indexOf("sample_options"),
-				preview = layoutText == null ? "<null>" : marker < 0 ? layoutText.substring(0,
-					Std.int(Math.min(512,
-						layoutText.length))) : layoutText.substring(Std.int(Math.max(0, marker - 128)), Std.int(Math.min(layoutText.length, marker + 512)));
-			throw 'record layout should come from Clang (captured ${layoutText == null ? -1 : layoutText.length} bytes, marker $marker, parsed $parsedKeys): $preview';
-		}
+		expect(first.indexOf("struct sample_options @layout(32, 8)") >= 0, "record layout should come from Clang");
 		expect(first.indexOf("title: nullable<utf8> @offset(8)") >= 0, "annotated UTF-8 field offsets should be preserved");
 		expect(first.indexOf('data: ptr<const<void>> @offset(0) @borrowed @length_field("data_size")') >= 0,
 			"borrowed buffer field annotations should retain their length contract");

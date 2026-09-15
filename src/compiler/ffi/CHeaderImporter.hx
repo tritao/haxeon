@@ -29,8 +29,6 @@ typedef CLayout = {
 class CHeaderImporter {
 	static final sourceCache:Map<String, String> = [];
 	static final sourceFiles:Map<String, SourceFile> = [];
-	@:noCompletion
-	static var lastLayoutText:Null<String>;
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
@@ -70,14 +68,13 @@ class CHeaderImporter {
 			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
 		var astText = astProcess.stdout,
 			layoutText = layoutProcess.stdout + layoutProcess.stderr;
-		lastLayoutText = layoutText;
 		var layouts = parseLayouts(layoutText),
 			declarations:Array<Dynamic> = [],
 			roots = [FileSystem.fullPath(Path.directory(header))];
 		var excluded = [];
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
-				excluded.push(FileSystem.fullPath(excludedHeader));
+				excluded.push(pathKey(FileSystem.fullPath(excludedHeader)));
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
 		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded);
@@ -158,7 +155,7 @@ class CHeaderImporter {
 			|| (name != null
 				&& !StringTools.startsWith(name, "__")
 				&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
-		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(currentFile) < 0)
+		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(pathKey(currentFile)) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
 		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
@@ -947,11 +944,15 @@ class CHeaderImporter {
 		var location:Dynamic = field(node, "loc");
 		if (location == null)
 			return false;
+		currentFile = pathKey(currentFile);
 		for (root in roots)
-			if (currentFile == root || StringTools.startsWith(currentFile, root + "/"))
+			if (currentFile == pathKey(root) || StringTools.startsWith(currentFile, pathKey(root) + "/"))
 				return true;
 		return false;
 	}
+
+	static function pathKey(path:String):String
+		return StringTools.replace(path, "\\", "/");
 
 	static function declarationLocation(node:Dynamic):String {
 		var location:Dynamic = field(node, "loc"),
