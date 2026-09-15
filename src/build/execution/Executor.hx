@@ -14,11 +14,13 @@ class Executor {
 	final environment:BuildEnvironment;
 	final workerCount:Int;
 	final print:String->Void;
+	final artifactCache:ArtifactCache;
 
 	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void) {
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
 		this.print = print == null ? Sys.println : print;
+		this.artifactCache = new ArtifactCache();
 	}
 
 	public function execute(plan:ExecutionPlan):ExecutionResult {
@@ -88,7 +90,7 @@ class Executor {
 			for (action in wave) {
 				var dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints);
-				if (isUpToDate(action, fingerprint)) {
+				if (isUpToDate(action, fingerprint, dependencyFingerprints)) {
 					waveResults.set(action.id.key(), new ActionResult(action.id, 0, true, false, fingerprint));
 					continue;
 				}
@@ -125,8 +127,11 @@ class Executor {
 						continue;
 					var status = statuses[index];
 					try {
-						if (status == 0 && isCacheable(item.action))
+						if (status == 0 && isCacheable(item.action)) {
 							ActionFingerprint.save(environment.buildRoot, item.action, item.fingerprint);
+							artifactCache.publish(item.action, ActionFingerprint.globalKey(item.action, environment.target.toString(),
+								[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
+						}
 						waveResults.set(item.action.id.key(),
 							new ActionResult(item.action.id, status, false, false, item.fingerprint, status == 0 ? null : 'Action exited with status $status'));
 					} catch (error:Dynamic) {
@@ -171,7 +176,7 @@ class Executor {
 
 	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>):ActionResult {
 		var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints);
-		if (isUpToDate(action, fingerprint))
+		if (isUpToDate(action, fingerprint, dependencyFingerprints))
 			return new ActionResult(action.id, 0, true, false, fingerprint);
 		try {
 			ensureOutputDirectories(action);
@@ -181,18 +186,27 @@ class Executor {
 				case Compiler(_, invoke):
 					invoke();
 			};
-			if (status == 0 && isCacheable(action))
+			if (status == 0 && isCacheable(action)) {
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
+				artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints));
+			}
 			return new ActionResult(action.id, status, false, false, fingerprint, status == 0 ? null : 'Action exited with status $status');
 		} catch (error:Dynamic) {
 			return new ActionResult(action.id, 1, false, false, null, Std.string(error));
 		}
 	}
 
-	function isUpToDate(action:ExecutionAction, fingerprint:String):Bool
-		return isCacheable(action)
-			&& ActionFingerprint.load(environment.buildRoot, action) == fingerprint
-			&& ActionFingerprint.outputsExist(action);
+	function isUpToDate(action:ExecutionAction, fingerprint:String, dependencyFingerprints:Array<String>):Bool {
+		if (!isCacheable(action))
+			return false;
+		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint && ActionFingerprint.outputsExist(action))
+			return true;
+		if (artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints))) {
+			ActionFingerprint.save(environment.buildRoot, action, fingerprint);
+			return true;
+		}
+		return false;
+	}
 
 	static function isCacheable(action:ExecutionAction):Bool
 		return switch action.action {

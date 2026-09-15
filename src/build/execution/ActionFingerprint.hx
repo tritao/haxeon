@@ -64,6 +64,37 @@ class ActionFingerprint {
 		return Sha256.encode(Json.stringify(fields));
 	}
 
+	/** Portable identity for the global artifact cache; project-local paths are excluded. */
+	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>):String {
+		var fields:Array<String> = ["artifact-action-v1", action.id.key(), target, action.description];
+		switch action.action {
+			case Process(command, arguments, cwd, environment):
+				fields.push('command:${Path.withoutDirectory(command)}');
+				var executable = resolveTool(command);
+				if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
+					fields.push('tool-content:${Sha256.make(File.getBytes(executable)).toHex()}');
+				for (argument in arguments)
+					fields.push('argument:${portableArgument(argument, action)}');
+				var keys = [for (key in environment.keys()) key];
+				keys.sort(Reflect.compare);
+				for (key in keys)
+					fields.push('environment:$key=${portableArgument(environment.get(key), action)}');
+			case Compiler(_, _):
+				fields.push("non-cacheable-compiler-action");
+		}
+		var inputIndex = 0;
+		for (input in action.inputs) {
+			fields.push('input:$inputIndex');
+			appendPortablePath(fields, input, "");
+			inputIndex++;
+		}
+		var orderedDependencies = dependencies.copy();
+		orderedDependencies.sort(Reflect.compare);
+		for (dependency in orderedDependencies)
+			fields.push('dependency:$dependency');
+		return Sha256.encode(Json.stringify(fields));
+	}
+
 	public static function load(buildRoot:String, action:ExecutionAction):Null<String> {
 		var path = recordPath(buildRoot, action);
 		if (!FileSystem.exists(path))
@@ -119,6 +150,33 @@ class ActionFingerprint {
 		}
 		fields.push('file:$path');
 		fields.push(Sha256.make(File.getBytes(path)).toHex());
+	}
+
+	static function appendPortablePath(fields:Array<String>, path:String, relative:String):Void {
+		if (!FileSystem.exists(path)) {
+			fields.push('missing:$relative');
+			return;
+		}
+		if (FileSystem.isDirectory(path)) {
+			fields.push('directory:$relative');
+			var entries = FileSystem.readDirectory(path);
+			entries.sort(Reflect.compare);
+			for (entry in entries)
+				appendPortablePath(fields, Path.join([path, entry]), Path.join([relative, entry]));
+			return;
+		}
+		fields.push('file:$relative:${Sha256.make(File.getBytes(path)).toHex()}');
+	}
+
+	static function portableArgument(argument:String, action:ExecutionAction):String {
+		var result = argument;
+		for (output in action.outputs)
+			result = StringTools.replace(result, output, "<output>");
+		for (input in action.inputs)
+			result = StringTools.replace(result, input, "<input>");
+		if (Path.isAbsolute(result))
+			return "<path>";
+		return result;
 	}
 
 	static function resolveTool(command:String):String {

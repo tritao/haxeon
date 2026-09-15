@@ -47,6 +47,7 @@ class BuildSystemMain {
 		testIndependentActionsRunConcurrently();
 		#end
 		testFingerprintsAndSkipping();
+		testArtifactCache();
 		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testPackageSourceModel();
@@ -243,6 +244,32 @@ class BuildSystemMain {
 		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []) != baseline,
 			"changed source contents should invalidate the action");
 		removeTree(root);
+	}
+
+	static function testArtifactCache():Void {
+		var cache = temporaryDirectory("artifact-cache-store"),
+			firstRoot = temporaryDirectory("artifact-cache-first"),
+			secondRoot = temporaryDirectory("artifact-cache-second"),
+			firstSource = Path.join([firstRoot, "source.txt"]),
+			firstOutput = Path.join([firstRoot, "output.txt"]),
+			secondSource = Path.join([secondRoot, "source.txt"]),
+			secondOutput = Path.join([secondRoot, "output.txt"]);
+		File.saveContent(firstSource, "same input\n");
+		File.saveContent(secondSource, "same input\n");
+		Sys.putEnv("HAXEON_ARTIFACT_CACHE", cache);
+		var firstAction = new ExecutionAction(new ActionId("portable-copy"), [], [firstSource], [firstOutput], "portable copy",
+			Process("sh", ["-c", 'cp "$firstSource" "$firstOutput"'], firstRoot, new Map())),
+			secondAction = new ExecutionAction(new ActionId("portable-copy"), [], [secondSource], [secondOutput], "portable copy",
+				Process("sh", ["-c", 'cp "$secondSource" "$secondOutput"'], secondRoot, new Map())),
+			firstEnvironment = new BuildEnvironment(firstRoot, Path.join([firstRoot, "build"])),
+			secondEnvironment = new BuildEnvironment(secondRoot, Path.join([secondRoot, "build"]));
+		var firstResult = new Executor(firstEnvironment, 1, _ -> {}).execute(new ExecutionPlan([firstAction]));
+		var secondResult = new Executor(secondEnvironment, 1, _ -> {}).execute(new ExecutionPlan([secondAction]));
+		expect(firstResult.exitCode == 0 && secondResult.exitCode == 0 && secondResult.actions[0].skipped
+			&& File.getContent(secondOutput) == "same input\n", "portable process artifacts should restore from the global cache");
+		removeTree(cache);
+		removeTree(firstRoot);
+		removeTree(secondRoot);
 	}
 
 	static function testProjectDiscovery():Void {
