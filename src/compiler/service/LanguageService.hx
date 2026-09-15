@@ -846,8 +846,8 @@ class LanguageService {
 		if (state == null || ast == null)
 			return completionResult(result);
 		var incompleteSnapshot = snapshot.recovered || snapshot.stale;
-		var prefix = identifierPrefix(state.source, position);
-		var qualifier = memberQualifier(state.source, position),
+		var prefix = identifierPrefix(snapshot.source, position);
+		var qualifier = memberQualifier(snapshot.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Import) {
@@ -1019,7 +1019,7 @@ class LanguageService {
 		if (context == null || context.symbol == null)
 			return result;
 		var declaration = context.model.index.symbol(context.symbol),
-			source = context.state.source;
+			source = context.snapshot.source;
 		for (span in context.model.index.locations(context.symbol)) {
 			if (token != null)
 				token.check();
@@ -1035,8 +1035,9 @@ class LanguageService {
 	public function semanticTokens(path:String, ?token:CancellationToken):Array<SemanticToken> {
 		var state = stateFor(path),
 			result:Array<SemanticToken> = [],
-			tokens = state == null ? null : effectiveTokens(state),
-			model = state == null ? null : effectiveSemanticModel(state);
+			snapshot = state == null ? null : editorSnapshot(state),
+			tokens = snapshot == null ? null : snapshot.tokens,
+			model = snapshot == null ? null : snapshot.semanticModel;
 		if (state == null || tokens == null)
 			return result;
 		for (index in 0...tokens.length) {
@@ -1067,20 +1068,21 @@ class LanguageService {
 					if (hasDeclarationModifier(tokens, index, Final))
 						modifiers.push("readonly");
 				}
-				addSemanticSpan(state.source, lexical.span.start, lexical.span.end, type, modifiers, result);
+				addSemanticSpan(snapshot.source, lexical.span.start, lexical.span.end, type, modifiers, result);
 			}
 		}
-		addCommentTokens(state.source, result);
+		addCommentTokens(snapshot.source, result);
 		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		return result;
 	}
 
 	public function hover(path:String, position:Int):Null<String> {
 		var state = stateFor(path),
-			ast = state == null ? null : effectiveAst(state);
+			snapshot = state == null ? null : editorSnapshot(state),
+			ast = snapshot == null ? null : snapshot.ast;
 		if (state == null || ast == null)
 			return null;
-		var model = effectiveSemanticModel(state),
+		var model = snapshot.semanticModel,
 			indexedId = model == null ? null : model.index.symbolIdAt(position),
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
 		if (indexedSignature != null)
@@ -1091,10 +1093,10 @@ class LanguageService {
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
-		var name = identifierPrefix(state.source, position);
+		var name = identifierPrefix(snapshot.source, position);
 		if (name.length == 0)
 			return null;
-		var qualifier = memberQualifier(state.source, position);
+		var qualifier = memberQualifier(snapshot.source, position);
 		if (qualifier != null) {
 			for (enumDecl in ast.enums)
 				if (enumDecl.name == qualifier)
@@ -1107,7 +1109,7 @@ class LanguageService {
 					for (field in classDecl.fields)
 						if (field.name == name && field.isStatic)
 							return '${field.name}:${typeName(field.type)}';
-			var model = effectiveSemanticModel(state),
+			var model = snapshot.semanticModel,
 				context = model == null ? null : model.index.completionContext(position, qualifier),
 				members:Array<CompletionItem> = [];
 			if (context != null && context.receiver != null) {
@@ -1853,11 +1855,14 @@ class LanguageService {
 
 	function documentationFor(state:ModuleState, span:SourceSpan):SymbolDocumentation {
 		var cached = documentationIndex.get(state.name);
-		if (cached == null || cached.revision != state.revision) {
-			cached = {revision: state.revision, comments: DocumentationTools.scan(state.source)};
-			documentationIndex.set(state.name, cached);
+		if (span.file == state.source) {
+			if (cached == null || cached.revision != state.revision) {
+				cached = {revision: state.revision, comments: DocumentationTools.scan(state.source)};
+				documentationIndex.set(state.name, cached);
+			}
+			return DocumentationTools.forSpan(state.source, cached.comments, span);
 		}
-		return DocumentationTools.forSpan(state.source, cached.comments, span);
+		return DocumentationTools.forSpan(span.file, DocumentationTools.scan(span.file), span);
 	}
 
 	function indexedStructure(state:ModuleState, ?token:CancellationToken):StructuralIndexEntry {
@@ -1868,8 +1873,9 @@ class LanguageService {
 			return cached;
 		var folds:Array<FoldingRegion> = [],
 			containers:Array<SourceSpan> = [],
-			tokens = effectiveTokens(state),
-			source = state.source;
+			snapshot = editorSnapshot(state),
+			tokens = snapshot == null ? null : snapshot.tokens,
+			source = snapshot == null ? state.source : snapshot.source;
 		if (tokens != null) {
 			var braces:Array<compiler.syntax.Token> = [],
 				firstImport:Null<Int> = null,

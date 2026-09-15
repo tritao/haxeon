@@ -599,6 +599,23 @@ class LanguageServiceMain {
 		unrecoverableService.update("Unrecoverable.hx", "function target():Int return \"");
 		if (unrecoverableService.references("Unrecoverable.hx", unrecoverableSource.indexOf("target") + 1).length != 0)
 			throw "references unexpectedly used a last-good snapshot after unrecoverable input";
+		var staleState = unrecoverableService.compiler.modules.get("Unrecoverable"),
+			staleSource = staleState.lastGoodSource,
+			staleFolds = unrecoverableService.foldingRanges("Unrecoverable.hx"),
+			staleSelections = unrecoverableService.selectionRanges("Unrecoverable.hx", [0]),
+			staleTokens = unrecoverableService.semanticTokens("Unrecoverable.hx");
+		if (staleSource == null)
+			throw "unrecoverable input discarded the last-good source snapshot";
+		for (fold in staleFolds)
+			if (fold.span.file != staleSource || fold.span.end > staleSource.bytes.length)
+				throw "stale folding ranges were built against the current broken source";
+		for (ranges in staleSelections)
+			for (range in ranges)
+				if (range.file != staleSource || range.end > staleSource.bytes.length)
+					throw "stale selection ranges were built against the current broken source";
+		for (semanticToken in staleTokens)
+			if (semanticToken.span.file != staleSource || semanticToken.span.end > staleSource.bytes.length)
+				throw "stale semantic tokens were built against the current broken source";
 		var immediateService = new LanguageService();
 		immediateService.update("Immediate.hx", "function unfinished(value:Int,");
 		if (immediateService.compiler.modules.get("Immediate").recoveredAst == null
