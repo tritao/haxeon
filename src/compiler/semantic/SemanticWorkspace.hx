@@ -1060,6 +1060,7 @@ class SemanticWorkspace {
 					case NominalKind.NativeValue: classMember(declaration, name, visiting);
 					default: null;
 				}
+			case TAbstract(declaration, _, _): abstractMember(declaration, name, visiting);
 			default: null;
 		};
 	}
@@ -1112,6 +1113,24 @@ class SemanticWorkspace {
 							return inherited;
 					}
 				}
+		}
+		return null;
+	}
+
+	function abstractMember(abstractName:String, name:String, visiting:Map<String, Bool>):Null<WorkspaceDeclaration> {
+		var visitKey = 'abstract:$abstractName';
+		if (visiting.exists(visitKey))
+			return null;
+		visiting.set(visitKey, true);
+		for (state in orderedStates()) {
+			var model = effectiveModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.abstracts)
+				if (ownsType(state, model, decl.name, abstractName))
+					for (method in decl.methods)
+						if (method.name == name)
+							return {state: state, key: 'abstract:${decl.name}:method:$name', span: method.span};
 		}
 		return null;
 	}

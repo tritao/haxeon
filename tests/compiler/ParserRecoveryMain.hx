@@ -586,6 +586,17 @@ class ParserRecoveryMain {
 				abstractMemberGet = item.detail;
 		if (abstractMemberGet != "get():Int")
 			throw 'recovered abstract member type was not substituted: $abstractMemberGet';
+		var exactAbstractService = new LanguageService(),
+			exactAbstractSource = "abstract Box(Int) { public function new(value:Int) { this = value; } public function get():Void return; } function main():Void { var box = new Box(1); box.get(); }";
+		exactAbstractService.update("ExactAbstract.hx", exactAbstractSource);
+		exactAbstractService.analyze("ExactAbstract");
+		var exactAbstractPosition = exactAbstractSource.lastIndexOf("get") + 1,
+			exactAbstractDefinition = exactAbstractService.definition("ExactAbstract.hx", exactAbstractPosition),
+			exactAbstractReferences = exactAbstractService.references("ExactAbstract.hx", exactAbstractPosition);
+		if (exactAbstractDefinition == null
+			|| exactAbstractDefinition.path != "ExactAbstract.hx"
+			|| exactAbstractReferences.length < 2)
+			throw "exact abstract member navigation did not resolve its authoritative identity";
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");

@@ -2449,14 +2449,25 @@ class SemanticIndex {
 	}
 
 	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {
-		var id = resolve(name),
-			token = referenceToken(tokens, span, sourceName(name));
+		var sourceNameValue = semanticSourceName(name),
+			id = resolve(sourceNameValue),
+			token = referenceToken(tokens, span, sourceName(sourceNameValue));
 		if (id != null) {
 			if (token != null)
 				bind(id, token.span);
 			recordResolvedReference(name, id);
 		}
 		return id;
+	}
+
+	/** Map generated generic ABI calls back to their source declaration. */
+	static function semanticSourceName(name:String):String {
+		var prefix = "$generic:";
+		if (!StringTools.startsWith(name, prefix))
+			return name;
+		var originStart = prefix.length,
+			originEnd = name.indexOf("[", originStart);
+		return originEnd < 0 ? name.substr(originStart) : name.substring(originStart, originEnd);
 	}
 
 	function bindMember(resolve:String->Null<SemanticSymbolId>, type:CompilerType, name:String, span:SourceSpan):Void {
