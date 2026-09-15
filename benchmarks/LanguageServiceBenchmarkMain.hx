@@ -46,7 +46,8 @@ class LanguageServiceBenchmarkMain {
 		var args = Sys.args(),
 			iterations = intArg(args, "--iterations", 100),
 			warmup = intArg(args, "--warmup", 10),
-			output = stringArg(args, "--json", "out/editor-benchmark.json");
+			output = stringArg(args, "--json", "out/editor-benchmark.json"),
+			checkBudgets = hasFlag(args, "--check-budgets");
 		if (iterations < 1 || warmup < 0)
 			throw "iterations must be positive and warmup cannot be negative";
 
@@ -98,7 +99,37 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
 		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
 		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
+		if (checkBudgets) {
+			enforceBudgets(report);
+			Sys.println("Budget check: passed");
+		}
 		Sys.println('JSON: $output');
+	}
+
+	/**
+	 * Conservative p95 budgets for the small multi-module editor workload above.
+	 * The check is opt-in so ordinary benchmark runs can still be used to compare
+	 * hardware and compiler changes without turning timing noise into failures.
+	 */
+	static function enforceBudgets(report:Dynamic):Void {
+		checkBudget("edit-to-recovery", report.updateMs.p95, 100.0);
+		checkBudget("completion", report.completionMs.p95, 100.0);
+		checkBudget("signature-help", report.signatureMs.p95, 100.0);
+		checkBudget("hover", report.hoverMs.p95, 100.0);
+		checkBudget("definition", report.definitionMs.p95, 100.0);
+		checkBudget("background-analysis", report.analysisMs.p95, 500.0);
+		checkBudget("workspace-edit-to-recovery", report.workspaceUpdateMs.p95, 100.0);
+		checkBudget("workspace-completion", report.workspaceCompletionMs.p95, 100.0);
+		checkBudget("malformed-edit-to-recovery", report.malformedUpdateMs.p95, 100.0);
+		checkBudget("malformed-completion", report.malformedCompletionMs.p95, 100.0);
+		var memoryGrowth:Float = report.memoryGrowthBytes;
+		if (memoryGrowth >= 0 && memoryGrowth > 32.0 * 1024.0 * 1024.0)
+			throw 'Editor benchmark memory-growth budget exceeded: ${memoryGrowth} bytes > ${32 * 1024 * 1024} bytes';
+	}
+
+	static function checkBudget(name:String, value:Float, limit:Float):Void {
+		if (value > limit)
+			throw 'Editor benchmark $name budget exceeded: ${format(value)} ms > ${format(limit)} ms';
 	}
 
 	static function runIteration():Sample {
@@ -242,5 +273,12 @@ class LanguageServiceBenchmarkMain {
 			if (StringTools.startsWith(argument, prefix))
 				return argument.substring(prefix.length);
 		return fallback;
+	}
+
+	static function hasFlag(args:Array<String>, name:String):Bool {
+		for (argument in args)
+			if (argument == name)
+				return true;
+		return false;
 	}
 }
