@@ -258,8 +258,12 @@ class ProgramTyper {
 			fieldNames:Map<String, Bool> = [],
 			erasedSubstitutions = session.representation.erasedNominalSubstitutions(classDecl.name);
 		for (field in classDecl.fields) {
-			if (fieldNames.exists(field.name))
-				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+			if (fieldNames.exists(field.name)) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+				rememberRecoveryDiagnostic("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+				continue;
+			}
 			if (field.isInline && !field.isStatic) {
 				if (!session.tolerant)
 					BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);

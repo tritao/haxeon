@@ -742,6 +742,17 @@ class ParserRecoveryMain {
 			|| unsupportedDeclarationTyped.enums.length != 1
 			|| unsupportedDeclarationTyped.enums[0].cases.length != 2)
 			throw "tolerant typing abandoned declarations after unsupported interface or enum layout types";
+
+		var duplicateFieldSource = new SourceFile("TolerantDuplicateField.hx",
+			"class Broken { var value:Int; var value:String; public function visible():Void return; } function main():Void return;");
+		var duplicateFieldProgram = new Parser(new Lexer(duplicateFieldSource).tokenize()).parseProgramRecovering().program,
+			duplicateFieldDiagnostics = [],
+			duplicateFieldTyped = Typer.typeRecovered(duplicateFieldProgram, null, null, duplicateFieldDiagnostics);
+		if (duplicateFieldTyped == null
+			|| duplicateFieldTyped.classes.length != 1
+			|| duplicateFieldTyped.classes[0].methods.length != 1
+			|| duplicateFieldTyped.functions.length != 2)
+			throw 'tolerant typing abandoned a class after a duplicate field: ${duplicateFieldTyped == null ? "null" : "classes=" + duplicateFieldTyped.classes.length + ", methods=" + (duplicateFieldTyped.classes.length == 0 ? 0 : duplicateFieldTyped.classes[0].methods.length) + ", functions=" + duplicateFieldTyped.functions.length}, diagnostics=${[for (diagnostic in duplicateFieldDiagnostics) diagnostic.message].join(" | ")}';
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {

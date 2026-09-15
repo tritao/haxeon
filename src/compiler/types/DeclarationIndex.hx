@@ -57,6 +57,7 @@ class DeclarationIndex {
 
 	final aliasSpans:Map<String, SourceSpan> = [];
 	final fallbackSpan:SourceSpan;
+	final recovery:Bool;
 
 	public static function validated(program:AstProgram):DeclarationIndex
 		return registered(program).validate(program);
@@ -66,44 +67,51 @@ class DeclarationIndex {
 
 	/** Register a recovery tree, including an empty editor buffer. */
 	public static function registeredRecovered(program:AstProgram):DeclarationIndex
-		return new DeclarationIndex(program, false, emptyRecoverySpan());
+		return new DeclarationIndex(program, false, emptyRecoverySpan(), true);
 
 	public static function forModule(program:AstProgram, source:SourceFile):DeclarationIndex
-		return new DeclarationIndex(program, false, source.span(0, 0));
+		return new DeclarationIndex(program, false, source.span(0, 0), true);
 
-	function new(program:AstProgram, validate:Bool, emptySpan:Null<SourceSpan>) {
+	function new(program:AstProgram, validate:Bool, emptySpan:Null<SourceSpan>, recovery:Bool = false) {
+		this.recovery = recovery;
 		fallbackSpan = firstSpan(program, emptySpan);
 		for (alias in program.aliases) {
-			declareType(alias.name, DeclarationKind.Alias, alias.span);
+			if (!declareType(alias.name, DeclarationKind.Alias, alias.span))
+				continue;
 			aliases.set(alias.name, alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
-			declareType(decl.name, DeclarationKind.Enum, decl.span);
+			if (!declareType(decl.name, DeclarationKind.Enum, decl.span))
+				continue;
 			enums.set(decl.name, decl);
 			for (enumCase in decl.cases)
 				declare(DeclarationKind.EnumCase, decl.name + "." + enumCase.name, enumCase.span);
 		}
 		for (decl in program.enumAbstracts) {
-			declareType(decl.name, DeclarationKind.Abstract, decl.span);
+			if (!declareType(decl.name, DeclarationKind.Abstract, decl.span))
+				continue;
 			enumAbstracts.set(decl.name, decl);
 			for (value in decl.values)
 				declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
 		}
 		for (decl in program.abstracts) {
-			declareType(decl.name, DeclarationKind.Abstract, decl.span);
+			if (!declareType(decl.name, DeclarationKind.Abstract, decl.span))
+				continue;
 			abstracts.set(decl.name, decl);
 			for (method in decl.methods)
 				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
 		for (decl in program.interfaces) {
-			declareType(decl.name, DeclarationKind.Interface, decl.span);
+			if (!declareType(decl.name, DeclarationKind.Interface, decl.span))
+				continue;
 			interfaces.set(decl.name, decl);
 			for (method in decl.methods)
 				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
 		for (decl in program.classes) {
-			declareType(decl.name, DeclarationKind.Class, decl.span);
+			if (!declareType(decl.name, DeclarationKind.Class, decl.span))
+				continue;
 			classes.set(decl.name, decl);
 			for (field in decl.fields)
 				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
@@ -623,7 +631,7 @@ class DeclarationIndex {
 		return name;
 	}
 
-	function declareType(name:String, kind:DeclarationKind, span:SourceSpan):Void {
+	function declareType(name:String, kind:DeclarationKind, span:SourceSpan):Bool {
 		var typeKinds:Array<DeclarationKind> = [
 			DeclarationKind.Alias,
 			DeclarationKind.Enum,
@@ -633,20 +641,27 @@ class DeclarationIndex {
 		];
 		for (existing in typeKinds)
 			if (symbols.exists('$existing:$name'))
-				fail('Duplicate type name "$name"', span);
-		declare(kind, name, span);
+				if (recovery)
+					return false;
+				else
+					fail('Duplicate type name "$name"', span);
+		return declare(kind, name, span);
 	}
 
-	function declare(kind:DeclarationKind, name:String, span:SourceSpan):Void {
+	function declare(kind:DeclarationKind, name:String, span:SourceSpan):Bool {
 		var key = '$kind:$name';
-		if (symbols.exists(key))
+		if (symbols.exists(key)) {
+			if (recovery)
+				return false;
 			fail('Duplicate declaration "$name"', span);
+		}
 		symbols.set(key, {
 			id: '$kind:$name',
 			kind: kind,
 			name: name,
 			span: span
 		});
+		return true;
 	}
 
 	static function firstSpan(program:AstProgram, emptySpan:Null<SourceSpan>):SourceSpan {
