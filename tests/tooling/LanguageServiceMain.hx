@@ -274,6 +274,21 @@ class LanguageServiceMain {
 			|| importedRecoveryReferences.length != 2
 			|| staleCurrentReference)
 			throw "recovered imported symbol resolution failed";
+		var crossModuleReferenceService = new LanguageService(),
+			crossModuleTarget = "package refs; class Target { public function value():Int return 1; }",
+			crossModuleConsumer = "package refs; import refs.Target; class Consumer { public function read(target:Target):Int return target.value(); } function main():Int return 0;";
+		crossModuleReferenceService.update("refs/Target.hx", crossModuleTarget);
+		crossModuleReferenceService.update("refs/Consumer.hx", crossModuleConsumer);
+		crossModuleReferenceService.compile("refs.Consumer");
+		var brokenCrossModuleTarget = "package refs; class Target { public function value():Int { var broken = ; return 1; } }";
+		crossModuleReferenceService.update("refs/Target.hx", brokenCrossModuleTarget);
+		var crossModuleReferences = crossModuleReferenceService.references("refs/Target.hx", brokenCrossModuleTarget.indexOf("value") + 1),
+			crossModuleConsumerReference = false;
+		for (reference in crossModuleReferences)
+			if (reference.path == "refs/Consumer.hx")
+				crossModuleConsumerReference = true;
+		if (!crossModuleConsumerReference || crossModuleReferences.length < 2)
+			throw 'recovered declaration dropped authoritative cross-module references: ${[for (reference in crossModuleReferences) reference.path].join(", ")}';
 		var aliasedRecoverySource = "package editor; import editor.util.Math as M; function main():Int { return M.add(20,";
 		importService.update("editor/Main.hx", aliasedRecoverySource);
 		var aliasedRecoveryPosition = aliasedRecoverySource.lastIndexOf("add") + 1,

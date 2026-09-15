@@ -229,9 +229,13 @@ class SemanticWorkspace {
 			}
 		if (state.ast != null || state.recoveredSemanticModel == null)
 			return indexedLocations(id, token);
-		if (state.recoveredSemanticModel.index.symbol(id) != null)
-			return recovered.length == 0 ? indexedLocations(id, token) : recovered;
+		// A recovered declaration may retain an authoritative identity from the
+		// last good revision. Keep current-file locations from recovery, but
+		// merge references from the rest of the valid workspace instead of
+		// silently dropping cross-module usages.
 		var result = indexedLocations(id, token, state);
+		if (state.recoveredSemanticModel.index.symbol(id) != null && result.length == 0)
+			return recovered.length == 0 ? indexedLocations(id, token) : recovered;
 		for (location in recovered) {
 			var duplicate = false;
 			for (existing in result)
