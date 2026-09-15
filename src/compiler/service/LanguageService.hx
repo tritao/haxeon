@@ -335,8 +335,13 @@ class LanguageService {
 		return compiler.compile(entryModule, token);
 
 	public function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
-		try
-			return compiler.analyze(entryModule, token)
+		try {
+			var result = compiler.analyze(entryModule, token);
+			// Analysis publishes authoritative module models. A previous editor
+			// query may have cached a missing name before those models existed.
+			compiler.semanticWorkspace.invalidateResolutionCache();
+			return result;
+		}
 		catch (error:CompileError) {
 			recoverCurrentSyntax(token);
 			throw error;
@@ -1623,6 +1628,8 @@ class LanguageService {
 			if (semanticContext != null && semanticContext.receiver != null)
 				for (member in compiler.semanticWorkspace.editorMembersForContext(state, ast, semanticContext.receiver, token))
 					addMember(member.name, member.kind, member.detail, prefix, result);
+			for (member in compiler.semanticWorkspace.editorStaticMembersForContext(state, qualifier, ast, token))
+				addMember(member.name, member.kind, member.detail, prefix, result);
 			addImportedMembers(ast, qualifier, prefix, result, token);
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {

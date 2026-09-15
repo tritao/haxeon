@@ -994,38 +994,71 @@ class SemanticWorkspace {
 	/** Resolve one static member through a visible editor type identity. */
 	public function editorStaticMemberForContext(from:ModuleState, ownerName:String, memberName:String,
 		program:AstProgram, ?token:CancellationToken):Null<EditorMember> {
+		for (member in editorStaticMembersForContext(from, ownerName, program, token))
+			if (member.name == memberName)
+				return member;
+		return null;
+	}
+
+	/**
+	 * Enumerate static members through the unique editor-visible type identity.
+	 * This includes inherited class members and keeps short type names scoped to
+	 * the current package/import context.
+	 */
+	public function editorStaticMembersForContext(from:ModuleState, ownerName:String,
+		program:AstProgram, ?token:CancellationToken):Array<EditorMember> {
 		var identity = editorResolveTypeSymbolId(from, ownerName, program, token),
-			resolved = identity == null ? null : editorSymbolById(identity);
+			result:Array<EditorMember> = [],
+			seen:Map<String, Bool> = [],
+			visited:Map<String, Bool> = [];
+		if (identity == null)
+			return result;
+		collectEditorStaticMembers(identity, result, seen, visited, token);
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
+	function collectEditorStaticMembers(identity:SemanticSymbolId, result:Array<EditorMember>, seen:Map<String, Bool>,
+		visited:Map<String, Bool>, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
+		var identityKey = Std.string(identity);
+		if (visited.exists(identityKey))
+			return;
+		visited.set(identityKey, true);
+		var resolved = editorSymbolById(identity);
 		if (resolved == null || !isTypeKind(resolved.symbol.kind))
-			return null;
+			return;
 		var model = editorModel(resolved.state);
 		if (model == null)
-			return null;
+			return;
 		for (decl in model.program.classes)
 			if (sameSpan(decl.span, resolved.symbol.declaration)) {
+				var substitutions = editorTypeSubstitutions(decl.typeParameters, []);
 				for (field in decl.fields)
-					if (field.isStatic && field.name == memberName)
-						return {name: field.name, kind: "field", detail: field.name + ":" + editorAstTypeName(field.type, [])};
+					if (field.isStatic)
+						addEditorMember(result, seen, field.name, "field", field.name + ":" + editorAstTypeName(field.type, substitutions));
 				for (method in decl.methods)
-					if (method.isStatic && method.name == memberName)
-						return {
-							name: method.name,
-							kind: "method",
-							detail: method.name + "(" + [for (argument in method.arguments) editorAstTypeName(argument.type, [])].join(",") + "):"
-								+ editorAstTypeName(method.result, [])
-						};
+					if (method.isStatic)
+						addEditorMember(result, seen, method.name, "method",
+							method.name + "(" + [for (argument in method.arguments)
+								editorAstTypeName(argument.type, substitutions)].join(",") + "):" + editorAstTypeName(method.result, substitutions));
+				if (decl.base != null) {
+					var baseName = ModuleCanonicalizer.astTypeName(decl.base),
+						baseIdentity = editorResolveTypeSymbolId(resolved.state, baseName, model.program, token);
+					if (baseIdentity != null)
+						collectEditorStaticMembers(baseIdentity, result, seen, visited, token);
+				}
 			}
 		for (decl in model.program.abstracts)
-			if (sameSpan(decl.span, resolved.symbol.declaration))
+			if (sameSpan(decl.span, resolved.symbol.declaration)) {
+				var substitutions = editorTypeSubstitutions(decl.typeParameters, []);
 				for (method in decl.methods)
-					if (method.isStatic && method.name == memberName)
-						return {
-							name: method.name,
-							kind: "method",
-							detail: method.name + "(" + [for (argument in method.arguments) editorAstTypeName(argument.type, [])].join(",") + "):"
-								+ editorAstTypeName(method.result, [])
-						};
-		return null;
+					if (method.isStatic)
+						addEditorMember(result, seen, method.name, "method",
+							method.name + "(" + [for (argument in method.arguments)
+								editorAstTypeName(argument.type, substitutions)].join(",") + "):" + editorAstTypeName(method.result, substitutions));
+			}
 	}
 
 	function editorMembersForIdentity(type:CompilerType, identity:SemanticSymbolId,

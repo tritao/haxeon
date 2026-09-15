@@ -1275,6 +1275,21 @@ class LanguageServiceMain {
 		var nominalStaticHover = nominalStaticService.hover("nominal/app/StaticUse.hx", nominalStaticPosition);
 		if (nominalStaticHover != "shared:String")
 			throw 'recovered nominal typing lost the imported type identity during static-member hover: ${nominalStaticHover == null ? "null" : nominalStaticHover}';
+		var inheritedStaticService = new LanguageService(),
+			inheritedStaticSource = "class StaticBase { public static function inherited():Int return 1; } class StaticChild extends StaticBase {} function main():Void { StaticChild.";
+		inheritedStaticService.update("InheritedStatic.hx", inheritedStaticSource);
+		var inheritedStaticCompletion = inheritedStaticService.completeResult("InheritedStatic.hx", inheritedStaticSource.length),
+			foundInheritedStatic = false;
+		for (item in inheritedStaticCompletion.items)
+			if (item.label == "inherited" && item.detail == "inherited():Int")
+				foundInheritedStatic = true;
+		if (!foundInheritedStatic)
+			throw "recovered static completion did not expose an inherited member";
+		var inheritedStaticHoverSource = "class StaticBase { public static function inherited():Int return 1; } class StaticChild extends StaticBase {} function main():Void { StaticChild.inherited; }";
+		inheritedStaticService.update("InheritedStatic.hx", inheritedStaticHoverSource);
+		var inheritedStaticPosition = inheritedStaticHoverSource.lastIndexOf("inherited") + "inherited".length;
+		if (inheritedStaticService.hover("InheritedStatic.hx", inheritedStaticPosition) != "inherited():Int")
+			throw "recovered static hover did not resolve an inherited member";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");
