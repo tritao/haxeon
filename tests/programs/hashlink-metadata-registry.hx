@@ -31,12 +31,12 @@ function buildFunctionGeneration(changed:Bool):HlMetadataGeneration {
 	return generation;
 }
 
-function buildGlobalGeneration(count:Int):HlMetadataGeneration {
+function buildGlobalGeneration(kind:HlTypeKind, count:Int):HlMetadataGeneration {
 	var generation = new HlMetadataGeneration(128, 1),
-		type = generation.builder.primitive(HlTypeKind.Int32Type);
+		type = generation.builder.primitive(kind);
 	generation.addType(type);
 	generation.defineModule([RawPtr.nullPtr()], [type]);
-	generation.defineGlobals(count);
+	generation.defineGlobalTypes([for (_ in 0...count) type]);
 	return generation;
 }
 
@@ -112,11 +112,16 @@ function main():Int {
 			&& registry.revision == 3
 			&& registry.retiredCount == 2
 			&& structuralPublication.types.offset(2).load() == structural.type(2);
-	var globalBefore = buildGlobalGeneration(0),
-		globalAfter = buildGlobalGeneration(1),
+	var globalBefore = buildGlobalGeneration(HlTypeKind.Int32Type, 0),
+		globalAfter = buildGlobalGeneration(HlTypeKind.Int32Type, 1),
 		globalShapeChanged = requiresReload(HlMetadataCompatibility.check(globalBefore, globalAfter));
 	globalBefore.dispose();
 	globalAfter.dispose();
+	var globalTypeBefore = buildGlobalGeneration(HlTypeKind.Int32Type, 1),
+		globalTypeAfter = buildGlobalGeneration(HlTypeKind.Float32Type, 1),
+		globalTypeChanged = requiresReload(HlMetadataCompatibility.check(globalTypeBefore, globalTypeAfter));
+	globalTypeBefore.dispose();
+	globalTypeAfter.dispose();
 	var objectBefore = buildObjectGeneration(HlTypeKind.Int32Type),
 		objectAfter = buildObjectGeneration(HlTypeKind.Float32Type),
 		objectChanged = requiresReload(HlMetadataCompatibility.check(objectBefore, objectAfter));
@@ -204,7 +209,7 @@ function main():Int {
 	currentLease.release();
 	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && globalShapeChanged && disposed && firstReleased && objectChanged && nativeNamesMatch && nativeChanged
-		&& functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates
-		&& disposeBlocked ? 42 : 1;
+	return switched && rejectionStable && reloaded && globalShapeChanged && globalTypeChanged && disposed && firstReleased && objectChanged
+		&& nativeNamesMatch && nativeChanged && functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed
+		&& releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
 }

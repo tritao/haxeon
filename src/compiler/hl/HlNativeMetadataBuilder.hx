@@ -29,7 +29,7 @@ class HlNativeMetadataBuilder {
 				pointers = dispatchPointers(functionCount, functionPointers),
 				functionTypes = dispatchTypes(code, typePointers, functionCount),
 				module = generation.defineModule(pointers, functionTypes),
-				globals = generation.defineGlobals(code.globals.length);
+				globals = generation.defineGlobalTypes([for (global in code.globals) typePointers[global]]);
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
 			defineTypes(code, generation, typePointers, module, globals);

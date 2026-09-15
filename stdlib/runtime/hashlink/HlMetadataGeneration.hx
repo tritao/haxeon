@@ -21,6 +21,7 @@ typedef HlMetadataPublication = {
 	final nativeDescriptors:RawPtr<HlNative>;
 	final nativeDescriptorCount:Int;
 	final nativeDescriptorCapacity:Int;
+	final globalTypes:RawPtr<RawPtr<HlType>>;
 	final globals:RawPtr<RawPtr<UInt8>>;
 	final globalCount:Int;
 	final functions:RawPtr<RawPtr<UInt8>>;
@@ -38,6 +39,7 @@ class HlMetadataGeneration {
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
+	var globalTypes:RawPtr<RawPtr<HlType>> = RawPtr.nullPtr();
 	var globals:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
 	var globalCount:Int = 0;
 	var globalsDefined:Bool = false;
@@ -146,10 +148,23 @@ class HlMetadataGeneration {
 		globalCount = count;
 		if (count == 0)
 			return globals;
+		globalTypes = arena.allocTypePointerArray(count);
+		for (index in 0...count)
+			globalTypes.offset(index).store(RawPtr.nullPtr());
 		globals = arena.allocNativePointerArray(count);
 		for (index in 0...count)
 			globals.offset(index).store(RawPtr.nullPtr());
 		return globals;
+	}
+
+	/** Define the HLB global type table and allocate its separate value slots. */
+	public function defineGlobalTypes(types:Array<RawPtr<HlType>>):RawPtr<RawPtr<UInt8>> {
+		if (types == null)
+			throw "HashLink metadata global types are required";
+		var result = defineGlobals(types.length);
+		for (index in 0...types.length)
+			globalTypes.offset(index).store(types[index]);
+		return result;
 	}
 
 	/** Return the arena-owned slot for a 1-based HLB global index. */
@@ -160,6 +175,14 @@ class HlMetadataGeneration {
 		if (!globalsDefined || index < 0 || index > globalCount)
 			throw 'HashLink metadata global index $index is outside 1...$globalCount';
 		return globals.offset(index - 1);
+	}
+
+	/** Read one HLB global type-table entry. */
+	public function globalType(index:Int):RawPtr<HlType> {
+		requireOpen();
+		if (!globalsDefined || index < 0 || index >= globalCount)
+			throw 'HashLink metadata global type index $index is outside 0...$globalCount';
+		return globalTypes.offset(index).load();
 	}
 
 	/** Initialize HashLink-derived metadata and return its stable pointer-table view. */
@@ -203,6 +226,7 @@ class HlMetadataGeneration {
 			nativeDescriptors: nativeDescriptors.pointer(),
 			nativeDescriptorCount: nativeDescriptors.length(),
 			nativeDescriptorCapacity: nativeDescriptors.capacityOf(),
+			globalTypes: globalTypes,
 			globals: globals,
 			globalCount: globalCount,
 			functions: requireFunctionTable().functionPointer(),

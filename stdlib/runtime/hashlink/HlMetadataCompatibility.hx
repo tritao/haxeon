@@ -27,6 +27,9 @@ class HlMetadataCompatibility {
 			return Compatible;
 		if (previous.globalCount != candidate.globalCount)
 			return RequiresReload("module global table changed");
+		for (index in 0...previous.globalCount)
+			if (!sameType(previous, candidate, previous.globalType(index), candidate.globalType(index)))
+				return RequiresReload('module global type changed at index $index');
 		if (previous.functionCount() != candidate.functionCount())
 			return RequiresReload("module function table changed");
 		for (index in 0...previous.functionCount())
