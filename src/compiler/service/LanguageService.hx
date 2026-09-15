@@ -314,9 +314,11 @@ class LanguageService {
 		try {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
-				typingDiagnostics:Array<Diagnostic> = [];
-			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics,
-				recoveryTypingModules(state, recovered.program, token));
+				typingDiagnostics:Array<Diagnostic> = [],
+				typingModules = recoveryTypingModules(state, recovered.program, token);
+			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules);
+			for (module in typingModules)
+				recoveredModel.index.indexRecoveredModule(module.program, module.qualifiers, token);
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return resolveRecoveredSymbol(recovered.program, name),
 				function(name, index) return resolveRecoveredEnumCase(recovered.program, name, index),
@@ -1427,6 +1429,7 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var state = stateFor(path),
+			snapshot = state == null ? null : editorSnapshot(state),
 			tokens = state == null ? null : effectiveTokens(state),
 			model = state == null ? null : effectiveSemanticModel(state);
 		if (state == null || tokens == null || model == null)
@@ -1444,6 +1447,18 @@ class LanguageService {
 			return null;
 		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
 			signature = id == null ? null : compiler.semanticWorkspace.editorSignature(state, id);
+		if (signature == null) {
+			var qualifier = memberQualifier(snapshot.source, tokens[callee].span.end),
+				calleeName = tokens[callee].text,
+				recoveredName = qualifier == null ? calleeName : qualifier + "." + calleeName;
+			signature = model.index.recoveredSignature(recoveredName);
+			if (signature == null && qualifier != null) {
+				var context = model.index.completionContext(position, qualifier, token),
+					owner = context == null ? null : typeDeclaration(context.receiver);
+				if (owner != null)
+					signature = model.index.recoveredSignature(owner + "." + calleeName);
+			}
+		}
 		if (signature == null)
 			return null;
 		var active = activeCallParameter(tokens, open, position, token);
@@ -1454,7 +1469,7 @@ class LanguageService {
 			parameters: signature.parameters,
 			activeParameter: active
 		};
-		var resolved = compiler.semanticWorkspace.editorSymbol(state, id),
+		var resolved = id == null ? null : compiler.semanticWorkspace.editorSymbol(state, id),
 			documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 		if (documentation != null) {
 			Reflect.setField(result, "documentation", documentation.markdown);

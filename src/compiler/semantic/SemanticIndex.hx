@@ -341,6 +341,62 @@ class SemanticIndex {
 		recoveryResolveType = null;
 	}
 
+	/** Index signatures from a visible module for editor-only recovery queries. */
+	public function indexRecoveredModule(program:AstProgram, qualifiers:Array<String>, ?token:CancellationToken):Void {
+		cancellation = token;
+		for (fn in program.functions) {
+			checkpoint();
+			addRecoveredFunction(fn.name, fn);
+			for (qualifier in qualifiers)
+				addRecoveredFunction(qualifier + "." + fn.name, fn);
+		}
+		for (decl in program.interfaces) {
+			checkpoint();
+			for (method in decl.methods)
+				indexRecoveredMethod(decl.name, method, qualifiers);
+		}
+		for (decl in program.classes) {
+			checkpoint();
+			for (method in decl.methods)
+				indexRecoveredMethod(decl.name, method, qualifiers);
+		}
+		for (decl in program.abstracts) {
+			checkpoint();
+			for (method in decl.methods)
+				indexRecoveredMethod(decl.name, method, qualifiers);
+		}
+	}
+
+	function indexRecoveredMethod(owner:String, method:AstFunction, qualifiers:Array<String>):Void {
+		var key = owner + "." + method.name;
+		addRecoveredFunction(key, method);
+		for (qualifier in qualifiers)
+			addRecoveredFunction(qualifier + "." + key, method);
+	}
+
+	function addRecoveredFunction(name:String, fn:AstFunction):Void {
+		if (!recoveredFunctions.exists(name))
+			recoveredFunctions.set(name, fn);
+	}
+
+	/** Return a signature retained for a current or visible recovered module. */
+	public function recoveredSignature(name:String):Null<SemanticSignatureInfo> {
+		var fn = recoveredFunctions.get(name);
+		if (fn == null)
+			fn = recoveredFunctions.get(name + ".new");
+		if (fn == null)
+			return null;
+		var parameters = [
+			for (argument in fn.arguments)
+				argument.name + ":" + displayAstType(argument.type)
+		];
+		return {
+			label: sourceName(name) + "(" + parameters.join(",") + "):" + displayAstType(fn.result),
+			parameters: parameters,
+			result: displayAstType(fn.result)
+		};
+	}
+
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
 		for (symbol in symbols)
 			if (sourceName(symbol.name) == name && symbol.declaration.start >= span.start && symbol.declaration.end <= span.end) {

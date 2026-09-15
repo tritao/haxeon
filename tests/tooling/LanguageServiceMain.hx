@@ -254,6 +254,11 @@ class LanguageServiceMain {
 					}
 		if (!importedConstructorType)
 			throw "recovered typing did not resolve a class imported from another editor module";
+		var importedSignatureSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.reset(";
+		importService.update("editor/ImportedSignature.hx", importedSignatureSource);
+		var importedSignature = importService.signatureHelp("editor/ImportedSignature.hx", importedSignatureSource.length);
+		if (importedSignature == null || importedSignature.label != "reset():Void" || importedSignature.activeParameter != 0)
+			throw "recovered signature help did not use an imported module's temporary signature";
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);
