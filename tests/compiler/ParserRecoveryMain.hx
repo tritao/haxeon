@@ -823,6 +823,22 @@ class ParserRecoveryMain {
 		if (!hasLambdaValue || !hasLambdaLocal || lambdaNames.indexOf("member") < 0)
 			throw 'recovered lambda scope lost its parameter or local: locals=${[for (local in lambdaContext.context.locals) local.name].join(",")}, items=${lambdaNames.join(",")}';
 
+		var uncontextualLambdaSource = new SourceFile("TolerantUncontextualLambda.hx",
+			"function main():Void { var callback = (value) -> value; var after:Int = 1; }");
+		var uncontextualLambdaProgram = new Parser(new Lexer(uncontextualLambdaSource).tokenize()).parseProgramRecovering().program,
+			uncontextualLambdaTyped = Typer.typeRecovered(uncontextualLambdaProgram),
+			uncontextualLambdaMain = uncontextualLambdaTyped == null ? null : [for (fn in uncontextualLambdaTyped.functions) if (fn.name == "main") fn][0];
+		if (uncontextualLambdaTyped == null || uncontextualLambdaMain == null || uncontextualLambdaMain.statements.length != 2)
+			throw 'tolerant typing discarded a lambda without contextual parameter types: ${uncontextualLambdaTyped == null ? "null" : uncontextualLambdaTyped.functions.length + "/" + (uncontextualLambdaMain == null ? "no-main" : Std.string(uncontextualLambdaMain.statements.length))}';
+		switch uncontextualLambdaMain.statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TFunction([TUnknown], TUnknown):
+					default: throw 'uncontextual lambda did not retain unknown parameter/result types: ${value.type}';
+				}
+			default: throw "uncontextual lambda did not remain a declaration-shaped expression";
+		}
+
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
 		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,

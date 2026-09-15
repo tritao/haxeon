@@ -71,19 +71,28 @@ class ClosureTyper {
 			return session.lambdaCache.get(lambdaKey);
 		var expectedFunction = expectedFunctionType(expectedType),
 			inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
-		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
-			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
+		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length) {
+			if (!session.tolerant)
+				fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1008",
+				'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span));
+		}
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
 			lambdaScope = new Scope(),
 			declared:Map<String, Bool> = [];
 		for (i in 0...arguments.length) {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
-			var argumentType = argument.type == InferredType ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
-			if (argumentType == null)
+			var contextualArgumentType:Null<CompilerType> = expectedFunction == null || i >= expectedFunction.arguments.length ? null
+				: expectedFunction.arguments[i],
+				argumentType:CompilerType = argument.type == InferredType ? contextualArgumentType == null ? TUnknown : contextualArgumentType : lowerType(argument.type);
+			if (argument.type == InferredType && contextualArgumentType == null && !session.tolerant)
 				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context', argument.span);
-			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
-				fail("E1003", "Lambda argument type does not match its context", argument.span);
+			if (expectedFunction != null && contextualArgumentType != null && !TypeRelations.equals(argumentType, contextualArgumentType)) {
+				if (!session.tolerant)
+					fail("E1003", "Lambda argument type does not match its context", argument.span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1003", "Lambda argument type does not match its context", argument.span));
+			}
 			lambdaScope.define(localName, argumentType, argument.span);
 			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
 			if (argument.name != "_")
@@ -178,8 +187,11 @@ class ClosureTyper {
 			lambdaCellTypes = copyMap(context.storage.types),
 			lambdaCellKinds = copyMap(context.storage.kinds);
 		leaveBody(lambdaContext);
-		if (inferredResult != TVoid && !alwaysReturns(typedBody))
-			fail("E1006", 'Function $lambdaName does not return on every path', span);
+		if (inferredResult != TVoid && !alwaysReturns(typedBody)) {
+			if (!session.tolerant)
+				fail("E1006", 'Function $lambdaName does not return on every path', span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1006", 'Function $lambdaName does not return on every path', span));
+		}
 		var environment:Null<String> = null;
 		if (captures.length > 0)
 			environment = '$' + 'lambda-env:${session.currentContext.name}:${span.start}';
