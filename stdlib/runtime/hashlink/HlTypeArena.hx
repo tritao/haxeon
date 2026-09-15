@@ -33,6 +33,21 @@ class HlTypeArena {
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>
 		return storage.alloc(count);
 
+	public inline function allocTypeObjectArray(count:Int):RawPtr<HlTypeObject>
+		return storage.alloc(count);
+
+	public inline function allocEnumConstructArray(count:Int):RawPtr<HlEnumConstruct>
+		return storage.alloc(count);
+
+	public inline function allocObjectFieldArray(count:Int):RawPtr<HlObjectField>
+		return storage.alloc(count);
+
+	public inline function allocObjectProtoArray(count:Int):RawPtr<HlObjectProto>
+		return storage.alloc(count);
+
+	public inline function allocInt32Array(count:Int):RawPtr<Int32>
+		return storage.alloc(count);
+
 	public inline function allocTypeObject():RawPtr<HlTypeObject>
 		return storage.alloc();
 

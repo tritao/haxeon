@@ -2,6 +2,27 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 
+typedef HlObjectFieldSpec = {
+	final name:RawPtr<UInt8>;
+	final type:RawPtr<HlType>;
+	final hashedName:Int;
+}
+
+typedef HlObjectProtoSpec = {
+	final name:RawPtr<UInt8>;
+	final findex:Int;
+	final pindex:Int;
+	final hashedName:Int;
+}
+
+typedef HlEnumConstructSpec = {
+	final name:RawPtr<UInt8>;
+	final parameters:Array<RawPtr<HlType>>;
+	final size:Int;
+	final hasPtr:Bool;
+	final offsets:Array<Int>;
+}
+
 /** Builds HashLink type graphs in stable storage without exposing allocation policy. */
 class HlTypeBuilder {
 	public final arena:HlTypeArena;
@@ -44,6 +65,107 @@ class HlTypeBuilder {
 		var type = allocateType(HlTypeKind.Function);
 		type.ref.data.ref.fun = functionData;
 		return type;
+	}
+
+	public function objectType(name:RawPtr<UInt8>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, prototypes:Array<HlObjectProtoSpec>,
+			bindings:Array<Int>, globalValue:RawPtr<RawPtr<UInt8>>, module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):RawPtr<HlType> {
+		var objectData = arena.allocTypeObject();
+		objectData.ref.nfields = cast fields.length;
+		objectData.ref.nproto = cast prototypes.length;
+		objectData.ref.nbindings = cast bindings.length;
+		objectData.ref.name = name;
+		objectData.ref.superType = superType;
+		objectData.ref.fields = objectFields(fields);
+		objectData.ref.proto = objectPrototypes(prototypes);
+		objectData.ref.bindings = int32Values(bindings);
+		objectData.ref.globalValue = globalValue;
+		objectData.ref.module = module;
+		objectData.ref.runtime = runtime;
+		var type = allocateType(HlTypeKind.Object);
+		type.ref.data.ref.obj = objectData;
+		return type;
+	}
+
+	public function enumType(name:RawPtr<UInt8>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
+		var enumData = arena.allocTypeEnum(),
+			nativeConstructs:RawPtr<HlEnumConstruct>;
+		enumData.ref.name = name;
+		enumData.ref.nconstructs = cast constructs.length;
+		enumData.ref.globalValue = globalValue;
+		if (constructs.length == 0)
+			nativeConstructs = RawPtr.nullPtr();
+		else {
+			nativeConstructs = arena.allocEnumConstructArray(constructs.length);
+			for (index in 0...constructs.length) {
+				var source = constructs[index], destination = nativeConstructs.offset(index),
+					parameters:RawPtr<RawPtr<HlType>> = source.parameters.length == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(source.parameters.length),
+					offsets:RawPtr<Int32> = source.offsets.length == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(source.offsets.length);
+				if (source.parameters.length != 0)
+					for (parameterIndex in 0...source.parameters.length)
+						parameters.offset(parameterIndex).store(source.parameters[parameterIndex]);
+				if (source.offsets.length != 0)
+					for (offsetIndex in 0...source.offsets.length)
+						offsets.offset(offsetIndex).store(cast source.offsets[offsetIndex]);
+				destination.ref.name = source.name;
+				destination.ref.nparams = cast source.parameters.length;
+				destination.ref.params = parameters;
+				destination.ref.size = cast source.size;
+				destination.ref.hasPtr = source.hasPtr;
+				destination.ref.offsets = offsets;
+			}
+		}
+		enumData.ref.constructs = nativeConstructs;
+		var type = allocateType(HlTypeKind.Enum);
+		type.ref.data.ref.enumType = enumData;
+		return type;
+	}
+
+	public function virtualType(fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>, lookup:RawPtr<UInt8>):RawPtr<HlType> {
+		var virtualData = arena.allocTypeVirtual();
+		virtualData.ref.fields = objectFields(fields);
+		virtualData.ref.nfields = cast fields.length;
+		virtualData.ref.dataSize = cast dataSize;
+		virtualData.ref.indexes = int32Values(indexes);
+		virtualData.ref.lookup = lookup;
+		var type = allocateType(HlTypeKind.Virtual);
+		type.ref.data.ref.virtualType = virtualData;
+		return type;
+	}
+
+	function objectFields(values:Array<HlObjectFieldSpec>):RawPtr<HlObjectField> {
+		if (values.length == 0)
+			return RawPtr.nullPtr();
+		var result = arena.allocObjectFieldArray(values.length);
+		for (index in 0...values.length) {
+			var source = values[index], destination = result.offset(index);
+			destination.ref.name = source.name;
+			destination.ref.type = source.type;
+			destination.ref.hashedName = cast source.hashedName;
+		}
+		return result;
+	}
+
+	function objectPrototypes(values:Array<HlObjectProtoSpec>):RawPtr<HlObjectProto> {
+		if (values.length == 0)
+			return RawPtr.nullPtr();
+		var result = arena.allocObjectProtoArray(values.length);
+		for (index in 0...values.length) {
+			var source = values[index], destination = result.offset(index);
+			destination.ref.name = source.name;
+			destination.ref.findex = cast source.findex;
+			destination.ref.pindex = cast source.pindex;
+			destination.ref.hashedName = cast source.hashedName;
+		}
+		return result;
+	}
+
+	function int32Values(values:Array<Int>):RawPtr<Int32> {
+		if (values.length == 0)
+			return RawPtr.nullPtr();
+		var result = arena.allocInt32Array(values.length);
+		for (index in 0...values.length)
+			result.offset(index).store(cast values[index]);
+		return result;
 	}
 
 	function allocateType(kind:HlTypeKind):RawPtr<HlType> {

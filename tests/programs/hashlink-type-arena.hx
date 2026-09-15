@@ -42,7 +42,44 @@ function main():Int {
 		&& HlTypeBridge.native_type_kind(builtFunction) == 10
 		&& HlTypeBridge.native_type_kind(builtParameter) == 14
 		&& HlTypeBridge.native_type_function_arity(builtFunction) == 3;
+	var builtObject = builder.objectType(RawPtr.nullPtr(), voidType, [{name: RawPtr.nullPtr(), type: intType, hashedName: 17}], [
+		{
+			name: RawPtr.nullPtr(),
+			findex: 3,
+			pindex: 4,
+			hashedName: 19
+		}
+	], [7],
+		RawPtr.nullPtr(), RawPtr.nullPtr(), RawPtr.nullPtr()),
+		objectData = builtObject.ref.data.ref.obj,
+		builtEnum = builder.enumType(RawPtr.nullPtr(), [
+			{
+				name: RawPtr.nullPtr(),
+				parameters: [intType],
+				size: 4,
+				hasPtr: false,
+				offsets: [0]
+			}
+		],
+			RawPtr.nullPtr()),
+		enumData = builtEnum.ref.data.ref.enumType,
+		builtVirtual = builder.virtualType([{name: RawPtr.nullPtr(), type: intType, hashedName: 23}], 4, [0], RawPtr.nullPtr()),
+		virtualData = builtVirtual.ref.data.ref.virtualType;
+	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
+		&& objectData.ref.nfields == 1
+		&& objectData.ref.fields.offset(0).ref.type == intType
+		&& objectData.ref.fields.offset(0).ref.hashedName == 17
+		&& objectData.ref.proto.offset(0).ref.findex == 3
+		&& objectData.ref.bindings.offset(0).load() == 7
+		&& HlTypeBridge.native_type_kind(builtEnum) == 18
+		&& enumData.ref.nconstructs == 1
+		&& enumData.ref.constructs.offset(0).ref.params.offset(0).load() == intType
+		&& enumData.ref.constructs.offset(0).ref.size == 4
+		&& HlTypeBridge.native_type_kind(builtVirtual) == 15
+		&& virtualData.ref.nfields == 1
+		&& virtualData.ref.fields.offset(0).ref.type == intType
+		&& virtualData.ref.indexes.offset(0).load() == 0;
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect ? 42 : 1;
+	return correct && builtCorrect && graphCorrect ? 42 : 1;
 }
