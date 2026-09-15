@@ -7,6 +7,8 @@ import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlFunctionTable;
+import runtime.hashlink.HlFunctionDescriptorTable;
+import runtime.hashlink.HlFunction;
 import runtime.memory.RawPtr;
 
 function main():Int {
@@ -46,6 +48,51 @@ function main():Int {
 		&& HlTypeBridge.native_type_kind(builtFunction) == 10
 		&& HlTypeBridge.native_type_kind(builtParameter) == 14
 		&& HlTypeBridge.native_type_function_arity(builtFunction) == 3;
+	var descriptorTable = new HlFunctionDescriptorTable(arena, 2),
+		descriptorName = builder.utf16Name("descriptor"),
+		descriptor = descriptorTable.add({
+			findex: 7,
+			nregs: 3,
+			nops: 5,
+			reference: 0,
+			nassigns: 0,
+			type: builtFunction,
+			regs: builtData.ref.args,
+			ops: RawPtr.nullPtr(),
+			debug: RawPtr.nullPtr(),
+			assigns: RawPtr.nullPtr(),
+			object: RawPtr.nullPtr(),
+			fieldName: descriptorName,
+			fieldReference: RawPtr.nullPtr()
+		}),
+		descriptorReference = descriptorTable.add({
+			findex: 8,
+			nregs: 0,
+			nops: 0,
+			reference: 1,
+			nassigns: 0,
+			type: builtFunction,
+			regs: RawPtr.nullPtr(),
+			ops: RawPtr.nullPtr(),
+			debug: RawPtr.nullPtr(),
+			assigns: RawPtr.nullPtr(),
+			object: RawPtr.nullPtr(),
+			fieldName: RawPtr.nullPtr(),
+			fieldReference: descriptor
+		});
+	var descriptorCorrect = descriptorTable.length() == 2
+		&& descriptorTable.capacityOf() == 2
+		&& descriptorTable.pointer() == descriptor
+		&& descriptorReference == descriptor.offset(1)
+		&& descriptor.ref.findex == 7
+		&& descriptor.ref.nregs == 3
+		&& descriptor.ref.nops == 5
+		&& descriptor.ref.type == builtFunction
+		&& descriptor.ref.regs == builtData.ref.args
+		&& descriptor.ref.field.ref.name == descriptorName
+		&& descriptorReference.ref.findex == 8
+		&& descriptorReference.ref.reference == 1
+		&& descriptorReference.ref.field.ref.reference == descriptor;
 	var module = builder.moduleContext([
 		RawPtr.nullPtr(),
 		RawPtr.nullPtr(),
@@ -184,6 +231,21 @@ function main():Int {
 	generation.addType(generationVoid);
 	generation.addType(generationFunction);
 	generation.addType(generationObject);
+	var generationDescriptor = generation.addFunctionDescriptor({
+		findex: 3,
+		nregs: 1,
+		nops: 2,
+		reference: 0,
+		nassigns: 0,
+		type: generationFunction,
+		regs: RawPtr.nullPtr(),
+		ops: RawPtr.nullPtr(),
+		debug: RawPtr.nullPtr(),
+		assigns: RawPtr.nullPtr(),
+		object: RawPtr.nullPtr(),
+		fieldName: RawPtr.nullPtr(),
+		fieldReference: RawPtr.nullPtr()
+	});
 	var publication = generation.publish();
 	var generationCorrect = publication.typeCount == 3
 		&& publication.typeCapacity == 4
@@ -191,6 +253,9 @@ function main():Int {
 		&& publication.contiguousTypeCount == 4
 		&& publication.contiguousTypeCapacity == 65536
 		&& !publication.usesContiguousTypes
+		&& publication.functionDescriptors == generationDescriptor
+		&& publication.functionDescriptorCount == 1
+		&& publication.functionDescriptorCapacity == 8
 		&& publication.functionCount == 1
 		&& publication.moduleContext == generationModule
 		&& publication.functions.offset(0).load() == RawPtr.nullPtr()
@@ -208,6 +273,6 @@ function main():Int {
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect && moduleCorrect && nativeObjectCorrect
-		&& generationCorrect && generationSealed ? 42 : 1;
+	return correct && builtCorrect && descriptorCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect && moduleCorrect
+		&& nativeObjectCorrect && generationCorrect && generationSealed ? 42 : 1;
 }

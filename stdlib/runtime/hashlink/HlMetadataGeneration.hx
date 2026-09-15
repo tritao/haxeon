@@ -13,6 +13,9 @@ typedef HlMetadataPublication = {
 	final contiguousTypeCount:Int;
 	final contiguousTypeCapacity:Int;
 	final usesContiguousTypes:Bool;
+	final functionDescriptors:RawPtr<HlFunction>;
+	final functionDescriptorCount:Int;
+	final functionDescriptorCapacity:Int;
 	final functions:RawPtr<RawPtr<UInt8>>;
 	final functionTypes:RawPtr<RawPtr<HlType>>;
 	final functionCount:Int;
@@ -23,6 +26,7 @@ typedef HlMetadataPublication = {
 class HlMetadataGeneration {
 	public final arena:HlTypeArena;
 	public final builder:HlTypeBuilder;
+	public final functionDescriptors:HlFunctionDescriptorTable;
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
@@ -32,9 +36,10 @@ class HlMetadataGeneration {
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
-	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536) {
+	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8) {
 		arena = new HlTypeArena(blockSize, typeCapacity);
 		builder = new HlTypeBuilder(arena);
+		functionDescriptors = new HlFunctionDescriptorTable(arena, functionDescriptorCapacity);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
 	}
 
@@ -75,6 +80,12 @@ class HlMetadataGeneration {
 	public function typeIndex(type:RawPtr<HlType>):Int {
 		requireOpen();
 		return typeTable.indexOf(type);
+	}
+
+	/** Append one Haxe-owned HashLink function descriptor. */
+	public function addFunctionDescriptor(spec:HlFunctionDescriptorSpec):RawPtr<HlFunction> {
+		requireBuilding();
+		return functionDescriptors.add(spec);
 	}
 
 	/** Number of function dispatch slots in the module context. */
@@ -135,6 +146,9 @@ class HlMetadataGeneration {
 			contiguousTypeCount: publishedContiguousTypeCount,
 			contiguousTypeCapacity: arena.typeCapacityOf(),
 			usesContiguousTypes: publishedUsesContiguousTypes,
+			functionDescriptors: functionDescriptors.pointer(),
+			functionDescriptorCount: functionDescriptors.length(),
+			functionDescriptorCapacity: functionDescriptors.capacityOf(),
 			functions: requireFunctionTable().functionPointer(),
 			functionTypes: requireFunctionTable().typePointer(),
 			functionCount: requireFunctionTable().length(),

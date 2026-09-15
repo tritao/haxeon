@@ -131,6 +131,10 @@ subset tables continue through the pointer-table adapter. The immutable
 `HlMetadataPublication` records both views, the reserved slab bounds, and whether
 the direct contiguous path was selected, so a future loader does not have to
 reconstruct ownership facts from raw pointers.
+Function descriptors follow the same pattern: `HlFunctionDescriptorTable` reserves
+a stable contiguous `hl_function` array in the generation arena, while bytecode,
+debug, register, and assignment pointers remain opaque until the Haxe loader owns
+those representations.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows
