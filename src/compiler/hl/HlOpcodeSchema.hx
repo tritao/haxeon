@@ -24,7 +24,7 @@ class HlOpcodeSchema {
 			case HlOpcode.Call3: 5;
 			case HlOpcode.Call4: 6;
 			case HlOpcode.EnumField: 4;
-			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure, HlOpcode.MakeEnum: VARIABLE_ARITY;
+			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure, HlOpcode.MakeEnum, HlOpcode.Switch: VARIABLE_ARITY;
 			default: UNSUPPORTED;
 		}
 
@@ -32,6 +32,14 @@ class HlOpcodeSchema {
 		var expected = arity(opcode);
 		if (expected == UNSUPPORTED)
 			throw 'Unsupported patch opcode $opcode';
+		if (opcode == HlOpcode.Switch) {
+			if (operands.length < 3 || operands[1] < 0 || operands.length != operands[1] + 3)
+				throw 'Invalid switch operands';
+			for (index in 2...operands.length)
+				if (operands[index] < 0)
+					throw 'Switch offsets must be unsigned';
+			return;
+		}
 		if (expected == VARIABLE_ARITY) {
 			if (operands.length <= VARIABLE_COUNT_OPERAND)
 				throw 'Missing variable operand count for opcode $opcode';

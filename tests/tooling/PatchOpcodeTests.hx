@@ -123,12 +123,13 @@ class PatchOpcodeTests {
 			{instruction: CallClosure(0, 1, []), opcode: 32, operands: [0, 1, 0]},
 			{instruction: MakeEnum(0, 1, []), opcode: 90, operands: [0, 1, 0]}
 		];
-		var covered:Map<String, Bool> = [];
+		var covered:Map<String, Bool> = [], coveredCount = 0;
 		// These are wire-format probes, not executable functions: operands deliberately
 		// include distinct values and multi-byte indices to expose stream misalignment.
 		for (fixture in fixtures) {
 			var name = HaxeType.enumConstructor(fixture.instruction);
 			covered.set(name, true);
+			coveredCount++;
 			var code = module([Label("target"), fixture.instruction, Return(0)]);
 			var bytes = HlPatchWriter.encode(code, HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2);
 			var decoded = HlPatchReader.decode(bytes),
@@ -144,12 +145,13 @@ class PatchOpcodeTests {
 				|| actual[2].operands.join(",") != "0")
 				throw 'Patch opcode decoding disagrees for $name';
 		}
+		// Switch tables change instruction layout and are applied by structural reloads.
 		for (name in HaxeType.getEnumConstructs(HlInstruction))
-			if (!covered.exists(name))
+			if (name != "Switch" && !covered.exists(name))
 				throw 'Missing patch opcode fixture for $name';
 		testMalformed();
 		testRejectedTransactions();
-		Sys.println('PASS: ${HaxeType.getEnumConstructs(HlInstruction).length} instruction variants covered by both patch decoders; malformed patches rejected');
+		Sys.println('PASS: $coveredCount patch-supported instruction variants covered by both patch decoders; malformed patches rejected');
 	}
 
 	static function module(ops:Array<HlInstruction>):HlCode {
@@ -219,6 +221,15 @@ class PatchOpcodeTests {
 
 	static function testMalformed():Void {
 		rejectBytes(rawPatch(255, []), "unknown opcode");
+		rejectBytes(rawPatch(HlOpcode.Switch, [0, 0, 0]), "switch structural reload");
+		var writerRejected = false;
+		try {
+			HlPatchWriter.encode(module([Switch(0, [], null), Return(0)]), HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2);
+		} catch (error:String) {
+			writerRejected = true;
+		}
+		if (!writerRejected)
+			throw "HLP writer accepted a switch that requires a structural reload";
 		var callThis = rawPatch(HlOpcode.CallThis, [0, 1, 0]);
 		HlPatchReader.decode(callThis);
 		Runtime.inspectPatch(callThis);

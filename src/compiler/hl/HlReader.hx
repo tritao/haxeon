@@ -196,6 +196,8 @@ class HlReader {
 	}
 
 	static function readOperands(input:BytesInput, opcode:Int):Array<Int> {
+		if (opcode == HlOpcode.Switch)
+			return readSwitchOperands(input);
 		return switch HlOpcodeSchema.arity(opcode) {
 			case HlOpcodeSchema.UNSUPPORTED:
 				throw 'Unsupported HLB opcode $opcode';
@@ -212,21 +214,29 @@ class HlReader {
 		}
 	}
 
+	static function readSwitchOperands(input:BytesInput):Array<Int> {
+		var value = readUnsigned(input, "switch value"),
+			count = readCount(input, "switch case"),
+			offsets = [value, count];
+		for (_ in 0...count)
+			offsets.push(readUnsigned(input, "switch case offset"));
+		offsets.push(readUnsigned(input, "switch default offset"));
+		return offsets;
+	}
+
 	static function decodeInstructions(raw:Array<RawInstruction>, registers:Array<Int>, functionIndex:Int):Array<HlInstruction> {
 		var labels:Map<Int, String> = [];
 		for (position in 0...raw.length)
 			if (raw[position].opcode == HlOpcode.Label)
 				labels.set(position, labelName(position));
-		for (position in 0...raw.length) {
-			var target = jumpTarget(raw[position]);
-			if (target == null)
-				continue;
-			var absoluteTarget = position + 1 + target;
-			if (absoluteTarget < 0 || absoluteTarget >= raw.length)
-				throw 'Invalid HLB jump target in function $functionIndex';
-			if (!labels.exists(absoluteTarget))
-				labels.set(absoluteTarget, labelName(absoluteTarget));
-		}
+		for (position in 0...raw.length)
+			for (target in jumpTargets(raw[position])) {
+				var absoluteTarget = position + 1 + target;
+				if (absoluteTarget < 0 || absoluteTarget >= raw.length)
+					throw 'Invalid HLB jump target in function $functionIndex';
+				if (!labels.exists(absoluteTarget))
+					labels.set(absoluteTarget, labelName(absoluteTarget));
+			}
 		var result:Array<HlInstruction> = [];
 		for (position in 0...raw.length) {
 			var instruction = raw[position];
@@ -240,13 +250,21 @@ class HlReader {
 		return result;
 	}
 
-	static function jumpTarget(instruction:RawInstruction):Null<Int> {
+	static function jumpTargets(instruction:RawInstruction):Array<Int> {
 		return switch instruction.opcode {
-			case HlOpcode.JAlways: instruction.operands[0];
-			case HlOpcode.JTrue | HlOpcode.JFalse | HlOpcode.JNull | HlOpcode.JNotNull: instruction.operands[1];
-			case HlOpcode.JSLt | HlOpcode.JSGte | HlOpcode.JSGt | HlOpcode.JSLte | HlOpcode.JULt | HlOpcode.JUGte | HlOpcode.JNotLt | HlOpcode.JNotGte | HlOpcode.JEq | HlOpcode.JNotEq: instruction.operands[2];
-			case HlOpcode.Trap: instruction.operands[1];
-			default: null;
+			case HlOpcode.JAlways: [instruction.operands[0]];
+			case HlOpcode.JTrue | HlOpcode.JFalse | HlOpcode.JNull | HlOpcode.JNotNull: [instruction.operands[1]];
+			case HlOpcode.JSLt | HlOpcode.JSGte | HlOpcode.JSGt | HlOpcode.JSLte | HlOpcode.JULt | HlOpcode.JUGte | HlOpcode.JNotLt | HlOpcode.JNotGte | HlOpcode.JEq | HlOpcode.JNotEq: [instruction.operands[2]];
+			case HlOpcode.Trap: [instruction.operands[1]];
+			case HlOpcode.Switch:
+				var count = instruction.operands[1], result = [];
+				for (index in 0...count)
+					if (instruction.operands[index + 2] != 0)
+						result.push(instruction.operands[index + 2]);
+				if (instruction.operands[count + 2] != 0)
+					result.push(instruction.operands[count + 2]);
+				result;
+			default: [];
 		};
 	}
 
@@ -340,6 +358,14 @@ class HlReader {
 			case HlOpcode.JEq: JumpEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JNotEq: JumpNotEqual(operands[0], operands[1], requireLabel(labels, position + 1 + operands[2], functionIndex));
 			case HlOpcode.JAlways: Jump(requireLabel(labels, position + 1 + operands[0], functionIndex));
+			case HlOpcode.Switch:
+				var count = operands[1], targets:Array<Null<String>> = [];
+				for (index in 0...count) {
+					var offset = operands[index + 2];
+					targets.push(offset == 0 ? null : requireLabel(labels, position + 1 + offset, functionIndex));
+				}
+				var defaultOffset = operands[count + 2];
+				Switch(operands[0], targets, defaultOffset == 0 ? null : requireLabel(labels, position + 1 + defaultOffset, functionIndex));
 			case HlOpcode.Ret: Return(operands[0]);
 			case HlOpcode.ToDyn: ToDyn(operands[0], operands[1]);
 			case HlOpcode.ToSFloat: ToSFloat(operands[0], operands[1]);

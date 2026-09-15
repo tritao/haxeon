@@ -133,6 +133,7 @@ enum HlInstruction {
 	JumpNotEqual(left:Int, right:Int, target:String);
 	JumpTrue(condition:Int, target:String);
 	Jump(target:String);
+	Switch(value:Int, targets:Array<Null<String>>, defaultTarget:Null<String>);
 	Label(name:String);
 	Return(register:Int);
 	Throw(register:Int);

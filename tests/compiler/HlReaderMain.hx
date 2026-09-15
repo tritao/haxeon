@@ -299,6 +299,31 @@ function main():Void {
 		referenceDecoded = HlReader.decode(referenceBytes);
 	expect(HlWriter.encode(referenceDecoded).compare(referenceBytes) == 0 && referenceDecoded.functions[0].opcodes.length == 11,
 		"HLB reference and type opcode family did not round trip");
+	var switches = new HlCode();
+	switches.types = [Simple(HlType.I32)];
+	switches.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [
+			Switch(0, ["case1", null, "case2"], "default"),
+			Label("case1"),
+			Return(0),
+			Label("case2"),
+			Return(0),
+			Label("default"),
+			Return(0)
+		])
+	];
+	switches.entryPoint = 0;
+	var switchBytes = HlWriter.encode(switches),
+		switchDecoded = HlReader.decode(switchBytes);
+	expect(HlWriter.encode(switchDecoded).compare(switchBytes) == 0
+		&& switchDecoded.functions[0].opcodes.length == 7, "HLB switch opcode did not round trip");
+	switch switchDecoded.functions[0].opcodes[0] {
+		case Switch(value, targets, defaultTarget):
+			expect(value == 0 && targets.length == 3 && targets[0] == null && targets[1] == null && targets[2] == "L3" && defaultTarget == "L5",
+				"HLB switch labels did not decode");
+		case _:
+			throw "HLB switch opcode did not decode as Switch";
+	}
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
 	var compiler = new Compiler();

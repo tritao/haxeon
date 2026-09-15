@@ -402,6 +402,13 @@ class HlValidator {
 				case Jump(target):
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+				case Switch(value, targets, defaultTarget):
+					requireRegister(fn, value);
+					for (target in targets)
+						if (target != null && !labels.exists(target))
+							throw 'Unknown switch label "$target" in function ${fn.functionIndex}';
+					if (defaultTarget != null && !labels.exists(defaultTarget))
+						throw 'Unknown switch default label "$defaultTarget" in function ${fn.functionIndex}';
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);

@@ -34,6 +34,12 @@ class HlPatchWriter {
 				}
 			if (found == null)
 				throw 'Patch references missing function $index';
+			for (op in found.opcodes)
+				switch op {
+					case Switch(_, _, _):
+						throw "Switch instructions require a structural reload";
+					default:
+				}
 			selected.push(found);
 		}
 		var symbols = new BytesOutput();

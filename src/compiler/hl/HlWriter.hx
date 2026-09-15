@@ -568,6 +568,13 @@ class HlWriter {
 				case Jump(target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
+				case Switch(value, targets, defaultTarget):
+					var offsets = [
+						for (target in targets)
+							target == null ? 0 : switchOffset(labels, target, result.length)
+					];
+					var defaultOffset = defaultTarget == null ? 0 : switchOffset(labels, defaultTarget, result.length);
+					{opcode: HlOpcode.Switch, operands: [value, targets.length].concat(offsets).concat([defaultOffset])};
 				case Trap(destination, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
@@ -593,10 +600,21 @@ class HlWriter {
 		return labels.get(target);
 	}
 
+	static function switchOffset(labels:Map<String, Int>, target:String, position:Int):Int {
+		var offset = requireLabel(labels, target) - (position + 1);
+		if (offset < 0)
+			throw 'HashLink switch label "$target" must not jump backwards';
+		return offset;
+	}
+
 	function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {
 		output.writeByte(opcode);
-		for (operand in operands)
-			writeIndex(operand);
+		if (opcode == HlOpcode.Switch)
+			for (operand in operands)
+				writeUnsignedIndex(operand);
+		else
+			for (operand in operands)
+				writeIndex(operand);
 	}
 
 	function writeUnsignedIndex(value:Int):Void {

@@ -211,7 +211,9 @@ class HlPatchReader {
 		};
 	}
 
-	static function readOperands(input:BytesInput, op:Int):Array<Int>
+	static function readOperands(input:BytesInput, op:Int):Array<Int> {
+		if (op == HlOpcode.Switch)
+			throw "Switch instructions require a structural reload";
 		return switch HlOpcodeSchema.arity(op) {
 			case HlOpcodeSchema.UNSUPPORTED: throw 'Unsupported patch opcode $op';
 			case HlOpcodeSchema.VARIABLE_ARITY:
@@ -223,7 +225,8 @@ class HlPatchReader {
 					operands.push(readIndex(input));
 				operands;
 			case count: [for (_ in 0...count) readIndex(input)];
-		}
+		};
+	}
 
 	static function readOperandCount(input:BytesInput):Int {
 		var count = readUnsigned(input);
