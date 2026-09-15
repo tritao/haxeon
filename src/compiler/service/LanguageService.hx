@@ -28,6 +28,7 @@ import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
 import compiler.Diagnostic.CompileError;
+import compiler.Diagnostic.DiagnosticSeverity;
 import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
@@ -310,6 +311,15 @@ class LanguageService {
 			// Parser recovery itself failed. Keep the last-good semantic snapshot
 			// available; do not destroy it.
 			publishRecoveryDiagnostics(state, [error.diagnostic]);
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
+			// Unexpected recovery failures must not escape an editor update. Keep
+			// the last-good semantic snapshot and expose one bounded diagnostic.
+			publishRecoveryDiagnostics(state, [
+				new Diagnostic("E0002", "Unable to recover editor syntax", state.source.span(0, 0), DiagnosticSeverity.Error, null,
+					DiagnosticOrigin.ParserRecovery)
+			]);
 		}
 	}
 
