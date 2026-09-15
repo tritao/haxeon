@@ -14,7 +14,7 @@ class HlNativeMetadataMain {
 		compiler.update("HlNativeMetadataAdapter.hx",
 			'import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlWriter; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
-			+ 'import runtime.hashlink.HlMetadataGeneration; import runtime.memory.RawPtr; '
+			+ 'import runtime.hashlink.HlMetadataGeneration; import runtime.hashlink.HlNativeModule; import runtime.memory.RawPtr; '
 			+ 'function main():Int { '
 			+ 'var code = new HlCode(); '
 			+ 'code.strings = ["Abstract", "BuilderObject", "value", "run", "BuilderEnum", "BuilderStruct", "Value", "std✓", "native"]; '
@@ -46,10 +46,9 @@ class HlNativeMetadataMain {
 			'kernel.addType(kernelInt); kernel.addType(kernelFunction); kernel.defineModule([RawPtr.nullPtr()], [kernelFunction]); kernel.defineGlobalTypes([kernelInt]); '
 			+ 'kernel.addFunctionDescriptor({findex: 0, nregs: 1, nops: 1, reference: 0, nassigns: 0, type: kernelFunction, regs: kernelRegs, ops: kernelOps, '
 			+ 'debug: RawPtr.nullPtr(), assigns: RawPtr.nullPtr(), object: RawPtr.nullPtr(), fieldName: RawPtr.nullPtr(), fieldReference: RawPtr.nullPtr()}); '
-			+ 'var kernelPublication = kernel.publish(), kernelModule = HlTypeBridge.native_metadata_module_alloc(kernelPublication.nativeCode), '
-			+ 'kernelInitialized = !kernelModule.isNull() && HlTypeBridge.native_metadata_module_init(kernelModule, 0), '
-			+ 'kernelUnloaded = kernelInitialized && HlTypeBridge.native_metadata_module_unload(kernelModule); '
-			+ 'if (!kernelModule.isNull() && !kernelUnloaded) HlTypeBridge.native_metadata_module_free_shutdown(kernelModule); kernel.dispose(); '
+			+ 'kernel.publish(); '
+			+
+			'var kernelModule = new HlNativeModule(kernel), kernelInitialized = kernelModule.isLoaded(), kernelUnloaded = kernelModule.unload(); kernel.dispose(); '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
