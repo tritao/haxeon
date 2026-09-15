@@ -192,10 +192,16 @@ class HlValidator {
 				case ToSFloat(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case ToUFloat(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
 				case ToInt(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
 				case SafeCast(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
+				case UnsafeCast(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
 				case Trap(destination, target):
@@ -226,15 +232,21 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
 					requireRegister(fn, right);
-				case Mul(destination, left, right), Div(destination, left, right):
+				case Mul(destination, left, right), Div(destination, left, right), UnsignedDiv(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
 					requireRegister(fn, right);
-				case Mod(destination, left, right), BitAnd(destination, left, right), BitXor(destination, left, right), BitOr(destination, left, right),
-					ShiftLeft(destination, left, right), ShiftRight(destination, left, right), UnsignedShiftRight(destination, left, right):
+				case Mod(destination, left, right), UnsignedMod(destination, left, right), BitAnd(destination, left, right), BitXor(destination, left, right),
+					BitOr(destination, left, right), ShiftLeft(destination, left, right), ShiftRight(destination, left, right),
+					UnsignedShiftRight(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
 					requireRegister(fn, right);
+				case Negate(destination, source), BitNot(destination, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
+				case Increment(destination), Decrement(destination):
+					requireRegister(fn, destination);
 				case Call0(destination, functionIndex):
 					requireRegister(fn, destination);
 					requireCallable(functionIndices, functionIndex, fn.functionIndex);

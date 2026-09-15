@@ -408,10 +408,14 @@ class HlWriter {
 					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
 				case ToSFloat(destination, source):
 					{opcode: HlOpcode.ToSFloat, operands: [destination, source]};
+				case ToUFloat(destination, source):
+					{opcode: HlOpcode.ToUFloat, operands: [destination, source]};
 				case ToInt(destination, source):
 					{opcode: HlOpcode.ToInt, operands: [destination, source]};
 				case SafeCast(destination, source):
 					{opcode: HlOpcode.SafeCast, operands: [destination, source]};
+				case UnsafeCast(destination, source):
+					{opcode: HlOpcode.UnsafeCast, operands: [destination, source]};
 				case GlobalGet(destination, global):
 					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
 				case GlobalSet(global, source):
@@ -426,13 +430,19 @@ class HlWriter {
 					{opcode: HlOpcode.Sub, operands: [destination, left, right]};
 				case Mul(destination, left, right): {opcode: HlOpcode.Mul, operands: [destination, left, right]};
 				case Div(destination, left, right): {opcode: HlOpcode.SDiv, operands: [destination, left, right]};
+				case UnsignedDiv(destination, left, right): {opcode: HlOpcode.UDiv, operands: [destination, left, right]};
 				case Mod(destination, left, right): {opcode: HlOpcode.SMod, operands: [destination, left, right]};
+				case UnsignedMod(destination, left, right): {opcode: HlOpcode.UMod, operands: [destination, left, right]};
 				case BitAnd(destination, left, right): {opcode: HlOpcode.And, operands: [destination, left, right]};
 				case BitXor(destination, left, right): {opcode: HlOpcode.Xor, operands: [destination, left, right]};
 				case BitOr(destination, left, right): {opcode: HlOpcode.Or, operands: [destination, left, right]};
 				case ShiftLeft(destination, left, right): {opcode: HlOpcode.Shl, operands: [destination, left, right]};
 				case ShiftRight(destination, left, right): {opcode: HlOpcode.SShr, operands: [destination, left, right]};
 				case UnsignedShiftRight(destination, left, right): {opcode: HlOpcode.UShr, operands: [destination, left, right]};
+				case Negate(destination, source): {opcode: HlOpcode.Neg, operands: [destination, source]};
+				case BitNot(destination, source): {opcode: HlOpcode.Not, operands: [destination, source]};
+				case Increment(destination): {opcode: HlOpcode.Incr, operands: [destination, 0]};
+				case Decrement(destination): {opcode: HlOpcode.Decr, operands: [destination, 0]};
 				case Call0(destination, functionIndex):
 					{opcode: HlOpcode.Call0, operands: [destination, functionIndex]};
 				case Call1(destination, functionIndex, argument):

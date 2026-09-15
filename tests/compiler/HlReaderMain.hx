@@ -211,6 +211,27 @@ function main():Void {
 		&& decoded.functions[0].debugLocations[4].line == 5, "HLB debug locations did not decode");
 	expect(decoded.functions[0].debugAssignments[0].position == -1 && decoded.functions[0].debugAssignments[0].scopeEnd == -1,
 		"HLB debug assignments did not decode");
+	var numeric = new HlCode();
+	numeric.ints = [1];
+	numeric.types = [Simple(HlType.I32)];
+	numeric.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [
+			UnsignedDiv(0, 0, 0),
+			UnsignedMod(0, 0, 0),
+			Negate(0, 0),
+			BitNot(0, 0),
+			Increment(0),
+			Decrement(0),
+			ToUFloat(0, 0),
+			UnsafeCast(0, 0),
+			Return(0)
+		])
+	];
+	numeric.entryPoint = 0;
+	var numericBytes = HlWriter.encode(numeric),
+		numericDecoded = HlReader.decode(numericBytes);
+	expect(HlWriter.encode(numericDecoded).compare(numericBytes) == 0 && numericDecoded.functions[0].opcodes.length == 9,
+		"HLB scalar opcode extensions did not round trip");
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
 	var compiler = new Compiler();
