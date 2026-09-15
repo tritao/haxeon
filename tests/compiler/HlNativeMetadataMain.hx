@@ -12,7 +12,7 @@ class HlNativeMetadataMain {
 		compiler.addSourceRoot("stdlib");
 		compiler.addSourceRoot("src");
 		compiler.update("HlNativeMetadataAdapter.hx",
-			'import compiler.Compiler; import compiler.runtime.CompilerIntrinsics; import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlRuntimePatchTransaction.HlRuntimePatchTransactionState; import compiler.hl.HlWriter; '
+			'import compiler.Compiler; import compiler.runtime.CompilerIntrinsics; import compiler.hl.HlCode; import compiler.hl.HlCode.HlTypeDef; import compiler.hl.HlHotReloadLoader; import compiler.hl.HlNativeMetadataBuilder; import compiler.hl.HlNativeModuleLoader; import compiler.hl.HlReader; import compiler.hl.HlRuntimeModuleRegistry; import compiler.hl.HlRuntimePatchTransaction.HlRuntimePatchTransactionState; import compiler.hl.HlWriter; '
 			+ 'import compiler.hl.patch.HlPatchWriter; '
 			+ 'import compiler.hl.HlType; import runtime.hashlink.HlTypeBuilder; import runtime.hashlink.HlTypeKind; import runtime.hashlink.HlTypeBridge; '
 			+
@@ -48,6 +48,8 @@ class HlNativeMetadataMain {
 			'loadCode.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(loadCode.functionIdentities)}]; loadCode.entryPoint = 0; '
 			+
 			'var generatedCompiler = new Compiler(); CompilerIntrinsics.register(generatedCompiler); generatedCompiler.update("Generated.hx", "function main():Int return 8;"); var generatedResult = generatedCompiler.compile("Generated"), generatedLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(generatedResult.module), generatedResult.runtimeIdentity), generatedValue = generatedLoaded.callI32(cast generatedResult.functionIds.get("main")), generatedUnloaded = generatedLoaded.unload(); '
+			+
+			'var runtimeRegistry = new HlRuntimeModuleRegistry(), registryFirst = runtimeRegistry.loadRuntime(HlWriter.encode(generatedResult.module), generatedResult.runtimeIdentity), registryFirstLoaded = registryFirst.isLoaded(), registryLease = runtimeRegistry.currentLease(), registrySecond = runtimeRegistry.loadRuntime(HlWriter.encode(generatedResult.module), generatedResult.runtimeIdentity), registrySecondLoaded = registrySecond.isLoaded(), registryBlocked = runtimeRegistry.disposeRetired() == 0 && runtimeRegistry.retiredCount == 1 && runtimeRegistry.retiredBorrowedCount == 1; registryLease.release(); var registryReclaimed = runtimeRegistry.disposeRetired() == 1 && runtimeRegistry.retiredCount == 0 && registryLease.isReleased(), registryValue = runtimeRegistry.currentModule().callI32(cast generatedResult.functionIds.get("main")); runtimeRegistry.dispose(); var registryDisposed = true; '
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
@@ -112,7 +114,7 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
-			'&& generatedValue == 8 && generatedUnloaded && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& generatedValue == 8 && generatedUnloaded && registryFirstLoaded && registrySecondLoaded && runtimeRegistry.generation == 2 && registryBlocked && registryReclaimed && registryValue == 8 && registryDisposed && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '

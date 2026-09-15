@@ -78,6 +78,15 @@ operand, symbol, and live-compatibility validation. The public host `Runtime.loa
 facade remains on the legacy native-decoder path until it can be compiled against
 the Haxeon-only native-memory classes.
 
+`HlRuntimeModuleRegistry` owns publication and retirement for the Haxe-built
+external path. Loading a candidate publishes it as the current module and moves
+the previous module into a retryable Haxe-owned retirement queue. A
+`HlRuntimeModuleLease` is an explicit Haxe-side borrower: retirement reports the
+module as pending while a lease is held, and `disposeRetired()` can reclaim it
+after the lease is released. Native HashLink still performs the final quiescence
+check and executable/metadata release, so this registry does not infer that a
+module is safe to unmap merely because Haxe policy no longer publishes it.
+
 HashLink records module ownership when a managed allocation is created. A major
 collection removes records for dead allocations, and the runtime exposes the
 remaining per-module count for diagnostics and reclamation tests. Closure and

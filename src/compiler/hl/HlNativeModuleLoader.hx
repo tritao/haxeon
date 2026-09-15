@@ -60,6 +60,7 @@ class HlLoadedRuntimeModule {
 	public var revision(default, null):Int;
 
 	var disposed:Bool = false;
+	var borrowers:Int = 0;
 
 	function new(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, nativeModule:HlRuntimeModule) {
 		this.module = module;
@@ -74,11 +75,29 @@ class HlLoadedRuntimeModule {
 	public function unload():Bool {
 		if (disposed)
 			return true;
+		if (borrowers != 0)
+			return false;
 		if (!nativeModule.unload())
 			return false;
 		metadata.dispose();
 		disposed = true;
 		return true;
+	}
+
+	/** Whether the Haxe-owned runtime module is still available for calls. */
+	public inline function isLoaded():Bool
+		return !disposed && nativeModule.isLoaded();
+
+	/** Number of Haxe-side borrowers that currently protect this module. */
+	public inline function borrowerCount():Int
+		return borrowers;
+
+	/** Borrow this module until the returned lease is released. */
+	public function acquire():HlRuntimeModuleLease {
+		if (!isLoaded())
+			throw "HashLink loaded runtime module has been unloaded";
+		borrowers++;
+		return new HlRuntimeModuleLease(this);
 	}
 
 	/** Invoke a stable zero-argument i32 function while the loaded module is live. */
@@ -140,6 +159,36 @@ class HlLoadedRuntimeModule {
 			}
 		throw "HLI initializer slot is not represented by the identity table";
 	}
+
+	@:allow(compiler.hl.HlRuntimeModuleLease)
+	function releaseBorrow():Void {
+		if (borrowers == 0)
+			throw "HashLink loaded runtime module lease count is already zero";
+		borrowers--;
+	}
+}
+
+/** Borrowed view that keeps one Haxe-built runtime module from retirement. */
+class HlRuntimeModuleLease {
+	public final module:HlLoadedRuntimeModule;
+
+	var released:Bool = false;
+
+	@:allow(compiler.hl.HlLoadedRuntimeModule)
+	function new(module:HlLoadedRuntimeModule) {
+		this.module = module;
+	}
+
+	/** Release this borrow. Repeated release is safe. */
+	public function release():Void {
+		if (released)
+			return;
+		released = true;
+		module.releaseBorrow();
+	}
+
+	public inline function isReleased():Bool
+		return released;
 }
 
 /** Loads HLB through Haxe policy before handing the resulting record to HashLink. */

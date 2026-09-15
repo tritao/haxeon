@@ -15,6 +15,12 @@ the complete byte-level validation to the native patch kernel. Keeping that
 external bridge narrow avoids duplicating a second mutable patch representation
 while its Haxe-owned module model remains the base generation.
 
+`HlRuntimeModuleRegistry` keeps module replacement separate from patch
+transactions. A patch changes the revision of the published module in place;
+loading a replacement publishes a new module generation and retires the old
+wrapper. `HlRuntimeModuleLease` makes Haxe-side borrowers explicit, while native
+HashLink remains the final quiescence authority during retirement.
+
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
 relocations, register and symbol bounds, opcode operands, and duplicate slots.
