@@ -48,6 +48,7 @@ enum SemanticCompletionContextKind {
 	Argument;
 	Import;
 	ObjectField;
+	Pattern;
 }
 
 typedef SemanticCompletionContext = {
@@ -463,9 +464,10 @@ class SemanticIndex {
 					for (caught in catches)
 						indexRecoveredStatementUses(caught.statements, expectedReturn);
 				case Switch(value, cases, fallback, _, _):
+					var expectedPattern = recoveredExpressionType(value);
 					indexRecoveredExpression(value);
 					for (item in cases) {
-						indexRecoveredExpression(item.value);
+						indexRecoveredExpression(item.value, expectedPattern);
 						if (item.guard != null)
 							indexRecoveredExpression(item.guard);
 						indexRecoveredStatementUses(item.statements, expectedReturn);
@@ -585,9 +587,10 @@ class SemanticIndex {
 			case Lambda(_, body, _):
 				indexRecoveredStatementUses(body, functionResultType(expected));
 			case SwitchExpression(value, cases, fallback, _):
+				var expectedPattern = recoveredExpressionType(value);
 				indexRecoveredExpression(value);
 				for (item in cases) {
-					indexRecoveredExpression(item.value);
+					indexRecoveredExpression(item.value, expectedPattern);
 					if (item.guard != null)
 						indexRecoveredExpression(item.guard);
 					indexRecoveredExpression(item.result, expected);
@@ -1015,7 +1018,9 @@ class SemanticIndex {
 			token) ? SemanticCompletionContextKind.Import : expected != null
 			&& isObjectFieldContext(position,
 				token) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position,
-				token) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
+				token) ? SemanticCompletionContextKind.Type : expected != null
+			&& isPatternContext(position,
+				token) ? SemanticCompletionContextKind.Pattern : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
 			receiver: receiver,
@@ -1104,6 +1109,31 @@ class SemanticIndex {
 			index--;
 		}
 		return false;
+	}
+
+	function isPatternContext(position:Int, ?cancellation:CancellationToken):Bool {
+		var index = lastTokenBefore(position);
+		while (index >= 0) {
+			if (cancellation != null)
+				cancellation.check();
+			var kind = tokens[index].kind;
+			if (kind == TokenKind.Case)
+				return true;
+			if (kind == TokenKind.Colon || kind == TokenKind.Semicolon || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
+				return false;
+			index--;
+		}
+		return false;
+	}
+
+	function lastTokenBefore(position:Int):Int {
+		var result = -1;
+		for (index in 0...tokens.length) {
+			if (tokens[index].kind == TokenKind.Eof || tokens[index].span.end > position)
+				break;
+			result = index;
+		}
+		return result;
 	}
 
 	public function unresolvedSymbols():Array<UnresolvedSymbol>

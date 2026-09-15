@@ -312,6 +312,27 @@ class ParserRecoveryMain {
 				throw 'object field did not retain expected Foo type: ${objectContext.expected}';
 		}
 
+		var patternService = new LanguageService(),
+			patternSource = "enum Choice { One; Two(value:Int); } function main():Void { var choice:Choice = One; switch (choice) { case ";
+		patternService.update("ExpectedPattern.hx", patternSource);
+		var patternModel = patternService.compiler.modules.get("ExpectedPattern").recoveredSemanticModel;
+		if (patternModel == null)
+			throw "missing recovered semantic model for pattern completion test";
+		var patternContext = patternModel.index.completionContext(patternSource.length);
+		if (patternContext.kind != SemanticCompletionContextKind.Pattern)
+			throw 'switch pattern was classified as ${patternContext.kind} instead of Pattern';
+		switch patternContext.expected {
+			case TInstance(NominalKind.Enum, "Choice", _):
+			default:
+				throw 'switch pattern did not retain expected Choice type: ${patternContext.expected}';
+		}
+		var patternNames = [
+			for (item in patternService.complete("ExpectedPattern.hx", patternSource.length))
+				item.label
+		];
+		if (patternNames.indexOf("One") < 0 || patternNames.indexOf("Two") < 0)
+			throw "switch pattern completion did not expose expected enum cases";
+
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
 		try
