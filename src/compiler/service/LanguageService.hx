@@ -580,7 +580,7 @@ class LanguageService {
 			if (importQualifier(program, importPath) != name)
 				continue;
 			var imported = importedModule(importPath),
-				importedAst = imported == null ? null : imported.ast != null ? imported.ast : imported.recoveredAst != null ? imported.recoveredAst : imported.lastGoodAst;
+				importedAst = imported == null ? null : effectiveAst(imported);
 			if (importedAst == null)
 				continue;
 			for (decl in importedAst.classes)
@@ -595,7 +595,7 @@ class LanguageService {
 		}
 		if (program.packageName != null && program.packageName.length > 0)
 			for (candidate in compiler.modules) {
-				var candidateAst = candidate.ast != null ? candidate.ast : candidate.recoveredAst != null ? candidate.recoveredAst : candidate.lastGoodAst;
+				var candidateAst = effectiveAst(candidate);
 				if (candidateAst == null || candidateAst.packageName != program.packageName)
 					continue;
 				for (decl in candidateAst.classes)
