@@ -825,7 +825,12 @@ class Parser {
 				tryBranch = parseTryBody(),
 				catches:Array<compiler.syntax.Ast.AstCatch> = [],
 				end = previous().span;
-			do {
+			if (!check(TokenKind.Catch)) {
+				if (!recovering)
+					consume(TokenKind.Catch);
+				recordExpected("catch clause");
+			}
+			while (check(TokenKind.Catch)) {
 				var catchStart = consume(TokenKind.Catch).span;
 				consume(TokenKind.LeftParen);
 				var catchName = consumeDeclarationName("catch binding");
@@ -840,7 +845,7 @@ class Parser {
 					statements: catchBranch,
 					span: catchStart.merge(end)
 				});
-			} while (check(TokenKind.Catch));
+			}
 			return Try(tryBranch, catches, start.merge(end));
 		}
 		if (match(TokenKind.Switch)) {
@@ -971,7 +976,11 @@ class Parser {
 				consume(TokenKind.Greater);
 				valueName = consumeDeclarationName("for value binding");
 			}
-			consume(TokenKind.In);
+			if (!match(TokenKind.In)) {
+				if (!recovering || !isExpressionTerminator(current().kind))
+					consume(TokenKind.In);
+				recordExpected("in");
+			}
 			var iterable = parseExpression();
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock(), end = statementEnd(body);

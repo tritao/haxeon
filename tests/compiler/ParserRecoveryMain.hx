@@ -136,6 +136,16 @@ class ParserRecoveryMain {
 		var enumResult = new Parser(new Lexer(enumSource).tokenize()).parseProgramRecovering();
 		if (enumResult.program.enums.length != 1)
 			throw "unfinished enum declaration was abandoned at EOF";
+
+		var controlSource = new SourceFile("Control.hx", "function main():Void { try { return; } for (");
+		var controlResult = new Parser(new Lexer(controlSource).tokenize()).parseProgramRecovering();
+		if (controlResult.program.functions.length != 1 || controlResult.program.functions[0].statements.length != 2)
+			throw "unfinished try/for constructs discarded the enclosing function";
+		switch controlResult.program.functions[0].statements[1] {
+			case ForIn(_, _, ErrorExpression(_), _, _):
+			default:
+				throw "unfinished for construct did not retain its missing iterable";
+		}
 	}
 
 	static function assertPartialTypeFacts():Void {
