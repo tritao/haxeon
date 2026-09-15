@@ -68,10 +68,18 @@ class HotReloadMain {
 			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
 			workIndex = requireFunctionId(initial, "Worker.run");
 		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var identityFound = false;
+		for (entry in loaded.identity.entries)
+			if (entry.stableId == valueIndex && entry.functionIndex == initial.functionIndices.get("Value.value"))
+				identityFound = true;
 		if (loaded.model.entryPoint != initial.module.entryPoint
 			|| loaded.model.functionCount() != initial.module.functions.length
-			|| loaded.model.dispatchSlotCount <= 0)
-			throw "runtime load did not retain the validated HLB module model";
+			|| loaded.model.dispatchSlotCount <= 0
+			|| loaded.identity.revision != initial.revision
+			|| loaded.identity.moduleId.compare(initial.runtimeIdentity.sub(4, 16)) != 0
+			|| loaded.identity.entries.length == 0
+			|| !identityFound)
+			throw "runtime load did not retain the validated HLB/HLI models";
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		var initialLocation = Runtime.jitLocation(loaded, valueIndex);

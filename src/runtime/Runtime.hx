@@ -3,6 +3,8 @@ package runtime;
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
 import compiler.hl.patch.HlPatchReader;
+import compiler.hl.persistence.HlRuntimeIdentity;
+import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import sys.thread.Mutex;
 
 /** Private declarations for the native module lifecycle and invocation ABI. */
@@ -111,9 +113,10 @@ class Runtime {
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
-		var model:HlModule;
+		var model:HlModule, identityModel:HlRuntimeManifest;
 		try {
 			model = HlModule.decode(bytes);
+			identityModel = validateIdentity(HlRuntimeIdentity.decode(identity), model);
 		} catch (error:Dynamic) {
 			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLB module: ${Std.string(error)}');
 		}
@@ -121,7 +124,19 @@ class Runtime {
 		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
-		return new LoadedModule(module, model);
+		return new LoadedModule(module, model, identityModel);
+	}
+
+	static function validateIdentity(identity:HlRuntimeManifest, model:HlModule):HlRuntimeManifest {
+		var initializerEntry = identity.initializerSlot < 0;
+		for (entry in identity.entries)
+			if (model.functionAt(entry.functionIndex) == null)
+				throw 'HLI identity references missing dispatch slot ${entry.functionIndex}';
+			else if (entry.functionIndex == identity.initializerSlot)
+				initializerEntry = true;
+		if (!initializerEntry)
+			throw 'HLI initializer references a slot absent from the identity table';
+		return identity;
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int

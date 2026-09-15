@@ -19,6 +19,14 @@ typedef HlPersistentIdentity = {
 	final specializationState:Null<Bytes>;
 }
 
+/** Decoded HLI manifest retained by the runtime load boundary. */
+typedef HlRuntimeManifest = {
+	final moduleId:Bytes;
+	final revision:Int;
+	final entries:Array<{stableId:Int, functionIndex:Int}>;
+	final initializerSlot:Int;
+}
+
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
 	public static inline final VERSION = 6;
@@ -56,6 +64,55 @@ class HlRuntimeIdentity {
 			out.writeInt32(indices.get(name));
 		}
 		return out.getBytes();
+	}
+
+	/** Decode the runtime-facing HLI manifest without invoking native loading. */
+	public static function decode(bytes:Bytes):HlRuntimeManifest {
+		if (bytes == null || bytes.length < 28)
+			throw "HLI data is truncated";
+		var input = new BytesInput(bytes);
+		input.bigEndian = false;
+		try {
+			if (input.readString(3) != "HLI")
+				throw "Invalid HLI header";
+			var version = input.readByte();
+			if (version != 2 && version != RUNTIME_VERSION)
+				throw "Unsupported HLI version";
+			var moduleId = input.read(16),
+				revision = input.readInt32(),
+				count = input.readInt32(),
+				initializerSlot = version == 3 ? input.readInt32() : -1,
+				entriesOffset = version == 3 ? 32 : 28;
+			if (revision < 0 || count < 0 || count > 0x100000 || initializerSlot < -1 || bytes.length != entriesOffset + count * 8)
+				throw "Invalid HLI manifest bounds";
+			var entries:Array<{stableId:Int, functionIndex:Int}> = [],
+				stableIds:Map<Int, Bool> = [],
+				slots:Map<Int, Bool> = [];
+			for (_ in 0...count) {
+				var stableId = input.readInt32(),
+					functionIndex = input.readInt32();
+				if (stableId < 0 || functionIndex < 0 || stableIds.exists(stableId) || slots.exists(functionIndex))
+					throw "Invalid HLI function identity";
+				stableIds.set(stableId, true);
+				slots.set(functionIndex, true);
+				entries.push({stableId: stableId, functionIndex: functionIndex});
+			}
+			if (input.position != bytes.length)
+				throw "Trailing HLI data";
+			var effectiveInitializer = initializerSlot;
+			if (version == 2)
+				for (entry in entries)
+					if (entry.stableId == 0x1FFFFFFF)
+						effectiveInitializer = entry.functionIndex;
+			return {
+				moduleId: moduleId,
+				revision: revision,
+				entries: entries,
+				initializerSlot: effectiveInitializer
+			};
+		} catch (error:haxe.io.Eof) {
+			throw "Truncated HLI data";
+		}
 	}
 
 	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor,

@@ -5,6 +5,7 @@ import compiler.hl.HlReader;
 import compiler.hl.HlModule;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 
@@ -451,5 +452,27 @@ function main():Void {
 		compiledDecoded = HlReader.decode(compiledBytes);
 	expect(compiledDecoded.functions.length == compiled.functions.length && HlWriter.encode(compiledDecoded).compare(compiledBytes) == 0,
 		"HLB reader could not consume a compiler-produced module");
+	var moduleId = HaxeBytes.alloc(16);
+	moduleId.set(0, 17);
+	var runtimeIdentity = HlRuntimeIdentity.encode(moduleId, 7, ["main" => 1], ["main" => 91]),
+		identity = HlRuntimeIdentity.decode(runtimeIdentity);
+	expect(identity.revision == 7
+		&& identity.moduleId.compare(moduleId) == 0
+		&& identity.initializerSlot == -1
+		&& identity.entries.length == 1
+		&& identity.entries[0].stableId == 91
+		&& identity.entries[0].functionIndex == 1,
+		"HLI reader did not preserve the runtime identity model");
+	var legacyIdentity = HaxeBytes.alloc(runtimeIdentity.length - 4);
+	legacyIdentity.blit(0, runtimeIdentity, 0, 28);
+	legacyIdentity.set(3, 2);
+	legacyIdentity.blit(28, runtimeIdentity, 32, runtimeIdentity.length - 32);
+	expect(HlRuntimeIdentity.decode(legacyIdentity).entries.length == 1, "HLI v2 identity did not decode");
+	var duplicateIdentity = HlRuntimeIdentity.encode(moduleId, 1, ["a" => 0, "b" => 1], ["a" => 91, "b" => 92]);
+	duplicateIdentity.setInt32(40, 91);
+	expect(expectFailure(() -> HlRuntimeIdentity.decode(duplicateIdentity)), "HLI reader accepted duplicate stable IDs");
+	var missingInitializer = HlRuntimeIdentity.encode(moduleId, 1, ["main" => 1], ["main" => 91]);
+	missingInitializer.setInt32(28, 0);
+	expect(HlRuntimeIdentity.decode(missingInitializer).initializerSlot == 0, "HLI reader did not preserve an explicit initializer slot");
 	Sys.println("PASS: HLB reader owns complete module metadata and rejects malformed input");
 }

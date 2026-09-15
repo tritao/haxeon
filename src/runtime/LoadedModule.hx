@@ -1,12 +1,16 @@
 package runtime;
 
 import compiler.hl.HlModule;
+import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import sys.thread.Mutex;
 
 /** Exclusive owner of one native runtime module handle. */
 class LoadedModule {
 	/** Validated Haxe-owned module model retained beside the native handle. */
 	public final model:HlModule;
+
+	/** Validated Haxe-owned runtime identity retained beside the native handle. */
+	public final identity:HlRuntimeManifest;
 
 	final mutex = new Mutex();
 	var handle:Null<hl.Abstract<"realtime_module">>;
@@ -15,9 +19,10 @@ class LoadedModule {
 	var deferredDispose:Null<hl.Abstract<"realtime_module">->Void>;
 
 	@:allow(runtime.Runtime)
-	function new(handle:hl.Abstract<"realtime_module">, model:HlModule) {
+	function new(handle:hl.Abstract<"realtime_module">, model:HlModule, identity:HlRuntimeManifest) {
 		this.handle = handle;
 		this.model = model;
+		this.identity = identity;
 	}
 
 	@:allow(runtime.Runtime)

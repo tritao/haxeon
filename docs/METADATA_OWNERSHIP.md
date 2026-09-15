@@ -6,7 +6,7 @@ module generation.
 
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
-| Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
+| Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state, Haxeon `LoadedModule`, and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
 | Base bytecode metadata | HashLink code reader arena | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
 | Type arena entries | Base code arena; patch type append allocations | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
 | Function dispatch slots | `hl_module` | Loaded module generation | Patchable calls and staged closures | Runtime-module release |
