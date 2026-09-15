@@ -124,6 +124,9 @@ class SemanticIndex {
 	var recoveryCandidates:Null<String->Array<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
 	var recoveryResolveType:Null<(String, Array<CompilerType>) -> Null<CompilerType>>;
+	var recoveryPreviousLocalIds:Map<String, Array<SemanticSymbolId>> = [];
+	var recoveryPreviousLocalSpans:Map<String, SourceSpan> = [];
+	var recoveryUsedLocalIds:Map<String, Bool> = [];
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
@@ -273,12 +276,13 @@ class SemanticIndex {
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
 			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
-			?candidates:String->Array<SemanticSymbolId>):Void {
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndex):Void {
 		cancellation = token;
 		recoveryResolve = resolve;
 		recoveryCandidates = candidates;
 		recoveryResolveEnumCase = resolveEnumCase;
 		recoveryResolveType = resolveType;
+		prepareRecoveredLocalReuse(previous);
 		if (token != null)
 			token.check();
 		for (fn in program.functions) {
@@ -361,7 +365,52 @@ class SemanticIndex {
 		recoveryCandidates = null;
 		recoveryResolveEnumCase = null;
 		recoveryResolveType = null;
+		recoveryPreviousLocalIds = [];
+		recoveryPreviousLocalSpans = [];
+		recoveryUsedLocalIds = [];
 	}
+
+	/**
+	 * Reuse identities from the last exact snapshot where the function and
+	 * source name still match. This keeps harmless insertions from renumbering
+	 * every later local in a recovered editor model. The fallback remains the
+	 * existing revision-local ordinal when no safe predecessor exists.
+	 */
+	function prepareRecoveredLocalReuse(previous:Null<SemanticIndex>):Void {
+		recoveryPreviousLocalIds = [];
+		recoveryPreviousLocalSpans = [];
+		recoveryUsedLocalIds = [];
+		if (previous == null)
+			return;
+		for (symbol in previous.symbols) {
+			var identity = Std.string(symbol.id),
+				marker = identity.indexOf(":local:");
+			if (marker < 0)
+				continue;
+			var local = identity.substring(marker + ":local:".length),
+				ordinal = local.indexOf(":$" + "l");
+			if (ordinal < 0)
+				continue;
+			var functionKey = local.substring(0, ordinal),
+				key = recoveredLocalKey(functionKey, symbol.name),
+				ids = recoveryPreviousLocalIds.get(key);
+			if (ids == null) {
+				ids = [];
+				recoveryPreviousLocalIds.set(key, ids);
+			}
+			ids.push(symbol.id);
+			recoveryPreviousLocalSpans.set(Std.string(symbol.id), symbol.declaration);
+		}
+		for (ids in recoveryPreviousLocalIds)
+			ids.sort(function(left, right) {
+				var leftSpan = recoveryPreviousLocalSpans.get(Std.string(left)),
+					rightSpan = recoveryPreviousLocalSpans.get(Std.string(right));
+				return Reflect.compare(leftSpan.start, rightSpan.start);
+			});
+	}
+
+	static function recoveredLocalKey(functionKey:String, name:String):String
+		return functionKey + "\u0000" + name;
 
 	/** Index signatures from a visible module for editor-only recovery queries. */
 	public function indexRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>, ?token:CancellationToken):Void {
@@ -593,9 +642,15 @@ class SemanticIndex {
 		var token = declarationToken(tokens, declaration, name);
 		if (token == null)
 			return;
-		var next = recoveredLocalNext.exists(functionKey) ? recoveredLocalNext.get(functionKey) : 0;
-		recoveredLocalNext.set(functionKey, next + 1);
-		var id = new SemanticSymbolId(module, 'local:' + functionKey + ':' + '$' + 'l' + next + ':' + name);
+		var id = reusedRecoveredLocalId(functionKey, name, token.span);
+		if (id == null) {
+			var next = recoveredLocalNext.exists(functionKey) ? recoveredLocalNext.get(functionKey) : 0;
+			do {
+				id = new SemanticSymbolId(module, 'local:' + functionKey + ':' + '$' + 'l' + next + ':' + name);
+				next++;
+			} while (symbols.exists(id));
+			recoveredLocalNext.set(functionKey, next);
+		}
 		if (!symbols.exists(id)) {
 			symbols.set(id, {
 				id: id,
@@ -608,6 +663,31 @@ class SemanticIndex {
 			declarationTypes.set(id, type);
 		}
 		addCompletionLocal(name, type, declaration, scope, depth);
+	}
+
+	function reusedRecoveredLocalId(functionKey:String, name:String, span:SourceSpan):Null<SemanticSymbolId> {
+		var candidates = recoveryPreviousLocalIds.get(recoveredLocalKey(functionKey, name));
+		if (candidates == null)
+			return null;
+		// Exact token spans are the strongest evidence that this is the same
+		// binding; this also handles edits that only damage a later expression.
+		for (candidate in candidates) {
+			var key = Std.string(candidate), previousSpan = recoveryPreviousLocalSpans.get(key);
+			if (!recoveryUsedLocalIds.exists(key) && previousSpan.start == span.start && previousSpan.end == span.end) {
+				recoveryUsedLocalIds.set(key, true);
+				return candidate;
+			}
+		}
+		// If source offsets moved, preserve identity by source name and lexical
+		// occurrence. Unrelated declarations therefore do not renumber it.
+		for (candidate in candidates) {
+			var key = Std.string(candidate);
+			if (!recoveryUsedLocalIds.exists(key)) {
+				recoveryUsedLocalIds.set(key, true);
+				return candidate;
+			}
+		}
+		return null;
 	}
 
 	function indexRecoveredStatementUses(statements:Array<AstStatement>, ?expectedReturn:CompilerType, ?functionKey:String):Void {

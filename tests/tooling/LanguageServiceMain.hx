@@ -1187,6 +1187,20 @@ class LanguageServiceMain {
 			restoredId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
 		if (restored.isIncomplete || restoredId == null || Std.string(restoredId) != Std.string(validId))
 			throw "valid editor snapshot did not replace recovery with the original semantic identity";
+		var stableIdentityService = new LanguageService(),
+			stableIdentitySource = "class StableType { public var member:Int; } function main():Void { var first:Int = 1; var target:StableType = new StableType(); target.member; }";
+		stableIdentityService.update("StableIdentity.hx", stableIdentitySource);
+		stableIdentityService.analyze("StableIdentity");
+		var stableIdentityUse = stableIdentitySource.lastIndexOf("target.member"),
+			stableIdentity = stableIdentityService.compiler.modules.get("StableIdentity").semanticModel.index.symbolIdAt(stableIdentityUse + 1);
+		if (stableIdentity == null)
+			throw "baseline local identity was not indexed";
+		var insertedIdentitySource = "class StableType { public var member:Int; } function main():Void { var inserted:Int = 0; var first:Int = 1; var target:StableType = new StableType(); target.";
+		stableIdentityService.update("StableIdentity.hx", insertedIdentitySource);
+		var insertedIdentityUse = insertedIdentitySource.lastIndexOf("target."),
+			recoveredIdentity = stableIdentityService.compiler.modules.get("StableIdentity").recoveredSemanticModel.index.symbolIdAt(insertedIdentityUse + 1);
+		if (recoveredIdentity == null || Std.string(recoveredIdentity) != Std.string(stableIdentity))
+			throw 'recovery renumbered an unaffected local identity: baseline=${Std.string(stableIdentity)} recovered=${Std.string(recoveredIdentity)}';
 		var noSnapshotCompletionService = new LanguageService();
 		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
 		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)
