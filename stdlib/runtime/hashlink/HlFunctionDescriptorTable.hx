@@ -71,6 +71,29 @@ class HlFunctionDescriptorTable {
 	public inline function capacityOf():Int
 		return capacity;
 
+	/** Validate descriptor indices and signatures against module dispatch slots. */
+	public function validate(functions:HlFunctionTable):Void {
+		if (functions == null)
+			throw "HashLink function descriptors require a module function table";
+		for (index in 0...count) {
+			var descriptor = entries.offset(index), findex:Int = cast descriptor.ref.findex,
+				nregs:Int = cast descriptor.ref.nregs, nops:Int = cast descriptor.ref.nops, nassigns:Int = cast descriptor.ref.nassigns;
+			if (findex < 0 || findex >= functions.length())
+				throw 'HashLink function descriptor $index references dispatch slot $findex outside the module table';
+			if (nregs < 0 || nops < 0 || nassigns < 0)
+				throw 'HashLink function descriptor $index contains a negative storage count';
+			if (descriptor.ref.type.isNull())
+				throw 'HashLink function descriptor $index has no signature type';
+			if (functions.typeAt(findex) != descriptor.ref.type)
+				throw 'HashLink function descriptor $index signature disagrees with dispatch slot $findex';
+			for (previous in 0...index) {
+				var previousFindex:Int = cast entries.offset(previous).ref.findex;
+				if (previousFindex == findex)
+					throw 'HashLink function descriptor table contains duplicate dispatch slot $findex';
+			}
+		}
+	}
+
 	public function get(index:Int):RawPtr<HlFunction> {
 		if (index < 0 || index >= count)
 			throw 'HashLink function descriptor index $index is outside 0...$count';

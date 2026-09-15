@@ -249,7 +249,7 @@ function main():Int {
 		generationFunction = generation.builder.functionType([generationInt], generationVoid);
 	var generationObjectName = generation.builder.utf16Name("GenerationObject"),
 		generationMethodName = generation.builder.utf16Name("run"),
-		generationModule = generation.defineModule([RawPtr.nullPtr()], [generationFunction]),
+		generationModule = generation.defineModule([RawPtr.nullPtr(), RawPtr.nullPtr()], [generationFunction, generationFunction]),
 		generationObject = generation.builder.objectType(generationObjectName, RawPtr.nullPtr(), [], [
 			{
 				name: generationMethodName,
@@ -282,7 +282,7 @@ function main():Int {
 		library: RawPtr.nullPtr(),
 		name: RawPtr.nullPtr(),
 		type: generationFunction,
-		findex: 0
+		findex: 1
 	});
 	var publication = generation.publish();
 	var generationCorrect = publication.typeCount == 3
@@ -299,7 +299,7 @@ function main():Int {
 		&& publication.nativeDescriptors == generationNativeDescriptor
 		&& publication.nativeDescriptorCount == 1
 		&& publication.nativeDescriptorCapacity == 8
-		&& publication.functionCount == 1
+		&& publication.functionCount == 2
 		&& publication.moduleContext == generationModule
 		&& publication.functions.offset(0).load() == RawPtr.nullPtr()
 		&& publication.functionTypes.offset(0).load() == generationFunction
@@ -313,9 +313,27 @@ function main():Int {
 		generation.addType(generationInt)
 	catch (error:Dynamic)
 		generationSealed = true;
+	var invalidGeneration = new HlMetadataGeneration(128, 1),
+		invalidType = invalidGeneration.builder.primitive(HlTypeKind.Int32Type),
+		invalidFunction = invalidGeneration.builder.functionType([invalidType], invalidType);
+	invalidGeneration.addType(invalidType);
+	invalidGeneration.addType(invalidFunction);
+	invalidGeneration.defineModule([RawPtr.nullPtr()], [invalidType]);
+	invalidGeneration.addNativeDescriptor({
+		library: RawPtr.nullPtr(),
+		name: RawPtr.nullPtr(),
+		type: invalidFunction,
+		findex: 0
+	});
+	var invalidDescriptorRejected = false;
+	try
+		invalidGeneration.publish()
+	catch (error:Dynamic)
+		invalidDescriptorRejected = true;
+	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
-		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed ? 42 : 1;
+		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected ? 42 : 1;
 }

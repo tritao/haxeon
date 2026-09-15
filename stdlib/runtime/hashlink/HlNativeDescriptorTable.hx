@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlNative;
+import runtime.hashlink.HlFunctionTable;
 
 /** Input used to construct one Haxe-owned HashLink native binding descriptor. */
 typedef HlNativeDescriptorSpec = {
@@ -50,6 +51,26 @@ class HlNativeDescriptorTable {
 
 	public inline function capacityOf():Int
 		return capacity;
+
+	/** Validate native binding indices and signatures against module dispatch slots. */
+	public function validate(functions:HlFunctionTable):Void {
+		if (functions == null)
+			throw "HashLink native descriptors require a module function table";
+		for (index in 0...count) {
+			var descriptor = entries.offset(index), findex:Int = cast descriptor.ref.findex;
+			if (findex < 0 || findex >= functions.length())
+				throw 'HashLink native descriptor $index references dispatch slot $findex outside the module table';
+			if (descriptor.ref.type.isNull())
+				throw 'HashLink native descriptor $index has no signature type';
+			if (functions.typeAt(findex) != descriptor.ref.type)
+				throw 'HashLink native descriptor $index signature disagrees with dispatch slot $findex';
+			for (previous in 0...index) {
+				var previousFindex:Int = cast entries.offset(previous).ref.findex;
+				if (previousFindex == findex)
+					throw 'HashLink native descriptor table contains duplicate dispatch slot $findex';
+			}
+		}
+	}
 
 	public function get(index:Int):RawPtr<HlNative> {
 		if (index < 0 || index >= count)

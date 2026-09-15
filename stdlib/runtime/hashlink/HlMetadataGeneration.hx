@@ -135,6 +135,7 @@ class HlMetadataGeneration {
 		requireBuilding();
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
+		validateDescriptorTables();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
 		if (usesContiguousTypes)
@@ -230,5 +231,19 @@ class HlMetadataGeneration {
 		if (functionTable == null)
 			throw "HashLink metadata generation has no module function table";
 		return functionTable;
+	}
+
+	function validateDescriptorTables():Void {
+		var functions = requireFunctionTable();
+		functionDescriptors.validate(functions);
+		nativeDescriptors.validate(functions);
+		for (functionIndex in 0...functionDescriptors.length()) {
+			var functionFindex:Int = cast functionDescriptors.get(functionIndex).ref.findex;
+			for (nativeIndex in 0...nativeDescriptors.length()) {
+				var nativeFindex:Int = cast nativeDescriptors.get(nativeIndex).ref.findex;
+				if (functionFindex == nativeFindex)
+					throw 'HashLink function and native descriptors share dispatch slot $functionFindex';
+			}
+		}
 	}
 }
