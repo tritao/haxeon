@@ -100,6 +100,13 @@ class ParserRecoveryMain {
 		if (classResult.program.classes.length != 1 || classResult.program.classes[0].base == null)
 			throw "unfinished extends clause discarded the class declaration";
 
+		var genericDeclarationSource = new SourceFile("GenericDeclaration.hx", "class Child<\nfunction main():Void return;");
+		var genericDeclarationResult = new Parser(new Lexer(genericDeclarationSource).tokenize()).parseProgramRecovering();
+		if (genericDeclarationResult.program.classes.length != 1
+			|| genericDeclarationResult.program.classes[0].typeParameters.length != 1
+			|| genericDeclarationResult.program.functions.length != 1)
+			throw "unfinished generic declaration discarded adjacent declarations";
+
 		var methodSource = new SourceFile("Method.hx", "class Child { public function unfinished(");
 		var methodResult = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering();
 		if (methodResult.program.classes.length != 1

@@ -2133,7 +2133,12 @@ class Parser {
 				|| check(TokenKind.RightParen)
 				|| check(TokenKind.Eof);
 			case TokenKind.Greater:
-				check(TokenKind.Eof);
+				check(TokenKind.Eof)
+				|| check(TokenKind.LeftBrace)
+				|| check(TokenKind.Semicolon)
+				|| check(TokenKind.RightParen)
+				|| check(TokenKind.RightBrace)
+				|| isDeclarationBoundary(current());
 			case TokenKind.Colon, TokenKind.LeftBrace:
 				check(TokenKind.Eof);
 			case TokenKind.RightBrace:
