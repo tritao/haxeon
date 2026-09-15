@@ -106,6 +106,9 @@ jobs:
   macos:
     runs-on: macos-15-intel
     timeout-minutes: 60
+    env:
+      # Keep compiler fan-out bounded on the shared Intel runner.
+      TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -124,6 +127,9 @@ jobs:
   macos-arm64:
     runs-on: macos-15
     timeout-minutes: 60
+    env:
+      # Keep compiler fan-out bounded on the shared Apple Silicon runner.
+      TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
         with:
