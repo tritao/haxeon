@@ -11,6 +11,7 @@ import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
+import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
 import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
@@ -767,6 +768,26 @@ class LanguageService {
 		var qualifier = memberQualifier(state.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
+		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.Type) {
+			if (model != null)
+				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token))
+					if (isTypeCompletionKind(symbol.kind)) {
+						var signature = compiler.semanticWorkspace.editorSignature(state, symbol.id);
+						addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 0,
+							signature == null ? null : symbol.name + "<");
+					}
+			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token))
+				if (isTypeCompletionKind(candidate.symbol.kind))
+					addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 1,
+						candidate.importPath == null ? null : candidate.symbol.name,
+						candidate.symbol.id, candidate.importPath);
+			for (symbol in documentSymbols(path))
+				if (symbol.kind == "class" || symbol.kind == "interface" || symbol.kind == "enum" || symbol.kind == "type" || symbol.kind == "abstract")
+					addMember(symbol.name, symbol.kind, symbol.detail, prefix, result, 2);
+			sortCompletion(result);
+			tagResults(result, state);
+			return completionResult(result, incompleteSnapshot);
+		}
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
 				addInstanceMembers(semanticContext.receiver, prefix, result);
@@ -1320,6 +1341,13 @@ class LanguageService {
 
 	static function isImportableCompletionKind(kind:String):Bool
 		return kind == "type" || kind == "class" || kind == "interface" || kind == "enum" || kind == "function";
+
+	static function isTypeCompletionKind(kind:DeclarationKind):Bool
+		return switch kind {
+			case DeclarationKind.Alias, DeclarationKind.Abstract, DeclarationKind.Class, DeclarationKind.Enum, DeclarationKind.Interface,
+				DeclarationKind.TypeParameter: true;
+			default: false;
+		};
 
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
 		switch type {

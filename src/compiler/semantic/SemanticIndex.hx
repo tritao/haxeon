@@ -772,11 +772,31 @@ class SemanticIndex {
 					expectedWidth = width;
 				}
 			}
+		var kind = qualifier != null
+			? SemanticCompletionContextKind.Member
+			: isTypeContext(position)
+				? SemanticCompletionContextKind.Type
+				: expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
 			receiver: receiver,
 			expected: expected,
-			kind: qualifier != null ? SemanticCompletionContextKind.Member : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression
+			kind: kind
+		};
+	}
+
+	function isTypeContext(position:Int):Bool {
+		var previous:Null<Token> = null;
+		for (token in tokens) {
+			if (token.kind == TokenKind.Eof)
+				break;
+			if (token.span.end > position)
+				break;
+			previous = token;
+		}
+		return previous != null && switch previous.kind {
+			case TokenKind.Colon, TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
+			default: false;
 		};
 	}
 

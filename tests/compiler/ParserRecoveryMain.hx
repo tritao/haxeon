@@ -3,6 +3,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
 import compiler.types.Typer;
 import compiler.types.Type.NominalKind;
 
@@ -46,14 +47,17 @@ class ParserRecoveryMain {
 			throw "recovered member definition did not resolve to the current field";
 
 		var typeService = new LanguageService(),
-			typeSource = "function main():Int { var unfinished:";
+			typeSource = "class Foo {} function main():Int { var unfinished:";
 		typeService.update("Type.hx", typeSource);
 		try
 			typeService.analyze("Type")
 		catch (_:CompileError) {}
-		var locals = [for (item in typeService.complete("Type.hx", typeSource.length)) item.label];
-		if (locals.indexOf("unfinished") < 0)
-			throw "unfinished type annotation discarded its local declaration";
+		var typeModel = typeService.compiler.modules.get("Type").recoveredSemanticModel,
+			locals = [for (item in typeService.complete("Type.hx", typeSource.length)) item.label];
+		if (typeModel == null || typeModel.index.completionContext(typeSource.length).kind != SemanticCompletionContextKind.Type)
+			throw "unfinished type annotation did not expose a type completion context";
+		if (locals.indexOf("Foo") < 0 || locals.indexOf("unfinished") >= 0)
+			throw "type completion mixed value locals into an incomplete type annotation";
 
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
@@ -167,7 +171,7 @@ class ParserRecoveryMain {
 				if (name.indexOf(":second") < 0)
 					throw 'tolerant typer retained the wrong local: $name';
 			default:
-				throw 'tolerant typer did not retain the local after an expression error: ${Type.enumConstructor(functionBody[2])}';
+				throw "tolerant typer did not retain the local after an expression error";
 		}
 	}
 
