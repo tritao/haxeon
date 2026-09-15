@@ -2,6 +2,7 @@ package runtime;
 
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
+import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
@@ -286,7 +287,7 @@ class Runtime {
 
 	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T
 		return module.access(function(handle) {
-			validateCall(handle, stableIndex, shape);
+			validateCall(module, handle, stableIndex, shape);
 			try {
 				return operation(handle);
 			} catch (error:RuntimeError) {
@@ -298,7 +299,7 @@ class Runtime {
 
 	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
 		return module.accessRetained(function(handle) {
-			validateCall(handle, stableIndex, shape);
+			validateCall(module, handle, stableIndex, shape);
 			try {
 				return operation(handle);
 			} catch (error:RuntimeError) {
@@ -308,9 +309,62 @@ class Runtime {
 			}
 		});
 
-	static function validateCall(handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
+	/** Haxeon owns the immutable module/identity policy; native code rechecks live dispatch state. */
+	static function validateCall(module:LoadedModule, handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
+		validateCallModel(module, stableIndex, shape);
 		var status:RuntimeStatus = RuntimeNative.validate_call(handle, stableIndex, shape);
 		if (status != RuntimeStatus.Ok)
 			throw new RuntimeError(status, 'Invalid runtime function call (stable ID $stableIndex)');
+	}
+
+	static function validateCallModel(module:LoadedModule, stableIndex:Int, shape:Int):Void {
+		if (shape < 0 || shape > 6)
+			throw new RuntimeError(RuntimeStatus.BadArgument, 'Invalid runtime call shape $shape');
+
+		var functionIndex = -1;
+		for (entry in module.identity.entries)
+			if (entry.stableId == stableIndex) {
+				functionIndex = entry.functionIndex;
+				break;
+			}
+		var fn = module.model.functionAt(functionIndex);
+		if (fn == null)
+			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
+
+		var argumentCount:Int, resultKind:Null<compiler.hl.HlType>;
+		switch module.model.typeAt(fn.type) {
+			case Function(arguments, result):
+				argumentCount = arguments.length;
+				resultKind = typeKind(module.model, result);
+			default:
+				throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
+		}
+
+		var expectedArguments = shape == 3 || shape == 6 ? 1 : 0;
+		if (argumentCount != expectedArguments)
+			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
+
+		var expectedResult:Null<compiler.hl.HlType> = switch shape {
+			case 0, 6: compiler.hl.HlType.I32;
+			case 1, 3: compiler.hl.HlType.Void;
+			case 2: compiler.hl.HlType.Bytes;
+			case 4: compiler.hl.HlType.Fun;
+			default: null;
+		};
+		if (expectedResult != null && resultKind != expectedResult)
+			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
+	}
+
+	static function typeKind(module:HlModule, index:Int):compiler.hl.HlType {
+		return switch module.typeAt(index) {
+			case Simple(kind), Parameterized(kind, _): kind;
+			case Abstract(_): compiler.hl.HlType.Abstract;
+			case Function(_, _): compiler.hl.HlType.Fun;
+			case Method(_, _): compiler.hl.HlType.Method;
+			case Object(_, _, _, _, _, _): compiler.hl.HlType.Obj;
+			case Structure(_, _, _, _, _): compiler.hl.HlType.Struct;
+			case Virtual(_): compiler.hl.HlType.Virtual;
+			case Enum(_, _, _): compiler.hl.HlType.Enum;
+		};
 	}
 }
