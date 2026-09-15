@@ -1303,6 +1303,22 @@ class LanguageServiceMain {
 		var inheritedStaticPosition = inheritedStaticHoverSource.lastIndexOf("inherited") + "inherited".length;
 		if (inheritedStaticService.hover("InheritedStatic.hx", inheritedStaticPosition) != "inherited():Int")
 			throw "recovered static hover did not resolve an inherited member";
+		var nestedMemberService = new LanguageService(),
+			nestedMemberSource = "class Leaf { public var value:Int; } class Root { public var child:Leaf; } function main():Void { var root:Root = new Root(); root.child.";
+		nestedMemberService.update("NestedMember.hx", nestedMemberSource);
+		var nestedItems = nestedMemberService.completeResult("NestedMember.hx", nestedMemberSource.length).items,
+			nestedContext = nestedMemberService.completionContext("NestedMember.hx", nestedMemberSource.length),
+			foundNestedMember = false,
+			nestedReceiver = nestedContext == null ? null : nestedContext.context.receiver;
+		for (item in nestedItems)
+			if (item.label == "value" && item.detail == "value:Int")
+				foundNestedMember = true;
+		var nestedReceiverName = switch nestedReceiver {
+			case TInstance(_, name, _): Std.string(name);
+			default: null;
+		};
+		if (!foundNestedMember || nestedReceiverName != "Leaf")
+			throw "recovered completion did not resolve a nested member receiver";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

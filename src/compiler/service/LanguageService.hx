@@ -3026,6 +3026,11 @@ class LanguageService {
 		var qualifierEnd = start - 1, qualifierStart = qualifierEnd;
 		while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
 			qualifierStart--;
+		while (qualifierStart > 0 && source.bytes.get(qualifierStart - 1) == ".".code) {
+			qualifierStart--;
+			while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
+				qualifierStart--;
+		}
 		return source.slice(qualifierStart, qualifierEnd);
 	}
 

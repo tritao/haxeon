@@ -1802,6 +1802,8 @@ class SemanticIndex {
 					receiver = recoveredClassBases.get(owner.name);
 					break;
 				}
+		if (receiver == null && qualifier != null)
+			receiver = recoveredQualifierType(qualifier, position);
 		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
 		for (candidate in completionTypes) {
 			if (token != null)
@@ -1828,6 +1830,20 @@ class SemanticIndex {
 			expected: expected,
 			kind: kind
 		};
+	}
+
+	/** Resolve a dotted receiver such as `root.child` for member completion. */
+	function recoveredQualifierType(qualifier:String, position:Int):Null<CompilerType> {
+		var parts = qualifier.split(".");
+		if (parts.length == 0 || parts[0].length == 0 || source == null)
+			return null;
+		var bounded = position < 0 ? 0 : position > source.bytes.length ? source.bytes.length : position,
+			span = source.span(bounded, bounded),
+			expression:AstExpression = Variable(parts[0], span);
+		for (index in 1...parts.length)
+			expression = Member(expression, parts[index], span);
+		var type = recoveredExpressionBindingType(expression);
+		return isRecoveryType(type) ? null : type;
 	}
 
 	function isTypeContext(position:Int, ?token:CancellationToken):Bool {
