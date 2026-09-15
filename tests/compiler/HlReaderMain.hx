@@ -2,6 +2,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlReader;
+import compiler.hl.HlModule;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.Compiler;
@@ -184,6 +185,21 @@ function main():Void {
 	var encoded = HlWriter.encode(code);
 	var decoded = HlReader.decode(encoded);
 	expect(HlWriter.encode(decoded).compare(encoded) == 0, "HLB reader/writer round trip changed canonical bytes");
+	var model = HlModule.decode(encoded), modelIdentity = model.identityAt(1);
+	expect(model.encode().compare(encoded) == 0 && model.entryPoint == 1 && model.dispatchSlotCount == 2,
+		"HLB module model must preserve canonical bytes and dispatch shape");
+	expect(model.typeCount() == 4 && model.globalCount() == 1 && model.functionCount() == 1 && model.nativeCount() == 1 && model.constantCount() == 1
+		&& model.debugSectionCount() == 2,
+		"HLB module model must expose complete table counts");
+	var modelFunction = model.functionAt(1), modelNative = model.nativeAt(0);
+	expect(modelFunction != null
+		&& modelFunction.functionIndex == 1
+		&& modelFunction.opcodes.length == decoded.functions[0].opcodes.length,
+		"HLB module model must index bytecode dispatch slots");
+	expect(modelNative != null && modelNative.functionIndex == 0 && modelNative.name == decoded.natives[0].name,
+		"HLB module model must index native dispatch slots");
+	expect(modelIdentity != null && modelIdentity.stableId == 91, "HLB module model must index function identities");
+	expect(model.dispatchSlots().join(",") == "0,1", "HLB module model must order dispatch slots");
 	expect(decoded.ints[0] == 41 && decoded.floats[0] == 1.5 && decoded.strings[1] == "native", "HLB scalar pools did not decode");
 	expect(decoded.bytes.compare(code.bytes) == 0 && decoded.bytePositions[1] == 4, "HLB byte pool did not decode");
 	expect(decoded.types.length == 4 && decoded.globals[0] == 2 && decoded.natives[0].functionIndex == 0, "HLB metadata tables did not decode");

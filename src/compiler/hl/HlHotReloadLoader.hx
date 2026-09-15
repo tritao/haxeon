@@ -10,13 +10,15 @@ import runtime.memory.RawPtr;
 
 /** Owns a decoded HLB module until its hot-reload transaction is resolved. */
 class HlStagedHotReloadModule {
+	public final module:HlModule;
 	public final code:HlCode;
 	public final metadata:HlMetadataGeneration;
 	public final functions:HlFunctionVersionTable;
 	public final transaction:HlHotReloadTransaction;
 
-	function new(code:HlCode, metadata:HlMetadataGeneration, functions:HlFunctionVersionTable, transaction:HlHotReloadTransaction) {
-		this.code = code;
+	function new(module:HlModule, metadata:HlMetadataGeneration, functions:HlFunctionVersionTable, transaction:HlHotReloadTransaction) {
+		this.module = module;
+		this.code = module.code;
 		this.metadata = metadata;
 		this.functions = functions;
 		this.transaction = transaction;
@@ -41,11 +43,11 @@ class HlHotReloadLoader {
 			?structuralReload:Bool = false):HlStagedHotReloadModule {
 		if (state == null)
 			throw "HashLink hot-reload loading requires a state owner";
-		var code = HlReader.decode(bytes),
-			metadata = HlNativeMetadataBuilder.build(code, functionPointers);
+		var module = HlModule.decode(bytes),
+			metadata = HlNativeMetadataBuilder.buildModule(module, functionPointers);
 		try {
-			var functions = new HlFunctionVersionTable(functionEntries(code, metadata));
-			return new HlStagedHotReloadModule(code, metadata, functions, state.stage(metadata, functions, structuralReload));
+			var functions = new HlFunctionVersionTable(functionEntries(module.code, metadata));
+			return new HlStagedHotReloadModule(module, metadata, functions, state.stage(metadata, functions, structuralReload));
 		} catch (error:Dynamic) {
 			metadata.dispose();
 			throw error;

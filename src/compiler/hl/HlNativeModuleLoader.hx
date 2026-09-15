@@ -7,14 +7,16 @@ import runtime.memory.RawPtr;
 
 /** Owns the HLB model, Haxe metadata, and native module for one loaded module. */
 class HlLoadedNativeModule {
+	public final module:HlModule;
 	public final code:HlCode;
 	public final metadata:HlMetadataGeneration;
 	public final nativeModule:HlNativeModule;
 
 	var disposed:Bool = false;
 
-	function new(code:HlCode, metadata:HlMetadataGeneration, nativeModule:HlNativeModule) {
-		this.code = code;
+	function new(module:HlModule, metadata:HlMetadataGeneration, nativeModule:HlNativeModule) {
+		this.module = module;
+		this.code = module.code;
 		this.metadata = metadata;
 		this.nativeModule = nativeModule;
 	}
@@ -47,10 +49,10 @@ class HlLoadedNativeModule {
 /** Loads HLB through Haxe policy before handing the resulting record to HashLink. */
 class HlNativeModuleLoader {
 	public static function load(bytes:Bytes, ?functionPointers:Array<RawPtr<UInt8>>, ?flags:Int = 0):HlLoadedNativeModule {
-		var code = HlReader.decode(bytes),
-			metadata = HlNativeMetadataBuilder.build(code, functionPointers);
+		var module = HlModule.decode(bytes),
+			metadata = HlNativeMetadataBuilder.buildModule(module, functionPointers);
 		try {
-			return new HlLoadedNativeModule(code, metadata, new HlNativeModule(metadata, flags));
+			return new HlLoadedNativeModule(module, metadata, new HlNativeModule(metadata, flags));
 		} catch (error:Dynamic) {
 			metadata.dispose();
 			throw error;

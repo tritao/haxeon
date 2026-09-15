@@ -21,9 +21,14 @@ class HlNativeMetadataBuilder {
 		installed. The returned generation owns every imported allocation.
 	 */
 	public static function build(code:HlCode, ?functionPointers:Array<RawPtr<UInt8>>):HlMetadataGeneration {
-		if (code == null)
+		return buildModule(new HlModule(code), functionPointers);
+	}
+
+	/** Build metadata from the validated Haxe-owned module model. */
+	public static function buildModule(module:HlModule, ?functionPointers:Array<RawPtr<UInt8>>):HlMetadataGeneration {
+		if (module == null)
 			throw "HashLink native metadata requires an HLB module";
-		HlValidator.validate(code);
+		var code = module.code;
 		var generation = new HlMetadataGeneration(65536, positive(code.types.length), 65536, positive(code.functions.length), positive(code.natives.length),
 			positive(code.constants.length), positive(code.debugSections.length));
 		try {
