@@ -152,7 +152,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
 	completion, signature-help, hover, definition, background-analysis latency,
 	recovered-snapshot publication, and process-memory growth under rapid
-	incomplete edits; representative workspace budgets remain to be defined.
+	incomplete edits, including a multi-module malformed-source scenario;
+	representative workspace budgets remain to be defined.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).
