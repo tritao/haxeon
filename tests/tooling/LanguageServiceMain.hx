@@ -992,6 +992,20 @@ class LanguageServiceMain {
 				candidateUnresolved = symbol;
 		if (candidateUnresolved == null || candidateUnresolved.candidates.length != 2)
 			throw 'recovered unresolved symbol candidates were not retained: ${candidateUnresolved == null ? "null" : Std.string(candidateUnresolved.candidates.length)}';
+		var uniqueCandidateService = new LanguageService();
+		uniqueCandidateService.update("candidate/unique/Library.hx", "package candidate.unique; function unique():Int return 1; function main():Void return;");
+		var uniqueCandidateSource = "package candidate.app; import candidate.unique.Library; function main():Void { unique; }";
+		uniqueCandidateService.update("candidate/unique/Main.hx", uniqueCandidateSource);
+		var uniqueCandidateCompletion = uniqueCandidateService.completeResult("candidate/unique/Main.hx", uniqueCandidateSource.indexOf("unique;") + "unique".length),
+			uniqueCandidateItem:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in uniqueCandidateCompletion.items)
+			if (item.label == "unique")
+				uniqueCandidateItem = item;
+		if (uniqueCandidateItem == null
+			|| !StringTools.startsWith(uniqueCandidateItem.sortText, "1_")
+			|| uniqueCandidateItem.identity != null
+			|| uniqueCandidateItem.importPath != null)
+			throw "unique recovered candidate did not get recovery-aware completion priority without speculative identity";
 		var unresolvedService = new LanguageService(),
 			unresolvedSource = "function main():Void { unknownName; }";
 		unresolvedService.update("Unresolved.hx", unresolvedSource);

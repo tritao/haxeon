@@ -1400,6 +1400,8 @@ class LanguageService {
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
+		if (qualifier == null && model != null)
+			addRecoveredUnresolvedCompletion(state, model, position, prefix, result, token);
 		if (model != null)
 			for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
 				if (token != null)
@@ -1445,6 +1447,34 @@ class LanguageService {
 		sortCompletion(result);
 		tagResults(result, state);
 		return completionResult(result, incompleteSnapshot);
+	}
+
+	/**
+	 * Prefer a uniquely identified recovery candidate over broad import/workspace
+	 * fallbacks. Ambiguous candidates remain diagnostics evidence only; they must
+	 * not cause completion to manufacture a semantic identity.
+	 */
+	function addRecoveredUnresolvedCompletion(state:ModuleState, model:SemanticModel, position:Int, prefix:String,
+			result:Array<CompletionItem>, token:Null<CancellationToken>):Void {
+		var unresolved = model.index.unresolvedAt(position);
+		if (unresolved == null || unresolved.candidates.length != 1)
+			return;
+		if (token != null)
+			token.check();
+		var identity = unresolved.candidates[0],
+			resolved = compiler.semanticWorkspace.editorSymbolById(identity);
+		if (resolved == null)
+			return;
+		var label = sourceName(resolved.symbol.name);
+		if (label.length == 0 || (unresolved.name != label && !StringTools.startsWith(label, prefix)))
+			return;
+		var signature = compiler.semanticWorkspace.editorSignatureById(identity),
+			insertText = signature != null && signature.parameters.length > 0 ? label + "(" : null,
+			authoritative = compiler.semanticWorkspace.indexedSymbol(identity) != null,
+			importPath = authoritative && resolved.state != state ? resolved.state.name : null;
+		addMember(label, completionDeclarationKind(resolved.symbol.kind),
+			signature == null ? resolved.symbol.name : signature.label, prefix, result, 1, insertText,
+			authoritative ? Std.string(identity) : null, importPath);
 	}
 
 	/** Add top-level declarations visible through current editor snapshots. */
