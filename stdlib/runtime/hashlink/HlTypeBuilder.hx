@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.memory.NativeString;
 
 typedef HlObjectFieldSpec = {
 	final name:RawPtr<UInt16>;
@@ -51,7 +52,7 @@ class HlTypeBuilder {
 
 	/** Copy a Haxe string into arena-owned, null-terminated UTF-8 storage. */
 	public function utf8Name(value:String):RawPtr<UInt8> {
-		var bytes = utf8Bytes(value), result = arena.allocUInt8Array(bytes.length + 1);
+		var bytes = NativeString.utf8Bytes(value), result = arena.allocUInt8Array(bytes.length + 1);
 		for (index in 0...bytes.length)
 			result.offset(index).store(cast bytes[index]);
 		result.offset(bytes.length).store(cast 0);
@@ -60,7 +61,7 @@ class HlTypeBuilder {
 
 	/** Return the encoded byte length used by HashLink's native string tables. */
 	public static function utf8Length(value:String):Int
-		return utf8Bytes(value).length;
+		return NativeString.utf8Length(value);
 
 	/** Hash a HashLink UTF-16 field name using the VM's stable name hash. */
 	public static function hashUtf16(value:String):Int {
@@ -340,36 +341,6 @@ class HlTypeBuilder {
 		var result = arena.allocInt32Array(values.length);
 		for (index in 0...values.length)
 			result.offset(index).store(cast values[index]);
-		return result;
-	}
-
-	static function utf8Bytes(value:String):Array<Int> {
-		var result:Array<Int> = [], index = 0;
-		while (index < value.length) {
-			var code = value.charCodeAt(index++);
-			if (code >= 0xD800 && code <= 0xDBFF && index < value.length) {
-				var low = value.charCodeAt(index);
-				if (low >= 0xDC00 && low <= 0xDFFF) {
-					code = 0x10000 + ((code - 0xD800) << 10) + (low - 0xDC00);
-					index++;
-				}
-			}
-			if (code <= 0x7F)
-				result.push(code);
-			else if (code <= 0x7FF) {
-				result.push(0xC0 | (code >> 6));
-				result.push(0x80 | (code & 0x3F));
-			} else if (code <= 0xFFFF) {
-				result.push(0xE0 | (code >> 12));
-				result.push(0x80 | ((code >> 6) & 0x3F));
-				result.push(0x80 | (code & 0x3F));
-			} else {
-				result.push(0xF0 | (code >> 18));
-				result.push(0x80 | ((code >> 12) & 0x3F));
-				result.push(0x80 | ((code >> 6) & 0x3F));
-				result.push(0x80 | (code & 0x3F));
-			}
-		}
 		return result;
 	}
 
