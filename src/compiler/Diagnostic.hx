@@ -20,6 +20,14 @@ enum DiagnosticSeverity {
 	Warning;
 }
 
+/** Provenance used to keep editor diagnostics explainable across snapshots. */
+enum abstract DiagnosticOrigin(String) {
+	var Lexical = "lexical";
+	var ParserRecovery = "parser-recovery";
+	var Semantic = "semantic";
+	var Stale = "stale";
+}
+
 /** Structured compiler feedback tied to an exact source span. */
 class Diagnostic {
 	public final code:String;
@@ -27,13 +35,15 @@ class Diagnostic {
 	public final severity:DiagnosticSeverity;
 	public final span:SourceSpan;
 	public final fixes:Array<DiagnosticFix>;
+	public var origin:DiagnosticOrigin;
 
-	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>) {
+	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>, ?origin:DiagnosticOrigin = Semantic) {
 		this.code = code;
 		this.message = message;
 		this.span = span;
 		this.severity = severity;
 		this.fixes = fixes == null ? [] : fixes;
+		this.origin = origin;
 	}
 
 	/**

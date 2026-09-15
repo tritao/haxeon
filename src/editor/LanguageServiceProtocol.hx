@@ -201,6 +201,7 @@ class LanguageServiceProtocol {
 			code: diagnostic.code,
 			message: diagnostic.message,
 			severity: Std.string(diagnostic.severity),
+			origin: Std.string(diagnostic.origin),
 			path: diagnostic.span.file.path,
 			start: diagnostic.span.start,
 			end: diagnostic.span.end

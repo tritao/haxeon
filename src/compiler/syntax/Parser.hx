@@ -18,6 +18,7 @@ import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
 import haxe.Int64;
+import compiler.Diagnostic.DiagnosticOrigin;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
@@ -2134,6 +2135,7 @@ class Parser {
 	}
 
 	function recordRecoveryDiagnostic(diagnostic:compiler.Diagnostic):Void {
+		diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 		if (recoveryDiagnostics.length < MAX_RECOVERY_DIAGNOSTICS)
 			recoveryDiagnostics.push(diagnostic);
 	}

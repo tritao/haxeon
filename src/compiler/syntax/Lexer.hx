@@ -4,6 +4,7 @@ import compiler.syntax.Token.TokenKind;
 import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticSeverity;
+import compiler.Diagnostic.DiagnosticOrigin;
 
 /** Converts one source file into a positioned token stream or a lexical diagnostic. */
 class Lexer {
@@ -48,7 +49,7 @@ class Lexer {
 								title: "Close block comment",
 								edits: [{span: file.span(position, position), replacement: "*/"}]
 							}
-						]));
+						], DiagnosticOrigin.Lexical));
 					position += 2;
 					continue;
 				}
@@ -77,7 +78,8 @@ class Lexer {
 					}
 				}
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal", file.span(start, position)));
+					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal", file.span(start, position),
+						DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
 				tokens.push(new Token(TokenKind.RegexLiteral, text(start, position), file.span(start, position)));
@@ -99,7 +101,7 @@ class Lexer {
 								}
 							]
 						}
-					]));
+					], DiagnosticOrigin.Lexical));
 				tokens.push(new Token(TokenKind.StringLiteral, text(start, position), file.span(start, position)));
 				continue;
 			}
@@ -121,7 +123,8 @@ class Lexer {
 					while (position < source.length && isHexDigit(source.get(position)))
 						position++;
 					if (position == digitsStart)
-						throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position)));
+					throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position),
+						DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 					tokens.push(new Token(TokenKind.Integer, text(start, position), file.span(start, position)));
 					continue;
 				}
@@ -152,7 +155,8 @@ class Lexer {
 				var end = position + utf8Width(code);
 				if (end > source.length)
 					end = source.length;
-				throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${text(position, end)}"', file.span(position, end)));
+				throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${text(position, end)}"', file.span(position, end),
+					DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 			}
 			position++;
 			var character = String.fromCharCode(code);
@@ -250,7 +254,8 @@ class Lexer {
 						position++;
 						TokenKind.PercentAssign;
 					} else TokenKind.Percent;
-				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
+				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position),
+					DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 			}
 			tokens.push(new Token(kind, text(start, position), file.span(start, position)));
 		}

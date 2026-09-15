@@ -2,6 +2,7 @@ import compiler.service.LanguageService;
 import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
 import compiler.Diagnostic.CompileError;
+import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -67,6 +68,7 @@ class ParserRecoveryMain {
 		assertPartialTypeFacts();
 		assertTolerantTypedSnapshot();
 		assertRecoveryCancellation();
+		assertDiagnosticOrigins();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
@@ -257,6 +259,20 @@ class ParserRecoveryMain {
 			cancelled = true;
 		if (!cancelled)
 			throw "parser recovery did not honor its cancellation checkpoint";
+	}
+
+	static function assertDiagnosticOrigins():Void {
+		var parserService = new LanguageService();
+		parserService.update("ParserDiagnostic.hx", "function main():Void { var value:");
+		var parserDiagnostics = parserService.diagnostics("ParserDiagnostic.hx");
+		if (parserDiagnostics.length == 0 || parserDiagnostics[0].origin != DiagnosticOrigin.ParserRecovery)
+			throw "recovery diagnostics did not retain parser provenance";
+
+		var lexicalService = new LanguageService();
+		lexicalService.update("LexicalDiagnostic.hx", "function main():Void return \"");
+		var lexicalDiagnostics = lexicalService.diagnostics("LexicalDiagnostic.hx");
+		if (lexicalDiagnostics.length != 1 || lexicalDiagnostics[0].origin != DiagnosticOrigin.Lexical)
+			throw "lexical recovery diagnostics did not retain lexical provenance";
 	}
 
 	static function assertTruncationRecovery():Void {

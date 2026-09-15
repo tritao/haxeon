@@ -24,7 +24,9 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
+import compiler.syntax.ConditionalCompilation.ConditionalSource;
 import compiler.Diagnostic.CompileError;
+import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.Documentation.DocumentationComment;
@@ -253,12 +255,26 @@ class LanguageService {
 	}
 
 	function recoverSyntax(state:ModuleState, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
+		var conditional:ConditionalSource;
+		try
+			conditional = ConditionalCompilation.process(state.source, editorDefines)
+		catch (error:CompileError) {
+			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
+			mergeRecoveryDiagnostics(state, [error.diagnostic]);
+			return;
+		}
+		var checkpoint:Null<Void -> Void> = token == null ? null : function() token.check(),
+			tokens:Array<compiler.syntax.Token>;
+		try
+			tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize()
+		catch (error:CompileError) {
+			error.diagnostic.origin = DiagnosticOrigin.Lexical;
+			mergeRecoveryDiagnostics(state, [error.diagnostic]);
+			return;
+		}
 		try {
-			if (token != null)
-				token.check();
-			var conditional = ConditionalCompilation.process(state.source, editorDefines);
-			var checkpoint:Null<Void -> Void> = token == null ? null : function() token.check();
-			var tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize();
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
 			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint);
@@ -267,9 +283,11 @@ class LanguageService {
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
 			mergeRecoveryDiagnostics(state, recovered.diagnostics);
-		} catch (_:CompileError) {
-			// Lexer/parser recovery itself failed. Keep the last-good semantic
-			// snapshot available; do not destroy it.
+		} catch (error:CompileError) {
+			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
+			// Parser recovery itself failed. Keep the last-good semantic snapshot
+			// available; do not destroy it.
+			mergeRecoveryDiagnostics(state, [error.diagnostic]);
 		}
 	}
 
