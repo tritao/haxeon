@@ -218,16 +218,16 @@ class DeclarationIndex {
 			case AppliedType(name, arguments):
 				if (name == "List") {
 					if (arguments.length != 1)
-						recoverTypeArity('Type "List" expects 1 type argument, got ${arguments.length}', span);
+						reportRecoveryTypeError('Type "List" expects 1 type argument, got ${arguments.length}', span);
 					TArray(arguments.length == 0 ? TUnknown : resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (name == "Iterator") {
 					if (arguments.length != 1)
-						recoverTypeArity('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
+						reportRecoveryTypeError('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
 					TIterator(arguments.length == 0 ? TUnknown : resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
-						recoverTypeArity('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
+						reportRecoveryTypeError('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
@@ -240,7 +240,7 @@ class DeclarationIndex {
 				} else if (abstracts.exists(name)) {
 					var decl = abstracts.get(name);
 					if (arguments.length != decl.typeParameters.length)
-						recoverTypeArity('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
+						reportRecoveryTypeError('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
 					var abstractSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (index in 0...arguments.length)
 						if (index < decl.typeParameters.length)
@@ -280,7 +280,7 @@ class DeclarationIndex {
 					var parameters = declaration.typeParameters,
 						constraints = declaration.typeConstraints;
 					if (arguments.length != parameters.length)
-						recoverTypeArity('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
+						reportRecoveryTypeError('Type "$name" expects ${parameters.length} type arguments, got ${arguments.length}', span);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
@@ -332,7 +332,17 @@ class DeclarationIndex {
 		var relations = new TypeRelations(this);
 		for (constraint in constraints) {
 			var actual = substitutions.get(constraint.parameter),
-				expected = resolve(constraint.type, constraint.span, substitutions);
+				expected:Null<CompilerType> = try resolve(constraint.type, constraint.span, substitutions) catch (error:Dynamic) {
+				if (!recovery)
+					throw error;
+				if (Std.isOfType(error, CompileError))
+					recordRecoveryDiagnostic((cast error : CompileError).diagnostic);
+				else
+					rememberRecoveryDiagnostic("E0002", "Unable to resolve recovered type constraint", constraint.span);
+				null;
+			};
+			if (expected == null)
+				continue;
 			if (actual != null)
 				switch actual {
 					case TTypeParameter(_, _):
@@ -340,7 +350,7 @@ class DeclarationIndex {
 					default:
 				}
 			if (actual == null || !relations.isAssignable(actual, expected))
-				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"',
+				reportRecoveryTypeError('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"',
 					span);
 		}
 	}
@@ -352,7 +362,7 @@ class DeclarationIndex {
 		var alias = aliases.get(name);
 		if (alias != null) {
 			if (alias.typeParameters.length != 0)
-				recoverTypeArity('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
+				reportRecoveryTypeError('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
 			if (recovery && alias.typeParameters.length != 0) {
 				var aliasSubstitutions:Map<String, CompilerType> = [for (parameter => value in substitutions) parameter => value];
 				for (parameter in alias.typeParameters)
@@ -367,7 +377,7 @@ class DeclarationIndex {
 		var decl = abstracts.get(name);
 		if (decl != null) {
 			if (decl.typeParameters.length != 0)
-				recoverTypeArity('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
+				reportRecoveryTypeError('Type "$name" expects ${decl.typeParameters.length} type arguments, got 0', span);
 			if (recovery && decl.typeParameters.length != 0) {
 				var abstractSubstitutions:Map<String, CompilerType> = [for (parameter => value in substitutions) parameter => value];
 				for (parameter in decl.typeParameters)
@@ -393,14 +403,14 @@ class DeclarationIndex {
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int, span:SourceSpan):CompilerType {
 		if (arity != 0) {
-			recoverTypeArity('Type "$name" expects $arity type arguments, got 0', span);
+			reportRecoveryTypeError('Type "$name" expects $arity type arguments, got 0', span);
 			if (recovery)
 				return TInstance(kind, name, [for (_ in 0...arity) TUnknown]);
 		}
 		return TInstance(kind, name, []);
 	}
 
-	function recoverTypeArity(message:String, span:SourceSpan):Void {
+	function reportRecoveryTypeError(message:String, span:SourceSpan):Void {
 		if (recovery)
 			rememberRecoveryDiagnostic("E1020", message, span);
 		else

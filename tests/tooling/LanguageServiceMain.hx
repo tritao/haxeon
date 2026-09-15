@@ -1294,6 +1294,16 @@ class LanguageServiceMain {
 				foundIncompleteGenericMember = true;
 		if (!foundIncompleteGenericMember || incompleteGenericService.diagnostics("IncompleteGeneric.hx").length == 0)
 			throw "incomplete generic type recovery discarded later typed locals";
+		var invalidConstraintService = new LanguageService(),
+			invalidConstraintSource = "class Bounded<T:MissingConstraint> { public var value:T; } function main():Void { var bounded:Bounded<>; bounded.";
+		invalidConstraintService.update("InvalidConstraint.hx", invalidConstraintSource);
+		var invalidConstraintCompletion = invalidConstraintService.completeResult("InvalidConstraint.hx", invalidConstraintSource.length),
+			foundBoundedMember = false;
+		for (item in invalidConstraintCompletion.items)
+			if (item.label == "value")
+				foundBoundedMember = true;
+		if (!foundBoundedMember || invalidConstraintService.diagnostics("InvalidConstraint.hx").length == 0)
+			throw "recovered type constraints collapsed a nominal receiver after an error";
 		var visibilityService = new LanguageService();
 		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
 		visibilityService.analyze("unrelated.Target");
