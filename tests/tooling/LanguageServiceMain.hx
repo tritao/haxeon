@@ -6,6 +6,7 @@ import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedExpressionKind;
 
 class LanguageServiceMain {
 	static function main():Void {
@@ -1264,6 +1265,48 @@ class LanguageServiceMain {
 		noSnapshotCompletionService.update("NoSnapshotCompletion.hx", "function main():Void return \"");
 		if (!noSnapshotCompletionService.completeResult("NoSnapshotCompletion.hx", 0).isIncomplete)
 			throw "completion did not request a retry when no editor snapshot was available";
+		var incrementalRecoveryService = new LanguageService(),
+			incrementalSource = "function stable():Int { var value:Int = 1; return value; } function edited():Int { return 1; }";
+		incrementalRecoveryService.update("IncrementalRecovery.hx", incrementalSource);
+		var initialReuseCount = incrementalRecoveryService.recoveredTypedFunctionReuses;
+		if (initialReuseCount != 0)
+			throw "first recovered snapshot unexpectedly reused a typed function";
+		var changedIncrementalSource = "function stable():Int { var value:Int = 1; return value; } function edited():Int { return 2; }";
+		incrementalRecoveryService.update("IncrementalRecovery.hx", changedIncrementalSource);
+		if (incrementalRecoveryService.recoveredTypedFunctionReuses != initialReuseCount + 1)
+			throw 'recovered typing did not reuse the unchanged declaration: ${incrementalRecoveryService.recoveredTypedFunctionReuses}';
+		var incrementalModel = incrementalRecoveryService.compiler.modules.get("IncrementalRecovery").recoveredSemanticModel,
+			editedLiteral:Null<Int> = null;
+		if (incrementalModel != null && incrementalModel.partialTypedProgram != null)
+			for (fn in incrementalModel.partialTypedProgram.functions)
+				if (fn.name == "edited")
+					for (statement in fn.statements)
+						switch statement {
+							case TReturn(expression, _):
+								switch expression.expression {
+									case TIntLiteral(value):
+										editedLiteral = value;
+									default:
+								}
+							default:
+						}
+		if (editedLiteral != 2)
+			throw 'recovered typing reused a changed body: ${editedLiteral}';
+		var classIncrementalService = new LanguageService(),
+			classIncrementalSource = "class Incremental { public function stable():Int { return 1; } public function edited():Int { return 1; } }";
+		classIncrementalService.update("ClassIncremental.hx", classIncrementalSource);
+		var classInitialReuseCount = classIncrementalService.recoveredTypedFunctionReuses;
+		classIncrementalService.update("ClassIncremental.hx",
+			"class Incremental { public function stable():Int { return 1; } public function edited():Int { return 2; } }");
+		if (classIncrementalService.recoveredTypedFunctionReuses != classInitialReuseCount + 1)
+			throw "recovered typing did not reuse an unchanged class method";
+		var contextRecoveryService = new LanguageService(),
+			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
+		contextRecoveryService.update("ContextRecovery.hx", contextSource);
+		var contextReuseCount = contextRecoveryService.recoveredTypedFunctionReuses;
+		contextRecoveryService.update("ContextRecovery.hx", "function stable():Int { return 1; } class Context { public static var value:Int = 2; }");
+		if (contextRecoveryService.recoveredTypedFunctionReuses != contextReuseCount)
+			throw "recovered typing reused a body after its declaration context changed";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 

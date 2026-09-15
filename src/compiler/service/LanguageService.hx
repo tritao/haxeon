@@ -1,6 +1,8 @@
 package compiler.service;
 
 import compiler.semantic.ModuleCanonicalizer;
+import compiler.semantic.SemanticSignature;
+import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstProgram;
 import compiler.Diagnostic;
@@ -23,6 +25,7 @@ import compiler.types.DeclarationIndex;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
 import compiler.types.Typer.RecoveryTypingModule;
+import compiler.types.TypedAst.TypedFunction;
 import compiler.types.SignatureInference;
 import compiler.service.EditorSnapshot.EditorSnapshot;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
@@ -240,6 +243,8 @@ class LanguageService {
 	public final compiler:Compiler;
 	public var recoveredSnapshotBuilds(default, null):Int = 0;
 	public var recoveredTypingModuleBuilds(default, null):Int = 0;
+	/** Number of recovered function bodies reused across editor updates. */
+	public var recoveredTypedFunctionReuses(default, null):Int = 0;
 
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
@@ -369,8 +374,12 @@ class LanguageService {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
 			var recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
 				typingDiagnostics:Array<Diagnostic> = [],
-				typingModules = recoveryTypingModules(state, recovered.program, token);
-			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules);
+				typingModules = recoveryTypingModules(state, recovered.program, token),
+				reusedFunctions = recoveredTypedFunctionReuse(state, recovered.program);
+			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules,
+				reusedFunctions);
+			if (recoveredModel.partialTypedProgram != null)
+				recoveredTypedFunctionReuses += mapSize(reusedFunctions);
 			for (module in typingModules)
 				recoveredModel.index.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
 			recoveredModel.index.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
@@ -400,6 +409,99 @@ class LanguageService {
 					DiagnosticOrigin.ParserRecovery)
 			]);
 		}
+	}
+
+	/**
+	 * Select unchanged recovered bodies from the previous editor snapshot.
+	 *
+	 * This deliberately requires the entire source prefix through a candidate
+	 * declaration to be byte-identical. Reused typed spans therefore still point
+	 * at the same line/column data, while edits after the declaration can avoid
+	 * retyping it. The declaration context check covers changes after the body
+	 * that could alter its meaning (imports, signatures, fields, or inheritance).
+	 */
+	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram):Map<String, TypedFunction> {
+		var previous = state.previousEditorSemanticModel;
+		if (previous == null || previous.partialTypedProgram == null)
+			return [];
+		if (SemanticSignature.recoveryContext(previous.program) != SemanticSignature.recoveryContext(current))
+			return [];
+
+		var previousAst:Map<String, AstFunction> = [],
+			previousTyped:Map<String, TypedFunction> = [],
+			previousSource:Null<SourceFile> = null;
+		for (fn in previous.program.functions) {
+			previousAst.set(fn.name, fn);
+			if (previousSource == null)
+				previousSource = fn.span.file;
+		}
+		for (owner in previous.program.classes)
+			for (fn in owner.methods) {
+				previousAst.set(owner.name + "." + fn.name, fn);
+				if (previousSource == null)
+					previousSource = fn.span.file;
+			}
+		for (owner in previous.program.abstracts)
+			for (fn in owner.methods) {
+				previousAst.set(owner.name + "." + fn.name, fn);
+				if (previousSource == null)
+					previousSource = fn.span.file;
+			}
+		for (fn in previous.partialTypedProgram.functions)
+			if (!StringTools.startsWith(fn.name, "$lambda:"))
+				previousTyped.set(fn.name, fn);
+
+		var currentSource:Null<SourceFile> = null;
+		for (fn in current.functions) {
+			currentSource = fn.span.file;
+			break;
+		}
+		if (currentSource == null)
+			for (owner in current.classes)
+				if (owner.methods.length > 0) {
+					currentSource = owner.methods[0].span.file;
+					break;
+				}
+		if (currentSource == null || previousSource == null || previousSource.path != currentSource.path)
+			return [];
+		var unchangedPrefix = commonSourcePrefix(previousSource, currentSource),
+			result:Map<String, TypedFunction> = [];
+		var consider = function(name:String, fn:AstFunction):Void {
+			if (fn.isExtern == true || (fn.typeParameters != null && fn.typeParameters.length > 0))
+				return;
+			var oldAst = previousAst.get(name), typed = previousTyped.get(name);
+			if (oldAst == null || typed == null
+				|| oldAst.span.start != fn.span.start
+				|| oldAst.span.end != fn.span.end
+				|| fn.span.end > unchangedPrefix
+				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end) != fn.span.file.slice(fn.span.start, fn.span.end))
+				return;
+			result.set(name, typed);
+		};
+		for (fn in current.functions)
+			consider(fn.name, fn);
+		for (owner in current.classes)
+			for (fn in owner.methods)
+				consider(owner.name + "." + fn.name, fn);
+		for (owner in current.abstracts)
+			for (fn in owner.methods)
+				consider(owner.name + "." + fn.name, fn);
+		return result;
+	}
+
+	static function commonSourcePrefix(left:SourceFile, right:SourceFile):Int {
+		var length = left.bytes.length < right.bytes.length ? left.bytes.length : right.bytes.length,
+			index = 0;
+		while (index < length && left.bytes.get(index) == right.bytes.get(index))
+			index++;
+		return index;
+	}
+
+	static function mapSize<T>(map:Map<String, T>):Int {
+		var result = 0;
+		for (_ in map)
+			result++;
+		return result;
 	}
 
 	/**

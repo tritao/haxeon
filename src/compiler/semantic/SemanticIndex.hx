@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
@@ -115,6 +116,8 @@ class SemanticIndex {
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
 	final module:String;
+	/** Source owned by the snapshot being indexed, used to rebind cached spans. */
+	final source:Null<SourceFile>;
 	var cancellation:Null<CancellationToken>;
 	var currentRecoveredTypeParameters:Map<String, CompilerType> = [];
 	/** Function key used to keep recovered lambda locals distinct and stable. */
@@ -139,6 +142,7 @@ class SemanticIndex {
 		this.revision = revision;
 		this.declarations = declarations;
 		this.tokens = tokens;
+		this.source = tokens.length == 0 ? null : tokens[0].span.file;
 		var keys = [for (key in declarations.symbols.keys()) key];
 		keys.sort(Reflect.compare);
 		for (key in keys) {
@@ -246,7 +250,7 @@ class SemanticIndex {
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
 		}
 		if (fn.owner != null)
-			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
+			functionReceivers.push({span: currentSpan(fn.span), type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
 		if (functionId != null) {
 			declarationTypes.set(functionId, fn.result);
@@ -2037,6 +2041,7 @@ class SemanticIndex {
 		var token = declarationToken(tokens, declaration, sourceLocalName(identity));
 		if (token == null)
 			return;
+		scope = currentSpan(scope);
 		var name = sourceLocalName(identity);
 		for (index in 0...completionLocals.length) {
 			var existing = completionLocals[index];
@@ -2065,6 +2070,10 @@ class SemanticIndex {
 			depth: depth
 		});
 	}
+
+	/** Rebind spans from a safely reused typed body to this index's source. */
+	function currentSpan(span:SourceSpan):SourceSpan
+		return source == null || span.file == source ? span : source.span(span.start, span.end);
 
 	static function isRecoveryType(type:CompilerType):Bool
 		return type == TUnknown || type == TError;
@@ -2205,7 +2214,7 @@ class SemanticIndex {
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
-		completionTypes.push({span: expression.span, type: expression.type});
+		completionTypes.push({span: currentSpan(expression.span), type: expression.type});
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
 				var id = localId(fn, identity);
@@ -2296,7 +2305,7 @@ class SemanticIndex {
 		if (currentCaller == null || callee == null)
 			return;
 		var token = referenceToken(tokens, expression, sourceName(name));
-		var span = token == null ? expression : token.span;
+		var span = token == null ? currentSpan(expression) : token.span;
 		for (edge in callEdges)
 			if (edge.caller == currentCaller && edge.callee == callee && edge.span.start == span.start && edge.span.end == span.end)
 				return;
@@ -2328,6 +2337,7 @@ class SemanticIndex {
 	}
 
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
+		span = currentSpan(span);
 		checkpoint();
 		var locations = references.get(id);
 		var keys = referenceKeys.get(id);

@@ -40,7 +40,7 @@ class ProgramTyper {
 	}
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
-			entryPoint:Null<String>):MeasuredTypedProgram {
+			entryPoint:Null<String>, ?reusedFunctions:Map<String, TypedFunction>):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
@@ -155,7 +155,7 @@ class ProgramTyper {
 			], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, reusedFunctions)
 			], typedFunctions:Array<TypedFunction> = [];
 		for (enumDecl in typedEnums)
 			for (caseDecl in enumDecl.cases)
@@ -187,8 +187,10 @@ class ProgramTyper {
 		typedClasses = layoutNativeClasses(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
-			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
-				typedFunctions.push(bodyTyper.typeFunction(fn));
+			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
+				var reused = reusedFunction(fn.name, reusedFunctions);
+				typedFunctions.push(reused == null ? bodyTyper.typeFunction(fn) : reused);
+			}
 		for (classDecl in typedClasses)
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
@@ -199,8 +201,12 @@ class ProgramTyper {
 				if (abstractDecl.isExtern != true
 					&& method.isStatic
 					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
-					&& (selected == null || selected.exists(name)))
-					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name), abstractDecl.name, true));
+					&& (selected == null || selected.exists(name))) {
+					var reused = reusedFunction(name, reusedFunctions);
+					typedFunctions.push(reused == null
+						? bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name), abstractDecl.name, true)
+						: reused);
+				}
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
@@ -233,7 +239,7 @@ class ProgramTyper {
 		};
 	}
 
-	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, ?reusedFunctions:Map<String, TypedFunction>):TypedClass {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue;
@@ -414,11 +420,13 @@ class ProgramTyper {
 				continue;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = selected == null || selected.exists(qualified),
-				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
+				reused = typeBody ? reusedFunction(qualified, reusedFunctions) : null,
+				typedMethod = typeBody
+					? reused == null ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic, erasedSubstitutions) : reused
+					: methodSignature(method, classDecl.name, erasedSubstitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
-				if (typeBody && instanceInitializers.length > 0)
+				if (typeBody && reused == null && instanceInitializers.length > 0)
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
 			}
 			typedMethods.push(typedMethod);
@@ -667,6 +675,9 @@ class ProgramTyper {
 			span: method.span
 		};
 	}
+
+	static function reusedFunction(name:String, reusedFunctions:Null<Map<String, TypedFunction>>):Null<TypedFunction>
+		return reusedFunctions == null ? null : reusedFunctions.get(name);
 
 	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
 		var statements = instanceInitializerStatements(fields, className);

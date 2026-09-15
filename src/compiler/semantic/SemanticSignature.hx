@@ -1,13 +1,142 @@
 package compiler.semantic;
 
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeAlias;
+import compiler.Source.SourceSpan;
+import compiler.types.FieldInference;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
 /** Deterministic spelling for resolved semantic types and callable signatures. */
 class SemanticSignature {
+	/**
+	 * The declaration context that can affect the typing of a recovered body.
+	 *
+	 * Function bodies are intentionally omitted. This lets the editor typer reuse
+	 * an unchanged body when another declaration body changed, while changes to
+	 * imports, aliases, nominal shapes, fields, inheritance, or signatures still
+	 * invalidate the reuse candidate.
+	 */
+	public static function recoveryContext(program:AstProgram):String {
+		var result:Array<String> = ["package:" + (program.packageName == null ? "" : program.packageName)],
+			imports = program.imports.copy();
+		imports.sort(Reflect.compare);
+		result.push("imports:" + imports.join(","));
+		var importAliases:Array<String> = [];
+		for (alias => path in program.importAliases)
+			importAliases.push(alias + "=" + path);
+		importAliases.sort(Reflect.compare);
+		result.push("import-aliases:" + importAliases.join(","));
+
+		var aliases = program.aliases.copy();
+		aliases.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (alias in aliases)
+			result.push("alias:" + alias.name
+				+ (alias.typeParameters.length == 0 ? "" : "<" + parsedParameters(alias.typeParameters, alias.typeConstraints, program.aliases) + ">")
+				+ (alias.isPrivate ? ":private" : ":public")
+				+ "=" + parsed(alias.type, program.aliases));
+
+		var enums = program.enums.copy();
+		enums.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (decl in enums) {
+			var cases = [
+				for (caseDecl in decl.cases)
+					caseDecl.name + "(" + [
+						for (parameter in caseDecl.params)
+							(parameter.name == null ? "" : parameter.name + ":")
+							+ (parameter.optional ? "?" : "")
+							+ parsed(parameter.type, program.aliases)
+					].join(",") + ")"
+			].join(";");
+			result.push("enum:" + decl.name
+				+ (decl.typeParameters.length == 0 ? "" : "<" + parsedParameters(decl.typeParameters, decl.typeConstraints, program.aliases) + ">")
+				+ "{" + cases + "}");
+		}
+
+		var enumAbstracts = program.enumAbstracts.copy();
+		enumAbstracts.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (decl in enumAbstracts) {
+			var values = [for (value in decl.values) value.name + "=" + sourceSlice(value.span)].join(";");
+			result.push("enum-abstract:" + decl.name
+				+ "(" + parsed(decl.underlying, program.aliases) + ")"
+				+ " from " + [for (type in decl.fromTypes) parsed(type, program.aliases)].join(",")
+				+ " to " + [for (type in decl.toTypes) parsed(type, program.aliases)].join(",")
+				+ "{" + values + "}");
+		}
+
+		var interfaces = program.interfaces.copy();
+		interfaces.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (decl in interfaces)
+			result.push("interface:" + decl.name
+				+ (decl.typeParameters.length == 0 ? "" : "<" + parsedParameters(decl.typeParameters, decl.typeConstraints, program.aliases) + ">")
+				+ " extends " + [for (base in decl.bases) parsed(base, program.aliases)].join(",")
+				+ "{" + [for (method in decl.methods) methodContext(method, program.aliases)].join(";") + "}");
+
+		var classes = program.classes.copy();
+		classes.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (decl in classes) {
+			var fields = [for (field in decl.fields) fieldContext(field, program.aliases)].join(";");
+			result.push("class:" + decl.name
+				+ (decl.isExtern == true ? ":extern" : ":source")
+				+ (decl.isPrivate ? ":private" : ":public")
+				+ (decl.typeParameters.length == 0 ? "" : "<" + parsedParameters(decl.typeParameters, decl.typeConstraints, program.aliases) + ">")
+				+ " base=" + (decl.base == null ? "" : parsed(decl.base, program.aliases))
+				+ " interfaces=" + [for (type in decl.interfaces) parsed(type, program.aliases)].join(",")
+				+ " metadata=" + metadataContext(decl.metadata)
+				+ " fields={" + fields + "}"
+				+ " methods={" + [for (method in decl.methods) methodContext(method, program.aliases)].join(";") + "}");
+		}
+
+		var abstracts = program.abstracts.copy();
+		abstracts.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (decl in abstracts)
+			result.push("abstract:" + decl.name
+				+ (decl.isExtern == true ? ":extern" : ":source")
+				+ (decl.typeParameters.length == 0 ? "" : "<" + parsedParameters(decl.typeParameters, decl.typeConstraints, program.aliases) + ">")
+				+ "(" + parsed(decl.underlying, program.aliases) + ")"
+				+ " from=" + [for (type in decl.fromTypes) parsed(type, program.aliases)].join(",")
+				+ " to=" + [for (type in decl.toTypes) parsed(type, program.aliases)].join(",")
+				+ " metadata=" + metadataContext(decl.metadata)
+				+ " methods={" + [for (method in decl.methods) methodContext(method, program.aliases)].join(";") + "}");
+
+		var functions = program.functions.copy();
+		functions.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (fn in functions)
+			result.push("function:" + methodContext(fn, program.aliases));
+		return result.join("|");
+	}
+
+	static function methodContext(fn:AstFunction, aliases:Array<AstTypeAlias>):String
+		return fn.name + (fn.isStatic ? ":static" : ":instance") + (fn.isExtern == true ? ":extern" : ":source")
+			+ ":" + parsedFunction(fn, aliases);
+
+	static function fieldContext(field:compiler.syntax.Ast.AstField, aliases:Array<AstTypeAlias>):String {
+		var fieldType:AstType = try FieldInference.parsedType(field) catch (_:Dynamic) ErrorType(field.span);
+		return field.name
+			+ (field.isStatic ? ":static" : ":instance")
+			+ (field.isInline ? ":inline" : ":normal")
+			+ (field.isFinal ? ":final" : ":mutable")
+			+ ":" + parsed(fieldType, aliases)
+			// Include the complete field declaration so changes to inferred or
+			// constant initializer semantics cannot reuse an old body.
+			+ ":" + sourceSlice(field.span);
+	}
+
+	static function metadataContext(metadata:Array<compiler.syntax.Ast.AstMetadata>):String {
+		var result = [for (entry in metadata) sourceSlice(entry.span)];
+		result.sort(Reflect.compare);
+		return result.join(",");
+	}
+
+	static function sourceSlice(span:SourceSpan):String {
+		try
+			return span.file.slice(span.start, span.end)
+		catch (_:Dynamic)
+			return "";
+	}
+
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
 		return '$' + 'anon:' + anonymousFields(fields);
 

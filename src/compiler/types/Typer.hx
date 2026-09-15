@@ -6,6 +6,7 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.types.DeclarationIndex;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.TypedAst.TypedFunction;
 import compiler.types.typing.BodyTyper;
 import compiler.types.typing.ProgramTyper;
 import compiler.Diagnostic.CompileError;
@@ -33,7 +34,7 @@ class Typer {
 
 	/** Type a recovery tree while keeping failures local to the smallest body. */
 	public static function typeRecovered(program:AstProgram, ?nativeAbiTarget:String, ?checkpoint:Void->Void, ?diagnostics:Array<Diagnostic>,
-			?modules:Array<RecoveryTypingModule>):Null<TypedProgram> {
+			?modules:Array<RecoveryTypingModule>, ?reusedFunctions:Map<String, TypedFunction>):Null<TypedProgram> {
 		var bodyTyper = new BodyTyper(null, null, nativeAbiTarget, true, checkpoint);
 		try {
 			var semantic = SemanticProgram.analyzeRecovered(program, checkpoint);
@@ -41,7 +42,7 @@ class Typer {
 			if (modules != null)
 				for (module in modules)
 					semantic.includeRecoveredModule(module.program, module.declarations, module.qualifiers);
-			var typed = new ProgramTyper(bodyTyper).typeProgramMeasured(semantic, null, false, null).program;
+			var typed = new ProgramTyper(bodyTyper).typeProgramMeasured(semantic, null, false, null, reusedFunctions).program;
 			appendRecoveryDiagnostics(diagnostics, bodyTyper.recoveryDiagnostics());
 			return typed;
 		} catch (_:CompileError) {
