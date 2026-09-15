@@ -125,16 +125,25 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 
 ### D. Language service
 
-- [~] Persistent AST snapshots, diagnostics, document symbols, completion,
-  hover, definition, references, and rename are exposed through
-  `LanguageService`; typed local member completion now covers classes,
-  interfaces, arrays, maps, and strings, and semantic symbol identity now
-  follows local bindings, class/interface members, and imported module
-  functions. Full semantic resolution remains.
-- [~] Definition, references, and rename now use compiler symbol identity for
-  locals, members, and imported functions; full type-aware navigation remains.
-- [~] Completion-safe partial parsing and error recovery through last-good
-  snapshots; true partial parsing remains.
+- [~] `LanguageService` now selects one compiler-owned editor snapshot in the
+  order current-valid, current-recovered, then last-known-good. Edits publish
+  a recovered AST, tokens, and editor-only semantic model immediately; the
+  recovered model never becomes authoritative workspace state.
+- [~] Interactive parser recovery retains incomplete declarations, parameter
+  and type lists, member access, calls, blocks, and control-flow constructs.
+  Recovery diagnostics are merged and deduplicated with compiler diagnostics,
+  and lexical, parser, partial-typing, indexing, and LSP work honor cooperative
+  cancellation.
+- [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
+  scopes and local types around unrelated failures, records expected argument
+  types, and exposes unresolved names and compiler-owned completion contexts.
+  Full error-tolerant type resolution remains.
+- [~] Completion, symbols, folding, selection ranges, links, highlights,
+  semantic tokens, hover, and signature help consume current recovered source
+  where safe. Completion reports incomplete results while recovery is active.
+- [~] Definition and references require a bound compiler identity; rename and
+  stale fallback edits remain conservative and reject speculative or stale
+  symbols. Full type-aware navigation and global reference precision remain.
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
@@ -165,8 +174,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	operation contract.
 2. Complete package/import resolution for nominal types, then migrate the
 	fixture into a real Pragtical utility plugin.
-3. Expose compiler snapshots through a thin editor protocol adapter and finish
-	semantic definition/references/rename.
+3. Strengthen the compiler-owned editor snapshots, then finish semantic
+	definition/references/rename on top of conservative identity checks.
 4. Add structural reload domains and state migration, then move larger editor
 	subsystems and finally the editor core.
 
@@ -178,6 +187,16 @@ function edits patch in place; class-layout edits reload only that plugin
 domain; diagnostics and completion come from the same compiler snapshot; a
 clean build works from the checked-in bootstrap compiler; and the differential
 suite covers every language feature used by the migrated code.
+
+## Language-service production readiness
+
+The semantic/editor subsystem is ready for production use when ordinary
+incomplete source rarely breaks queries; completion is type-aware during
+malformed edits; structural features track the current recovered source;
+navigation is reliable only for authoritative identities; rename never edits
+from speculative or stale identity; rapid edits remain responsive under
+cancellation; realistic edit-sequence tests stay green; and large-workspace
+latency and memory budgets are measured and met.
 
 ## Long-term delivery sequence
 
@@ -224,14 +243,16 @@ second compiler or a second runtime.
 
 ### 3. Persistent compiler and language service
 
-- Turn edits into transactions: parse/type/codegen failures retain the last
-  good snapshot and return diagnostics without mutating live compiler state.
-- Add dependency-aware parallel work with deterministic assembly on the editor
-  thread, plus measured budgets for a representative Pragtical workspace.
-- Complete definition, references, rename, semantic completion, hover, and
-  document symbols from one compiler snapshot.
-- Add a small protocol adapter for Pragtical and keep it deliberately thinner
-  than the compiler service.
+- Keep current-valid, current-recovered, and last-good editor snapshots
+  separate, with recovery artifacts isolated from authoritative workspace
+  declarations.
+- Improve error-tolerant/incremental typing, expected-type propagation, and
+  stable symbol resolution before relaxing conservative navigation policies.
+- Measure edit-to-recovery, edit-to-completion, hover, navigation, background
+  analysis, memory, and snapshot churn on representative workspaces.
+- Add dependency-aware parallel work only after deterministic recovery and
+  invalidation budgets are met; keep the protocol adapter thinner than the
+  compiler service.
 
 ### 4. Plugin-first migration
 
