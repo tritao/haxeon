@@ -86,6 +86,23 @@ class HlTypeBuilder {
 		return type;
 	}
 
+	public function moduleContext(functions:Array<RawPtr<UInt8>>, types:Array<RawPtr<HlType>>):RawPtr<HlModuleContext> {
+		if (functions.length != types.length)
+			throw "HashLink module function and type tables must have equal lengths";
+		var context = arena.allocModuleContext(),
+			nativeFunctions:RawPtr<RawPtr<UInt8>> = functions.length == 0 ? RawPtr.nullPtr() : arena.allocNativePointerArray(functions.length),
+			nativeTypes:RawPtr<RawPtr<HlType>> = types.length == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(types.length);
+		context.ref.alloc.ref.current = RawPtr.nullPtr();
+		if (functions.length != 0)
+			for (index in 0...functions.length) {
+				nativeFunctions.offset(index).store(functions[index]);
+				nativeTypes.offset(index).store(types[index]);
+			}
+		context.ref.functionsPtrs = nativeFunctions;
+		context.ref.functionsTypes = nativeTypes;
+		return context;
+	}
+
 	public function enumType(name:RawPtr<UInt8>, constructs:Array<HlEnumConstructSpec>, globalValue:RawPtr<RawPtr<UInt8>>):RawPtr<HlType> {
 		var enumData = arena.allocTypeEnum(),
 			nativeConstructs:RawPtr<HlEnumConstruct>;

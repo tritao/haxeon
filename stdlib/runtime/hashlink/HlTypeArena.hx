@@ -33,6 +33,9 @@ class HlTypeArena {
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>
 		return storage.alloc(count);
 
+	public inline function allocNativePointerArray(count:Int):RawPtr<RawPtr<UInt8>>
+		return storage.alloc(count);
+
 	public inline function allocTypeObjectArray(count:Int):RawPtr<HlTypeObject>
 		return storage.alloc(count);
 

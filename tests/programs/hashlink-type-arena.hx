@@ -82,7 +82,11 @@ function main():Int {
 		&& virtualData.ref.nfields == 1
 		&& virtualData.ref.fields.offset(0).ref.type == intType
 		&& virtualData.ref.indexes.offset(0).load() == 0;
+	var module = builder.moduleContext([RawPtr.nullPtr()], [intType]);
+	var moduleCorrect = module.ref.alloc.ref.current == RawPtr.nullPtr()
+		&& module.ref.functionsPtrs.offset(0).load() == RawPtr.nullPtr()
+		&& module.ref.functionsTypes.offset(0).load() == intType;
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect ? 42 : 1;
+	return correct && builtCorrect && graphCorrect && moduleCorrect ? 42 : 1;
 }
