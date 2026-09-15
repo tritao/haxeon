@@ -84,6 +84,19 @@ class HlLoadedRuntimeModule {
 			throw "HashLink loaded runtime module has been unloaded";
 		return nativeModule.callI32(stableId);
 	}
+
+	/** Execute the manifest initializer through the Haxe-owned runtime policy. */
+	@:allow(compiler.hl.HlNativeModuleLoader)
+	function initialize():Void {
+		if (identity.initializerSlot < 0)
+			return;
+		for (entry in identity.entries)
+			if (entry.functionIndex == identity.initializerSlot) {
+				nativeModule.callVoid(entry.stableId);
+				return;
+			}
+		throw "HLI initializer slot is not represented by the identity table";
+	}
 }
 
 /** Loads HLB through Haxe policy before handing the resulting record to HashLink. */
@@ -104,10 +117,16 @@ class HlNativeModuleLoader {
 		var module = HlModule.decode(bytes),
 			identityModel = validateIdentity(HlRuntimeIdentity.decode(identity), module),
 			metadata = HlNativeMetadataBuilder.buildModule(module);
+		var loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
-			return new HlLoadedRuntimeModule(module, identityModel, metadata, new HlRuntimeModule(metadata, bytes, identity));
+			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata, new HlRuntimeModule(metadata, bytes, identity));
+			loaded.initialize();
+			return loaded;
 		} catch (error:Dynamic) {
-			metadata.dispose();
+			if (loaded == null)
+				metadata.dispose();
+			else if (!loaded.unload())
+				throw "HashLink external runtime module could not be unloaded after initialization failure";
 			throw error;
 		}
 	}

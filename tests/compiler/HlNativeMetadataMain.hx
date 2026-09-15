@@ -51,6 +51,9 @@ class HlNativeMetadataMain {
 			'var externalIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["main" => 0], ["main" => 101]), externalLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), externalIdentity), '
 			+ 'externalValue = externalLoaded.callI32(101), externalUnloaded = externalLoaded.unload(); '
 			+
+			'var initializerIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["__init" => 0], ["__init" => 101]), initializerRejected = false; '
+			+ 'try { HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), initializerIdentity); } catch (error:Dynamic) initializerRejected = true; '
+			+
 			'var patchCode = new HlCode(); patchCode.strings = ["haxeon_runtime", "native_pointer_size"]; patchCode.ints = [42]; patchCode.types = [Simple(HlType.I32), Function([], 0), Function([], 0)]; '
 			+
 			'patchCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; patchCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; patchCode.entryPoint = 0; '
@@ -100,7 +103,7 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
 			+
-			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalUnloaded && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '

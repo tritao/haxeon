@@ -36,6 +36,13 @@ class HlRuntimeModule {
 		return HlTypeBridge.native_runtime_module_call_i32(module, stableId);
 	}
 
+	/** Invoke a stable zero-argument void function. */
+	public function callVoid(stableId:Int):Void {
+		if (!isLoaded())
+			throw "HashLink external runtime module is no longer loaded";
+		HlTypeBridge.native_runtime_module_call_void(module, stableId);
+	}
+
 	/** Retire the wrapper, preserving the metadata lease if native borrowers block it. */
 	public function unload():Bool {
 		if (!isLoaded())

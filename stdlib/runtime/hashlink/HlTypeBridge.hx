@@ -113,6 +113,9 @@ class HlTypeBridge {
 	public static function native_runtime_module_call_i32(module:RawPtr<UInt8>, stableId:Int):Int
 		return 0;
 
+	/** Invoke a stable zero-argument void function through an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_void(module:RawPtr<UInt8>, stableId:Int):Void {}
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

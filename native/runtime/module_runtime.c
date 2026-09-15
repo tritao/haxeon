@@ -26,6 +26,13 @@ HL_PRIM int HL_NAME(native_runtime_module_call_i32)( vbyte *module, int stable_i
 	return result;
 }
 
+HL_PRIM void HL_NAME(native_runtime_module_call_void)( vbyte *module, int stable_id ) {
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_void((hl_runtime_module*)module,stable_id,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid external runtime void call (status %d, stable ID %d)",status,stable_id);
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;
