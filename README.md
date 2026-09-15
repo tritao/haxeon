@@ -265,7 +265,15 @@ is available on Unix-like systems and Windows:
 ./scripts/haxeon build --target android
 ./scripts/haxeon run --target android
 ./scripts/haxeon devices
+./scripts/haxeon fmt src/Main.hx
+./scripts/haxeon fmt --check src/Main.hx
+cat src/Main.hx | ./scripts/haxeon fmt --stdin --line-width 100
 ```
+
+`haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
+default, while `--check` reports files that would change. Use `--stdin` for
+editor or pipeline integration, `--line-width` to set the column limit, and
+`--tab-size` with `--use-tabs` to control indentation.
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:

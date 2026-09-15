@@ -7,6 +7,8 @@ import build.execution.ProcessRunner;
 import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
+import compiler.formatter.Formatter;
+import compiler.formatter.FormatConfig.FormatConfigTools;
 
 private typedef ProjectConfig = {
 	final entry:String;
@@ -28,6 +30,15 @@ private typedef BuildOptions = {
 	final runtimeArguments:Array<String>;
 	final plan:Bool;
 	final jobs:Int;
+}
+
+private typedef FormatOptions = {
+	final check:Bool;
+	final stdin:Bool;
+	final lineWidth:Int;
+	final indentWidth:Int;
+	final useTabs:Bool;
+	final paths:Array<String>;
 }
 
 private typedef CommandCapture = {
@@ -53,6 +64,7 @@ class HaxeonCli {
 				case "doctor": doctor(arguments);
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
+				case "fmt": fmt(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
 				case "help", "--help", "-h": usage();
@@ -127,6 +139,87 @@ class HaxeonCli {
 		File.saveContent(configPath, Json.stringify(config, null, "\t") + "\n");
 		Sys.println('Created $CONFIG_FILE and $sourcePath');
 		return 0;
+	}
+
+	static function fmt(arguments:Array<String>):Int {
+		var check = false, stdin = false, lineWidth = 120, indentWidth = 2, useTabs = false, paths:Array<String> = [], index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--check")
+				check = true;
+			else if (argument == "--stdin")
+				stdin = true;
+			else if (argument == "--use-tabs")
+				useTabs = true;
+			else if (argument == "--spaces" || argument == "--insert-spaces")
+				useTabs = false;
+			else if (argument == "--line-width" || argument == "--tab-size") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a positive integer';
+				var value = Std.parseInt(arguments[index++]);
+				if (value == null || value < 1)
+					throw 'Option "$argument" requires a positive integer';
+				if (argument == "--line-width")
+					lineWidth = value;
+				else
+					indentWidth = value;
+			} else if (StringTools.startsWith(argument, "--line-width=")) {
+				lineWidth = parsePositiveFormatOption(argument.substr("--line-width=".length), "--line-width");
+			} else if (StringTools.startsWith(argument, "--tab-size=")) {
+				indentWidth = parsePositiveFormatOption(argument.substr("--tab-size=".length), "--tab-size");
+			} else if (StringTools.startsWith(argument, "-"))
+				throw 'Unknown fmt option "$argument"';
+			else
+				paths.push(argument);
+		}
+		if (stdin && paths.length > 0)
+			throw 'haxeon fmt --stdin cannot be combined with file paths';
+		if (!stdin && paths.length == 0)
+			throw 'haxeon fmt requires a file path or --stdin';
+		var options:FormatOptions = {
+			check: check,
+			stdin: stdin,
+			lineWidth: lineWidth,
+			indentWidth: indentWidth,
+			useTabs: useTabs,
+			paths: paths
+		};
+		var config = FormatConfigTools.defaults(options.indentWidth, !options.useTabs);
+		config.lineWidth = options.lineWidth;
+		if (options.stdin) {
+			var source = Sys.stdin().readAll().toString(),
+				formatted = Formatter.format(source, config);
+			if (formatted == null)
+				throw "cannot format malformed source from stdin";
+			if (options.check)
+				return formatted == source ? 0 : 1;
+			Sys.print(formatted);
+			return 0;
+		}
+		var status = 0;
+		for (path in options.paths) {
+			if (!FileSystem.exists(path))
+				throw 'Source file not found: $path';
+			var source = File.getContent(path),
+				formatted = Formatter.format(source, config);
+			if (formatted == null)
+				throw 'Cannot format malformed source: $path';
+			if (formatted == source)
+				continue;
+			if (options.check) {
+				Sys.println('Would reformat $path');
+				status = 1;
+			} else
+				File.saveContent(path, formatted);
+		}
+		return status;
+	}
+
+	static function parsePositiveFormatOption(value:String, option:String):Int {
+		var parsed = Std.parseInt(value);
+		if (parsed == null || parsed < 1)
+			throw 'Option "$option" requires a positive integer';
+		return parsed;
 	}
 
 	static function doctor(arguments:Array<String>):Int {
@@ -628,6 +721,9 @@ class HaxeonCli {
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");
+		Sys.println("  fmt [options] PATH...          Format Haxe source files");
+		Sys.println("       [--check] [--stdin]      Check files or format stdin");
+		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--jobs COUNT]   Inspect the host build plan or set worker count");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
