@@ -1300,6 +1300,14 @@ class LanguageServiceMain {
 			"class Incremental { public function stable():Int { return 1; } public function edited():Int { return 2; } }");
 		if (classIncrementalService.recoveredTypedFunctionReuses != classInitialReuseCount + 1)
 			throw "recovered typing did not reuse an unchanged class method";
+		var abstractIncrementalService = new LanguageService(),
+			abstractIncrementalSource = "abstract IncrementalValue(Int) { public static function stable():Int return 1; public static function edited():Int return 1; }";
+		abstractIncrementalService.update("AbstractIncremental.hx", abstractIncrementalSource);
+		var abstractInitialReuseCount = abstractIncrementalService.recoveredTypedFunctionReuses;
+		abstractIncrementalService.update("AbstractIncremental.hx",
+			"abstract IncrementalValue(Int) { public static function stable():Int return 1; public static function edited():Int return 2; }");
+		if (abstractIncrementalService.recoveredTypedFunctionReuses != abstractInitialReuseCount + 1)
+			throw "recovered typing did not reuse an unchanged abstract static method";
 		var contextRecoveryService = new LanguageService(),
 			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
 		contextRecoveryService.update("ContextRecovery.hx", contextSource);

@@ -467,6 +467,12 @@ class LanguageService {
 					currentSource = owner.methods[0].span.file;
 					break;
 				}
+		if (currentSource == null)
+			for (owner in current.abstracts)
+				if (owner.methods.length > 0) {
+					currentSource = owner.methods[0].span.file;
+					break;
+				}
 		if (currentSource == null || previousSource == null || previousSource.path != currentSource.path)
 			return [];
 		var unchangedPrefix = commonSourcePrefix(previousSource, currentSource),
