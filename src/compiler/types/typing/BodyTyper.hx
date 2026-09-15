@@ -286,7 +286,7 @@ class BodyTyper {
 			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType))
 				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
 		}
-		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
+		var result = resolveType(fn.result, substitutions);
 		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
@@ -1659,7 +1659,7 @@ class BodyTyper {
 		var type = if (argument.type == InferredType && argument.defaultValue != null) {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
-		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
+		} else resolveType(argument.type, substitutions);
 		return argument.optional == true && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
 	}
 
@@ -1919,6 +1919,16 @@ class BodyTyper {
 	function lowerType(type:AstType):CompilerType {
 		try {
 			return session.representation.semanticType(type, null, context.typeSubstitutions);
+		} catch (error:CompileError) {
+			if (!session.tolerant)
+				throw error;
+			return TUnknown;
+		}
+	}
+
+	function resolveType(type:AstType, ?substitutions:Map<String, CompilerType>):CompilerType {
+		try {
+			return substitutions == null ? lowerType(type) : session.declarations.resolve(type, null, substitutions);
 		} catch (error:CompileError) {
 			if (!session.tolerant)
 				throw error;

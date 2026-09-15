@@ -200,6 +200,17 @@ class ParserRecoveryMain {
 			default:
 				throw "tolerant typer did not retain the local after an expression error";
 		}
+
+		var incompleteParameter = new SourceFile("TolerantParameter.hx", "function main(value:)");
+		var parameterProgram = new Parser(new Lexer(incompleteParameter).tokenize()).parseProgramRecovering().program,
+			parameterTyped = Typer.typeRecovered(parameterProgram);
+		if (parameterTyped == null || parameterTyped.functions.length != 1 || parameterTyped.functions[0].arguments.length != 1)
+			throw "tolerant typer abandoned a function with an incomplete parameter type";
+		switch parameterTyped.functions[0].arguments[0].type {
+			case TUnknown:
+			default:
+				throw "incomplete parameter type did not become TUnknown";
+		}
 	}
 
 	static function assertTruncationRecovery():Void {

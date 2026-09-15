@@ -28,6 +28,8 @@ class Typer {
 				.typeProgramMeasured(SemanticProgram.analyze(program), null, false, null).program;
 		} catch (_:CompileError) {
 			return null;
+		} catch (_:Dynamic) {
+			return null;
 		}
 	}
 
