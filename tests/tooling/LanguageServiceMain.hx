@@ -1308,6 +1308,29 @@ class LanguageServiceMain {
 			"abstract IncrementalValue(Int) { public static function stable():Int return 1; public static function edited():Int return 2; }");
 		if (abstractIncrementalService.recoveredTypedFunctionReuses != abstractInitialReuseCount + 1)
 			throw "recovered typing did not reuse an unchanged abstract static method";
+		var dependentIncrementalService = new LanguageService(),
+			dependentIncrementalSource = "function stable():Void { changed(); return; } function changed():Void { throw  1; }";
+		dependentIncrementalService.update("DependentIncremental.hx", dependentIncrementalSource);
+		dependentIncrementalService.update("DependentIncremental.hx",
+			"function stable():Void { changed(); return; } function changed():Void { return ; }");
+		var dependentModel = dependentIncrementalService.compiler.modules.get("DependentIncremental").recoveredSemanticModel,
+			stableNoReturn = false;
+		if (dependentModel != null && dependentModel.partialTypedProgram != null)
+			for (fn in dependentModel.partialTypedProgram.functions)
+				if (fn.name == "stable")
+					for (statement in fn.statements)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+									case TNoReturn(_): stableNoReturn = true;
+									default:
+								}
+							default:
+						}
+		if (stableNoReturn)
+			throw "recovered typing reused stale no-return semantics from a changed dependency";
+		if (dependentIncrementalService.recoveredTypedFunctionReuses != 0)
+			throw "recovered typing reused a body whose callee changed";
 		var contextRecoveryService = new LanguageService(),
 			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
 		contextRecoveryService.update("ContextRecovery.hx", contextSource);

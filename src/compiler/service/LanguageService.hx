@@ -2,7 +2,11 @@ package compiler.service;
 
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticSignature;
+import compiler.semantic.SemanticDependencyCollector;
+import compiler.syntax.AstChildren;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstProgram;
 import compiler.Diagnostic;
@@ -476,7 +480,31 @@ class LanguageService {
 		if (currentSource == null || previousSource == null || previousSource.path != currentSource.path)
 			return [];
 		var unchangedPrefix = commonSourcePrefix(previousSource, currentSource),
+			currentAst:Map<String, AstFunction> = [],
+			changedBodies:Map<String, Bool> = [],
 			result:Map<String, TypedFunction> = [];
+		for (fn in current.functions)
+			currentAst.set(fn.name, fn);
+		for (owner in current.classes)
+			for (fn in owner.methods)
+				currentAst.set(owner.name + "." + fn.name, fn);
+		for (owner in current.abstracts)
+			for (fn in owner.methods)
+				currentAst.set(owner.name + "." + fn.name, fn);
+
+		// A body can remain byte-identical while its callee changes. In that case
+		// reusing its typed tree is unsound: result types, no-return information,
+		// overload selection, and resolved identities may all have changed.
+		for (name in currentAst.keys()) {
+			var fn = currentAst.get(name), oldAst = previousAst.get(name);
+			if (oldAst == null
+				|| oldAst.span.start != fn.span.start
+				|| oldAst.span.end != fn.span.end
+				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end)
+					!= fn.span.file.slice(fn.span.start, fn.span.end))
+				changedBodies.set(name, true);
+		}
+
 		var consider = function(name:String, fn:AstFunction):Void {
 			if (fn.isExtern == true || (fn.typeParameters != null && fn.typeParameters.length > 0))
 				return;
@@ -486,6 +514,8 @@ class LanguageService {
 				|| oldAst.span.end != fn.span.end
 				|| fn.span.end > unchangedPrefix
 				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end) != fn.span.file.slice(fn.span.start, fn.span.end))
+				return;
+			if (recoveredBodyReferencesChanged(fn, changedBodies))
 				return;
 			result.set(name, typed);
 		};
@@ -498,6 +528,83 @@ class LanguageService {
 			for (fn in owner.methods)
 				consider(owner.name + "." + fn.name, fn);
 		return result;
+	}
+
+	/**
+	 * Conservatively detect references from a recovered body to declarations
+	 * whose bodies changed in the current edit. Matching is intentionally based
+	 * on canonical/suffix names: a false positive costs reuse, while a false
+	 * negative can publish stale semantic information.
+	 */
+	static function recoveredBodyReferencesChanged(fn:AstFunction, changedBodies:Map<String, Bool>):Bool {
+		if (mapSize(changedBodies) == 0)
+			return false;
+		var references:Map<String, Bool> = [];
+		for (statement in fn.statements)
+			scanRecoveredStatementReferences(statement, references);
+		for (reference in references.keys())
+			for (changed in changedBodies.keys())
+				if (SemanticDependencyCollector.sameDependencyTarget(reference, changed))
+					return true;
+		return false;
+	}
+
+	static function scanRecoveredStatementReferences(statement:AstStatement, references:Map<String, Bool>):Void {
+		for (expression in AstChildren.statementExpressions(statement))
+			scanRecoveredExpressionReferences(expression, references);
+		switch (statement) {
+			case Try(tryBranch, catches, _):
+				for (nested in tryBranch)
+					scanRecoveredStatementReferences(nested, references);
+				for (clause in catches)
+					for (nested in clause.statements)
+						scanRecoveredStatementReferences(nested, references);
+			case If(_, thenBranch, elseBranch, _):
+				for (nested in thenBranch)
+					scanRecoveredStatementReferences(nested, references);
+				for (nested in elseBranch)
+					scanRecoveredStatementReferences(nested, references);
+			case While(_, body, _):
+				for (nested in body)
+					scanRecoveredStatementReferences(nested, references);
+			case DoWhile(body, _, _):
+				for (nested in body)
+					scanRecoveredStatementReferences(nested, references);
+			case ForIn(_, _, _, body, _):
+				for (nested in body)
+					scanRecoveredStatementReferences(nested, references);
+			case Switch(_, cases, defaultBranch, _, _):
+				for (switchCase in cases)
+					for (nested in switchCase.statements)
+						scanRecoveredStatementReferences(nested, references);
+				for (nested in defaultBranch)
+					scanRecoveredStatementReferences(nested, references);
+			case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _),
+				VarDeclaration(_, _, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _),
+				Return(_, _), Throw(_, _), Expression(_, _):
+			}
+	}
+
+	static function scanRecoveredExpressionReferences(expression:AstExpression, references:Map<String, Bool>):Void {
+		switch (expression) {
+			case Variable(name, _):
+				references.set(name, true);
+			case Call(name, _, _):
+				references.set(name, true);
+			case MethodCall(_, name, _, _):
+				references.set(name, true);
+			case New(typeName, _, _), NewGeneric(typeName, _, _, _):
+				references.set(typeName + ".new", true);
+			case BlockExpression(statements, _, _):
+				for (nested in statements)
+					scanRecoveredStatementReferences(nested, references);
+			case Lambda(_, statements, _):
+				for (nested in statements)
+					scanRecoveredStatementReferences(nested, references);
+			default:
+			}
+		for (child in AstChildren.expressions(expression))
+			scanRecoveredExpressionReferences(child, references);
 	}
 
 	static function commonSourcePrefix(left:SourceFile, right:SourceFile):Int {
