@@ -1241,6 +1241,22 @@ class LanguageServiceMain {
 			importedVisibilityDefinition = visibilityService.definition("visible/ImportedUse.hx", importedVisibilityPosition);
 		if (importedVisibilityDefinition == null || importedVisibilityDefinition.path != "unrelated/Target.hx")
 			throw "recovered resolution discarded the uniquely imported symbol among duplicate names";
+		var nominalVisibilityService = new LanguageService();
+		nominalVisibilityService.update("nominal/a/Foo.hx", "package nominal.a; class Foo { public var fromA:Int; }");
+		nominalVisibilityService.update("nominal/b/Foo.hx", "package nominal.b; class Foo { public var fromB:Int; }");
+		var nominalVisibilitySource = "package nominal.app; import nominal.b.Foo; function main():Void { var value:Foo = new Foo(); value.";
+		nominalVisibilityService.update("nominal/app/Main.hx", nominalVisibilitySource);
+		var nominalVisibilityItems = nominalVisibilityService.completeResult("nominal/app/Main.hx", nominalVisibilitySource.length).items,
+			foundImportedMember = false,
+			foundInvisibleMember = false;
+		for (item in nominalVisibilityItems) {
+			if (item.label == "fromB")
+				foundImportedMember = true;
+			if (item.label == "fromA")
+				foundInvisibleMember = true;
+		}
+		if (!foundImportedMember || foundInvisibleMember)
+			throw "recovered nominal typing lost the imported type identity during member completion";
 		var transitionService = new LanguageService(),
 			validEditorSource = "class Foo { public var knownFoo:Int; } function main():Int { var foo:Foo = new Foo(); return foo.knownFoo; }";
 		transitionService.update("Transition.hx", validEditorSource);

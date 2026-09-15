@@ -929,7 +929,50 @@ class SemanticWorkspace {
 		return result;
 	}
 
-	function collectEditorMembers(type:CompilerType, result:Array<EditorMember>, seen:Map<String, Bool>, ?token:CancellationToken):Void {
+	/**
+	 * Resolve the receiver against the current module's visible type set before
+	 * enumerating members. A short nominal name can otherwise match unrelated
+	 * packages that happen to declare the same class name.
+	 */
+	public function editorMembersForContext(from:ModuleState, program:AstProgram, type:CompilerType,
+		?token:CancellationToken):Array<EditorMember> {
+		var name = editorNominalName(type),
+			candidates:Array<SemanticSymbolId> = [];
+		if (name != null)
+			for (candidate in editorSymbolCandidates(from, name, token, program)) {
+				if (token != null)
+					token.check();
+				var resolved = editorSymbolById(candidate);
+				if (resolved != null && isTypeKind(resolved.symbol.kind))
+					addUniqueIdentity(candidates, candidate);
+			}
+		if (candidates.length == 1)
+			return editorMembersForIdentity(type, candidates[0], token);
+		if (candidates.length > 1)
+			return [];
+		return editorMembers(type, token);
+	}
+
+	function editorMembersForIdentity(type:CompilerType, identity:SemanticSymbolId,
+		?token:CancellationToken):Array<EditorMember> {
+		if (editorSymbolById(identity) == null)
+			return [];
+		var result:Array<EditorMember> = [],
+			seen:Map<String, Bool> = [];
+		collectEditorMembers(type, result, seen, token, identity);
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
+	static function editorNominalName(type:CompilerType):Null<String>
+		return switch type {
+			case TNullable(element): editorNominalName(element);
+			case TInstance(_, name, _), TAbstract(name, _, _): name;
+			default: null;
+		};
+
+	function collectEditorMembers(type:CompilerType, result:Array<EditorMember>, seen:Map<String, Bool>, ?token:CancellationToken,
+		?preferredIdentity:SemanticSymbolId):Void {
 		if (token != null)
 			token.check();
 		var key = Std.string(type);
@@ -947,7 +990,8 @@ class SemanticWorkspace {
 					if (model == null)
 						continue;
 					for (classDecl in model.program.classes)
-						if (ownsType(state, model, classDecl.name, name)) {
+						if (ownsType(state, model, classDecl.name, name)
+							&& (preferredIdentity == null || editorDeclarationIdentity(model, classDecl.span) == preferredIdentity)) {
 							var substitutions = editorTypeSubstitutions(classDecl.typeParameters, arguments);
 							for (field in classDecl.fields) {
 								if (token != null)
@@ -979,7 +1023,8 @@ class SemanticWorkspace {
 					if (model == null)
 						continue;
 					for (interfaceDecl in model.program.interfaces)
-						if (ownsType(state, model, interfaceDecl.name, name)) {
+						if (ownsType(state, model, interfaceDecl.name, name)
+							&& (preferredIdentity == null || editorDeclarationIdentity(model, interfaceDecl.span) == preferredIdentity)) {
 							var substitutions = editorTypeSubstitutions(interfaceDecl.typeParameters, arguments);
 							for (method in interfaceDecl.methods) {
 								if (token != null)
@@ -1001,7 +1046,8 @@ class SemanticWorkspace {
 					if (model == null)
 						continue;
 					for (abstractDecl in model.program.abstracts)
-						if (ownsType(state, model, abstractDecl.name, name)) {
+						if (ownsType(state, model, abstractDecl.name, name)
+							&& (preferredIdentity == null || editorDeclarationIdentity(model, abstractDecl.span) == preferredIdentity)) {
 							var substitutions = editorTypeSubstitutions(abstractDecl.typeParameters, arguments);
 							for (method in abstractDecl.methods)
 								if (!method.isStatic) {
@@ -1287,6 +1333,13 @@ class SemanticWorkspace {
 		for (symbol in model.index.symbols)
 			if (sameSpan(symbol.declaration, span) && isTypeKind(symbol.kind))
 				return symbol;
+		return null;
+	}
+
+	static function editorDeclarationIdentity(model:compiler.semantic.SemanticModel, span:SourceSpan):Null<SemanticSymbolId> {
+		for (symbol in model.index.symbols)
+			if (sameSpan(symbol.declaration, span) && isTypeKind(symbol.kind))
+				return symbol.id;
 		return null;
 	}
 }

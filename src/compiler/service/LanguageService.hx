@@ -1623,7 +1623,7 @@ class LanguageService {
 		}
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
-				for (member in compiler.semanticWorkspace.editorMembers(semanticContext.receiver, token))
+				for (member in compiler.semanticWorkspace.editorMembersForContext(state, ast, semanticContext.receiver, token))
 					addMember(member.name, member.kind, member.detail, prefix, result);
 			addImportedMembers(ast, qualifier, prefix, result, token);
 			if (model != null)
