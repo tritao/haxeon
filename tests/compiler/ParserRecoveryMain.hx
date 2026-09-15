@@ -230,6 +230,8 @@ class ParserRecoveryMain {
 			default:
 				throw "malformed enum abstract value did not retain an error expression";
 		}
+		if (Typer.typeRecovered(enumAbstractValueResult.program) == null)
+			throw "malformed enum abstract value aborted tolerant typing";
 
 		var controlSource = new SourceFile("Control.hx", "function main():Void { try { return; } for (");
 		var controlResult = new Parser(new Lexer(controlSource).tokenize()).parseProgramRecovering();

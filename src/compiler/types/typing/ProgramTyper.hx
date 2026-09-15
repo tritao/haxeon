@@ -47,10 +47,17 @@ class ProgramTyper {
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
 			var emptySubstitutions:Map<String, CompilerType> = [];
-			var underlying = session.declarations.resolve(decl.underlying, null, emptySubstitutions);
-			for (value in decl.values)
-				bodyTyper.coerce(bodyTyper.typeExpression(value.value, new Scope(), underlying), underlying,
-					'enum abstract value "${decl.name}.${value.name}"', "E1002");
+			var underlying = bodyTyper.resolveType(decl.underlying, emptySubstitutions);
+			for (value in decl.values) {
+				try
+					bodyTyper.coerce(bodyTyper.typeExpression(value.value, new Scope(), underlying), underlying,
+						'enum abstract value "${decl.name}.${value.name}"', "E1002")
+				catch (error:Dynamic) {
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error);
+				}
+			}
 		}
 		session.bindNominalDeclarations();
 		for (alias in program.aliases) {
