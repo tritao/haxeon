@@ -286,6 +286,14 @@ class ParserRecoveryMain {
 		var interfaceSignature = interfaceService.signatureHelp("InterfaceRecovery.hx", interfaceSource.length);
 		if (interfaceSignature == null || interfaceSignature.label != "take(value:Foo):Void" || interfaceSignature.activeParameter != 0)
 			throw "recovered interface call did not expose signature help context";
+
+		var navigationService = new LanguageService(),
+			navigationSource = "function target():Void return; function main():Void return target(";
+		navigationService.update("NavigationRecovery.hx", navigationSource);
+		var targetDefinition = navigationService.definition("NavigationRecovery.hx", navigationSource.lastIndexOf("target(") + 1);
+		var targetDeclaration = navigationSource.indexOf("target");
+		if (targetDefinition == null || targetDefinition.span.start > targetDeclaration || targetDefinition.span.end < targetDeclaration)
+			throw "recovered unfinished call did not resolve its current definition";
 	}
 
 	static function assertNestedRecovery(tail:String):Void {
