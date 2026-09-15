@@ -185,6 +185,22 @@ class Parser {
 		var name = consumeDeclarationName("abstract"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
+		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current()))) {
+			var underlying = missingType("abstract underlying type");
+			recordExpected("abstract body");
+			return {
+				name: name,
+				isExtern: isExtern,
+				metadata: metadata == null ? [] : metadata,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				underlying: underlying,
+				fromTypes: [],
+				toTypes: [],
+				methods: [],
+				span: start.merge(previous().span)
+			};
+		}
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
@@ -198,6 +214,21 @@ class Parser {
 				fromTypes.push(conversionType);
 			else
 				toTypes.push(conversionType);
+		}
+		if (recovering && isDeclarationBoundary(current())) {
+			recordExpected("abstract body");
+			return {
+				name: name,
+				isExtern: isExtern,
+				metadata: metadata == null ? [] : metadata,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				underlying: underlying,
+				fromTypes: fromTypes,
+				toTypes: toTypes,
+				methods: [],
+				span: start.merge(previous().span)
+			};
 		}
 		consume(TokenKind.LeftBrace);
 		var methods = [];
@@ -231,6 +262,18 @@ class Parser {
 
 	function parseEnumAbstract(start:SourceSpan):AstEnumAbstract {
 		var name = consumeDeclarationName("enum abstract");
+		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current()))) {
+			var underlying = missingType("enum abstract underlying type");
+			recordExpected("enum abstract body");
+			return {
+				name: name,
+				underlying: underlying,
+				fromTypes: [],
+				toTypes: [],
+				values: [],
+				span: start.merge(previous().span)
+			};
+		}
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
@@ -244,6 +287,17 @@ class Parser {
 				fromTypes.push(conversionType);
 			else
 				toTypes.push(conversionType);
+		}
+		if (recovering && isDeclarationBoundary(current())) {
+			recordExpected("enum abstract body");
+			return {
+				name: name,
+				underlying: underlying,
+				fromTypes: fromTypes,
+				toTypes: toTypes,
+				values: [],
+				span: start.merge(previous().span)
+			};
 		}
 		consume(TokenKind.LeftBrace);
 		var values = [];

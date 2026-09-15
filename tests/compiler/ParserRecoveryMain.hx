@@ -197,6 +197,20 @@ class ParserRecoveryMain {
 			|| enumBoundaryResult.program.functions[0].name != "visible")
 			throw "unfinished enum header discarded the following declaration";
 
+		var abstractSource = new SourceFile("AbstractBoundary.hx", "abstract Value\nfunction visible():Void return;");
+		var abstractResult = new Parser(new Lexer(abstractSource).tokenize()).parseProgramRecovering();
+		if (abstractResult.program.abstracts.length != 1
+			|| abstractResult.program.functions.length != 1
+			|| abstractResult.program.functions[0].name != "visible")
+			throw "unfinished abstract header discarded the following declaration";
+
+		var enumAbstractSource = new SourceFile("EnumAbstractBoundary.hx", "enum abstract Flags\nfunction visible():Void return;");
+		var enumAbstractResult = new Parser(new Lexer(enumAbstractSource).tokenize()).parseProgramRecovering();
+		if (enumAbstractResult.program.enumAbstracts.length != 1
+			|| enumAbstractResult.program.functions.length != 1
+			|| enumAbstractResult.program.functions[0].name != "visible")
+			throw "unfinished enum abstract header discarded the following declaration";
+
 		var controlSource = new SourceFile("Control.hx", "function main():Void { try { return; } for (");
 		var controlResult = new Parser(new Lexer(controlSource).tokenize()).parseProgramRecovering();
 		if (controlResult.program.functions.length != 1 || controlResult.program.functions[0].statements.length != 2)
