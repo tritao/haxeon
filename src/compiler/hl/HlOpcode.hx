@@ -67,8 +67,14 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var EnumAlloc = 91;
 	var EnumIndex = 92;
 	var EnumField = 93;
+	var SetEnumField = 94;
+	var Assert = 95;
 	var RefData = 96;
 	var RefOffset = 97;
+	var Nop = 98;
+	var Prefetch = 99;
+	var Asm = 100;
+	var Catch = 101;
 	var JTrue = 44;
 	var JFalse = 45;
 	var JNull = 46;

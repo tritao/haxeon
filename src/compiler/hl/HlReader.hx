@@ -343,6 +343,11 @@ class HlReader {
 			case HlOpcode.EnumAlloc: EnumAlloc(operands[0], operands[1]);
 			case HlOpcode.EnumIndex: EnumIndex(operands[0], operands[1]);
 			case HlOpcode.EnumField: EnumField(operands[0], operands[1], operands[2], operands[3]);
+			case HlOpcode.SetEnumField: SetEnumField(operands[0], operands[1], operands[2]);
+			case HlOpcode.Assert: Assert;
+			case HlOpcode.Nop: Nop;
+			case HlOpcode.Prefetch: Prefetch(operands[0], operands[1], operands[2]);
+			case HlOpcode.Asm: Asm(operands[0], operands[1], operands[2]);
 			case HlOpcode.JTrue: JumpTrue(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
 			case HlOpcode.JFalse: JumpFalse(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
 			case HlOpcode.JNull: JumpNull(operands[0], requireLabel(labels, position + 1 + operands[1], functionIndex));
@@ -366,6 +371,7 @@ class HlReader {
 				}
 				var defaultOffset = operands[count + 2];
 				Switch(operands[0], targets, defaultOffset == 0 ? null : requireLabel(labels, position + 1 + defaultOffset, functionIndex));
+			case HlOpcode.Catch: Catch(operands[0]);
 			case HlOpcode.Ret: Return(operands[0]);
 			case HlOpcode.ToDyn: ToDyn(operands[0], operands[1]);
 			case HlOpcode.ToSFloat: ToSFloat(operands[0], operands[1]);

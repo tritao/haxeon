@@ -324,6 +324,31 @@ function main():Void {
 		case _:
 			throw "HLB switch opcode did not decode as Switch";
 	}
+	var lowLevel = new HlCode();
+	lowLevel.types = [Simple(HlType.I32)];
+	lowLevel.functions = [
+		new compiler.hl.HlFunction(0, 0, [0], [
+			Catch(0),
+			SetEnumField(0, 0, 0),
+			Assert,
+			Nop,
+			Prefetch(0, 0, 0),
+			Asm(0, 0, 0),
+			Return(0)
+		])
+	];
+	lowLevel.globals = [0];
+	lowLevel.entryPoint = 0;
+	var lowLevelBytes = HlWriter.encode(lowLevel),
+		lowLevelDecoded = HlReader.decode(lowLevelBytes);
+	expect(HlWriter.encode(lowLevelDecoded).compare(lowLevelBytes) == 0 && lowLevelDecoded.functions[0].opcodes.length == 7,
+		"HLB low-level opcode extensions did not round trip");
+	switch lowLevelDecoded.functions[0].opcodes[0] {
+		case Catch(global):
+			expect(global == 0, "HLB catch global did not round trip");
+		case _:
+			throw "HLB catch opcode did not decode as Catch";
+	}
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");
 	var compiler = new Compiler();

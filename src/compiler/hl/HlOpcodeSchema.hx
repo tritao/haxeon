@@ -8,8 +8,9 @@ class HlOpcodeSchema {
 
 	public static function arity(opcode:Int):Int
 		return switch opcode {
-			case HlOpcode.Label: 0;
-			case HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.NullCheck, HlOpcode.EndTrap, HlOpcode.New: 1;
+			case HlOpcode.Label, HlOpcode.Assert, HlOpcode.Nop: 0;
+			case HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.NullCheck, HlOpcode.EndTrap, HlOpcode.New,
+				HlOpcode.Catch: 1;
 			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.Bytes, HlOpcode.String, HlOpcode.StaticClosure, HlOpcode.GetGlobal,
 				HlOpcode.SetGlobal, HlOpcode.GetThis, HlOpcode.SetThis, HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToUFloat, HlOpcode.ToInt,
 				HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.Neg, HlOpcode.Not, HlOpcode.Incr, HlOpcode.Decr,
@@ -19,7 +20,7 @@ class HlOpcodeSchema {
 				HlOpcode.UShr, HlOpcode.And, HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.VirtualClosure, HlOpcode.Field,
 				HlOpcode.SetField, HlOpcode.DynGet, HlOpcode.DynSet, HlOpcode.GetArray, HlOpcode.SetArray, HlOpcode.GetI8, HlOpcode.GetI16, HlOpcode.GetMem,
 				HlOpcode.SetI8, HlOpcode.SetI16, HlOpcode.SetMem, HlOpcode.JSLt, HlOpcode.JSGte, HlOpcode.JSGt, HlOpcode.JSLte, HlOpcode.JULt, HlOpcode.JUGte,
-				HlOpcode.JNotLt, HlOpcode.JNotGte, HlOpcode.JEq, HlOpcode.JNotEq, HlOpcode.RefOffset: 3;
+				HlOpcode.JNotLt, HlOpcode.JNotGte, HlOpcode.JEq, HlOpcode.JNotEq, HlOpcode.RefOffset, HlOpcode.SetEnumField, HlOpcode.Prefetch, HlOpcode.Asm: 3;
 			case HlOpcode.Call2: 4;
 			case HlOpcode.Call3: 5;
 			case HlOpcode.Call4: 6;

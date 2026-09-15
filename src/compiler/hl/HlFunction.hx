@@ -118,6 +118,11 @@ enum HlInstruction {
 	EnumAlloc(destination:Int, constructor:Int);
 	EnumIndex(destination:Int, value:Int);
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
+	SetEnumField(destination:Int, field:Int, source:Int);
+	Assert;
+	Nop;
+	Prefetch(object:Int, field:Int, locality:Int);
+	Asm(first:Int, second:Int, third:Int);
 	JumpFalse(condition:Int, target:String);
 	JumpNull(value:Int, target:String);
 	JumpNotNull(value:Int, target:String);
@@ -134,6 +139,7 @@ enum HlInstruction {
 	JumpTrue(condition:Int, target:String);
 	Jump(target:String);
 	Switch(value:Int, targets:Array<Null<String>>, defaultTarget:Null<String>);
+	Catch(global:Int);
 	Label(name:String);
 	Return(register:Int);
 	Throw(register:Int);

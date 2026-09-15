@@ -523,6 +523,14 @@ class HlWriter {
 					{opcode: HlOpcode.EnumIndex, operands: [destination, value]};
 				case EnumField(destination, value, constructor, field):
 					{opcode: HlOpcode.EnumField, operands: [destination, value, constructor, field]};
+				case SetEnumField(destination, field, source):
+					{opcode: HlOpcode.SetEnumField, operands: [destination, field, source]};
+				case Assert: {opcode: HlOpcode.Assert, operands: []};
+				case Nop: {opcode: HlOpcode.Nop, operands: []};
+				case Prefetch(object, field, locality):
+					{opcode: HlOpcode.Prefetch, operands: [object, field, locality]};
+				case Asm(first, second, third):
+					{opcode: HlOpcode.Asm, operands: [first, second, third]};
 				case JumpSignedLessOrEqual(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
@@ -575,6 +583,8 @@ class HlWriter {
 					];
 					var defaultOffset = defaultTarget == null ? 0 : switchOffset(labels, defaultTarget, result.length);
 					{opcode: HlOpcode.Switch, operands: [value, targets.length].concat(offsets).concat([defaultOffset])};
+				case Catch(global):
+					{opcode: HlOpcode.Catch, operands: [global]};
 				case Trap(destination, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};

@@ -379,6 +379,20 @@ class HlValidator {
 					requireRegister(fn, value);
 					if (constructor < 0 || field < 0)
 						throw 'Invalid enum field ${constructor}.${field} in function ${fn.functionIndex}';
+				case SetEnumField(destination, field, source):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
+					if (field < 0)
+						throw 'Invalid enum field $field in function ${fn.functionIndex}';
+				case Assert:
+				case Nop:
+				case Prefetch(object, field, locality):
+					requireRegister(fn, object);
+					if (field < 0 || locality < 0)
+						throw 'Invalid prefetch operands in function ${fn.functionIndex}';
+				case Asm(first, second, third):
+					if (first < 0 || second < 0 || third < 0)
+						throw 'Invalid asm operands in function ${fn.functionIndex}';
 				case JumpSignedLessOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
@@ -409,6 +423,8 @@ class HlValidator {
 							throw 'Unknown switch label "$target" in function ${fn.functionIndex}';
 					if (defaultTarget != null && !labels.exists(defaultTarget))
 						throw 'Unknown switch default label "$defaultTarget" in function ${fn.functionIndex}';
+				case Catch(global):
+					requireGlobal(code, global, 'catch handler in function ${fn.functionIndex}');
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);
