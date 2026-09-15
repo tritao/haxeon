@@ -9,7 +9,7 @@ class PathSourceAcquirer implements SourceAcquirer {
 
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource
 		return switch source {
-			case PackageSource.Path(path):
+			case PackageSource.Path(path) | PackageSource.Workspace(path):
 				var root = Path.normalize(Path.isAbsolute(path) ? path : Path.join([ownerRoot, path]));
 				if (!FileSystem.exists(root) || !FileSystem.isDirectory(root))
 					throw 'Package "$packageId" path source does not exist: $root';

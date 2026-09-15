@@ -373,6 +373,14 @@ Git dependencies can be added and installed reproducibly:
 `haxeon.lock`; `install --locked` rejects manifest changes and checks out the
 exact recorded revision.
 
+Repositories can declare workspace members. A workspace member with the same
+package name overrides an external dependency source while retaining the same
+package identity:
+
+```json
+"workspace": ["packages/core", "packages/editor"]
+```
+
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the

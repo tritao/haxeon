@@ -21,6 +21,7 @@ class PackageManifest {
 	public final entry:Null<String>;
 	public final legacySources:Array<String>;
 	public final sourceRoots:Array<String>;
+	public final workspace:Array<String>;
 	public final target:String;
 	public final defines:Array<String>;
 	public final outputDir:String;
@@ -29,7 +30,7 @@ class PackageManifest {
 	public final androidApplicationId:String;
 	public final androidAppLabel:String;
 
-	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, target:String,
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, workspace:Array<String>, target:String,
 		defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, androidApplicationId:String,
 		androidAppLabel:String) {
 		this.version = version;
@@ -38,6 +39,7 @@ class PackageManifest {
 		this.entry = entry;
 		this.legacySources = legacySources.copy();
 		this.sourceRoots = sourceRoots.copy();
+		this.workspace = workspace.copy();
 		this.target = target;
 		this.defines = defines.copy();
 		this.outputDir = outputDir;
@@ -65,6 +67,7 @@ class PackageManifest {
 			entry = optionalNullableString(raw, "entry", path),
 			legacySources = stringArray(raw, "sources", path, []),
 			sourceRoots = stringArray(raw, "sourceRoots", path, ["src"]),
+			workspace = stringArray(raw, "workspace", path, []),
 			target = optionalString(raw, "target", "host", path),
 			defines = stringArray(raw, "defines", path, []),
 			outputDir = optionalString(raw, "outputDir", "build", path),
@@ -106,7 +109,7 @@ class PackageManifest {
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
-		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, target, defines, outputDir, dependencies, native,
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, workspace, target, defines, outputDir, dependencies, native,
 			androidApplicationId, androidAppLabel);
 	}
 

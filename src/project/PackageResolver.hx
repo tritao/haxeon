@@ -19,11 +19,25 @@ class PackageResolver {
 			throw "haxeon.lock is required for --locked resolution";
 		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
 			projectRoot = Path.directory(absoluteManifest),
+			rootManifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
 			visited = new Map<String, ResolvedPackage>(),
 			active = new Map<String, Bool>(),
 			nameToRoot = new Map<String, String>(),
 			ordered:Array<ResolvedPackage> = [],
-			lockEntries:Array<PackageLockEntry> = [];
+			lockEntries:Array<PackageLockEntry> = [],
+			workspaceMembers:Map<String, {root:String, path:String}> = new Map();
+		for (workspacePath in rootManifest.workspace) {
+			var workspaceRoot = resolveDirectory(projectRoot, workspacePath, "workspace member", rootManifest.packageName),
+				workspaceManifestPath = Path.join([workspaceRoot, MANIFEST_NAME]);
+			if (!FileSystem.exists(workspaceManifestPath))
+				throw 'Workspace member "$workspacePath" has no $MANIFEST_NAME at $workspaceManifestPath';
+			var workspaceManifest = PackageManifest.parse(workspaceManifestPath, File.getContent(workspaceManifestPath));
+			if (workspaceManifest.packageName == rootManifest.packageName)
+				throw 'Workspace member "$workspacePath" duplicates root package "${rootManifest.packageName}"';
+			if (workspaceMembers.exists(workspaceManifest.packageName))
+				throw 'Duplicate workspace package "${workspaceManifest.packageName}"';
+			workspaceMembers.set(workspaceManifest.packageName, {root: workspaceRoot, path: Path.normalize(workspacePath)});
+		}
 
 		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource):ResolvedPackage {
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
@@ -61,14 +75,25 @@ class PackageResolver {
 				var dependency = manifest.dependencies.get(dependencyName);
 				if (dependency == null)
 					throw 'Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata';
-				var lockEntry = locked ? lockfile.get(dependency.id.name) : null;
+				var lockEntry = locked ? lockfile.get(dependency.id.name) : null,
+					workspaceMember = workspaceMembers.get(dependency.id.name);
 				if (locked && lockEntry == null)
 					throw 'haxeon.lock has no entry for dependency "${dependency.id.name}"';
-				if (locked && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
-					throw 'haxeon.lock source for "${dependency.id.name}" disagrees with the manifest';
-				var source = lockEntry == null ? dependency.source : lockEntry.resolvedSource(),
-					acquiredDependency = sourceAcquirer.acquire(source, resolvedRoot, dependency.id),
-					resolved = resolvePackage(acquiredDependency, dependency.source);
+				var resolvedSource:PackageSource, acquiredDependency:AcquiredSource, requestedSource:PackageSource;
+				if (workspaceMember != null) {
+					resolvedSource = PackageSource.Workspace(workspaceMember.path);
+					requestedSource = resolvedSource;
+					if (locked && !PackageSourceCodec.equal(lockEntry.source, resolvedSource))
+						throw 'haxeon.lock workspace source for "${dependency.id.name}" does not match the workspace';
+					acquiredDependency = new AcquiredSource(workspaceMember.root, resolvedSource);
+				} else {
+					if (locked && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
+						throw 'haxeon.lock source for "${dependency.id.name}" disagrees with the manifest';
+					resolvedSource = lockEntry == null ? dependency.source : lockEntry.resolvedSource();
+					requestedSource = dependency.source;
+					acquiredDependency = sourceAcquirer.acquire(resolvedSource, resolvedRoot, dependency.id);
+				}
+				var resolved = resolvePackage(acquiredDependency, requestedSource);
 				if (resolved.name != dependencyName)
 					throw 'Package "${manifest.packageName}" declares dependency "$dependencyName" but ${resolved.root}/$MANIFEST_NAME names package "${resolved.name}"';
 				resolvedDependencies.push(resolved.name);
@@ -83,8 +108,15 @@ class PackageResolver {
 			return resolvedPackage;
 		}
 
-		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path(".")),
-			resolvedLockfile = new PackageLockfile(lockEntries);
+		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path("."));
+		var workspaceNames = [for (name in workspaceMembers.keys()) name];
+		workspaceNames.sort(Reflect.compare);
+		for (workspaceName in workspaceNames) {
+			var member = workspaceMembers.get(workspaceName);
+			if (member != null && visited.get(member.root) == null)
+				resolvePackage(new AcquiredSource(member.root, PackageSource.Workspace(member.path)), PackageSource.Workspace(member.path));
+		}
+		var resolvedLockfile = new PackageLockfile(lockEntries);
 		if (locked)
 			lockfile.validateGraph(resolvedLockfile);
 		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage, new ResolvedPackageGraph(ordered), resolvedLockfile);

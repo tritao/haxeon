@@ -12,7 +12,7 @@ class ProjectSourceAcquirer implements SourceAcquirer {
 
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource
 		return switch source {
-			case PackageSource.Path(_): path.acquire(source, ownerRoot, packageId);
+			case PackageSource.Path(_) | PackageSource.Workspace(_): path.acquire(source, ownerRoot, packageId);
 			case PackageSource.Git(_, _): git.acquire(source, ownerRoot, packageId);
 			case _: throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} has no configured acquirer';
 		};
