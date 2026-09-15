@@ -334,6 +334,24 @@ class ParserRecoveryMain {
 			throw "tolerant typing abandoned a program with an incomplete inheritance clause";
 		if (typed.classes.length != 1 || typed.functions.length != 1 || typed.functions[0].name != "main")
 			throw 'tolerant typing discarded a valid declaration: classes=${typed.classes.length}, functions=${typed.functions.length}';
+
+		var interfaceSource = new SourceFile("TolerantInterfaceDeclaration.hx", "interface Contract extends\nfunction main():Void return;");
+		var interfaceRecovered = new Parser(new Lexer(interfaceSource).tokenize()).parseProgramRecovering().program,
+			interfaceTyped = Typer.typeRecovered(interfaceRecovered);
+		if (interfaceRecovered.interfaces.length != 1
+			|| interfaceTyped == null
+			|| interfaceTyped.interfaces.length != 1
+			|| interfaceTyped.functions.length != 1)
+			throw "tolerant typing abandoned a program with an incomplete interface inheritance clause";
+
+		var implementsSource = new SourceFile("TolerantImplementsDeclaration.hx", "class Child implements\nfunction main():Void return;");
+		var implementsRecovered = new Parser(new Lexer(implementsSource).tokenize()).parseProgramRecovering().program,
+			implementsTyped = Typer.typeRecovered(implementsRecovered);
+		if (implementsRecovered.classes.length != 1
+			|| implementsTyped == null
+			|| implementsTyped.classes.length != 1
+			|| implementsTyped.functions.length != 1)
+			throw "tolerant typing abandoned a program with an incomplete implements clause";
 	}
 
 	static function assertRecoveryCancellation():Void {

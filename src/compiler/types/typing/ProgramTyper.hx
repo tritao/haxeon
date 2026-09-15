@@ -132,7 +132,7 @@ class ProgramTyper {
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
-					bases: [for (base in interfaceDecl.bases) BodyTyper.inheritanceName(base)],
+					bases: inheritanceNames(interfaceDecl.bases),
 					methods: [
 						for (method in interfaceDecl.methods)
 							{
@@ -296,12 +296,30 @@ class ProgramTyper {
 		var classSemanticSubstitutions:Map<String, CompilerType> = [];
 		for (parameter in classDecl.typeParameters)
 			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
+		var interfaceNames:Array<String> = [];
 		for (interfaceType in classDecl.interfaces) {
-			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
-				interfaceName = BodyTyper.inheritanceName(interfaceType);
-			if (!session.interfaceDecls.exists(interfaceName))
-				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
-			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
+			var interfaceName = inheritanceName(interfaceType);
+			if (interfaceName == null)
+				continue;
+			interfaceNames.push(interfaceName);
+			var interfaceInstance:Null<CompilerType> = try session.declarations.resolve(interfaceType, classDecl.span,
+				classSemanticSubstitutions) catch (error:Dynamic) {
+				if (!session.tolerant)
+					throw error;
+				null;
+			};
+			if (!session.interfaceDecls.exists(interfaceName)) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
+				continue;
+			}
+			if (interfaceInstance != null)
+				try
+					validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span)
+				catch (error:Dynamic) {
+					if (!session.tolerant)
+						throw error;
+				};
 		}
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
@@ -345,10 +363,7 @@ class ProgramTyper {
 			isNativeValue: isNativeValue,
 			nativeLayouts: [],
 			base: baseName,
-			interfaces: [
-				for (interfaceType in classDecl.interfaces)
-					BodyTyper.inheritanceName(interfaceType)
-			],
+			interfaces: interfaceNames,
 			fields: fields,
 			methods: typedMethods,
 			span: classDecl.span
@@ -361,6 +376,16 @@ class ProgramTyper {
 			default:
 				if (session.tolerant) null; else BodyTyper.inheritanceName(type);
 		};
+	}
+
+	function inheritanceNames(types:Array<AstType>):Array<String> {
+		var result:Array<String> = [];
+		for (type in types) {
+			var name = inheritanceName(type);
+			if (name != null)
+				result.push(name);
+		}
+		return result;
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
