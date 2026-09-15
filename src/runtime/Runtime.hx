@@ -2,6 +2,7 @@ package runtime;
 
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
+import compiler.hl.patch.HlPatchReader;
 import sys.thread.Mutex;
 
 /** Private declarations for the native module lifecycle and invocation ABI. */
@@ -249,10 +250,22 @@ class Runtime {
 		});
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
+		validatePatchFormat(patch.bytes);
 		var status:RuntimeStatus = module.access(function(handle) return RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length));
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
+		}
+	}
+
+	/** Haxeon owns HLP wire validation; native code remains responsible for live compatibility and publication. */
+	static function validatePatchFormat(payload:Bytes):Void {
+		try {
+			HlPatchReader.decode(payload);
+		} catch (error:RuntimeError) {
+			throw error;
+		} catch (error:Dynamic) {
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLP patch: ${Std.string(error)}');
 		}
 	}
 

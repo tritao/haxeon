@@ -6,7 +6,13 @@ resolution and remain locked until the call returns. Two patches based on the
 same revision therefore serialize; the first may publish and the second observes
 the new revision and fails as stale.
 
-Before staging, the runtime validates module identity, revision and symbol bases,
+Before native staging, the Haxeon runtime boundary decodes the complete HLP
+wire model and rejects malformed sections, unsupported patch opcodes, truncated
+payloads, invalid debug metadata, and invalid source snapshots. This makes the
+serialized patch representation available to Haxeon before any native state is
+touched.
+
+Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
 relocations, register and symbol bounds, opcode operands, and duplicate slots.
 HLP version 7 also validates content-addressed source snapshots before copying
