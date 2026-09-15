@@ -894,6 +894,7 @@ class LanguageService {
 				if (recoveredReceiver != null)
 					addInstanceMembers(recoveredReceiver, prefix, result);
 			}
+			addImportedMembers(ast, qualifier, prefix, result, token);
 			if (model != null)
 				for (symbol in compiler.semanticWorkspace.editorVisibleSymbols(state, token)) {
 					var separator = symbol.name.lastIndexOf(".");
@@ -1508,6 +1509,51 @@ class LanguageService {
 				addMember("substring", "method", "substring(start,end):String", prefix, result);
 			default:
 		}
+	}
+
+	function addImportedMembers(program:compiler.syntax.Ast.AstProgram, qualifier:String, prefix:String, result:Array<CompletionItem>,
+			token:Null<CancellationToken>):Void {
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (importQualifier(program, importPath) != qualifier)
+				continue;
+			var imported = importedModule(importPath),
+				importedAst = imported == null ? null : imported.ast != null ? imported.ast : imported.lastGoodAst;
+			if (imported == null || importedAst == null)
+				continue;
+			var importedPrefix = importPath + ".";
+			for (fn in importedAst.functions) {
+				var id = compiler.semanticWorkspace.resolveSymbolId(importedPrefix + fn.name);
+				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}',
+					prefix, result, 1, fn.name + "(", id == null ? null : Std.string(id), importPath);
+			}
+			var importedName = sourceName(importPath);
+			for (classDecl in importedAst.classes)
+				if (classDecl.name == importedName) {
+					for (field in classDecl.fields)
+						if (field.isStatic)
+							addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result, 1);
+					for (method in classDecl.methods)
+						if (method.isStatic)
+							addMember(method.name, "method",
+								'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+								prefix, result, 1, method.name + "(");
+				}
+			for (enumDecl in importedAst.enums)
+				if (enumDecl.name == importedName)
+					for (caseDecl in enumDecl.cases)
+						addMember(caseDecl.name, "enumCase",
+							'${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})',
+							prefix, result, 1, caseDecl.params.length == 0 ? null : caseDecl.name + "(");
+		}
+	}
+
+	static function importQualifier(program:compiler.syntax.Ast.AstProgram, importPath:String):String {
+		for (alias => path in program.importAliases)
+			if (path == importPath)
+				return alias;
+		return sourceName(importPath);
 	}
 
 	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String,

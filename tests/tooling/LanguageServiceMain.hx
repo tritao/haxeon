@@ -210,6 +210,24 @@ class LanguageServiceMain {
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
 			throw "language service imported symbol resolution failed";
+		var importedMemberSource = "package editor; import editor.util.Math; function main():Int { return Math.";
+		importService.update("editor/Main.hx", importedMemberSource);
+		var importedMemberCompletion = importService.completeResult("editor/Main.hx", importedMemberSource.length),
+			hasImportedMember = false;
+		for (item in importedMemberCompletion.items)
+			if (item.label == "add" && item.detail == "add(Int,Int):Int")
+				hasImportedMember = true;
+		if (!hasImportedMember || !importedMemberCompletion.isIncomplete)
+			throw "recovered imported module completion failed";
+		var aliasedMemberSource = "package editor; import editor.util.Math as M; function main():Int { return M.";
+		importService.update("editor/Main.hx", aliasedMemberSource);
+		var aliasedMemberCompletion = importService.complete("editor/Main.hx", aliasedMemberSource.length),
+			hasAliasedMember = false;
+		for (item in aliasedMemberCompletion)
+			if (item.label == "add")
+				hasAliasedMember = true;
+		if (!hasAliasedMember)
+			throw "recovered aliased module completion failed";
 		var importedRecoverySource = "package editor; import editor.util.Math; function main():Int { return Math.add(20,";
 		importService.update("editor/Main.hx", importedRecoverySource);
 		var importedRecoveryPosition = importedRecoverySource.lastIndexOf("add") + 1,
