@@ -1649,6 +1649,14 @@ class BodyTyper {
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		switch typedObject.type {
+			case TUnknown, TError if (session.tolerant):
+				// Preserve a member chain after an unresolved receiver. The
+				// speculative field has no stable identity, but retaining its
+				// shape lets later expressions continue to be typed.
+				return new TypedExpression(TField(typedObject, name), TUnknown, span);
+			case TNullable(_) if (session.tolerant):
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1005", 'Field "$name" requires an object', span));
+				return new TypedExpression(TField(typedObject, name), TUnknown, span);
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);
 			default:

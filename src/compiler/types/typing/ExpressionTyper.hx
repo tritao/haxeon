@@ -435,8 +435,15 @@ class ExpressionTyper {
 	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedStart = typeExpressionCallback(start, scope, TInt, false),
 			typedEnd = typeExpressionCallback(rangeEnd, scope, TInt, false);
-		if (typedStart.type != TInt || typedEnd.type != TInt)
-			fail("E1014", "Range bounds must be Int values", span);
+		if (typedStart.type != TInt || typedEnd.type != TInt) {
+			if (!session.tolerant)
+				fail("E1014", "Range bounds must be Int values", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1014", "Range bounds must be Int values", span));
+			if (typedStart.type != TInt)
+				typedStart = recoveredError(typedStart.span);
+			if (typedEnd.type != TInt)
+				typedEnd = recoveredError(typedEnd.span);
+		}
 		return new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 	}
 
@@ -445,34 +452,52 @@ class ExpressionTyper {
 			typedIndex = typeExpressionCallback(offset, scope, null, false);
 		return switch typedArray.type {
 			case TMap(key, value):
-				if (session.mapName(key, value) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
+				if (session.mapName(key, value) == null) {
+					if (!session.tolerant)
+						fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+				}
+				var typedKey = recoverCoerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? CallResolver.nullableMapValue(value) : refined, span);
 			default:
 				if (typedIndex.type == TNever)
-					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-				if (typedIndex.type != TInt)
-					fail("E1014", "Array index must be Int", typedIndex.span);
-				var element = arrayElementType(typedArray.type, span);
+					typedIndex = recoverCoerce(typedIndex, TInt, "array index", "E1014");
+				if (typedIndex.type != TInt) {
+					if (!session.tolerant)
+						fail("E1014", "Array index must be Int", typedIndex.span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1014", "Array index must be Int", typedIndex.span));
+					typedIndex = recoveredError(typedIndex.span);
+				}
+				var element = switch typedArray.type {
+					case TArray(value): value;
+					case TUnknown, TError: TUnknown;
+					default: arrayElementType(typedArray.type, span);
+				};
 				new TypedExpression(TIndex(typedArray, typedIndex), element, span);
 		};
 	}
 
 	public function typeNewArray(element:AstType, length:AstExpression, span:SourceSpan, scope:Scope, lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var typedLength = typeExpressionCallback(length, scope, null, false);
-		if (typedLength.type != TInt)
-			fail("E1014", "Array length must be Int", typedLength.span);
+		if (typedLength.type != TInt) {
+			if (!session.tolerant)
+				fail("E1014", "Array length must be Int", typedLength.span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1014", "Array length must be Int", typedLength.span));
+			typedLength = recoveredError(typedLength.span);
+		}
 		var loweredElement = lowerType(element);
 		return new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
 	}
 
 	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan, lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var loweredKey = lowerType(key), loweredValue = lowerType(value);
-		if (session.mapName(loweredKey, loweredValue) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		if (session.mapName(loweredKey, loweredValue) == null) {
+			if (!session.tolerant)
+				fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
+		}
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 
@@ -647,10 +672,17 @@ class ExpressionTyper {
 	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, contextualExpressionType:ContextualExpressionTypeCallback):TypedExpression {
 		var typedCondition = typeExpressionCallback(predicate, scope, TBool, false);
-		if (!sameType(typedCondition.type, TBool))
-			fail("E1011", "Conditional expression requires a Bool condition", span);
-		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true),
-			falseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false),
+		var invalidCondition = !sameType(typedCondition.type, TBool);
+		if (invalidCondition) {
+			if (!session.tolerant)
+				fail("E1011", "Conditional expression requires a Bool condition", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1011", "Conditional expression requires a Bool condition", span));
+		}
+		// A failed predicate must not prevent either branch from being typed. In
+		// recovery mode there is no sound narrowing to apply, but each branch
+		// still contributes useful result and expected-type information.
+		var trueScope = invalidCondition ? new Scope(scope) : FlowAnalysis.narrowedScope(scope, typedCondition, true),
+			falseScope = invalidCondition ? new Scope(scope) : FlowAnalysis.narrowedScope(scope, typedCondition, false),
 			contextualType = expectedType;
 		if (contextualType == null) {
 			contextualType = contextualExpressionType(whenTrue, trueScope);
@@ -1029,6 +1061,26 @@ class ExpressionTyper {
 			case TNullable(_): true;
 			default: false;
 		};
+
+	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+		if (!session.tolerant)
+			return coerce(value, expected, context, code);
+		try {
+			return coerce(value, expected, context, code);
+		}
+		catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError))
+				throw error;
+			if (Std.isOfType(error, CompileError)) {
+				var compileError:CompileError = cast error;
+				session.rememberRecoveryDiagnostic(compileError.diagnostic);
+			}
+			return recoveredError(value.span);
+		}
+	}
+
+	static function recoveredError(span:SourceSpan):TypedExpression
+		return new TypedExpression(TNullLiteral, TError, span);
 
 	static function unwrapNullable(value:TypedExpression):TypedExpression
 		return switch value.type {

@@ -701,6 +701,37 @@ class ParserRecoveryMain {
 		if (postErrorNames.indexOf("value") < 0)
 			throw "an expression error erased the known local type needed for member completion";
 
+		var conditionalSource = new SourceFile("TolerantConditional.hx",
+			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");
+		var conditionalProgram = new Parser(new Lexer(conditionalSource).tokenize()).parseProgramRecovering().program,
+			conditionalTyped = Typer.typeRecovered(conditionalProgram);
+		if (conditionalTyped == null || conditionalTyped.functions.length != 1)
+			throw "tolerant typing discarded a conditional with an invalid predicate";
+		switch conditionalTyped.functions[0].statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TInstance(NominalKind.Class, "Foo", _):
+					default:
+						throw 'invalid conditional predicate poisoned its known branch type: ${value.type}';
+				}
+			default:
+				throw 'invalid conditional predicate poisoned its known branch type: ${conditionalTyped.functions[0].statements[0]}';
+		}
+
+		var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
+			"function main():Void { var value = broken.unresolved().thing; var after:Int = 1; }");
+		var chainedErrorProgram = new Parser(new Lexer(chainedErrorSource).tokenize()).parseProgramRecovering().program,
+			chainedErrorTyped = Typer.typeRecovered(chainedErrorProgram);
+		if (chainedErrorTyped == null || chainedErrorTyped.functions.length != 1)
+			throw "tolerant typing discarded a chained unresolved expression";
+		switch chainedErrorTyped.functions[0].statements[0] {
+			case TVar(_, value, _):
+				if (value.type != TUnknown)
+					throw 'chained unresolved expression did not retain a local unknown type: ${value.type}';
+			default:
+				throw "chained unresolved expression did not remain a local declaration";
+		}
+
 		var methodSource = new SourceFile("TolerantMethodCall.hx",
 			"class Foo { public function bar(value:Int):Int return value; } function main():Int { var foo:Foo = new Foo(); return foo.bar(");
 		var methodProgram = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering().program,
@@ -713,6 +744,29 @@ class ParserRecoveryMain {
 		};
 		if (methodExpression == null || methodExpression.type != TInt)
 			throw "unfinished method call did not retain its resolved result type";
+
+		var genericAritySource = new SourceFile("TolerantGenericArity.hx",
+			"function identity<T>(value:T):T return value; function main():Int return identity(1, 2);");
+		var genericArityProgram = new Parser(new Lexer(genericAritySource).tokenize()).parseProgramRecovering().program,
+			genericArityTyped = Typer.typeRecovered(genericArityProgram);
+		var genericArityMain = -1;
+		if (genericArityTyped != null)
+			for (index in 0...genericArityTyped.functions.length)
+				if (genericArityTyped.functions[index].name == "main")
+					genericArityMain = index;
+		if (genericArityTyped == null || genericArityMain < 0)
+			throw 'tolerant typing discarded a generic call with an invalid argument count: ${genericArityTyped == null ? "null" : Std.string(genericArityTyped.functions.length)}';
+		var genericArityExpression = switch genericArityTyped.functions[genericArityMain].statements[0] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (genericArityExpression == null || genericArityExpression.type != TInt)
+			throw 'generic arity recovery poisoned the known result type: ${genericArityExpression == null ? "null" : Std.string(genericArityExpression.type)}';
+		switch genericArityExpression.expression {
+			case TCall(_, arguments) if (arguments.length == 2):
+			default:
+				throw "generic arity recovery discarded the typed call shape";
+		}
 
 		var constructorSource = new SourceFile("TolerantConstructor.hx", "class Box { public function new(value:Int) {} } function main():Box return new Box(");
 		var constructorProgram = new Parser(new Lexer(constructorSource).tokenize()).parseProgramRecovering().program,

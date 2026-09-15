@@ -52,15 +52,22 @@ class GenericInstantiation {
 			required--;
 		if (arguments.length < required || arguments.length > fn.arguments.length) {
 			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
-			fail("E1008", 'Function "$baseName" expects $expected arguments, got ${arguments.length}', span);
+			if (!session.tolerant)
+				fail("E1008", 'Function "$baseName" expects $expected arguments, got ${arguments.length}', span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1008",
+				'Function "$baseName" expects $expected arguments, got ${arguments.length}', span));
 		}
 		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : [for (parameter => type in presetSubstitutions) parameter => type],
 			parameters = functionTypeParameters(fn);
 		for (i in 0...arguments.length)
-			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
+			if (i < fn.arguments.length)
+				inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
 		for (parameter in parameters)
-			if (!substitutions.exists(parameter))
-				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+			if (!substitutions.exists(parameter)) {
+				if (!session.tolerant)
+					fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+				substitutions.set(parameter, TUnknown);
+			}
 		var constraints = fn.typeConstraints;
 		if (constraints != null)
 			for (constraint in constraints) {
@@ -75,15 +82,21 @@ class GenericInstantiation {
 				defaultValue = parameter.defaultValue,
 				expected = semanticExpected[index];
 			if (CallResolver.isPosInfosParameter(parameter))
-				arguments.push(coerce(typeExpression(posInfosExpression(span), scope, expected, false), expected,
+				arguments.push(recoverOrCoerce(typeExpression(posInfosExpression(span), scope, expected, false), expected,
 					'position argument ${index + 1} to "$baseName"', "E1009"));
 			else if (defaultValue == null)
-				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${index + 1} to "$baseName"', "E1009"));
+				arguments.push(recoverOrCoerce(new TypedExpression(TNullLiteral, TNull, span), expected,
+					'default argument ${index + 1} to "$baseName"', "E1009"));
 			else
-				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected, 'default argument ${index + 1} to "$baseName"',
-					"E1009"));
+				arguments.push(recoverOrCoerce(typeDefaultExpression(defaultValue, expected, baseName), expected,
+					'default argument ${index + 1} to "$baseName"', "E1009"));
 		}
-		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
+		var semanticArguments = if (!session.tolerant) coerceArguments(arguments, semanticExpected, baseName) else [
+			for (index in 0...arguments.length)
+				index < semanticExpected.length
+					? recoverOrCoerce(arguments[index], semanticExpected[index], 'argument ${index + 1} to "$baseName"', "E1009")
+					: arguments[index]
+		],
 			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
@@ -110,6 +123,22 @@ class GenericInstantiation {
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
 		return session.representation.boundaryCast(call, result);
+	}
+
+	function recoverOrCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+		if (!session.tolerant)
+			return coerce(value, expected, context, code);
+		try {
+			return coerce(value, expected, context, code);
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError))
+				throw error;
+			if (Std.isOfType(error, CompileError)) {
+				var compileError:CompileError = cast error;
+				session.rememberRecoveryDiagnostic(compileError.diagnostic);
+			}
+			return new TypedExpression(value.expression, TError, value.span);
+		}
 	}
 
 	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>,

@@ -130,6 +130,8 @@ class CallResolver {
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
+		if (session.tolerant && isRecoveryType(receiver.type))
+			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
 		if (isRawPointerType(receiver.type)) {
 			var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
 			if (rawPointerCall != null)
@@ -271,6 +273,14 @@ class CallResolver {
 	static function isRawPointerAbstract(declaration:String):Bool
 		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
 
+	static function isRecoveryType(type:CompilerType):Bool
+		return type == TUnknown || type == TError;
+
+	function recoveredCallArguments(arguments:Array<AstExpression>, scope:Scope, name:String):Array<TypedExpression> {
+		var expected = [for (_ in arguments) TUnknown];
+		return typeCallArguments(arguments, expected, scope, name);
+	}
+
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return typeExpression(expression, scope, expectedType, false);
 
@@ -345,10 +355,11 @@ class CallResolver {
 			typed:Array<TypedExpression> = [];
 		for (index in 0...arguments.length) {
 			var expected:Null<CompilerType> = null;
-			if (allTypeParametersBound(parameters, substitutions))
+			if (index < fn.arguments.length && allTypeParametersBound(parameters, substitutions))
 				expected = session.declarations.resolve(fn.arguments[index].type, fn.arguments[index].span, substitutions);
 			var argument = typeExpression(arguments[index], scope, expected, expected != null);
-			inferTypeParameters(fn.arguments[index].type, argument.type, parameters, substitutions, argument.span);
+			if (index < fn.arguments.length)
+				inferTypeParameters(fn.arguments[index].type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
 		return {arguments: typed, substitutions: substitutions};
@@ -398,8 +409,9 @@ class CallResolver {
 						typingSubstitutions.set(parameter, TDynamic);
 			var genericArguments = contextual ? [
 				for (index in 0...arguments.length)
-					typeExpression(arguments[index], scope,
-						session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+					typeExpression(arguments[index], scope, index < method.arguments.length
+						? session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions)
+						: null, true)
 			] : [for (argument in arguments) typeExpression(argument, scope, null, false)];
 			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, false, preset, receiver);
 		}
@@ -539,8 +551,12 @@ class CallResolver {
 			var external = requiredMapValue(session.externals, name);
 			expectedArguments = external.arguments;
 			result = external.result;
-		} else
-			fail("E1007", 'Unknown function "$name"', span);
+		} else {
+			if (!session.tolerant)
+				fail("E1007", 'Unknown function "$name"', span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1007", 'Unknown function "$name"', span));
+			return new TypedExpression(TCall(name, recoveredCallArguments(arguments, scope, name)), TError, span);
+		}
 		if (!hasSignature && arguments.length != expectedArguments.length)
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 		var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, name).arguments, scope, name,
@@ -588,8 +604,9 @@ class CallResolver {
 						typingSubstitutions.set(parameter, TDynamic);
 			var genericArguments = contextual ? [
 				for (index in 0...arguments.length)
-					typeExpression(arguments[index], scope,
-						session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
+					typeExpression(arguments[index], scope, index < method.arguments.length
+						? session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions)
+						: null, true)
 			] : [for (argument in arguments) typeExpression(argument, scope, null, false)];
 			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, methodInfo.isStatic, preset, receiver);
 		}
