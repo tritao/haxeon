@@ -52,7 +52,7 @@ class LanguageServiceBenchmarkMain {
 			samples = [for (_ in 0...iterations) runIteration()],
 			after = processMemory();
 		var report = {
-			version: 1,
+			version: 2,
 			iterations: iterations,
 			warmup: warmup,
 			platform: Sys.systemName(),
