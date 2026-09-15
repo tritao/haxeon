@@ -8,6 +8,24 @@ HL_PRIM hl_runtime_module *HL_NAME(load_code)( vbyte *code, vbyte *bytes, int le
 	return hl_runtime_module_load_code((hl_code*)code,bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
 }
 
+HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *identity, int identity_length ) {
+	hl_runtime_module *runtime = NULL;
+	return hl_runtime_module_load_code((hl_code*)code,bytes == NULL ? NULL : bytes->data,length,identity == NULL ? NULL : identity->data,identity_length,&runtime) == HL_RUNTIME_OK ? (vbyte*)runtime : NULL;
+}
+
+HL_PRIM bool HL_NAME(native_runtime_module_unload)( vbyte *module ) {
+	return module != NULL && hl_runtime_module_release((hl_runtime_module*)module) == HL_RUNTIME_OK;
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_call_i32)( vbyte *module, int stable_id ) {
+	int result = 0;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_i32((hl_runtime_module*)module,stable_id,&result,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid external runtime function call (status %d, stable ID %d)",status,stable_id);
+	return result;
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;

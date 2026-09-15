@@ -100,6 +100,19 @@ class HlTypeBridge {
 	public static function native_metadata_module_call_i32(module:RawPtr<UInt8>, functionIndex:Int):Int
 		return 0;
 
+	/** Load a runtime wrapper from a Haxe-owned code record and external identity bytes. */
+	public static function native_runtime_module_load_code(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, identity:haxe.io.Bytes,
+		identityLength:Int):RawPtr<UInt8>
+		return RawPtr.nullPtr();
+
+	/** Retire an externally loaded runtime wrapper when no managed borrowers remain. */
+	public static function native_runtime_module_unload(module:RawPtr<UInt8>):Bool
+		return false;
+
+	/** Invoke a stable zero-argument i32 function through an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_i32(module:RawPtr<UInt8>, stableId:Int):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 
