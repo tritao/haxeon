@@ -2004,6 +2004,8 @@ class LanguageService {
 			case TFloat: "Float";
 			case TBool: "Bool";
 			case TString: "String";
+			case TUnknown: "Unknown";
+			case TError: "Error";
 			case TVoid: "Void";
 			case TArray(element): 'Array<${compilerTypeName(element)}>';
 			case TIterator(element): 'Iterator<${compilerTypeName(element)}>';
