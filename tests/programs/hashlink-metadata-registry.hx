@@ -5,6 +5,7 @@ import runtime.hashlink.HlMetadataCompatibility.HlMetadataDecision;
 import runtime.hashlink.HlTypeKind;
 import runtime.hashlink.HlMetadataTransaction;
 import runtime.hashlink.HlMetadataTransaction.HlMetadataTransactionState;
+import runtime.hashlink.HlTypeArena;
 import runtime.memory.RawPtr;
 
 function buildPrimitiveGeneration(extra:Bool):HlMetadataGeneration {
@@ -65,6 +66,14 @@ function requiresReload(decision:HlMetadataDecision):Bool
 			true;
 	};
 
+function cString(arena:HlTypeArena, value:String):RawPtr<UInt8> {
+	var result = arena.allocUInt8Array(value.length + 1);
+	for (index in 0...value.length)
+		result.offset(index).store(cast value.charCodeAt(index));
+	result.offset(value.length).store(cast 0);
+	return result;
+}
+
 function main():Int {
 	var registry = new HlMetadataRegistry(),
 		first = buildPrimitiveGeneration(false),
@@ -100,16 +109,31 @@ function main():Int {
 	objectBefore.dispose();
 	objectAfter.dispose();
 	var nativeBefore = buildPrimitiveGeneration(false),
-		nativeAfter = buildPrimitiveGeneration(false);
+		nativeAfter = buildPrimitiveGeneration(false),
+		nativeChangedAfter = buildPrimitiveGeneration(false);
 	nativeBefore.addNativeDescriptor({
-		library: RawPtr.nullPtr(),
-		name: RawPtr.nullPtr(),
+		library: cString(nativeBefore.arena, "lib"),
+		name: cString(nativeBefore.arena, "bind"),
 		type: nativeBefore.type(0),
 		findex: 0
 	});
-	var nativeChanged = requiresReload(HlMetadataCompatibility.check(nativeBefore, nativeAfter));
+	nativeAfter.addNativeDescriptor({
+		library: cString(nativeAfter.arena, "lib"),
+		name: cString(nativeAfter.arena, "bind"),
+		type: nativeAfter.type(0),
+		findex: 0
+	});
+	nativeChangedAfter.addNativeDescriptor({
+		library: cString(nativeChangedAfter.arena, "lib"),
+		name: cString(nativeChangedAfter.arena, "changed"),
+		type: nativeChangedAfter.type(0),
+		findex: 0
+	});
+	var nativeNamesMatch = isCompatible(HlMetadataCompatibility.check(nativeBefore, nativeAfter));
+	var nativeChanged = requiresReload(HlMetadataCompatibility.check(nativeBefore, nativeChangedAfter));
 	nativeBefore.dispose();
 	nativeAfter.dispose();
+	nativeChangedAfter.dispose();
 	var functionBefore = buildFunctionGeneration(false),
 		functionAfter = buildFunctionGeneration(true),
 		functionChanged = requiresReload(HlMetadataCompatibility.check(functionBefore, functionAfter));
@@ -166,6 +190,6 @@ function main():Int {
 	currentLease.release();
 	transactionRegistry.dispose();
 	registry.dispose();
-	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && nativeChanged && functionChanged && derivedStateIgnored
-		&& transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
+	return switched && rejectionStable && reloaded && disposed && firstReleased && objectChanged && nativeNamesMatch && nativeChanged && functionChanged
+		&& derivedStateIgnored && transactionReloaded && reloadRetiredDisposed && releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
 }

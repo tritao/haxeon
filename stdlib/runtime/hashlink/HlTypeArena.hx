@@ -92,6 +92,9 @@ class HlTypeArena {
 	public inline function allocUtf16Array(count:Int):RawPtr<UInt16>
 		return storage.alloc(count);
 
+	public inline function allocUInt8Array(count:Int):RawPtr<UInt8>
+		return storage.alloc(count);
+
 	public inline function allocTypeObject():RawPtr<HlTypeObject>
 		return storage.alloc();
 

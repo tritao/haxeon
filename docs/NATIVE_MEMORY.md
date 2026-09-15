@@ -146,6 +146,8 @@ publication mechanics and native symbol resolution.
 Reload compatibility also compares native descriptor counts, dispatch indices,
 signature identities, and the bytes of their library and symbol names, so a
 binding change requires an explicit structural reload.
+`HlTypeArena` exposes fixed `UInt8` arrays for loader-owned C strings; this is a
+byte-storage primitive only, not yet a general native string library.
 `HlFunctionTable` applies the same ownership rule to module dispatch slots: its
 function addresses and signature pointers are stable native arrays, with slot
 replacement kept separate from table shape changes. A module context borrows
