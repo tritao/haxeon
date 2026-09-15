@@ -5,6 +5,7 @@ import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlNative;
+import runtime.hashlink.HlConstant;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -21,6 +22,9 @@ typedef HlMetadataPublication = {
 	final nativeDescriptors:RawPtr<HlNative>;
 	final nativeDescriptorCount:Int;
 	final nativeDescriptorCapacity:Int;
+	final constants:RawPtr<HlConstant>;
+	final constantCount:Int;
+	final constantCapacity:Int;
 	final debugFiles:RawPtr<RawPtr<UInt8>>;
 	final debugFileLengths:RawPtr<Int32>;
 	final debugFileCount:Int;
@@ -39,6 +43,7 @@ class HlMetadataGeneration {
 	public final builder:HlTypeBuilder;
 	public final functionDescriptors:HlFunctionDescriptorTable;
 	public final nativeDescriptors:HlNativeDescriptorTable;
+	public final constantDescriptors:HlConstantTable;
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
 	var moduleContext:RawPtr<HlModuleContext> = RawPtr.nullPtr();
@@ -58,11 +63,12 @@ class HlMetadataGeneration {
 	var borrowers:Int = 0;
 
 	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8,
-		?nativeDescriptorCapacity:Int = 8) {
+		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8) {
 		arena = new HlTypeArena(blockSize, typeCapacity);
 		builder = new HlTypeBuilder(arena);
 		functionDescriptors = new HlFunctionDescriptorTable(arena, functionDescriptorCapacity);
 		nativeDescriptors = new HlNativeDescriptorTable(arena, nativeDescriptorCapacity);
+		constantDescriptors = new HlConstantTable(arena, constantCapacity);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
 	}
 
@@ -115,6 +121,12 @@ class HlMetadataGeneration {
 	public function addNativeDescriptor(spec:HlNativeDescriptorSpec):RawPtr<HlNative> {
 		requireBuilding();
 		return nativeDescriptors.add(spec);
+	}
+
+	/** Append one Haxe-owned HashLink global constant descriptor. */
+	public function addConstant(spec:HlConstantDescriptorSpec):RawPtr<HlConstant> {
+		requireBuilding();
+		return constantDescriptors.add(spec);
 	}
 
 	/** Number of function dispatch slots in the module context. */
@@ -239,6 +251,8 @@ class HlMetadataGeneration {
 		for (functionIndex in 0...functionDescriptors.length())
 			HlTypeBridge.native_metadata_validate_function_debug(functionDescriptors.get(functionIndex), debugFileCount);
 		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
+		constantDescriptors.validate(globalCount);
+		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
 		if (usesContiguousTypes)
@@ -274,6 +288,9 @@ class HlMetadataGeneration {
 			nativeDescriptors: nativeDescriptors.pointer(),
 			nativeDescriptorCount: nativeDescriptors.length(),
 			nativeDescriptorCapacity: nativeDescriptors.capacityOf(),
+			constants: constantDescriptors.pointer(),
+			constantCount: constantDescriptors.length(),
+			constantCapacity: constantDescriptors.capacityOf(),
 			debugFiles: debugFiles,
 			debugFileLengths: debugFileLengths,
 			debugFileCount: debugFileCount,

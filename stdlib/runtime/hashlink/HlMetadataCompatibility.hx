@@ -45,6 +45,15 @@ class HlMetadataCompatibility {
 				|| !sameCString(previousNative.ref.name, candidateNative.ref.name))
 				return RequiresReload('native binding changed at index $index');
 		}
+		if (previous.constantDescriptors.length() != candidate.constantDescriptors.length())
+			return RequiresReload("constant table changed");
+		for (index in 0...previous.constantDescriptors.length()) {
+			var previousConstant = previous.constantDescriptors.get(index), candidateConstant = candidate.constantDescriptors.get(index),
+				previousFields:Int = cast previousConstant.ref.nfields, candidateFields:Int = cast candidateConstant.ref.nfields;
+			if (previousConstant.ref.global != candidateConstant.ref.global || previousFields != candidateFields
+				|| !sameInts(previousConstant.ref.fields, candidateConstant.ref.fields, previousFields))
+				return RequiresReload('constant descriptor changed at index $index');
+		}
 
 		var previousCount = previous.typeCount(), candidateCount = candidate.typeCount();
 		if (candidateCount < previousCount)

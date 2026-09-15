@@ -29,13 +29,16 @@ class HlNativeMetadataMain {
 			+ '{path: "metadata.hx", line: 43, column: 1, endLine: 43, endColumn: 2, sourceHash: 0, start: null, end: null, flags: 1}, '
 			+ '{path: "metadata.hx", line: 44, column: 1, endLine: 44, endColumn: 2, sourceHash: 0, start: null, end: null, flags: 1}], '
 			+ '[{name: 8, position: 0, scopeEnd: 4}])]; '
-			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.entryPoint = 0; '
+			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.constants = [{global: 0, fields: [0, 1]}]; code.entryPoint = 0; '
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
 			+ '&& object.ref.data.ref.obj.ref.globalValue == publication.globals '
+			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
+			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
+			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '
 			+
 			'&& publication.debugFileCount == 1 && publication.debugFiles.offset(0).load().offset(0).load() == 109 && publication.debugFileLengths.load() == 11 '
 			+ '&& HlTypeBridge.native_metadata_validate_debug_files(publication.debugFiles, publication.debugFileCount) == 1 '

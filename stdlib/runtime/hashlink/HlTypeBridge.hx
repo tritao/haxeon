@@ -59,6 +59,9 @@ class HlTypeBridge {
 		globals:RawPtr<RawPtr<UInt8>>):Int
 		return 0;
 
+	public static function native_metadata_validate_constants(constants:RawPtr<HlConstant>, count:Int, globalCount:Int):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

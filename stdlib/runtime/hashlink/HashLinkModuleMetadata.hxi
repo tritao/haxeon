@@ -107,6 +107,11 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 	}
 	opaque hl_type;
 	opaque hl_type_obj;
+	struct hl_constant @layout(16, 8) {
+		global: c_int @offset(0);
+		nfields: c_int @offset(4);
+		fields: ptr<c_int> @offset(8);
+	}
 	struct hl_function @layout(80, 8) {
 		findex: c_int @offset(0);
 		nregs: c_int @offset(4);

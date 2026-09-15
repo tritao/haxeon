@@ -23,7 +23,8 @@ class HlNativeMetadataBuilder {
 		if (code == null)
 			throw "HashLink native metadata requires an HLB module";
 		HlValidator.validate(code);
-		var generation = new HlMetadataGeneration(65536, positive(code.types.length), 65536, positive(code.functions.length), positive(code.natives.length));
+		var generation = new HlMetadataGeneration(65536, positive(code.types.length), 65536, positive(code.functions.length), positive(code.natives.length),
+			positive(code.constants.length));
 		try {
 			var typePointers = allocateTypes(code, generation),
 				functionCount = dispatchSlotCount(code),
@@ -37,6 +38,7 @@ class HlNativeMetadataBuilder {
 			defineTypes(code, generation, typePointers, module, globals);
 			addFunctionDescriptors(code, generation, typePointers);
 			addNativeDescriptors(code, generation, typePointers);
+			addConstants(code, generation);
 			generation.publish();
 			return generation;
 		} catch (error:Dynamic) {
@@ -296,6 +298,19 @@ class HlNativeMetadataBuilder {
 				type: types[native.type],
 				findex: native.functionIndex
 			});
+	}
+
+	static function addConstants(code:HlCode, generation:HlMetadataGeneration):Void {
+		for (constant in code.constants) {
+			var fields:RawPtr<Int32> = constant.fields.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(constant.fields.length);
+			for (index in 0...constant.fields.length)
+				fields.offset(index).store(cast constant.fields[index]);
+			generation.addConstant({
+				global: constant.global,
+				nfields: constant.fields.length,
+				fields: fields
+			});
+		}
 	}
 
 	static function dispatchSlotCount(code:HlCode):Int {

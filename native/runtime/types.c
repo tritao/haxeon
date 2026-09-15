@@ -193,6 +193,20 @@ HL_PRIM int HL_NAME(native_metadata_validate_global_types)( hl_type **types, int
 	return count;
 }
 
+HL_PRIM int HL_NAME(native_metadata_validate_constants)( hl_constant *constants, int count, int global_count ) {
+	int i, j;
+	if( count < 0 || global_count < 0 || (count > 0 && constants == NULL) )
+		hl_error("HashLink constant metadata requires a descriptor table and global count");
+	for( i = 0; i < count; i++ ) {
+		hl_constant *constant = constants + i;
+		if( constant->global < 0 || constant->global >= global_count || constant->nfields < 0 || (constant->nfields > 0 && constant->fields == NULL) )
+			hl_error("HashLink constant metadata contains invalid storage metadata");
+		for( j = 0; j < constant->nfields; j++ )
+			if( constant->fields[j] < 0 ) hl_error("HashLink constant metadata contains an invalid field index");
+	}
+	return count;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

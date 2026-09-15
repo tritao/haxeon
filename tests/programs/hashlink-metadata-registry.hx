@@ -59,6 +59,18 @@ function buildObjectGeneration(fieldKind:HlTypeKind):HlMetadataGeneration {
 	return generation;
 }
 
+function buildConstantGeneration(field:Int):HlMetadataGeneration {
+	var generation = new HlMetadataGeneration(128, 1),
+		type = generation.builder.primitive(HlTypeKind.Int32Type),
+		fields = generation.arena.allocInt32Array(1);
+	fields.store(cast field);
+	generation.addType(type);
+	generation.defineModule([RawPtr.nullPtr()], [type]);
+	generation.defineGlobalTypes([type]);
+	generation.addConstant({global: 0, nfields: 1, fields: fields});
+	return generation;
+}
+
 function isCompatible(decision:HlMetadataDecision):Bool
 	return switch decision {
 		case Compatible:
@@ -166,6 +178,11 @@ function main():Int {
 	functionBefore.dispose();
 	functionAfter.dispose();
 	equivalentFunction.dispose();
+	var constantBefore = buildConstantGeneration(0),
+		constantAfter = buildConstantGeneration(1),
+		constantChanged = requiresReload(HlMetadataCompatibility.check(constantBefore, constantAfter));
+	constantBefore.dispose();
+	constantAfter.dispose();
 	var reloadCandidate = buildObjectGeneration(HlTypeKind.Int32Type),
 		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true);
 	var reloadPublication = reloadTransaction.commit();
@@ -210,6 +227,6 @@ function main():Int {
 	transactionRegistry.dispose();
 	registry.dispose();
 	return switched && rejectionStable && reloaded && globalShapeChanged && globalTypeChanged && disposed && firstReleased && objectChanged
-		&& nativeNamesMatch && nativeChanged && functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed
+		&& constantChanged && nativeNamesMatch && nativeChanged && functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed
 		&& releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
 }

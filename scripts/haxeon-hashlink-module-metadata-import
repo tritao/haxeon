@@ -11,6 +11,7 @@ exec "$root_dir/scripts/haxeon-ffi-import" \
   --output="$root_dir/stdlib/runtime/hashlink/HashLinkModuleMetadata.hxi" \
   --only=hl_op \
   --only=hl_opcode \
+  --only=hl_constant \
   --only=hl_native \
   --only=hl_function \
   "$root_dir/vendor/hashlink/src/hlmodule.h"
