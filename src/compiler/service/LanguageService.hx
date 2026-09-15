@@ -19,6 +19,7 @@ import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.DeclarationIndex.DeclarationKind;
+import compiler.types.DeclarationIndex;
 import compiler.types.TypeRelations;
 import compiler.types.Typer;
 import compiler.types.Typer.RecoveryTypingModule;
@@ -231,10 +232,16 @@ class LanguageService {
 	}
 
 	public function update(path:String, source:String):ModuleState {
-		var state = compiler.update(path, source);
+		var moduleName = ModulePath.fromFile(path),
+			previous = compiler.modules.get(moduleName),
+			previousRevision = previous == null ? 0 : previous.revision,
+			state = compiler.update(path, source),
+			changed = state.revision != previousRevision;
 		compiler.semanticWorkspace.invalidateResolutionCache();
 		if (state.ast == null && (state.recoveredSemanticModel == null || state.recoveredSemanticModel.revision != state.revision))
 			recoverSyntax(state);
+		if (changed)
+			refreshDependentRecovery(state);
 		compiler.semanticWorkspace.invalidateResolutionCache();
 		return state;
 	}
@@ -346,6 +353,33 @@ class LanguageService {
 	}
 
 	/**
+	 * Rebuild recovered snapshots that import or share a package with a changed
+	 * editor module. Valid compiler snapshots remain authoritative and are left
+	 * for normal analysis invalidation.
+	 */
+	function refreshDependentRecovery(changed:ModuleState):Void {
+		var pending:Array<ModuleState> = [changed],
+			refreshed:Map<String, Bool> = [changed.name => true],
+			pendingIndex = 0;
+		while (pendingIndex < pending.length) {
+			var dependency = pending[pendingIndex++],
+				dependencyProgram = effectiveAst(dependency);
+			if (dependencyProgram == null)
+				continue;
+			for (candidate in compiler.modules) {
+				if (candidate == dependency || candidate.ast != null || refreshed.exists(candidate.name))
+					continue;
+				var candidateProgram = effectiveAst(candidate);
+				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram))
+					continue;
+				recoverSyntax(candidate);
+				refreshed.set(candidate.name, true);
+				pending.push(candidate);
+			}
+		}
+	}
+
+	/**
 	 * Supply tolerant typing with declarations from modules already known to the
 	 * editor. These declarations are copied into the temporary semantic program
 	 * only; the authoritative workspace index remains unchanged.
@@ -376,7 +410,7 @@ class LanguageService {
 				continue;
 			result.push({
 				program: model.program,
-				declarations: model.declarations,
+				declarations: DeclarationIndex.forModule(model.program, candidate.source),
 				qualifiers: recoveryModuleQualifiers(program, candidate, model.program)
 			});
 			for (nested in compiler.modules) {

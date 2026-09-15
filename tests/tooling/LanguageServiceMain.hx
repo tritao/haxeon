@@ -262,7 +262,7 @@ class LanguageServiceMain {
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
 		transitiveService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
-		var transitiveSource = "package editor; import editor.util.Widget; function main():Int { var widget:Widget = new Widget(); return widget.inherited; }";
+		var transitiveSource = "package editor; import editor.util.Widget; function main() { var widget:Widget = new Widget(); return widget.inherited; }";
 		transitiveService.update("editor/Transitive.hx", transitiveSource);
 		var transitiveModel = transitiveService.compiler.modules.get("editor.Transitive").recoveredSemanticModel,
 			transitiveInheritedType = false;
@@ -280,6 +280,27 @@ class LanguageServiceMain {
 		for (unresolved in transitiveService.unresolvedSymbols("editor/Transitive.hx"))
 			if (unresolved.name == "inherited")
 				throw "recovered known inherited member was incorrectly reported as unresolved";
+		var refreshedClosureService = new LanguageService();
+		refreshedClosureService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:Int; }");
+		refreshedClosureService.update("editor/util/Widget.hx", "package editor.util; import editor.base.Base; class Widget extends Base {}");
+		refreshedClosureService.update("editor/Transitive.hx", transitiveSource);
+		refreshedClosureService.update("editor/base/Base.hx", "package editor.base; class Base { public var inherited:String; }");
+		refreshedClosureService.update("editor/Transitive.hx", transitiveSource);
+		var refreshedModel = refreshedClosureService.compiler.modules.get("editor.Transitive").recoveredSemanticModel,
+			retainedOldInheritedType = false,
+			refreshedTypes:Array<String> = [];
+		if (refreshedModel != null && refreshedModel.partialTypedProgram != null)
+			for (fn in refreshedModel.partialTypedProgram.functions)
+				for (statement in fn.statements)
+					switch statement {
+						case TReturn(expression, _):
+							refreshedTypes.push(Std.string(expression.type));
+							if (expression.type == TInt)
+								retainedOldInheritedType = true;
+						default:
+					}
+		if (retainedOldInheritedType)
+			throw 'recovered typing reused a stale transitive declaration after dependency update: ${refreshedTypes.join(",")}';
 		importService.analyze("editor.util.Widget");
 		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
 		importService.update("editor/ClassMain.hx", importedMemberUseSource);
