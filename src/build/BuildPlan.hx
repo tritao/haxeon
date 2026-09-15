@@ -54,6 +54,31 @@ class BuildPlan {
 		return output.toString();
 	}
 
+	/** Explains why each artifact is present and what it contributes to the request. */
+	public function toExplainString():String {
+		var requestedKeys = new Map<String, Bool>();
+		for (id in requested)
+			requestedKeys.set(id.key(), true);
+		var output = new StringBuf();
+		output.add("Build explanation:\n");
+		for (artifact in artifacts) {
+			output.add('  ${artifact.id}\n');
+			if (requestedKeys.exists(artifact.id.key()))
+				output.add("    reason: requested output\n");
+			else if (artifact.dependencies.length == 0)
+				output.add("    reason: provider input\n");
+			else
+				output.add('    reason: required by ${artifact.dependencies.join(", ")}\n');
+			if (artifact.dependencies.length > 0)
+				output.add('    depends on: ${artifact.dependencies.join(", ")}\n');
+			var keys = [for (key in artifact.details.keys()) key];
+			keys.sort(Reflect.compare);
+			for (key in keys)
+				output.add('    detail $key: ${artifact.details.get(key)}\n');
+		}
+		return output.toString();
+	}
+
 	function validateAcyclic():Void {
 		var active = new Map<String, Bool>(),
 			complete = new Map<String, Bool>();

@@ -29,6 +29,8 @@ private typedef BuildOptions = {
 	final defines:Array<String>;
 	final runtimeArguments:Array<String>;
 	final plan:Bool;
+	final explain:Bool;
+	final timings:Bool;
 	final jobs:Int;
 }
 
@@ -284,7 +286,9 @@ class HaxeonCli {
 		var projectDirectory = Path.directory(projectConfigPath);
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
-		var project = ProjectDiscovery.discover(projectConfigPath),
+		var resolveStarted = Date.now().getTime(),
+			project = ProjectDiscovery.discover(projectConfigPath),
+			resolutionMs = Date.now().getTime() - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target;
 		if (target != "host" && target != "wasm32" && target != "android")
 			throw 'Unsupported CLI target "$target". Supported targets are "host", "wasm32", and "android".';
@@ -292,16 +296,21 @@ class HaxeonCli {
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
 		if (options.plan && launch)
 			throw 'Option "--plan" is only valid with "haxeon build"';
+		if (options.explain && launch)
+			throw 'Option "--explain" is only valid with "haxeon build"';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (target != "android" && options.device != null)
 			throw 'Option "--device" requires "--target android"';
+		if ((options.plan || options.explain || options.timings) && !(target == "host" && project.manifest.target == "host"))
+			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
 
 		var home = haxeonHome();
 		if (target == "host" && project.manifest.target == "host") {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
-			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan);
+			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain,
+				options.timings, resolutionMs);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -509,7 +518,7 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, jobs = 4;
+			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -517,8 +526,12 @@ class HaxeonCli {
 				runtimeArguments = arguments.slice(index);
 				break;
 			}
-			if (argument == "--plan")
-				plan = true;
+				if (argument == "--plan")
+					plan = true;
+				else if (argument == "--explain")
+					explain = true;
+				else if (argument == "--timings")
+					timings = true;
 			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
@@ -568,9 +581,11 @@ class HaxeonCli {
 			output: output,
 			device: device,
 			defines: defines,
-			runtimeArguments: runtimeArguments,
-			plan: plan,
-			jobs: jobs
+				runtimeArguments: runtimeArguments,
+				plan: plan,
+				explain: explain,
+				timings: timings,
+				jobs: jobs
 		};
 	}
 
@@ -725,7 +740,8 @@ class HaxeonCli {
 		Sys.println("       [--check] [--stdin]      Check files or format stdin");
 		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
-		Sys.println("       [--plan] [--jobs COUNT]   Inspect the host build plan or set worker count");
+		Sys.println("       [--plan] [--explain] [--timings] [--jobs COUNT]");
+		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");

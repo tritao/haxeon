@@ -22,6 +22,7 @@ class Executor {
 	}
 
 	public function execute(plan:ExecutionPlan):ExecutionResult {
+		var started = Date.now().getTime();
 		var pending = new Map<String, ExecutionAction>(),
 			completed = new Map<String, ActionResult>(),
 			fingerprints = new Map<String, String>(),
@@ -147,7 +148,7 @@ class Executor {
 					print('[${result.id}] failed: ${result.message}');
 			}
 		}
-		return new ExecutionResult(results);
+		return new ExecutionResult(results, Date.now().getTime() - started);
 	}
 
 	function failedDependency(action:ExecutionAction, completed:Map<String, ActionResult>):Null<ActionResult> {

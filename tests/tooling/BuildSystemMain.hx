@@ -218,7 +218,14 @@ class BuildSystemMain {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
-			executionText = execution.toDebugString();
+		executionText = execution.toDebugString();
+		expect(plan.toExplainString().indexOf("reason: requested output") >= 0
+			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
+			"plan explanations should identify requested outputs and provider details");
+		expect(executionText.indexOf("kind: process") >= 0
+			&& executionText.indexOf("kind: compiler (outer cache disabled)") >= 0
+			&& executionText.indexOf("outputs:") >= 0,
+			"execution plans should expose action kinds and outputs");
 		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0, "the package build plan should require its shared native library");
 		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") < 0, "the package build plan should not create an unrequested native archive");
 		expect(executionText.indexOf("Compile C") >= 0

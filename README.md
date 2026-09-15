@@ -349,6 +349,8 @@ The `foo` package can list native inputs in its own manifest:
 ```
 
 `haxeon build --plan` prints the deterministic artifact and action plans.
+Add `--explain` to show why each artifact is present, and `--timings` to print
+resolution, planning/lowering, and execution wall-clock measurements.
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native actions are skipped on later builds.

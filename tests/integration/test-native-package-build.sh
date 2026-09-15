@@ -18,12 +18,15 @@ run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
 }
 
-plan_output=$(run_cli build --project "$project_dir/app/haxeon.json" --plan)
+plan_output=$(run_cli build --project "$project_dir/app/haxeon.json" --plan --explain --timings)
 [[ "$plan_output" == *"foo:NativeSharedLibrary"* ]]
 [[ "$plan_output" != *"foo:NativeStaticLibrary"* ]]
 [[ "$plan_output" == *"Compile C"* ]]
 [[ "$plan_output" == *"Link shared library foo"* ]]
 [[ "$plan_output" == *"Compile Haxe package"* ]]
+[[ "$plan_output" == *"Build explanation:"* ]]
+[[ "$plan_output" == *"inputs:"* && "$plan_output" == *"outputs:"* ]]
+[[ "$plan_output" == *"Timings:"* ]]
 
 run_cli build --project "$project_dir/app/haxeon.json" --jobs 4
 test -s "$project_dir/app/build/host/main.hl"
