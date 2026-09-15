@@ -315,6 +315,16 @@ class LanguageServiceMain {
 				hasRecoveredQualifiedFunction = true;
 		if (!hasRecoveredQualifiedFunction || !inferredQualifiedCompletion.isIncomplete)
 			throw "qualified completion did not expose an inferred recovered function";
+		inferredExternalService.update("editor/util/Inferred.hx", "package editor.util; function value() return 1;");
+		var inferredUpdatedSource = "package editor; import editor.util.Inferred; function main():Void { return Inferred.";
+		inferredExternalService.update("editor/InferredQualifiedUpdated.hx", inferredUpdatedSource);
+		var inferredUpdatedCompletion = inferredExternalService.completeResult("editor/InferredQualifiedUpdated.hx", inferredUpdatedSource.length),
+			hasUpdatedRecoveredQualifiedFunction = false;
+		for (item in inferredUpdatedCompletion.items)
+			if (item.label == "value" && item.detail == "value():Int")
+				hasUpdatedRecoveredQualifiedFunction = true;
+		if (!hasUpdatedRecoveredQualifiedFunction)
+			throw "qualified completion reused an inferred signature from an older dependency revision";
 		var recoveredTypeCompletionSource = "package editor; import editor.util.Widget; function main():Void { var item:Wid";
 		importService.update("editor/RecoveredTypeCompletion.hx", recoveredTypeCompletionSource);
 		var recoveredTypeCompletion = importService.completeResult("editor/RecoveredTypeCompletion.hx", recoveredTypeCompletionSource.length),

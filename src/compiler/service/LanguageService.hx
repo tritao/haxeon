@@ -225,6 +225,7 @@ class LanguageService {
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
+	final recoveredCompletionPrograms:Map<String, {revision:Int, program:AstProgram}> = [];
 	var editorDefines:Map<String, String> = [];
 
 	public function new(?identityState:haxe.io.Bytes) {
@@ -254,6 +255,7 @@ class LanguageService {
 		workspaceIndex.remove(name);
 		documentationIndex.remove(name);
 		structuralIndex.remove(name);
+		recoveredCompletionPrograms.remove(name);
 		compiler.semanticWorkspace.invalidateResolutionCache();
 		return true;
 	}
@@ -268,6 +270,7 @@ class LanguageService {
 		workspaceIndex.clear();
 		documentationIndex.clear();
 		structuralIndex.clear();
+		recoveredCompletionPrograms.clear();
 		compiler.configure(identity, scopeIdentity, defines);
 	}
 
@@ -1347,7 +1350,7 @@ class LanguageService {
 			var candidateAst = effectiveAst(candidate);
 			if (candidateAst == null || !recoveryModuleVisible(program, candidate, candidateAst))
 				continue;
-			var completionAst = SignatureInference.inferProgram(candidateAst);
+			var completionAst = recoveredCompletionProgram(candidate, candidateAst);
 			var identityFor = function(name:String):Null<String> {
 				var identity = compiler.semanticWorkspace.resolveSymbolId(candidate.name + "." + name);
 				return identity == null ? null : Std.string(identity);
@@ -1397,6 +1400,15 @@ class LanguageService {
 					fn.name + "(", identityFor(fn.name));
 			}
 		}
+	}
+
+	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram):AstProgram {
+		var cached = recoveredCompletionPrograms.get(state.name);
+		if (cached != null && cached.revision == state.revision)
+			return cached.program;
+		var program = SignatureInference.inferProgram(ast);
+		recoveredCompletionPrograms.set(state.name, {revision: state.revision, program: program});
+		return program;
 	}
 
 	static function recoveredCompletionName(program:AstProgram, candidate:ModuleState, name:String):String {
@@ -2029,7 +2041,7 @@ class LanguageService {
 				rawAst = imported == null ? null : effectiveAst(imported);
 			if (imported == null || rawAst == null)
 				continue;
-			var importedAst = SignatureInference.inferProgram(rawAst);
+			var importedAst = recoveredCompletionProgram(imported, rawAst);
 			var importedPrefix = importedPath + ".";
 			for (fn in importedAst.functions) {
 				if (token != null)
