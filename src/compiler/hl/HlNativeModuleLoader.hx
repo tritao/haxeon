@@ -1,6 +1,7 @@
 package compiler.hl;
 
 import haxe.io.Bytes;
+import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.hashlink.HlMetadataGeneration;
@@ -92,10 +93,32 @@ class HlLoadedRuntimeModule {
 			return;
 		for (entry in identity.entries)
 			if (entry.functionIndex == identity.initializerSlot) {
+				var fn = module.functionAt(entry.functionIndex), valid = false;
+				if (fn != null)
+					switch module.typeAt(fn.type) {
+						case Function(arguments, result):
+							valid = arguments.length == 0 && typeKind(module, result) == compiler.hl.HlType.Void;
+						default:
+					}
+				if (!valid)
+					throw "HLI initializer must reference a zero-argument void function";
 				nativeModule.callVoid(entry.stableId);
 				return;
 			}
 		throw "HLI initializer slot is not represented by the identity table";
+	}
+
+	static function typeKind(module:HlModule, index:Int):compiler.hl.HlType {
+		return switch module.typeAt(index) {
+			case Simple(kind), Parameterized(kind, _): kind;
+			case Abstract(_): compiler.hl.HlType.Abstract;
+			case Function(_, _): compiler.hl.HlType.Fun;
+			case Method(_, _): compiler.hl.HlType.Method;
+			case Object(_, _, _, _, _, _): compiler.hl.HlType.Obj;
+			case Structure(_, _, _, _, _): compiler.hl.HlType.Struct;
+			case Virtual(_): compiler.hl.HlType.Virtual;
+			case Enum(_, _, _): compiler.hl.HlType.Enum;
+		};
 	}
 }
 
