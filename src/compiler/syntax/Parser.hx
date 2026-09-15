@@ -2332,12 +2332,19 @@ class Parser {
 		if (check(TokenKind.Identifier))
 			if (current().text == "Array") {
 				advance();
+				if (isRecoveryBoundary())
+					return ArrayType(missingType("type arguments"));
 				consume(TokenKind.Less);
 				var element = parseType();
 				consume(TokenKind.Greater);
 				return ArrayType(element);
 			} else if (current().text == "Map") {
 				advance();
+				if (isRecoveryBoundary()) {
+					var missingSpan = current().span;
+					var missing = missingType("type arguments");
+					return MapType(missing, ErrorType(missingSpan));
+				}
 				consume(TokenKind.Less);
 				var key = parseType();
 				var value = if (match(TokenKind.Comma))
@@ -2353,6 +2360,8 @@ class Parser {
 				return MapType(key, value);
 			} else if (current().text == "Null") {
 				advance();
+				if (isRecoveryBoundary())
+					return NullableType(missingType("type arguments"));
 				consume(TokenKind.Less);
 				var element = parseType();
 				consume(TokenKind.Greater);

@@ -213,6 +213,14 @@ class ParserRecoveryMain {
 			default:
 				throw "unfinished map type did not retain a declaration-shaped recovery node";
 		}
+		for (typeName in ["Array", "Map", "Null"]) {
+			var typePrefixSource = new SourceFile("TypePrefix.hx", "function main():Void { var value:" + typeName);
+			var typePrefixResult = new Parser(new Lexer(typePrefixSource).tokenize()).parseProgramRecovering();
+			if (typePrefixResult.program.functions.length != 1 || typePrefixResult.program.functions[0].statements.length != 1)
+				throw 'unfinished $typeName annotation discarded its enclosing function';
+			if (Typer.typeRecovered(typePrefixResult.program) == null)
+				throw 'tolerant typing abandoned unfinished $typeName annotation';
+		}
 		for (constructor in ["new Array", "new Array<", "new Map", "new Map<", "new List<"]) {
 			var constructorSource = new SourceFile("Constructor.hx", "function main():Void return " + constructor);
 			var constructorResult = new Parser(new Lexer(constructorSource).tokenize()).parseProgramRecovering();
