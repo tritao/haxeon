@@ -1111,6 +1111,11 @@ class SemanticWorkspace {
 						if (inherited != null)
 							return inherited;
 					}
+					for (interfaceType in decl.interfaces) {
+						var inherited = interfaceMember(ModuleCanonicalizer.astTypeName(interfaceType), name, visiting);
+						if (inherited != null)
+							return inherited;
+					}
 				}
 		}
 		return null;

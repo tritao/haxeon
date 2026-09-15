@@ -34,6 +34,17 @@ class SemanticWorkspaceMain {
 		var inherited = workspace.member(TInstance(Class, "demo.Child", []), "value");
 		expect(inherited != null && inherited.state == base && inherited.key == "class:Base:method:value",
 			"qualified classes should resolve inherited members across modules");
+		var inheritedSymbol = workspace.memberSymbolId(TInstance(Class, "demo.Child", []), "value");
+		expect(inheritedSymbol != null && workspace.resolveSymbolId("demo.Child.value") == inheritedSymbol,
+			"qualified inherited member names should resolve to their compiler identity");
+
+		var contract = parsedState("demo.Contract", "package demo; interface Contract { function required():Int; }");
+		var implementer = parsedState("demo.Implementer", "package demo; import demo.Contract; class Implementer implements Contract {}");
+		modules.set(contract.name, contract);
+		modules.set(implementer.name, implementer);
+		var interfaceInherited = new SemanticWorkspace(modules).member(TInstance(Class, "demo.Implementer", []), "required");
+		expect(interfaceInherited != null && interfaceInherited.state == contract && interfaceInherited.key == "interface:Contract:method:required",
+			"classes should resolve members supplied by implemented interfaces");
 
 		publish(base);
 		base.update(new SourceFile("demo/Base.hx", "class Base {"));
