@@ -244,29 +244,34 @@ class ProgramTyper {
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
-			if (field.isInline && !field.isStatic)
-				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
-			if (field.isInline && field.initializer == null)
-				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-<<<<<<< HEAD
+			if (field.isInline && !field.isStatic) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
+				rememberRecoveryDiagnostic("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
+			}
+			if (field.isInline && field.initializer == null) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
+				rememberRecoveryDiagnostic("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
+			}
 			var fieldType:AstType = try session.declarations.resolvedFieldType(classDecl.name, field) catch (error:Dynamic) {
 				if (!session.tolerant)
 					throw error;
 				ErrorType(field.span);
 			};
 			var type = session.representation.physicalType(fieldType, field.span, erasedSubstitutions);
-=======
-			var fieldType:AstType = try session.declarations.resolvedFieldType(classDecl.name, field) catch (error:Dynamic) {
+			if (type == TVoid) {
 				if (!session.tolerant)
-					throw error;
-				ErrorType(field.span);
-			};
-			var type = bodyTyper.resolveType(fieldType, erasedSubstitutions);
->>>>>>> d565bf01 (feat(typer): keep methods after invalid field types)
-			if (type == TVoid)
-				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
-			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
-				BodyTyper.fail("E1022", 'Native layout types can only appear in native value record fields', field.span);
+					BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+				rememberRecoveryDiagnostic("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+				type = TError;
+			}
+			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type)) {
+				if (!session.tolerant)
+					BodyTyper.fail("E1022", 'Native layout types can only appear in native value record fields', field.span);
+				rememberRecoveryDiagnostic("E1022", 'Native layout types can only appear in native value record fields', field.span);
+				type = TError;
+			}
 			var initializer:Null<TypedExpression> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
@@ -394,6 +399,9 @@ class ProgramTyper {
 			session.rememberRecoveryDiagnostic(compileError.diagnostic);
 		}
 	}
+
+	function rememberRecoveryDiagnostic(code:String, message:String, span:SourceSpan):Void
+		session.rememberRecoveryDiagnostic(new compiler.Diagnostic(code, message, span));
 
 	function inheritanceName(type:AstType):Null<String> {
 		return switch type {

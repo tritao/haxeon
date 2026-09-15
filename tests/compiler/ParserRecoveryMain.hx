@@ -565,6 +565,22 @@ class ParserRecoveryMain {
 			default:
 				throw 'invalid field initializer did not become TError: ${initializerTyped.classes[0].fields[0].initializer}';
 		}
+
+		var invalidFieldTypeSource = new SourceFile("TolerantInvalidFieldType.hx",
+			"class Broken { var invalid:Void; var valid:String; public function visible():Void return; } function main():Void return;");
+		var invalidFieldTypeProgram = new Parser(new Lexer(invalidFieldTypeSource).tokenize()).parseProgramRecovering().program,
+			invalidFieldTypeTyped = Typer.typeRecovered(invalidFieldTypeProgram);
+		if (invalidFieldTypeTyped == null
+			|| invalidFieldTypeTyped.classes.length != 1
+			|| invalidFieldTypeTyped.classes[0].fields.length != 2
+			|| invalidFieldTypeTyped.classes[0].methods.length != 1
+			|| invalidFieldTypeTyped.functions.length != 2)
+			throw "invalid field type discarded the rest of the recovered class";
+		switch invalidFieldTypeTyped.classes[0].fields[0].type {
+			case TError:
+			default:
+				throw 'invalid field type did not become TError: ${invalidFieldTypeTyped.classes[0].fields[0].type}';
+		}
 	}
 
 	static function assertRecoveryCancellation():Void {
