@@ -30,6 +30,13 @@ class HlLoadedNativeModule {
 		return true;
 	}
 
+	/** Invoke a zero-argument i32 function while the loaded module is live. */
+	public function callI32(functionIndex:Int):Int {
+		if (disposed)
+			throw "HashLink loaded module has been unloaded";
+		return nativeModule.callI32(functionIndex);
+	}
+
 	/** Require both native and Haxe-owned resources to be released. */
 	public function close():Void {
 		if (!unload())

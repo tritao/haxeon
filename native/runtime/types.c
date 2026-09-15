@@ -289,6 +289,34 @@ HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
 	if( module != NULL ) hl_module_free_shutdown((hl_module*)module);
 }
 
+HL_PRIM int HL_NAME(native_metadata_module_call_i32)( vbyte *module, int findex ) {
+	hl_module *m = (hl_module*)module;
+	hl_function *function;
+	vclosure closure;
+	vdynamic *result;
+	bool exception;
+
+	if( m == NULL || m->code == NULL )
+		hl_error("HashLink native module call requires an initialized module");
+	if( findex < 0 || findex >= m->code->nfunctions + m->code->nnatives )
+		hl_error("HashLink native module function index is outside the dispatch table");
+	function = native_metadata_find_function(m->code->functions,m->code->nfunctions,findex);
+	if( function == NULL || function->type == NULL || function->type->kind != HFUN || function->type->fun == NULL
+		|| function->type->fun->nargs != 0 || function->type->fun->ret == NULL || function->type->fun->ret->kind != HI32 )
+		hl_error("HashLink native module call requires a zero-argument i32 function");
+	if( m->functions_ptrs == NULL || m->functions_ptrs[findex] == NULL )
+		hl_error("HashLink native module function has no installed entrypoint");
+	closure.t = function->type;
+	closure.fun = m->functions_ptrs[findex];
+	closure.hasValue = 0;
+	result = hl_dyn_call_safe(&closure,NULL,0,&exception);
+	if( exception )
+		hl_error("HashLink native module function raised an exception");
+	if( result == NULL || result->t == NULL || result->t->kind != HI32 )
+		hl_error("HashLink native module function did not return i32");
+	return result->v.i;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

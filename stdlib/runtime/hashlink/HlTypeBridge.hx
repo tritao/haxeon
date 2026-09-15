@@ -88,6 +88,10 @@ class HlTypeBridge {
 	/** Free a native module whose initialization failed before it entered the registry. */
 	public static function native_metadata_module_free_shutdown(module:RawPtr<UInt8>):Void {}
 
+	/** Invoke a zero-argument Haxe-owned function with an i32 result. */
+	public static function native_metadata_module_call_i32(module:RawPtr<UInt8>, functionIndex:Int):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

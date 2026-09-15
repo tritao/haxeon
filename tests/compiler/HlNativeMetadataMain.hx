@@ -36,12 +36,13 @@ class HlNativeMetadataMain {
 			+ 'code.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(code.functionIdentities)}]; '
 			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.constants = [{global: 0, fields: [0, 1]}]; code.entryPoint = 0; '
 			+
-			'var loadCode = new HlCode(); loadCode.types = [Simple(HlType.I32), Function([0], 0)]; loadCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [Return(0)])]; '
+			'var loadCode = new HlCode(); loadCode.ints = [42]; loadCode.types = [Simple(HlType.I32), Function([], 0)]; loadCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; '
 			+
 			'loadCode.functionIdentities = [{stableId: 101, functionIndex: 0, qualifiedName: "Loaded.main", displayName: "main", sourcePath: "loaded.hx", start: 0, end: 0, line: 1, flags: 0}]; '
 			+
 			'loadCode.debugSections = [{kind: 1, version: 1, flags: 0, payload: HlWriter.encodeFunctionIdentities(loadCode.functionIdentities)}]; loadCode.entryPoint = 0; '
-			+ 'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedModuleUnloaded = loadedModule.unload(); '
+			+
+			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
 			+ 'var kernel = new HlMetadataGeneration(128, 1), kernelInt = kernel.builder.primitive(HlTypeKind.Int32Type), '
@@ -76,7 +77,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
 			+ '&& HlTypeBridge.native_metadata_validate_code(publication.nativeCode) == 12 '
 			+ '&& kernelInitialized && kernelUnloaded '
-			+ '&& loadedModuleUnloaded '
+			+ '&& loadedValue == 42 && loadedModuleUnloaded '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_constants(publication.constants, publication.constantCount, publication.globalCount) == 1 '

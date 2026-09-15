@@ -44,6 +44,13 @@ class HlNativeModule {
 		return module;
 	}
 
+	/** Invoke a zero-argument Haxe-owned function through HashLink's JIT. */
+	public function callI32(functionIndex:Int):Int {
+		if (!isLoaded())
+			throw "HashLink native module is no longer loaded";
+		return HlTypeBridge.native_metadata_module_call_i32(module, functionIndex);
+	}
+
 	/** Try to retire the module; a failed retirement keeps its lease and handle alive. */
 	public function unload():Bool {
 		if (!isLoaded())
