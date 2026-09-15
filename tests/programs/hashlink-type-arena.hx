@@ -82,11 +82,21 @@ function main():Int {
 		&& virtualData.ref.nfields == 1
 		&& virtualData.ref.fields.offset(0).ref.type == intType
 		&& virtualData.ref.indexes.offset(0).load() == 0;
-	var module = builder.moduleContext([RawPtr.nullPtr()], [intType]);
+	var objectName = builder.utf16Name("Obj"),
+		fieldName = builder.utf16Name("field"),
+		module = builder.moduleContext([RawPtr.nullPtr()], [intType]);
+	objectData.ref.name = objectName;
+	objectData.ref.fields.offset(0).ref.name = fieldName;
+	var namesCorrect = objectData.ref.name.offset(0).load() == 79
+		&& objectData.ref.name.offset(1).load() == 98
+		&& objectData.ref.name.offset(2).load() == 106
+		&& objectData.ref.name.offset(3).load() == 0
+		&& objectData.ref.fields.offset(0).ref.name.offset(0).load() == 102
+		&& objectData.ref.fields.offset(0).ref.name.offset(5).load() == 0;
 	var moduleCorrect = module.ref.alloc.ref.current == RawPtr.nullPtr()
 		&& module.ref.functionsPtrs.offset(0).load() == RawPtr.nullPtr()
 		&& module.ref.functionsTypes.offset(0).load() == intType;
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect && moduleCorrect ? 42 : 1;
+	return correct && builtCorrect && graphCorrect && namesCorrect && moduleCorrect ? 42 : 1;
 }

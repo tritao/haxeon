@@ -35,6 +35,15 @@ class HlTypeBuilder {
 		return type;
 	}
 
+	/** Copy a Haxe string into arena-owned, null-terminated UTF-16 storage. */
+	public function utf16Name(value:String):RawPtr<UInt16> {
+		var result = arena.allocUtf16Array(value.length + 1);
+		for (index in 0...value.length)
+			result.offset(index).store(cast value.charCodeAt(index));
+		result.offset(value.length).store(cast 0);
+		return result;
+	}
+
 	public function typeParameter(parameter:RawPtr<HlType>):RawPtr<HlType> {
 		var type = allocateType(HlTypeKind.Reference);
 		type.ref.data.ref.typeParam = parameter;
