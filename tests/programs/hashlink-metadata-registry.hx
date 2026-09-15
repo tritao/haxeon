@@ -7,6 +7,7 @@ import runtime.hashlink.HlMetadataTransaction;
 import runtime.hashlink.HlMetadataTransaction.HlMetadataTransactionState;
 import runtime.hashlink.HlTypeArena;
 import runtime.memory.RawPtr;
+import haxe.io.Bytes;
 
 function buildPrimitiveGeneration(extra:Bool):HlMetadataGeneration {
 	var generation = new HlMetadataGeneration(128, 1),
@@ -68,6 +69,24 @@ function buildConstantGeneration(field:Int):HlMetadataGeneration {
 	generation.defineModule([RawPtr.nullPtr()], [type]);
 	generation.defineGlobalTypes([type]);
 	generation.addConstant({global: 0, nfields: 1, fields: fields});
+	return generation;
+}
+
+function buildModuleGeneration(ints:Array<Int>, floats:Array<Float>, strings:Array<String>, bytes:String, debug:String):HlMetadataGeneration {
+	var generation = new HlMetadataGeneration(128, 1),
+		type = generation.builder.primitive(HlTypeKind.Int32Type),
+		byteData = Bytes.ofString(bytes);
+	generation.addType(type);
+	generation.defineModule([RawPtr.nullPtr()], [type]);
+	generation.defineModulePools(new runtime.hashlink.HlModulePools(generation.arena, generation.builder, ints, floats, strings, byteData,
+		byteData.length == 0 ? [] : [0], 0));
+	if (debug != null)
+		generation.addDebugSection({
+			kind: 1,
+			version: 1,
+			flags: 0,
+			payload: Bytes.ofString(debug)
+		});
 	return generation;
 }
 
@@ -183,6 +202,25 @@ function main():Int {
 		constantChanged = requiresReload(HlMetadataCompatibility.check(constantBefore, constantAfter));
 	constantBefore.dispose();
 	constantAfter.dispose();
+	var poolBefore = buildModuleGeneration([1], [1.5], ["one"], "xyz", null),
+		poolAppend = buildModuleGeneration([1, 2], [1.5], ["one", "two"], "xyz", null),
+		poolChanged = buildModuleGeneration([9], [1.5], ["one"], "xyz", null),
+		poolBytesChanged = buildModuleGeneration([1], [1.5], ["one"], "changed", null),
+		poolAppendCompatible = isCompatible(HlMetadataCompatibility.check(poolBefore, poolAppend)),
+		poolChangedRequiresReload = requiresReload(HlMetadataCompatibility.check(poolBefore, poolChanged)),
+		poolBytesRequireReload = requiresReload(HlMetadataCompatibility.check(poolBefore, poolBytesChanged));
+	poolBefore.dispose();
+	poolAppend.dispose();
+	poolChanged.dispose();
+	poolBytesChanged.dispose();
+	var debugBefore = buildModuleGeneration([], [], [], "", "old"),
+		debugSame = buildModuleGeneration([], [], [], "", "old"),
+		debugChanged = buildModuleGeneration([], [], [], "", "new"),
+		debugStable = isCompatible(HlMetadataCompatibility.check(debugBefore, debugSame)),
+		debugRequiresReload = requiresReload(HlMetadataCompatibility.check(debugBefore, debugChanged));
+	debugBefore.dispose();
+	debugSame.dispose();
+	debugChanged.dispose();
 	var reloadCandidate = buildObjectGeneration(HlTypeKind.Int32Type),
 		reloadTransaction = new HlMetadataTransaction(registry, reloadCandidate, true);
 	var reloadPublication = reloadTransaction.commit();
@@ -228,5 +266,6 @@ function main():Int {
 	registry.dispose();
 	return switched && rejectionStable && reloaded && globalShapeChanged && globalTypeChanged && disposed && firstReleased && objectChanged
 		&& constantChanged && nativeNamesMatch && nativeChanged && functionChanged && derivedStateIgnored && transactionReloaded && reloadRetiredDisposed
-		&& releasedRetiredDisposed && transactionStates && disposeBlocked ? 42 : 1;
+		&& releasedRetiredDisposed && transactionStates && disposeBlocked && poolAppendCompatible && poolChangedRequiresReload && poolBytesRequireReload
+		&& debugStable && debugRequiresReload ? 42 : 1;
 }

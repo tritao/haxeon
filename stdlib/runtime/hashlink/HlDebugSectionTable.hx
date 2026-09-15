@@ -47,4 +47,10 @@ class HlDebugSectionTable {
 
 	public inline function capacityOf():Int
 		return capacity;
+
+	public function get(index:Int):RawPtr<HlDebugSection> {
+		if (index < 0 || index >= count)
+			throw 'HashLink debug section index $index is outside 0...$count';
+		return entries.offset(index);
+	}
 }

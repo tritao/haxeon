@@ -173,6 +173,12 @@ class HlMetadataGeneration {
 		return modulePools.string(index);
 	}
 
+	/** Return the module scalar pools, or null for hand-built metadata without an HLB module. */
+	public function modulePoolsOrNull():Null<HlModulePools> {
+		requireOpen();
+		return modulePools;
+	}
+
 	/** Number of function dispatch slots in the module context. */
 	public function functionCount():Int {
 		requireOpen();

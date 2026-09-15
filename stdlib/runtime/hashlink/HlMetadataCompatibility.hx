@@ -54,6 +54,12 @@ class HlMetadataCompatibility {
 				|| !sameInts(previousConstant.ref.fields, candidateConstant.ref.fields, previousFields))
 				return RequiresReload('constant descriptor changed at index $index');
 		}
+		var poolDecision = compareModulePools(previous, candidate);
+		if (poolDecision != null)
+			return RequiresReload(poolDecision);
+		var debugDecision = compareDebugSections(previous, candidate);
+		if (debugDecision != null)
+			return RequiresReload(debugDecision);
 
 		var previousCount = previous.typeCount(), candidateCount = candidate.typeCount();
 		if (candidateCount < previousCount)
@@ -68,6 +74,37 @@ class HlMetadataCompatibility {
 			if (!isAppendable(candidate.type(index)))
 				return RequiresReload('type $index is not append-compatible');
 		return Compatible;
+	}
+
+	static function compareModulePools(previous:HlMetadataGeneration, candidate:HlMetadataGeneration):Null<String> {
+		var left = previous.modulePoolsOrNull(), right = candidate.modulePoolsOrNull();
+		if (left == null || right == null)
+			return left == null && right == null ? null : "module scalar pools were added or removed";
+		if (right.intCount < left.intCount || !sameInts(left.ints, right.ints, left.intCount))
+			return "integer constant pool is not append-compatible";
+		if (right.floatCount < left.floatCount || !sameFloats(left.floats, right.floats, left.floatCount))
+			return "float constant pool is not append-compatible";
+		if (right.stringCount < left.stringCount || !sameStringPool(left, right, left.stringCount))
+			return "string constant pool is not append-compatible";
+		if (left.byteCount != right.byteCount || !sameBytes(left.bytes, right.bytes, left.byteCount)
+			|| left.bytePositionCount != right.bytePositionCount || !sameInts(left.bytePositions, right.bytePositions, left.bytePositionCount))
+			return "byte constant pool changed";
+		if (left.entryPoint != right.entryPoint)
+			return "module entry point changed";
+		return null;
+	}
+
+	static function compareDebugSections(previous:HlMetadataGeneration, candidate:HlMetadataGeneration):Null<String> {
+		if (previous.debugSectionDescriptors.length() != candidate.debugSectionDescriptors.length())
+			return "debug section table changed";
+		for (index in 0...previous.debugSectionDescriptors.length()) {
+			var left = previous.debugSectionDescriptors.get(index), right = candidate.debugSectionDescriptors.get(index),
+				leftSize:Int = cast left.ref.size, rightSize:Int = cast right.ref.size;
+			if (left.ref.kind != right.ref.kind || left.ref.version != right.ref.version || left.ref.flags != right.ref.flags || leftSize != rightSize
+				|| !sameBytes(left.ref.data, right.ref.data, leftSize))
+				return 'debug section changed at index $index';
+		}
+		return null;
 	}
 
 	static function sameType(previous:HlMetadataGeneration, candidate:HlMetadataGeneration, left:RawPtr<HlType>,
@@ -220,6 +257,43 @@ class HlMetadataCompatibility {
 	}
 
 	static function sameInts(left:RawPtr<Int32>, right:RawPtr<Int32>, count:Int):Bool {
+		if (left.isNull() || right.isNull())
+			return left.isNull() && right.isNull();
+		var index = 0;
+		while (index < count) {
+			if (left.offset(index).load() != right.offset(index).load())
+				return false;
+			index++;
+		}
+		return true;
+	}
+
+	static function sameFloats(left:RawPtr<Float>, right:RawPtr<Float>, count:Int):Bool {
+		if (left.isNull() || right.isNull())
+			return left.isNull() && right.isNull();
+		var index = 0;
+		while (index < count) {
+			if (left.offset(index).load() != right.offset(index).load())
+				return false;
+			index++;
+		}
+		return true;
+	}
+
+	static function sameStringPool(left:HlModulePools, right:HlModulePools, count:Int):Bool {
+		var index = 0;
+		while (index < count) {
+			var leftLength:Int = cast left.stringLengths.offset(index).load(), rightLength:Int = cast right.stringLengths.offset(index).load();
+			if (leftLength != rightLength || !sameBytes(left.strings.offset(index).load(), right.strings.offset(index).load(), leftLength))
+				return false;
+			index++;
+		}
+		return true;
+	}
+
+	static function sameBytes(left:RawPtr<UInt8>, right:RawPtr<UInt8>, count:Int):Bool {
+		if (count == 0)
+			return true;
 		if (left.isNull() || right.isNull())
 			return left.isNull() && right.isNull();
 		var index = 0;
