@@ -225,6 +225,19 @@ HL_PRIM int HL_NAME(native_metadata_validate_module_pools)( int *ints, int int_c
 	return string_count;
 }
 
+HL_PRIM int HL_NAME(native_metadata_validate_debug_sections)( hl_debug_section *sections, int count ) {
+	int i;
+	if( count < 0 || (count > 0 && sections == NULL) )
+		hl_error("HashLink debug sections require a descriptor table");
+	for( i = 0; i < count; i++ ) {
+		hl_debug_section *section = sections + i;
+		if( section->kind <= 0 || section->version <= 0 || section->flags < 0 || section->size < 0
+			|| (section->size > 0 && section->data == NULL) )
+			hl_error("HashLink debug section contains invalid storage metadata");
+	}
+	return count;
+}
+
 HL_PRIM void HL_NAME(native_metadata_bind_function_descriptors)( hl_type **types, int count, hl_function *functions, int function_count, hl_module_context *context ) {
 	int i;
 	native_metadata_validate_publication(count,types,context);

@@ -112,6 +112,13 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 		nfields: c_int @offset(4);
 		fields: ptr<c_int> @offset(8);
 	}
+	struct hl_debug_section @layout(24, 8) {
+		kind: c_int @offset(0);
+		version: c_int @offset(4);
+		flags: c_int @offset(8);
+		size: c_int @offset(12);
+		data: ptr<c_uchar> @offset(16);
+	}
 	struct hl_function @layout(80, 8) {
 		findex: c_int @offset(0);
 		nregs: c_int @offset(4);

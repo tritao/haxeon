@@ -7,6 +7,8 @@ import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlNative;
 import runtime.hashlink.HlConstant;
 import runtime.hashlink.HlModulePools;
+import runtime.hashlink.HlDebugSection;
+import runtime.hashlink.HlDebugSectionTable;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -26,6 +28,9 @@ typedef HlMetadataPublication = {
 	final constants:RawPtr<HlConstant>;
 	final constantCount:Int;
 	final constantCapacity:Int;
+	final debugSections:RawPtr<HlDebugSection>;
+	final debugSectionCount:Int;
+	final debugSectionCapacity:Int;
 	final ints:RawPtr<Int32>;
 	final intCount:Int;
 	final floats:RawPtr<Float>;
@@ -57,6 +62,7 @@ class HlMetadataGeneration {
 	public final functionDescriptors:HlFunctionDescriptorTable;
 	public final nativeDescriptors:HlNativeDescriptorTable;
 	public final constantDescriptors:HlConstantTable;
+	public final debugSectionDescriptors:HlDebugSectionTable;
 	var modulePools:Null<HlModulePools>;
 	final typeTable:HlTypeTable;
 	var functionTable:Null<HlFunctionTable>;
@@ -77,12 +83,13 @@ class HlMetadataGeneration {
 	var borrowers:Int = 0;
 
 	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8,
-		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8) {
+		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8, ?debugSectionCapacity:Int = 8) {
 		arena = new HlTypeArena(blockSize, typeCapacity);
 		builder = new HlTypeBuilder(arena);
 		functionDescriptors = new HlFunctionDescriptorTable(arena, functionDescriptorCapacity);
 		nativeDescriptors = new HlNativeDescriptorTable(arena, nativeDescriptorCapacity);
 		constantDescriptors = new HlConstantTable(arena, constantCapacity);
+		debugSectionDescriptors = new HlDebugSectionTable(arena, debugSectionCapacity);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
 	}
 
@@ -141,6 +148,12 @@ class HlMetadataGeneration {
 	public function addConstant(spec:HlConstantDescriptorSpec):RawPtr<HlConstant> {
 		requireBuilding();
 		return constantDescriptors.add(spec);
+	}
+
+	/** Append one Haxe-owned HashLink module debug section. */
+	public function addDebugSection(spec:HlDebugSectionSpec):RawPtr<HlDebugSection> {
+		requireBuilding();
+		return debugSectionDescriptors.add(spec);
 	}
 
 	/** Attach the arena-owned scalar pools for one HLB module. */
@@ -284,6 +297,7 @@ class HlMetadataGeneration {
 		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
 		constantDescriptors.validate(globalCount);
 		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
+		HlTypeBridge.native_metadata_validate_debug_sections(debugSectionDescriptors.pointer(), debugSectionDescriptors.length());
 		validateModulePools();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
@@ -323,6 +337,9 @@ class HlMetadataGeneration {
 			constants: constantDescriptors.pointer(),
 			constantCount: constantDescriptors.length(),
 			constantCapacity: constantDescriptors.capacityOf(),
+			debugSections: debugSectionDescriptors.pointer(),
+			debugSectionCount: debugSectionDescriptors.length(),
+			debugSectionCapacity: debugSectionDescriptors.capacityOf(),
 			ints: modulePools == null ? RawPtr.nullPtr() : modulePools.ints,
 			intCount: modulePools == null ? 0 : modulePools.intCount,
 			floats: modulePools == null ? RawPtr.nullPtr() : modulePools.floats,

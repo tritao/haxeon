@@ -18,6 +18,7 @@ import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlOpcode;
 import runtime.hashlink.HlNative;
 import runtime.hashlink.HlConstant;
+import runtime.hashlink.HlDebugSection;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
@@ -71,6 +72,9 @@ class HlTypeArena {
 		return storage.alloc(count);
 
 	public inline function allocConstantArray(count:Int):RawPtr<HlConstant>
+		return storage.alloc(count);
+
+	public inline function allocDebugSectionArray(count:Int):RawPtr<HlDebugSection>
 		return storage.alloc(count);
 
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>

@@ -30,6 +30,7 @@ class HlNativeMetadataMain {
 			+ '{path: "metadata.hx", line: 44, column: 1, endLine: 44, endColumn: 2, sourceHash: 0, start: null, end: null, flags: 1}], '
 			+ '[{name: 8, position: 0, scopeEnd: 4}])]; '
 			+ 'code.ints = [17]; code.floats = [2.5]; code.bytes = haxe.io.Bytes.ofString("xyz"); code.bytePositions = [1]; '
+			+ 'code.debugSections = [{kind: 1, version: 1, flags: 0, payload: haxe.io.Bytes.ofString("debug")}]; '
 			+ 'code.natives = [{library: 7, name: 8, type: 2, functionIndex: 1}]; code.constants = [{global: 0, fields: [0, 1]}]; code.entryPoint = 0; '
 			+
 			'var generation = HlNativeMetadataBuilder.build(code), publication = generation.snapshot(), object = generation.type(9), native = publication.nativeDescriptors; '
@@ -52,6 +53,10 @@ class HlNativeMetadataMain {
 			+ '&& HlTypeBridge.native_metadata_validate_module_pools(publication.ints, publication.intCount, publication.floats, publication.floatCount, '
 			+ 'publication.strings, publication.stringLengths, publication.stringCount, publication.bytes, publication.byteCount, '
 			+ 'publication.bytePositions, publication.bytePositionCount, publication.entryPoint) == 9 '
+			+ '&& publication.debugSectionCount == 1 && publication.debugSections.ref.kind == 1 && publication.debugSections.ref.version == 1 '
+			+ '&& publication.debugSections.ref.flags == 0 && publication.debugSections.ref.size == 5 '
+			+ '&& publication.debugSections.ref.data.load() == 100 '
+			+ '&& HlTypeBridge.native_metadata_validate_debug_sections(publication.debugSections, publication.debugSectionCount) == 1 '
 			+ '&& HlTypeBridge.native_metadata_validate_function_debug(publication.functionDescriptors, publication.debugFileCount) == 1 '
 			+ '&& publication.functionDescriptors.ref.debug.load() == 0 && publication.functionDescriptors.ref.debug.offset(1).load() == 42 '
 			+ '&& publication.functionDescriptors.ref.debug.offset(2).load() == 0 && publication.functionDescriptors.ref.debug.offset(3).load() == 42 '

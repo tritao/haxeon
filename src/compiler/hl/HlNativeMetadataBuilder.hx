@@ -24,7 +24,7 @@ class HlNativeMetadataBuilder {
 			throw "HashLink native metadata requires an HLB module";
 		HlValidator.validate(code);
 		var generation = new HlMetadataGeneration(65536, positive(code.types.length), 65536, positive(code.functions.length), positive(code.natives.length),
-			positive(code.constants.length));
+			positive(code.constants.length), positive(code.debugSections.length));
 		try {
 			var typePointers = allocateTypes(code, generation),
 				functionCount = dispatchSlotCount(code),
@@ -35,6 +35,13 @@ class HlNativeMetadataBuilder {
 			generation.defineModulePools(new runtime.hashlink.HlModulePools(generation.arena, generation.builder, code.ints, code.floats, code.strings,
 				code.bytes, code.bytePositions, code.entryPoint));
 			generation.defineDebugFiles(debugFilePaths(code));
+			for (section in code.debugSections)
+				generation.addDebugSection({
+					kind: section.kind,
+					version: section.version,
+					flags: section.flags,
+					payload: section.payload
+				});
 			for (index in 0...code.types.length)
 				generation.addType(typePointers[index]);
 			defineTypes(code, generation, typePointers, module, globals);

@@ -67,6 +67,9 @@ class HlTypeBridge {
 		bytePositions:RawPtr<Int32>, bytePositionCount:Int, entryPoint:Int):Int
 		return 0;
 
+	public static function native_metadata_validate_debug_sections(sections:RawPtr<HlDebugSection>, count:Int):Int
+		return 0;
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

@@ -26,6 +26,7 @@ class HashlinkTypeMetadataMain {
 			+ 'import runtime.hashlink.HlRuntimeObject; import runtime.hashlink.HlRuntimeObject.HlRuntimeBinding; '
 			+
 			'import runtime.hashlink.HlFunction; import runtime.hashlink.HlFunction.HlFunctionField; import runtime.hashlink.HlNative; import runtime.hashlink.HlConstant; '
+			+ 'import runtime.hashlink.HlDebugSection; '
 			+ 'function typeSize():Int return sizeof<HlType>(); '
 			+ 'function typeDataSize():Int return sizeof<HlTypeData>(); '
 			+ 'function typeDataOffset():Int return offsetof<HlType>("data"); '
@@ -50,6 +51,7 @@ class HashlinkTypeMetadataMain {
 			+ 'function functionFieldSize():Int return sizeof<HlFunctionField>(); '
 			+ 'function nativeDescriptorSize():Int return sizeof<HlNative>(); '
 			+ 'function constantSize():Int return sizeof<HlConstant>(); '
+			+ 'function debugSectionSize():Int return sizeof<HlDebugSection>(); '
 			+ 'function main():Int return typeSize() + typeDataSize() + typeDataOffset() + functionSize() + objectSize();');
 		compiler.compile("HashlinkTypeMetadata");
 		var functions = compiler.lastTypedProgram.functions;
@@ -250,13 +252,15 @@ class HashlinkTypeMetadataMain {
 		expect(constantReturn(functions, "HashlinkTypeMetadata.functionFieldSize") == 8, "hl_function.field must remain pointer-sized");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.nativeDescriptorSize") == 32, "hl_native must preserve descriptor alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.constantSize") == 16, "hl_constant must preserve descriptor alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.debugSectionSize") == 24, "hl_debug_section must preserve payload pointer alignment");
 		var moduleNames = [
 			"hl_op",
 			"hl_function",
 			"hl_function_field",
 			"hl_native",
 			"hl_opcode",
-			"hl_constant"
+			"hl_constant",
+			"hl_debug_section"
 		],
 			moduleModel = CHeaderImporter.importHeader("vendor/hashlink/src/hlmodule.h", "x86_64-linux-gnu", ["vendor/hashlink/src"], "clang",
 				"haxeon_runtime", "HashLinkModuleMetadata", null, null, moduleNames),
@@ -310,6 +314,17 @@ class HashlinkTypeMetadataMain {
 						{nativeName: "p3", haxeName: "p3"},
 						{nativeName: "extra", haxeName: "extra"}
 					]
+				},
+				{
+					nativeName: "hl_debug_section",
+					haxeName: "runtime.hashlink.HlDebugSection",
+					fields: [
+						{nativeName: "kind", haxeName: "kind"},
+						{nativeName: "version", haxeName: "version"},
+						{nativeName: "flags", haxeName: "flags"},
+						{nativeName: "size", haxeName: "size"},
+						{nativeName: "data", haxeName: "data"}
+					]
 				}
 			];
 		HxiValidator.validate(parsedModule, []);
@@ -335,6 +350,7 @@ class HashlinkTypeMetadataMain {
 			&& moduleSource.indexOf("ref: ptr<hl_function> @offset(12)") < 0
 			&& moduleSource.indexOf("struct hl_native @layout(32, 8)") >= 0
 			&& moduleSource.indexOf("struct hl_constant @layout(16, 8)") >= 0
+			&& moduleSource.indexOf("struct hl_debug_section @layout(24, 8)") >= 0
 			&& moduleSource.indexOf("enum hl_op : c_int") >= 0
 			&& moduleSource.indexOf("struct hl_opcode @layout(24, 8)") >= 0
 			&& moduleSource.indexOf("op: hl_op @offset(0)") >= 0,
