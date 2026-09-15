@@ -21,6 +21,9 @@ import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
 import project.PackageSourceTools;
+import project.PackageResolver;
+import project.PathSourceAcquirer;
+import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
 #if (target.threaded && !eval)
@@ -38,6 +41,7 @@ class BuildSystemMain {
 		testFingerprintsAndSkipping();
 		testProjectDiscovery();
 		testPackageSourceModel();
+		testResolverDelegatesAcquisition();
 		testNativeDependencyScanning();
 		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
 	}
@@ -296,6 +300,19 @@ class BuildSystemMain {
 		}, "path dependency metadata should remain a path source declaration");
 	}
 
+	static function testResolverDelegatesAcquisition():Void {
+		var root = temporaryDirectory("resolver"),
+			app = Path.join([root, "app"]),
+			foo = Path.join([root, "foo"]);
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"path":"../foo"}}}', []);
+		writePackage(foo, '{"package":{"name":"foo"}}', []);
+		var acquirer = new RecordingSourceAcquirer(),
+			project = new PackageResolver(acquirer).resolve(Path.join([app, "haxeon.json"]));
+		expect(acquirer.calls == 1 && project.packages.get("foo").source != null,
+			"package resolution should delegate source acquisition and retain the source identity");
+		removeTree(root);
+	}
+
 	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
 		return new ExecutionAction(new ActionId(id), dependencies, [], [], description, Compiler(description, invoke));
 
@@ -354,5 +371,19 @@ class BuildSystemMain {
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)
 			throw message;
+	}
+}
+
+class RecordingSourceAcquirer implements SourceAcquirer {
+	public var calls:Int = 0;
+	final delegate:PathSourceAcquirer;
+
+	public function new() {
+		delegate = new PathSourceAcquirer();
+	}
+
+	public function acquire(source:project.PackageSource, ownerRoot:String, packageId:project.PackageId):String {
+		calls++;
+		return delegate.acquire(source, ownerRoot, packageId);
 	}
 }
