@@ -64,6 +64,10 @@ class DeclarationIndex {
 	public static function registered(program:AstProgram):DeclarationIndex
 		return new DeclarationIndex(program, false, null);
 
+	/** Register a recovery tree, including an empty editor buffer. */
+	public static function registeredRecovered(program:AstProgram):DeclarationIndex
+		return new DeclarationIndex(program, false, emptyRecoverySpan());
+
 	public static function forModule(program:AstProgram, source:SourceFile):DeclarationIndex
 		return new DeclarationIndex(program, false, source.span(0, 0));
 
@@ -664,6 +668,9 @@ class DeclarationIndex {
 			throw "Cannot index an empty program";
 		return emptySpan;
 	}
+
+	static function emptyRecoverySpan():SourceSpan
+		return new SourceFile("<recovered>", "").span(0, 0);
 
 	static function fail(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E1020", message, span));

@@ -48,7 +48,7 @@ class SemanticProgram {
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
 		var inferred = SignatureInference.inferProgram(program);
-		var declarations = DeclarationIndex.registered(inferred),
+		var declarations = recovered ? DeclarationIndex.registeredRecovered(inferred) : DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
 			lifecycle = new DeclarationLifecycle(declarations),
 			shapesAt = declaredAt,
