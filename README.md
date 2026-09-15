@@ -392,6 +392,12 @@ provider:
 }
 ```
 
+Native providers advertise their supported targets with `native.targets`; the
+default source and CMake providers support `host` and `android`. If a package
+has no provider for a requested target, planning stops with the package and
+missing-provider chain—for example, `foo cannot be built for wasm32`—before
+compilation or linking begins.
+
 Android builds resolve the same package graph, compile `native.sources` with the
 Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
 under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets

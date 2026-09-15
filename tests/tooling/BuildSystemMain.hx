@@ -275,6 +275,15 @@ class BuildSystemMain {
 			"native sources, the requested shared library, and Haxe compilation should lower to concrete actions");
 		expect(execution.actions[execution.actions.length - 1].description.indexOf("Compile Haxe package") >= 0,
 			"the Haxe compiler request must follow native package actions");
+		var wasmDiagnostic:Null<String> = null;
+		try {
+			BuildPlanner.project(project, BuildIntent.Build, Target.parse("wasm32"), NativeArtifactDemand.Shared);
+		} catch (error:Dynamic) {
+			wasmDiagnostic = Std.string(error);
+		}
+		expect(wasmDiagnostic != null && wasmDiagnostic.indexOf("foo cannot be built for wasm32") >= 0
+			&& wasmDiagnostic.indexOf("no wasm32 provider is available") >= 0,
+			"unsupported native Wasm combinations should fail with a planning diagnostic");
 
 		var staticPlan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Static),
 			staticPlanText = staticPlan.toDebugString();

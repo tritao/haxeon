@@ -26,6 +26,7 @@ class BuildPlanner {
 
 	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
 		nativeDemand:NativeArtifactDemand):BuildPlan {
+		NativeTargetSupport.validate(project, target);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
 			nativeStatic = new Map<String, ArtifactId>();

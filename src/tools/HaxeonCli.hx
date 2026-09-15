@@ -5,6 +5,7 @@ import haxe.io.Path;
 import build.HaxeonProjectBuild;
 import build.HaxeonNativePackageBuild;
 import build.Target;
+import build.NativeTargetSupport;
 import build.execution.ProcessRunner;
 import project.PackageLockfile;
 import project.PackageResolver;
@@ -422,6 +423,7 @@ class HaxeonCli {
 			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
 
 		var home = haxeonHome();
+		NativeTargetSupport.validate(project, targetInfo);
 		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
