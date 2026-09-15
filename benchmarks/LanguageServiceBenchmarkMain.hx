@@ -156,7 +156,7 @@ class LanguageServiceBenchmarkMain {
 	} {
 		var service = new LanguageService();
 		service.update("bench/Foo.hx", "package bench; class Foo { public var knownFoo:Int; }");
-		var source = "package bench; function main():Int { var foo:Foo = new Foo(); return foo. }",
+		var source = "package bench; import bench.Foo; function main():Int { var foo:Foo = new Foo(); return foo. }",
 			started = Sys.time();
 		service.update("bench/Main.hx", source);
 		var workspaceUpdateMs = (Sys.time() - started) * 1000.0;
@@ -165,7 +165,7 @@ class LanguageServiceBenchmarkMain {
 		var workspaceCompletionMs = (Sys.time() - started) * 1000.0;
 		if (!completion.isIncomplete || !hasLabel(completion.items, "knownFoo"))
 			throw "multi-module recovery benchmark lost current member completion";
-		var malformed = "package bench; function main():Int { var foo:Foo = new Foo(); broken.unresolved().thing; return foo. }";
+		var malformed = "package bench; import bench.Foo; function main():Int { var foo:Foo = new Foo(); broken.unresolved().thing; return foo. }";
 		started = Sys.time();
 		service.update("bench/Main.hx", malformed);
 		var malformedUpdateMs = (Sys.time() - started) * 1000.0;
