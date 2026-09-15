@@ -129,8 +129,9 @@ class Executor implements ExecutionBackend {
 					try {
 						if (status == 0 && isCacheable(item.action)) {
 							ActionFingerprint.save(environment.buildRoot, item.action, item.fingerprint);
-							artifactCache.publish(item.action, ActionFingerprint.globalKey(item.action, environment.target.toString(),
-								[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
+							artifactCache.publish(item.action,
+								ActionFingerprint.globalKey(item.action, environment.target.toString(),
+									[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
 						}
 						waveResults.set(item.action.id.key(),
 							new ActionResult(item.action.id, status, false, false, item.fingerprint, status == 0 ? null : 'Action exited with status $status'));

@@ -77,13 +77,15 @@ class PackageCompatibility {
 				}
 			}
 			if (StringTools.startsWith(constraint, "^")) {
-				var lower = parseVersion(constraint.substr(1)), current = parseVersion(actual);
+				var lower = parseVersion(constraint.substr(1)),
+					current = parseVersion(actual);
 				if (compare(current, lower) < 0 || current[0] != lower[0])
 					return false;
 				continue;
 			}
 			if (StringTools.startsWith(constraint, "~")) {
-				var lower = parseVersion(constraint.substr(1)), current = parseVersion(actual);
+				var lower = parseVersion(constraint.substr(1)),
+					current = parseVersion(actual);
 				if (compare(current, lower) < 0 || current[0] != lower[0] || current[1] != lower[1])
 					return false;
 				continue;

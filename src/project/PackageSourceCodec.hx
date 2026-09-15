@@ -19,8 +19,8 @@ class PackageSourceCodec {
 			gitValue:Dynamic = Reflect.field(raw, "git"),
 			registryValue:Dynamic = Reflect.field(raw, "registry"),
 			haxelibValue:Dynamic = Reflect.field(raw, "haxelib"),
-			count = (pathValue == null ? 0 : 1) + (workspaceValue == null ? 0 : 1) + (gitValue == null ? 0 : 1)
-				+ (registryValue == null ? 0 : 1) + (haxelibValue == null ? 0 : 1);
+			count = (pathValue == null ? 0 : 1) + (workspaceValue == null ? 0 : 1) + (gitValue == null ? 0 : 1) + (registryValue == null ? 0 : 1)
+				+ (haxelibValue == null ? 0 : 1);
 		if (count != 1)
 			throw '$path must declare exactly one package source';
 		if (pathValue != null)
@@ -39,8 +39,10 @@ class PackageSourceCodec {
 			case [PackageSource.Path(a), PackageSource.Path(b)]: a == b;
 			case [PackageSource.Workspace(a), PackageSource.Workspace(b)]: a == b;
 			case [PackageSource.Git(aUrl, aRev), PackageSource.Git(bUrl, bRev)]: aUrl == bUrl && aRev == bRev;
-			case [PackageSource.Registry(aRegistry, aName, aVersion), PackageSource.Registry(bRegistry, bName, bVersion)]:
-				aRegistry == bRegistry && aName == bName && aVersion == bVersion;
+			case [
+				PackageSource.Registry(aRegistry, aName, aVersion),
+				PackageSource.Registry(bRegistry, bName, bVersion)
+			]: aRegistry == bRegistry && aName == bName && aVersion == bVersion;
 			case [PackageSource.Haxelib(aName, aVersion), PackageSource.Haxelib(bName, bVersion)]: aName == bName && aVersion == bVersion;
 			case _: false;
 		};

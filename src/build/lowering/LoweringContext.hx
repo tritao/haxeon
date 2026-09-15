@@ -14,8 +14,8 @@ class LoweringContext {
 	public final compilerHome:String;
 	public final extraDefines:Array<String>;
 
-	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
-		?compilerHome:String, ?extraDefines:Array<String>) {
+	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
+			?extraDefines:Array<String>) {
 		this.environment = environment;
 		this.layout = new TargetLayout(environment);
 		this.cmakePreset = cmakePreset == null ? Std.string(environment.profile) : cmakePreset;

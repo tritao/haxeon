@@ -14,7 +14,7 @@ class ResolvedPackage {
 	public final includeDirs:Array<String>;
 
 	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, sources:Array<String>, dependencies:Array<String>,
-		nativeSources:Array<String>, includeDirs:Array<String>, ?source:PackageSource) {
+			nativeSources:Array<String>, includeDirs:Array<String>, ?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;

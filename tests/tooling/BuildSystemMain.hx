@@ -71,12 +71,14 @@ class BuildSystemMain {
 			wasm = Target.parse("wasm32");
 		expect(windows.toString() == "windows-x86_64-msvc", "Windows target triples should be canonical");
 		expect(linux.toString() == "linux-x86_64-gnu", "Linux target triples should be canonical");
-		expect(mac.toString() == "macos-arm64" && mac.equals(Target.parse("macos-arm64-darwin")), "Apple targets should accept architecture aliases");
+		expect(mac.toString() == "macos-arm64"
+			&& mac.equals(Target.parse("macos-arm64-darwin")), "Apple targets should accept architecture aliases");
 		expect(android.isAndroid() && android.toString() == "android-arm64", "Android targets should have a stable short identity");
 		expect(wasm.isWasm() && wasm.toString() == "wasm32", "Wasm should be a first-class target");
 		var androidToolchain = ToolchainInfo.detect(android),
 			wasmToolchain = ToolchainInfo.detect(wasm);
-		expect(androidToolchain.targetTriple == "aarch64-linux-android21" && androidToolchain.compileFlags[0] == "--target=aarch64-linux-android21",
+		expect(androidToolchain.targetTriple == "aarch64-linux-android21"
+			&& androidToolchain.compileFlags[0] == "--target=aarch64-linux-android21",
 			"Android toolchains should centralize their ABI and compiler flags");
 		expect(wasmToolchain.targetTriple == "wasm32-wasi" && wasmToolchain.compileFlags[0] == "--target=wasm32-wasi",
 			"Wasm toolchains should centralize their target flags");
@@ -275,8 +277,11 @@ class BuildSystemMain {
 			secondEnvironment = new BuildEnvironment(secondRoot, Path.join([secondRoot, "build"]));
 		var firstResult = new Executor(firstEnvironment, 1, _ -> {}).execute(new ExecutionPlan([firstAction]));
 		var secondResult = new Executor(secondEnvironment, 1, _ -> {}).execute(new ExecutionPlan([secondAction]));
-		expect(firstResult.exitCode == 0 && secondResult.exitCode == 0 && secondResult.actions[0].skipped
-			&& File.getContent(secondOutput) == "same input\n", "portable process artifacts should restore from the global cache");
+		expect(firstResult.exitCode == 0
+			&& secondResult.exitCode == 0
+			&& secondResult.actions[0].skipped
+			&& File.getContent(secondOutput) == "same input\n",
+			"portable process artifacts should restore from the global cache");
 		removeTree(cache);
 		removeTree(firstRoot);
 		removeTree(secondRoot);
@@ -302,8 +307,9 @@ class BuildSystemMain {
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
-			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
-		executionText = execution.toDebugString();
+			execution = PlanLowerer.lower(plan,
+				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+			executionText = execution.toDebugString();
 		expect(plan.toExplainString().indexOf("reason: requested output") >= 0
 			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
 			"plan explanations should identify requested outputs and provider details");
@@ -326,7 +332,8 @@ class BuildSystemMain {
 		} catch (error:Dynamic) {
 			wasmDiagnostic = Std.string(error);
 		}
-		expect(wasmDiagnostic != null && wasmDiagnostic.indexOf("foo cannot be built for wasm32") >= 0
+		expect(wasmDiagnostic != null
+			&& wasmDiagnostic.indexOf("foo cannot be built for wasm32") >= 0
 			&& wasmDiagnostic.indexOf("no wasm32 provider is available") >= 0,
 			"unsupported native Wasm combinations should fail with a planning diagnostic");
 
@@ -374,9 +381,11 @@ class BuildSystemMain {
 	}
 
 	static function testPackageSourceModel():Void {
-		var manifest = PackageManifest.parse("/tmp/example/haxeon.json", '{"package":{"name":"app"},"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
+		var manifest = PackageManifest.parse("/tmp/example/haxeon.json",
+			'{"package":{"name":"app"},"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
 		expect(manifest.packageId.equals(new project.PackageId("app")), "package manifests should expose stable package identity");
-		var git = manifest.dependencies.get("git-dependency"), path = manifest.dependencies.get("path-dependency");
+		var git = manifest.dependencies.get("git-dependency"),
+			path = manifest.dependencies.get("path-dependency");
 		expect(git != null && path != null && PackageSourceTools.describe(git.source) == "git:https://example.invalid/foo.git@main",
 			"git dependency metadata should remain a source declaration");
 		expect(switch path.source {
@@ -397,16 +406,15 @@ class BuildSystemMain {
 		}
 		expect(rejected != null && rejected.indexOf("does not support target wasm32") >= 0,
 			"package compatibility should reject unsupported targets before compilation");
-		var badVersion = PackageManifest.parse("/tmp/incompatible/haxeon.json",
-			'{"package":{"name":"incompatible"},"compatibility":{"haxeon":">=0.4"}}');
+		var badVersion = PackageManifest.parse("/tmp/incompatible/haxeon.json", '{"package":{"name":"incompatible"},"compatibility":{"haxeon":">=0.4"}}');
 		rejected = null;
 		try {
 			badVersion.compatibility.validate("incompatible", Target.detectHost());
 		} catch (error:Dynamic) {
 			rejected = Std.string(error);
 		}
-		expect(rejected != null && rejected.indexOf("requires Haxeon") >= 0,
-			"package compatibility should reject incompatible Haxeon versions");
+		expect(rejected != null
+			&& rejected.indexOf("requires Haxeon") >= 0, "package compatibility should reject incompatible Haxeon versions");
 	}
 
 	static function testHaxelibAdapter():Void {
@@ -416,8 +424,7 @@ class BuildSystemMain {
 			foo = Path.join([cache, "foo", "1.0.0"]);
 		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"haxelib":"foo","version":"1.0.0"}}}', []);
 		ensureDirectory(Path.join([foo, "src"]));
-		File.saveContent(Path.join([foo, "haxelib.json"]),
-			'{"name":"foo","version":"1.0.0","classPath":"src","dependencies":{}}\n');
+		File.saveContent(Path.join([foo, "haxelib.json"]), '{"name":"foo","version":"1.0.0","classPath":"src","dependencies":{}}\n');
 		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
 		var project = new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([app, "haxeon.json"]));
 		expect(project.packages.get("foo").source != null && FileSystem.exists(Path.join([foo, "haxeon.json"])),
@@ -489,12 +496,10 @@ class BuildSystemMain {
 
 	static function testLockfileRoundTrip():Void {
 		var lock = new PackageLockfile([
-			new PackageLockEntry(new project.PackageId("app"), project.PackageSource.Path("."), null, null,
-				[new project.PackageId("foo")]),
+			new PackageLockEntry(new project.PackageId("app"), project.PackageSource.Path("."), null, null, [new project.PackageId("foo")]),
 			new PackageLockEntry(new project.PackageId("foo"), project.PackageSource.Git("https://example.invalid/foo.git", "main"),
 				"0123456789012345678901234567890123456789")
-		]),
-			parsed = PackageLockfile.parse("haxeon.lock", lock.toJson());
+		]), parsed = PackageLockfile.parse("haxeon.lock", lock.toJson());
 		lock.validateGraph(parsed);
 		expect(parsed.get("foo").resolvedRevision == "0123456789012345678901234567890123456789"
 			&& switch parsed.get("foo").resolvedSource() {
@@ -566,6 +571,7 @@ class BuildSystemMain {
 
 class RecordingSourceAcquirer implements SourceAcquirer {
 	public var calls:Int = 0;
+
 	final delegate:PathSourceAcquirer;
 
 	public function new() {

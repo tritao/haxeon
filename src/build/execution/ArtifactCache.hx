@@ -35,7 +35,8 @@ class ArtifactCache {
 	public function restore(action:ExecutionAction, key:String):Bool {
 		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0)
 			return false;
-		var directory = Path.join([cacheRoot, key]), manifestPath = Path.join([directory, "manifest.json"]);
+		var directory = Path.join([cacheRoot, key]),
+			manifestPath = Path.join([directory, "manifest.json"]);
 		if (!FileSystem.exists(manifestPath))
 			return false;
 		var manifest:CachedManifest;
@@ -49,8 +50,11 @@ class ArtifactCache {
 		var temporary:Array<String> = [];
 		try {
 			for (index in 0...action.outputs.length) {
-				var cached = manifest.outputs[index], source = Path.join([directory, cached.file]);
-				if (!FileSystem.exists(source) || FileSystem.isDirectory(source) || Sha256.make(File.getBytes(source)).toHex() != cached.checksum)
+				var cached = manifest.outputs[index],
+					source = Path.join([directory, cached.file]);
+				if (!FileSystem.exists(source)
+					|| FileSystem.isDirectory(source)
+					|| Sha256.make(File.getBytes(source)).toHex() != cached.checksum)
 					throw "invalid cached output";
 				var temp = action.outputs[index] + '.haxeon-cache-${Std.int(Date.now().getTime())}-$index';
 				ensureDirectory(Path.directory(temp));
@@ -78,7 +82,8 @@ class ArtifactCache {
 	public function publish(action:ExecutionAction, key:String):Void {
 		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0 || !outputsExist(action))
 			return;
-		var directory = Path.join([cacheRoot, key]), manifestPath = Path.join([directory, "manifest.json"]);
+		var directory = Path.join([cacheRoot, key]),
+			manifestPath = Path.join([directory, "manifest.json"]);
 		if (FileSystem.exists(manifestPath))
 			return;
 		var temporary = Path.join([cacheRoot, '.artifact-${key}-${Std.int(Date.now().getTime())}']);
@@ -86,7 +91,9 @@ class ArtifactCache {
 			ensureDirectory(temporary);
 			var outputs:Array<CachedOutput> = [];
 			for (index in 0...action.outputs.length) {
-				var output = action.outputs[index], cachedFile = 'output-$index', destination = Path.join([temporary, cachedFile]);
+				var output = action.outputs[index],
+					cachedFile = 'output-$index',
+					destination = Path.join([temporary, cachedFile]);
 				File.copy(output, destination);
 				outputs.push({file: cachedFile, checksum: Sha256.make(File.getBytes(destination)).toHex()});
 			}

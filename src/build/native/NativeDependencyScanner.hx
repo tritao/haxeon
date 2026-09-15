@@ -7,7 +7,9 @@ import sys.io.File;
 /** Finds project-local C headers that can affect one source action. */
 class NativeDependencyScanner {
 	public static function dependencies(source:String, includeDirs:Array<String>):Array<String> {
-		var found:Map<String, Bool> = [], active:Map<String, Bool> = [], result:Array<String> = [];
+		var found:Map<String, Bool> = [],
+			active:Map<String, Bool> = [],
+			result:Array<String> = [];
 		scan(FileSystem.fullPath(source), includeDirs, found, active, result);
 		result.sort(Reflect.compare);
 		return result;
@@ -21,7 +23,8 @@ class NativeDependencyScanner {
 		var includePattern = ~/^\s*#\s*include\s*[<"]([^">]+)[">]/;
 		for (line in File.getContent(canonical).split("\n"))
 			if (includePattern.match(line)) {
-				var included = includePattern.matched(1), resolved = resolve(canonical, included, includeDirs);
+				var included = includePattern.matched(1),
+					resolved = resolve(canonical, included, includeDirs);
 				if (resolved != null && !found.exists(resolved)) {
 					found.set(resolved, true);
 					result.push(resolved);

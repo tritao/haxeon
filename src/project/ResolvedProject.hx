@@ -9,7 +9,7 @@ class ResolvedProject {
 	public final lockfile:PackageLockfile;
 
 	public function new(root:String, manifestPath:String, manifest:PackageManifest, rootPackage:ResolvedPackage, packages:ResolvedPackageGraph,
-		?lockfile:PackageLockfile) {
+			?lockfile:PackageLockfile) {
 		this.root = root;
 		this.manifestPath = manifestPath;
 		this.manifest = manifest;

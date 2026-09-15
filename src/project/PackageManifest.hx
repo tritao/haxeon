@@ -46,9 +46,9 @@ class PackageManifest {
 	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
-	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, workspace:Array<String>, target:String,
-		defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, androidApplicationId:String,
-		androidAppLabel:String, compatibility:PackageCompatibility) {
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, workspace:Array<String>,
+			target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>,
+			androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);

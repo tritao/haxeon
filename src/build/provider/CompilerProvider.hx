@@ -9,7 +9,8 @@ import project.ResolvedProject;
 
 /** One project-level request to the persistent Haxeon compiler service. */
 class CompilerProvider {
-	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId, dependencies:Array<ActionId>, output:String):ExecutionAction {
+	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId, dependencies:Array<ActionId>,
+			output:String):ExecutionAction {
 		if (project == null)
 			throw "CompilerProvider requires a resolved project";
 		if (project.manifest.entry == null)

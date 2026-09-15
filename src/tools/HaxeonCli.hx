@@ -457,7 +457,8 @@ class HaxeonCli {
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
 			throw 'Option "--device" requires "--target android"';
-		if ((options.plan || options.explain || options.timings) && !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
+		if ((options.plan || options.explain || options.timings)
+			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
 
 		var home = haxeonHome();
@@ -465,8 +466,8 @@ class HaxeonCli {
 		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
-			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain,
-				options.timings, resolutionMs);
+			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
+				resolutionMs);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -687,12 +688,12 @@ class HaxeonCli {
 				runtimeArguments = arguments.slice(index);
 				break;
 			}
-				if (argument == "--plan")
-					plan = true;
-				else if (argument == "--explain")
-					explain = true;
-				else if (argument == "--timings")
-					timings = true;
+			if (argument == "--plan")
+				plan = true;
+			else if (argument == "--explain")
+				explain = true;
+			else if (argument == "--timings")
+				timings = true;
 			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
@@ -742,11 +743,11 @@ class HaxeonCli {
 			output: output,
 			device: device,
 			defines: defines,
-				runtimeArguments: runtimeArguments,
-				plan: plan,
-				explain: explain,
-				timings: timings,
-				jobs: jobs
+			runtimeArguments: runtimeArguments,
+			plan: plan,
+			explain: explain,
+			timings: timings,
+			jobs: jobs
 		};
 	}
 
@@ -779,10 +780,14 @@ class HaxeonCli {
 					throw 'Option "$argument" requires a value';
 				var value = arguments[index++];
 				switch argument {
-					case "--git": git = value;
-					case "--rev": rev = value;
-					case "--name": name = value;
-					case "--project": projectPath = value;
+					case "--git":
+						git = value;
+					case "--rev":
+						rev = value;
+					case "--name":
+						name = value;
+					case "--project":
+						projectPath = value;
 					case _:
 				}
 			} else if (StringTools.startsWith(argument, "--git="))
@@ -804,7 +809,12 @@ class HaxeonCli {
 			throw 'Option "--git" requires a non-empty URL';
 		if (rev == null || rev.length == 0)
 			throw 'Option "--rev" requires a non-empty ref';
-		return {projectPath: projectPath, name: name, git: git, rev: rev};
+		return {
+			projectPath: projectPath,
+			name: name,
+			git: git,
+			rev: rev
+		};
 	}
 
 	static function parsePublishOptions(arguments:Array<String>):PublishOptions {
@@ -816,9 +826,12 @@ class HaxeonCli {
 					throw 'Option "$argument" requires a value';
 				var value = arguments[index++];
 				switch argument {
-					case "--registry": registry = value;
-					case "--version": version = value;
-					case "--project": projectPath = value;
+					case "--registry":
+						registry = value;
+					case "--version":
+						version = value;
+					case "--project":
+						projectPath = value;
 					case _:
 				}
 			} else if (StringTools.startsWith(argument, "--registry="))
@@ -838,9 +851,8 @@ class HaxeonCli {
 	}
 
 	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject {
-		var lockPath = lockfilePath(manifestPath), lockfile = FileSystem.exists(lockPath)
-			? PackageLockfile.parse(lockPath, File.getContent(lockPath))
-			: null;
+		var lockPath = lockfilePath(manifestPath),
+			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
 		return resolveProject(manifestPath, lockfile, lockfile != null, target);
 	}
 

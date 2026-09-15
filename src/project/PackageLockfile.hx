@@ -37,6 +37,7 @@ class PackageLockEntry {
 /** Deterministic exact package graph stored in haxeon.lock. */
 class PackageLockfile {
 	public static inline var VERSION = 1;
+
 	public final entries:Array<PackageLockEntry>;
 
 	final byName:Map<String, PackageLockEntry>;

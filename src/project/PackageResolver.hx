@@ -27,7 +27,10 @@ class PackageResolver {
 			nameToRoot = new Map<String, String>(),
 			ordered:Array<ResolvedPackage> = [],
 			lockEntries:Array<PackageLockEntry> = [],
-			workspaceMembers:Map<String, {root:String, path:String}> = new Map();
+			workspaceMembers:Map<String, {
+				root:String,
+				path:String
+			}> = new Map();
 		for (workspacePath in rootManifest.workspace) {
 			var workspaceRoot = resolveDirectory(projectRoot, workspacePath, "workspace member", rootManifest.packageName),
 				workspaceManifestPath = Path.join([workspaceRoot, MANIFEST_NAME]);
@@ -63,8 +66,10 @@ class PackageResolver {
 			var sourceRoots = [
 				for (sourceRoot in manifest.sourceRoots)
 					resolveDirectory(resolvedRoot, sourceRoot, 'source root', manifest.packageName)
-			], sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
-				manifest.packageName, "source"), nativeSources:Array<String> = [], includeDirs:Array<String> = [];
+			],
+				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
+					manifest.packageName, "source"),
+				nativeSources:Array<String> = [], includeDirs:Array<String> = [];
 			if (manifest.native != null) {
 				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName, "native source");
 				includeDirs = [
@@ -86,7 +91,9 @@ class PackageResolver {
 					workspaceMember = workspaceMembers.get(dependency.id.name);
 				if (locked && lockEntry == null)
 					throw 'haxeon.lock has no entry for dependency "${dependency.id.name}"';
-				var resolvedSource:PackageSource, acquiredDependency:AcquiredSource, requestedSource:PackageSource;
+				var resolvedSource:PackageSource,
+					acquiredDependency:AcquiredSource,
+					requestedSource:PackageSource;
 				if (workspaceMember != null) {
 					resolvedSource = PackageSource.Workspace(workspaceMember.path);
 					requestedSource = resolvedSource;

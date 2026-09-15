@@ -25,13 +25,13 @@ class PlanLowerer {
 		var project = context.project;
 		if (project != null) {
 			for (resolvedPackage in project.packages.packages)
-				if (resolvedPackage.nativeSources.length > 0 || (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
+				if (resolvedPackage.nativeSources.length > 0
+					|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
 					var packageArtifacts = [
 						for (artifact in plan.artifacts)
 							if (artifact.id.packageId == resolvedPackage.name) artifact
-					], lowered = resolvedPackage.nativeSources.length > 0
-						? NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts, context)
-						: NativeCMakeProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
+					], lowered = resolvedPackage.nativeSources.length > 0 ? NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts,
+						context) : NativeCMakeProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
 					actions = actions.concat(lowered.actions);
 					for (key in lowered.artifactActions.keys())
 						artifactActions.set(key, lowered.artifactActions.get(key));
@@ -47,10 +47,9 @@ class PlanLowerer {
 								throw 'No lowered action for required artifact $dependency';
 							dependencies = dependencies.concat(loweredDependency);
 						}
-						var destination = context.output == null
-							? (artifact.id.kind == ArtifactKind.WasmModule ? context.layout.wasmModulePath(artifact.id.packageId) : context.layout.hashLinkModulePath(artifact.id.packageId))
-							: context.output;
-						actions.push(CompilerProvider.action(project, context, new ActionId('compile-project:${artifact.id.key()}'), dependencies, destination));
+						var destination = context.output == null ? (artifact.id.kind == ArtifactKind.WasmModule ? context.layout.wasmModulePath(artifact.id.packageId) : context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
+						actions.push(CompilerProvider.action(project, context, new ActionId('compile-project:${artifact.id.key()}'), dependencies,
+							destination));
 					default:
 						if (artifact.id.kind != ArtifactKind.NativeRuntime
 							&& artifact.id.kind != ArtifactKind.NativeObject

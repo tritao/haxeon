@@ -24,6 +24,10 @@ class HaxeonNativePackageBuild {
 
 	public static function nativeRoot(project:ResolvedProject, target:Target):String {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, project.manifest.outputDir]), BuildProfile.Release, target);
-		return Path.join([environment.buildRoot, new TargetLayout(environment).targetDirectory(), "jniLibs"]);
+		return Path.join([
+			environment.buildRoot,
+			new TargetLayout(environment).targetDirectory(),
+			"jniLibs"
+		]);
 	}
 }

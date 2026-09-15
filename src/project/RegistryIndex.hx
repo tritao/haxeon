@@ -54,7 +54,8 @@ class RegistryIndex {
 			throw '$path "packages" must be an object';
 		var packages:Map<String, Array<RegistryVersion>> = new Map();
 		for (name in Reflect.fields(rawPackages)) {
-			var packageData:Dynamic = Reflect.field(rawPackages, name), rawVersions:Dynamic = Reflect.field(packageData, "versions");
+			var packageData:Dynamic = Reflect.field(rawPackages, name),
+				rawVersions:Dynamic = Reflect.field(packageData, "versions");
 			if (!Reflect.isObject(packageData) || Std.isOfType(packageData, Array) || !Std.isOfType(rawVersions, Array))
 				throw '$path package "$name" requires a versions array';
 			var versions:Array<RegistryVersion> = [];
@@ -70,7 +71,8 @@ class RegistryIndex {
 						targets: Reflect.field(rawVersion, "targets"),
 						runtimeAbi: Reflect.field(rawVersion, "runtimeAbi")
 					};
-				versions.push(new RegistryVersion(version, checksum, yanked, PackageCompatibility.parse(compatibilityRaw, '$path package "$name" release "$version"')));
+				versions.push(new RegistryVersion(version, checksum, yanked,
+					PackageCompatibility.parse(compatibilityRaw, '$path package "$name" release "$version"')));
 			}
 			packages.set(name, versions);
 		}
@@ -78,8 +80,8 @@ class RegistryIndex {
 	}
 
 	/** Append a release to a local registry index without replacing existing versions. */
-	public static function appendRelease(path:String, name:String, version:String, checksum:String,
-		compatibility:PackageCompatibility, native:Null<NativeManifest>):Void {
+	public static function appendRelease(path:String, name:String, version:String, checksum:String, compatibility:PackageCompatibility,
+			native:Null<NativeManifest>):Void {
 		var raw:Dynamic;
 		if (FileSystem.exists(path)) {
 			try {
@@ -137,8 +139,7 @@ class RegistryIndex {
 
 	static function isExactVersion(value:String):Bool
 		return !StringTools.startsWith(value, "<") && !StringTools.startsWith(value, ">") && !StringTools.startsWith(value, "^")
-			&& !StringTools.startsWith(value, "~")
-			&& value.indexOf(",") < 0 && value.indexOf(" ") < 0;
+			&& !StringTools.startsWith(value, "~") && value.indexOf(",") < 0 && value.indexOf(" ") < 0;
 
 	static function compareVersions(left:String, right:String):Int {
 		var a = versionParts(left), b = versionParts(right);

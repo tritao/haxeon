@@ -20,13 +20,13 @@ class NativeToolchain {
 				arguments = ["/nologo", "/c", source, "/Fo" + output];
 				for (directory in includeDirs)
 					arguments.push("/I" + directory);
-		case _:
-			arguments = ["-c", source, "-o", output];
-			if (environment.target.os != TargetOs.Windows)
-				arguments.push("-fPIC");
-			arguments = environment.toolchain.compileFlags.concat(arguments);
-			for (directory in includeDirs)
-				arguments.push("-I" + directory);
+			case _:
+				arguments = ["-c", source, "-o", output];
+				if (environment.target.os != TargetOs.Windows)
+					arguments.push("-fPIC");
+				arguments = environment.toolchain.compileFlags.concat(arguments);
+				for (directory in includeDirs)
+					arguments.push("-I" + directory);
 		}
 		return arguments;
 	}

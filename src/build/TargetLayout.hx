@@ -52,7 +52,13 @@ class TargetLayout {
 
 	public function haxeonNativeLibraryPath(packageName:String):String {
 		if (environment.target.isAndroid())
-			return Path.join([environment.buildRoot, targetDirectory(), "jniLibs", androidAbi(), "lib" + packageName + ".so"]);
+			return Path.join([
+				environment.buildRoot,
+				targetDirectory(),
+				"jniLibs",
+				androidAbi(),
+				"lib" + packageName + ".so"
+			]);
 		return Path.join([packageRoot(packageName), packageName + ".hdll"]);
 	}
 

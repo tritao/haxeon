@@ -22,8 +22,8 @@ class RegistryPublisher {
 		copyTree(packageRoot, destination, "");
 		var checksum = checksumTree(destination);
 		File.saveContent(Path.join([destination, ".haxeon-checksum"]), checksum + "\n");
-		RegistryIndex.appendRelease(Path.join([registryDirectory, "index.json"]), manifest.packageName, version, checksum,
-			manifest.compatibility, manifest.native);
+		RegistryIndex.appendRelease(Path.join([registryDirectory, "index.json"]), manifest.packageName, version, checksum, manifest.compatibility,
+			manifest.native);
 		return checksum;
 	}
 
@@ -34,7 +34,8 @@ class RegistryPublisher {
 		for (entry in entries) {
 			if (entry == ".git" || entry == "build" || entry == "haxeon.lock" || entry == ".haxeon-checksum")
 				continue;
-			var sourcePath = Path.join([source, entry]), destinationPath = Path.join([destination, entry]);
+			var sourcePath = Path.join([source, entry]),
+				destinationPath = Path.join([destination, entry]);
 			if (FileSystem.isDirectory(sourcePath))
 				copyTree(sourcePath, destinationPath, Path.join([relative, entry]));
 			else {
@@ -57,7 +58,8 @@ class RegistryPublisher {
 		for (entry in entries) {
 			if (entry == ".haxeon-checksum")
 				continue;
-			var path = Path.join([root, entry]), child = Path.join([relative, entry]);
+			var path = Path.join([root, entry]),
+				child = Path.join([relative, entry]);
 			if (FileSystem.isDirectory(path))
 				collectChecksums(path, child, result);
 			else

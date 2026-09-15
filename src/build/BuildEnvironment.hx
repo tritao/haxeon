@@ -24,7 +24,7 @@ class ToolchainInfo {
 	public final sharedLibrarySuffix:String;
 
 	public function new(cCompiler:String, cxxCompiler:String, archiver:String, objectSuffix:String, staticLibrarySuffix:String, sharedLibrarySuffix:String,
-		?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>, ?linkFlags:Array<String>) {
+			?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>, ?linkFlags:Array<String>) {
 		this.cCompiler = cCompiler;
 		this.cxxCompiler = cxxCompiler;
 		this.linker = linker == null ? cxxCompiler : linker;
@@ -41,25 +41,19 @@ class ToolchainInfo {
 	public static function detect(target:Target):ToolchainInfo {
 		return switch target.os {
 			case Windows:
-				if (target.abi == TargetAbi.Gnu)
-					new ToolchainInfo("x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-ar", ".o", ".a", ".dll",
-						"x86_64-w64-mingw32-g++", "x86_64-w64-mingw32");
-				else
-					new ToolchainInfo("cl", "cl", "lib", ".obj", ".lib", ".dll", "cl");
+				if (target.abi == TargetAbi.Gnu) new ToolchainInfo("x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-ar", ".o", ".a",
+					".dll", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32"); else new ToolchainInfo("cl", "cl", "lib", ".obj", ".lib", ".dll", "cl");
 			case MacOS:
 				var flags = target.arch == TargetArch.Arm64 ? ["-arch", "arm64"] : target.arch == TargetArch.X86 ? ["-arch", "i386"] : [];
 				new ToolchainInfo("clang", "clang++", "ar", ".o", ".a", ".dylib", "clang++", null, null, flags, flags);
 			case Linux:
-				if (target.arch == TargetArch.Arm64)
-					new ToolchainInfo("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-g++", "aarch64-linux-gnu-ar", ".o", ".a", ".so",
-						"aarch64-linux-gnu-g++", "aarch64-linux-gnu");
-				else
-					new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so");
+				if (target.arch == TargetArch.Arm64) new ToolchainInfo("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-g++", "aarch64-linux-gnu-ar", ".o", ".a",
+					".so", "aarch64-linux-gnu-g++", "aarch64-linux-gnu"); else new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so");
 			case Android:
 				androidToolchain(target);
 			case Wasm:
-				new ToolchainInfo("clang", "clang++", "llvm-ar", ".o", ".a", ".wasm", "wasm-ld", "wasm32-wasi", null,
-					["--target=wasm32-wasi"], ["--target=wasm32-wasi"]);
+				new ToolchainInfo("clang", "clang++", "llvm-ar", ".o", ".a", ".wasm", "wasm-ld", "wasm32-wasi", null, ["--target=wasm32-wasi"],
+					["--target=wasm32-wasi"]);
 			case Other(_):
 				new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so");
 		};

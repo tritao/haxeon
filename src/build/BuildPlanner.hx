@@ -24,16 +24,17 @@ class BuildPlanner {
 		return new BuildPlan([id], [new Artifact(id, dependencies)]);
 	}
 
-	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
-		nativeDemand:NativeArtifactDemand):BuildPlan {
+	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target, nativeDemand:NativeArtifactDemand):BuildPlan {
 		NativeTargetSupport.validate(project, target);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
 			nativeStatic = new Map<String, ArtifactId>();
 		for (resolvedPackage in project.packages.packages)
-			if (resolvedPackage.nativeSources.length > 0 || (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
+			if (resolvedPackage.nativeSources.length > 0
+				|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
 				var objects:Array<ArtifactId> = [];
-				if (NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary) || NativeArtifactDemands.includes(nativeDemand, NativeSharedLibrary))
+				if (NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)
+					|| NativeArtifactDemands.includes(nativeDemand, NativeSharedLibrary))
 					for (source in resolvedPackage.nativeSources) {
 						var relative = relativePath(resolvedPackage.root, source),
 							id = new ArtifactId(resolvedPackage.name, NativeObject, target, relative),
@@ -78,12 +79,13 @@ class BuildPlanner {
 	}
 
 	/** Native-only request used by package consumers such as Android packaging. */
-	public static function nativePackages(project:ResolvedProject, target:Target,
-		nativeDemand:NativeArtifactDemand):BuildPlan {
+	public static function nativePackages(project:ResolvedProject, target:Target, nativeDemand:NativeArtifactDemand):BuildPlan {
 		var full = BuildPlanner.project(project, BuildIntent.Build, target, nativeDemand),
 			artifacts:Array<Artifact> = [
 				for (artifact in full.artifacts)
-					if (artifact.id.kind == NativeObject || artifact.id.kind == NativeStaticLibrary || artifact.id.kind == NativeSharedLibrary) artifact
+					if (artifact.id.kind == NativeObject
+						|| artifact.id.kind == NativeStaticLibrary
+						|| artifact.id.kind == NativeSharedLibrary) artifact
 			],
 			requested:Array<ArtifactId> = [
 				for (artifact in artifacts)
