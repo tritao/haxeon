@@ -89,6 +89,10 @@ class HlTypeBridge {
 	public static function native_metadata_module_patch_generation(target:RawPtr<UInt8>, generation:RawPtr<UInt8>):Bool
 		return false;
 
+	/** Redirect an explicit set of compatible function slots to an initialized generation. */
+	public static function native_metadata_module_patch_slots(target:RawPtr<UInt8>, generation:RawPtr<UInt8>, indices:RawPtr<Int32>, count:Int):Bool
+		return false;
+
 	/** Free a native module whose initialization failed before it entered the registry. */
 	public static function native_metadata_module_free_shutdown(module:RawPtr<UInt8>):Void {}
 

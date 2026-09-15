@@ -166,6 +166,7 @@ DEFINE_PRIM(_BYTES,native_metadata_module_alloc,_BYTES);
 DEFINE_PRIM(_BOOL,native_metadata_module_init,_BYTES _I32);
 DEFINE_PRIM(_BOOL,native_metadata_module_unload,_BYTES);
 DEFINE_PRIM(_BOOL,native_metadata_module_patch_generation,_BYTES _BYTES);
+DEFINE_PRIM(_BOOL,native_metadata_module_patch_slots,_BYTES _BYTES _BYTES _I32);
 DEFINE_PRIM(_VOID,native_metadata_module_free_shutdown,_BYTES);
 DEFINE_PRIM(_I32,native_metadata_module_call_i32,_BYTES _I32);
 DEFINE_PRIM(_I32,native_type_function_arity,_BYTES);

@@ -291,6 +291,12 @@ HL_PRIM bool HL_NAME(native_metadata_module_patch_generation)( vbyte *target, vb
 	return hl_module_patch_generation((hl_module*)target,(hl_module*)generation) != 0;
 }
 
+HL_PRIM bool HL_NAME(native_metadata_module_patch_slots)( vbyte *target, vbyte *generation, int *indices, int count ) {
+	if( target == NULL || generation == NULL || indices == NULL || count <= 0 )
+		hl_error("HashLink native module patch slots require two modules and a non-empty slot table");
+	return hl_module_patch_slots((hl_module*)target,(hl_module*)generation,indices,count) != 0;
+}
+
 HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
 	if( module != NULL ) hl_module_free_shutdown((hl_module*)module);
 }

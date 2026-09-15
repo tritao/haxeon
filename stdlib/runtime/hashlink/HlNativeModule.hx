@@ -63,6 +63,25 @@ class HlNativeModule {
 		return HlTypeBridge.native_metadata_module_patch_generation(module, generation.module);
 	}
 
+	/** Redirect only the selected compatible dispatch slots to a generation. */
+	public function patchSlots(generation:HlNativeModule, slots:Array<Int>):Bool {
+		if (!isLoaded() || generation == null || !generation.isLoaded())
+			throw "HashLink native module patch requires two loaded modules";
+		if (generation == this)
+			throw "HashLink native module cannot patch itself";
+		if (slots == null || slots.length == 0)
+			throw "HashLink native module patch requires at least one slot";
+		var indices = generation.metadata.arena.allocInt32Array(slots.length), seen:Map<Int, Bool> = [];
+		for (index in 0...slots.length) {
+			var slot = slots[index];
+			if (slot < 0 || seen.exists(slot))
+				throw "HashLink native module patch slots must be unique and non-negative";
+			seen.set(slot, true);
+			indices.offset(index).store(cast slot);
+		}
+		return HlTypeBridge.native_metadata_module_patch_slots(module, generation.module, indices, slots.length);
+	}
+
 	/** Try to retire the module; a failed retirement keeps its lease and handle alive. */
 	public function unload():Bool {
 		if (!isLoaded())
