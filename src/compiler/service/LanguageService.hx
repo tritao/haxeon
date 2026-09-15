@@ -205,6 +205,7 @@ class LanguageService {
 	static inline final MAX_REFERENCE_RESULTS = 10000;
 
 	public final compiler:Compiler;
+	public var recoveredSnapshotBuilds(default, null):Int = 0;
 
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
@@ -292,6 +293,7 @@ class LanguageService {
 			state.recoveredTokens = tokens;
 			state.recoveredAst = recovered.program;
 			state.recoveredSemanticModel = recoveredModel;
+			recoveredSnapshotBuilds++;
 			mergeRecoveryDiagnostics(state, recovered.diagnostics);
 		} catch (error:CompileError) {
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;

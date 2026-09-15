@@ -10,6 +10,10 @@ private typedef Sample = {
 	final updateMs:Float;
 	final completionMs:Float;
 	final signatureMs:Float;
+	final hoverMs:Float;
+	final definitionMs:Float;
+	final analysisMs:Float;
+	final recoveredSnapshots:Int;
 	final totalMs:Float;
 }
 
@@ -58,6 +62,13 @@ class LanguageServiceBenchmarkMain {
 			updateMs: percentiles([for (sample in samples) sample.updateMs]),
 			completionMs: percentiles([for (sample in samples) sample.completionMs]),
 			signatureMs: percentiles([for (sample in samples) sample.signatureMs]),
+			hoverMs: percentiles([for (sample in samples) sample.hoverMs]),
+			definitionMs: percentiles([for (sample in samples) sample.definitionMs]),
+			analysisMs: percentiles([for (sample in samples) sample.analysisMs]),
+			recoveredSnapshots: {
+				total: sumSnapshots(samples),
+				average: sumSnapshots(samples) / samples.length
+			},
 			totalMs: percentiles([for (sample in samples) sample.totalMs])
 		};
 		var separator = output.lastIndexOf("/");
@@ -71,18 +82,21 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Update median/p95/p99: ${format(report.updateMs.median)}/${format(report.updateMs.p95)}/${format(report.updateMs.p99)} ms');
 		Sys.println('Completion median/p95/p99: ${format(report.completionMs.median)}/${format(report.completionMs.p95)}/${format(report.completionMs.p99)} ms');
 		Sys.println('Signature median/p95/p99: ${format(report.signatureMs.median)}/${format(report.signatureMs.p95)}/${format(report.signatureMs.p99)} ms');
+		Sys.println('Hover median/p95/p99: ${format(report.hoverMs.median)}/${format(report.hoverMs.p95)}/${format(report.hoverMs.p99)} ms');
+		Sys.println('Definition median/p95/p99: ${format(report.definitionMs.median)}/${format(report.definitionMs.p95)}/${format(report.definitionMs.p99)} ms');
+		Sys.println('Analysis median/p95/p99: ${format(report.analysisMs.median)}/${format(report.analysisMs.p95)}/${format(report.analysisMs.p99)} ms');
+		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
 		Sys.println('JSON: $output');
 	}
 
 	static function runIteration():Sample {
-		var service = new LanguageService(),
-			updateMs = 0.0,
-			completionMs = 0.0,
-			signatureMs = 0.0,
+		var service = new LanguageService(), updateMs = 0.0, completionMs = 0.0, signatureMs = 0.0, hoverMs = 0.0, definitionMs = 0.0, analysisMs = 0.0,
 			started = Sys.time();
 		for (tail in tails) {
 			var source = prefix + tail, editStarted = Sys.time();
-			service.update("EditorBenchmark.hx", source);
+			var state = service.update("EditorBenchmark.hx", source);
+			if (state.recoveredSemanticModel == null)
+				throw 'editor update did not build a recovered snapshot for "$tail"';
 			updateMs += (Sys.time() - editStarted) * 1000.0;
 			var queryStarted = Sys.time();
 			service.completeResult("EditorBenchmark.hx", source.length);
@@ -93,10 +107,26 @@ class LanguageServiceBenchmarkMain {
 				signatureMs += (Sys.time() - queryStarted) * 1000.0;
 			}
 		}
+		var probe = (prefix + tails[tails.length - 1]).lastIndexOf("foo.bar") + 1,
+			queryStarted = Sys.time();
+		service.hover("EditorBenchmark.hx", probe);
+		hoverMs = (Sys.time() - queryStarted) * 1000.0;
+		queryStarted = Sys.time();
+		service.definition("EditorBenchmark.hx", probe);
+		definitionMs = (Sys.time() - queryStarted) * 1000.0;
+		queryStarted = Sys.time();
+		try
+			service.analyze("EditorBenchmark")
+		catch (_:Dynamic) {}
+		analysisMs = (Sys.time() - queryStarted) * 1000.0;
 		return {
 			updateMs: updateMs,
 			completionMs: completionMs,
 			signatureMs: signatureMs,
+			hoverMs: hoverMs,
+			definitionMs: definitionMs,
+			analysisMs: analysisMs,
+			recoveredSnapshots: service.recoveredSnapshotBuilds,
 			totalMs: (Sys.time() - started) * 1000.0
 		};
 	}
@@ -108,6 +138,13 @@ class LanguageServiceBenchmarkMain {
 			p95: percentile(values, 0.95),
 			p99: percentile(values, 0.99)
 		};
+	}
+
+	static function sumSnapshots(samples:Array<Sample>):Int {
+		var result = 0;
+		for (sample in samples)
+			result += sample.recoveredSnapshots;
+		return result;
 	}
 
 	static function percentile(values:Array<Float>, fraction:Float):Float {
