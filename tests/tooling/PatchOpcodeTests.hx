@@ -66,6 +66,8 @@ class PatchOpcodeTests {
 			{instruction: FieldSet(0, 1, 2), opcode: 39, operands: [0, 1, 2]},
 			{instruction: ThisGet(0, 128), opcode: 40, operands: [0, 128]},
 			{instruction: ThisSet(128, 0), opcode: 41, operands: [128, 0]},
+			{instruction: DynamicGet(0, 1, 128), opcode: 42, operands: [0, 1, 128]},
+			{instruction: DynamicSet(0, 128, 1), opcode: 43, operands: [0, 128, 1]},
 			{instruction: JumpTrue(0, "target"), opcode: 44, operands: [0, -2]},
 			{instruction: JumpFalse(0, "target"), opcode: 45, operands: [0, -2]},
 			{instruction: JumpNull(0, "target"), opcode: 46, operands: [0, -2]},

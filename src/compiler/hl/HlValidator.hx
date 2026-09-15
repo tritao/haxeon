@@ -236,6 +236,14 @@ class HlValidator {
 					requireRegister(fn, source);
 					if (field < 0)
 						throw 'Invalid this field $field in function ${fn.functionIndex}';
+				case DynamicGet(destination, object, name):
+					requireRegister(fn, destination);
+					requireRegister(fn, object);
+					requireString(code, name, 'dynamic field in function ${fn.functionIndex}');
+				case DynamicSet(object, name, source):
+					requireRegister(fn, object);
+					requireRegister(fn, source);
+					requireString(code, name, 'dynamic field in function ${fn.functionIndex}');
 				case Add(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);

@@ -303,6 +303,8 @@ class HlReader {
 			case HlOpcode.SetGlobal: GlobalSet(operands[0], operands[1]);
 			case HlOpcode.GetThis: ThisGet(operands[0], operands[1]);
 			case HlOpcode.SetThis: ThisSet(operands[0], operands[1]);
+			case HlOpcode.DynGet: DynamicGet(operands[0], operands[1], operands[2]);
+			case HlOpcode.DynSet: DynamicSet(operands[0], operands[1], operands[2]);
 			case HlOpcode.Field: FieldGet(operands[0], operands[1], operands[2]);
 			case HlOpcode.SetField: FieldSet(operands[0], operands[1], operands[2]);
 			case HlOpcode.GetArray: ArrayGet(operands[0], operands[1], operands[2]);

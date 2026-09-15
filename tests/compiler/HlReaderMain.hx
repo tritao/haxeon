@@ -278,6 +278,7 @@ function main():Void {
 		"HLB conditional branch family did not round trip");
 	var references = new HlCode();
 	references.types = [Simple(HlType.I32)];
+	references.strings = ["field"];
 	references.functions = [
 		new compiler.hl.HlFunction(0, 0, [0], [
 			NullCheck(0),
@@ -288,13 +289,15 @@ function main():Void {
 			SetRef(0, 0),
 			RefData(0, 0),
 			RefOffset(0, 0, 0),
+			DynamicGet(0, 0, 0),
+			DynamicSet(0, 0, 0),
 			Return(0)
 		])
 	];
 	references.entryPoint = 0;
 	var referenceBytes = HlWriter.encode(references),
 		referenceDecoded = HlReader.decode(referenceBytes);
-	expect(HlWriter.encode(referenceDecoded).compare(referenceBytes) == 0 && referenceDecoded.functions[0].opcodes.length == 9,
+	expect(HlWriter.encode(referenceDecoded).compare(referenceBytes) == 0 && referenceDecoded.functions[0].opcodes.length == 11,
 		"HLB reference and type opcode family did not round trip");
 	expect(expectFailure(() -> HlReader.decode(encoded.sub(0, encoded.length - 1))), "truncated HLB data was accepted");
 	expect(expectFailure(() -> HlReader.decode(withTrailingByte(encoded))), "trailing HLB data was accepted");

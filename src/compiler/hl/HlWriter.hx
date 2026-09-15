@@ -440,6 +440,10 @@ class HlWriter {
 					{opcode: HlOpcode.GetThis, operands: [destination, field]};
 				case ThisSet(field, source):
 					{opcode: HlOpcode.SetThis, operands: [field, source]};
+				case DynamicGet(destination, object, name):
+					{opcode: HlOpcode.DynGet, operands: [destination, object, name]};
+				case DynamicSet(object, name, source):
+					{opcode: HlOpcode.DynSet, operands: [object, name, source]};
 				case Add(destination, left, right):
 					{opcode: HlOpcode.Add, operands: [destination, left, right]};
 				case Sub(destination, left, right):

@@ -70,6 +70,8 @@ enum HlInstruction {
 	GlobalSet(global:Int, source:Int);
 	ThisGet(destination:Int, field:Int);
 	ThisSet(field:Int, source:Int);
+	DynamicGet(destination:Int, object:Int, name:Int);
+	DynamicSet(object:Int, name:Int, source:Int);
 	Add(destination:Int, left:Int, right:Int);
 	Sub(destination:Int, left:Int, right:Int);
 	Mul(destination:Int, left:Int, right:Int);
