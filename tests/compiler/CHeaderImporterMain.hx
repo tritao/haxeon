@@ -5,6 +5,7 @@ import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiValidator;
 import sys.FileSystem;
+import sys.io.File;
 
 class CHeaderImporterMain {
 	static function main():Void {
@@ -153,12 +154,14 @@ class CHeaderImporterMain {
 			"hl_type_enum",
 			"hl_type"
 		];
-		var hashlinkModel = CHeaderImporter.importHeader("vendor/hashlink/src/hl.h", "x86_64-linux-gnu", ["vendor/hashlink/src"], "clang", null,
+		var hashlinkModel = CHeaderImporter.importHeader("vendor/hashlink/src/hl.h", "x86_64-linux-gnu", ["vendor/hashlink/src"], "clang", "haxeon_runtime",
 			"HashLinkMetadata", null, null, hashlinkNames),
 			hashlinkSource = HxiWriter.write(hashlinkModel, generatedHeader("vendor/hashlink/src/hl.h", "x86_64-linux-gnu")),
-			parsedHashlink = HxiParser.parse("hashlink.hxi", hashlinkSource);
+			checkedInHashlinkSource = File.getContent("stdlib/runtime/hashlink/HashLinkMetadata.hxi"),
+			parsedHashlink = HxiParser.parse("hashlink.hxi", checkedInHashlinkSource);
 		HxiValidator.validate(parsedHashlink, []);
-		expect(hashlinkSource.indexOf("enum hl_type_kind : c_int") >= 0
+		expect(hashlinkSource == checkedInHashlinkSource
+			&& hashlinkSource.indexOf("enum hl_type_kind : c_int") >= 0
 			&& hashlinkSource.indexOf("struct hl_type @layout(40, 8)") >= 0
 			&& hashlinkSource.indexOf("abs_name: ptr<const<u16>> @offset(8) @union") >= 0
 			&& hashlinkSource.indexOf("struct hl_type_fun @layout(80, 8)") >= 0

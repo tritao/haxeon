@@ -28,6 +28,14 @@ Output is sorted so the same header and target produce byte-identical results.
 Use repeatable `--only=<declaration>` options when a large public header contains
 unrelated declarations outside the ABI ring being imported. The header is still
 parsed and laid out by Clang; only the named declarations are emitted.
+
+HashLink's type-metadata ring is checked in as
+`stdlib/runtime/hashlink/HashLinkMetadata.hxi`; regenerate it from the pinned
+HashLink header with `--only` for `hl_type_kind`, `hl_alloc`,
+`hl_module_context`, `hl_type_fun`, `hl_obj_field`, `hl_obj_proto`,
+`hl_type_obj`, `hl_type_virtual`, `hl_enum_construct`, `hl_type_enum`, and
+`hl_type`. The importer adds pointer-only dependencies as opaque declarations,
+leaving runtime/JIT-sensitive definitions outside this interface.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;
 they are not incorrectly assumed to have a platform-independent width. The
 optional library name becomes interface-level `@library` metadata. Use
