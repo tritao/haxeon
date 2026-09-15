@@ -260,6 +260,30 @@ class ParserRecoveryMain {
 			default:
 				throw "unfinished block did not retain the conditional node";
 		}
+		var missingBodySource = new SourceFile("MissingBody.hx", "function main():Void if (condition)");
+		var missingBodyResult = new Parser(new Lexer(missingBodySource).tokenize()).parseProgramRecovering();
+		if (missingBodyResult.program.functions.length != 1 || missingBodyResult.program.functions[0].statements.length != 1)
+			throw "missing conditional body discarded the enclosing function";
+		switch missingBodyResult.program.functions[0].statements[0] {
+			case If(_, thenBranch, elseBranch, _) if (thenBranch.length == 0 && elseBranch.length == 0):
+			default:
+				throw "missing conditional body did not retain an empty recovered branch";
+		}
+		var missingBodyDiagnostic = false;
+		for (diagnostic in missingBodyResult.diagnostics)
+			if (diagnostic.message == "Expected statement or block")
+				missingBodyDiagnostic = true;
+		if (!missingBodyDiagnostic)
+			throw "missing conditional body did not produce a focused recovery diagnostic";
+		var missingElseBodySource = new SourceFile("MissingElseBody.hx", "function main():Void if (condition) else");
+		var missingElseBodyResult = new Parser(new Lexer(missingElseBodySource).tokenize()).parseProgramRecovering();
+		if (missingElseBodyResult.program.functions.length != 1 || missingElseBodyResult.program.functions[0].statements.length != 1)
+			throw "missing else body discarded the enclosing function";
+		switch missingElseBodyResult.program.functions[0].statements[0] {
+			case If(_, thenBranch, elseBranch, _) if (thenBranch.length == 0 && elseBranch.length == 0):
+			default:
+				throw "missing else body did not retain both recovered branches";
+		}
 
 		var callSource = new SourceFile("Call.hx", "function main():Void return new Foo(");
 		var callResult = new Parser(new Lexer(callSource).tokenize()).parseProgramRecovering();

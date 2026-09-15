@@ -2391,8 +2391,13 @@ class Parser {
 	}
 
 	function parseStatementOrBlock():Array<AstStatement> {
-		if (!match(TokenKind.LeftBrace))
+		if (!match(TokenKind.LeftBrace)) {
+			if (recovering && isRecoveryBoundary()) {
+				recordExpected("statement or block");
+				return [];
+			}
 			return parseStatements();
+		}
 		var statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
 			appendStatements(statements, parseStatements());
@@ -2429,7 +2434,9 @@ class Parser {
 
 	/** Whether the current token is a safe synchronization point for recovery. */
 	function isRecoveryBoundary():Bool
-		return recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()));
+		return recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current())
+			|| current().kind == TokenKind.Else || current().kind == TokenKind.Catch
+			|| current().kind == TokenKind.Case || current().kind == TokenKind.Default);
 
 	function canInsert(kind:TokenKind):Bool
 		return switch kind {
