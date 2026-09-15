@@ -95,6 +95,43 @@ class HlFunctionDescriptorTable {
 		}
 	}
 
+	/** Validate one descriptor's native opcode storage and opcode identities. */
+	public function validateCodeAt(index:Int):Int {
+		var descriptor = get(index), nops:Int = cast descriptor.ref.nops;
+		if (nops < 0 || (nops > 0 && descriptor.ref.ops.isNull()))
+			throw 'HashLink function descriptor $index contains an incomplete opcode array';
+		for (opcodeIndex in 0...nops) {
+			var opcode:Int = cast descriptor.ref.ops.offset(opcodeIndex).ref.op;
+			if (opcode < 0 || opcode >= HlOpcodeLimit.LAST_OPCODE)
+				throw 'HashLink function descriptor $index contains an invalid opcode';
+		}
+		return nops;
+	}
+
+	/** Validate one descriptor's source locations and debug-assignment storage. */
+	public function validateDebugAt(index:Int, debugFileCount:Int):Int {
+		var descriptor = get(index), nops:Int = cast descriptor.ref.nops, nassigns:Int = cast descriptor.ref.nassigns;
+		if (debugFileCount < 0)
+			throw "HashLink function debug validation requires a non-negative file count";
+		if (!descriptor.ref.debug.isNull()) {
+			if (debugFileCount == 0)
+				throw "HashLink function debug metadata has no file table";
+			for (opcodeIndex in 0...nops) {
+				var file:Int = cast descriptor.ref.debug.offset(opcodeIndex * 2).load(), line:Int = cast descriptor.ref.debug.offset(opcodeIndex * 2 + 1).load();
+				if (file < 0 || file >= debugFileCount || line < 1)
+					throw "HashLink function debug metadata contains an invalid location";
+			}
+		}
+		if (nassigns < 0 || (nassigns > 0 && descriptor.ref.assigns.isNull()))
+			throw 'HashLink function descriptor $index contains an incomplete assignment table';
+		for (assignmentIndex in 0...nassigns) {
+			var position:Int = cast descriptor.ref.assigns.offset(assignmentIndex * 3 + 1).load(), scopeEnd:Int = cast descriptor.ref.assigns.offset(assignmentIndex * 3 + 2).load();
+			if (position < -1 || scopeEnd < -1)
+				throw "HashLink function debug metadata contains an invalid assignment range";
+		}
+		return nassigns;
+	}
+
 	public function get(index:Int):RawPtr<HlFunction> {
 		if (index < 0 || index >= count)
 			throw 'HashLink function descriptor index $index is outside 0...$count';

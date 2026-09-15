@@ -83,52 +83,6 @@ static hl_function *native_metadata_find_function( hl_function *functions, int c
 	return NULL;
 }
 
-HL_PRIM int HL_NAME(native_metadata_validate_function_code)( hl_function *function ) {
-	int i;
-	if( function == NULL )
-		hl_error("HashLink function code validation requires a function descriptor");
-	if( function->nops < 0 || (function->nops > 0 && function->ops == NULL) )
-		hl_error("HashLink function descriptor contains an incomplete opcode array");
-	for( i = 0; i < function->nops; i++ ) {
-		if( function->ops[i].op < 0 || function->ops[i].op >= OLast )
-			hl_error("HashLink function descriptor contains an invalid opcode");
-	}
-	return function->nops;
-}
-
-HL_PRIM int HL_NAME(native_metadata_validate_debug_files)( uchar **files, int count ) {
-	int i;
-	if( count < 0 || (count > 0 && files == NULL) )
-		hl_error("HashLink debug metadata requires a debug-file table");
-	for( i = 0; i < count; i++ )
-		if( files[i] == NULL ) hl_error("HashLink debug metadata contains a null file name");
-	return count;
-}
-
-HL_PRIM int HL_NAME(native_metadata_validate_function_debug)( hl_function *function, int debug_file_count ) {
-	int i;
-	if( function == NULL || debug_file_count < 0 )
-		hl_error("HashLink function debug validation requires a function descriptor and file count");
-	if( function->debug != NULL ) {
-		if( debug_file_count == 0 ) hl_error("HashLink function debug metadata has no file table");
-		for( i = 0; i < function->nops; i++ ) {
-			int file = function->debug[i << 1];
-			int line = function->debug[(i << 1) | 1];
-			if( file < 0 || file >= debug_file_count || line < 1 )
-				hl_error("HashLink function debug metadata contains an invalid location");
-		}
-	}
-	if( function->nassigns < 0 || (function->nassigns > 0 && function->assigns == NULL) )
-		hl_error("HashLink function debug metadata contains an incomplete assignment table");
-	for( i = 0; i < function->nassigns; i++ ) {
-		int position = function->assigns[i * 3 + 1];
-		int scope_end = function->assigns[i * 3 + 2];
-		if( position < -1 || scope_end < -1 )
-			hl_error("HashLink function debug metadata contains an invalid assignment range");
-	}
-	return function->nassigns;
-}
-
 static bool native_metadata_contains_global_slot( void **globals, int count, void **value ) {
 	int i;
 	for( i = 0; i < count; i++ )

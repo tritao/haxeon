@@ -358,11 +358,11 @@ class HlMetadataGeneration {
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
 		validateDescriptorTables();
-		HlTypeBridge.native_metadata_validate_debug_files(debugFiles, debugFileCount);
-		for (functionIndex in 0...functionDescriptors.length())
-			HlTypeBridge.native_metadata_validate_function_code(functionDescriptors.get(functionIndex));
-		for (functionIndex in 0...functionDescriptors.length())
-			HlTypeBridge.native_metadata_validate_function_debug(functionDescriptors.get(functionIndex), debugFileCount);
+		validateDebugFiles();
+		for (functionIndex in 0...functionDescriptors.length()) {
+			functionDescriptors.validateCodeAt(functionIndex);
+			functionDescriptors.validateDebugAt(functionIndex, debugFileCount);
+		}
 		HlTypeBridge.native_metadata_validate_global_types(globalTypes, globalCount, globals);
 		constantDescriptors.validate(globalCount);
 		HlTypeBridge.native_metadata_validate_constants(constantDescriptors.pointer(), constantDescriptors.length(), globalCount);
@@ -506,6 +506,16 @@ class HlMetadataGeneration {
 		HlTypeBridge.native_metadata_validate_module_pools(modulePools.ints, modulePools.intCount, modulePools.floats, modulePools.floatCount,
 			modulePools.strings, modulePools.stringLengths, modulePools.stringCount, modulePools.bytes, modulePools.byteCount, modulePools.bytePositions,
 			modulePools.bytePositionCount, modulePools.entryPoint);
+	}
+
+	/** Validate the arena-owned source paths referenced by function debug records. */
+	public function validateDebugFiles():Int {
+		if (debugFileCount < 0 || (debugFileCount > 0 && debugFiles.isNull()))
+			throw "HashLink debug metadata requires a debug-file table";
+		for (index in 0...debugFileCount)
+			if (debugFiles.offset(index).load().isNull())
+				throw "HashLink debug metadata contains a null file name";
+		return debugFileCount;
 	}
 
 	/** Borrow the published view until the returned lease is released. */
