@@ -354,6 +354,13 @@ class LanguageServiceMain {
 				hasRecoveredImport = true;
 		if (!hasRecoveredImport || !recoveredImportCompletion.isIncomplete)
 			throw "import completion did not expose an editor-only recovered declaration";
+		var wildcardTypingService = new LanguageService();
+		wildcardTypingService.update("wild/lib/Widget.hx", "package wild.lib; class Widget { public var known:Int; }");
+		var wildcardTypingSource = "package wild; import wild.lib.*; function main():Void { var widget:Widget = new Widget(); widget.";
+		wildcardTypingService.update("wild/Main.hx", wildcardTypingSource);
+		var wildcardTypingNames = [for (item in wildcardTypingService.complete("wild/Main.hx", wildcardTypingSource.length)) item.label];
+		if (wildcardTypingNames.indexOf("known") < 0)
+			throw "wildcard-imported recovered type did not retain its member completion";
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
