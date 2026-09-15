@@ -23,6 +23,10 @@ class ParserRecoveryFuzzMain {
 				},
 				started = Sys.time();
 			service.update("Main.hx", mutated);
+			var recoveryState = service.compiler.modules.get("Main"),
+				recoveryModel = recoveryState == null ? null : recoveryState.recoveredSemanticModel;
+			if (recoveryModel == null || recoveryModel.partialTypedProgram == null)
+				throw 'mutation $caseIndex lost its partial typed snapshot';
 			try
 				service.analyze("Main")
 			catch (_:CompileError) {}
