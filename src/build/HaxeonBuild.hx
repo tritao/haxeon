@@ -9,6 +9,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionPlan;
 import build.execution.Executor;
 import build.execution.ProcessRunner;
+import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import sys.FileSystem;
 import sys.io.File;
@@ -39,7 +40,7 @@ class HaxeonBuild {
 	static function native(arguments:Array<String>):Int {
 		var preset = arguments.length == 0 ? (Sys.systemName() == "Windows" ? "windows-msvc" : "release") : arguments[0];
 		var plan = BuildPlanner.nativeRuntime(environment, preset),
-			execution = PlanLowerer.lower(plan, environment, preset),
+			execution = PlanLowerer.lower(plan, new LoweringContext(environment, preset)),
 			result = new Executor(environment, 1).execute(execution);
 		return result.exitCode;
 	}

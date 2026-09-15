@@ -1,6 +1,6 @@
 package build.provider;
 
-import build.BuildEnvironment;
+import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
@@ -9,18 +9,19 @@ import project.ResolvedProject;
 
 /** One project-level request to the persistent Haxeon compiler service. */
 class CompilerProvider {
-	public static function action(project:ResolvedProject, environment:BuildEnvironment, actionId:ActionId, dependencies:Array<ActionId>, output:String,
-			compilerHome:String, ?extraDefines:Array<String>):ExecutionAction {
+	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId, dependencies:Array<ActionId>, output:String):ExecutionAction {
+		if (project == null)
+			throw "CompilerProvider requires a resolved project";
 		if (project.manifest.entry == null)
 			throw 'Root package "${project.rootPackage.name}" must declare an "entry" for a build';
 		var compiler = haxe.io.Path.join([
-			compilerHome,
+			context.compilerHome,
 			".tools",
 			"haxe",
 			"haxe" + (Sys.systemName() == "Windows" ? ".exe" : "")
 		]), compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"), arguments = [
 			"-cp",
-			compilerSource == null || compilerSource == "" ? haxe.io.Path.join([compilerHome, "src"]) : compilerSource,
+			compilerSource == null || compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
 			"--run",
 			"compiler.tools.HaxeonCompiler",
 			"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
@@ -41,9 +42,9 @@ class CompilerProvider {
 				inputs.push(source);
 			}
 		}
-		for (define in project.manifest.defines.concat(extraDefines == null ? [] : extraDefines))
+		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		return new ExecutionAction(actionId, dependencies, inputs, [output], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler('Haxeon ${project.manifest.target} compilation', () -> ProcessRunner.run(compiler, arguments, compilerHome, new Map())));
+			Compiler('Haxeon ${project.manifest.target} compilation', () -> ProcessRunner.run(compiler, arguments, context.compilerHome, new Map())));
 	}
 }

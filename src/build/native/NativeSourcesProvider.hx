@@ -2,8 +2,7 @@ package build.native;
 
 import build.Artifact;
 import build.Artifact.ArtifactKind;
-import build.BuildEnvironment;
-import build.TargetLayout;
+import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
@@ -12,14 +11,15 @@ import project.ResolvedPackage;
 
 /** Lowers C sources to object files and only the native library artifacts in the plan. */
 class NativeSourcesProvider {
-	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, environment:BuildEnvironment, layout:TargetLayout,
-			compilerHome:String):{
+	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, context:LoweringContext):{
 		actions:Array<ExecutionAction>,
 		artifactActions:Map<String, Array<ActionId>>
 	} {
 		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources, resolvedPackage.includeDirs),
+			environment = context.environment,
+			layout = context.layout,
 			toolchain = new NativeToolchain(environment),
-			hashlinkIncludes = Path.join([compilerHome, "vendor", "hashlink", "src"]),
+			hashlinkIncludes = Path.join([context.compilerHome, "vendor", "hashlink", "src"]),
 			includeDirs = library.includeDirs.concat([hashlinkIncludes]),
 			actions:Array<ExecutionAction> = [],
 			artifactActions:Map<String, Array<ActionId>> = [],

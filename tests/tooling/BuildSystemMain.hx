@@ -14,6 +14,7 @@ import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionPlan;
 import build.execution.Executor;
+import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import haxe.io.Path;
 import project.ProjectDiscovery;
@@ -216,7 +217,7 @@ class BuildSystemMain {
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
-			execution = PlanLowerer.lower(plan, environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root),
+			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
 			executionText = execution.toDebugString();
 		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0, "the package build plan should require its shared native library");
 		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") < 0, "the package build plan should not create an unrequested native archive");

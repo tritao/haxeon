@@ -1,6 +1,7 @@
 package build;
 
 import build.execution.Executor;
+import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.BuildEnvironment.BuildProfile;
 import haxe.io.Path;
@@ -14,7 +15,7 @@ class HaxeonProjectBuild {
 			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, project.manifest.outputDir]), BuildProfile.Release),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
-			execution = PlanLowerer.lower(plan, environment, null, project, output, home, defines);
+			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines));
 		if (planOnly) {
 			Sys.println('Build ${project.rootPackage.name} [host]');
 			Sys.println(plan.toDebugString());
