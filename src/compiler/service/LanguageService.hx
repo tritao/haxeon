@@ -2110,7 +2110,7 @@ class LanguageService {
 											prefix, result);
 								}
 								if (classDecl.base != null)
-									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result, token);
+									addInstanceMembers(compilerTypeFromAst(classDecl.base, substitutions), prefix, result, token);
 							}
 				}
 			case TInstance(Interface, name, arguments):
@@ -2805,6 +2805,32 @@ class LanguageService {
 			default: typeName(type);
 		};
 	}
+
+	static function compilerTypeFromAst(type:AstType, substitutions:Map<String, String>):CompilerType {
+		return switch type {
+			case IntType: TInt;
+			case BoolType: TBool;
+			case FloatType: TFloat;
+			case StringType: TString;
+			case VoidType: TVoid;
+			case NamedType(name): compilerTypeFromName(substitutions.exists(name) ? substitutions.get(name) : name);
+			case AppliedType(name, arguments): TInstance(Class, name, [for (argument in arguments) compilerTypeFromAst(argument, substitutions)]);
+			case ArrayType(element): TArray(compilerTypeFromAst(element, substitutions));
+			case MapType(key, value): TMap(compilerTypeFromAst(key, substitutions), compilerTypeFromAst(value, substitutions));
+			case NullableType(element): TNullable(compilerTypeFromAst(element, substitutions));
+			default: TUnknown;
+		};
+	}
+
+	static function compilerTypeFromName(name:String):CompilerType
+		return switch name {
+			case "Int": TInt;
+			case "Bool": TBool;
+			case "Float": TFloat;
+			case "String": TString;
+			case "Void": TVoid;
+			default: TInstance(Class, name, []);
+		};
 
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {

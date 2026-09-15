@@ -684,11 +684,12 @@ class SemanticIndex {
 						callee = bindRecoveredMember(receiver, memberName, span);
 					if (callee == null)
 						callee = bindNamed(resolveRecoveredSymbol, name, span);
-					var owner = memberOwner(receiverType);
+					var owner = memberOwner(receiverType),
+						method = owner == null ? null : recoveredMethodWithSubstitutions(owner, memberName, [], recoveredTypeSubstitutions(receiverType));
 					if (callee == null && !isKnownRecoveredMember(receiver, memberName))
 						recordUnresolved(memberName, span);
 					addCall(callee, span, memberName);
-					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, memberName, []), recoveredTypeSubstitutions(receiverType));
+					indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions);
 				} else {
 					var local = bindRecoveredLocal(name, span);
 					if (local == null) {
@@ -714,8 +715,9 @@ class SemanticIndex {
 				if (callee == null && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 				var receiverType = recoveredExpressionBindingType(object),
-					owner = memberOwner(receiverType);
-				indexRecoveredCallArguments(arguments, owner == null ? null : recoveredMethod(owner, name, []), recoveredTypeSubstitutions(receiverType));
+					owner = memberOwner(receiverType),
+					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
+				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -936,13 +938,28 @@ class SemanticIndex {
 	}
 
 	function recoveredFunctionResult(name:String, ?substitutions:Map<String, CompilerType>):CompilerType {
-		var fn = recoveredFunction(name);
-		return fn == null ? TUnknown : recoveredType(fn.result, substitutions);
+		var fn = recoveredFunctions.get(name);
+		if (fn != null)
+			return recoveredType(fn.result, substitutions);
+		var separator = name.lastIndexOf(".");
+		if (separator < 1)
+			return TUnknown;
+		var method = recoveredMethodWithSubstitutions(name.substring(0, separator), name.substring(separator + 1), [],
+			substitutions == null ? [] : substitutions);
+		return method == null ? TUnknown : recoveredType(method.method.result, method.substitutions);
 	}
 
 	function recoveredFunctionType(name:String, ?substitutions:Map<String, CompilerType>):Null<CompilerType> {
-		var fn = recoveredFunction(name);
-		return fn == null ? null : TFunction([for (argument in fn.arguments) recoveredType(argument.type, substitutions)], recoveredType(fn.result, substitutions));
+		var fn = recoveredFunctions.get(name);
+		if (fn != null)
+			return TFunction([for (argument in fn.arguments) recoveredType(argument.type, substitutions)], recoveredType(fn.result, substitutions));
+		var separator = name.lastIndexOf(".");
+		if (separator < 1)
+			return null;
+		var method = recoveredMethodWithSubstitutions(name.substring(0, separator), name.substring(separator + 1), [],
+			substitutions == null ? [] : substitutions);
+		return method == null ? null : TFunction([for (argument in method.method.arguments) recoveredType(argument.type, method.substitutions)],
+			recoveredType(method.method.result, method.substitutions));
 	}
 
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
@@ -974,9 +991,10 @@ class SemanticIndex {
 					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type, substitutions);
 			}
 			if (classDecl.base != null) {
-				var base = memberOwner(recoveredType(classDecl.base));
+				var baseType = recoveredType(classDecl.base, substitutions),
+					base = memberOwner(baseType);
 				if (base != null) {
-					var inherited = recoveredFieldType(base, name, nextVisiting, substitutions);
+					var inherited = recoveredFieldType(base, name, nextVisiting, recoveredTypeSubstitutions(baseType));
 					if (inherited != null)
 						return inherited;
 				}
@@ -986,18 +1004,27 @@ class SemanticIndex {
 	}
 
 	function recoveredMethod(owner:String, name:String, visiting:Array<String>):Null<AstFunction> {
+		var resolved = recoveredMethodWithSubstitutions(owner, name, visiting, []);
+		return resolved == null ? null : resolved.method;
+	}
+
+	function recoveredMethodWithSubstitutions(owner:String, name:String, visiting:Array<String>, substitutions:Map<String, CompilerType>):Null<{
+		final method:AstFunction;
+		final substitutions:Map<String, CompilerType>;
+	}> {
 		if (visiting.indexOf(owner) >= 0)
 			return null;
 		var direct = recoveredFunctions.get(owner + "." + name);
 		if (direct != null)
-			return direct;
+			return {method: direct, substitutions: substitutions};
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(owner);
 		var classDecl = declarations.classes.get(owner);
 		if (classDecl != null && classDecl.base != null) {
-			var base = memberOwner(recoveredType(classDecl.base));
+			var baseType = recoveredType(classDecl.base, substitutions),
+				base = memberOwner(baseType);
 			if (base != null) {
-				var inherited = recoveredMethod(base, name, nextVisiting);
+				var inherited = recoveredMethodWithSubstitutions(base, name, nextVisiting, recoveredTypeSubstitutions(baseType));
 				if (inherited != null)
 					return inherited;
 			}
@@ -1005,9 +1032,10 @@ class SemanticIndex {
 		var interfaceDecl = declarations.interfaces.get(owner);
 		if (interfaceDecl != null)
 			for (baseType in interfaceDecl.bases) {
-				var base = memberOwner(recoveredType(baseType));
+				var resolvedBaseType = recoveredType(baseType, substitutions),
+					base = memberOwner(resolvedBaseType);
 				if (base != null) {
-					var inherited = recoveredMethod(base, name, nextVisiting);
+					var inherited = recoveredMethodWithSubstitutions(base, name, nextVisiting, recoveredTypeSubstitutions(resolvedBaseType));
 					if (inherited != null)
 						return inherited;
 				}

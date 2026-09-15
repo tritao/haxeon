@@ -457,6 +457,20 @@ class ParserRecoveryMain {
 		var genericArgumentContext = genericArgumentService.completionContext("GenericArgument.hx", genericArgumentSource.length);
 		if (genericArgumentContext == null || genericArgumentContext.context.expected != TInt)
 			throw 'generic method argument did not retain the inferred receiver type: ${genericArgumentContext == null ? "null" : Std.string(genericArgumentContext.context.expected)}';
+		var genericInheritanceService = new LanguageService(),
+			genericInheritanceSource = "class Base<T> { public var value:T; public function get():T return value; } class Child<U> extends Base<U> {} function main():Void { var child = new Child<Int>(); child.";
+		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceSource);
+		var genericInheritanceCompletion = genericInheritanceService.complete("GenericInheritance.hx", genericInheritanceSource.length),
+			genericInheritanceValue:Null<String> = null,
+			genericInheritanceGet:Null<String> = null;
+		for (item in genericInheritanceCompletion) {
+			if (item.label == "value")
+				genericInheritanceValue = item.detail;
+			if (item.label == "get")
+				genericInheritanceGet = item.detail;
+		}
+		if (genericInheritanceValue != "value:Int" || genericInheritanceGet != "get():Int")
+			throw 'generic inherited member types were not substituted: value=$genericInheritanceValue, get=$genericInheritanceGet';
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
