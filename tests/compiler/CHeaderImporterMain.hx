@@ -5,8 +5,15 @@ import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjection;
 import sys.FileSystem;
 
+@:access(compiler.ffi.CHeaderImporter)
 class CHeaderImporterMain {
 	static function main():Void {
+		var windowsLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\r\n" + "         0 | struct sample_options\r\n"
+			+ "         0 |   uint32_t struct_size\r\n" + "         8 |   const char * title\r\n" + "        16 |   uint64_t reserved[2]\r\n"
+			+ "           | [sizeof=32, align=8]\r\n")
+			.get("sample_options");
+		expect(windowsLayout != null && windowsLayout.size == 32 && windowsLayout.align == 8 && windowsLayout.offsets.get("title") == 8,
+			"record layout parser should accept Clang's Windows CRLF output");
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);

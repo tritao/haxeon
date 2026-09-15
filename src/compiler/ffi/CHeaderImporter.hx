@@ -777,7 +777,11 @@ class CHeaderImporter {
 		var result:Map<String, CLayout> = [],
 			current:String = null,
 			offsets:Map<String, Int> = [];
-		for (line in text.split("\n")) {
+		for (rawLine in text.split("\n")) {
+			// Clang emits CRLF on Windows.  Keep the layout grammar independent
+			// of the host line ending so the record marker and size trailer are
+			// still parsed before they reach the HXI model.
+			var line = StringTools.endsWith(rawLine, "\r") ? rawLine.substring(0, rawLine.length - 1) : rawLine;
 			var record = ~/^\s*0 \| struct ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (record.match(line)) {
 				current = record.matched(1);
