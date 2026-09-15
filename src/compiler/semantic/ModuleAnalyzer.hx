@@ -46,6 +46,10 @@ class ModuleAnalyzer {
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
 			return;
 		}
+		// A recovered editor snapshot may have populated diagnostics while the
+		// strict compiler snapshot was still unavailable. Once this transaction
+		// owns parsing the module, its diagnostics must be authoritative.
+		state.diagnostics = [];
 		try {
 			var conditional = ConditionalCompilation.process(state.source, defines);
 			state.conditionalDefines = conditional.defines;

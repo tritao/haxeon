@@ -92,6 +92,7 @@ class SemanticIndex {
 	public var indexingMs(default, null):Float = 0.0;
 
 	final bindings:Array<PositionBinding> = [];
+	final symbolIdsByName:Map<String, Array<SemanticSymbolId>> = [];
 	final references:Map<String, Array<SourceSpan>> = [];
 	final referenceKeys:Map<String, Map<String, Bool>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
@@ -140,6 +141,7 @@ class SemanticIndex {
 				kind: declaration.kind,
 				declaration: declaration.span
 			});
+			addSymbolName(declaration.name, id);
 			declarationSymbolsBySpan.set(spanKey(declaration.span), id);
 			if (binding != null)
 				bind(id, binding.span);
@@ -199,13 +201,27 @@ class SemanticIndex {
 	static inline function spanKey(span:SourceSpan):String
 		return span.start + ":" + span.end;
 
-	function setDeclaredSignature(symbolName:String, label:String, parameters:Array<String>, result:String):Void
-		for (symbol in symbols)
-			if (symbol.name == symbolName)
-				signatures.set(symbol.id, {label: label, parameters: parameters, result: result});
+	function setDeclaredSignature(symbolName:String, label:String, parameters:Array<String>, result:String):Void {
+		var ids = symbolIdsByName.get(symbolName);
+		if (ids != null)
+			for (id in ids) {
+				if (Std.string(id).indexOf(":local:") >= 0)
+					continue;
+				signatures.set(id, {label: label, parameters: parameters, result: result});
+			}
+	}
+
+	function addSymbolName(name:String, id:SemanticSymbolId):Void {
+		var ids = symbolIdsByName.get(name);
+		if (ids == null) {
+			ids = [];
+			symbolIdsByName.set(name, ids);
+		}
+		ids.push(id);
+	}
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
-			?token:CancellationToken):Void {
+			?token:CancellationToken, ?deferBindingSort = false):Void {
 		var started = Sys.time();
 		if (token != null)
 			token.check();
@@ -238,7 +254,8 @@ class SemanticIndex {
 		indexCallTokens(fn, functionId, resolve);
 		currentCaller = null;
 		currentCallerName = null;
-		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
+		if (!deferBindingSort)
+			bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
 		indexingMs += (Sys.time() - started) * 1000.0;
@@ -313,7 +330,7 @@ class SemanticIndex {
 		if (typedProgram != null)
 			for (fn in typedProgram.functions) {
 				checkpoint();
-				indexTypedFunction(fn, resolveRecoveredSymbol, resolveRecoveredEnumCase, token);
+				indexTypedFunction(fn, resolveRecoveredSymbol, resolveRecoveredEnumCase, token, true);
 				cancellation = token;
 			}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
@@ -349,17 +366,36 @@ class SemanticIndex {
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
 		indexRecoveredStatementUses(fn.statements, recoveredType(fn.result));
-		for (token in tokens)
-			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start && token.span.end <= fn.span.end)
+		var tokenIndex = firstTokenAtOrAfter(fn.span.start);
+		while (tokenIndex < tokens.length) {
+			var token = tokens[tokenIndex++];
+			if (token.span.start > fn.span.end)
+				break;
+			if (token.kind == TokenKind.Identifier && token.span.end <= fn.span.end)
 				bindRecoveredLocal(token.text, token.span);
+		}
 		currentCaller = null;
 	}
 
 	function recoveredDeclaredSymbol(name:String):Null<SemanticSymbolId> {
-		for (symbol in symbols)
-			if (symbol.name == name && Std.string(symbol.id).indexOf(":local:") < 0)
-				return symbol.id;
+		var ids = symbolIdsByName.get(name);
+		if (ids != null)
+			for (id in ids)
+				if (Std.string(id).indexOf(":local:") < 0)
+					return id;
 		return null;
+	}
+
+	function firstTokenAtOrAfter(start:Int):Int {
+		var low = 0, high = tokens.length;
+		while (low < high) {
+			var middle = (low + high) >> 1;
+			if (tokens[middle].span.start < start)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		return low;
 	}
 
 	function resolveRecoveredSymbol(name:String):Null<SemanticSymbolId>
@@ -422,6 +458,7 @@ class SemanticIndex {
 				kind: DeclarationKind.Member,
 				declaration: token.span
 			});
+			addSymbolName(name, id);
 			bind(id, token.span);
 			declarationTypes.set(id, type);
 		}
@@ -1444,13 +1481,15 @@ class SemanticIndex {
 		if (caller == null)
 			return;
 		var declaration = declarationToken(tokens, fn.span, sourceName(fn.name));
-		for (index in 0...tokens.length) {
-			var token = tokens[index];
-			if (token.span.start < fn.span.start
-				|| token.span.end > fn.span.end
+		var index = tokenIndexAtOrAfter(tokens, fn.span.start);
+		while (index < tokens.length) {
+			var token = tokens[index++];
+			if (token.span.start > fn.span.end)
+				break;
+			if (token.span.end > fn.span.end
 				|| token.kind != TokenKind.Identifier
-				|| index + 1 >= tokens.length
-				|| tokens[index + 1].kind != TokenKind.LeftParen
+				|| index >= tokens.length
+				|| tokens[index].kind != TokenKind.LeftParen
 				|| declaration != null
 				&& token.span.start == declaration.span.start)
 				continue;
