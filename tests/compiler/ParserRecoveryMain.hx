@@ -336,6 +336,54 @@ class ParserRecoveryMain {
 				throw "tolerant typer did not retain the local after an expression error";
 		}
 
+		var callSource = new SourceFile("TolerantCall.hx", "function take(value:Int):Void return; function main():Void return take(");
+		var callProgram = new Parser(new Lexer(callSource).tokenize()).parseProgramRecovering().program,
+			callTyped = Typer.typeRecovered(callProgram);
+		if (callTyped == null || callTyped.functions.length != 2)
+			throw "tolerant typer discarded an unfinished call";
+		var callExpression = switch callTyped.functions[1].statements[0] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (callExpression == null || callExpression.type != TVoid)
+			throw "unfinished call did not retain its resolved result type";
+		switch callExpression.expression {
+			case TCall(name, arguments) if (name == "take" && arguments.length == 1 && arguments[0].type == TError):
+			default:
+				throw "unfinished call did not retain a typed callee";
+		}
+
+		var memberSource = new SourceFile("TolerantMember.hx",
+			"class Foo { public function bar(value:Int):Int return value; } function main():Foo { var foo:Foo = new Foo(); return foo. }");
+		var memberProgram = new Parser(new Lexer(memberSource).tokenize()).parseProgramRecovering().program,
+			memberTyped = Typer.typeRecovered(memberProgram);
+		if (memberTyped == null || memberTyped.functions.length != 2)
+			throw "tolerant typer discarded an incomplete member expression";
+		var memberExpression = switch memberTyped.functions[0].statements[1] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (memberExpression == null)
+			throw "unfinished member access produced no typed expression";
+		switch memberExpression.type {
+			case TInstance(NominalKind.Class, "Foo", _):
+			default:
+				throw 'unfinished member access did not retain its receiver type: ${memberExpression.type}';
+		}
+
+		var methodSource = new SourceFile("TolerantMethodCall.hx",
+			"class Foo { public function bar(value:Int):Int return value; } function main():Int { var foo:Foo = new Foo(); return foo.bar(");
+		var methodProgram = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering().program,
+			methodTyped = Typer.typeRecovered(methodProgram);
+		if (methodTyped == null || methodTyped.functions.length != 2)
+			throw "tolerant typer discarded an unfinished method call";
+		var methodExpression = switch methodTyped.functions[0].statements[1] {
+			case TReturn(expression, _): expression;
+			default: null;
+		};
+		if (methodExpression == null || methodExpression.type != TInt)
+			throw "unfinished method call did not retain its resolved result type";
+
 		var incompleteParameter = new SourceFile("TolerantParameter.hx", "function main(value:)");
 		var parameterProgram = new Parser(new Lexer(incompleteParameter).tokenize()).parseProgramRecovering().program,
 			parameterTyped = Typer.typeRecovered(parameterProgram);

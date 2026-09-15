@@ -96,11 +96,35 @@ class CallResolver {
 	}
 
 	public function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope, name:String):Array<TypedExpression> {
+		if (session.tolerant)
+			return typeRecoveredCallArguments(arguments, expected, scope, name);
 		var typed = [
 			for (i in 0...arguments.length)
 				typeExpression(arguments[i], scope, expected[i], false)
 		];
 		return coerceArguments(typed, expected, name);
+	}
+
+	function typeRecoveredCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope, name:String):Array<TypedExpression> {
+		var typed:Array<TypedExpression> = [];
+		for (index in 0...arguments.length) {
+			var suppliedExpected = index < expected.length ? expected[index] : TUnknown,
+				value = typeExpression(arguments[index], scope, index < expected.length ? suppliedExpected : null, false);
+			typed.push(index < expected.length ? recoverCoerce(value, suppliedExpected, 'argument ${index + 1} to "$name"') : value);
+		}
+		return typed;
+	}
+
+	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String):TypedExpression {
+		try {
+			return coerce(value, expected, context, "E1009");
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError))
+				throw error;
+			if (!session.tolerant)
+				throw error;
+			return new TypedExpression(value.expression, TError, value.span);
+		}
 	}
 
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -252,6 +276,8 @@ class CallResolver {
 
 	public function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<AstArgument>, scope:Scope, name:String, span:SourceSpan,
 			?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
+		if (session.tolerant)
+			return typeRecoveredDeclaredCallArguments(arguments, parameters, scope, name, span, substitutions);
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional == true)
 			required--;
@@ -278,6 +304,36 @@ class CallResolver {
 				typed.push(coerce(typeDefaultExpression(defaultValue, expected, name), expected, 'default argument ${i + 1} to "$name"', "E1009"));
 		}
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
+	}
+
+	function typeRecoveredDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<AstArgument>, scope:Scope, name:String, span:SourceSpan,
+			substitutions:Null<Map<String, CompilerType>>):Array<TypedExpression> {
+		var expected = [for (parameter in parameters) argumentType(parameter, substitutions)],
+			typed:Array<TypedExpression> = [];
+		for (index in 0...arguments.length) {
+			if (index >= parameters.length) {
+				typed.push(typeExpression(arguments[index], scope, null, false));
+				continue;
+			}
+			var value = typeExpression(arguments[index], scope, expected[index], false);
+			typed.push(recoverCoerce(value, expected[index], 'argument ${index + 1} to "$name"'));
+		}
+		var required = parameters.length;
+		while (required > 0 && parameters[required - 1].optional == true)
+			required--;
+		if (arguments.length >= required)
+			for (index in arguments.length...parameters.length) {
+				var parameter = parameters[index],
+					parameterType = expected[index],
+					defaultValue = parameter.defaultValue;
+				if (isPosInfosParameter(parameter))
+					typed.push(recoverCoerce(typeExpression(posInfosExpression(span), scope, parameterType, false), parameterType,
+						'position argument ${index + 1} to "$name"'));
+				else if (defaultValue != null)
+					typed.push(recoverCoerce(typeDefaultExpression(defaultValue, parameterType, name), parameterType,
+						'default argument ${index + 1} to "$name"'));
+			}
+		return typed;
 	}
 
 	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{

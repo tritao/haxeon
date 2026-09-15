@@ -1440,7 +1440,10 @@ class BodyTyper {
 	}
 
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
+		var typedObject = typeExpression(object, scope);
+		if (session.tolerant && name.length == 0)
+			return typedObject;
+		return typedMemberWithFlow(typedObject, name, span, scope);
 	}
 
 	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
