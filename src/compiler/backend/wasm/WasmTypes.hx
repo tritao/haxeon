@@ -167,6 +167,8 @@ enum WasmInstruction {
 	F32DemoteF64;
 	I32WrapI64;
 	I32TruncF64S;
+	I32ReinterpretF32;
+	F32ReinterpretI32;
 	I64ReinterpretF64;
 	F64ReinterpretI64;
 	RefNull(heapType:WasmHeapType);

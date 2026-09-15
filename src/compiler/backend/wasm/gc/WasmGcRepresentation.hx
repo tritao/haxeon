@@ -694,6 +694,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC FloatBits.fromInt64 signature";
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
 		}
+		if (name == "Math.mathIsFinite" || name == "__math_is_finite") {
+			if (output.type != Bool || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw 'Invalid Wasm GC $name signature';
+			var maxFinite = 1.7976931348623157e308;
+			return [
+				LocalGet(argumentLocals[0]),
+				F64Const(maxFinite),
+				F64Le,
+				F64Const(-maxFinite),
+				LocalGet(argumentLocals[0]),
+				F64Le,
+				I32And,
+				LocalSet(outputLocal)
+			];
+		}
 		if (name == "Math.mathIsNaN" || name == "__math_is_nan") {
 			if (output.type != Bool || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw 'Invalid Wasm GC $name signature';
@@ -786,6 +801,175 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.setInt32 signature";
 			return managedByteSetI32(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+		}
+		if (name == "__bytes_set_float" || name == "setF32") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != F64
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC Bytes.setFloat signature";
+			var floatBitsLocal = allocateLocal(I32);
+			return [LocalGet(argumentLocals[2]), F32DemoteF64, I32ReinterpretF32, LocalSet(floatBitsLocal)]
+				.concat(managedByteSetI32(argumentLocals[0], argumentLocals[1], floatBitsLocal));
+		}
+		if (name == "getI64") {
+			if (output.type != I64 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI i64 getter signature";
+			return managedByteGetI64(argumentLocals[0], argumentLocals[1], outputLocal);
+		}
+		if (name == "setI64") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != I64
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI i64 setter signature";
+			return managedByteSetI64(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+		}
+		if (name == "getF32") {
+			if (output.type != F64 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI f32 getter signature";
+			var bits = allocateLocal(I32),
+				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], bits);
+			return body.concat([LocalGet(bits), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)]);
+		}
+		if (name == "getF64") {
+			if (output.type != F64 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI f64 getter signature";
+			var bits = allocateLocal(I64),
+				body = managedByteGetI64(argumentLocals[0], argumentLocals[1], bits);
+			return body.concat([LocalGet(bits), F64ReinterpretI64, LocalSet(outputLocal)]);
+		}
+		if (name == "setF64") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != F64
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI f64 setter signature";
+			var bits = allocateLocal(I64);
+			return [LocalGet(argumentLocals[2]), I64ReinterpretF64, LocalSet(bits)]
+				.concat(managedByteSetI64(argumentLocals[0], argumentLocals[1], bits));
+		}
+		if (name == "structCopy") {
+			if (output.type != Void || arguments.length != 4 || arguments[0].type != ManagedBytes || arguments[1].type != I32
+				|| arguments[2].type != ManagedBytes || arguments[3].type != I32 || argumentLocals.length != 4)
+				throw "Invalid Wasm GC HXI struct copy signature";
+			return managedBytesCopy(argumentLocals[0], argumentLocals[1], argumentLocals[2], argumentLocals[3]);
+		}
+		if (name == "structCopyPointer") {
+			if (output.type != ManagedBytes || arguments.length != 4 || arguments[0].type != ManagedBytes || arguments[1].type != I32
+				|| arguments[2].type != I32 || arguments[3].type != I32 || argumentLocals.length != 4)
+				throw "Invalid Wasm GC HXI pointer copy signature";
+			return managedBytesCopyPointer(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
+		}
+		if (name == "structSetBorrowedBytes") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
+				|| arguments[2].type != ManagedBytes || argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI borrowed-byte field setter signature";
+			var rootsType = plan.arrayType(ManagedBytes),
+				rootsLocal = allocateLocal(valueType(Array(ManagedBytes))),
+				indexLocal = allocateLocal(I32),
+				tokenLocal = allocateLocal(I32),
+				body:Array<WasmInstruction> = [LocalGet(argumentLocals[2]), RefIsNull, If(null), I32Const(0), LocalSet(tokenLocal), Else];
+			body = body.concat([
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(rootsType)}),
+				LocalSet(rootsLocal),
+				LocalGet(argumentLocals[1]),
+				I32Const(2),
+				I32ShrU,
+				I32Const(1),
+				I32Add,
+				LocalTee(indexLocal),
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				I32LtS,
+				I32Eqz,
+				If(null)
+			]);
+			body = body.concat(trapInstructions());
+			body = body.concat([
+				End,
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalGet(indexLocal),
+				ArrayGet(plan.arrayStorageType(ManagedBytes)),
+				LocalGet(argumentLocals[2]),
+				RefEq,
+				I32Eqz,
+				If(null)
+			]);
+			body = body.concat(trapInstructions());
+			body = body.concat([
+				End,
+				I32Const(-2147483648),
+				LocalGet(indexLocal),
+				I32Or,
+				LocalSet(tokenLocal)
+			]);
+			body.push(End);
+			body = body.concat(managedByteSetI32(argumentLocals[0], argumentLocals[1], tokenLocal));
+			return body;
+		}
+		if (name == "structUtf8Copy") {
+			if (output.type != ManagedBytes || arguments.length != 1 || arguments[0].type != Bytes || argumentLocals.length != 1)
+				throw "Invalid Wasm GC HXI UTF-8 copy signature";
+			return managedBytesFromUtf8String(argumentLocals[0], outputLocal);
+		}
+		if (name == "structSetUtf8") {
+			if (output.type != Void || arguments.length != 4 || arguments[0].type != ManagedBytes || arguments[1].type != I32
+				|| arguments[2].type != Bytes || arguments[3].type != Bool || argumentLocals.length != 4)
+				throw "Invalid Wasm GC HXI UTF-8 field setter signature";
+			var rootsType = plan.arrayType(ManagedBytes),
+				rootsStorageType = plan.arrayStorageType(ManagedBytes),
+				rootsLocal = allocateLocal(valueType(Array(ManagedBytes))),
+				indexLocal = allocateLocal(I32),
+				utf8Local = allocateLocal(valueType(ManagedBytes)),
+				tokenLocal = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(rootsType)}),
+				LocalSet(rootsLocal),
+				LocalGet(argumentLocals[1]),
+				I32Const(2),
+				I32ShrU,
+				I32Const(1),
+				I32Add,
+				LocalSet(indexLocal),
+				LocalGet(indexLocal),
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				I32LtS,
+				I32Eqz,
+				If(null)
+			];
+			body = body.concat(trapInstructions());
+			body = body.concat([
+				End,
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalGet(indexLocal),
+				RefNull(Type(plan.managedBytesTypeIndex)),
+				ArraySet(rootsStorageType),
+				LocalGet(argumentLocals[2]),
+				RefIsNull,
+				If(null),
+				LocalGet(argumentLocals[3]),
+				I32Eqz,
+				If(null)
+			]);
+			body = body.concat(trapInstructions());
+			body = body.concat([End, I32Const(0), LocalSet(tokenLocal), Else]);
+			body = body.concat(managedBytesFromUtf8String(argumentLocals[2], utf8Local));
+			body = body.concat([
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				LocalGet(indexLocal),
+				LocalGet(utf8Local),
+				ArraySet(rootsStorageType),
+				I32Const(-2147483648),
+				LocalGet(indexLocal),
+				I32Or,
+				LocalSet(tokenLocal),
+				End
+			]);
+			body = body.concat(managedByteSetI32(argumentLocals[0], argumentLocals[1], tokenLocal));
+			return body;
 		}
 		if (name == "__bytes_view" || name == "structSlice" || name == "__bytes_sub") {
 			if (output.type != ManagedBytes || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
@@ -1779,13 +1963,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			body = body.concat([End, End, End]);
 			return body;
 		}
-		var comparison = switch valueType(element) {
-			case F64: F64Eq;
-			case I64: I64Eq;
-			case Ref(_): RefEq;
-			default: I32Eq;
+		return switch valueType(element) {
+			case F64: [LocalGet(left), LocalGet(right), F64Eq, LocalSet(destination)];
+			case I64: [LocalGet(left), LocalGet(right), I64Eq, LocalSet(destination)];
+			case Ref({heap: Any}): [
+				LocalGet(left), RefCast({nullable: true, heap: Eq}),
+				LocalGet(right), RefCast({nullable: true, heap: Eq}),
+				RefEq, LocalSet(destination)
+			];
+			case Ref(_): [LocalGet(left), LocalGet(right), RefEq, LocalSet(destination)];
+			default: [LocalGet(left), LocalGet(right), I32Eq, LocalSet(destination)];
 		};
-		return [LocalGet(left), LocalGet(right), comparison, LocalSet(destination)];
 	}
 
 	function arraySlice(element:IrType, arrayLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
@@ -2871,6 +3059,42 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
+	function managedBytesFromUtf8String(stringLocal:Int, destination:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			size = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
+		return [
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 2),
+			LocalSet(length),
+			LocalGet(length),
+			I32Const(1),
+			I32Add,
+			LocalSet(size),
+			LocalGet(size),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 0),
+			LocalGet(stringLocal),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(length),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+			LocalGet(storage),
+			LocalGet(length),
+			I32Const(0),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(size),
+			RefNull(Any),
+			StructNew(plan.managedBytesTypeIndex),
+			LocalSet(destination)
+		];
+	}
+
 	function managedByteGet(bytesLocal:Int, indexLocal:Int, destination:Int):Array<WasmInstruction> {
 		var body = checkedByteIndex(plan.managedBytesTypeIndex, bytesLocal, indexLocal, 1);
 		body = body.concat([
@@ -2945,6 +3169,51 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
+	function managedByteGetI64(bytesLocal:Int, indexLocal:Int, destination:Int):Array<WasmInstruction> {
+		var low = allocateLocal(I32),
+			high = allocateLocal(I32),
+			highOffset = allocateLocal(I32),
+			body = checkedByteIndex(plan.managedBytesTypeIndex, bytesLocal, indexLocal, 8);
+		body = body.concat(managedByteGetI32(bytesLocal, indexLocal, low));
+		body = body.concat([LocalGet(indexLocal), I32Const(4), I32Add, LocalSet(highOffset)]);
+		body = body.concat(managedByteGetI32(bytesLocal, highOffset, high));
+		body = body.concat([
+			LocalGet(low),
+			I64ExtendI32U,
+			LocalGet(high),
+			I64ExtendI32U,
+			I64Const(32),
+			I64Shl,
+			I64Or,
+			LocalSet(destination)
+		]);
+		return body;
+	}
+
+	function managedByteSetI64(bytesLocal:Int, indexLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var low = allocateLocal(I32),
+			high = allocateLocal(I32),
+			highOffset = allocateLocal(I32),
+			body = checkedByteIndex(plan.managedBytesTypeIndex, bytesLocal, indexLocal, 8);
+		body = body.concat([
+			LocalGet(valueLocal),
+			I32WrapI64,
+			LocalSet(low),
+			LocalGet(valueLocal),
+			I64Const(32),
+			I64ShrU,
+			I32WrapI64,
+			LocalSet(high),
+			LocalGet(indexLocal),
+			I32Const(4),
+			I32Add,
+			LocalSet(highOffset)
+		]);
+		body = body.concat(managedByteSetI32(bytesLocal, indexLocal, low));
+		body = body.concat(managedByteSetI32(bytesLocal, highOffset, high));
+		return body;
+	}
+
 	function managedBytesView(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
 		var body = checkedByteRange(plan.managedBytesTypeIndex, bytesLocal, offsetLocal, lengthLocal);
 		body = body.concat([
@@ -2982,6 +3251,78 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(storage),
 			I32Const(0),
 			LocalGet(lengthLocal),
+			RefNull(Any),
+			StructNew(plan.managedBytesTypeIndex),
+			LocalSet(destination)
+		]);
+		return body;
+	}
+
+	function managedBytesCopy(destinationLocal:Int, destinationOffsetLocal:Int, sourceLocal:Int, lengthLocal:Int):Array<WasmInstruction> {
+		var sourceOffsetLocal = allocateLocal(I32),
+			body = checkedByteRange(plan.managedBytesTypeIndex, destinationLocal, destinationOffsetLocal, lengthLocal);
+		body.push(I32Const(0));
+		body.push(LocalSet(sourceOffsetLocal));
+		body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, sourceLocal, sourceOffsetLocal, lengthLocal));
+		body = body.concat([
+			LocalGet(destinationLocal),
+			StructGet(plan.managedBytesTypeIndex, 0),
+			LocalGet(destinationLocal),
+			StructGet(plan.managedBytesTypeIndex, 1),
+			LocalGet(destinationOffsetLocal),
+			I32Add,
+			LocalGet(sourceLocal),
+			StructGet(plan.managedBytesTypeIndex, 0),
+			LocalGet(sourceLocal),
+			StructGet(plan.managedBytesTypeIndex, 1),
+			LocalGet(sourceOffsetLocal),
+			I32Add,
+			LocalGet(lengthLocal),
+			ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+		]);
+		return body;
+	}
+
+	function managedBytesCopyPointer(bytesLocal:Int, pointerOffsetLocal:Int, lengthOffsetLocal:Int, destination:Int):Array<WasmInstruction> {
+		var pointer = allocateLocal(I32),
+			length = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			index = allocateLocal(I32),
+			body = managedByteGetI32(bytesLocal, pointerOffsetLocal, pointer);
+		body = body.concat(managedByteGetI32(bytesLocal, lengthOffsetLocal, length));
+		body = body.concat([LocalGet(length), I32Const(0), I32LtS, If(null)]);
+		body = body.concat(trapInstructions());
+		body = body.concat([
+			End,
+			LocalGet(length),
+			ArrayNewDefault(plan.byteArrayTypeIndex),
+			LocalSet(storage),
+			I32Const(0),
+			LocalSet(index),
+			Block(null),
+			Loop(null),
+			LocalGet(index),
+			LocalGet(length),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(storage),
+			LocalGet(index),
+			LocalGet(pointer),
+			LocalGet(index),
+			I32Add,
+			I32Load8U(0),
+			ArraySet(plan.byteArrayTypeIndex),
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(0),
+			End,
+			End,
+			LocalGet(storage),
+			I32Const(0),
+			LocalGet(length),
 			RefNull(Any),
 			StructNew(plan.managedBytesTypeIndex),
 			LocalSet(destination)

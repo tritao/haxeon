@@ -624,7 +624,7 @@ class HxiHaxeEmitter {
 									lengthExpression = lengthAccess == "I64" ? "haxe.Int64.ofInt(values.length)" : "values.length",
 									rootSlot = Std.int(field.offset / pointerSize) + 1;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
-								output.add('\tpublic function set_$fieldName(values:Array<$pointed>):Void { var bytes = $pointed.array(values); ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, bytes); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
+								output.add('\tpublic function set_$fieldName(values:Array<$pointed>):Void { var bytes = $pointed.array(values); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
 								continue;
 							}
 							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
@@ -646,7 +646,7 @@ class HxiHaxeEmitter {
 									rootSlot = Std.int(field.offset / pointerSize) + 1;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
 								output.add('\tpublic function get_$fieldName():Array<String> { var bytes = ${model.name}.__hxi_struct_get_roots(this)[$rootSlot]; var count = $countExpression; var values:Array<String> = []; if (bytes != null) for (index in 0...count) values.push(${model.name}.__hxi_struct_get_utf8(bytes, index * $pointerSize, false)); return values; }\n');
-								output.add('\tpublic function set_$fieldName(values:Array<String>):Void { var storage = ${model.name}.__hxi_struct_alloc(values.length * $pointerSize); var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...values.length + 1) roots.push(null); roots[0] = storage; var bytes:haxe.io.Bytes = ${model.name}.__hxi_struct_with_roots(storage, roots); for (index in 0...values.length) { var __text = ${model.name}.__hxi_struct_utf8_copy(values[index]); ${model.name}.__hxi_struct_set_borrowed_bytes(bytes, index * $pointerSize, __text); roots[index + 1] = __text; } ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, bytes); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
+								output.add('\tpublic function set_$fieldName(values:Array<String>):Void { var storage = ${model.name}.__hxi_struct_alloc(values.length * $pointerSize); var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...values.length + 1) roots.push(null); roots[0] = storage; var bytes:haxe.io.Bytes = ${model.name}.__hxi_struct_with_roots(storage, roots); for (index in 0...values.length) { var __text = ${model.name}.__hxi_struct_utf8_copy(values[index]); roots[index + 1] = __text; ${model.name}.__hxi_struct_set_borrowed_bytes(bytes, index * $pointerSize, __text); } ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
 								continue;
 							}
 							usesBorrowedBuffers = true;
@@ -656,7 +656,7 @@ class HxiHaxeEmitter {
 								lengthExpression = lengthBytes == 8 ? "haxe.Int64.ofInt(value.length)" : "value.length";
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_copy_pointer(this, ${field.offset}, ${lengthField.offset}, $lengthBytes);\n');
-							output.add('\tpublic function set_${fieldName}_bytes(value:haxe.io.Bytes):Void { ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = value; ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
+							output.add('\tpublic function set_${fieldName}_bytes(value:haxe.io.Bytes):Void { ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = value; ${model.name}.__hxi_struct_set_borrowed_bytes(this, ${field.offset}, value); ${model.name}.__hxi_struct_set$lengthAccess(this, ${lengthField.offset}, $lengthExpression); }\n');
 							continue;
 						}
 						var array = arrayType(field.type, declarations);
@@ -1283,7 +1283,7 @@ class HxiHaxeEmitter {
 					} else {
 						arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
 						if (utf8)
-							setup.push('var __array_storage_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); var __array_roots_${parameter.name}:Array<haxe.io.Bytes> = []; for (__root in 0...(${parameter.name}.length + 1)) __array_roots_${parameter.name}.push(null); __array_roots_${parameter.name}[0] = __array_storage_${parameter.name}; var __array_${parameter.name}:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_${parameter.name}, __array_roots_${parameter.name}); for (__index in 0...${parameter.name}.length) { var __text = __hxi_struct_utf8_copy(${parameter.name}[__index]); __hxi_struct_set_borrowed_bytes(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, __text); __array_roots_${parameter.name}[__index + 1] = __text; }');
+							setup.push('var __array_storage_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); var __array_roots_${parameter.name}:Array<haxe.io.Bytes> = []; for (__root in 0...(${parameter.name}.length + 1)) __array_roots_${parameter.name}.push(null); __array_roots_${parameter.name}[0] = __array_storage_${parameter.name}; var __array_${parameter.name}:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_${parameter.name}, __array_roots_${parameter.name}); for (__index in 0...${parameter.name}.length) { var __text = __hxi_struct_utf8_copy(${parameter.name}[__index]); __array_roots_${parameter.name}[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, __text); }');
 						else
 							setup.push('var __array_${parameter.name} = $elementType.array(${parameter.name});');
 						callArguments.push('__array_${parameter.name}');
