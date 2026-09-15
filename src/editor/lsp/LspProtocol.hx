@@ -1461,7 +1461,9 @@ class LspProtocol {
 			severity: Std.string(diagnostic.severity) == "Warning" ? 2 : 1,
 			code: diagnostic.code,
 			source: "haxeon",
-			data: {origin: Std.string(diagnostic.origin)},
+			data: {
+				origin: Std.string(diagnostic.origin)
+			},
 			message: diagnostic.message
 		};
 

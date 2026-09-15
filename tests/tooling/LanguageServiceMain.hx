@@ -612,8 +612,8 @@ class LanguageServiceMain {
 		transitionService.update("Transition.hx", incompleteEditorSource);
 		var recoveredPosition = incompleteEditorSource.indexOf("foo.") + "foo.".length,
 			recoveredResult = transitionService.completeResult("Transition.hx", recoveredPosition),
-			recoveredId = transitionService.compiler.modules.get("Transition").recoveredSemanticModel.index.symbolIdAt(
-			incompleteEditorSource.indexOf("foo.") + 1);
+			recoveredId = transitionService.compiler.modules.get("Transition")
+				.recoveredSemanticModel.index.symbolIdAt(incompleteEditorSource.indexOf("foo.") + 1);
 		if (!recoveredResult.isIncomplete || recoveredId == null || Std.string(recoveredId) != Std.string(validId))
 			throw 'recovery transition did not preserve the local semantic identity: valid=${Std.string(validId)} recovered=${Std.string(recoveredId)}';
 		transitionService.update("Transition.hx", validEditorSource);

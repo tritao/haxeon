@@ -297,7 +297,10 @@ class SemanticIndex {
 		recoveredLocalNext.set(functionKey, owner != null && !fn.isStatic ? 1 : 0);
 		var functionId = recoveredDeclaredSymbol(functionKey);
 		if (functionId != null) {
-			var parameters = [for (argument in fn.arguments) argument.name + ":" + displayAstType(argument.type)];
+			var parameters = [
+				for (argument in fn.arguments)
+					argument.name + ":" + displayAstType(argument.type)
+			];
 			setDeclaredSignature(functionKey, fn.name + "(" + parameters.join(", ") + "):" + displayAstType(fn.result), parameters, displayAstType(fn.result));
 		}
 		for (argument in fn.arguments)
@@ -419,7 +422,7 @@ class SemanticIndex {
 						indexRecoveredStatementUses(item.statements, expectedReturn);
 					}
 					indexRecoveredStatementUses(fallback, expectedReturn);
-			default:
+				default:
 			}
 	}
 
@@ -439,8 +442,7 @@ class SemanticIndex {
 						else
 							recordUnresolved(name, span);
 					}
-				}
-				else {
+				} else {
 					var receiver = name.substring(0, separator),
 						member = name.substring(name.lastIndexOf(".") + 1);
 					bindRecoveredLocal(receiver, span);
@@ -453,8 +455,10 @@ class SemanticIndex {
 			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
-					var receiverName = name.substring(0, separator), memberName = name.substring(separator + 1),
-						receiver = Variable(receiverName, span), callee = bindRecoveredMember(receiver, memberName, span),
+					var receiverName = name.substring(0, separator),
+						memberName = name.substring(separator + 1),
+						receiver = Variable(receiverName, span),
+						callee = bindRecoveredMember(receiver, memberName, span),
 						owner = memberOwner(recoveredExpressionBindingType(receiver));
 					if (callee == null)
 						recordUnresolved(memberName, span);
@@ -470,7 +474,7 @@ class SemanticIndex {
 								bind(callee, token.span);
 							addCall(callee, span, name);
 						} else
-						recordUnresolved(name, span);
+							recordUnresolved(name, span);
 					}
 					indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
 				}
@@ -577,14 +581,9 @@ class SemanticIndex {
 		return switch expression {
 			case Variable(name, span):
 				var id = bindRecoveredLocal(name, span);
-				if (id != null && declarationTypes.exists(id))
-					declarationTypes.get(id);
-				else if (declarations.classes.exists(name))
-					TInstance(compiler.types.Type.NominalKind.Class, name, []);
-				else if (declarations.interfaces.exists(name))
-					TInstance(compiler.types.Type.NominalKind.Interface, name, []);
-				else
-					TUnknown;
+				if (id != null && declarationTypes.exists(id)) declarationTypes.get(id); else if (declarations.classes.exists(name))
+					TInstance(compiler.types.Type.NominalKind.Class, name,
+					[]); else if (declarations.interfaces.exists(name)) TInstance(compiler.types.Type.NominalKind.Interface, name, []); else TUnknown;
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: recoveredExpressionType(expression);
 		};
@@ -817,11 +816,7 @@ class SemanticIndex {
 					expectedWidth = width;
 				}
 			}
-		var kind = qualifier != null
-			? SemanticCompletionContextKind.Member
-			: isTypeContext(position)
-				? SemanticCompletionContextKind.Type
-				: expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
+		var kind = qualifier != null ? SemanticCompletionContextKind.Member : isTypeContext(position) ? SemanticCompletionContextKind.Type : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
 			receiver: receiver,

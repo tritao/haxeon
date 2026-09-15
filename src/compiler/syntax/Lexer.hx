@@ -10,10 +10,10 @@ import compiler.Diagnostic.DiagnosticOrigin;
 class Lexer {
 	final file:SourceFile;
 	final source:haxe.io.Bytes;
-	final checkpointCallback:Null<Void -> Void>;
+	final checkpointCallback:Null<Void->Void>;
 	var position:Int = 0;
 
-	public function new(file:SourceFile, ?source:String, ?checkpoint:Void -> Void) {
+	public function new(file:SourceFile, ?source:String, ?checkpoint:Void->Void) {
 		this.file = file;
 		this.source = source == null || source == file.text ? file.bytes : haxe.io.Bytes.ofString(source);
 		this.checkpointCallback = checkpoint;
@@ -123,8 +123,8 @@ class Lexer {
 					while (position < source.length && isHexDigit(source.get(position)))
 						position++;
 					if (position == digitsStart)
-					throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position),
-						DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
+						throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position),
+							DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 					tokens.push(new Token(TokenKind.Integer, text(start, position), file.span(start, position)));
 					continue;
 				}
@@ -255,7 +255,7 @@ class Lexer {
 						TokenKind.PercentAssign;
 					} else TokenKind.Percent;
 				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position),
-					DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
+						DiagnosticSeverity.Error, null, DiagnosticOrigin.Lexical));
 			}
 			tokens.push(new Token(kind, text(start, position), file.span(start, position)));
 		}

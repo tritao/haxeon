@@ -5,13 +5,20 @@ import compiler.service.LanguageService;
 class InteractiveEditMain {
 	static function main():Void {
 		var service = new LanguageService(),
-			prefix = "class Foo { public function bar(value:Int):Int return value; }\n"
-				+ "function main():Void { var foo:Foo = new Foo(); ",
-			tails = ["f", "fo", "foo", "foo.", "foo.b", "foo.ba", "foo.bar(", "foo.bar(x", "foo.bar(x)"]; 
+			prefix = "class Foo { public function bar(value:Int):Int return value; }\n" + "function main():Void { var foo:Foo = new Foo(); ", tails = [
+				"f",
+				"fo",
+				"foo",
+				"foo.",
+				"foo.b",
+				"foo.ba",
+				"foo.bar(",
+				"foo.bar(x",
+				"foo.bar(x)"
+			];
 
 		for (tail in tails) {
-			var source = prefix + tail,
-				position = source.length;
+			var source = prefix + tail, position = source.length;
 			service.update("Interactive.hx", source);
 			assertHealthySnapshot(service, source, tail);
 

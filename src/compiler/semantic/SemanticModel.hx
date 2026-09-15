@@ -13,6 +13,7 @@ class SemanticModel {
 	public final program:AstProgram;
 	public final declarations:DeclarationIndex;
 	public final index:SemanticIndex;
+
 	/** Optional partial typed output owned only by a recovered editor model. */
 	public var partialTypedProgram:Null<TypedProgram>;
 

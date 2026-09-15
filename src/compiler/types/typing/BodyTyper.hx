@@ -63,8 +63,7 @@ class BodyTyper {
 		session.leaveBody(body);
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
-			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false,
-			?checkpoint:Void -> Void) {
+			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String, tolerant:Bool = false, ?checkpoint:Void->Void) {
 		this.session = new TypingSession(externals, specializations, nativeAbiTarget, tolerant, checkpoint);
 		this.conversionResolver = new ConversionResolver(session);
 		this.inlineConstantResolver = new InlineConstantResolver(session, function(owner, name) return this.findStaticFieldNullable(owner, name),
@@ -322,7 +321,9 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (!session.tolerant && result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if (!session.tolerant
+			&& result != TVoid
+			&& !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;

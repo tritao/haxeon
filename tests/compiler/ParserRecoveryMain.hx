@@ -101,7 +101,8 @@ class ParserRecoveryMain {
 
 		var methodSource = new SourceFile("Method.hx", "class Child { public function unfinished(");
 		var methodResult = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering();
-		if (methodResult.program.classes.length != 1 || methodResult.program.classes[0].methods.length != 1
+		if (methodResult.program.classes.length != 1
+			|| methodResult.program.classes[0].methods.length != 1
 			|| methodResult.program.classes[0].methods[0].name != "unfinished")
 			throw "unfinished method declaration discarded the class member";
 
@@ -178,7 +179,8 @@ class ParserRecoveryMain {
 		for (local in locals)
 			if (local.name == "broken")
 				switch local.type {
-					case TError: foundError = true;
+					case TError:
+						foundError = true;
 					default:
 				}
 		if (!foundError)
@@ -207,8 +209,7 @@ class ParserRecoveryMain {
 	}
 
 	static function assertTolerantTypedSnapshot():Void {
-		var source = new SourceFile("Tolerant.hx",
-			"function main():Void { var first:Int = 1; broken.unresolved().thing; var second:Int = first; }");
+		var source = new SourceFile("Tolerant.hx", "function main():Void { var first:Int = 1; broken.unresolved().thing; var second:Int = first; }");
 		var recovered = new Parser(new Lexer(source).tokenize()).parseProgramRecovering().program,
 			typed = Typer.typeRecovered(recovered);
 		if (typed == null || typed.functions.length != 1)

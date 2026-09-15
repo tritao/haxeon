@@ -265,7 +265,7 @@ class LanguageService {
 			mergeRecoveryDiagnostics(state, [error.diagnostic]);
 			return;
 		}
-		var checkpoint:Null<Void -> Void> = token == null ? null : function() token.check(),
+		var checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
 			tokens:Array<compiler.syntax.Token>;
 		try
 			tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize()
@@ -670,12 +670,14 @@ class LanguageService {
 
 	/** Whether the latest source has either a valid or recovered editor snapshot. */
 	public function isEditorSnapshotCurrent(path:String):Bool {
-		var state = stateFor(path), snapshot = state == null ? null : editorSnapshot(state);
+		var state = stateFor(path),
+			snapshot = state == null ? null : editorSnapshot(state);
 		return snapshot != null && !snapshot.stale;
 	}
 
 	public function editorSnapshotConfidence(path:String):Null<EditorSnapshotConfidence> {
-		var state = stateFor(path), snapshot = state == null ? null : editorSnapshot(state);
+		var state = stateFor(path),
+			snapshot = state == null ? null : editorSnapshot(state);
 		return snapshot == null ? null : snapshot.confidence;
 	}
 
@@ -784,8 +786,7 @@ class LanguageService {
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token))
 				if (isTypeCompletionKind(candidate.symbol.kind))
 					addMember(candidate.symbol.name, completionDeclarationKind(candidate.symbol.kind), candidate.symbol.name, prefix, result, 1,
-						candidate.importPath == null ? null : candidate.symbol.name,
-						candidate.symbol.id, candidate.importPath);
+						candidate.importPath == null ? null : candidate.symbol.name, candidate.symbol.id, candidate.importPath);
 			for (symbol in documentSymbols(path))
 				if (symbol.kind == "class" || symbol.kind == "interface" || symbol.kind == "enum" || symbol.kind == "type" || symbol.kind == "abstract")
 					addMember(symbol.name, symbol.kind, symbol.detail, prefix, result, 2);
@@ -994,7 +995,7 @@ class LanguageService {
 			return null;
 		var model = effectiveSemanticModel(state),
 			indexedId = model == null ? null : model.index.symbolIdAt(position),
-				indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
+			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId);
 		if (indexedSignature != null)
 			return indexedSignature.label;
 		if (indexedId != null && model != null) {
@@ -1227,7 +1228,11 @@ class LanguageService {
 			indexedId = context == null ? null : context.symbol,
 			name = symbolAt(path, position),
 			result:Array<TextEdit> = [];
-		if (context == null || context.confidence != EditorSnapshotConfidence.Exact || name == null || !isIdentifier(replacement) || replacement == name)
+		if (context == null
+			|| context.confidence != EditorSnapshotConfidence.Exact
+			|| name == null
+			|| !isIdentifier(replacement)
+			|| replacement == name)
 			return result;
 		var targetReferences = references(path, position);
 		if (indexedRenameCollides(indexedId, replacement, targetReferences))
@@ -1315,8 +1320,8 @@ class LanguageService {
 			snapshot = state == null ? null : editorSnapshot(state),
 			model = snapshot == null ? null : snapshot.semanticModel;
 		var symbol = model == null ? null : model.index.symbolIdAt(position),
-			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial && symbol != null
-				? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
+			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial
+				&& symbol != null ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence;
 		return state == null || snapshot == null || model == null ? null : {
 			state: state,
 			snapshot: snapshot,
@@ -1329,7 +1334,8 @@ class LanguageService {
 	}
 
 	static function stableSymbol(context:Null<SemanticQueryContext>):Bool
-		return context != null && context.symbol != null
+		return context != null
+			&& context.symbol != null
 			&& (context.confidence == EditorSnapshotConfidence.Exact || context.confidence == EditorSnapshotConfidence.RecoveredStable);
 
 	static function sourceName(name:String):String {

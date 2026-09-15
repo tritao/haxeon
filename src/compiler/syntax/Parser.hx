@@ -30,12 +30,12 @@ class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 
 	final tokens:Array<Token>;
-	final checkpointCallback:Null<Void -> Void>;
+	final checkpointCallback:Null<Void->Void>;
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
-	public function new(tokens:Array<Token>, ?checkpoint:Void -> Void) {
+	public function new(tokens:Array<Token>, ?checkpoint:Void->Void) {
 		this.tokens = tokens;
 		this.checkpointCallback = checkpoint;
 	}
@@ -1468,7 +1468,7 @@ class Parser {
 				do {
 					var optional = match(TokenKind.Question),
 						argumentStart = current().span,
-					argumentName = consumeDeclarationName("parameter");
+						argumentName = consumeDeclarationName("parameter");
 					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType;
 					arguments.push({
 						name: argumentName,
@@ -1493,8 +1493,7 @@ class Parser {
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot
-				&& !(recovering && isExpressionTerminator(peekKind(1)))) {
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot && !(recovering && isExpressionTerminator(peekKind(1)))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1524,8 +1523,7 @@ class Parser {
 			return parseNativeLayoutQuery();
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
-			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot
-				&& !(recovering && isExpressionTerminator(peekKind(1)))) {
+			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot && !(recovering && isExpressionTerminator(peekKind(1)))) {
 				advance();
 				var part = consumeName();
 				name += "." + part.text;
@@ -1605,7 +1603,8 @@ class Parser {
 
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
 		consume(TokenKind.LeftParen);
-		var keyName = consumeDeclarationName("comprehension key"), valueName = null;
+		var keyName = consumeDeclarationName("comprehension key"),
+			valueName = null;
 		if (match(TokenKind.Assign)) {
 			consume(TokenKind.Greater);
 			valueName = consumeDeclarationName("comprehension value");
