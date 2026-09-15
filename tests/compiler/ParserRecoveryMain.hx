@@ -408,6 +408,16 @@ class ParserRecoveryMain {
 				throw 'unfinished member access did not retain its receiver type: ${memberExpression.type}';
 		}
 
+		var postErrorService = new LanguageService(),
+			postErrorSource = "class Foo { public var value:Int; } function main():Void { var foo:Foo = new Foo(); broken.unresolved().thing; foo. }";
+		postErrorService.update("TolerantPostError.hx", postErrorSource);
+		var postErrorNames = [
+			for (item in postErrorService.complete("TolerantPostError.hx", postErrorSource.length))
+				item.label
+		];
+		if (postErrorNames.indexOf("value") < 0)
+			throw "an expression error erased the known local type needed for member completion";
+
 		var methodSource = new SourceFile("TolerantMethodCall.hx",
 			"class Foo { public function bar(value:Int):Int return value; } function main():Int { var foo:Foo = new Foo(); return foo.bar(");
 		var methodProgram = new Parser(new Lexer(methodSource).tokenize()).parseProgramRecovering().program,
