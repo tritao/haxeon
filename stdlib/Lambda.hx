@@ -6,4 +6,11 @@ class Lambda {
 				return value;
 		return null;
 	}
+
+	public static function exists<T>(values:Array<T>, predicate:T->Bool):Bool {
+		for (value in values)
+			if (predicate(value))
+				return true;
+		return false;
+	}
 }

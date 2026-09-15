@@ -1576,21 +1576,21 @@ class IrGenerator {
 			if (predicate.arrayIndex >= 0)
 				field = builder.arrayGet(field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
 			field = abiBoundaryCast(builder, field, lowerType(predicate.type));
-			var matches = if (predicate.nestedConstructorIndex != null) builder.equal(builder.enumIndex(field),
-				builder.constInt(predicate.nestedConstructorIndex)); else if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field),
-				builder.constInt(predicate.arrayLength)); else {
-				var predicateValue = predicate.value;
-				if (predicateValue == null)
-					throw "Equality payload predicate has no value";
-				var expected = lowerExpression(predicateValue, builder, localTypes);
-				if (isStringPatternType(predicate.type))
-					builder.call("__string_equal", [field, expected], Bool);
-				else if (isDirectEnumType(predicate.type))
-					builder.equal(builder.enumIndex(field), builder.enumIndex(expected));
-				else
-					builder.equal(field, expected);
-			}
-			checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
+			var nestedConstructorIndex = predicate.nestedConstructorIndex,
+				matches = if (nestedConstructorIndex != null) builder.equal(builder.enumIndex(field),
+					builder.constInt(nestedConstructorIndex)); else if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field),
+					builder.constInt(predicate.arrayLength)); else {
+					var predicateValue = predicate.value;
+					if (predicateValue == null)
+						throw "Equality payload predicate has no value";
+					var expected = lowerExpression(predicateValue, builder, localTypes);
+					if (isStringPatternType(predicate.type))
+						builder.call("__string_equal", [field, expected], Bool);
+					else if (isDirectEnumType(predicate.type))
+						builder.equal(builder.enumIndex(field), builder.enumIndex(expected));
+					else
+						builder.equal(field, expected);
+				} checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
 			builder.branch(matches, checkBlock, nextBlock);
 		}
 	}
