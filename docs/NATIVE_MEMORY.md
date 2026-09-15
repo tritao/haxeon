@@ -122,6 +122,10 @@ allocates only a new pointer slot; the `hl_type` record itself remains in the
 arena at a stable address. When the table grows, `pointer()` changes to the new
 contiguous table and the previous table storage remains owned by the arena,
 allowing publication code to stage a replacement before exposing it.
+Module contexts created by `HlTypeBuilder` are also owned by the arena. If
+HashLink derives runtime object metadata through a context, `reset()` and
+`dispose()` release those native allocator blocks before invalidating the
+arena's records.
 
 ## Deliberate exclusions
 

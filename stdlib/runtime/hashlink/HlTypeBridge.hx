@@ -11,6 +11,14 @@ class HlTypeBridge {
 	public static function native_type_size(type:RawPtr<HlType>):Int
 		return 0;
 
+	public static function native_type_data_size(type:RawPtr<HlType>):Int
+		return 0;
+
+	public static function native_type_object_field_offset(type:RawPtr<HlType>, field:Int):Int
+		return 0;
+
+	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
+
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int
 		return 0;
 

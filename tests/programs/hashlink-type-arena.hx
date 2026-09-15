@@ -43,7 +43,14 @@ function main():Int {
 		&& HlTypeBridge.native_type_kind(builtFunction) == 10
 		&& HlTypeBridge.native_type_kind(builtParameter) == 14
 		&& HlTypeBridge.native_type_function_arity(builtFunction) == 3;
-	var builtObject = builder.objectType(RawPtr.nullPtr(), voidType, [{name: RawPtr.nullPtr(), type: intType, hashedName: 17}], [
+	var module = builder.moduleContext([
+		RawPtr.nullPtr(),
+		RawPtr.nullPtr(),
+		RawPtr.nullPtr(),
+		RawPtr.nullPtr(),
+		RawPtr.nullPtr()
+	], [intType, builtFunction, builtFunction, builtFunction, builtFunction]);
+	var builtObject = builder.objectType(RawPtr.nullPtr(), RawPtr.nullPtr(), [{name: RawPtr.nullPtr(), type: intType, hashedName: 17}], [
 		{
 			name: RawPtr.nullPtr(),
 			findex: 3,
@@ -51,7 +58,7 @@ function main():Int {
 			hashedName: 19
 		}
 	], [7],
-		RawPtr.nullPtr(), RawPtr.nullPtr(), RawPtr.nullPtr()),
+		RawPtr.nullPtr(), module, RawPtr.nullPtr()),
 		objectData = builtObject.ref.data.ref.obj,
 		builtEnum = builder.enumType(RawPtr.nullPtr(), [
 			{
@@ -92,8 +99,7 @@ function main():Int {
 	typeTable.set(1, builtParameter);
 	tableCorrect = tableCorrect && typeTable.get(1) == builtParameter;
 	var objectName = builder.utf16Name("Obj"),
-		fieldName = builder.utf16Name("field"),
-		module = builder.moduleContext([RawPtr.nullPtr()], [intType]);
+		fieldName = builder.utf16Name("field");
 	objectData.ref.name = objectName;
 	objectData.ref.fields.offset(0).ref.name = fieldName;
 	var namesCorrect = objectData.ref.name.offset(0).load() == 79
@@ -105,7 +111,16 @@ function main():Int {
 	var moduleCorrect = module.ref.alloc.ref.current == RawPtr.nullPtr()
 		&& module.ref.functionsPtrs.offset(0).load() == RawPtr.nullPtr()
 		&& module.ref.functionsTypes.offset(0).load() == intType;
+	var nativeObjectCorrect = HlTypeBridge.native_type_data_size(builtObject) == 16
+		&& HlTypeBridge.native_type_object_field_offset(builtObject, 0) == 8
+		&& objectData.ref.module == module;
 	arena.dispose();
 	arena.dispose();
-	return correct && builtCorrect && graphCorrect && tableCorrect && namesCorrect && moduleCorrect ? 42 : 1;
+	return correct
+		&& builtCorrect
+		&& graphCorrect
+		&& tableCorrect
+		&& namesCorrect
+		&& moduleCorrect
+		&& nativeObjectCorrect ? 42 : 1;
 }

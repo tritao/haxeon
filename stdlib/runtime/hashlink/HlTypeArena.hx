@@ -17,6 +17,7 @@ import runtime.hashlink.HlRuntimeObject;
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
 	final storage:Arena;
+	final moduleContexts:Array<RawPtr<HlModuleContext>> = [];
 
 	public function new(?blockSize:Int = 65536)
 		storage = new Arena(blockSize);
@@ -78,11 +79,26 @@ class HlTypeArena {
 	public inline function allocRuntimeObject():RawPtr<HlRuntimeObject>
 		return storage.alloc();
 
+	/** Register a module context whose derived HashLink allocations share this arena's lifetime. */
+	@:allow(runtime.hashlink.HlTypeBuilder)
+	function ownModuleContext(context:RawPtr<HlModuleContext>):Void
+		moduleContexts.push(context);
+
 	/** Invalidate every metadata pointer while retaining the arena blocks. */
-	public inline function reset():Void
+	public function reset():Void {
+		disposeModuleContexts();
 		storage.reset();
+	}
 
 	/** Release all metadata storage. Repeated disposal is safe. */
-	public inline function dispose():Void
+	public function dispose():Void {
+		disposeModuleContexts();
 		storage.dispose();
+	}
+
+	function disposeModuleContexts():Void {
+		for (context in moduleContexts)
+			HlTypeBridge.native_module_context_dispose(context);
+		moduleContexts.resize(0);
+	}
 }

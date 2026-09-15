@@ -109,6 +109,7 @@ class HlTypeBuilder {
 			}
 		context.ref.functionsPtrs = nativeFunctions;
 		context.ref.functionsTypes = nativeTypes;
+		arena.ownModuleContext(context);
 		return context;
 	}
 

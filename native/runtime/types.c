@@ -8,6 +8,30 @@ HL_PRIM int HL_NAME(native_type_size)( hl_type *type ) {
 	return hl_type_size(type);
 }
 
+HL_PRIM int HL_NAME(native_type_data_size)( hl_type *type ) {
+	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
+	if( type->kind != HOBJ && type->kind != HSTRUCT )
+		hl_error("HashLink type metadata pointer must reference an object type");
+	return hl_get_obj_rt(type)->size;
+}
+
+HL_PRIM int HL_NAME(native_type_object_field_offset)( hl_type *type, int field ) {
+	hl_runtime_obj *runtime;
+	if( type == NULL || (type->kind != HOBJ && type->kind != HSTRUCT) )
+		hl_error("HashLink type metadata pointer must reference an object type");
+	runtime = hl_get_obj_rt(type);
+	if( field < 0 || field >= runtime->nfields )
+		hl_error("HashLink object field index is outside the runtime layout");
+	return runtime->fields_indexes[field];
+}
+
+HL_PRIM void HL_NAME(native_module_context_dispose)( hl_module_context *context ) {
+	if( context == NULL ) return;
+	hl_free(&context->alloc);
+	context->functions_ptrs = NULL;
+	context->functions_types = NULL;
+}
+
 HL_PRIM int HL_NAME(native_type_function_arity)( hl_type *type ) {
 	if( type == NULL || type->kind != HFUN || type->fun == NULL )
 		hl_error("HashLink type metadata pointer must reference a function type");
