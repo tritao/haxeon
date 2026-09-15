@@ -451,18 +451,29 @@ class SemanticIndex {
 				if (bindRecoveredMember(object, name, span) == null && name.length > 0)
 					recordUnresolved(name, span);
 			case Call(name, arguments, span):
-				var local = bindRecoveredLocal(name, span);
-				if (local == null) {
-					var callee = recoveredDeclaredSymbol(name);
-					if (callee != null) {
-						var token = referenceToken(tokens, span, sourceName(name));
-						if (token != null)
-							bind(callee, token.span);
-						addCall(callee, span, name);
-					} else
-					recordUnresolved(name, span);
+				var separator = name.lastIndexOf(".");
+				if (separator > 0) {
+					var receiverName = name.substring(0, separator), memberName = name.substring(separator + 1),
+						receiver = Variable(receiverName, span), callee = bindRecoveredMember(receiver, memberName, span),
+						owner = memberOwner(recoveredExpressionBindingType(receiver));
+					if (callee == null)
+						recordUnresolved(memberName, span);
+					addCall(callee, span, memberName);
+					indexRecoveredCallArguments(arguments, owner == null ? null : recoveredFunctions.get(owner + "." + memberName));
+				} else {
+					var local = bindRecoveredLocal(name, span);
+					if (local == null) {
+						var callee = recoveredDeclaredSymbol(name);
+						if (callee != null) {
+							var token = referenceToken(tokens, span, sourceName(name));
+							if (token != null)
+								bind(callee, token.span);
+							addCall(callee, span, name);
+						} else
+						recordUnresolved(name, span);
+					}
+					indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
 				}
-				indexRecoveredCallArguments(arguments, recoveredFunctions.get(name));
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee);
 				for (argument in arguments)
@@ -564,8 +575,16 @@ class SemanticIndex {
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
-			case Variable(name, span): var id = bindRecoveredLocal(name,
-					span); id == null || !declarationTypes.exists(id) ? TUnknown : declarationTypes.get(id);
+			case Variable(name, span):
+				var id = bindRecoveredLocal(name, span);
+				if (id != null && declarationTypes.exists(id))
+					declarationTypes.get(id);
+				else if (declarations.classes.exists(name))
+					TInstance(compiler.types.Type.NominalKind.Class, name, []);
+				else if (declarations.interfaces.exists(name))
+					TInstance(compiler.types.Type.NominalKind.Interface, name, []);
+				else
+					TUnknown;
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: recoveredExpressionType(expression);
 		};
