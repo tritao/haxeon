@@ -129,6 +129,13 @@ class ParserRecoveryMain {
 			|| methodResult.program.classes[0].methods[0].name != "unfinished")
 			throw "unfinished method declaration discarded the class member";
 
+		var interfaceMethodSource = new SourceFile("InterfaceMethod.hx", "interface Contract { function unfinished");
+		var interfaceMethodResult = new Parser(new Lexer(interfaceMethodSource).tokenize()).parseProgramRecovering();
+		if (interfaceMethodResult.program.interfaces.length != 1
+			|| interfaceMethodResult.program.interfaces[0].methods.length != 1
+			|| interfaceMethodResult.program.interfaces[0].methods[0].name != "unfinished")
+			throw "unfinished interface method declaration discarded the interface member";
+
 		var genericSource = new SourceFile("Generic.hx", "function main():Void { var values:Array<");
 		var genericResult = new Parser(new Lexer(genericSource).tokenize()).parseProgramRecovering();
 		if (genericResult.program.functions.length != 1 || genericResult.program.functions[0].statements.length != 1)

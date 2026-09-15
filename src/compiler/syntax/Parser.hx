@@ -756,28 +756,32 @@ class Parser {
 				methodName = consumeDeclarationName("interface method");
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 				typeParameters = parseTypeParameters(typeConstraints);
-			consume(TokenKind.LeftParen);
 			var arguments = [];
-			while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
-				if (check(TokenKind.Comma)) {
-					recordExpected("parameter");
-					advance();
-					continue;
+			if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
+				recordExpected("left parenthesis");
+			else {
+				consume(TokenKind.LeftParen);
+				while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
+					if (check(TokenKind.Comma)) {
+						recordExpected("parameter");
+						advance();
+						continue;
+					}
+					var optional = match(TokenKind.Question),
+						argumentName = consumeDeclarationName("parameter");
+					consume(TokenKind.Colon);
+					arguments.push({
+						name: argumentName,
+						type: parseType(),
+						span: previous().span,
+						optional: optional,
+						defaultValue: null
+					});
+					if (!match(TokenKind.Comma))
+						break;
 				}
-				var optional = match(TokenKind.Question),
-					argumentName = consumeDeclarationName("parameter");
-				consume(TokenKind.Colon);
-				arguments.push({
-					name: argumentName,
-					type: parseType(),
-					span: previous().span,
-					optional: optional,
-					defaultValue: null
-				});
-				if (!match(TokenKind.Comma))
-					break;
+				consume(TokenKind.RightParen);
 			}
-			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
 				end = consume(TokenKind.Semicolon).span;
 			methods.push({
