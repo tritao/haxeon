@@ -373,37 +373,46 @@ class Parser {
 			};
 		}
 		consume(TokenKind.LeftBrace);
+		var bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
-			var caseMetadata = parseMetadata(),
-				caseToken = consumeName(),
-				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
-			if (match(TokenKind.LeftParen)) {
-				if (!check(TokenKind.RightParen))
-					do {
-						var optional = match(TokenKind.Question),
-							parameterStart = current().span,
-							name:Null<String> = null;
-						if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
-							name = advance().text;
-							advance();
-						}
-						var type = parseType();
-						params.push({
-							name: name,
-							type: type,
-							optional: optional,
-							span: parameterStart.merge(previous().span)
-						});
-					} while (match(TokenKind.Comma));
-				consume(TokenKind.RightParen);
+			var caseStart = position;
+			try {
+				var caseMetadata = parseMetadata(),
+					caseToken = consumeName(),
+					params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
+				if (match(TokenKind.LeftParen)) {
+					if (!check(TokenKind.RightParen))
+						do {
+							var optional = match(TokenKind.Question),
+								parameterStart = current().span,
+								name:Null<String> = null;
+							if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
+								name = advance().text;
+								advance();
+							}
+							var type = parseType();
+							params.push({
+								name: name,
+								type: type,
+								optional: optional,
+								span: parameterStart.merge(previous().span)
+							});
+						} while (match(TokenKind.Comma));
+					consume(TokenKind.RightParen);
+				}
+				cases.push({
+					name: caseToken.text,
+					metadata: caseMetadata,
+					params: params,
+					span: caseToken.span.merge(previous().span)
+				});
+				consume(TokenKind.Semicolon);
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				synchronizeEnumCase(bodyStart, caseStart);
 			}
-			cases.push({
-				name: caseToken.text,
-				metadata: caseMetadata,
-				params: params,
-				span: caseToken.span.merge(previous().span)
-			});
-			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -824,6 +833,66 @@ class Parser {
 			default: false;
 		};
 
+	function synchronizeEnumCase(bodyStart:Int, caseStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				default:
+			}
+		if (position <= caseStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && check(TokenKind.RightBrace))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.Semicolon:
+					if (braceDepth == 0)
+						return;
+				default:
+			}
+		}
+	}
+
+	function synchronizeInterfaceMember(bodyStart:Int, memberStart:Int):Void {
+		var braceDepth = 0;
+		for (index in bodyStart...position)
+			switch tokens[index].kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				default:
+			}
+		if (position <= memberStart && !check(TokenKind.Eof))
+			advance();
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && (check(TokenKind.RightBrace) || check(TokenKind.Function)))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.Semicolon:
+					if (braceDepth == 0)
+						return;
+				default:
+			}
+		}
+	}
+
 	function synchronizeEnumAbstractValue(bodyStart:Int, valueStart:Int):Void {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
@@ -902,55 +971,63 @@ class Parser {
 			};
 		}
 		consume(TokenKind.LeftBrace);
-		var methods = [];
+		var methods = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-			var methodMetadata = parseMetadata();
-			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))
-				advance();
-			var methodStart = consume(TokenKind.Function).span,
-				methodName = consumeDeclarationName("interface method");
-			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-				typeParameters = parseTypeParameters(typeConstraints);
-			var arguments = [];
-			if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
-				recordExpected("left parenthesis");
-			else {
-				consume(TokenKind.LeftParen);
-				while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
-					if (check(TokenKind.Comma)) {
-						recordExpected("parameter");
-						advance();
-						continue;
+			var memberStart = position;
+			try {
+				var methodMetadata = parseMetadata();
+				while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))
+					advance();
+				var methodToken = consume(TokenKind.Function),
+					methodName = consumeDeclarationName("interface method");
+				var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+					typeParameters = parseTypeParameters(typeConstraints);
+				var arguments = [];
+				if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
+					recordExpected("left parenthesis");
+				else {
+					consume(TokenKind.LeftParen);
+					while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
+						if (check(TokenKind.Comma)) {
+							recordExpected("parameter");
+							advance();
+							continue;
+						}
+						var optional = match(TokenKind.Question),
+							argumentName = consumeDeclarationName("parameter");
+						consume(TokenKind.Colon);
+						arguments.push({
+							name: argumentName,
+							type: parseType(),
+							span: previous().span,
+							optional: optional,
+							defaultValue: null
+						});
+						if (!match(TokenKind.Comma))
+							break;
 					}
-					var optional = match(TokenKind.Question),
-						argumentName = consumeDeclarationName("parameter");
-					consume(TokenKind.Colon);
-					arguments.push({
-						name: argumentName,
-						type: parseType(),
-						span: previous().span,
-						optional: optional,
-						defaultValue: null
-					});
-					if (!match(TokenKind.Comma))
-						break;
+					consume(TokenKind.RightParen);
 				}
-				consume(TokenKind.RightParen);
+				var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
+					end = consume(TokenKind.Semicolon).span;
+				methods.push({
+					name: methodName,
+					isStatic: false,
+					isExtern: false,
+					metadata: methodMetadata,
+					typeParameters: typeParameters,
+					typeConstraints: typeConstraints,
+					arguments: arguments,
+					result: result,
+					statements: [],
+					span: methodToken.span.merge(end)
+				});
+			} catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				synchronizeInterfaceMember(bodyStart, memberStart);
 			}
-			var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
-				end = consume(TokenKind.Semicolon).span;
-			methods.push({
-				name: methodName,
-				isStatic: false,
-				isExtern: false,
-				metadata: methodMetadata,
-				typeParameters: typeParameters,
-				typeConstraints: typeConstraints,
-				arguments: arguments,
-				result: result,
-				statements: [],
-				span: methodStart.merge(end)
-			});
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {

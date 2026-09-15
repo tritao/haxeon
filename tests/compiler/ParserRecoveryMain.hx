@@ -197,6 +197,20 @@ class ParserRecoveryMain {
 			|| enumBoundaryResult.program.functions[0].name != "visible")
 			throw "unfinished enum header discarded the following declaration";
 
+		var enumCaseSource = new SourceFile("EnumCaseRecovery.hx", "enum Choice { (Int); visible; }");
+		var enumCaseResult = new Parser(new Lexer(enumCaseSource).tokenize()).parseProgramRecovering();
+		if (enumCaseResult.program.enums.length != 1
+			|| enumCaseResult.program.enums[0].cases.length != 1
+			|| enumCaseResult.program.enums[0].cases[0].name != "visible")
+			throw "malformed enum case discarded the following case";
+
+		var interfaceMemberSource = new SourceFile("InterfaceMemberRecovery.hx", "interface Contract { malformed; function visible():Int; }");
+		var interfaceMemberResult = new Parser(new Lexer(interfaceMemberSource).tokenize()).parseProgramRecovering();
+		if (interfaceMemberResult.program.interfaces.length != 1
+			|| interfaceMemberResult.program.interfaces[0].methods.length != 1
+			|| interfaceMemberResult.program.interfaces[0].methods[0].name != "visible")
+			throw "malformed interface member discarded the following method";
+
 		var abstractSource = new SourceFile("AbstractBoundary.hx", "abstract Value\nfunction visible():Void return;");
 		var abstractResult = new Parser(new Lexer(abstractSource).tokenize()).parseProgramRecovering();
 		if (abstractResult.program.abstracts.length != 1
