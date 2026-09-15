@@ -220,6 +220,31 @@ class LanguageServiceMain {
 				hasImportedMember = true;
 		if (!hasImportedMember || !importedMemberCompletion.isIncomplete)
 			throw "recovered imported module completion failed";
+		var importedClassSource = "package editor.util; class Widget { public var ready:Int; public function reset():Void return; } function main():Void return;";
+		importService.update("editor/util/Widget.hx", importedClassSource);
+		var importedClassRecoverySource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.";
+		importService.update("editor/ClassMain.hx", importedClassRecoverySource);
+		var importedClassCompletion = importService.complete("editor/ClassMain.hx", importedClassRecoverySource.length),
+			hasImportedField = false,
+			hasImportedMethod = false;
+		for (item in importedClassCompletion) {
+			if (item.label == "ready")
+				hasImportedField = true;
+			if (item.label == "reset")
+				hasImportedMethod = true;
+		}
+		if (!hasImportedField || !hasImportedMethod)
+			throw "recovered imported class typing did not expose instance members";
+		importService.analyze("editor.util.Widget");
+		var importedMemberUseSource = "package editor; import editor.util.Widget; function main():Void { var widget:Widget = new Widget(); widget.ready; }";
+		importService.update("editor/ClassMain.hx", importedMemberUseSource);
+		var importedMemberUse = importedMemberUseSource.lastIndexOf("ready"),
+			importedMemberDefinition = importService.definition("editor/ClassMain.hx", importedMemberUse + 1),
+			importedMemberReferences = importService.references("editor/ClassMain.hx", importedMemberUse + 1);
+		if (importedMemberDefinition == null
+			|| importedMemberDefinition.path != "editor/util/Widget.hx"
+			|| importedMemberReferences.length != 2)
+			throw "recovered imported class member navigation did not use the authoritative identity";
 		var aliasedMemberSource = "package editor; import editor.util.Math as M; function main():Int { return M.";
 		importService.update("editor/Main.hx", aliasedMemberSource);
 		var aliasedMemberCompletion = importService.complete("editor/Main.hx", aliasedMemberSource.length),

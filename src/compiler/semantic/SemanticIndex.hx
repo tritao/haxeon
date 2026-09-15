@@ -632,6 +632,8 @@ class SemanticIndex {
 		if (owner == null)
 			return null;
 		var id = recoveredMembers.get(owner + "." + name);
+		if (id == null && recoveryResolve != null)
+			id = recoveryResolve(owner + "." + name);
 		if (id == null)
 			return null;
 		var token = referenceToken(tokens, span, name);
@@ -703,13 +705,36 @@ class SemanticIndex {
 			case ArrayType(element): TArray(recoveredType(element));
 			case MapType(key, value): TMap(recoveredType(key), recoveredType(value));
 			case NullableType(element): TNullable(recoveredType(element));
-			default:
+			case NamedType(name):
 				try {
 					declarations.resolve(type);
 				} catch (_:Dynamic) {
-					TUnknown;
+					recoveredExternalType(name, []);
 				}
+			case AppliedType(name, arguments):
+				try {
+					declarations.resolve(type);
+				} catch (_:Dynamic) {
+					recoveredExternalType(name, [for (argument in arguments) recoveredType(argument)]);
+				}
+			default: TUnknown;
 		};
+	}
+
+	function recoveredExternalType(name:String, arguments:Array<CompilerType>):CompilerType {
+		if (recoveryResolve == null)
+			return TUnknown;
+		var id = recoveryResolve(name);
+		if (id == null)
+			return TUnknown;
+		var identity = Std.string(id);
+		if (identity.indexOf(":class:") >= 0)
+			return TInstance(compiler.types.Type.NominalKind.Class, name, arguments);
+		if (identity.indexOf(":interface:") >= 0)
+			return TInstance(compiler.types.Type.NominalKind.Interface, name, arguments);
+		if (identity.indexOf(":enum:") >= 0)
+			return TInstance(compiler.types.Type.NominalKind.Enum, name, arguments);
+		return TUnknown;
 	}
 
 	function recoveredFunctionResult(name:String):CompilerType {
