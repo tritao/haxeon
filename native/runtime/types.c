@@ -43,6 +43,34 @@ HL_PRIM void HL_NAME(native_type_initialize_virtual)( hl_type *type, hl_module_c
 	hl_init_virtual(type,context);
 }
 
+HL_PRIM void HL_NAME(native_metadata_initialize)( hl_type **types, int count, hl_module_context *context ) {
+	int i;
+	if( count < 0 || (count > 0 && types == NULL) || context == NULL )
+		hl_error("HashLink metadata publication requires a type table and module context");
+	for( i = 0; i < count; i++ ) {
+		hl_type *type = types[i];
+		if( type == NULL ) hl_error("HashLink metadata publication contains a null type");
+		switch( type->kind ) {
+		case HOBJ:
+		case HSTRUCT:
+			if( type->obj == NULL || type->obj->m == NULL )
+				hl_error("HashLink object metadata publication requires a module context");
+			hl_get_obj_proto(type);
+			break;
+		case HENUM:
+			if( type->tenum == NULL ) hl_error("HashLink metadata publication contains an invalid enum");
+			hl_init_enum(type,context);
+			break;
+		case HVIRTUAL:
+			if( type->virt == NULL ) hl_error("HashLink metadata publication contains an invalid virtual type");
+			hl_init_virtual(type,context);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 HL_PRIM void HL_NAME(native_module_context_dispose)( hl_module_context *context ) {
 	if( context == NULL ) return;
 	hl_free(&context->alloc);

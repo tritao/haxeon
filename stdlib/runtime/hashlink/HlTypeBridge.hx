@@ -23,6 +23,8 @@ class HlTypeBridge {
 
 	public static function native_type_initialize_virtual(type:RawPtr<HlType>, context:RawPtr<HlModuleContext>):Void {}
 
+	public static function native_metadata_initialize(types:RawPtr<RawPtr<HlType>>, count:Int, context:RawPtr<HlModuleContext>):Void {}
+
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 
 	public static function native_type_function_arity(type:RawPtr<HlType>):Int

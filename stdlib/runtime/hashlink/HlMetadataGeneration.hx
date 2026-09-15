@@ -84,8 +84,7 @@ class HlMetadataGeneration {
 		requireBuilding();
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
-		for (index in 0...typeTable.length())
-			initialize(typeTable.get(index));
+		HlTypeBridge.native_metadata_initialize(typeTable.pointer(), typeTable.length(), moduleContext);
 		published = true;
 		return snapshot();
 	}
@@ -113,16 +112,6 @@ class HlMetadataGeneration {
 		disposed = true;
 		arena.dispose();
 		moduleContext = RawPtr.nullPtr();
-	}
-
-	function initialize(type:RawPtr<HlType>):Void {
-		var kind:HlTypeKind = cast type.ref.kind;
-		if (kind == HlTypeKind.Object || kind == HlTypeKind.Struct)
-			HlTypeBridge.native_type_initialize_object(type);
-		else if (kind == HlTypeKind.Enum)
-			HlTypeBridge.native_type_initialize_enum(type, moduleContext);
-		else if (kind == HlTypeKind.Virtual)
-			HlTypeBridge.native_type_initialize_virtual(type, moduleContext);
 	}
 
 	function requireBuilding():Void {
