@@ -130,10 +130,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   a recovered AST, tokens, and editor-only semantic model immediately; the
   recovered model never becomes authoritative workspace state.
 - [~] Interactive parser recovery retains incomplete declarations, parameter
-  and type lists, member access, calls, blocks, and control-flow constructs.
-  Recovery diagnostics are merged and deduplicated with compiler diagnostics,
-  and lexical, parser, partial-typing, indexing, and LSP work honor cooperative
-  cancellation.
+	and type lists, member access, calls, blocks, and control-flow constructs.
+	Recovery diagnostics are merged and deduplicated with compiler diagnostics,
+	and lexical, parser, partial-typing, indexing, and LSP work honor cooperative
+	cancellation. The interactive corpus covers real edit sequences and UTF-16
+	positions in recovered source.
 - [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
   scopes and local types around unrelated failures, records expected argument
   types, and exposes unresolved names and compiler-owned completion contexts.
@@ -149,8 +150,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
   There is no second typechecker.
 - [~] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
-  completion, signature-help latency, and process-memory growth under rapid
-  incomplete edits; representative workspace budgets remain to be defined.
+	completion, signature-help, hover, definition, background-analysis latency,
+	recovered-snapshot publication, and process-memory growth under rapid
+	incomplete edits; representative workspace budgets remain to be defined.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).
