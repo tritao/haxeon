@@ -1120,6 +1120,44 @@ class LspProtocolMain {
 				foundUtf16Member = true;
 		if (!foundUtf16Member || !utf16Completion.result.isIncomplete)
 			throw "LSP completion did not honor UTF-16 positions in recovered source";
+		var recoveredTypeService = new LanguageService(),
+			recoveredTypeProtocol = new LspProtocol(recoveredTypeService),
+			recoveredTypeUri = "file:///workspace/types/Foo.hx",
+			recoveredTypeTarget = "package types; class Foo {} function main():Void return;",
+			recoveredTypeConsumerUri = "file:///workspace/use/Main.hx",
+			recoveredTypeConsumer = "package use; import types.Foo; function main(value:Foo):Foo { return value;";
+		recoveredTypeService.update("/workspace/types/Foo.hx", recoveredTypeTarget);
+		recoveredTypeService.analyze("workspace.types.Foo");
+		recoveredTypeProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: recoveredTypeConsumerUri,
+					languageId: "haxe",
+					version: 1,
+					text: recoveredTypeConsumer
+				}
+			}
+		}));
+		var recoveredTypeDocument = new LspDocument(recoveredTypeConsumerUri, "/workspace/use/Main.hx", 1, recoveredTypeConsumer),
+			recoveredTypePosition = recoveredTypeConsumer.indexOf(":Foo") + 1,
+			recoveredTypeDefinition = request(recoveredTypeProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 11,
+			method: "textDocument/definition",
+			params: {textDocument: {uri: recoveredTypeConsumerUri}, position: recoveredTypeDocument.position(recoveredTypePosition)}
+		})),
+			recoveredTypeReferences = request(recoveredTypeProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 12,
+			method: "textDocument/references",
+			params: {textDocument: {uri: recoveredTypeConsumerUri}, position: recoveredTypeDocument.position(recoveredTypePosition)}
+		}));
+		if (recoveredTypeDefinition.result == null
+			|| recoveredTypeDefinition.result.uri != recoveredTypeUri
+			|| recoveredTypeReferences.result.length < 3)
+			throw "LSP recovered type navigation did not preserve the authoritative identity";
 		var immediateProtocol = new LspProtocol();
 		immediateProtocol.enableDeferredDiagnostics();
 		var immediateUri = "file:///workspace/ImmediateRecovery.hx",
