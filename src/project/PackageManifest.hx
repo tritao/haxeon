@@ -1,0 +1,170 @@
+package project;
+
+import haxe.Json;
+import haxe.io.Path;
+
+class NativeManifest {
+	public final sources:Array<String>;
+	public final includeDirs:Array<String>;
+
+	public function new(sources:Array<String>, includeDirs:Array<String>) {
+		this.sources = sources.copy();
+		this.includeDirs = includeDirs.copy();
+	}
+}
+
+/** Parsed package metadata. Paths remain package-relative until acquisition. */
+class PackageManifest {
+	public final version:Int;
+	public final packageName:String;
+	public final packageId:PackageId;
+	public final entry:Null<String>;
+	public final legacySources:Array<String>;
+	public final sourceRoots:Array<String>;
+	public final target:String;
+	public final defines:Array<String>;
+	public final outputDir:String;
+	public final dependencies:Map<String, PackageDependency>;
+	public final native:Null<NativeManifest>;
+	public final androidApplicationId:String;
+	public final androidAppLabel:String;
+
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, target:String,
+		defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, androidApplicationId:String,
+		androidAppLabel:String) {
+		this.version = version;
+		this.packageName = packageName;
+		this.packageId = new PackageId(packageName);
+		this.entry = entry;
+		this.legacySources = legacySources.copy();
+		this.sourceRoots = sourceRoots.copy();
+		this.target = target;
+		this.defines = defines.copy();
+		this.outputDir = outputDir;
+		this.dependencies = dependencies;
+		this.native = native;
+		this.androidApplicationId = androidApplicationId;
+		this.androidAppLabel = androidAppLabel;
+	}
+
+	public static function parse(path:String, content:String):PackageManifest {
+		var raw:Dynamic;
+		try {
+			raw = Json.parse(content);
+		} catch (error:Dynamic) {
+			throw 'Could not parse $path: ${Std.string(error)}';
+		}
+		if (!isObject(raw))
+			throw '$path must contain a JSON object';
+		var rawVersion:Dynamic = Reflect.field(raw, "version"),
+			version = rawVersion == null ? 1 : Std.int(rawVersion);
+		if (version != 1)
+			throw 'Unsupported haxeon.json version "$rawVersion"';
+		var packageData:Dynamic = Reflect.field(raw, "package"),
+			packageName = packageData == null ? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
+			entry = optionalNullableString(raw, "entry", path),
+			legacySources = stringArray(raw, "sources", path, []),
+			sourceRoots = stringArray(raw, "sourceRoots", path, ["src"]),
+			target = optionalString(raw, "target", "host", path),
+			defines = stringArray(raw, "defines", path, []),
+			outputDir = optionalString(raw, "outputDir", "build", path),
+			dependencies:Map<String, PackageDependency> = new Map();
+		if (packageName.length == 0)
+			throw '$path requires a non-empty package name';
+		if (sourceRoots.length == 0)
+			throw '$path must list at least one path in "sourceRoots"';
+		if (target != "host" && target != "wasm32" && target != "android")
+			throw '$path target must be "host", "wasm32", or "android"';
+		var rawDependencies:Dynamic = Reflect.field(raw, "dependencies");
+		if (rawDependencies != null) {
+			if (!isObject(rawDependencies))
+				throw '$path "dependencies" must be an object';
+			var dependencyNames = Reflect.fields(rawDependencies);
+			dependencyNames.sort(Reflect.compare);
+			for (name in dependencyNames) {
+				var dependency:Dynamic = Reflect.field(rawDependencies, name);
+				dependencies.set(name, new PackageDependency(new PackageId(name), parseSource(dependency, name, '$path dependency "$name"')));
+			}
+		}
+		var nativeData:Dynamic = Reflect.field(raw, "native"),
+			native:Null<NativeManifest> = null;
+		if (nativeData != null) {
+			if (!isObject(nativeData))
+				throw '$path "native" must be an object';
+			var nativeSources = stringArray(nativeData, "sources", path, []),
+				includeDirs = stringArray(nativeData, "includeDirs", path, []);
+			if (nativeSources.length == 0)
+				throw '$path "native.sources" must contain at least one C source';
+			native = new NativeManifest(nativeSources, includeDirs);
+		}
+		var android:Dynamic = Reflect.field(raw, "android"),
+			androidApplicationId = "org.haxeon.android",
+			androidAppLabel = "Haxeon";
+		if (android != null) {
+			if (!isObject(android))
+				throw '$path "android" must be an object';
+			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
+			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
+		}
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, target, defines, outputDir, dependencies, native,
+			androidApplicationId, androidAppLabel);
+	}
+
+	static function parseSource(raw:Dynamic, name:String, path:String):PackageSource {
+		if (!isObject(raw))
+			throw '$path must be an object with a package source';
+		var pathValue:Dynamic = Reflect.field(raw, "path"),
+			gitValue:Dynamic = Reflect.field(raw, "git"),
+			registryValue:Dynamic = Reflect.field(raw, "registry"),
+			haxelibValue:Dynamic = Reflect.field(raw, "haxelib"),
+			count = (pathValue == null ? 0 : 1) + (gitValue == null ? 0 : 1) + (registryValue == null ? 0 : 1) + (haxelibValue == null ? 0 : 1);
+		if (count != 1)
+			throw '$path must declare exactly one of "path", "git", "registry", or "haxelib"';
+		if (pathValue != null)
+			return PackageSource.Path(requiredValueString(pathValue, "path", path));
+		if (gitValue != null)
+			return PackageSource.Git(requiredValueString(gitValue, "git", path), requiredString(raw, "rev", path));
+		if (registryValue != null)
+			return PackageSource.Registry(requiredValueString(registryValue, "registry", path), name, requiredString(raw, "version", path));
+		return PackageSource.Haxelib(requiredValueString(haxelibValue, "haxelib", path), requiredString(raw, "version", path));
+	}
+
+	static function isObject(value:Dynamic):Bool
+		return value != null && Reflect.isObject(value) && !Std.isOfType(value, Array);
+
+	static function requiredValueString(value:Dynamic, field:String, path:String):String {
+		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+			throw '$path requires a non-empty "$field" string';
+		return cast value;
+	}
+
+	static function requiredString(raw:Dynamic, field:String, path:String):String {
+		if (!isObject(raw))
+			throw '$path must contain an object with a "$field" string';
+		return requiredValueString(Reflect.field(raw, field), field, path);
+	}
+
+	static function optionalNullableString(raw:Dynamic, field:String, path:String):Null<String> {
+		var value:Dynamic = Reflect.field(raw, field);
+		if (value == null)
+			return null;
+		return requiredValueString(value, field, path);
+	}
+
+	static function optionalString(raw:Dynamic, field:String, fallback:String, path:String):String {
+		var value:Dynamic = Reflect.field(raw, field);
+		return value == null ? fallback : requiredValueString(value, field, path);
+	}
+
+	static function stringArray(raw:Dynamic, field:String, path:String, fallback:Array<String>):Array<String> {
+		var value:Dynamic = Reflect.field(raw, field);
+		if (value == null)
+			return fallback.copy();
+		if (!Std.isOfType(value, Array))
+			throw '$path "$field" must be an array of strings';
+		var result:Array<String> = [];
+		for (item in (cast value : Array<Dynamic>))
+			result.push(requiredValueString(item, field, '$path "$field"'));
+		return result;
+	}
+}

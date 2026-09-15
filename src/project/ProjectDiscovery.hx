@@ -4,7 +4,7 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
-/** Reads manifests and resolves only local path dependencies. */
+/** Reads manifests through the package source model while path acquisition remains inline for now. */
 class ProjectDiscovery {
 	public static inline var MANIFEST_NAME = "haxeon.json";
 
@@ -16,7 +16,7 @@ class ProjectDiscovery {
 			nameToRoot = new Map<String, String>(),
 			ordered:Array<ResolvedPackage> = [];
 
-		function resolve(path:String):ResolvedPackage {
+		function resolve(path:String, ?source:PackageSource):ResolvedPackage {
 			var resolvedManifest = canonicalExistingFile(path, 'Project file not found: $path'),
 				root = Path.directory(resolvedManifest);
 			if (active.exists(root))
@@ -24,7 +24,7 @@ class ProjectDiscovery {
 			var existing = visited.get(root);
 			if (existing != null)
 				return existing;
-			var manifest = ProjectManifest.parse(resolvedManifest, File.getContent(resolvedManifest)),
+			var manifest = PackageManifest.parse(resolvedManifest, File.getContent(resolvedManifest)),
 				priorRoot = nameToRoot.get(manifest.packageName);
 			if (priorRoot != null && priorRoot != root)
 				throw 'Duplicate package name "${manifest.packageName}" in $priorRoot and $root';
@@ -49,27 +49,33 @@ class ProjectDiscovery {
 			dependencyNames.sort(Reflect.compare);
 			var resolvedDependencies:Array<String> = [];
 			for (dependencyName in dependencyNames) {
-				var dependencyPath = Path.normalize(Path.join([root, manifest.dependencies.get(dependencyName)]));
+				var dependency = manifest.dependencies.get(dependencyName);
+				if (dependency == null)
+					throw 'Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata';
+				var dependencyPath = switch dependency.source {
+					case PackageSource.Path(path): Path.normalize(Path.join([root, path]));
+					case _: throw 'Package "${manifest.packageName}" dependency "$dependencyName" uses ${PackageSourceTools.describe(dependency.source)}, which is not supported yet';
+				};
 				if (!FileSystem.exists(dependencyPath) || !FileSystem.isDirectory(dependencyPath))
 					throw 'Package "${manifest.packageName}" dependency "$dependencyName" path does not exist: $dependencyPath';
 				var dependencyRoot = FileSystem.fullPath(dependencyPath),
 					dependencyManifest = Path.join([dependencyRoot, MANIFEST_NAME]);
 				if (!FileSystem.exists(dependencyManifest))
 					throw 'Package "${manifest.packageName}" dependency "$dependencyName" has no $MANIFEST_NAME at $dependencyManifest';
-				var resolved = resolve(dependencyManifest);
+				var resolved = resolve(dependencyManifest, dependency.source);
 				if (resolved.name != dependencyName)
 					throw 'Package "${manifest.packageName}" declares dependency "$dependencyName" but $dependencyManifest names package "${resolved.name}"';
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(root);
-			var resolvedPackage = new ResolvedPackage(manifest.packageName, root, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs);
+				var resolvedPackage = new ResolvedPackage(manifest.packageName, root, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
+					includeDirs, source);
 			visited.set(root, resolvedPackage);
 			ordered.push(resolvedPackage);
 			return resolvedPackage;
 		}
 
-		var rootPackage = resolve(absoluteManifest);
+		var rootPackage = resolve(absoluteManifest, PackageSource.Path(projectRoot));
 		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage, new ResolvedPackageGraph(ordered));
 	}
 

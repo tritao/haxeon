@@ -19,6 +19,8 @@ import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
 import haxe.io.Path;
 import project.ProjectDiscovery;
+import project.PackageManifest;
+import project.PackageSourceTools;
 import sys.FileSystem;
 import sys.io.File;
 #if (target.threaded && !eval)
@@ -35,6 +37,7 @@ class BuildSystemMain {
 		#end
 		testFingerprintsAndSkipping();
 		testProjectDiscovery();
+		testPackageSourceModel();
 		testNativeDependencyScanning();
 		Sys.println("PASS: build model, executor, fingerprints, demand-driven native outputs, and local package discovery");
 	}
@@ -279,6 +282,18 @@ class BuildSystemMain {
 		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0 && dependencies[1].indexOf("second.h") >= 0,
 			"native dependency scanning should follow recursive local includes");
 		removeTree(root);
+	}
+
+	static function testPackageSourceModel():Void {
+		var manifest = PackageManifest.parse("/tmp/example/haxeon.json", '{"package":{"name":"app"},"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
+		expect(manifest.packageId.equals(new project.PackageId("app")), "package manifests should expose stable package identity");
+		var git = manifest.dependencies.get("git-dependency"), path = manifest.dependencies.get("path-dependency");
+		expect(git != null && path != null && PackageSourceTools.describe(git.source) == "git:https://example.invalid/foo.git@main",
+			"git dependency metadata should remain a source declaration");
+		expect(switch path.source {
+			case project.PackageSource.Path(value): value == "../path-dependency";
+			case _: false;
+		}, "path dependency metadata should remain a path source declaration");
 	}
 
 	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
