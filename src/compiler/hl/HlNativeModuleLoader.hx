@@ -132,15 +132,16 @@ class HlLoadedRuntimeModule {
 		new HlRuntimePatchTransaction(this, bytes).commit();
 	}
 
-	/** Haxeon preflights HLP identity/revision before native publication. */
+	/** Haxeon preflights the HLP envelope, identity, and revision before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
-	function commitPatch(bytes:Bytes):Void {
-		var patch:{moduleId:Bytes, baseRevision:Int, revision:Int} = null;
-		try {
-			patch = HlPatchHeaderReader.decode(bytes);
-		} catch (error:Dynamic) {
-			throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
-		}
+	function commitPatch(bytes:Bytes, ?decoded:{moduleId:Bytes, baseRevision:Int, revision:Int}):Void {
+		var patch:{moduleId:Bytes, baseRevision:Int, revision:Int} = decoded;
+		if (patch == null)
+			try {
+				patch = HlPatchHeaderReader.decodeComplete(bytes);
+			} catch (error:Dynamic) {
+				throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
+			}
 		if (patch.moduleId.compare(identity.moduleId) != 0)
 			throw "Haxeon rejected an HLP patch for another module";
 		if (patch.baseRevision != revision)

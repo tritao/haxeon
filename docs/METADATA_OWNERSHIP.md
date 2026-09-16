@@ -73,11 +73,11 @@ passes that graph plus the decoded manifest to
 wrapper from those Haxe-owned records without reparsing HLI on this path. Haxeon
 owns HLI identity validation, initializer policy,
 stable-ID call-shape validation, and the external wrapper's revision state. Its
-HLP operation preflights the fixed module-ID and revision header before handing
-the bytes to HashLink; the native patch kernel still performs complete wire,
-operand, symbol, and live-compatibility validation. The public host `Runtime.load`
-facade remains on the legacy native-decoder path until it can be compiled against
-the Haxeon-only native-memory classes.
+HLP operation preflights the section envelope, fixed module-ID, and revision
+header before handing the bytes to HashLink; the native patch kernel still
+performs complete wire, operand, symbol, and live-compatibility validation. The
+public host `Runtime.load` facade remains on the legacy native-decoder path until
+it can be compiled against the Haxeon-only native-memory classes.
 
 Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
 boundary flag tells the native kernel to retain Haxeon's enum and virtual

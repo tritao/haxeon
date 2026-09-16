@@ -20,6 +20,10 @@ enum HlRuntimePatchTransactionState {
 class HlRuntimePatchTransaction {
 	public final owner:HlLoadedRuntimeModule;
 	public final bytes:Bytes;
+
+	/** Strict Haxe-side envelope decode retained as the transaction's policy description. */
+	public final patch:{moduleId:Bytes, baseRevision:Int, revision:Int};
+
 	public final baseRevision:Int;
 	public final patchBaseRevision:Int;
 	public final patchRevision:Int;
@@ -31,16 +35,15 @@ class HlRuntimePatchTransaction {
 		this.owner = owner;
 		this.bytes = bytes.sub(0, bytes.length);
 		baseRevision = owner.revision;
-		var header:{moduleId:Bytes, baseRevision:Int, revision:Int};
 		try {
-			header = HlPatchHeaderReader.decode(this.bytes);
+			patch = HlPatchHeaderReader.decodeComplete(this.bytes);
 		} catch (error:Dynamic) {
 			throw 'Haxeon rejected the HLP transaction: ${Std.string(error)}';
 		}
-		if (header.moduleId.compare(owner.identity.moduleId) != 0)
+		if (patch.moduleId.compare(owner.identity.moduleId) != 0)
 			throw "Haxeon rejected an HLP transaction for another module";
-		patchBaseRevision = header.baseRevision;
-		patchRevision = header.revision;
+		patchBaseRevision = patch.baseRevision;
+		patchRevision = patch.revision;
 	}
 
 	/** Commit this patch only if the owner has not advanced since staging. */
@@ -50,7 +53,7 @@ class HlRuntimePatchTransaction {
 			throw 'HashLink runtime patch transaction is stale (expected revision $baseRevision, got ${owner.revision})';
 		if (patchBaseRevision != baseRevision)
 			throw 'HashLink runtime patch transaction has the wrong base revision (expected $baseRevision, got $patchBaseRevision)';
-		owner.commitPatch(bytes);
+		owner.commitPatch(bytes, patch);
 		state = Committed;
 	}
 

@@ -26,6 +26,53 @@ class HlPatchHeaderReader {
 		}
 	}
 
+	/** Decode the header and validate the complete HLP section envelope. */
+	public static function decodeComplete(bytes:Bytes):{moduleId:Bytes, baseRevision:Int, revision:Int} {
+		if (bytes == null || bytes.length < 21)
+			throw "Truncated HLP header";
+		var input = new BytesInput(bytes);
+		input.bigEndian = false;
+		try {
+			if (input.readString(3) != HlPatchFormat.MAGIC)
+				throw "Invalid HLP magic";
+			if (input.readByte() != HlPatchFormat.VERSION)
+				throw "Unsupported HLP version";
+			var moduleId = input.read(16),
+				baseRevision = readUnsigned(input),
+				revision = readUnsigned(input);
+			if (revision <= baseRevision)
+				throw "Invalid patch revision range";
+			var sectionCount = readUnsigned(input);
+			if (sectionCount < 2 || sectionCount > bytes.length)
+				throw "Invalid HLP section count";
+			var symbols = false, functions = false;
+			for (_ in 0...sectionCount) {
+				var tag = input.readByte(),
+					length = readUnsigned(input),
+					end = input.position + length;
+				if (end < input.position || end > bytes.length)
+					throw "Truncated HLP section";
+				if (tag == 1) {
+					if (symbols)
+						throw "Duplicate HLP symbols section";
+					symbols = true;
+				} else if (tag == 2) {
+					if (functions)
+						throw "Duplicate HLP functions section";
+					functions = true;
+				}
+				input.read(length);
+			}
+			if (!symbols || !functions)
+				throw "Missing required HLP section";
+			if (input.position != bytes.length)
+				throw "Trailing HLP data";
+			return {moduleId: moduleId, baseRevision: baseRevision, revision: revision};
+		} catch (error:haxe.io.Eof) {
+			throw "Truncated HLP section envelope";
+		}
+	}
+
 	static function readUnsigned(input:BytesInput):Int {
 		var value = readIndex(input);
 		if (value < 0)
