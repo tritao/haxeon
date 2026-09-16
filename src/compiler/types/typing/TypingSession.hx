@@ -8,10 +8,17 @@ import compiler.types.analysis.ClosureConversion;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedNativeLayout;
+import compiler.Source.SourceSpan;
 
 typedef ResolvedInlineConstant = {
 	final initializer:TypedExpression;
 	final value:TypedExpression;
+}
+
+typedef WireCodecRequest = {
+	final type:CompilerType;
+	final origin:String;
+	final span:SourceSpan;
 }
 
 /** Mutable semantic state shared by all typing phases for one compilation. */
@@ -35,6 +42,7 @@ class TypingSession {
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
+	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];

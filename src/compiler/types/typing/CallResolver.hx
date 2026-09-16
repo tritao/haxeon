@@ -760,7 +760,25 @@ class CallResolver {
 		return null;
 	}
 
-	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "MessagePack.encode" || name == "haxe.wire.MessagePack.encode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.encodeName(value.type), [value]), TBytes, span);
+		}
+		if (name == "MessagePack.decode" || name == "haxe.wire.MessagePack.decode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			if (expectedType == null || expectedType == TNull)
+				fail("E1009", "MessagePack.decode requires an expected result type", span);
+			var bytes = coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input", "E1002"),
+				resultType = cast expectedType;
+			WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.decodeName(resultType), [bytes]), resultType, span);
+		}
 		if (name == "Type.enumEq") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
@@ -1457,7 +1475,7 @@ class CallResolver {
 		var decl = requiredMapValue(session.declarations.abstracts, name),
 			valueType = typeArguments.length == 0 ? session.declarations.resolve(NamedType(name), span,
 				session.currentContext.typeSubstitutions) : session.declarations.resolve(AppliedType(name, typeArguments), span,
-				session.currentContext.typeSubstitutions),
+					session.currentContext.typeSubstitutions),
 			constructorName = name + ".new",
 			constructor = session.signatures.get(constructorName);
 		if (constructor == null)

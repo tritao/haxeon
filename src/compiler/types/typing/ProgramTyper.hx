@@ -185,6 +185,8 @@ class ProgramTyper {
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
+		for (codec in WireCodecGenerator.generate(session, typedClasses))
+			typedFunctions.push(codec);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		semantic.lifecycle.advanceAll(BodyTyped);

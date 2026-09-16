@@ -165,7 +165,7 @@ class ExpressionTyper {
 				var runtimeDataCall = callResolver.typeRuntimeDataCall(name, arguments, span, scope);
 				if (runtimeDataCall != null)
 					return runtimeDataCall;
-				var builtinCall = callResolver.typeBuiltinCall(name, arguments, span, scope);
+				var builtinCall = callResolver.typeBuiltinCall(name, arguments, span, scope, expectedType);
 				if (builtinCall != null)
 					return builtinCall;
 				callResolver.typeNamedCall(name, arguments, span, scope, expectedType);

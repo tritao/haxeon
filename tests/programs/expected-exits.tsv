@@ -3,6 +3,7 @@ add	42
 bytes-view	42
 bytes-codec	42
 messagepack-codec	42
+messagepack-generated	43
 bytes-stream-edge	42
 call-many	42
 function-call	42
