@@ -1697,6 +1697,18 @@ class TestMain {
 		ambiguousConstructorCompiler.update("Main.hx",
 			"import First.FirstChoice; import Second.SecondChoice; function main():Int { var first:FirstChoice = Same(42); var second:SecondChoice = Same(\"value\"); return switch first { case Same(value): value; }; }");
 		ambiguousConstructorCompiler.compile("Main");
+		var ambiguousExplicitCompiler = new Compiler();
+		ambiguousExplicitCompiler.update("collision/first/Same.hx", "package collision.first; class Same {} function main():Void return;");
+		ambiguousExplicitCompiler.update("collision/second/Same.hx", "package collision.second; class Same {} function main():Void return;");
+		ambiguousExplicitCompiler.update("collision/app/Main.hx",
+			"package collision.app; import collision.first.Same; import collision.second.Same; function main():Void { var value:Same; return; }");
+		var ambiguousExplicitRejected = false;
+		try
+			ambiguousExplicitCompiler.compile("collision.app.Main")
+		catch (error:CompileError)
+			ambiguousExplicitRejected = true;
+		if (!ambiguousExplicitRejected)
+			throw "ambiguous explicit imports unexpectedly compiled";
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)

@@ -217,6 +217,33 @@ class SemanticAssembly {
 				}
 				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
 			}
+			// An explicit type import must not silently overwrite another explicit
+			// import with the same local spelling. Keep the name unresolved so the
+			// typer rejects the use instead of assigning the wrong compiler identity.
+			var explicitTypeImports:Map<String, String> = [],
+				ambiguousExplicitTypes:Map<String, Bool> = [];
+			for (importPath in ast.imports) {
+				if (isWildcardImport(importPath))
+					continue;
+				var importedType = sourceTypeAliases.get(importPath);
+				if (importedType == null)
+					continue;
+				var localName = compiler.QualifiedName.last(importPath);
+				for (alias => path in ast.importAliases)
+					if (path == importPath)
+						localName = alias;
+				if (ambiguousExplicitTypes.exists(localName))
+					continue;
+				var previousType = explicitTypeImports.get(localName);
+				if (previousType == null)
+					explicitTypeImports.set(localName, importedType);
+				else if (previousType != importedType) {
+					explicitTypeImports.remove(localName);
+					ambiguousExplicitTypes.set(localName, true);
+				}
+			}
+			for (name in ambiguousExplicitTypes.keys())
+				aliases.remove(name);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			for (interfaceDecl in ast.interfaces)
 				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName));
