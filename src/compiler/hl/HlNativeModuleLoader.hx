@@ -13,6 +13,7 @@ import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimePatchCode;
 import runtime.hashlink.HlRuntimeModule;
+import runtime.hashlink.HlRuntimePatchPublication;
 import runtime.memory.RawPtr;
 
 /** Owns the HLB model, Haxe metadata, and native module for one loaded module. */
