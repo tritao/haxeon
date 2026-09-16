@@ -549,6 +549,22 @@ class IrProgramAssembler {
 				result: I32
 			});
 		}
+		if (needsStringRuntime && !hasNative(natives, "__string_to_lower_case"))
+			program.natives.push({
+				name: "__string_to_lower_case",
+				library: "haxeon_runtime",
+				symbol: "__string_to_lower_case",
+				arguments: [Bytes],
+				result: Bytes
+			});
+		if (needsStringRuntime && !hasNative(natives, "__string_to_upper_case"))
+			program.natives.push({
+				name: "__string_to_upper_case",
+				library: "haxeon_runtime",
+				symbol: "__string_to_upper_case",
+				arguments: [Bytes],
+				result: Bytes
+			});
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_length",
@@ -625,5 +641,14 @@ class IrProgramAssembler {
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
 		return program;
+	}
+
+	static function hasNative(natives:Null<Array<IrNative>>, name:String):Bool {
+		if (natives == null)
+			return false;
+		for (native in natives)
+			if (native.name == name)
+				return true;
+		return false;
 	}
 }
