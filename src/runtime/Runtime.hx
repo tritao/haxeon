@@ -13,9 +13,17 @@ import sys.thread.Mutex;
  * Calls translate native status codes and exceptions into {@link RuntimeError}.
  */
 class Runtime {
+	/** Integer lifecycle codes for the Haxe-owned JIT generation side ledger. */
+	public static inline var JitGenerationPublished:Int = 1;
+
+	public static inline var JitGenerationRetiring:Int = 2;
+
 	static final retirementBacklog:Array<LoadedModule> = [];
 	static final retirementMutex = new Mutex();
 	static final jitBackend = new NativeRuntimeJitBackend();
+	static final jitGenerationModules:Array<LoadedModule> = [];
+	static final jitGenerationRevisions:Array<Array<Int>> = [];
+	static final jitGenerationStates:Array<Array<Int>> = [];
 
 	public static var pendingRetirementCount(get, never):Int;
 
@@ -110,6 +118,14 @@ class Runtime {
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
 		return module.access(jitBackend.retiredCodeAllocationCount);
 
+	/** Return the Haxe-side lifecycle code for one live JIT generation record. */
+	public static function jitGenerationState(module:LoadedModule, index:Int):Int {
+		var ledger = jitGenerationLedger(module);
+		if (ledger == null || index < 0 || index >= ledger.states.length)
+			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
+		return ledger.states[index];
+	}
+
 	public static function metadataTypeCount(module:LoadedModule):Int
 		return module.access(RuntimeKernel.type_count);
 
@@ -177,13 +193,19 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.RetirementBlocked, '$pending runtime module retirement(s) remain blocked');
 	}
 
-	static function tryDispose(module:LoadedModule):Bool
-		return module.close(function(handle) {
+	static function tryDispose(module:LoadedModule):Bool {
+		var disposed = module.close(function(handle) {
 			var status:RuntimeStatus = RuntimeKernel.dispose(handle);
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
 		});
+		if (disposed)
+			finishJitRetirement(module);
+		else
+			beginJitRetirement(module);
+		return disposed;
+	}
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
 		stagePatch(module, patch).commit();
@@ -227,8 +249,10 @@ class Runtime {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
 			var result:RuntimeStatus = jitBackend.applyPatch(handle, transaction);
-			if (result == RuntimeStatus.Ok)
+			if (result == RuntimeStatus.Ok) {
 				module.commitPatch(generation);
+				recordJitPublication(module, generation.revision);
+			}
 			return result;
 		});
 		if (status != RuntimeStatus.Ok) {
@@ -274,5 +298,40 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadArgument, 'Invalid runtime call shape $shape');
 		if (!HlRuntimeCallPolicy.validFunction(module.model, module.identity, stableIndex, shape))
 			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
+	}
+
+	static function jitGenerationLedger(module:LoadedModule):Null<{revisions:Array<Int>, states:Array<Int>}> {
+		var index = jitGenerationModules.indexOf(module);
+		return index < 0 ? null : {revisions: jitGenerationRevisions[index], states: jitGenerationStates[index]};
+	}
+
+	static function recordJitPublication(module:LoadedModule, revision:Int):Void {
+		var index = jitGenerationModules.indexOf(module);
+		if (index < 0) {
+			jitGenerationModules.push(module);
+			jitGenerationRevisions.push([]);
+			jitGenerationStates.push([]);
+			index = jitGenerationModules.length - 1;
+		}
+		jitGenerationRevisions[index].push(revision);
+		jitGenerationStates[index].push(JitGenerationPublished);
+	}
+
+	static function beginJitRetirement(module:LoadedModule):Void {
+		var index = jitGenerationModules.indexOf(module);
+		if (index < 0)
+			return;
+		var states = jitGenerationStates[index];
+		for (generation in 0...states.length)
+			states[generation] = JitGenerationRetiring;
+	}
+
+	static function finishJitRetirement(module:LoadedModule):Void {
+		var index = jitGenerationModules.indexOf(module);
+		if (index < 0)
+			return;
+		jitGenerationModules.splice(index, 1);
+		jitGenerationRevisions.splice(index, 1);
+		jitGenerationStates.splice(index, 1);
 	}
 }

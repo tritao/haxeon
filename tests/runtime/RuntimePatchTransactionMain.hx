@@ -42,6 +42,7 @@ class RuntimePatchTransactionMain {
 			|| loaded.revision != changed.revision
 			|| loaded.functions.at(mainId).generation != changed.revision
 			|| loaded.committedPatchCount() != 1
+			|| Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationPublished
 			|| Runtime.callInt(loaded, mainId) != 42)
 			throw "committed host patch transaction did not publish its generation";
 		try {
