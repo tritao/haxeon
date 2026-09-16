@@ -147,6 +147,7 @@ class CHeaderImporterMain {
 		var hashlinkNames = [
 			"hl_type_kind",
 			"hl_field_lookup",
+			"vvirtual",
 			"hl_runtime_binding",
 			"hl_runtime_obj",
 			"hl_alloc",
@@ -170,6 +171,8 @@ class CHeaderImporterMain {
 			&& hashlinkSource.indexOf("enum hl_type_kind : c_int") >= 0
 			&& hashlinkSource.indexOf("struct hl_field_lookup @layout(16, 8)") >= 0
 			&& hashlinkSource.indexOf("field_index: c_int @offset(12)") >= 0
+			&& hashlinkSource.indexOf("struct vvirtual @layout(24, 8)") >= 0
+			&& hashlinkSource.indexOf("next: ptr<vvirtual> @offset(16)") >= 0
 			&& hashlinkSource.indexOf("struct hl_type @layout(40, 8)") >= 0
 			&& hashlinkSource.indexOf("abs_name: ptr<const<u16>> @offset(8) @union") >= 0
 			&& hashlinkSource.indexOf("struct hl_type_fun @layout(80, 8)") >= 0
@@ -196,6 +199,7 @@ class CHeaderImporterMain {
 		for (binding in [
 			{native: "hl_alloc", haxe: "runtime.hashlink.HlAllocation"},
 			{native: "hl_field_lookup", haxe: "runtime.hashlink.HlFieldLookup"},
+			{native: "vvirtual", haxe: "runtime.hashlink.HlVirtualValue"},
 			{native: "hl_module_context", haxe: "runtime.hashlink.HlModuleContext"},
 			{native: "hl_obj_field", haxe: "runtime.hashlink.HlObjectField"},
 			{native: "hl_obj_proto", haxe: "runtime.hashlink.HlObjectProto"},
@@ -250,6 +254,9 @@ class CHeaderImporterMain {
 			{owner: "hl_field_lookup", native: "t", haxe: "type"},
 			{owner: "hl_field_lookup", native: "hashed_name", haxe: "hashedName"},
 			{owner: "hl_field_lookup", native: "field_index", haxe: "fieldIndex"},
+			{owner: "vvirtual", native: "t", haxe: "type"},
+			{owner: "vvirtual", native: "value", haxe: "value"},
+			{owner: "vvirtual", native: "next", haxe: "next"},
 			{owner: "hl_enum_construct", native: "name", haxe: "name"},
 			{owner: "hl_enum_construct", native: "nparams", haxe: "nparams"},
 			{owner: "hl_enum_construct", native: "params", haxe: "params"},

@@ -29,6 +29,7 @@ interface HashLinkMetadata @target("x86_64-linux-gnu") @library("haxeon_runtime"
 		_H_FORCE_INT = 2147483647;
 	}
 	opaque hl_alloc_block;
+	opaque vdynamic;
 	struct hl_alloc @layout(8, 8) {
 		cur: ptr<hl_alloc_block> @offset(0);
 	}
@@ -144,5 +145,10 @@ interface HashLinkMetadata @target("x86_64-linux-gnu") @library("haxeon_runtime"
 		dataSize: c_int @offset(12);
 		indexes: ptr<c_int> @offset(16);
 		lookup: ptr<hl_field_lookup> @offset(24);
+	}
+	struct vvirtual @layout(24, 8) {
+		t: ptr<hl_type> @offset(0);
+		value: ptr<vdynamic> @offset(8);
+		next: ptr<vvirtual> @offset(16);
 	}
 }

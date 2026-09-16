@@ -15,6 +15,7 @@ exec "$importer" \
   --output="$output" \
   --only=hl_type_kind \
   --only=hl_field_lookup \
+  --only=vvirtual \
   --only=hl_runtime_binding \
   --only=hl_runtime_obj \
   --only=hl_alloc \
