@@ -11,6 +11,7 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 #if haxeon
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlRuntimeModuleKernel;
 import runtime.memory.RawPtr;
 #end
 import sys.thread.Mutex;
@@ -33,6 +34,7 @@ class Runtime {
 	#if haxeon
 	static final metadataModules:Array<LoadedModule> = [];
 	static final metadataGenerations:Array<HlMetadataGeneration> = [];
+	static final haxeRuntimeModuleKernel:HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	#end
 
 	public static var pendingRetirementCount(get, never):Int;
@@ -80,8 +82,8 @@ class Runtime {
 			stableIdStorage.offset(index).store(cast entry.stableId);
 			slotStorage.offset(index).store(cast entry.functionIndex);
 		}
-		var module = RuntimeKernel.load_code_manifest(publication.nativeCode.castTo(), bytes, bytes.length, identityModel.moduleId, identityModel.revision,
-			stableIdStorage, slotStorage, count, identityModel.initializerSlot);
+		var module = haxeRuntimeModuleKernel.loadCodeManifest(publication.nativeCode, bytes, identityModel.moduleId, identityModel.revision, stableIdStorage,
+			slotStorage, count, identityModel.initializerSlot);
 		if (module == null) {
 			metadata.dispose();
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");

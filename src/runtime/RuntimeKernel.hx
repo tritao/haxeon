@@ -1,9 +1,5 @@
 package runtime;
 
-#if haxeon
-import runtime.memory.RawPtr;
-#end
-
 /**
 	The deliberately small native bootstrap/kernel boundary for HashLink.
 
@@ -15,13 +11,6 @@ import runtime.memory.RawPtr;
 class RuntimeKernel {
 	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):RuntimeModuleHandle
 		return null;
-
-	/** Load a Haxe-owned native code record with an already decoded identity manifest. */
-	#if haxeon
-	public static function load_code_manifest(code:RawPtr<UInt8>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes, revision:Int,
-			stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):RuntimeModuleHandle
-		return null;
-	#end
 
 	public static function call_i32(module:RuntimeModuleHandle, index:Int):Int
 		return 0;

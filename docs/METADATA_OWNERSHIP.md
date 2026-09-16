@@ -96,10 +96,10 @@ pointers without taking ownership of their storage. The public host `Runtime.loa
 on the legacy native-decoder path when compiled by the pinned host Haxe
 toolchain. Haxeon-generated runtime code now takes the same decoded-manifest
 path: it builds and publishes `HlMetadataGeneration`, passes the native code
-record and stable ID/slot tables through `RuntimeKernel.load_code_manifest`, and
-retains the metadata generation in a parallel ownership ledger until native
-module teardown completes. This keeps the host compatibility fallback while
-making Haxeon-owned metadata the active path for generated runtime code.
+record and stable ID/slot tables through `HlRuntimeModuleKernel`, and retains
+the metadata generation in a parallel ownership ledger until native module
+teardown completes. This keeps the host compatibility fallback while making
+Haxeon-owned metadata the active path for generated runtime code.
 
 Each Haxe-built external patch generation privately owns one opaque native
 patch-code handle. The non-owning diagnostic snapshots do not copy that handle;
