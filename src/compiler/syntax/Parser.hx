@@ -677,6 +677,7 @@ class Parser {
 			if (angleDepth == 0 && braceDepth == 0 && bracketDepth == 0 && parenDepth == 0
 				&& (check(TokenKind.Comma) || check(TokenKind.Greater) || check(TokenKind.Semicolon)
 					|| check(TokenKind.RightParen) || check(TokenKind.RightBrace) || check(TokenKind.LeftBrace)
+					|| check(TokenKind.Extends) || check(TokenKind.Implements)
 					|| isDeclarationBoundary(current())))
 				return;
 			switch advance().kind {
@@ -761,13 +762,13 @@ class Parser {
 			base:Null<AstType> = null,
 			interfaces = [];
 		if (match(TokenKind.Extends))
-			base = recovering && (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base type") : parseType();
+			base = recovering && (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base type") : parseDelimitedType(TokenKind.LeftBrace);
 		while (match(TokenKind.Implements)) {
 			interfaces.push(recovering
-				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseType());
+				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseDelimitedType(TokenKind.LeftBrace));
 			while (match(TokenKind.Comma))
 				interfaces.push(recovering
-					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseType());
+					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("implemented type") : parseDelimitedType(TokenKind.LeftBrace));
 		}
 		if (recovering && isDeclarationBoundary(current())) {
 			recordExpected("class body");
@@ -1107,10 +1108,10 @@ class Parser {
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [], typeParameters = parseTypeParameters(typeConstraints), bases = [];
 		if (match(TokenKind.Extends)) {
 			bases.push(recovering
-				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseType());
+				&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseDelimitedType(TokenKind.LeftBrace));
 			while (match(TokenKind.Comma))
 				bases.push(recovering
-					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseType());
+					&& (check(TokenKind.LeftBrace) || isDeclarationBoundary(current())) ? missingType("base interface type") : parseDelimitedType(TokenKind.LeftBrace));
 		}
 		if (recovering && isDeclarationBoundary(current())) {
 			recordExpected("interface body");

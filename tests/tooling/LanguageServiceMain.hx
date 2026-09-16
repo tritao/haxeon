@@ -1859,6 +1859,16 @@ class LanguageServiceMain {
 						}
 		if (!foundGenericRecoveryMember || !foundGenericRecoveryArguments)
 			throw "generic argument recovery did not preserve later arguments or statements";
+		var inheritanceRecoveryService = new LanguageService(),
+			inheritanceRecoverySource = "package inheritanceapp; class Base { public var member:Int; } class Child extends Base MissingBase { } function retained():Void { var value:Child = new Child(); value.";
+		inheritanceRecoveryService.update("InheritanceRecovery.hx", inheritanceRecoverySource);
+		var inheritanceRecoveryItems = inheritanceRecoveryService.completeResult("InheritanceRecovery.hx", inheritanceRecoverySource.length).items,
+			foundInheritanceRecoveryMember = false;
+		for (item in inheritanceRecoveryItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundInheritanceRecoveryMember = true;
+		if (!foundInheritanceRecoveryMember)
+			throw "inheritance recovery consumed the class body or inherited member context";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
