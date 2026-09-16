@@ -7,10 +7,9 @@ class HlMetadataLease {
 	var released:Bool = false;
 
 	@:allow(runtime.hashlink.HlMetadataGeneration)
-	function new(generation:HlMetadataGeneration) {
+	function new(generation:HlMetadataGeneration, publication:HlMetadataPublication) {
 		this.generation = generation;
-		publication = generation.snapshot();
-		generation.retainBorrow();
+		this.publication = publication;
 	}
 
 	/** Release this borrow. Repeated release is safe. */

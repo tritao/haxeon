@@ -27,22 +27,16 @@ class HlMetadataTransaction {
 			throw "HashLink metadata transaction requires a registry";
 		this.registry = registry;
 		this.candidate = candidate;
-		this.baseRevision = registry.revision;
-		this.decision = registry.compatibility(candidate);
+		var staged = registry.stage(candidate);
+		this.baseRevision = staged.revision;
+		this.decision = staged.decision;
 		this.structuralReload = structuralReload;
 	}
 
 	/** Commit the candidate if the registry has not advanced since staging. */
 	public function commit():HlMetadataPublication {
 		requireStaged();
-		if (registry.revision != baseRevision)
-			throw 'HashLink metadata transaction is stale (expected revision $baseRevision, got ${registry.revision})';
-
-		var publication:HlMetadataPublication;
-		if (structuralReload)
-			publication = registry.reload(candidate);
-		else
-			publication = registry.publish(candidate);
+		var publication = registry.commitTransaction(this);
 		state = Committed;
 		return publication;
 	}

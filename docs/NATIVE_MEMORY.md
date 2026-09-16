@@ -201,12 +201,15 @@ enum, virtual, and signature/layout changes return a structural-reload reason.
 `HlMetadataRegistry.publish()` accepts only compatible candidates and seals them
 before switching publication; `reload()` is the explicit structural path.
 Both paths retire the previous generation without disposing it. Retired arenas
-are drained explicitly, leaving atomic publication and concurrent borrower
-tracking for the synchronization phase.
+are drained explicitly. Registry publication, revision reads, transaction
+staging/commit, and retirement are serialized by a runtime mutex, while each
+generation protects its lease count against concurrent acquire/release and
+disposal.
 `HlMetadataTransaction` stages that decision against the registry revision:
-commit transfers the candidate to the registry, while a stale or rejected
-candidate remains disposable through rollback. This is the Haxe-side
-transaction boundary that a future native JIT staging API can attach to.
+staging captures the decision and revision together, and commit transfers the
+candidate only if that revision is still current. A stale or rejected candidate
+remains disposable through rollback. This is the Haxe-side transaction boundary
+that a future native JIT staging API can attach to.
 Consumers that retain a publication use `HlMetadataRegistry.currentLease()`;
 `disposeRetired()` skips generations with active leases and reports only actual
 disposals. Registry shutdown likewise refuses to reclaim a borrowed current or
@@ -228,8 +231,11 @@ explicit `MemoryOrder` values (`Relaxed`, `Acquire`, `Release`, `AcqRel`, and
 `SeqCst`). Invalid load/store orderings are rejected at the Haxe boundary;
 compare-exchange derives the permitted failure ordering from its success
 ordering. Mutexes, condition variables, TLS, and explicit GC handles remain
-separate runtime primitives, so native metadata records still contain no
-implicit managed references.
+separate runtime primitives. Metadata publication uses `Mutex` for serialized
+policy transitions and lease lifetime; native metadata records still contain
+no implicit managed references. A raw `currentPublication()` view is only a
+point-in-time snapshot; consumers that retain native pointers use
+`currentLease()`.
 
 ## Deliberate exclusions
 

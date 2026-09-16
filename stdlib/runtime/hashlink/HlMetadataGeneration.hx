@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.memory.Mutex;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlFunction;
@@ -95,6 +96,7 @@ class HlMetadataGeneration {
 	var activeTypeAppend:Null<HlMetadataTypeAppend>;
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
+	final borrowerMutex:Mutex;
 
 	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8,
 		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8, ?debugSectionCapacity:Int = 8) {
@@ -106,6 +108,7 @@ class HlMetadataGeneration {
 		debugSectionDescriptors = new HlDebugSectionTable(arena, debugSectionCapacity);
 		modulePools = new HlModulePools(arena, builder, [], [], [], haxe.io.Bytes.alloc(0), [], 0);
 		typeTable = new HlTypeTable(arena, initialTypeCapacity);
+		borrowerMutex = Mutex.create();
 	}
 
 	/** Base of the contiguous Haxe-owned type-record slab. */
@@ -659,25 +662,51 @@ class HlMetadataGeneration {
 
 	/** Borrow the published view until the returned lease is released. */
 	public function acquire():HlMetadataLease {
-		requireOpen();
-		if (!published)
-			throw "HashLink metadata generation has not been published";
-		return new HlMetadataLease(this);
+		borrowerMutex.acquire();
+		try {
+			requireOpen();
+			if (!published)
+				throw "HashLink metadata generation has not been published";
+			var result = new HlMetadataLease(this, snapshot());
+			borrowers++;
+			borrowerMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
 	}
 
 	/** Number of active metadata leases. */
 	public function borrowerCount():Int {
-		requireOpen();
-		return borrowers;
+		borrowerMutex.acquire();
+		try {
+			requireOpen();
+			var result = borrowers;
+			borrowerMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
 	}
 
 	/** Release HashLink-derived and arena-owned metadata. Repeated disposal is safe. */
 	public function dispose():Void {
-		if (disposed)
-			return;
-		if (borrowers != 0)
-			throw 'HashLink metadata generation has $borrowers active lease(s)';
-		disposed = true;
+		borrowerMutex.acquire();
+		try {
+			if (disposed) {
+				borrowerMutex.release();
+				return;
+			}
+			if (borrowers != 0)
+				throw 'HashLink metadata generation has $borrowers active lease(s)';
+			disposed = true;
+			borrowerMutex.release();
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
 		arena.dispose();
 		moduleContext = RawPtr.nullPtr();
 	}
@@ -694,16 +723,37 @@ class HlMetadataGeneration {
 	}
 
 	@:allow(runtime.hashlink.HlMetadataLease)
-	function retainBorrow():Void {
-		requireOpen();
-		borrowers++;
+	function releaseBorrow():Void {
+		borrowerMutex.acquire();
+		try {
+			if (borrowers == 0)
+				throw "HashLink metadata generation lease count is already zero";
+			borrowers--;
+			borrowerMutex.release();
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
 	}
 
-	@:allow(runtime.hashlink.HlMetadataLease)
-	function releaseBorrow():Void {
-		if (borrowers == 0)
-			throw "HashLink metadata generation lease count is already zero";
-		borrowers--;
+	/** Dispose this generation only when no lease can acquire concurrently. */
+	@:allow(runtime.hashlink.HlMetadataRegistry)
+	function disposeIfUnborrowed():Bool {
+		borrowerMutex.acquire();
+		try {
+			if (disposed || borrowers != 0) {
+				borrowerMutex.release();
+				return false;
+			}
+			disposed = true;
+			borrowerMutex.release();
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
+		arena.dispose();
+		moduleContext = RawPtr.nullPtr();
+		return true;
 	}
 
 	function requireFunctionTable():HlFunctionTable {
