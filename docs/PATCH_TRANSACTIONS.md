@@ -12,9 +12,10 @@ truncated payloads, invalid debug metadata, and invalid source snapshots. The
 Haxe-built `HlNativeModuleLoader.loadRuntime` path decodes and retains the
 complete Haxe `HlPatch` model before native publication. Its envelope is a
 derived identity-policy view, so the external path and host path share one HLP
-wire decoder. Native still rechecks live compatibility and performs the JIT
-publication; the Haxe transaction owns the decoded policy input that can grow
-into patch-state ownership without introducing a second mutable representation.
+wire decoder and the shared `HlPatchPolicy` compatibility validator. Native
+still rechecks live compatibility and performs the JIT publication; the Haxe
+transaction owns the decoded policy input that can grow into patch-state
+ownership without introducing a second mutable representation.
 Before staging, that policy now also checks symbol-base counts and HashLink-
 compatible prefix hashes, appended type references, stable-ID-to-slot mapping,
 unchanged function signatures, register type indices, and relocation instruction
@@ -43,6 +44,13 @@ so mutating a transaction or returned diagnostic model cannot rewrite published
 history. The same successful transition also advances the Haxe-owned symbol
 pools, so later patches validate against the actual post-publication counts and
 prefix hashes rather than the original HLB snapshot.
+
+The legacy host `LoadedModule` follows the same ordering: it retains a
+Haxe-owned revision, stable function-version table, and private patch-generation
+ledger, and advances those records and its decoded symbol model only after
+`RuntimeNative.patch` reports success. Its host-side function table deliberately
+tracks identity, slot, signature, and generation without pretending to own the
+native JIT entrypoint addresses; those remain inside the native HashLink bridge.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
