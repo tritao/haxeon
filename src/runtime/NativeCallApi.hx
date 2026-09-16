@@ -20,6 +20,15 @@ class NativeCallApi {
 	public static function native_last_error(output:hl.Bytes, capacity:Int):Int
 		return 0;
 
+	public static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer">
+		return null;
+
+	public static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool
+		return false;
+
+	public static function native_pointer_is_closed(pointer:hl.Abstract<"native_pointer">):Bool
+		return true;
+
 	public static function lastError():String {
 		var output = new hl.Bytes(512),
 			length = native_last_error(output, 512);

@@ -12,7 +12,7 @@ class FfiImportMain {
 		var args = Sys.args(), target = "", output = "", language = "c", standard = "c11", clang = "clang", compileCommands:Null<String> = null,
 			library:Null<String> = null, interfaceName:Null<String> = null, includes:Array<String> = [], defines:Array<String> = [],
 			dependencies:Array<String> = [], sourceLabel:Null<String> = null, excludedHeaders:Array<String> = [], paths:Array<String> = [],
-			trivialValues = false, haxeOutputDir:Null<String> = null;
+			trivialValues = false, cxxLifetimes = false, haxeOutputDir:Null<String> = null;
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--target="))
 				target = arg.substring(9);
@@ -32,6 +32,8 @@ class FfiImportMain {
 				compileCommands = arg.substring(arg.indexOf("=") + 1);
 			else if (arg == "--cxx-trivial-values")
 				trivialValues = true;
+			else if (arg == "--cxx-lifetimes")
+				cxxLifetimes = true;
 			else if (StringTools.startsWith(arg, "--library="))
 				library = arg.substring(10);
 			else if (StringTools.startsWith(arg, "--interface="))
@@ -57,9 +59,9 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import --language=c|c++ --target=<triple> --output=<file> [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-import --language=c|c++ --target=<triple> --output=<file> [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
-			excludedHeaders, standard, defines, compileCommands, trivialValues) : null,
+			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes) : null,
 			model = cxxResult == null ? CHeaderImporter.importHeaderWithOptions(paths[0], target, includes, clang, library, interfaceName, dependencies,
 				excludedHeaders, defines, compileCommands) : cxxResult.hxi,
 			label = sourceLabel == null ? paths[0] : sourceLabel,
@@ -68,7 +70,7 @@ class FfiImportMain {
 		if (haxeOutputDir != null) {
 			if (!FileSystem.exists(haxeOutputDir))
 				FileSystem.createDirectory(haxeOutputDir);
-			for (projection in CxxProjection.sources(cxxResult.model, cxxResult.hxi))
+			for (projection in CxxProjection.sources(cxxResult.model, cxxResult.hxi, null, cxxResult.plans))
 				File.saveContent(Path.join([haxeOutputDir, projection.file]), projection.source);
 		}
 		Sys.println('imported ${paths[0]} -> $output');

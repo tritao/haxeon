@@ -13,7 +13,8 @@ typedef HxiFunctionAbi = NativeCallPlan;
 
 /** Lowers a normalized HXI function into its complete target-specific native signature. */
 class HxiNativeSignature {
-	public static function lower(model:HxiInterface, abi:HxiAbi, ?visibleDeclarations:Map<String, HxiDeclaration>):Array<HxiFunctionAbi> {
+	public static function lower(model:HxiInterface, abi:HxiAbi, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			?dispatches:Map<String, NativeDispatch>):Array<HxiFunctionAbi> {
 		var semantics = HxiSemantics.normalize(model, abi, visibleDeclarations),
 			declarations:Map<String, HxiDeclaration> = [];
 		for (declaration in model.declarations)
@@ -36,7 +37,7 @@ class HxiNativeSignature {
 						callConvention: callConvention,
 						resultPolicy: resultPolicy,
 						semantics: semantic,
-						dispatch: DirectSymbol
+						dispatch: dispatches == null || dispatches.get(name) == null ? DirectSymbol : dispatches.get(name)
 					});
 				case _:
 			}

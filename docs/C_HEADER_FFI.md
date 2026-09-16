@@ -20,10 +20,12 @@ The current direct profile imports namespaces, aliases, enum classes, opaque
 records, free functions, static methods, and public non-virtual `noexcept`
 methods. A member method is lowered to an HXI function with a synthetic
 `__this` pointer, while the `@symbol` value is exactly Clang's mangled name.
-References are represented as non-null pointer ABI values. Constructors,
-destructors, virtual methods, inheritance, rvalue references, throwing calls,
-and non-trivial class values produce `CXX` diagnostics instead of an unsafe
-binding. Trivial record values are opt-in through `--cxx-trivial-values`.
+References are represented as non-null pointer ABI values. Virtual methods,
+inheritance, rvalue references, throwing calls, and non-trivial class values
+produce `CXX` diagnostics instead of an unsafe binding. Trivial record values
+are opt-in through `--cxx-trivial-values`. Constructors and destructors are
+also opt-in through `--cxx-lifetimes` and must be public, `noexcept`, and
+defined on a complete record with an explicit destructor.
 
 With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
 class module per imported record. The generated class stores the raw opaque
@@ -52,10 +54,15 @@ haxeon-compiler \
   sources.manifest
 ```
 
-The generated `DisplayList.hx`-style modules are intentionally thin. They do
-not allocate or destroy C++ objects; callers supply a native pointer obtained
-from an API with an explicit ownership contract. Overloaded methods receive
-stable numeric suffixes until a richer Haxe overload policy is added.
+The generated `DisplayList.hx`-style modules are intentionally thin. Without
+`--cxx-lifetimes`, they expose borrowed `fromNative()` wrappers and do not
+allocate or destroy C++ objects; callers supply a native pointer obtained from
+an API with an explicit ownership contract. With lifetime support enabled,
+each constructor becomes `create()` (or a numbered overload), which allocates
+storage through the runtime and invokes the Clang-selected constructor symbol;
+`close()` invokes the destructor and then releases that storage. Borrowed
+wrappers cannot be closed. Overloaded methods receive stable numeric suffixes
+until a richer Haxe overload policy is added.
 
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:

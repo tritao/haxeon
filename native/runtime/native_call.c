@@ -1102,6 +1102,18 @@ static haxeon_native_pointer *haxeon_native_pointer_invoke( vbyte *library, vbyt
 	return pointer;
 }
 
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_alloc)( int size ) {
+	if( size <= 0 ) hl_error("Native pointer allocation requires a positive size");
+	void *value = malloc((size_t)size);
+	if( value == NULL ) hl_error("Native pointer allocation failed");
+	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
+	memset(pointer,0,sizeof(*pointer));
+	pointer->finalize = haxeon_native_pointer_finalize;
+	pointer->value = value;
+	pointer->release = free;
+	return pointer;
+}
+
 HL_PRIM bool HL_NAME(native_pointer_close)( haxeon_native_pointer *pointer ) {
 	if( pointer == NULL || pointer->value == NULL || pointer->release == NULL ) return false;
 	pointer->release(pointer->value);

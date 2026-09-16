@@ -19,7 +19,7 @@ typedef CxxDiagnostic = {
 class CxxSubsetValidator {
 	public static inline final PROFILE = "CXX_ABI_V1";
 
-	public static function validate(model:CxxModel, trivialValues:Bool = false):Array<CxxDiagnostic> {
+	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false):Array<CxxDiagnostic> {
 		var diagnostics:Array<CxxDiagnostic> = [],
 			records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
@@ -35,7 +35,7 @@ class CxxSubsetValidator {
 			if (record.bases.length > 0)
 				diagnostics.push({code: "CXX005", message: 'inheritance for ${record.qualifiedName} is unsupported by CXX_ABI_V1', span: record.span});
 			for (method in record.methods)
-				validateMethod(method, records, enums, aliases, diagnostics, trivialValues);
+				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes);
 		}
 		for (functionModel in model.functions) {
 			if (functionModel.symbol.length == 0)
@@ -73,8 +73,8 @@ class CxxSubsetValidator {
 			});
 	}
 
-	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false):Void {
-		var diagnostics = validate(model, trivialValues);
+	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false):Void {
+		var diagnostics = validate(model, trivialValues, lifetimes);
 		if (diagnostics.length == 0)
 			return;
 		var lines = [
@@ -86,14 +86,40 @@ class CxxSubsetValidator {
 		throw lines.join("\n");
 	}
 
-	static function validateMethod(method:CxxMethod, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>,
-			diagnostics:Array<CxxDiagnostic>, trivialValues:Bool):Void {
-		if (method.isConstructor || method.isDestructor)
+	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool):Void {
+		if ((method.isConstructor || method.isDestructor) && !lifetimes)
 			diagnostics.push({
 				code: "CXX008",
-				message: 'constructors and destructors are not supported by the direct-call milestone (${method.qualifiedName})',
+				message: 'constructors and destructors are disabled; pass --cxx-lifetimes to enable ${method.qualifiedName}',
 				span: method.span
 			});
+		if ((method.isConstructor || method.isDestructor) && lifetimes) {
+			if (!record.completeDefinition || record.size <= 0 || record.align <= 0)
+				diagnostics.push({
+					code: "CXX014",
+					message: 'lifetime operation ${method.qualifiedName} requires a complete record with a usable size and alignment',
+					span: record.span
+				});
+			if (record.align > 16)
+				diagnostics.push({
+					code: "CXX014",
+					message: 'lifetime operation ${method.qualifiedName} requires alignment ${record.align}, above the 16-byte native allocation guarantee',
+					span: record.span
+				});
+			if (method.isConstructor) {
+				var hasExplicitDestructor = false;
+				for (candidate in record.methods)
+					if (candidate.isDestructor)
+						hasExplicitDestructor = true;
+				if (!hasExplicitDestructor)
+					diagnostics.push({
+						code: "CXX014",
+						message: 'constructor ${method.qualifiedName} requires an explicit noexcept destructor for owned projection',
+						span: method.span
+					});
+			}
+		}
 		if (method.symbol.length == 0)
 			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
 		if (!method.isNoexcept)

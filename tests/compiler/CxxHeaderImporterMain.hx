@@ -126,6 +126,38 @@ class CxxHeaderImporterMain {
 			&& hosted.model.records[0].size > 0
 			&& hosted.model.records[0].align > 0,
 			"C++ imports should support hosted standard-library headers without importing their declarations");
+		var lifetimeDisabled = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_lifetime_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+		} catch (error:Dynamic)
+			lifetimeDisabled = Std.string(error);
+		expect(lifetimeDisabled.indexOf("CXX008") >= 0, "C++ lifetime operations should require explicit opt-in");
+		var lifetime = CxxHeaderImporter.importHeader("tests/ffi/cxx_lifetime_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_lifetime",
+			null, null, null, "c++20", null, null, false, true),
+			lifetimeText = HxiWriter.write(lifetime.hxi, "// test"),
+			lifetimeProjection = CxxProjection.sources(lifetime.model, lifetime.hxi, null, lifetime.plans)[0].source,
+			hasConstructorDispatch = false,
+			hasDestructorDispatch = false;
+		for (plan in lifetime.plans)
+			switch plan.dispatch {
+				case CxxConstructor:
+					hasConstructorDispatch = true;
+				case CxxDestructor:
+					hasDestructorDispatch = true;
+				case _:
+			}
+		expect(hasConstructorDispatch
+			&& hasDestructorDispatch
+			&& lifetimeText.indexOf("@symbol(\"_ZN7cxxlife6WidgetC1Ei\")") >= 0
+			&& lifetimeText.indexOf("@symbol(\"_ZN7cxxlife6WidgetD1Ev\")") >= 0,
+			"opted-in C++ lifetimes should lower constructor and destructor symbols into HXI");
+		expect(lifetimeProjection.indexOf('@:hlNative("haxeon_runtime")') >= 0
+			&& lifetimeProjection.indexOf("__CxxNativeMemory.native_pointer_alloc") >= 0
+			&& lifetimeProjection.indexOf("public static function create(value:Int):Widget") >= 0
+			&& lifetimeProjection.indexOf("public function close():Void") >= 0
+			&& lifetimeProjection.indexOf("C++ object is closed") >= 0
+			&& lifetimeProjection.indexOf("public function ~Widget") < 0,
+			"C++ lifetime projection should allocate owned objects and hide ABI destructor names");
 	}
 
 	static function expect(value:Bool, message:String):Void {

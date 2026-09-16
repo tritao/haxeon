@@ -15,14 +15,15 @@ import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiModel.HxiResultPolicy;
+import compiler.ffi.NativeCallPlan.NativeDispatch;
 import haxe.Int64;
 import sys.FileSystem;
 
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
 class CxxAbiLowerer {
 	public static function lower(model:CxxModel, target:String, ?library:String, ?interfaceName:String, ?dependencies:Array<String>,
-			trivialValues:Bool = false):HxiInterface {
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues);
+			trivialValues:Bool = false, lifetimes:Bool = false):HxiInterface {
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes);
 		var records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
 			aliases:Map<String, CxxAlias> = [];
@@ -67,6 +68,19 @@ class CxxAbiLowerer {
 		var source = model.span.file;
 		return new HxiInterface(interfaceName == null ? moduleName(model.header) : interfaceName, target, library,
 			dependencies == null ? [] : dependencies.copy(), declarations, source.span(0, source.bytes.length));
+	}
+
+	/** Returns the C++-specific dispatch metadata for already lowered declarations. */
+	public static function dispatches(model:CxxModel):Map<String, NativeDispatch> {
+		var result:Map<String, NativeDispatch> = [];
+		for (functionModel in model.functions)
+			if (functionModel.loweredName != null)
+				result.set(functionModel.loweredName, DirectSymbol);
+		for (record in model.records)
+			for (method in record.methods)
+				if (method.loweredName != null)
+					result.set(method.loweredName, method.isConstructor ? CxxConstructor : method.isDestructor ? CxxDestructor : DirectSymbol);
+		return result;
 	}
 
 	static function lowerRecord(record:CxxRecord, trivialValues:Bool, valueRecords:Map<String, Bool>, records:Map<String, CxxRecord>,

@@ -4,7 +4,7 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.HxiSemantics.HxiSemanticFunction;
 
-/** How a native call obtains its callee. Direct symbols cover C and CXX_ABI_V1. */
+/** How a native call obtains its callee or performs a language-specific ABI operation. */
 enum NativeDispatch {
 	DirectSymbol;
 	IndirectPointer;

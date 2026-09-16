@@ -7,6 +7,7 @@ import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 import compiler.ffi.HxiProjectionProfile.HxiProjectionProfile;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.NativeCallPlan.NativeDispatch;
 
 typedef CxxProjectionSource = {
 	final file:String;
@@ -16,7 +17,8 @@ typedef CxxProjectionSource = {
 
 /** Emits small Haxe object wrappers over the raw C++ HXI projection. */
 class CxxProjection {
-	public static function sources(model:CxxModel, hxi:HxiInterface, ?profile:HxiProjectionProfile):Array<CxxProjectionSource> {
+	public static function sources(model:CxxModel, hxi:HxiInterface, ?profile:HxiProjectionProfile,
+			?nativePlans:Array<HxiFunctionAbi>):Array<CxxProjectionSource> {
 		if (hxi.library == null)
 			throw "CXX200 C++ Haxe projection requires an HXI library";
 		var classNames = projectedClassNames(model),
@@ -26,29 +28,43 @@ class CxxProjection {
 			result.push({
 				file: typeName + ".hx",
 				typeName: typeName,
-				source: emit(model, hxi, record, typeName, profile)
+				source: emit(model, hxi, record, typeName, profile, nativePlans)
 			});
 		}
 		result.sort((left, right) -> Reflect.compare(left.file, right.file));
 		return result;
 	}
 
-	static function emit(model:CxxModel, hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>):String {
+	static function emit(model:CxxModel, hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>,
+			nativePlans:Null<Array<HxiFunctionAbi>>):String {
 		var abi = HxiAbi.forInterface(hxi),
-			plans:Map<String, HxiFunctionAbi> = [];
-		for (plan in abi.functions())
+			plans:Map<String, HxiFunctionAbi> = [],
+			availablePlans = nativePlans == null ? abi.functions() : nativePlans;
+		for (plan in availablePlans)
 			plans.set(plan.name, plan);
 		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
 			output = new StringBuf();
 		output.add('// Generated C++ object projection for ${record.qualifiedName}. Do not edit.\n');
-		output.add('import ${hxi.name};\n\n');
+		output.add('import ${hxi.name};\n');
+		output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class __CxxNativeMemory {\n');
+		output.add('\tpublic static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer"> return null;\n');
+		output.add('\tpublic static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool return false;\n');
+		output.add('}\n\n');
 		output.add('class $typeName {\n');
 		output.add('\tfinal __native:$nativeType;\n\n');
-		output.add('\tpublic function new(native:$nativeType) {\n');
+		output.add('\tfinal __owned:Bool;\n');
+		output.add('\tvar __closed:Bool;\n\n');
+		output.add('\tprivate function new(native:$nativeType, owned:Bool) {\n');
 		output.add('\t\tthis.__native = native;\n');
+		output.add('\t\tthis.__owned = owned;\n');
+		output.add('\t\tthis.__closed = false;\n');
 		output.add('\t}\n\n');
-		output.add('\tpublic static inline function fromNative(native:$nativeType):$typeName return new $typeName(native);\n');
-		output.add('\tpublic inline function nativeHandle():$nativeType return __native;\n');
+		output.add('\tpublic static inline function fromNative(native:$nativeType):$typeName return new $typeName(native, false);\n');
+		output.add('\tpublic inline function nativeHandle():$nativeType {\n');
+		output.add('\t\tif (__closed) throw "C++ object is closed";\n');
+		output.add('\t\treturn __native;\n');
+		output.add('\t}\n');
+		output.add('\tpublic inline function isClosed():Bool return __closed;\n');
 
 		var methods = record.methods.copy();
 		methods.sort(function(left, right) {
@@ -60,6 +76,8 @@ class CxxProjection {
 			counts.set(method.name, (counts.get(method.name) == null ? 0 : counts.get(method.name)) + 1);
 		var indices:Map<String, Int> = [];
 		for (method in methods) {
+			if (method.isConstructor || method.isDestructor)
+				continue;
 			var plan = method.loweredName == null ? null : plans.get(method.loweredName);
 			if (plan == null)
 				throw 'CXX201 missing lowered call plan for ${method.qualifiedName}';
@@ -85,13 +103,68 @@ class CxxProjection {
 			if (result == null)
 				throw 'CXX201 unsupported Haxe projection for ${method.qualifiedName} result';
 			var publicFunction = HxiHaxeEmitter.projectedFunctionName(method.loweredName, profile),
-				callArguments = (method.isStatic ? [] : ["__native"]).concat(calls),
+				callArguments = (method.isStatic ? [] : ["nativeHandle()"]).concat(calls),
 				staticModifier = method.isStatic ? " static" : "";
 			output.add('\tpublic$staticModifier function $methodName(${arguments.join(", ")}):${result.haxeType} {\n');
 			if (result.haxeType == "Void")
 				output.add('\t\t${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
 			else
 				output.add('\t\treturn ${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+			output.add('\t}\n');
+		}
+
+		var constructors = [for (method in methods) if (method.isConstructor) method],
+			destructors = [for (method in methods) if (method.isDestructor) method];
+		if (constructors.length != 0 && destructors.length == 0)
+			throw 'CXX203 lifetime projection for ${record.qualifiedName} requires an explicit destructor';
+		if (destructors.length != 0) {
+			var destructor = destructors[0],
+				destructorPlan = destructor.loweredName == null ? null : plans.get(destructor.loweredName);
+			if (destructorPlan == null)
+				throw 'CXX201 missing lowered destructor call plan for ${destructor.qualifiedName}';
+			switch destructorPlan.dispatch {
+				case CxxDestructor:
+				case _:
+					throw 'CXX204 destructor ${destructor.qualifiedName} has an invalid native dispatch plan';
+			}
+			var destructorFunction = HxiHaxeEmitter.projectedFunctionName(destructor.loweredName, profile);
+			output.add('\tpublic function close():Void {\n');
+			output.add('\t\tif (!__owned) throw "Cannot close a borrowed C++ object";\n');
+			output.add('\t\tif (!__closed) {\n');
+			output.add('\t\t\t${hxi.name}.$destructorFunction(__native);\n');
+			output.add('\t\t\t__CxxNativeMemory.native_pointer_close(cast __native);\n');
+			output.add('\t\t\t__closed = true;\n');
+			output.add('\t\t}\n');
+			output.add('\t}\n');
+		}
+		for (index in 0...constructors.length) {
+			var constructor = constructors[index],
+				constructorPlan = constructor.loweredName == null ? null : plans.get(constructor.loweredName);
+			if (constructorPlan == null)
+				throw 'CXX201 missing lowered constructor call plan for ${constructor.qualifiedName}';
+			switch constructorPlan.dispatch {
+				case CxxConstructor:
+				case _:
+					throw 'CXX204 constructor ${constructor.qualifiedName} has an invalid native dispatch plan';
+			}
+			var constructorArguments:Array<String> = [],
+				constructorCalls:Array<String> = [];
+			for (parameterIndex in 0...constructor.parameters.length) {
+				var argument = constructorPlan.arguments[parameterIndex + 1],
+					projected = HxiHaxeEmitter.project(argument, false, profile);
+				if (projected == null)
+					throw 'CXX201 unsupported Haxe projection for ${constructor.qualifiedName} parameter ${parameterIndex + 1}';
+				var argumentName = identifier(constructor.parameters[parameterIndex].name) ? constructor.parameters[parameterIndex].name : 'arg$parameterIndex';
+				constructorArguments.push('$argumentName:${projected.haxeType}');
+				constructorCalls.push(argumentName);
+			}
+			var constructorName = constructors.length == 1 ? "create" : "create_" + index,
+				constructorFunction = HxiHaxeEmitter.projectedFunctionName(constructor.loweredName, profile);
+			output.add('\tpublic static function $constructorName(${constructorArguments.join(", ")}):$typeName {\n');
+			output.add('\t\tvar native:$nativeType = cast __CxxNativeMemory.native_pointer_alloc(${record.size});\n');
+			output.add('\t\tvar result = new $typeName(native, true);\n');
+			output.add('\t\t${hxi.name}.$constructorFunction(native${constructorCalls.length == 0 ? "" : ", " + constructorCalls.join(", ")});\n');
+			output.add('\t\treturn result;\n');
 			output.add('\t}\n');
 		}
 		output.add('}\n');
@@ -127,7 +200,7 @@ class CxxProjection {
 	}
 
 	static function validateMethodName(name:String, method:CxxMethod):Void
-		if (!identifier(name) || name == "fromNative" || name == "nativeHandle")
+		if (!identifier(name) || name == "fromNative" || name == "nativeHandle" || name == "isClosed" || name == "close")
 			throw 'CXX202 invalid projected method name "$name" for ${method.qualifiedName}';
 
 	static function identifier(value:String):Bool {
