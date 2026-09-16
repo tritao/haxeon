@@ -14,8 +14,9 @@ complete Haxe `HlPatch` model before native publication. Its envelope is a
 derived identity-policy view, so the external path and host path share one HLP
 wire decoder and the shared `HlPatchPolicy` compatibility validator. Native
 still rechecks live compatibility and performs the JIT publication; the Haxe
-transaction owns the decoded policy input that can grow into patch-state
-ownership without introducing a second mutable representation.
+transaction owns the decoded policy input and compatible appended type graph,
+while the native kernel retains only the machine-sensitive patch function
+storage and publication mechanism.
 Before staging, that policy now also checks symbol-base counts and HashLink-
 compatible prefix hashes, appended type references, stable-ID-to-slot mapping,
 unchanged function signatures, register type indices, and relocation instruction
@@ -111,13 +112,18 @@ relocations, register and symbol bounds, opcode operands, and duplicate slots.
 HLP version 7 also validates content-addressed source snapshots before copying
 them into the staged code owner; their lifetime therefore matches active or
 retired patch JIT code that can reference them in debugger stacks.
-It then creates combined symbol tables, initializes reserved non-moving type
-slots, builds private function metadata, and JIT-compiles a private code image.
-Any failure frees staged storage and clears reserved type slots while leaving the
-published revision, symbol counts, dispatch pointers, and owners unchanged.
+On the Haxe-built external path, Haxeon has already constructed the compatible
+appended type records in the generation's contiguous arena. Native therefore
+builds combined symbol tables, creates private function metadata, and
+JIT-compiles a private code image without allocating those type records. The
+legacy native-decoder path retains the old native type staging behavior. Any
+failure frees staged storage; the Haxe path also rolls back its arena and type
+table cursors, leaving the published revision, symbol counts, dispatch
+pointers, and owners unchanged.
 
 Publication begins only after JIT finalization and owner-array capacity are
-ready. Under the same mutex, the runtime transfers appended-type ownership,
+ready. Under the same mutex, the runtime marks Haxe-prepared appended types as
+module-owned (or transfers native-staged type ownership on the legacy path),
 advances the visible type count, swaps all affected dispatch slots and their code
 owners, replaces append-only symbol storage, and finally advances the revision.
 Because callers use the mutex, they observe either the complete old state or the

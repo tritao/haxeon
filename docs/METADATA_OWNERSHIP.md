@@ -48,14 +48,17 @@ closure-patch memory.
 
 The type arena is one contiguous, non-moving allocation with 65,536 append slots
 reserved when a module is loaded. Compatible patches may append primitive,
-abstract, and function descriptors. Object, struct/interface-like virtual,
-enum, reference, nullable, and packed descriptors require a structural reload;
-both the HLP writer and reader reject them. Function descriptor payloads and
-abstract names are module-owned until shutdown. Patch staging checks the full
-append against the remaining capacity before writing any arena entry, and a
-capacity failure leaves the published type count, revision, dispatch slots, and
-existing behavior unchanged. The count and capacity are exposed as runtime
-metrics so long-running tests can distinguish arena growth from JIT retention.
+abstract, function, reference, and nullable descriptors. Haxeon constructs
+those records and their recursive payloads in a checkpointed metadata
+transaction before asking HashLink to publish the patch. Object,
+struct/interface-like virtual, enum, method, and packed descriptors still
+require a structural reload; both the HLP policy and native validation reject
+them. Function descriptor payloads and abstract names are module-owned until
+shutdown. A native publication failure rolls the Haxe arena and pointer table
+back to their prior cursors, leaving the published type count, revision,
+dispatch slots, and existing behavior unchanged. The count and capacity are
+exposed as runtime metrics so long-running tests can distinguish arena growth
+from JIT retention.
 
 The contiguous reserve is deliberate: generated code, heap values, function
 signatures, globals, and reflection retain direct `hl_type *` pointers, while
