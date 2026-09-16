@@ -1424,9 +1424,17 @@ class LanguageServiceMain {
 		var qualifiedAliasNavigationSource = "package alias.app; function main():Void { var value:alias.types.Alias; value.member; }";
 		qualifiedAliasService.update("alias/app/QualifiedAlias.hx", qualifiedAliasNavigationSource);
 		var qualifiedAliasMemberPosition = qualifiedAliasNavigationSource.indexOf("value.member") + "value.".length + 1,
-			qualifiedAliasMemberDefinition = qualifiedAliasService.definition("alias/app/QualifiedAlias.hx", qualifiedAliasMemberPosition);
+			qualifiedAliasMemberDefinition = qualifiedAliasService.definition("alias/app/QualifiedAlias.hx", qualifiedAliasMemberPosition),
+			qualifiedAliasMemberReferences = qualifiedAliasService.references("alias/types/Foo.hx", "package alias.types; class Foo { public var member:Int; } function main():Void return;".indexOf("member") + 1),
+			hasQualifiedAliasMemberReference = false;
+		for (reference in qualifiedAliasMemberReferences)
+			if (reference.path == "alias/app/QualifiedAlias.hx"
+				&& reference.span.start == qualifiedAliasNavigationSource.indexOf("member"))
+				hasQualifiedAliasMemberReference = true;
 		if (qualifiedAliasMemberDefinition == null || qualifiedAliasMemberDefinition.path != "alias/types/Foo.hx")
 			throw 'recovered fully qualified typedef did not navigate its underlying member: completion=$qualifiedAliasCompletion, definition=${qualifiedAliasMemberDefinition == null ? "null" : qualifiedAliasMemberDefinition.path}';
+		if (!hasQualifiedAliasMemberReference)
+			throw 'recovered fully qualified typedef did not retain the underlying member identity for references: ${qualifiedAliasMemberReferences.length}';
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");
