@@ -87,12 +87,18 @@ class HlNativeMetadataMain {
 			+
 			'kernelRegs.store(kernelInt); kernelOps.ref.op = 67; kernelOps.ref.p1 = 0; kernelOps.ref.p2 = 0; kernelOps.ref.p3 = 0; kernelOps.ref.extra = RawPtr.nullPtr(); '
 			+
-			'kernel.addType(kernelInt); kernel.addType(kernelFunction); kernel.defineModule([RawPtr.nullPtr()], [kernelFunction]); kernel.defineGlobalTypes([kernelInt]); '
+			'var kernelModuleContext = kernel.defineModule([RawPtr.nullPtr()], [kernelFunction]), kernelObject = kernel.builder.objectType(kernel.builder.utf16Name("NativeObject"), RawPtr.nullPtr(), [{name: kernel.builder.utf16Name("value"), type: kernelInt, hashedName: HlTypeBuilder.hashUtf16("value")}], [], [], RawPtr.nullPtr(), kernelModuleContext, RawPtr.nullPtr()), '
+			+
+			'kernelEnum = kernel.builder.enumType(kernel.builder.utf16Name("NativeEnum"), [{name: kernel.builder.utf16Name("value"), parameters: [kernelInt], size: 0, hasPtr: false, offsets: [0]}], RawPtr.nullPtr()), '
+			+
+			'kernelVirtual = kernel.builder.virtualType([{name: kernel.builder.utf16Name("value"), type: kernelInt, hashedName: HlTypeBuilder.hashUtf16("value")}], 0, [0], RawPtr.nullPtr()), kernelVirtualLookupBeforeInit = kernelVirtual.ref.data.ref.virtualType.ref.lookup; '
+			+
+			'kernel.addType(kernelInt); kernel.addType(kernelFunction); kernel.addType(kernelObject); kernel.addType(kernelEnum); kernel.addType(kernelVirtual); kernel.defineGlobalTypes([kernelInt]); '
 			+ 'kernel.addFunctionDescriptor({findex: 0, nregs: 1, nops: 1, reference: 0, nassigns: 0, type: kernelFunction, regs: kernelRegs, ops: kernelOps, '
 			+ 'debug: RawPtr.nullPtr(), assigns: RawPtr.nullPtr(), object: RawPtr.nullPtr(), fieldName: RawPtr.nullPtr(), fieldReference: RawPtr.nullPtr()}); '
 			+ 'kernel.publish(); '
 			+
-			'var kernelModule = new HlNativeModule(kernel), kernelInitialized = kernelModule.isLoaded(), kernelUnloaded = kernelModule.unload(); kernel.dispose(); '
+			'var kernelModule = new HlNativeModule(kernel), kernelInitialized = kernelModule.isLoaded(), kernelObjectInitialized = !kernelObject.ref.data.ref.obj.ref.runtime.isNull(), kernelEnumInitialized = kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.size == 16 && kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12, kernelVirtualInitialized = kernelVirtual.ref.data.ref.virtualType.ref.dataSize == 4 && !kernelVirtual.ref.data.ref.virtualType.ref.lookup.isNull() && kernelVirtual.ref.data.ref.virtualType.ref.lookup != kernelVirtualLookupBeforeInit, kernelUnloaded = kernelModule.unload(); kernel.dispose(); '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
@@ -115,7 +121,7 @@ class HlNativeMetadataMain {
 			+ '&& publication.functionNames == publication.nativeCode.ref.functionNames && publication.functionNames.offset(0).load().offset(0).load() == 66 '
 			+ '&& publication.functionNameLengths == publication.nativeCode.ref.functionNameLengths && publication.functionNameLengths.load() == 11 '
 			+ '&& generation.validateNativeCode() == 12 '
-			+ '&& kernelInitialized && kernelUnloaded '
+			+ '&& kernelInitialized && kernelObjectInitialized && kernelEnumInitialized && kernelVirtualInitialized && kernelUnloaded '
 			+
 			'&& generatedValue == 8 && generatedUnloaded && registryFirstLoaded && registrySecondLoaded && runtimeRegistry.generation == 2 && registryBlocked && registryReclaimed && registryValue == 8 && registryDisposed && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
