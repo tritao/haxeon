@@ -8,11 +8,10 @@ import runtime.memory.RawPtr;
 	dispatch publication, and retirement; metadata construction and lifecycle
 	policy stay in Haxe.
 */
-interface HlMetadataModuleKernel {
+interface HlMetadataModuleKernel extends HlObjectPrototypeKernel {
 	function allocate(code:RawPtr<HlNativeCode>):RawPtr<UInt8>;
 	function initialize(module:RawPtr<UInt8>, flags:Int):Bool;
 	function publishObjectPrototype(type:RawPtr<HlType>):Void;
-	function publishObjectPrototypes(module:RawPtr<UInt8>):Bool;
 	function disposeContext(context:RawPtr<HlModuleContext>):Void;
 	function initializeConstant(module:RawPtr<UInt8>, index:Int):Bool;
 	function unload(module:RawPtr<UInt8>):Bool;
@@ -34,9 +33,6 @@ class NativeHlMetadataModuleKernel implements HlMetadataModuleKernel {
 
 	public inline function publishObjectPrototype(type:RawPtr<HlType>):Void
 		HlTypeBridge.native_metadata_publish_object_prototype(type);
-
-	public inline function publishObjectPrototypes(module:RawPtr<UInt8>):Bool
-		return HlTypeBridge.native_metadata_module_publish_object_prototypes(module);
 
 	public inline function disposeContext(context:RawPtr<HlModuleContext>):Void
 		HlTypeBridge.native_module_context_dispose(context);

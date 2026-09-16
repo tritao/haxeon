@@ -10,6 +10,7 @@ import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlRuntimeDispatchTable;
 import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 import runtime.hashlink.HlRuntimeModuleKernel;
+import runtime.hashlink.HlTypeLayout;
 
 /**
 	Haxe-owned loader for a HashLink runtime module and its native metadata.
@@ -43,8 +44,7 @@ class HaxeRuntimeModuleLoader {
 			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
-			if (!kernel.publishObjectPrototypes(module))
-				throw new RuntimeError(RuntimeStatus.JitFailed, "HashLink rejected Haxe-owned object prototypes");
+			HlTypeLayout.publishObjectPrototypes(publication.types, publication.typeCount, kernel);
 			metadata.constantDescriptors.initialize(function(index) return kernel.initializeConstant(cast module, index));
 			initializeModule(module, model, identity);
 			return new LoadedModule(module, model, identity, metadata);

@@ -27,10 +27,6 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code_manifest)( vbyte *code, r
 		? (vbyte*)runtime : NULL;
 }
 
-HL_PRIM bool HL_NAME(native_runtime_module_publish_object_prototypes)( vbyte *module ) {
-	return module != NULL && hl_runtime_module_publish_haxe_object_prototypes((hl_runtime_module*)module) == HL_RUNTIME_OK;
-}
-
 HL_PRIM bool HL_NAME(native_runtime_module_initialize_constant)( vbyte *module, int index ) {
 	return module != NULL && hl_runtime_module_initialize_constant((hl_runtime_module*)module,index) == HL_RUNTIME_OK;
 }

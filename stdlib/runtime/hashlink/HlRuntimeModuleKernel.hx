@@ -9,10 +9,9 @@ import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 	The kernel owns only native handle creation, calls, failure injection, and
 	retirement; module policy and executable-code policy stay in Haxe.
 */
-interface HlRuntimeModuleKernel {
+interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
-	function publishObjectPrototypes(module:HlRuntimeModuleHandle):Bool;
 	function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool;
 	function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int;
 	function callVoid(module:HlRuntimeModuleHandle, stableId:Int):Void;
@@ -42,8 +41,8 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, dispatch.stableIds, dispatch.slots,
 			dispatch.count, dispatch.initializerSlot);
 
-	public inline function publishObjectPrototypes(module:HlRuntimeModuleHandle):Bool
-		return HlTypeBridge.native_runtime_module_publish_object_prototypes(module);
+	public inline function publishObjectPrototype(type:RawPtr<HlType>):Void
+		HlTypeBridge.native_metadata_publish_object_prototype(type);
 
 	public inline function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool
 		return HlTypeBridge.native_runtime_module_initialize_constant(module, index);

@@ -118,7 +118,6 @@ DEFINE_PRIM(_ABSTRACT(realtime_module),load_code,_BYTES _BYTES _I32 _BYTES _I32)
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_bytes,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code_manifest,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _BYTES _BYTES _I32 _I32);
-DEFINE_PRIM(_BOOL,native_runtime_module_publish_object_prototypes,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_BOOL,native_runtime_module_initialize_constant,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BOOL,native_runtime_module_unload,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_dispose,_ABSTRACT(realtime_module));
@@ -216,7 +215,6 @@ DEFINE_PRIM(_VOID,native_metadata_publish_object_prototype,_BYTES);
 DEFINE_PRIM(_VOID,native_module_context_dispose,_BYTES);
 DEFINE_PRIM(_BYTES,native_metadata_module_alloc,_BYTES);
 DEFINE_PRIM(_BOOL,native_metadata_module_init,_BYTES _I32);
-DEFINE_PRIM(_BOOL,native_metadata_module_publish_object_prototypes,_BYTES);
 DEFINE_PRIM(_BOOL,native_metadata_module_initialize_constant,_BYTES _I32);
 DEFINE_PRIM(_BOOL,native_metadata_module_unload,_BYTES);
 DEFINE_PRIM(_BOOL,native_metadata_module_patch_generation,_BYTES _BYTES);
