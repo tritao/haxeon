@@ -158,15 +158,19 @@ class HlLoadedRuntimeModule {
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function validatePatchPolicy(patch:HlPatchEnvelope):Void {
 		for (stableId in patch.functionStableIds) {
-			var known = false;
-			for (entry in identity.entries)
-				if (entry.stableId == stableId) {
-					known = true;
-					break;
-				}
-			if (!known)
+			if (!hasFunctionIdentity(stableId))
 				throw 'Haxeon rejected an HLP patch for unknown function identity $stableId';
 		}
+		for (stableId in patch.relocationStableIds)
+			if (!hasFunctionIdentity(stableId))
+				throw 'Haxeon rejected an HLP relocation for unknown function identity $stableId';
+	}
+
+	function hasFunctionIdentity(stableId:Int):Bool {
+		for (entry in identity.entries)
+			if (entry.stableId == stableId)
+				return true;
+		return false;
 	}
 
 	/** Execute the manifest initializer through the Haxe-owned runtime policy. */

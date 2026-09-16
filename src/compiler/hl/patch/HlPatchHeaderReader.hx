@@ -2,12 +2,15 @@ package compiler.hl.patch;
 
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
+import compiler.hl.HlOpcode;
+import compiler.hl.HlOpcodeSchema;
 
 typedef HlPatchEnvelope = {
 	final moduleId:Bytes;
 	final baseRevision:Int;
 	final revision:Int;
 	final functionStableIds:Array<Int>;
+	final relocationStableIds:Array<Int>;
 }
 
 /** Reads the HLP identity prefix before native patch publication. */
@@ -50,7 +53,8 @@ class HlPatchHeaderReader {
 			if (revision <= baseRevision)
 				throw "Invalid patch revision range";
 			var sectionCount = readUnsigned(input),
-				functionStableIds:Array<Int> = [];
+				functionStableIds:Array<Int> = [],
+				relocationStableIds:Array<Int> = [];
 			if (sectionCount < 2 || sectionCount > bytes.length)
 				throw "Invalid HLP section count";
 			var symbols = false, functions = false;
@@ -79,7 +83,12 @@ class HlPatchHeaderReader {
 							if (existing == stableId)
 								throw "Duplicate HLP function identity";
 						functionStableIds.push(stableId);
-						input.read(functionEnd - input.position);
+						var functionBytes = input.read(functionEnd - input.position),
+							functionInput = new BytesInput(functionBytes);
+						functionInput.bigEndian = false;
+						readFunctionPolicy(functionInput, relocationStableIds);
+						if (functionInput.position != functionBytes.length)
+							throw 'Invalid HLP function length for $stableId (${functionInput.position}/${functionBytes.length})';
 					}
 				}
 				input.read(end - input.position);
@@ -92,11 +101,44 @@ class HlPatchHeaderReader {
 				moduleId: moduleId,
 				baseRevision: baseRevision,
 				revision: revision,
-				functionStableIds: functionStableIds
+				functionStableIds: functionStableIds,
+				relocationStableIds: relocationStableIds
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated HLP section envelope";
 		}
+	}
+
+	static function readFunctionPolicy(input:BytesInput, relocationStableIds:Array<Int>):Void {
+		readIndex(input);
+		readIndex(input);
+		var registerCount = readUnsigned(input),
+			instructionCount = readUnsigned(input);
+		for (_ in 0...registerCount)
+			readIndex(input);
+		for (_ in 0...instructionCount)
+			readInstructionPolicy(input);
+		for (_ in 0...readUnsigned(input)) {
+			readUnsigned(input);
+			relocationStableIds.push(readUnsigned(input));
+		}
+	}
+
+	static function readInstructionPolicy(input:BytesInput):Void {
+		var opcode = input.readByte(), arity = HlOpcodeSchema.arity(opcode);
+		if (opcode == HlOpcode.Switch || arity == HlOpcodeSchema.UNSUPPORTED)
+			throw 'Unsupported HLP patch opcode $opcode';
+		if (arity == HlOpcodeSchema.VARIABLE_ARITY) {
+			readIndex(input);
+			readIndex(input);
+			var count = readUnsigned(input);
+			if (count > 0x1000000)
+				throw "Invalid variable operand count";
+			for (_ in 0...count)
+				readIndex(input);
+		} else
+			for (_ in 0...arity)
+				readIndex(input);
 	}
 
 	static function readUnsigned(input:BytesInput):Int {
