@@ -2254,21 +2254,8 @@ class LanguageService {
 		if (context == null)
 			return null;
 		var model = context.model,
-			symbolId = context.symbol,
-			usingRecovered = false;
-		// A valid compiler model may omit an unreachable generic function's
-		// locals. The current recovered model still has the source-level shape;
-		// use it only for a same-revision query, never for stale fallback data.
-		if (symbolId == null && !context.stale && context.state.recoveredSemanticModel != null
-			&& context.state.recoveredSemanticModel.revision == context.state.revision) {
-			var recoveredSymbol = context.state.recoveredSemanticModel.index.symbolIdAt(position, token);
-			if (recoveredSymbol != null) {
-				model = context.state.recoveredSemanticModel;
-				symbolId = recoveredSymbol;
-				usingRecovered = true;
-			}
-		}
-		if (symbolId == null || !usingRecovered && !navigableSymbol(context))
+			symbolId = context.symbol;
+		if (symbolId == null || !navigableSymbol(context))
 			return null;
 		var target:Null<SemanticSymbolId> = null,
 			symbol = model.index.symbol(symbolId),
