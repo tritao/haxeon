@@ -105,7 +105,7 @@ class CxxAbiLowerer {
 	static function lowerFunction(functionModel:CxxFunction, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>):HxiDeclaration {
 		return Function(name, parameters(functionModel.parameters, records, enums, aliases), lowerType(functionModel.result, records, enums, aliases, true),
-			functionModel.symbol, false, "cdecl", emptyResultPolicy(), functionModel.span);
+			functionModel.symbol, false, "cdecl", resultPolicy(functionModel.result), functionModel.span);
 	}
 
 	static function lowerMethod(method:CxxMethod, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
@@ -124,7 +124,7 @@ class CxxAbiLowerer {
 				span: method.span
 			});
 		}
-		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true), method.symbol, false, "cdecl", emptyResultPolicy(),
+		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true), method.symbol, false, "cdecl", resultPolicy(method.result),
 			method.span);
 	}
 
@@ -161,12 +161,24 @@ class CxxAbiLowerer {
 		};
 	}
 
-	static function emptyResultPolicy():HxiResultPolicy
+	static function resultPolicy(type:CxxType):HxiResultPolicy {
+		var borrowed = pointerResult(type),
+			metadata:Map<String, Array<String>> = [];
+		if (borrowed)
+			metadata.set("borrowed", []);
 		return {
-			ownership: Unspecified,
+			ownership: borrowed ? Borrowed : Unspecified,
 			handleDisposition: Unspecified,
 			length: null,
-			metadata: []
+			metadata: metadata
+		};
+	}
+
+	static function pointerResult(type:CxxType):Bool
+		return switch type {
+			case CxxPointer(_) | CxxReference(_): true;
+			case CxxConst(element): pointerResult(element);
+			case _: false;
 		};
 
 	static function markValueType(type:CxxType, byValue:Bool, records:Map<String, CxxRecord>, aliases:Map<String, CxxAlias>, valueRecords:Map<String, Bool>,

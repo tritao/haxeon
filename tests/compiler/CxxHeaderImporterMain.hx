@@ -63,6 +63,8 @@ class CxxHeaderImporterMain {
 			"const methods should lower this as a const opaque pointer");
 		expect(generated.indexOf('extern fn __cxx_nkui__consume(value: ptr<__cxx_nkui__DisplayList>, mode: ptr<const<__cxx_nkui__Mode>>)') >= 0,
 			"C++ references should lower to non-null pointer ABI values");
+		expect(generated.indexOf('extern fn __cxx_nkui__acquire() -> ptr<__cxx_nkui__DisplayList> @symbol("_ZN4nkui7acquireEv") @borrowed;') >= 0,
+			"C++ object pointer results should default to borrowed ownership");
 		var parsed:HxiInterface = HxiParser.parse("cxx_import_fixture.hxi", generated),
 			functions = HxiAbi.forInterface(parsed).functions(),
 			resetAbi:Null<Dynamic> = null;
