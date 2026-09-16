@@ -7,12 +7,14 @@ class CxxHxiCallMain {
 	static function main():Void {
 		var output = Sys.args()[0],
 			hxiPath = Sys.args()[1],
+			projectionPath = Sys.args()[2],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
+		compiler.update("DisplayList.hx", File.getContent(projectionPath));
 		compiler.update("Main.hx",
-			"import CxxFixture; function main():Int { var list = CxxFixture.__cxx_nkui__acquire(); CxxFixture.__cxx_nkui__DisplayList__reset(list); CxxFixture.__cxx_nkui__mark(list); return CxxFixture.__cxx_nkui__DisplayList__size(list) == 1 && CxxFixture.__cxx_nkui__DisplayList__make(21) == 42 && CxxFixture.__cxx_nkui__score(list) == 42 ? 42 : 1; }");
+			"import CxxFixture; import DisplayList; function main():Int { var list = DisplayList.fromNative(CxxFixture.__cxx_nkui__acquire()); list.reset(); CxxFixture.__cxx_nkui__mark(list.nativeHandle()); return list.size() == 1 && DisplayList.make(21) == 42 && CxxFixture.__cxx_nkui__score(list.nativeHandle()) == 42 ? 42 : 1; }");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
 	}
 }

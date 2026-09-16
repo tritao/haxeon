@@ -216,6 +216,9 @@ class CxxAbiLowerer {
 		return result;
 	}
 
+	public static function hxiNameForQualified(name:String):String
+		return hxiName(name);
+
 	static function hxiName(name:String):String
 		return "__cxx_" + sanitize(name);
 

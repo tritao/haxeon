@@ -7,6 +7,7 @@ mkdir -p "$repo_dir/out"
 "$repo_dir/scripts/build-native.sh"
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-hxi-fixture.sh")
 hxi_path="$repo_dir/out/cxx_hxi_fixture.hxi"
+projection_dir="$repo_dir/out/cxx_hxi_projection"
 
 case "$(uname -s):$(uname -m)" in
 	Linux:x86_64)
@@ -36,11 +37,12 @@ esac
 	--target="$target" \
 	--library="$fixture_path" \
 	--interface=CxxFixture \
+	--haxe-output-dir="$projection_dir" \
 	--output="$hxi_path" \
 	"$repo_dir/tests/ffi/cxx_runtime_fixture.hpp"
 
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxHxiCallMain \
-	"$repo_dir/out/cxx-hxi-call-test.hl" "$hxi_path"
+	"$repo_dir/out/cxx-hxi-call-test.hl" "$hxi_path" "$projection_dir/DisplayList.hx"
 (
 	cd "$repo_dir/out"
 	set +e

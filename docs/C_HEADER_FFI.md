@@ -25,6 +25,38 @@ destructors, virtual methods, inheritance, rvalue references, throwing calls,
 and non-trivial class values produce `CXX` diagnostics instead of an unsafe
 binding. Trivial record values are opt-in through `--cxx-trivial-values`.
 
+With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
+class module per imported record. The generated class stores the raw opaque
+pointer, exposes `fromNative()` and `nativeHandle()`, and projects supported
+instance and static methods while retaining the HXI module as the ABI source:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --target=x86_64-linux-gnu \
+  --library=nativekit \
+  --interface=NativeKit \
+  --haxe-output-dir=generated/nativekit-cxx \
+  --output=generated/nativekit.hxi \
+/path/to/nativekit/include/nativekit.hpp
+```
+
+Add the projection directory as a source root when compiling the application,
+alongside the generated HXI interface:
+
+```sh
+haxeon-compiler \
+  --root=generated/nativekit-cxx \
+  --ffi-interface=generated/nativekit.hxi \
+  --entry=app.Main \
+  sources.manifest
+```
+
+The generated `DisplayList.hx`-style modules are intentionally thin. They do
+not allocate or destroy C++ objects; callers supply a native pointer obtained
+from an API with an explicit ownership contract. Overloaded methods receive
+stable numeric suffixes until a richer Haxe overload policy is added.
+
 Use repeatable `--define=<name[=value]>` options for explicit preprocessor
 definitions. `--compile-commands=<path>` accepts a Clang
 `compile_commands.json` database and contributes the selected command's

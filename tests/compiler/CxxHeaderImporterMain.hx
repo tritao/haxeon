@@ -1,5 +1,6 @@
 import compiler.ffi.CxxHeaderImporter;
 import compiler.ffi.CxxModel.CxxMethod;
+import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxSubsetValidator;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiAbi;
@@ -15,7 +16,7 @@ import sys.io.File;
 
 class CxxHeaderImporterMain {
 	static function main():Void {
-		var imported = CxxHeaderImporter.importHeader("tests/ffi/cxx_import_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]),
+		var imported = CxxHeaderImporter.importHeader("tests/ffi/cxx_import_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_test"),
 			model = imported.model;
 		expect(model.records.length == 1
 			&& model.records[0].qualifiedName == "nkui::DisplayList"
@@ -79,6 +80,15 @@ class CxxHeaderImporterMain {
 				case _:
 					throw "C++ this pointer did not classify as a 64-bit opaque pointer";
 			}
+		var projections = CxxProjection.sources(model, imported.hxi),
+			projection = projections.length == 1 ? projections[0].source : "";
+		expect(projections.length == 1
+			&& projections[0].file == "DisplayList.hx"
+			&& projection.indexOf("class DisplayList") >= 0
+			&& projection.indexOf("public function reset():Void") >= 0
+			&& projection.indexOf("public function size():haxe.Int64") >= 0
+			&& projection.indexOf("public static function make(value:Int):Int") >= 0,
+			"C++ records should produce Haxe object wrappers over their lowered HXI methods");
 		var compileDatabase = "/tmp/haxeon-cxx-compile-commands.json",
 			headerPath = FileSystem.fullPath("tests/ffi/cxx_import_fixture.hpp");
 		File.saveContent(compileDatabase, Json.stringify([
