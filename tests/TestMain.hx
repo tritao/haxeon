@@ -52,6 +52,7 @@ import compiler.syntax.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
+import compiler.types.typing.TypingSession;
 import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
@@ -76,7 +77,8 @@ class TestMain {
 			"src/compiler/ir/IrGenerator.hx",
 			"src/compiler/backend/wasm/WasmFunctionLower.hx",
 			"src/compiler/backend/wasm/WasmRepresentation.hx",
-			"src/compiler/types/typing/BodyTyper.hx"
+			"src/compiler/types/typing/BodyTyper.hx",
+			"src/compiler/types/typing/TypeRepresentation.hx"
 		])
 			try
 				new Parser(new Lexer(new SourceFile(compilerSource, File.getContent(compilerSource))).tokenize()).parseProgram()
@@ -1339,6 +1341,34 @@ class TestMain {
 		Frontend.compile('class GenericMethods { public static function identity<T>(value:T):T return value; public static function answer():Int return identity(42); } function main():Int return GenericMethods.answer();');
 		Frontend.compile('class GenericMethodStore {} class GenericMethodBox<T> { public var value:T; public function new(store:GenericMethodStore, value:T) this.value = value; } class GenericMethodFactory { public static function make<T>(store:GenericMethodStore, value:T):GenericMethodBox<T> return new GenericMethodBox<T>(store, value); } function main():Int return GenericMethodFactory.make(new GenericMethodStore(), 42).value;');
 		Frontend.compile('class GenericProperty<T> { var stored:T; public var value(get, never):T; public function new(value:T) this.stored = value; public function update(value:T):Void this.stored = value; function get_value():T return stored; } function main():Int { var box:GenericProperty<Int> = new GenericProperty<Int>(42); box.update(43); return box.value; }');
+		Frontend.compile('class RepresentationBox<T> { var value:T; public var ready(get, never):Bool; public function new(value:T) this.value = value; function get_ready():Bool return true; public function generic():T return value; } function main():Int { var box:RepresentationBox<Int> = new RepresentationBox<Int>(42); return box.ready ? box.generic() : 0; }');
+		Frontend.compile('class RepresentationBase<T> { var value:T; public function new(value:T, label:String, enabled:Bool) { this.value = value; } public function ready():Bool return true; public function generic():T return value; } class RepresentationDerived extends RepresentationBase<Int> { public function new(value:Int) super(value, "ready", true); public function inherited():Int return generic(); } function main():Int { var value = new RepresentationDerived(42); return value.ready() ? value.inherited() : 0; }');
+		Frontend.compile('interface RepresentationReader<T> { function read():T; } class RepresentationReaderImpl implements RepresentationReader<Int> { public function new() {} public function read():Int return 42; } function readValue(reader:RepresentationReader<Int>):Int return reader.read(); function main():Int return readValue(new RepresentationReaderImpl());');
+		Frontend.compile('class NullableRepresentation<T> { var value:Null<T>; public function new(value:Null<T>) this.value = value; public function read():Null<T> return value; } function main():Int { var box:NullableRepresentation<Int> = new NullableRepresentation<Int>(null); var value:Null<Int> = box.read(); return value == null ? 42 : 0; }');
+		Frontend.compile('abstract NestedRepresentation<T>(T) { public function new(value:T) this = value; public function unwrap():T return this; } function makeNested<T>(value:T):NestedRepresentation<T> return new NestedRepresentation<T>(value); function main():Int { var value:NestedRepresentation<Int> = makeNested(42); return 42; }');
+		var representationProgram = new Parser(new Lexer(new SourceFile("representation-service.hx",
+			'class RepresentationProbe<T> { var value:T; public function new(value:T) this.value = value; public function ready():Bool return true; public function generic():T return value; } function inspect(value:RepresentationProbe<Int>):Int return value.generic(); function main():Int return inspect(new RepresentationProbe<Int>(42));'))
+			.tokenize()).parseProgram(),
+			representationModel = compiler.semantic.SemanticProgram.analyze(representationProgram),
+			representationSession = new TypingSession(null, null);
+		representationSession.bindSemantic(representationModel);
+		representationSession.bindNominalDeclarations();
+		var probeType = representationModel.declarations.resolve(representationProgram.functions[0].arguments[0].type),
+			genericMethod = representationModel.signatures.get("RepresentationProbe.generic"),
+			readyMethod = representationModel.signatures.get("RepresentationProbe.ready");
+		if (genericMethod == null || readyMethod == null)
+			throw "Representation service fixture methods were not indexed";
+		var genericResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", genericMethod),
+			readyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", readyMethod),
+			fieldResult = representationSession.representation.resolveField(probeType, "value", representationProgram.classes[0].span);
+		if (genericResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| genericResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| readyResult.semantic != compiler.types.Type.CompilerType.TBool
+			|| readyResult.physical != compiler.types.Type.CompilerType.TBool
+			|| fieldResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| fieldResult.physical != compiler.types.Type.CompilerType.TDynamic)
+			throw "Representation service did not preserve semantic and physical type pairs";
+		Sys.println("PASS: semantic and physical generic representation matrix");
 		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
 			.tokenize()).parseProgram(),

@@ -38,8 +38,8 @@ class ConversionResolver {
 				functionAdapter(value, expected, value.span);
 			case AbstractCast:
 				var conversion = abstractFromFunction(value.type, expected);
-				conversion == null ? new TypedExpression(TAbiCast(value), expected,
-					value.span) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
+				conversion == null ? session.representation.boundaryCast(value,
+					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
 			case ToDynamic:
 				new TypedExpression(TToDynamic(value), expected, value.span);
 			case ToInterface(name):

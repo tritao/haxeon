@@ -39,6 +39,7 @@ class TypingSession {
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
 	public var functionAdapterCounter:Int = 0;
+	public final representation:TypeRepresentation;
 
 	public var currentContext(get, never):TypingContext;
 
@@ -50,6 +51,7 @@ class TypingSession {
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
+		this.representation = new TypeRepresentation(this);
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {

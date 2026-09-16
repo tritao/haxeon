@@ -12,7 +12,6 @@ import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
-import compiler.semantic.GenericSpecializationPolicy;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.ControlFlow;
@@ -138,8 +137,8 @@ class BodyTyper {
 				findFieldType: function(type, name) return this.findFieldType(type, name),
 				instancePropertyAccessor: function(type, name, read) return this.instancePropertyAccessor(type, name, read),
 				fieldType: function(type, name, span) return this.fieldType(type, name, span),
-				fieldRepresentationType: function(type, name, span) return this.fieldRepresentationType(type, name, span),
-				abiBoundaryCast: function(value, target) return this.abiBoundaryCast(value, target),
+				fieldRepresentationType: function(type, name, span) return session.representation.resolveField(type, name, span).physical,
+				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
 				arrayElementType: function(type, span) return this.arrayElementType(type, span),
 				boundCell: function(name, scope) return this.boundCell(name, scope)
 			});
@@ -560,7 +559,7 @@ class BodyTyper {
 						if (index < info.params.length)
 							switch arguments[index] {
 								case Variable(binding, _) if (binding != "_"):
-									bindings.set(binding, enumStorageParameterType(info.typeParameters, info.params[index]));
+									bindings.set(binding, session.representation.enumStorageType(info.typeParameters, info.params[index]));
 								default:
 							}
 			default:
@@ -752,7 +751,7 @@ class BodyTyper {
 						if (index >= info.params.length)
 							break;
 						var parameter = info.params[index],
-							parameterType = enumStorageParameterType(info.typeParameters, parameter);
+							parameterType = session.representation.enumStorageType(info.typeParameters, parameter);
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
 				else {
@@ -879,7 +878,7 @@ class BodyTyper {
 					var parameter = info.params[index],
 						parameterType = enumParameterType(info.typeParameters, parameter, instanceType),
 						abstractName = enumAbstractPatternName(parameter.type),
-						storageType = enumStorageParameterType(info.typeParameters, parameter);
+						storageType = session.representation.enumStorageType(info.typeParameters, parameter);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							var constantName = enumAbstractPatternConstant(abstractName, binding);
@@ -1490,11 +1489,11 @@ class BodyTyper {
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
 			var method = requiredMapValue(session.signatures, getter);
-			var substitutions = nominalSubstitutions(typedObject.type),
-				semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
-				physicalResult = isGenericNominal(typedObject.type) ? TDynamic : semanticResult,
-				call = new TypedExpression(TMethodCall(typedObject, getter, []), physicalResult, span);
-			return abiBoundaryCast(call, semanticResult);
+			var methodInfo = session.methodInfo.get(getter),
+				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
+				methodResult = session.representation.resolveMethodResult(typedObject.type, owner, method),
+				call = new TypedExpression(TMethodCall(typedObject, getter, []), methodResult.physical, span);
+			return session.representation.boundaryCast(call, methodResult.semantic);
 		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
@@ -1507,16 +1506,16 @@ class BodyTyper {
 					method = requiredMapValue(session.signatures, methodKey);
 				if (isGeneric(method))
 					fail("E1007", "Generic instance method values are not supported yet", span);
-				var substitutions = nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
+				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
 					result = session.declarations.resolve(method.result, method.span, substitutions);
 				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
 			}
 		}
-		var semanticType = fieldType(typedObject.type, name, span),
-			physicalType = fieldRepresentationType(typedObject.type, name, span),
+		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
 			stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
-		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span, stableFlowValue), semanticType);
+		return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name), fieldRepresentation.physical, span, stableFlowValue),
+			fieldRepresentation.semantic);
 	}
 
 	static function isStableFlowReceiver(value:TypedExpression):Bool
@@ -1542,7 +1541,8 @@ class BodyTyper {
 					if (found || declaration.base == null)
 						false;
 					else
-						isFinalInstanceField(session.declarations.resolve(declaration.base, declaration.span, nominalSubstitutions(type)), name);
+						isFinalInstanceField(session.declarations.resolve(declaration.base, declaration.span,
+							session.representation.nominalSubstitutions(type)), name);
 				}
 			default: false;
 		};
@@ -1565,31 +1565,12 @@ class BodyTyper {
 							accessor = className + "." + (read ? "get_" : "set_") + name;
 					}
 				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base,
-					declaration.span, nominalSubstitutions(type)), name, read); else null;
+					declaration.span, session.representation.nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
 
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
-		return switch type {
-			case TInstance(NominalKind.Class, className, _) if (session.classDecls.exists(className)):
-				var declaration = requiredMapValue(session.classDecls, className),
-					substitutions:Map<String, CompilerType> = [];
-				for (parameter in declaration.typeParameters)
-					substitutions.set(parameter, TDynamic);
-				var result:Null<CompilerType> = null;
-				for (field in declaration.fields)
-					if (field.name == name && !field.isStatic)
-						result = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span, substitutions);
-				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(session.declarations.resolve(declaration.base,
-					declaration.span, substitutions), name, span); else fieldType(type, name, span);
-			default: fieldType(type, name, span);
-		};
-
-	function isGenericNominal(type:CompilerType):Bool
-		return switch type {
-			case TInstance(Class, _, arguments), TInstance(Interface, _, arguments): arguments.length > 0;
-			default: false;
-		};
+		return session.representation.resolveField(type, name, span).physical;
 
 	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
 		var result = findStaticFieldNullable(className, name);
@@ -1675,10 +1656,6 @@ class BodyTyper {
 		], span);
 	}
 
-	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
-		return session.declarations.inheritance.substitutions(type);
-	}
-
 	function projectNominal(type:CompilerType, target:String):CompilerType {
 		var projected = session.declarations.inheritance.project(type, target);
 		return projected == null ? type : projected;
@@ -1749,24 +1726,8 @@ class BodyTyper {
 		return parameter.optional ? TNullable(resolved) : resolved;
 	}
 
-	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType {
-		// A HashLink enum has one physical constructor layout for every source
-		// specialization. Erase all payloads of a generic enum so two uses cannot
-		// publish incompatible field representations for that shared layout.
-		if (typeParameters.length > 0)
-			return TDynamic;
-		var substitutions:Map<String, CompilerType> = [];
-		for (name in typeParameters)
-			substitutions.set(name, TDynamic);
-		var type = session.declarations.resolve(parameter.type, parameter.span, substitutions);
-		return parameter.optional ? TNullable(type) : type;
-	}
-
 	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
-		return enumStorageParameterType(declaration.typeParameters, parameter);
-
-	function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
-		return sameType(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
+		return session.representation.erasedEnumParameter(declaration, parameter);
 
 	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
@@ -1776,32 +1737,8 @@ class BodyTyper {
 		return minimum;
 	}
 
-	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {
-		var platformField = PlatformAbi.field(type, name);
-		if (platformField != null)
-			return platformField.type;
-		switch type {
-			case TAnonymous(_, fields):
-				for (field in fields)
-					if (field.name == name)
-						return field.type;
-				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
-			case TInstance(Class, className, arguments):
-				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
-					for (field in classDecl.fields)
-						if (field.name == name && !field.isStatic)
-							return session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
-								nominalSubstitutions(type));
-					var base = classDecl.base;
-					if (base != null)
-						return fieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
-				}
-				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
-			default:
-				throw new CompileError(new Diagnostic("E1005", 'Field "$name" requires an object', span));
-		}
-	}
+	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType
+		return session.representation.resolveField(type, name, span).semantic;
 
 	function expectedEnumLiteral(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
 		var expectedEnumName = enumName(expectedType);
@@ -1873,10 +1810,10 @@ class BodyTyper {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
-								nominalSubstitutions(type));
+								session.representation.nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
-						found = findFieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);
+						found = findFieldType(session.declarations.resolve(base, classDecl.span, session.representation.nominalSubstitutions(type)), name);
 				}
 				found;
 			default: null;
@@ -1959,7 +1896,7 @@ class BodyTyper {
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return session.declarations.resolve(type, null, context.typeSubstitutions);
+		return session.representation.semanticType(type, null, context.typeSubstitutions);
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
