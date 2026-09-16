@@ -730,10 +730,9 @@ class SemanticWorkspace {
 		for (parent in parents) {
 			if (token != null)
 				token.check();
-			var declaration = editorGlobal(resolved.state, ModuleCanonicalizer.astTypeName(parent)),
-				symbol = declaration == null ? null : editorSymbolAt(editorModel(declaration.state), declaration.span);
-			if (symbol != null)
-				addTypeIdentity(result, symbol.id);
+			var identity = editorNominalTypeIdentity(resolved.state, parent, model.program, [], token);
+			if (identity != null)
+				addTypeIdentity(result, identity);
 		}
 		result.sort(function(left, right) return Reflect.compare(Std.string(left), Std.string(right)));
 		return result;
@@ -845,15 +844,70 @@ class SemanticWorkspace {
 
 	function hasDirectEditorParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>, target:SemanticSymbolId,
 		?token:CancellationToken):Bool {
+		var model = editorModel(state),
+			program = model == null ? null : model.program;
 		for (parent in parents) {
 			if (token != null)
 				token.check();
-			var declaration = editorGlobal(state, ModuleCanonicalizer.astTypeName(parent)),
-				symbol = declaration == null ? null : editorSymbolAt(editorModel(declaration.state), declaration.span);
-			if (symbol != null && symbol.id == target)
+			var identity = program == null ? null : editorNominalTypeIdentity(state, parent, program, [], token);
+			if (identity == target)
 				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Resolve a source inheritance type to its underlying nominal identity.
+	 *
+	 * `editorResolveTypeSymbolId()` intentionally returns a typedef's own
+	 * identity for definition/type queries. Hierarchy queries need one extra
+	 * step: an imported alias such as `extends Parent` must be followed to the
+	 * class or interface that actually owns the inherited members. Keeping this
+	 * dereference local to hierarchy traversal preserves alias navigation while
+	 * preventing speculative editor declarations from becoming workspace facts.
+	 */
+	function editorNominalTypeIdentity(from:ModuleState, type:compiler.syntax.Ast.AstType, program:AstProgram,
+		visited:Array<SemanticSymbolId>, ?token:CancellationToken):Null<SemanticSymbolId> {
+		var name = switch type {
+			case NamedType(value): value;
+			case AppliedType(value, _): value;
+			default: null;
+		};
+		if (name == null)
+			return null;
+		var candidates = editorSymbolCandidates(from, name, token, program);
+		if (candidates.length > 1)
+			return null;
+		var identity = editorResolveTypeSymbolId(from, name, program, token);
+		return editorNominalTypeIdentityById(identity, visited, token);
+	}
+
+	function editorNominalTypeIdentityById(identity:Null<SemanticSymbolId>, visited:Array<SemanticSymbolId>,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		if (identity == null)
+			return null;
+		for (seen in visited)
+			if (seen == identity)
+				return null;
+		var nextVisited = visited.copy();
+		nextVisited.push(identity);
+		var resolved = editorSymbolById(identity);
+		if (resolved == null)
+			return null;
+		switch resolved.symbol.kind {
+			case DeclarationKind.Class, DeclarationKind.Interface, DeclarationKind.Abstract, DeclarationKind.Enum:
+				return identity;
+			case DeclarationKind.Alias:
+				var model = editorModel(resolved.state);
+				if (model == null)
+					return null;
+				for (alias in model.program.aliases)
+					if (sameSpan(alias.span, resolved.symbol.declaration))
+						return editorNominalTypeIdentity(resolved.state, alias.type, model.program, nextVisited, token);
+				return null;
+			default:
+				return null;
+		}
 	}
 
 	function editorGlobal(from:ModuleState, name:String):Null<WorkspaceDeclaration> {
@@ -1299,18 +1353,21 @@ class SemanticWorkspace {
 	}
 
 	function resolveEditorTypeIdentity(from:ModuleState, name:String):String {
-		var declaration = editorGlobal(from, name);
-		if (declaration == null)
+		var model = editorModel(from),
+			program = model == null ? null : model.program,
+			identity = program == null ? null : editorNominalTypeIdentity(from, NamedType(name), program, [], null);
+		if (identity == null)
 			return name;
-		var model = editorModel(declaration.state);
-		if (model == null)
+		var resolved = editorSymbolById(identity),
+			resolvedModel = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || resolvedModel == null)
 			return name;
-		for (decl in model.program.classes)
-			if (sameSpan(decl.span, declaration.span))
-				return qualifiedType(model, decl.name);
-		for (decl in model.program.interfaces)
-			if (sameSpan(decl.span, declaration.span))
-				return qualifiedType(model, decl.name);
+		for (decl in resolvedModel.program.classes)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(resolvedModel, decl.name);
+		for (decl in resolvedModel.program.interfaces)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(resolvedModel, decl.name);
 		return name;
 	}
 
