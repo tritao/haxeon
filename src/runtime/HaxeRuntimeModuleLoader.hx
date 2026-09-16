@@ -6,8 +6,9 @@ import compiler.hl.HlModule;
 import compiler.hl.HlNativeMetadataBuilder;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlRuntimeDispatchTable;
+import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 import runtime.hashlink.HlRuntimeModuleKernel;
-import runtime.memory.RawPtr;
 
 /**
 	Haxe-owned loader for a HashLink runtime module and its native metadata.
@@ -33,25 +34,18 @@ class HaxeRuntimeModuleLoader {
 		} catch (error:Dynamic) {
 			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the native metadata: ${Std.string(error)}');
 		}
-		var publication = metadata.snapshot(),
-			count = identity.entries.length,
-			stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
-			slotStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count);
-		for (index in 0...count) {
-			var entry = identity.entries[index];
-			stableIdStorage.offset(index).store(cast entry.stableId);
-			slotStorage.offset(index).store(cast entry.functionIndex);
-		}
-		var module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, stableIdStorage, slotStorage, count,
-			identity.initializerSlot);
-		if (module == null) {
-			metadata.dispose();
-			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
-		}
+		var module:Null<HlRuntimeModuleHandle> = null;
 		try {
+			var publication = metadata.snapshot(),
+				dispatch = new HlRuntimeDispatchTable(metadata.arena, [for (entry in identity.entries) entry.stableId],
+					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot);
+			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
+			if (module == null)
+				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			return new LoadedModule(module, model, identity, metadata);
 		} catch (error:Dynamic) {
-			kernel.dispose(cast module);
+			if (module != null)
+				kernel.dispose(cast module);
 			metadata.dispose();
 			throw error;
 		}

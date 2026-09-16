@@ -30,16 +30,8 @@ class HlRuntimeModule {
 		lease = metadata.acquire();
 		module = null;
 		try {
-			var count = stableIds.length,
-				stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
-				slotStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count);
-			for (index in 0...count) {
-				if (stableIds[index] < 0 || slots[index] < 0)
-					throw "HashLink runtime module manifest entries must be non-negative";
-				stableIdStorage.offset(index).store(cast stableIds[index]);
-				slotStorage.offset(index).store(cast slots[index]);
-			}
-			module = this.kernel.loadCodeManifest(metadata.snapshot().nativeCode, bytes, moduleId, revision, stableIdStorage, slotStorage, count, initializerSlot);
+			var dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot);
+			module = this.kernel.loadCodeManifest(metadata.snapshot().nativeCode, bytes, moduleId, revision, dispatch);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
 		} catch (error:Dynamic) {

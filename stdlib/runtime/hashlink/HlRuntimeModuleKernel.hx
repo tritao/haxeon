@@ -10,8 +10,8 @@ import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 	retirement; module policy and executable-code policy stay in Haxe.
 */
 interface HlRuntimeModuleKernel {
-	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:RawPtr<Int32>,
-		slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):HlRuntimeModuleHandle;
+	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
+		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
 	function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int;
 	function callVoid(module:HlRuntimeModuleHandle, stableId:Int):Void;
 	function callBytes(module:HlRuntimeModuleHandle, stableId:Int):hl.Bytes;
@@ -35,10 +35,10 @@ interface HlRuntimeModuleKernel {
 class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public function new() {}
 
-	public inline function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:RawPtr<Int32>,
-		slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):HlRuntimeModuleHandle
-		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, stableIds, slots, identityCount,
-			initializerSlot);
+	public inline function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
+		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle
+		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, dispatch.stableIds, dispatch.slots,
+			dispatch.count, dispatch.initializerSlot);
 
 	public inline function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int
 		return HlTypeBridge.native_runtime_module_call_i32(module, stableId);
