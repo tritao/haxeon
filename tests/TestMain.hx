@@ -876,6 +876,40 @@ class TestMain {
 		wildcardImportCompiler.update("sample/app/Main.hx",
 			"package sample.app; import sample.lib.*; function main():Int { var choice:Choice = Value; var secondary:Bar = new Bar(); return switch choice { case Value: new Foo().known(); }; }");
 		wildcardImportCompiler.compile("sample.app.Main");
+		var wildcardFunctionCompiler = new Compiler();
+		wildcardFunctionCompiler.update("sample/functions/Source.hx",
+			"package sample.functions; function answer():Int return 42;");
+		wildcardFunctionCompiler.update("sample/functions/app/Main.hx",
+			"package sample.functions.app; import sample.functions.*; function main():Int return answer();");
+		wildcardFunctionCompiler.compile("sample.functions.app.Main");
+		var ambiguousWildcardFunctionCompiler = new Compiler();
+		ambiguousWildcardFunctionCompiler.update("sample/wildfunctions/first/Source.hx",
+			"package sample.wildfunctions.first; function same():Int return 1;");
+		ambiguousWildcardFunctionCompiler.update("sample/wildfunctions/second/Source.hx",
+			"package sample.wildfunctions.second; function same():Int return 2;");
+		ambiguousWildcardFunctionCompiler.update("sample/wildfunctions/app/Main.hx",
+			"package sample.wildfunctions.app; import sample.wildfunctions.first.*; import sample.wildfunctions.second.*; function main():Int return same();");
+		var ambiguousWildcardFunctionRejected = false;
+		try
+			ambiguousWildcardFunctionCompiler.compile("sample.wildfunctions.app.Main")
+		catch (error:CompileError)
+			ambiguousWildcardFunctionRejected = true;
+		if (!ambiguousWildcardFunctionRejected)
+			throw "ambiguous wildcard function imports unexpectedly compiled";
+		var explicitFunctionOverWildcardCompiler = new Compiler();
+		explicitFunctionOverWildcardCompiler.update("sample/functionprecedence/first/Source.hx",
+			"package sample.functionprecedence.first; function same():String return \"wildcard\";");
+		explicitFunctionOverWildcardCompiler.update("sample/functionprecedence/second/Source.hx",
+			"package sample.functionprecedence.second; function same():Int return 2;");
+		explicitFunctionOverWildcardCompiler.update("sample/functionprecedence/app/Main.hx",
+			"package sample.functionprecedence.app; import sample.functionprecedence.first.*; import sample.functionprecedence.second.Source.same; function main():Int return same();");
+		explicitFunctionOverWildcardCompiler.compile("sample.functionprecedence.app.Main");
+		var moduleFunctionCompiler = new Compiler();
+		moduleFunctionCompiler.update("sample/modulefunctions/Source.hx",
+			"package sample.modulefunctions; function answer():Int return 42; function main():Void return;");
+		moduleFunctionCompiler.update("sample/modulefunctions/app/Main.hx",
+			"package sample.modulefunctions.app; import sample.modulefunctions.Source; function main():Int return answer();");
+		moduleFunctionCompiler.compile("sample.modulefunctions.app.Main");
 		var explicitOverWildcardCompiler = new Compiler();
 		explicitOverWildcardCompiler.update("wild/a/Foo.hx", "package wild.a; class Foo { public function new() {} public function answer():String return \"wildcard\"; }");
 		explicitOverWildcardCompiler.update("wild/b/Foo.hx", "package wild.b; class Foo { public function new() {} public function answer():Int return 43; }");

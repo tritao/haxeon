@@ -47,6 +47,7 @@ class SemanticAssembly {
 			reverseCalls:Map<String, Array<String>> = [],
 			genericOrigins:Map<String, Bool> = [];
 		var sourceTypeAliases:Map<String, String> = [],
+			sourceFunctions:Map<String, Array<AstFunction>> = [],
 			enumCasesByType:Map<String, Array<String>> = [],
 			enumConstructorCounts:Map<String, Int> = [];
 		for (moduleName in names) {
@@ -54,6 +55,7 @@ class SemanticAssembly {
 				continue;
 			var moduleState = modules.get(moduleName),
 				program = moduleState.parsedAst();
+			sourceFunctions.set(moduleName, program.functions);
 			for (declaration in program.aliases)
 				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
 					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
@@ -92,6 +94,9 @@ class SemanticAssembly {
 		for (typeName => caseNames in enumCasesByType)
 			for (caseName in caseNames)
 				aliasUniverse.push(typeName + "#" + caseName);
+		for (moduleName => functionsInModule in sourceFunctions)
+			for (fn in functionsInModule)
+				aliasUniverse.push(moduleName + "." + fn.name);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
 		var classDeclarations:Map<String, AstClass> = [];
@@ -131,7 +136,34 @@ class SemanticAssembly {
 					explicitImportNames.set(compiler.QualifiedName.last(importPath), true);
 			for (alias in ast.importAliases.keys())
 				explicitImportNames.set(alias, true);
+			var explicitFunctionNames:Map<String, Bool> = [],
+				ambiguousExplicitFunctions:Map<String, Bool> = [];
+			for (importPath in ast.imports) {
+				if (isWildcardImport(importPath) || !sourceFunctions.exists(importPath))
+					continue;
+				var aliasedModule = false;
+				for (_alias => path in ast.importAliases)
+					if (path == importPath)
+						aliasedModule = true;
+				if (aliasedModule)
+					continue;
+				for (fn in sourceFunctions.get(importPath)) {
+					var functionName = fn.name,
+						functionTarget = importPath + "." + functionName;
+					explicitFunctionNames.set(functionName, true);
+					if (ambiguousExplicitFunctions.exists(functionName))
+						continue;
+					var previousTarget = aliases.get(functionName);
+					if (previousTarget == null)
+						aliases.set(functionName, functionTarget);
+					else if (previousTarget != functionTarget) {
+						aliases.remove(functionName);
+						ambiguousExplicitFunctions.set(functionName, true);
+					}
+				}
+			}
 			var ambiguousWildcardTypes:Map<String, Bool> = [];
+			var ambiguousWildcardFunctions:Map<String, Bool> = [];
 			for (importPath in ast.imports)
 				if (isWildcardImport(importPath)) {
 					var packagePrefix = importPath.substring(0, importPath.length - 2) + ".";
@@ -147,6 +179,26 @@ class SemanticAssembly {
 						else if (aliases.get(importedName) != declarationName) {
 							aliases.remove(importedName);
 							ambiguousWildcardTypes.set(importedName, true);
+						}
+					}
+					var packageName = importPath.substring(0, importPath.length - 2);
+					for (moduleName => functionsInModule in sourceFunctions) {
+						var functionState = modules.get(moduleName),
+							functionProgram = functionState == null ? null : functionState.parsedAst();
+						if (functionProgram == null || functionProgram.packageName != packageName)
+							continue;
+						for (fn in functionsInModule) {
+							var localName = fn.name;
+							if (explicitImportNames.exists(localName) || explicitFunctionNames.exists(localName)
+								|| ambiguousWildcardFunctions.exists(localName))
+								continue;
+							var target = moduleName + "." + fn.name;
+							if (!aliases.exists(localName))
+								aliases.set(localName, target);
+							else if (aliases.get(localName) != target) {
+								aliases.remove(localName);
+								ambiguousWildcardFunctions.set(localName, true);
+							}
 						}
 					}
 				}
@@ -256,6 +308,8 @@ class SemanticAssembly {
 				}
 			}
 			for (name in ambiguousExplicitImports.keys())
+				aliases.remove(name);
+			for (name in ambiguousExplicitFunctions.keys())
 				aliases.remove(name);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			for (interfaceDecl in ast.interfaces)

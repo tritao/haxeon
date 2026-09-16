@@ -514,6 +514,19 @@ class LanguageServiceMain {
 		if (wildcardFunctionDefinition == null || wildcardFunctionDefinition.path != "wildfn/b/Run.hx"
 			|| wildcardFunctionReferences.length != 2)
 			throw 'explicit function import did not override wildcard candidates: definition=${wildcardFunctionDefinition == null ? "null" : wildcardFunctionDefinition.path}, references=${wildcardFunctionReferences.length}';
+		var pureWildcardFunctionService = new LanguageService();
+		pureWildcardFunctionService.update("wildfn/pure/Source.hx",
+			"package wildfn.pure; function answer():Int return 42; function main():Void return;");
+		pureWildcardFunctionService.compile("wildfn.pure.Source");
+		var pureWildcardFunctionSource =
+			"package wildfn.pure.app; import wildfn.pure.*; function main():Int return answer(";
+		pureWildcardFunctionService.update("wildfn/pure/app/Main.hx", pureWildcardFunctionSource);
+		var pureWildcardFunctionPosition = pureWildcardFunctionSource.lastIndexOf("answer") + 1,
+			pureWildcardFunctionDefinition = pureWildcardFunctionService.definition("wildfn/pure/app/Main.hx", pureWildcardFunctionPosition),
+			pureWildcardFunctionReferences = pureWildcardFunctionService.references("wildfn/pure/app/Main.hx", pureWildcardFunctionPosition);
+		if (pureWildcardFunctionDefinition == null || pureWildcardFunctionDefinition.path != "wildfn/pure/Source.hx"
+			|| pureWildcardFunctionReferences.length != 2)
+			throw 'pure wildcard function import did not retain its authoritative identity: definition=${pureWildcardFunctionDefinition == null ? "null" : pureWildcardFunctionDefinition.path}, references=${pureWildcardFunctionReferences.length}';
 		var secondaryModuleService = new LanguageService(),
 			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
 		secondaryModuleService.update("secondary/types/Container.hx",
@@ -2121,6 +2134,27 @@ class LanguageServiceMain {
 			importedVisibilityDefinition = visibilityService.definition("visible/ImportedUse.hx", importedVisibilityPosition);
 		if (importedVisibilityDefinition == null || importedVisibilityDefinition.path != "unrelated/Target.hx")
 			throw "recovered resolution discarded the uniquely imported symbol among duplicate names";
+		var ambiguousRecoveredImportService = new LanguageService();
+		ambiguousRecoveredImportService.update("collision/first/Same.hx",
+			"package collision.first; class Same { public var fromFirst:Int; }");
+		ambiguousRecoveredImportService.update("collision/second/Same.hx",
+			"package collision.second; class Same { public var fromSecond:Int; }");
+		var ambiguousRecoveredImportSource = "package collision.app; import collision.first.Same; import collision.second.Same; function main():Void { var value:Same = new Same(); value.";
+		ambiguousRecoveredImportService.update("collision/app/Main.hx", ambiguousRecoveredImportSource);
+		var ambiguousRecoveredImportPosition = ambiguousRecoveredImportSource.length,
+			ambiguousRecoveredImportItems = ambiguousRecoveredImportService.completeResult("collision/app/Main.hx", ambiguousRecoveredImportPosition).items,
+			ambiguousRecoveredTypePosition = ambiguousRecoveredImportSource.indexOf("value:Same") + "value:".length + 1,
+			ambiguousRecoveredTypeDefinition = ambiguousRecoveredImportService.definition("collision/app/Main.hx", ambiguousRecoveredTypePosition),
+			foundAmbiguousFirstMember = false,
+			foundAmbiguousSecondMember = false;
+		for (item in ambiguousRecoveredImportItems) {
+			if (item.label == "fromFirst")
+				foundAmbiguousFirstMember = true;
+			if (item.label == "fromSecond")
+				foundAmbiguousSecondMember = true;
+		}
+		if (foundAmbiguousFirstMember || foundAmbiguousSecondMember || ambiguousRecoveredTypeDefinition != null)
+			throw "recovered resolution guessed through ambiguous explicit imports";
 		var nominalVisibilityService = new LanguageService();
 		nominalVisibilityService.update("nominal/a/Foo.hx", "package nominal.a; class Foo { public var fromA:Int; }");
 		nominalVisibilityService.update("nominal/b/Foo.hx", "package nominal.b; class Foo { public var fromB:Int; }");
