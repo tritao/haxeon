@@ -1455,8 +1455,9 @@ class CallResolver {
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var decl = requiredMapValue(session.declarations.abstracts, name),
-			valueType = typeArguments.length == 0 ? session.declarations.resolve(NamedType(name),
-				span) : session.declarations.resolve(AppliedType(name, typeArguments), span),
+			valueType = typeArguments.length == 0 ? session.declarations.resolve(NamedType(name), span,
+				session.currentContext.typeSubstitutions) : session.declarations.resolve(AppliedType(name, typeArguments), span,
+				session.currentContext.typeSubstitutions),
 			constructorName = name + ".new",
 			constructor = session.signatures.get(constructorName);
 		if (constructor == null)

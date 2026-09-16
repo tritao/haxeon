@@ -1337,6 +1337,8 @@ class TestMain {
 		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
 		Frontend.compile('function identity<T>(value:T):T return value; function first<T>(values:Array<T>):T return values[0]; function main():Int { var values = new Array<Int>(1); values[0] = 42; return identity(first(values)); }');
 		Frontend.compile('class GenericMethods { public static function identity<T>(value:T):T return value; public static function answer():Int return identity(42); } function main():Int return GenericMethods.answer();');
+		Frontend.compile('class GenericMethodStore {} class GenericMethodBox<T> { public var value:T; public function new(store:GenericMethodStore, value:T) this.value = value; } class GenericMethodFactory { public static function make<T>(store:GenericMethodStore, value:T):GenericMethodBox<T> return new GenericMethodBox<T>(store, value); } function main():Int return GenericMethodFactory.make(new GenericMethodStore(), 42).value;');
+		Frontend.compile('class GenericProperty<T> { var stored:T; public var value(get, never):T; public function new(value:T) this.stored = value; public function update(value:T):Void this.stored = value; function get_value():T return stored; } function main():Int { var box:GenericProperty<Int> = new GenericProperty<Int>(42); box.update(43); return box.value; }');
 		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
 			.tokenize()).parseProgram(),
