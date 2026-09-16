@@ -1101,6 +1101,36 @@ class ParserRecoveryMain {
 				throw 'unfinished member access did not retain its receiver type: ${memberExpression.type}';
 		}
 
+		var knownMemberSource = new SourceFile("TolerantKnownMember.hx",
+			"class Foo { public var known:Int; } function main():Void { var foo:Foo = new Foo(); var result = foo.missing().known; var after:Int = 1; }");
+		var knownMemberProgram = new Parser(new Lexer(knownMemberSource).tokenize()).parseProgramRecovering().program,
+			knownMemberTyped = Typer.typeRecovered(knownMemberProgram);
+		if (knownMemberTyped == null || knownMemberTyped.functions.length != 1
+			|| knownMemberTyped.functions[0].statements.length != 3)
+			throw "an unresolved member chain discarded the surrounding declarations";
+		var knownMemberExpression = switch knownMemberTyped.functions[0].statements[1] {
+			case TVar(_, value, _): value;
+			default: null;
+		};
+		if (knownMemberExpression == null)
+			throw "an unresolved member chain did not remain a typed declaration";
+		switch knownMemberExpression.expression {
+			case TField(call, "known"):
+				if (call.type != TUnknown)
+					throw 'an unresolved member chain lost its unknown intermediate type: ${call.type}';
+				switch call.expression {
+					case TMethodCall(receiver, "missing", arguments):
+						switch receiver.type {
+							case TInstance(NominalKind.Class, "Foo", _) if (arguments.length == 0):
+							default: throw "an unresolved member chain did not preserve its receiver type";
+						}
+					default:
+						throw "an unresolved member chain did not preserve its receiver and call shape";
+				}
+			default:
+				throw "an unresolved member chain collapsed its outer member expression";
+		}
+
 		var postErrorService = new LanguageService(),
 			postErrorSource = "class Foo { public var value:Int; } function main():Void { var foo:Foo = new Foo(); broken.unresolved().thing; foo. }";
 		postErrorService.update("TolerantPostError.hx", postErrorSource);

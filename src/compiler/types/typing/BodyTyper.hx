@@ -1858,10 +1858,30 @@ class BodyTyper {
 				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
 			}
 		}
-		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
-			stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
-		return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name), fieldRepresentation.physical, span, stableFlowValue),
-			fieldRepresentation.semantic);
+<<<<<<< HEAD
+		try {
+			var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
+				stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
+			return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name), fieldRepresentation.physical, span, stableFlowValue),
+				fieldRepresentation.semantic);
+		} catch (error:Dynamic) {
+			if (!session.tolerant)
+				throw error;
+			rememberRecoveryError(error, span);
+			return new TypedExpression(TField(typedObject, name), TUnknown, span);
+		}
+=======
+		try {
+			var semanticType = fieldType(typedObject.type, name, span),
+				physicalType = fieldRepresentationType(typedObject.type, name, span);
+			return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
+		} catch (error:CompileError) {
+			if (!session.tolerant)
+				throw error;
+			session.rememberRecoveryDiagnostic(error.diagnostic);
+			return new TypedExpression(TField(typedObject, name), TUnknown, span);
+		}
+>>>>>>> 423f96d0 (fix(typing): preserve unresolved member chains)
 	}
 
 	static function isStableFlowReceiver(value:TypedExpression):Bool

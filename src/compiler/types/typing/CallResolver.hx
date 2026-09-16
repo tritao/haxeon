@@ -161,7 +161,14 @@ class CallResolver {
 		var fieldCall = typeFunctionFieldCall(receiver, name, arguments, span, scope);
 		if (fieldCall != null)
 			return fieldCall;
-		return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName, contextualGenericArguments);
+		try {
+			return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName, contextualGenericArguments);
+		} catch (error:CompileError) {
+			if (!session.tolerant)
+				throw error;
+			session.rememberRecoveryDiagnostic(error.diagnostic);
+			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
+		}
 	}
 
 	public function typeRawPointerNullCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
