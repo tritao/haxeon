@@ -19,6 +19,7 @@ module generation.
 | Native-library mapping | Platform loader | HashLink process | Resolved native function pointers | Process shutdown; module retirement never unloads a shared library |
 | TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
 | Explicit Haxe GC handles | HashLink GC handle bridge | `LoadedModule`, `HlRuntimeModule`, or `HlNativeModule` for owned handles; process runtime for unowned handles | Haxeon/native consumers that explicitly retain the handle | Owned handles close during module retirement; unowned handles close explicitly or when finalized |
+| Explicit Haxe weak GC roots | HashLink weak-root registry and Haxe weak-handle finalizer | `WeakRoot<T>` handle plus the HashLink collector | Haxeon/native caches that explicitly retain the weak handle | Target slot is cleared after strong marking when unreachable; the weak slot is unregistered on close or handle finalization |
 | Patch JIT image | HashLink patch transaction | Haxe `HlRuntimePatchLedger` policy plus `hl_module` patch-code owner and one Haxe-owned external code handle per committed generation | Dispatch slots, escaped closures, active calls, Haxe generation ledger | Haxe tracks superseded generations; handle release remains after module retirement while native owner lists decide executable reclamation |
 | Patched function descriptors, register arrays, opcodes, debug pairs, and source spans | Haxe metadata arena | Loaded Haxe generation and its patch ledger | Native JIT, dispatch slots, debugger | Generation teardown after the native module and retained code handles are released |
 | Patch stable-ID and relocation resolution plans | Haxe-managed policy state | Haxe patch transaction/generation and patch-input projection | Haxe patch-input construction | Transaction state is discarded on failure; native publication never borrows it |
@@ -194,6 +195,15 @@ the loaded `hl_module` as that owner, and the runtime reports them separately
 from managed allocations. Process-global runtime roots remain unowned. Removing
 a root removes its ownership record in the same GC-locked operation, so the
 count describes the current root set rather than historical registrations.
+
+`WeakRoot<T>` uses a separate collector registration and never marks its target
+as reachable. HashLink clears the target slot after strong marking when the
+target is not marked, before finalizers and sweeping run; a reachable target is
+left available for the current collection. Reading, replacing, and removing a
+weak slot are synchronized with the collector, and the Haxe handle finalizer
+unregisters forgotten weak slots. Weak roots are therefore suitable for
+non-owning caches and metadata side tables, but cannot replace a `GcHandle<T>`
+when runtime state must keep a value alive.
 
 `Runtime.retirementStatus()` takes these counters under the runtime-module call
 mutex. It reports module-owned roots separately from borrowers because teardown
