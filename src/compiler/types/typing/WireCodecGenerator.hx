@@ -23,6 +23,7 @@ class WireCodecGenerator {
 	static inline final DECODE_PREFIX:String = "$wire:decode:";
 	static inline final VALUE_ENCODE_PREFIX:String = "$wire:value-encode:";
 	static inline final VALUE_DECODE_PREFIX:String = "$wire:value-decode:";
+	static inline final INT_COMPARE_NAME:String = "$wire:map-int-compare";
 	static inline final WRITER:String = "haxe.wire.MessagePackWriter";
 	static inline final READER:String = "haxe.wire.MessagePackReader";
 	static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
@@ -62,10 +63,16 @@ class WireCodecGenerator {
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
+		var needsIntComparator = false;
 		for (key in keys) {
 			var type = reachable.get(key), request = requests.get(key);
 			if (request == null)
 				request = {type: type, origin: roots[0].origin, span: roots[0].span};
+			if (switch type {
+					case TMap(TInt, _): true;
+					default: false;
+				})
+				needsIntComparator = true;
 			result.push(valueEncoder(session, type, classesByName, request));
 			result.push(valueDecoder(session, type, classesByName, request));
 			if (rootKeys.exists(key)) {
@@ -73,6 +80,8 @@ class WireCodecGenerator {
 				result.push(decoder(type, request));
 			}
 		}
+		if (needsIntComparator)
+			result.push(intComparator(roots[0]));
 		return result;
 	}
 
@@ -94,6 +103,7 @@ class WireCodecGenerator {
 			case TNullable(element): isRequestType(session, element);
 			case TArray(element): isRequestType(session, element);
 			case TMap(TString, value): isRequestType(session, value);
+			case TMap(TInt, value): isRequestType(session, value);
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			default: false;
 		};
@@ -114,7 +124,7 @@ class WireCodecGenerator {
 				collectType(session, element, classes, reachable, visiting, path, span);
 			case TArray(element):
 				collectType(session, element, classes, reachable, visiting, path, span);
-			case TMap(TString, value):
+			case TMap(_, value):
 				collectType(session, value, classes, reachable, visiting, path, span);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
@@ -182,6 +192,24 @@ class WireCodecGenerator {
 		return cast id;
 	}
 
+	static function intComparator(request:WireCodecRequest):TypedFunction {
+		var left = local("left", TInt, request.span),
+			right = local("right", TInt, request.span),
+			result = new TypedExpression(TConditional(new TypedExpression(TLess(left, right), TBool, request.span), intLiteral(-1, request.span),
+				new TypedExpression(TConditional(new TypedExpression(TLess(right, left), TBool, request.span), intLiteral(1, request.span),
+					intLiteral(0, request.span)),
+					TInt, request.span)),
+				TInt, request.span);
+		return generatedFunction(INT_COMPARE_NAME, [{name: "left", type: TInt}, {name: "right", type: TInt}], TInt, [TReturn(result, request.span)], request);
+	}
+
+	static function mapKeyComparator(type:CompilerType, span:SourceSpan):TypedExpression
+		return switch type {
+			case TString: new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span);
+			case TInt: new TypedExpression(TFunctionRef(INT_COMPARE_NAME), TFunction([TInt, TInt], TInt), span);
+			default: throw 'No MessagePack map key comparator for "$type"';
+		};
+
 	static function valueEncoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
 		var writerType = classType(WRITER),
 			valueType = type,
@@ -215,18 +243,18 @@ class WireCodecGenerator {
 					TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span), span)
 				], span));
 				result;
-			case TMap(TString, valueType):
-				var keysType = TArray(TString),
+			case TMap(keyType, valueType):
+				var keysType = TArray(keyType),
 					keysName = "__wire_map_keys",
 					keyName = "__wire_map_key",
 					indexName = "__wire_map_index",
 					keys = local(keysName, keysType, span),
-					key = local(keyName, TString, span),
+					key = local(keyName, keyType, span),
 					index = local(indexName, TInt, span),
 					keysExpression = new TypedExpression(TCollectionCall(value, "keys", []), keysType, span),
-					comparator = new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span),
+					comparator = mapKeyComparator(keyType, span),
 					result:Array<TypedStatement> = [
-						TVar(keysName, new TypedExpression(TNewArray(TString, intLiteral(0, span)), keysType, span), span),
+						TVar(keysName, new TypedExpression(TNewArray(keyType, intLiteral(0, span)), keysType, span), span),
 						TForIn(keyName, null, keysExpression, [
 							expressionStatement(new TypedExpression(TArrayPush(keys, key), TInt, span), span)
 						],
@@ -235,9 +263,9 @@ class WireCodecGenerator {
 						expressionStatement(method(writer, "writeMapHeader", [new TypedExpression(TArrayLength(keys), TInt, span)], TVoid, span), span),
 						TVar(indexName, intLiteral(0, span), span)
 					];
-				var mapKey = new TypedExpression(TIndex(keys, index), TString, span);
+				var mapKey = new TypedExpression(TIndex(keys, index), keyType, span);
 				result.push(TWhile(new TypedExpression(TLess(index, new TypedExpression(TArrayLength(keys), TInt, span)), TBool, span), [
-					expressionStatement(method(writer, "writeString", [mapKey], TVoid, span), span),
+					expressionStatement(method(writer, mapKeyMethod(keyType, true), [mapKey], TVoid, span), span),
 					expressionStatement(new TypedExpression(TCall(valueEncodeName(valueType),
 						[writer, new TypedExpression(TMapGet(value, mapKey), valueType, span)]), TVoid, span),
 						span),
@@ -316,19 +344,19 @@ class WireCodecGenerator {
 					request.span),
 					decodeArrayBody(session, classes, resultName, resultType, element, reader, indexName, request.span), request.span));
 				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
-			case TMap(TString, valueType):
+			case TMap(keyType, valueType):
 				var countName = "__wire_count",
 					indexName = "__wire_index",
 					keyName = "__wire_key",
 					resultName = "__wire_result",
-					resultType = TMap(TString, valueType);
+					resultType = TMap(keyType, valueType);
 				statements.push(TVar(countName, method(reader, "readMapHeader", [], TInt, request.span), request.span));
 				statements.push(TVar(indexName, intLiteral(0, request.span), request.span));
-				statements.push(TVar(resultName, new TypedExpression(TNewMap(TString, valueType), resultType, request.span), request.span));
-				statements.push(TVar(keyName, stringLiteral("", request.span), request.span));
+				statements.push(TVar(resultName, new TypedExpression(TNewMap(keyType, valueType), resultType, request.span), request.span));
+				statements.push(TVar(keyName, defaultValue(keyType, request.span), request.span));
 				statements.push(TWhile(new TypedExpression(TLess(local(indexName, TInt, request.span), local(countName, TInt, request.span)), TBool,
 					request.span),
-					decodeMapValueBody(session, classes, resultName, resultType, valueType, reader, keyName, indexName, request.span), request.span));
+					decodeMapValueBody(session, classes, resultName, resultType, keyType, valueType, reader, keyName, indexName, request.span), request.span));
 				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
 			default:
 				var methodName = primitiveReadMethod(type);
@@ -396,11 +424,13 @@ class WireCodecGenerator {
 	}
 
 	static function decodeMapValueBody(session:TypingSession, classes:Map<String, TypedClass>, resultName:String, resultType:CompilerType,
-			valueType:CompilerType, reader:TypedExpression, keyName:String, indexName:String, span:SourceSpan):Array<TypedStatement> {
-		var key = local(keyName, TString, span),
+			keyType:CompilerType, valueType:CompilerType, reader:TypedExpression, keyName:String, indexName:String, span:SourceSpan):Array<TypedStatement> {
+		var key = local(keyName, keyType, span),
 			map = local(resultName, resultType, span),
 			target = new TypedExpression(TMapGet(map, key), valueType, span),
-			result:Array<TypedStatement> = [TAssign(keyName, method(reader, "readString", [], TString, span), span)];
+			result:Array<TypedStatement> = [
+				TAssign(keyName, method(reader, mapKeyMethod(keyType, false), [], keyType, span), span)
+			];
 		result = result.concat(decodeValueAssignment(session, classes, target, valueType, reader, span));
 		result.push(TAssign(indexName, new TypedExpression(TAdd(local(indexName, TInt, span), intLiteral(1, span)), TInt, span), span));
 		return result;
@@ -459,7 +489,7 @@ class WireCodecGenerator {
 			case TBytes: new TypedExpression(TCall("haxe.io.Bytes.alloc", [intLiteral(0, span)]), TBytes, span);
 			case TNullable(_): nullValue(type, span);
 			case TArray(element): new TypedExpression(TNewArray(element, intLiteral(0, span)), type, span);
-			case TMap(TString, value): new TypedExpression(TNewMap(TString, value), type, span);
+			case TMap(key, value): new TypedExpression(TNewMap(key, value), type, span);
 			case TInstance(NominalKind.Class, name, _): new TypedExpression(TNew(name, [], false), type, span);
 			default: throw 'No MessagePack default for "$type"';
 		};
@@ -490,6 +520,13 @@ class WireCodecGenerator {
 			default: null;
 		};
 
+	static function mapKeyMethod(type:CompilerType, writing:Bool):String {
+		var methodName = writing ? primitiveMethod(type) : primitiveReadMethod(type);
+		if (methodName == null)
+			throw 'No MessagePack map key method for "$type"';
+		return methodName;
+	}
+
 	static function typeKey(type:CompilerType):String
 		return switch type {
 			case TInt: "int";
@@ -499,7 +536,12 @@ class WireCodecGenerator {
 			case TBytes: "bytes";
 			case TNullable(element): "nullable_" + typeKey(element);
 			case TArray(element): "array_" + typeKey(element);
-			case TMap(TString, value): "map_string_" + typeKey(value);
+			case TMap(key, value):
+				(switch key {
+					case TString: "map_string_";
+					case TInt: "map_int_";
+					default: throw 'No MessagePack map key for "$key"';
+				}) + typeKey(value);
 			case TInstance(NominalKind.Class, name, _): "class_" + StringTools.replace(name, ".", "_");
 			default: throw 'No MessagePack codec key for "$type"';
 		};

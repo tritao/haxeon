@@ -892,6 +892,8 @@ class TestMain {
 			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_class_RecursiveArrayWire -> class_RecursiveArrayWire)');
 		expectCompileError('@:wire class RecursiveMapWire { @:wireId(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
 			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_class_RecursiveMapWire -> class_RecursiveMapWire)');
+		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxe.wire.MessagePack.encode(values).length; }',
+			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;

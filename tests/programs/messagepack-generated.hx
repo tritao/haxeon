@@ -29,6 +29,8 @@ class WireEnvelope {
 	public var usersByName:Map<String, WireUser>;
 	@:wireId(8)
 	public var optionalCountsByName:Map<String, Null<Int>>;
+	@:wireId(9)
+	public var countsById:Map<Int, Null<Int>>;
 }
 
 function main():Int {
@@ -64,6 +66,9 @@ function main():Int {
 	envelope.optionalCounts = [1, null, 3];
 	envelope.usersByName = ["ada" => user];
 	envelope.optionalCountsByName = ["one" => 1, "none" => null];
+	envelope.countsById = new Map<Int, Null<Int>>();
+	envelope.countsById.set(-1, null);
+	envelope.countsById.set(2, 20);
 	var envelopeBytes = MessagePack.encode(envelope);
 	var restoredEnvelope:WireEnvelope = MessagePack.decode(envelopeBytes);
 	if (restoredEnvelope.user == null
@@ -84,7 +89,9 @@ function main():Int {
 		|| restoredEnvelope.usersByName.get("ada") == null
 		|| restoredEnvelope.usersByName.get("ada").name != "Ada"
 		|| restoredEnvelope.optionalCountsByName.get("one") != 1
-		|| restoredEnvelope.optionalCountsByName.get("none") != null)
+		|| restoredEnvelope.optionalCountsByName.get("none") != null
+		|| restoredEnvelope.countsById.get(-1) != null
+		|| restoredEnvelope.countsById.get(2) != 20)
 		return 3;
 
 	var users:Array<WireUser> = [user];
@@ -106,13 +113,27 @@ function main():Int {
 	if (restoredScores.get("alpha") != 1 || restoredScores.get("zulu") != 26)
 		return 6;
 
+	var firstIds:Map<Int, Int> = new Map<Int, Int>();
+	firstIds.set(20, 2);
+	firstIds.set(-3, 1);
+	var secondIds:Map<Int, Int> = new Map<Int, Int>();
+	secondIds.set(-3, 1);
+	secondIds.set(20, 2);
+	var firstIdBytes = MessagePack.encode(firstIds);
+	var secondIdBytes = MessagePack.encode(secondIds);
+	if (firstIdBytes.compare(secondIdBytes) != 0)
+		return 7;
+	var restoredIds:Map<Int, Int> = MessagePack.decode(firstIdBytes);
+	if (restoredIds.get(-3) != 1 || restoredIds.get(20) != 2)
+		return 8;
+
 	var optionalUser:Null<WireUser> = user;
 	var optionalBytes = MessagePack.encode(optionalUser);
 	var restoredOptional:Null<WireUser> = MessagePack.decode(optionalBytes);
 	if (restoredOptional == null || restoredOptional.id != 73)
-		return 7;
+		return 9;
 	optionalUser = null;
 	var nullBytes = MessagePack.encode(optionalUser);
 	var restoredNull:Null<WireUser> = MessagePack.decode(nullBytes);
-	return restoredNull == null ? 43 : 8;
+	return restoredNull == null ? 43 : 10;
 }
