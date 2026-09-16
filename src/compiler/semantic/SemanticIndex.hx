@@ -2966,16 +2966,19 @@ class SemanticIndex {
 			case TNullable(element):
 				return recoveredTypeSubstitutions(element);
 			case TInstance(_, name, arguments):
-				var parameters:Null<Array<String>> = null,
-					classDecl = declarations.classes.get(name),
-					interfaceDecl = declarations.interfaces.get(name),
-					abstractDecl = declarations.abstracts.get(name);
-				if (classDecl != null)
-					parameters = classDecl.typeParameters;
-				else if (interfaceDecl != null)
-					parameters = interfaceDecl.typeParameters;
-				else if (abstractDecl != null)
-					parameters = abstractDecl.typeParameters;
+			var parameters:Null<Array<String>> = null,
+				classDecl = declarations.classes.get(name),
+				interfaceDecl = declarations.interfaces.get(name),
+				abstractDecl = declarations.abstracts.get(name),
+				enumDecl = declarations.enums.get(name);
+			if (classDecl != null)
+				parameters = classDecl.typeParameters;
+			else if (interfaceDecl != null)
+				parameters = interfaceDecl.typeParameters;
+			else if (abstractDecl != null)
+				parameters = abstractDecl.typeParameters;
+			else if (enumDecl != null)
+				parameters = enumDecl.typeParameters;
 				if (parameters != null)
 					for (index in 0...parameters.length)
 						if (index < arguments.length)
