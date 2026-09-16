@@ -36,7 +36,13 @@ class HlRuntimeModule {
 			module = this.kernel.loadCodeManifest(metadata.snapshot().nativeCode, bytes, moduleId, revision, dispatch);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
+			metadata.constantDescriptors.initialize(function(index)
+				return this.kernel.initializeConstant(cast module, index));
 		} catch (error:Dynamic) {
+			if (module != null) {
+				this.kernel.dispose(cast module);
+				module = null;
+			}
 			lease.release();
 			throw error;
 		}

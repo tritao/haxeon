@@ -24,6 +24,10 @@ class HlTypeBridge {
 	public static function native_metadata_module_init(module:RawPtr<UInt8>, flags:Int):Bool
 		return false;
 
+	/** Materialize one Haxe-owned constant through HashLink's GC-sensitive kernel. */
+	public static function native_metadata_module_initialize_constant(module:RawPtr<UInt8>, index:Int):Bool
+		return false;
+
 	/** Retire and free an initialized native HashLink module. */
 	public static function native_metadata_module_unload(module:RawPtr<UInt8>):Bool
 		return false;
@@ -52,6 +56,10 @@ class HlTypeBridge {
 	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
 		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):hl.Abstract<"realtime_module">
 		return null;
+
+	/** Materialize one Haxe-owned constant through an external runtime wrapper. */
+	public static function native_runtime_module_initialize_constant(module:hl.Abstract<"realtime_module">, index:Int):Bool
+		return false;
 
 	/** Retire an externally loaded runtime wrapper when no managed borrowers remain. */
 	public static function native_runtime_module_unload(module:hl.Abstract<"realtime_module">):Bool

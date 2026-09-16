@@ -12,6 +12,7 @@ import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 interface HlRuntimeModuleKernel {
 	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
+	function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool;
 	function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int;
 	function callVoid(module:HlRuntimeModuleHandle, stableId:Int):Void;
 	function callBytes(module:HlRuntimeModuleHandle, stableId:Int):hl.Bytes;
@@ -39,6 +40,9 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle
 		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, dispatch.stableIds, dispatch.slots,
 			dispatch.count, dispatch.initializerSlot);
+
+	public inline function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool
+		return HlTypeBridge.native_runtime_module_initialize_constant(module, index);
 
 	public inline function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int
 		return HlTypeBridge.native_runtime_module_call_i32(module, stableId);

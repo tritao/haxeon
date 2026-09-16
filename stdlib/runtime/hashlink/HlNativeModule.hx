@@ -17,6 +17,7 @@ class HlNativeModule {
 	final lease:HlMetadataLease;
 	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:RawPtr<UInt8>;
+	var constantsInitialized:Bool = false;
 
 	public function new(metadata:HlMetadataGeneration, ?flags:Int = 0) {
 		if (metadata == null)
@@ -34,12 +35,21 @@ class HlNativeModule {
 				module = RawPtr.nullPtr();
 				throw "HashLink native module initialization failed";
 			}
+			initializeConstants();
 		} catch (error:Dynamic) {
 			if (!module.isNull())
 				HlTypeBridge.native_metadata_module_free_shutdown(module);
 			lease.release();
 			throw error;
 		}
+	}
+
+	function initializeConstants():Void {
+		if (constantsInitialized)
+			throw "HashLink native module constants were already initialized";
+		metadata.constantDescriptors.initialize(function(index)
+			return HlTypeBridge.native_metadata_module_initialize_constant(module, index));
+		constantsInitialized = true;
 	}
 
 	/** Whether the native module remains initialized and owned by this wrapper. */

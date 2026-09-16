@@ -48,6 +48,15 @@ class HlConstantTable {
 	public inline function capacityOf():Int
 		return capacity;
 
+	/** Apply one native materialization operation to every validated descriptor. */
+	public function initialize(initializer:Int->Bool):Void {
+		if (initializer == null)
+			throw "HashLink constant initialization requires a native operation";
+		for (index in 0...count)
+			if (!initializer(index))
+				throw 'HashLink native constant initialization failed at index $index';
+	}
+
 	/** Validate global indices and field storage against a module global table. */
 	public function validate(globalCount:Int):Int {
 		if (globalCount < 0)
