@@ -221,10 +221,20 @@ for in-place patches, and exposes borrower-aware retired generations. It still
 does not install executable addresses; that remains the deliberately small
 native JIT/kernel boundary.
 
+## Runtime synchronization
+
+`runtime.memory.AtomicInt32` provides aligned unmanaged i32 operations with
+explicit `MemoryOrder` values (`Relaxed`, `Acquire`, `Release`, `AcqRel`, and
+`SeqCst`). Invalid load/store orderings are rejected at the Haxe boundary;
+compare-exchange derives the permitted failure ordering from its success
+ordering. Mutexes, condition variables, TLS, and explicit GC handles remain
+separate runtime primitives, so native metadata records still contain no
+implicit managed references.
+
 ## Deliberate exclusions
 
 The first foundation does not add general-purpose allocation, ownership or
-borrow checking, pinning, GC write barriers, atomics, TLS, executable memory,
+borrow checking, pinning, GC write barriers, executable memory,
 `unsafe {}` syntax, indirect invocation through native function pointers,
 aggregate
 by-value calling conventions, or changes to the HashLink fork. The first
