@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 
 /**
 	Haxe-owned interface for the bootstrap-sensitive runtime-module boundary.
