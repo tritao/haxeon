@@ -29,8 +29,6 @@ class Runtime {
 	static final retirementBacklog:Array<LoadedModule> = [];
 	static final retirementMutex = new Mutex();
 	static final jitBackend = new NativeRuntimeJitBackend();
-	static final jitGenerationModules:Array<LoadedModule> = [];
-	static final jitGenerations:Array<Array<RuntimeJitGeneration>> = [];
 	#if haxeon
 	static final haxeRuntimeModuleKernel:HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	#end
@@ -216,18 +214,12 @@ class Runtime {
 
 	/** Return the Haxe-side lifecycle code for one live JIT generation record. */
 	public static function jitGenerationState(module:LoadedModule, index:Int):Int {
-		var ledger = jitGenerationLedger(module);
-		if (ledger == null || index < 0 || index >= ledger.length)
-			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
-		return ledger[index].state;
+		return module.jitGenerationState(index);
 	}
 
 	/** Return the native revision held by one Haxe-owned JIT generation record. */
 	public static function jitGenerationRevision(module:LoadedModule, index:Int):Int {
-		var ledger = jitGenerationLedger(module);
-		if (ledger == null || index < 0 || index >= ledger.length)
-			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
-		return ledger[index].codeRevision();
+		return module.jitGenerationRevision(index);
 	}
 
 	public static function metadataTypeCount(module:LoadedModule):Int
@@ -404,7 +396,7 @@ class Runtime {
 			var publication = jitBackend.applyPatch(handle, transaction);
 			if (publication.status == RuntimeStatus.Ok) {
 				module.commitPatch(generation);
-				recordJitPublication(module, generation.revision, publication.code);
+				module.recordJitPublication(jitBackend, generation.revision, publication.code);
 			}
 			return publication.status;
 		});
@@ -457,21 +449,6 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
 	}
 
-	static function jitGenerationLedger(module:LoadedModule):Null<Array<RuntimeJitGeneration>> {
-		var index = jitGenerationModules.indexOf(module);
-		return index < 0 ? null : jitGenerations[index];
-	}
-
-	static function recordJitPublication(module:LoadedModule, revision:Int, handle:RuntimeJitCodeHandle):Void {
-		var index = jitGenerationModules.indexOf(module);
-		if (index < 0) {
-			jitGenerationModules.push(module);
-			jitGenerations.push([]);
-			index = jitGenerationModules.length - 1;
-		}
-		jitGenerations[index].push(new RuntimeJitGeneration(jitBackend, revision, handle, JitGenerationPublished));
-	}
-
 	#if haxeon
 	static function finishMetadataRetirement(module:LoadedModule):Void {
 		module.metadata.dispose();
@@ -479,21 +456,10 @@ class Runtime {
 	#end
 
 	static function beginJitRetirement(module:LoadedModule):Void {
-		var index = jitGenerationModules.indexOf(module);
-		if (index < 0)
-			return;
-		for (generation in jitGenerations[index])
-			generation.markRetiring(JitGenerationRetiring);
+		module.beginJitRetirement();
 	}
 
 	static function finishJitRetirement(module:LoadedModule):Void {
-		var index = jitGenerationModules.indexOf(module);
-		if (index < 0)
-			return;
-		for (generation in jitGenerations[index])
-			if (!generation.release())
-				throw new RuntimeError(RuntimeStatus.RetirementBlocked, "Runtime JIT generation release failed");
-		jitGenerationModules.splice(index, 1);
-		jitGenerations.splice(index, 1);
+		module.finishJitRetirement();
 	}
 }

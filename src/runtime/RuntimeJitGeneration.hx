@@ -23,7 +23,7 @@ class RuntimeJitGeneration {
 		return released ? -1 : backend.codeRevision(code);
 
 	/** Move this generation into the host retirement lifecycle. */
-	@:allow(runtime.Runtime)
+	@:allow(runtime.Runtime, runtime.LoadedModule)
 	function markRetiring(retiringState:Int):Void
 		state = retiringState;
 

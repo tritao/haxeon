@@ -24,6 +24,9 @@ class LoadedModule {
 	/** Haxe-owned snapshots of successfully published patch generations. */
 	final patchLedger:Array<RuntimePatchGeneration> = [];
 
+	/** Haxe-owned JIT allocations retained by this module's patch generations. */
+	final jitGenerations:Array<RuntimeJitGeneration> = [];
+
 	#if haxeon
 	/** Haxe-owned native metadata retained for the lifetime of this module. */
 	public final metadata:HlMetadataGeneration;
@@ -52,6 +55,43 @@ class LoadedModule {
 	/** Number of successfully published Haxe-owned patch generations. */
 	public inline function committedPatchCount():Int
 		return patchLedger.length;
+
+	/** Return the lifecycle state for one retained JIT generation. */
+	@:allow(runtime.Runtime)
+	function jitGenerationState(index:Int):Int {
+		if (index < 0 || index >= jitGenerations.length)
+			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
+		return jitGenerations[index].state;
+	}
+
+	/** Return the native revision for one retained JIT generation. */
+	@:allow(runtime.Runtime)
+	function jitGenerationRevision(index:Int):Int {
+		if (index < 0 || index >= jitGenerations.length)
+			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
+		return jitGenerations[index].codeRevision();
+	}
+
+	/** Retain one successfully published JIT allocation with this module. */
+	@:allow(runtime.Runtime)
+	function recordJitPublication(backend:RuntimeJitBackend, revision:Int, code:RuntimeJitCodeHandle):Void
+		jitGenerations.push(new RuntimeJitGeneration(backend, revision, code, Runtime.JitGenerationPublished));
+
+	/** Mark every retained generation as awaiting module retirement. */
+	@:allow(runtime.Runtime)
+	function beginJitRetirement():Void {
+		for (generation in jitGenerations)
+			generation.markRetiring(Runtime.JitGenerationRetiring);
+	}
+
+	/** Release every JIT allocation after native module retirement succeeds. */
+	@:allow(runtime.Runtime)
+	function finishJitRetirement():Void {
+		for (generation in jitGenerations)
+			if (!generation.release())
+				throw new RuntimeError(RuntimeStatus.RetirementBlocked, "Runtime JIT generation release failed");
+		jitGenerations.resize(0);
+	}
 
 	/** Advance Haxe-owned state after the native patch has been published. */
 	@:allow(runtime.Runtime)
