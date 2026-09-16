@@ -19,6 +19,12 @@ class WireEnvelope {
 	public var note:Null<String>;
 	@:wireId(3)
 	public var count:Null<Int>;
+	@:wireId(4)
+	public var tags:Array<String>;
+	@:wireId(5)
+	public var users:Array<WireUser>;
+	@:wireId(6)
+	public var optionalCounts:Array<Null<Int>>;
 }
 
 function main():Int {
@@ -49,19 +55,40 @@ function main():Int {
 	envelope.user = user;
 	envelope.note = null;
 	envelope.count = 7;
+	envelope.tags = ["wire", "array"];
+	envelope.users = [user];
+	envelope.optionalCounts = [1, null, 3];
 	var envelopeBytes = MessagePack.encode(envelope);
 	var restoredEnvelope:WireEnvelope = MessagePack.decode(envelopeBytes);
-	if (restoredEnvelope.user == null || restoredEnvelope.user.id != 73 || !restoredEnvelope.user.active || restoredEnvelope.user.name != "Ada"
-		|| restoredEnvelope.note != null || restoredEnvelope.count != 7)
+	if (restoredEnvelope.user == null
+		|| restoredEnvelope.user.id != 73
+		|| !restoredEnvelope.user.active
+		|| restoredEnvelope.user.name != "Ada"
+		|| restoredEnvelope.note != null
+		|| restoredEnvelope.count != 7
+		|| restoredEnvelope.tags.length != 2
+		|| restoredEnvelope.tags[0] != "wire"
+		|| restoredEnvelope.tags[1] != "array"
+		|| restoredEnvelope.users.length != 1
+		|| restoredEnvelope.users[0].name != "Ada"
+		|| restoredEnvelope.optionalCounts.length != 3
+		|| restoredEnvelope.optionalCounts[0] != 1
+		|| restoredEnvelope.optionalCounts[1] != null
+		|| restoredEnvelope.optionalCounts[2] != 3)
 		return 3;
+
+	var users:Array<WireUser> = [user];
+	var restoredUsers:Array<WireUser> = MessagePack.decode(MessagePack.encode(users));
+	if (restoredUsers.length != 1 || restoredUsers[0].id != 73)
+		return 4;
 
 	var optionalUser:Null<WireUser> = user;
 	var optionalBytes = MessagePack.encode(optionalUser);
 	var restoredOptional:Null<WireUser> = MessagePack.decode(optionalBytes);
 	if (restoredOptional == null || restoredOptional.id != 73)
-		return 4;
+		return 5;
 	optionalUser = null;
 	var nullBytes = MessagePack.encode(optionalUser);
 	var restoredNull:Null<WireUser> = MessagePack.decode(nullBytes);
-	return restoredNull == null ? 43 : 5;
+	return restoredNull == null ? 43 : 6;
 }

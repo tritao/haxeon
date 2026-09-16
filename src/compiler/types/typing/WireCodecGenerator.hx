@@ -92,6 +92,7 @@ class WireCodecGenerator {
 		return switch type {
 			case TInt, TFloat, TBool, TString, TBytes: true;
 			case TNullable(element): isRequestType(session, element);
+			case TArray(element): isRequestType(session, element);
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			default: false;
 		};
@@ -109,6 +110,8 @@ class WireCodecGenerator {
 		path.push(key);
 		switch type {
 			case TNullable(element):
+				collectType(session, element, classes, reachable, visiting, path, span);
+			case TArray(element):
 				collectType(session, element, classes, reachable, visiting, path, span);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
@@ -192,8 +195,23 @@ class WireCodecGenerator {
 				var nonNullValue = new TypedExpression(TCast(value), element, value.span);
 				[
 					TIf(isNullValue(value, type, span), [expressionStatement(method(writer, "writeNil", [], TVoid, span), span)],
-						encodeValueStatements(session, classes, writer, nonNullValue, element, span), span)
+						encodeNestedValueStatements(writer, nonNullValue, element, span), span)
 				];
+			case TArray(element):
+				var indexName = "__wire_array_index",
+					arrayLength = new TypedExpression(TArrayLength(value), TInt, span),
+					index = local(indexName, TInt, span),
+					result:Array<TypedStatement> = [
+						expressionStatement(method(writer, "writeArrayHeader", [arrayLength], TVoid, span), span),
+						TVar(indexName, intLiteral(0, span), span)
+					];
+				result.push(TWhile(new TypedExpression(TLess(index, arrayLength), TBool, span), [
+					expressionStatement(new TypedExpression(TCall(valueEncodeName(element),
+						[writer, new TypedExpression(TIndex(value, index), element, span)]), TVoid, span),
+						span),
+					TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span), span)
+				], span));
+				result;
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = requiredClass(classes, name, span),
 					fields = serializableFields(session, declaration, span),
@@ -204,7 +222,7 @@ class WireCodecGenerator {
 					var field = wireField.field,
 						fieldValue = new TypedExpression(TField(value, field.name), field.type, field.span);
 					result.push(expressionStatement(method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span), span));
-					result = result.concat(encodeValueStatements(session, classes, writer, fieldValue, field.type, field.span));
+					result = result.concat(encodeNestedValueStatements(writer, fieldValue, field.type, field.span));
 				}
 				result;
 			default:
@@ -214,6 +232,11 @@ class WireCodecGenerator {
 				[expressionStatement(method(writer, methodName, [value], TVoid, span), span)];
 		};
 	}
+
+	static function encodeNestedValueStatements(writer:TypedExpression, value:TypedExpression, type:CompilerType, span:SourceSpan):Array<TypedStatement>
+		return [
+			expressionStatement(new TypedExpression(TCall(valueEncodeName(type), [writer, value]), TVoid, span), span)
+		];
 
 	static function valueDecoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
 		var readerType = classType(READER),
@@ -247,6 +270,19 @@ class WireCodecGenerator {
 				for (index in 0...fields.length)
 					statements.push(TFieldAssign(local(resultName, resultType, request.span), fields[index].field.name,
 						local(fieldLocal(index), fields[index].field.type, request.span), request.span));
+				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
+			case TArray(element):
+				var countName = "__wire_count",
+					indexName = "__wire_index",
+					resultName = "__wire_result",
+					resultType = TArray(element);
+				statements.push(TVar(countName, method(reader, "readArrayHeader", [], TInt, request.span), request.span));
+				statements.push(TVar(indexName, intLiteral(0, request.span), request.span));
+				statements.push(TVar(resultName, new TypedExpression(TNewArray(element, local(countName, TInt, request.span)), resultType, request.span),
+					request.span));
+				statements.push(TWhile(new TypedExpression(TLess(local(indexName, TInt, request.span), local(countName, TInt, request.span)), TBool,
+					request.span),
+					decodeArrayBody(session, classes, resultName, resultType, element, reader, indexName, request.span), request.span));
 				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
 			default:
 				var methodName = primitiveReadMethod(type);
@@ -305,29 +341,49 @@ class WireCodecGenerator {
 		return result;
 	}
 
+	static function decodeArrayBody(session:TypingSession, classes:Map<String, TypedClass>, resultName:String, resultType:CompilerType, element:CompilerType,
+			reader:TypedExpression, indexName:String, span:SourceSpan):Array<TypedStatement> {
+		var target = new TypedExpression(TIndex(local(resultName, resultType, span), local(indexName, TInt, span)), element, span),
+			result = decodeValueAssignment(session, classes, target, element, reader, span);
+		result.push(TAssign(indexName, new TypedExpression(TAdd(local(indexName, TInt, span), intLiteral(1, span)), TInt, span), span));
+		return result;
+	}
+
 	static function decodeFieldAssignment(session:TypingSession, classes:Map<String, TypedClass>, field:TypedField, fieldIndex:Int, reader:TypedExpression,
 			span:SourceSpan):Array<TypedStatement> {
-		return switch field.type {
+		return decodeValueAssignment(session, classes, local(fieldLocal(fieldIndex), field.type, span), field.type, reader, span);
+	}
+
+	static function decodeValueAssignment(session:TypingSession, classes:Map<String, TypedClass>, target:TypedExpression, type:CompilerType,
+			reader:TypedExpression, span:SourceSpan):Array<TypedStatement> {
+		return switch type {
 			case TNullable(element):
 				var decoded = decodeValueExpression(session, classes, reader, element, span),
-					wrapped = new TypedExpression(TNullableWrap(decoded), field.type, span);
+					wrapped = new TypedExpression(TNullableWrap(decoded), type, span);
 				[
 					TIf(method(reader, "isNil", [], TBool, span), [
 						expressionStatement(method(reader, "readNil", [], TVoid, span), span),
-						TAssign(fieldLocal(fieldIndex), nullValue(field.type, span), span)
-					], [TAssign(fieldLocal(fieldIndex), wrapped, span)], span)
+						assignValue(target, nullValue(type, span), span)
+					], [assignValue(target, wrapped, span)], span)
 				];
 			default:
 				[
-					TAssign(fieldLocal(fieldIndex), decodeValueExpression(session, classes, reader, field.type, span), span)
+					assignValue(target, decodeValueExpression(session, classes, reader, type, span), span)
 				];
 		};
 	}
 
+	static function assignValue(target:TypedExpression, value:TypedExpression, span:SourceSpan):TypedStatement
+		return switch target.expression {
+			case TLocal(name): TAssign(name, value, span);
+			case TIndex(array, index): TIndexAssign(array, index, value, span);
+			default: throw "MessagePack decoder target must be a local or array index";
+		};
+
 	static function decodeValueExpression(session:TypingSession, classes:Map<String, TypedClass>, reader:TypedExpression, type:CompilerType,
 			span:SourceSpan):TypedExpression {
 		return switch type {
-			case TInstance(NominalKind.Class, _, _): new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
+			case TArray(_), TInstance(NominalKind.Class, _, _): new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
 			default:
 				var methodName = primitiveReadMethod(type);
 				if (methodName == null)
@@ -344,6 +400,7 @@ class WireCodecGenerator {
 			case TString: stringLiteral("", span);
 			case TBytes: new TypedExpression(TCall("haxe.io.Bytes.alloc", [intLiteral(0, span)]), TBytes, span);
 			case TNullable(_): nullValue(type, span);
+			case TArray(element): new TypedExpression(TNewArray(element, intLiteral(0, span)), type, span);
 			case TInstance(NominalKind.Class, name, _): new TypedExpression(TNew(name, [], false), type, span);
 			default: throw 'No MessagePack default for "$type"';
 		};
@@ -382,6 +439,7 @@ class WireCodecGenerator {
 			case TString: "string";
 			case TBytes: "bytes";
 			case TNullable(element): "nullable_" + typeKey(element);
+			case TArray(element): "array_" + typeKey(element);
 			case TInstance(NominalKind.Class, name, _): "class_" + StringTools.replace(name, ".", "_");
 			default: throw 'No MessagePack codec key for "$type"';
 		};

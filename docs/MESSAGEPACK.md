@@ -39,14 +39,15 @@ var decoded:User = MessagePack.decode(bytes);
 
 The initial compiler profile supports non-generic, non-inheriting records with
 directly stored `Int`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
-nullable versions of those types and nested `@:wire` records. Every instance
-field requires one positive, unique `@:wireId(n)` annotation. Fields are
-encoded as an integer-keyed map sorted by ID and decoded by ID; this makes
-field renames and declaration reordering wire-compatible. Unknown fields are
-skipped, missing primitive fields receive their zero value, and missing
-nullable fields receive `null`. Recursive record schemas are rejected because
-the value codec does not represent object identity or cycles.
-Arrays, maps, and enums remain explicit next-step extensions to the generator.
+nullable versions of those types, arrays of supported values, and nested
+`@:wire` records. Every instance field requires one positive, unique
+`@:wireId(n)` annotation. Fields are encoded as an integer-keyed map sorted by
+ID and decoded by ID; this makes field renames and declaration reordering
+wire-compatible. Unknown fields are skipped, missing primitive fields receive
+their zero value, missing nullable fields receive `null`, and missing array
+fields receive an empty array. Recursive record schemas are rejected because
+the value codec does not represent object identity or cycles. Maps and enums
+remain explicit next-step extensions to the generator.
 
 ## Example shape
 
