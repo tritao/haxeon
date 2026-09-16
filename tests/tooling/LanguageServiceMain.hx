@@ -1386,6 +1386,29 @@ class LanguageServiceMain {
 		var primitiveAliasPosition = primitiveAliasSource.lastIndexOf("value") + 1;
 		if (primitiveAliasService.hover("alias/app/PrimitiveAlias.hx", primitiveAliasPosition) != "value:Int")
 			throw "recovered primitive aliased typedef did not preserve its resolved local type";
+		var qualifiedTypeService = new LanguageService(),
+			qualifiedTypeSource = "package alias.app; function main():Void { deep.types.Foo.create(); deep.types.Foo.";
+		qualifiedTypeService.update("deep/types/Foo.hx",
+			"package deep.types; class Foo { public static function create():Void return; public static function build():Foo return new Foo(); } function main():Void return;");
+		qualifiedTypeService.compile("deep.types.Foo");
+		qualifiedTypeService.update("alias/app/QualifiedType.hx", qualifiedTypeSource);
+		var qualifiedTypeItems = qualifiedTypeService.completeResult("alias/app/QualifiedType.hx", qualifiedTypeSource.length).items,
+			qualifiedTypeCompletion = false;
+		for (item in qualifiedTypeItems)
+			if (item.label == "build")
+				qualifiedTypeCompletion = true;
+		var qualifiedTypePosition = qualifiedTypeSource.indexOf("deep.types.Foo.create") + "deep.types.Foo.".length + 1,
+			qualifiedTypeDefinition = qualifiedTypeService.definition("alias/app/QualifiedType.hx", qualifiedTypePosition),
+			qualifiedTypeNamePosition = qualifiedTypeSource.indexOf("deep.types.Foo.create") + "deep.types.".length + 1,
+			qualifiedTypeNameDefinition = qualifiedTypeService.typeDefinition("alias/app/QualifiedType.hx", qualifiedTypeNamePosition),
+			qualifiedTypeContext = qualifiedTypeService.completionContext("alias/app/QualifiedType.hx", qualifiedTypePosition),
+			qualifiedTypeUnresolved = qualifiedTypeService.unresolvedSymbolAt("alias/app/QualifiedType.hx", qualifiedTypePosition);
+		if (!qualifiedTypeCompletion
+			|| qualifiedTypeDefinition == null
+			|| qualifiedTypeDefinition.path != "deep/types/Foo.hx"
+			|| qualifiedTypeNameDefinition == null
+			|| qualifiedTypeNameDefinition.path != "deep/types/Foo.hx")
+			throw 'recovered fully qualified type resolution did not preserve static completion or navigation: completion=$qualifiedTypeCompletion, definition=${qualifiedTypeDefinition == null ? "null" : qualifiedTypeDefinition.path}, typeDefinition=${qualifiedTypeNameDefinition == null ? "null" : qualifiedTypeNameDefinition.path}, context=${qualifiedTypeContext == null ? "null" : Std.string(qualifiedTypeContext.identityTrusted)}, unresolved=${qualifiedTypeUnresolved == null ? "null" : qualifiedTypeUnresolved.name}';
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");

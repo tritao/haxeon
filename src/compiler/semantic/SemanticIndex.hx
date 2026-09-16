@@ -1170,7 +1170,7 @@ class SemanticIndexBuilder {
 				} else {
 					var receiver = name.substring(0, separator),
 						member = name.substring(name.lastIndexOf(".") + 1);
-					bindRecoveredLocal(receiver, span);
+					bindRecoveredReceiver(receiver, span);
 					if (bindRecoveredMember(Variable(receiver, span), member, span) == null)
 						bindNamed(resolveRecoveredSymbol, name, span);
 				}
@@ -1183,8 +1183,9 @@ class SemanticIndexBuilder {
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
 						memberName = name.substring(separator + 1),
-						receiver = Variable(receiverName, span),
-						receiverType = recoveredExpressionBindingType(receiver),
+						receiver = Variable(receiverName, span);
+					bindRecoveredReceiver(receiverName, span);
+					var receiverType = recoveredExpressionBindingType(receiver),
 						callee = bindRecoveredMember(receiver, memberName, span);
 					if (callee == null)
 						callee = bindNamed(resolveRecoveredSymbol, name, span);
@@ -1381,6 +1382,19 @@ class SemanticIndexBuilder {
 				return symbol.id;
 			}
 		return null;
+	}
+
+	/**
+		Bind a receiver that may be either a lexical local or a qualified type.
+		Recovered calls represent static access as one dotted name, so the type
+		component needs its own binding for type-definition queries.
+	*/
+	function bindRecoveredReceiver(name:String, span:SourceSpan):Null<SemanticSymbolId> {
+		var local = bindRecoveredLocal(name, span);
+		if (local != null)
+			return local;
+		var type = recoveredType(NamedType(name));
+		return isRecoveryType(type) ? null : bindNamed(resolveRecoveredSymbol, name, span);
 	}
 
 	function bindRecoveredMember(object:AstExpression, name:String, span:SourceSpan):Null<SemanticSymbolId> {

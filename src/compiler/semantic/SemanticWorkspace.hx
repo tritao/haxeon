@@ -997,23 +997,28 @@ class SemanticWorkspace {
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
-			if (state != from && !editorModuleVisible(from, state, fromPackage, fromProgram))
-				continue;
 			var model = editorModel(state);
 			if (model == null)
 				continue;
 			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			var visible = state == from || editorModuleVisible(from, state, fromPackage, fromProgram);
 			for (symbol in model.index.symbols) {
 				if (token != null)
 					token.check();
-				if (symbol.kind != DeclarationKind.Function && !isTypeKind(symbol.kind))
-					continue;
 				var separator = symbol.name.lastIndexOf("."),
 					shortName = separator < 0 ? symbol.name : symbol.name.substring(separator + 1),
 					matches = symbol.name == name
 						|| shortName == name
 						|| state.name + "." + symbol.name == name
 						|| packagePrefix + symbol.name == name;
+				// A package/module-qualified spelling is an explicit visibility
+				// proof even when the source did not add a separate import. Keep
+				// short names subject to the normal package/import rules.
+				var qualifiedMatch = state.name + "." + symbol.name == name || packagePrefix + symbol.name == name;
+				if (symbol.kind != DeclarationKind.Function && !isTypeKind(symbol.kind) && !qualifiedMatch)
+					continue;
+				if (!visible && !qualifiedMatch)
+					continue;
 				if (matches && !seen.exists(Std.string(symbol.id))) {
 					seen.set(Std.string(symbol.id), true);
 					result.push(symbol.id);
