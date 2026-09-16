@@ -3,6 +3,7 @@ package compiler.hl;
 import compiler.hl.patch.HlPatch;
 import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import runtime.hashlink.HlFunctionVersionTable;
+import runtime.hashlink.HlRuntimePatchCode;
 
 /** Haxe-owned publication record for one committed external HLP generation. */
 class HlRuntimePatchGeneration {
@@ -14,7 +15,9 @@ class HlRuntimePatchGeneration {
 	public final functionStableIds:Array<Int>;
 	public final relocationStableIds:Array<Int>;
 
-	public function new(patch:HlPatch, envelope:HlPatchEnvelope, functions:HlFunctionVersionTable) {
+	final code:Null<HlRuntimePatchCode>;
+
+	public function new(patch:HlPatch, envelope:HlPatchEnvelope, functions:HlFunctionVersionTable, ?code:HlRuntimePatchCode) {
 		if (patch == null || envelope == null || functions == null)
 			throw "HashLink runtime patch generations require a patch, envelope, and function versions";
 		if (patch.baseRevision != envelope.baseRevision || patch.revision != envelope.revision)
@@ -32,7 +35,17 @@ class HlRuntimePatchGeneration {
 		revision = envelope.revision;
 		functionStableIds = envelope.functionStableIds.copy();
 		relocationStableIds = envelope.relocationStableIds.copy();
+		this.code = code;
 	}
+
+	/** Return the native revision while the committed generation owns its code. */
+	public function codeRevision():Int
+		return code == null ? -1 : code.revision;
+
+	/** Release the native allocation owned by this generation exactly once. */
+	@:allow(compiler.hl.HlLoadedRuntimeModule)
+	function releaseCode():Bool
+		return code == null || code.release();
 
 	/** Return an isolated diagnostic snapshot of this committed generation. */
 	public function snapshot():HlRuntimePatchGeneration

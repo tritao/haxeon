@@ -66,7 +66,6 @@ class HlLoadedRuntimeModule {
 	public var revision(default, null):Int;
 
 	final patchLedger:Array<HlRuntimePatchGeneration> = [];
-	final patchCodes:Array<HlRuntimePatchCode> = [];
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
@@ -89,10 +88,9 @@ class HlLoadedRuntimeModule {
 			return false;
 		if (!nativeModule.unload())
 			return false;
-		for (code in patchCodes)
-			if (!code.release())
+		for (generation in patchLedger)
+			if (!generation.releaseCode())
 				throw "HashLink external runtime patch-code release failed";
-		patchCodes.resize(0);
 		metadata.dispose();
 		disposed = true;
 		return true;
@@ -156,9 +154,9 @@ class HlLoadedRuntimeModule {
 
 	/** Return the native revision retained by one committed patch generation. */
 	public function committedPatchCodeRevision(index:Int):Int {
-		if (index < 0 || index >= patchCodes.length)
+		if (index < 0 || index >= patchLedger.length)
 			throw 'HashLink runtime patch generation index $index is unavailable';
-		return patchCodes[index].revision;
+		return patchLedger[index].codeRevision();
 	}
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
@@ -200,8 +198,7 @@ class HlLoadedRuntimeModule {
 			throw error;
 		}
 		applyPatchSymbols(model);
-		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions));
-		patchCodes.push(patchCode);
+		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions, patchCode));
 		functions = nextFunctions;
 		revision = patch.revision;
 	}

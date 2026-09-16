@@ -92,10 +92,10 @@ that arena is released, so Haxe-owned type, function, pool, and debug pointers
 remain valid for the whole native module lifetime.
 
 The Haxe-built external loader follows the same rule: every committed external
-patch retains one native code handle in a parallel Haxe ledger, and releases it
-only after the runtime wrapper has retired. This makes the Haxe patch-generation
-record the owner of code lifetime without exposing executable addresses to
-policy code.
+patch generation privately owns one native code handle, while diagnostic
+snapshots remain non-owning. The generation releases its handle only after the
+runtime wrapper has retired, so policy owns code lifetime without exposing
+executable addresses.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
