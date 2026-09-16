@@ -247,6 +247,16 @@ class LanguageServiceMain {
 				foundSuperArgument = true;
 		if (superValueId == null || !foundSuperArgument)
 			throw "exact semantic traversal dropped a super-call argument reference";
+		var superOwnerPosition = superTraversalSource.indexOf("Base {"),
+			superOwnerId = superTraversalState.semanticModel.index.symbolIdAt(superOwnerPosition + 1),
+			superCallPosition = superTraversalSource.indexOf("super(value)");
+		var foundSuperOwnerReference = false;
+		if (superOwnerId != null)
+			for (location in superTraversalState.semanticModel.index.locations(superOwnerId))
+				if (location.start <= superCallPosition && superCallPosition < location.end)
+					foundSuperOwnerReference = true;
+		if (superOwnerId == null || !foundSuperOwnerReference)
+			throw "exact semantic traversal dropped the super-call owner reference";
 		var shadowService = new LanguageService(),
 			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
 		shadowService.update("Shadow.hx", shadowSource);

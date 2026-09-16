@@ -2900,7 +2900,8 @@ class SemanticIndex {
 				indexExpression(fn, end, resolve, resolveEnumCase);
 			case TNewArray(_, length):
 				indexExpression(fn, length, resolve, resolveEnumCase);
-			case TSuperCall(_, arguments):
+			case TSuperCall(owner, arguments):
+				bindNamed(resolve, owner, expression.span);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TStringFromCharCode(code):
@@ -3119,9 +3120,18 @@ class SemanticIndex {
 		var sourceNameValue = semanticSourceName(name),
 			id = resolve(sourceNameValue),
 			token = referenceToken(tokens, span, sourceName(sourceNameValue));
+		// Same-module declarations are already present in this index even when
+		// workspace resolution is temporarily unavailable while the exact model
+		// is being assembled. Keep those references bound locally; do not invent
+		// an identity for declarations that are not in the current index.
+		if (id == null)
+			for (symbol in symbols)
+				if (symbol.name == sourceNameValue) {
+					id = symbol.id;
+					break;
+				}
 		if (id != null) {
-			if (token != null)
-				bind(id, token.span);
+			bind(id, token == null ? span : token.span);
 			recordResolvedReference(name, id);
 		}
 		return id;
