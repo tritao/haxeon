@@ -169,7 +169,7 @@ class HlMetadataGeneration {
 		if (type.isNull())
 			throw "HashLink metadata type append contains a null type";
 		var index = typeTable.length();
-		if (arena.typeCountOf() != index || type != arena.typePointer().offset(index))
+		if (arena.typeCountOf() != index + 1 || type != arena.typePointer().offset(index))
 			throw "HashLink metadata type append is not contiguous with the published type table";
 		return typeTable.add(type);
 	}
