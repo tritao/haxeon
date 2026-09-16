@@ -1674,6 +1674,24 @@ class LanguageServiceMain {
 				foundGenericMember = true;
 		if (!foundGenericMember || genericContext == null || genericContext.context.receiver == null)
 			throw "recovered completion did not preserve generic nested member substitution";
+		var genericInheritanceService = new LanguageService(),
+			genericInheritanceSource = "class GenericBase<T> { public var value:T; public function read():T return value; } class GenericChild extends GenericBase<String> {} function main():Void { var child:GenericChild = new GenericChild(); child.value; child.";
+		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceSource);
+		var genericInheritancePosition = genericInheritanceSource.length,
+			genericInheritanceItems = genericInheritanceService.completeResult("GenericInheritance.hx", genericInheritancePosition).items,
+			foundInheritedValue = false;
+		for (item in genericInheritanceItems)
+			if (item.label == "value" && item.detail == "value:String")
+				foundInheritedValue = true;
+		var genericInheritedUse = genericInheritanceSource.indexOf("child.value"),
+			genericInheritedDefinition = genericInheritanceService.definition("GenericInheritance.hx", genericInheritedUse + "child.".length + 1),
+			genericInheritedReferences = genericInheritanceService.references("GenericInheritance.hx", genericInheritedUse + "child.".length + 1),
+			genericInheritedDeclaration = genericInheritanceSource.indexOf("value:T");
+		if (!foundInheritedValue || genericInheritedDefinition == null
+			|| genericInheritedDefinition.span.start > genericInheritedDeclaration
+			|| genericInheritedDefinition.span.end < genericInheritedDeclaration + "value".length
+			|| genericInheritedReferences.length < 2)
+			throw 'recovered generic inheritance lost member substitution or identity: completion=$foundInheritedValue, definition=${genericInheritedDefinition == null ? "null" : Std.string(genericInheritedDefinition.span.start)}, references=${genericInheritedReferences.length}';
 		var expectedArgumentService = new LanguageService(),
 			expectedArgumentSource = "class Foo {} function take(value:Foo):Void return; function main():Void { take(";
 		expectedArgumentService.update("ExpectedArgument.hx", expectedArgumentSource);
