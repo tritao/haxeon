@@ -27,7 +27,9 @@ record with `@:wire` to have those calls lowered to type-specific functions:
 ```haxe
 @:wire
 class User {
+	@:wireId(1)
 	public var id:Int;
+	@:wireId(2)
 	public var name:String;
 }
 
@@ -36,24 +38,25 @@ var decoded:User = MessagePack.decode(bytes);
 ```
 
 The initial compiler profile supports non-generic, non-inheriting records with
-directly stored `Int`, `Float`, `Bool`, `String`, or `Bytes` fields. Fields are
-encoded as a map in declaration order and decoded by field name; unknown
-fields are skipped and missing primitive fields receive their zero value.
-This restriction is intentional while enum, nullable, collection, and
-explicit field-ID policies are added to the generator.
+directly stored `Int`, `Float`, `Bool`, `String`, or `Bytes` fields. Every
+instance field requires one positive, unique `@:wireId(n)` annotation. Fields
+are encoded as an integer-keyed map sorted by ID and decoded by ID; this makes
+field renames and declaration reordering wire-compatible. Unknown fields are
+skipped and missing primitive fields receive their zero value.
+This restriction is intentional while enum, nullable, and collection policies
+are added to the generator.
 
 ## Example shape
 
-A generated codec for a record should normally use a map with stable field
-names or numeric field IDs:
+A generated codec for a record uses a map with numeric field IDs:
 
 ```haxe
 class UserCodec implements MessagePackCodec<User> {
 	public function encode(writer:MessagePackWriter, value:User):Void {
 		writer.writeMapHeader(2);
-		writer.writeString("id");
+		writer.writeInt(1);
 		writer.writeInt(value.id);
-		writer.writeString("name");
+		writer.writeInt(2);
 		writer.writeString(value.name);
 	}
 
@@ -62,9 +65,9 @@ class UserCodec implements MessagePackCodec<User> {
 		var name = "";
 		var fields = reader.readMapHeader();
 		for (_ in 0...fields) {
-			switch (reader.readString()) {
-				case "id": id = reader.readInt();
-				case "name": name = reader.readString();
+			switch (reader.readInt()) {
+				case 1: id = reader.readInt();
+				case 2: name = reader.readString();
 				default: reader.skip();
 			}
 		}

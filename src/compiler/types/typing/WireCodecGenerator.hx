@@ -12,6 +12,11 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypeRelations;
 import compiler.types.typing.TypingSession.WireCodecRequest;
 
+private typedef WireField = {
+	final field:TypedField;
+	final id:Int;
+}
+
 /** Emits the first compiler-owned MessagePack codec profile. */
 class WireCodecGenerator {
 	static inline final ENCODE_PREFIX:String = "$wire:encode:";
@@ -91,8 +96,8 @@ class WireCodecGenerator {
 		}
 	}
 
-	static function serializableFields(declaration:TypedClass, span:SourceSpan):Array<TypedField> {
-		var result:Array<TypedField> = [];
+	static function serializableFields(declaration:TypedClass, span:SourceSpan):Array<WireField> {
+		var result:Array<WireField> = [], ids:Map<Int, TypedField> = [];
 		for (field in declaration.fields) {
 			if (field.isStatic)
 				continue;
@@ -104,9 +109,39 @@ class WireCodecGenerator {
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" must have direct storage', field.span);
 			if (primitiveMethod(field.type) == null)
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" has unsupported type "${field.type}"', field.span);
-			result.push(field);
+			var id = wireFieldId(declaration, field);
+			if (ids.exists(id))
+				BodyTyper.fail("E1024",
+					'MessagePack record fields "${declaration.name}.${ids.get(id).name}" and "${declaration.name}.${field.name}" use duplicate @:wireId($id)',
+					field.span);
+			ids.set(id, field);
+			result.push({field: field, id: id});
 		}
+		result.sort(function(left, right) return Reflect.compare(left.id, right.id));
 		return result;
+	}
+
+	static function wireFieldId(declaration:TypedClass, field:TypedField):Int {
+		var id:Null<Int> = null;
+		for (metadata in field.metadata) {
+			if (metadata.name != "wireId")
+				continue;
+			if (id != null)
+				BodyTyper.fail("E1024", 'MessagePack record field "${field.name}" cannot declare @:wireId more than once', metadata.span);
+			if (metadata.arguments.length != 1)
+				BodyTyper.fail("E1024", '@:wireId requires exactly one integer argument', metadata.span);
+			switch metadata.arguments[0] {
+				case compiler.syntax.Ast.AstExpression.IntegerLiteral(value, _):
+					id = value;
+				default:
+					BodyTyper.fail("E1024", '@:wireId requires an integer literal argument', metadata.span);
+			}
+		}
+		if (id == null)
+			BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" requires @:wireId(n)', field.span);
+		if (id <= 0)
+			BodyTyper.fail("E1024", '@:wireId must be a positive integer', field.span);
+		return cast id;
 	}
 
 	static function valueEncoder(type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
@@ -121,8 +156,9 @@ class WireCodecGenerator {
 					value = local("value", valueType, request.span);
 				statements.push(expressionStatement(method(writer, "writeMapHeader", [intLiteral(fields.length, request.span)], TVoid, request.span),
 					request.span));
-				for (field in fields) {
-					statements.push(expressionStatement(method(writer, "writeString", [stringLiteral(field.name, request.span)], TVoid, request.span),
+				for (wireField in fields) {
+					var field = wireField.field;
+					statements.push(expressionStatement(method(writer, "writeInt", [intLiteral(wireField.id, request.span)], TVoid, request.span),
 						request.span));
 					statements.push(expressionStatement(method(writer, cast primitiveMethod(field.type),
 						[new TypedExpression(TField(value, field.name), field.type, field.span)], TVoid, request.span),
@@ -152,7 +188,7 @@ class WireCodecGenerator {
 				statements.push(TVar(countName, method(reader, "readMapHeader", [], TInt, request.span), request.span));
 				statements.push(TVar(indexName, intLiteral(0, request.span), request.span));
 				for (index in 0...fields.length)
-					statements.push(TVar(fieldLocal(index), defaultValue(fields[index].type, request.span), request.span));
+					statements.push(TVar(fieldLocal(index), defaultValue(fields[index].field.type, request.span), request.span));
 				statements.push(TWhile(new TypedExpression(TLess(local(indexName, TInt, request.span), local(countName, TInt, request.span)), TBool,
 					request.span),
 					decodeMapBody(fields, reader, keyName, request.span), request.span));
@@ -160,8 +196,8 @@ class WireCodecGenerator {
 					newValue = new TypedExpression(TNew(name, [], false), resultType, request.span);
 				statements.push(TVar(resultName, newValue, request.span));
 				for (index in 0...fields.length)
-					statements.push(TFieldAssign(local(resultName, resultType, request.span), fields[index].name,
-						local(fieldLocal(index), fields[index].type, request.span), request.span));
+					statements.push(TFieldAssign(local(resultName, resultType, request.span), fields[index].field.name,
+						local(fieldLocal(index), fields[index].field.type, request.span), request.span));
 				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
 			default:
 				statements.push(TReturn(method(local("reader", readerType, request.span), cast primitiveReadMethod(type), [], type, request.span),
@@ -201,13 +237,14 @@ class WireCodecGenerator {
 		return generatedFunction(decodeName(type), [{name: "bytes", type: TBytes}], type, statements, request);
 	}
 
-	static function decodeMapBody(fields:Array<TypedField>, reader:TypedExpression, keyName:String, span:SourceSpan):Array<TypedStatement> {
-		var result:Array<TypedStatement> = [TVar(keyName, method(reader, "readString", [], TString, span), span)];
+	static function decodeMapBody(fields:Array<WireField>, reader:TypedExpression, keyName:String, span:SourceSpan):Array<TypedStatement> {
+		var result:Array<TypedStatement> = [TVar(keyName, method(reader, "readInt", [], TInt, span), span)];
 		var fallback:Array<TypedStatement> = [expressionStatement(method(reader, "skip", [], TVoid, span), span)];
 		for (index in 0...fields.length) {
-			var field = fields[fields.length - index - 1],
+			var wireField = fields[fields.length - index - 1],
+				field = wireField.field,
 				fieldIndex = fields.length - index - 1,
-				condition = new TypedExpression(TEqual(local(keyName, TString, span), stringLiteral(field.name, span)), TBool, span),
+				condition = new TypedExpression(TEqual(local(keyName, TInt, span), intLiteral(wireField.id, span)), TBool, span),
 				assignment = TAssign(fieldLocal(fieldIndex), method(reader, cast primitiveReadMethod(field.type), [], field.type, span), span);
 			fallback = [TIf(condition, [assignment], fallback, span)];
 		}

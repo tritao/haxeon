@@ -874,12 +874,18 @@ class TestMain {
 		voidEntryCompiler.compile("Main");
 		Sys.println("PASS: constructor parameters infer from declared field constraints");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
-			'@:hlNative("sample") private class Native { @:noCompletion public static function read():Int return @:privateAccess 42; }')).tokenize())
-			.parseProgram();
+			'@:hlNative("sample") private class Native { @:wireId(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; }'))
+			.tokenize()).parseProgram();
 		if (!metadataProgram.classes[0].isPrivate
 			|| metadataProgram.classes[0].metadata[0].name != "hlNative"
-			|| metadataProgram.classes[0].metadata[0].arguments.length != 1)
+			|| metadataProgram.classes[0].metadata[0].arguments.length != 1
+			|| metadataProgram.classes[0].fields[0].metadata[0].name != "wireId"
+			|| metadataProgram.classes[0].fields[0].metadata[0].arguments.length != 1)
 			throw "Class metadata and top-level visibility were not preserved";
+		expectCompileError('@:wire class MissingWireId { public var id:Int; } function main():Int { return haxe.wire.MessagePack.encode(new MissingWireId()).length; }',
+			'MessagePack record field "MissingWireId.id" requires @:wireId(n)');
+		expectCompileError('@:wire class DuplicateWireId { @:wireId(1) public var left:Int; @:wireId(1) public var right:Int; } function main():Int { return haxe.wire.MessagePack.encode(new DuplicateWireId()).length; }',
+			'MessagePack record fields "DuplicateWireId.left" and "DuplicateWireId.right" use duplicate @:wireId(1)');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;

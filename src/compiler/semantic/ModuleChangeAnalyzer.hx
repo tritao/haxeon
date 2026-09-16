@@ -16,6 +16,7 @@ typedef ModuleChangeAnalysis = {
 	final interfaceFingerprints:Map<String, String>;
 	final aliasFingerprints:Map<String, String>;
 	final enumFingerprints:Map<String, String>;
+	final wireFieldFingerprints:Map<String, String>;
 	final staticInitializerFingerprints:Map<String, String>;
 	final instanceInitializerFingerprints:Map<String, String>;
 }
@@ -30,6 +31,7 @@ class ModuleChangeAnalyzer {
 			structuralChanged:Map<String, Bool> = [];
 		var signatures:Map<String, String> = [],
 			bodies:Map<String, String> = [];
+		var wireFields:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
 		for (interfaceDecl in ast.interfaces) {
 			var signature = interfaceDecl.name
@@ -210,6 +212,13 @@ class ModuleChangeAnalyzer {
 				for (method in classDecl.methods)
 					{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
+			var wireFieldFingerprint = [
+				for (field in classDecl.fields)
+					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
+			].join(";");
+			wireFields.set(className, wireFieldFingerprint);
+			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
+				structuralChanged.set(className, true);
 			var isValue = false, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
@@ -255,6 +264,9 @@ class ModuleChangeAnalyzer {
 				var canonical = ModuleCanonicalizer.canonicalName(state.name, entry, old);
 				signatureChanged.set(canonical, true);
 			}
+		for (old in state.wireFieldFingerprints.keys())
+			if (!wireFields.exists(old))
+				structuralChanged.set(old, true);
 		state.signatureFingerprints = signatures;
 		state.bodyFingerprints = bodies;
 		return {
@@ -266,10 +278,14 @@ class ModuleChangeAnalyzer {
 			interfaceFingerprints: interfaces,
 			aliasFingerprints: aliases,
 			enumFingerprints: enums,
+			wireFieldFingerprints: wireFields,
 			staticInitializerFingerprints: staticInitializers,
 			instanceInitializerFingerprints: instanceInitializers
 		};
 	}
+
+	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState, metadata:Array<compiler.syntax.Ast.AstMetadata>):String
+		return [for (entry in metadata) state.source.slice(entry.span.start, entry.span.end)].join("|");
 
 	/** Include the source line because it is part of emitted debugger metadata. */
 	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan):String

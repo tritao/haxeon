@@ -31,6 +31,13 @@ class ModuleChangeAnalyzerMain {
 		var aliasEdit = analyze(aliasState, aliasTypes, true);
 		expect(aliasEdit.structuralChanged.exists("alias:Count"), "alias representation edits should be structural");
 
+		var wireState = parsedState("Wire", "@:wire class Wire { @:wireId(1) public var value:Int; }");
+		var wireTypes = new TypeRegistry();
+		publish(wireState, analyze(wireState, wireTypes, false));
+		parseInto(wireState, "@:wire class Wire { @:wireId(2) public var value:Int; }");
+		var wireEdit = analyze(wireState, wireTypes, true);
+		expect(wireEdit.structuralChanged.exists("Wire"), "wire field ID edits should be structural");
+
 		Sys.println("PASS: module change classification");
 	}
 
@@ -58,6 +65,7 @@ class ModuleChangeAnalyzerMain {
 		state.interfaceFingerprints = analysis.interfaceFingerprints;
 		state.aliasFingerprints = analysis.aliasFingerprints;
 		state.enumFingerprints = analysis.enumFingerprints;
+		state.wireFieldFingerprints = analysis.wireFieldFingerprints;
 		state.staticInitializerFingerprints = analysis.staticInitializerFingerprints;
 		state.instanceInitializerFingerprints = analysis.instanceInitializerFingerprints;
 	}

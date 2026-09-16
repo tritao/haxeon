@@ -280,6 +280,7 @@ class ProgramTyper {
 			fieldNames.set(field.name, true);
 			fields.push({
 				name: field.name,
+				metadata: field.metadata,
 				type: type,
 				initializer: initializer,
 				inlineValue: inlineValue,

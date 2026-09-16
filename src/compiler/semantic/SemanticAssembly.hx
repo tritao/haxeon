@@ -314,6 +314,7 @@ class SemanticAssembly {
 						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
 					canonicalFields.push({
 						name: field.name,
+						metadata: field.metadata,
 						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
 							classDecl.typeParameters),
 						initializer: initializer,

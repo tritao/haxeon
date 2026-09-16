@@ -274,6 +274,7 @@ typedef TypedFunction = {
 /** Class field after annotation inference and initializer type checking. */
 typedef TypedField = {
 	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
 	final type:CompilerType;
 	final initializer:Null<TypedExpression>;
 
