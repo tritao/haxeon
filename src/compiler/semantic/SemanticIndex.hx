@@ -36,7 +36,7 @@ typedef IndexedSemanticSymbol = {
 
 private typedef PositionBinding = {final span:SourceSpan; final symbol:SemanticSymbolId;}
 
-private typedef RecoveredTypeParameterScope = {
+typedef SemanticRecoveredTypeParameterScope = {
 	final name:String;
 	final owner:String;
 	final span:SourceSpan;
@@ -126,7 +126,7 @@ class SemanticIndexBuilder {
 	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
-	final recoveredTypeParameterScopes:Array<RecoveredTypeParameterScope> = [];
+	final recoveredTypeParameterScopes:Array<SemanticRecoveredTypeParameterScope> = [];
 	final typeParameterIds:Map<String, SemanticSymbolId> = [];
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
@@ -947,7 +947,7 @@ class SemanticIndexBuilder {
 		return owner + ":" + name;
 
 	function typeParameterAt(position:Int, name:String):Null<SemanticSymbolId> {
-		var selected:Null<RecoveredTypeParameterScope> = null;
+		var selected:Null<SemanticRecoveredTypeParameterScope> = null;
 		for (candidate in recoveredTypeParameterScopes) {
 			if (candidate.name != name || position < candidate.span.start || position > candidate.span.end)
 				continue;
@@ -2381,77 +2381,16 @@ class SemanticIndexBuilder {
 	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext {
-		var visible:Map<String, SemanticCompletionLocal> = [];
-		for (local in completionLocals) {
-			if (token != null)
-				token.check();
-			if (position >= local.declaration.start && position <= local.scope.end) {
-				var existing = visible.get(local.name);
-				if (existing == null
-					|| local.depth > existing.depth
-					|| (local.depth == existing.depth && local.declaration.start > existing.declaration.start))
-					visible.set(local.name, local);
-			}
-		}
-		var locals = [for (local in visible) local];
-		locals.sort(function(left, right) return Reflect.compare(left.name, right.name));
-		var typeParameters:Array<String> = [];
-		for (candidate in recoveredTypeParameterScopes)
-			if (position >= candidate.span.start && position <= candidate.span.end && typeParameters.indexOf(candidate.name) < 0)
-				typeParameters.push(candidate.name);
-		typeParameters.sort(Reflect.compare);
-		var overrideContext = CompletionContextSyntax.isOverrideContext(tokens, position, token),
-			receiver:Null<CompilerType> = null;
-		if (qualifier != null) {
-			if (qualifier == "this")
-				for (candidate in functionReceivers) {
-					if (token != null)
-						token.check();
-					if (position >= candidate.span.start && position <= candidate.span.end)
-						receiver = candidate.type;
-				}
-			if (receiver == null)
-				for (local in locals) {
-					if (token != null)
-						token.check();
-					if (local.name == qualifier)
-						receiver = local.type;
-				}
-		}
-		if (receiver == null && overrideContext)
-			for (owner in declarations.classes)
-				if (position >= owner.span.start && position <= owner.span.end && recoveredClassBases.exists(owner.name)) {
-					receiver = recoveredClassBases.get(owner.name);
-					break;
-				}
-		if (receiver == null && qualifier != null)
-			receiver = recoveredQualifierType(qualifier, position);
-		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
-		for (candidate in completionTypes) {
-			if (token != null)
-				token.check();
-			if (position >= candidate.span.start && position <= candidate.span.end) {
-				var width = candidate.span.end - candidate.span.start;
-				if (width < expectedWidth) {
-					expected = candidate.type;
-					expectedWidth = width;
-				}
-			}
-		}
-		var kind = CompletionContextSyntax.isImportContext(tokens, position, token) ? SemanticCompletionContextKind.Import : qualifier != null ? SemanticCompletionContextKind.Member : overrideContext
-			? SemanticCompletionContextKind.Override : expected != null
-			&& CompletionContextSyntax.isObjectFieldContext(tokens, position,
-				token) ? SemanticCompletionContextKind.ObjectField : CompletionContextSyntax.isTypeContext(tokens, position,
-				token) ? SemanticCompletionContextKind.Type : expected != null
-			&& CompletionContextSyntax.isPatternContext(tokens, position,
-				token) ? SemanticCompletionContextKind.Pattern : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
-		return {
-			locals: locals,
-			typeParameters: typeParameters,
-			receiver: receiver,
-			expected: expected,
-			kind: kind
-		};
+		return SemanticCompletionQuery.build({
+			locals: completionLocals,
+			typeParameters: recoveredTypeParameterScopes,
+			receivers: functionReceivers,
+			expectedTypes: completionTypes,
+			classBases: recoveredClassBases,
+			declarations: declarations,
+			tokens: tokens,
+			qualifierType: function(qualifier:String, position:Int) return recoveredQualifierType(qualifier, position)
+		}, position, qualifier, token);
 	}
 
 	/** Resolve a dotted receiver such as `root.child` for member completion. */
