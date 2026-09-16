@@ -2,6 +2,7 @@ package compiler.hl;
 
 import haxe.io.Bytes;
 import compiler.hl.patch.HlPatchHeaderReader;
+import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
 
 /** Lifecycle state for one staged external-runtime HLP transaction. */
 enum HlRuntimePatchTransactionState {
@@ -22,7 +23,7 @@ class HlRuntimePatchTransaction {
 	public final bytes:Bytes;
 
 	/** Strict Haxe-side envelope decode retained as the transaction's policy description. */
-	public final patch:{moduleId:Bytes, baseRevision:Int, revision:Int};
+	public final patch:HlPatchEnvelope;
 
 	public final baseRevision:Int;
 	public final patchBaseRevision:Int;
@@ -42,6 +43,7 @@ class HlRuntimePatchTransaction {
 		}
 		if (patch.moduleId.compare(owner.identity.moduleId) != 0)
 			throw "Haxeon rejected an HLP transaction for another module";
+		owner.validatePatchPolicy(patch);
 		patchBaseRevision = patch.baseRevision;
 		patchRevision = patch.revision;
 	}

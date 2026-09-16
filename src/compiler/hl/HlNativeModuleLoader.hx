@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import compiler.hl.patch.HlPatchHeaderReader;
+import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimeModule;
@@ -134,8 +135,8 @@ class HlLoadedRuntimeModule {
 
 	/** Haxeon preflights the HLP envelope, identity, and revision before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
-	function commitPatch(bytes:Bytes, ?decoded:{moduleId:Bytes, baseRevision:Int, revision:Int}):Void {
-		var patch:{moduleId:Bytes, baseRevision:Int, revision:Int} = decoded;
+	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope):Void {
+		var patch:HlPatchEnvelope = decoded;
 		if (patch == null)
 			try {
 				patch = HlPatchHeaderReader.decodeComplete(bytes);
@@ -146,10 +147,26 @@ class HlLoadedRuntimeModule {
 			throw "Haxeon rejected an HLP patch for another module";
 		if (patch.baseRevision != revision)
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
+		validatePatchPolicy(patch);
 		var status = nativeModule.patch(bytes);
 		if (status != 0)
 			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
 		revision = patch.revision;
+	}
+
+	/** Validate patch identities before a staged transaction can publish. */
+	@:allow(compiler.hl.HlRuntimePatchTransaction)
+	function validatePatchPolicy(patch:HlPatchEnvelope):Void {
+		for (stableId in patch.functionStableIds) {
+			var known = false;
+			for (entry in identity.entries)
+				if (entry.stableId == stableId) {
+					known = true;
+					break;
+				}
+			if (!known)
+				throw 'Haxeon rejected an HLP patch for unknown function identity $stableId';
+		}
 	}
 
 	/** Execute the manifest initializer through the Haxe-owned runtime policy. */
