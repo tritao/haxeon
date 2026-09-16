@@ -109,6 +109,12 @@ the injectable backend. `NativeHlRuntimeJitBackend` is the current HashLink
 adapter; alternative backends can exercise or replace the executable-code
 mechanism without changing Haxe-owned patch policy or generation ownership.
 
+`HlRuntimeModuleKernel` now isolates the remaining bootstrap-sensitive module
+operations. `HlRuntimeModule` owns metadata leases and module policy while the
+kernel performs only native wrapper creation, stable calls, failure injection,
+and retirement. `NativeHlRuntimeModuleKernel` is the current HashLink adapter;
+the Haxe-facing module state no longer calls those native entry points directly.
+
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last
 published it and records a generation in a Haxe-owned retirement list once all

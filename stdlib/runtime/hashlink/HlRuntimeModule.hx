@@ -7,19 +7,23 @@ import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
+	public static var defaultKernel(default, null):HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	public static var defaultJitBackend(default, null):HlRuntimeJitBackend = new NativeHlRuntimeJitBackend();
 
 	public final metadata:HlMetadataGeneration;
 	final lease:HlMetadataLease;
+	final kernel:HlRuntimeModuleKernel;
 	final jitBackend:HlRuntimeJitBackend;
 	var module:Null<hl.Abstract<"realtime_module">>;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
-		?jitBackend:HlRuntimeJitBackend) {
+		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel) {
 		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
-			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1 || jitBackend == null && defaultJitBackend == null)
+			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1
+			|| kernel == null && defaultKernel == null || jitBackend == null && defaultJitBackend == null)
 			throw "HashLink runtime module requires metadata, HLB bytes, and a decoded HLI manifest";
 		this.metadata = metadata;
+		this.kernel = kernel == null ? defaultKernel : kernel;
 		this.jitBackend = jitBackend == null ? defaultJitBackend : jitBackend;
 		lease = metadata.acquire();
 		module = null;
@@ -33,8 +37,7 @@ class HlRuntimeModule {
 				stableIdStorage.offset(index).store(cast stableIds[index]);
 				slotStorage.offset(index).store(cast slots[index]);
 			}
-			module = HlTypeBridge.native_runtime_module_load_code_manifest(metadata.snapshot().nativeCode, bytes, bytes.length, moduleId, revision,
-				stableIdStorage, slotStorage, count, initializerSlot);
+			module = this.kernel.loadCodeManifest(metadata.snapshot().nativeCode, bytes, moduleId, revision, stableIdStorage, slotStorage, count, initializerSlot);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
 		} catch (error:Dynamic) {
@@ -51,14 +54,14 @@ class HlRuntimeModule {
 	public function callI32(stableId:Int):Int {
 		if (!isLoaded())
 			throw "HashLink external runtime module is no longer loaded";
-		return HlTypeBridge.native_runtime_module_call_i32(module, stableId);
+		return kernel.callI32(cast module, stableId);
 	}
 
 	/** Invoke a stable zero-argument void function. */
 	public function callVoid(stableId:Int):Void {
 		if (!isLoaded())
 			throw "HashLink external runtime module is no longer loaded";
-		HlTypeBridge.native_runtime_module_call_void(module, stableId);
+		kernel.callVoid(cast module, stableId);
 	}
 
 	/** Apply an HLP transaction; policy validation belongs to the owning loader. */
@@ -72,7 +75,7 @@ class HlRuntimeModule {
 	public function setPatchFailureStage(stage:Int):Void {
 		if (!isLoaded())
 			throw "HashLink external runtime failure injection requires a loaded module";
-		HlTypeBridge.native_runtime_module_set_patch_failure_stage(module, stage);
+		kernel.setPatchFailureStage(cast module, stage);
 	}
 
 	/** Apply a patch while retaining the published native code allocation. */
@@ -113,7 +116,7 @@ class HlRuntimeModule {
 	public function unload():Bool {
 		if (!isLoaded())
 			return true;
-		if (!HlTypeBridge.native_runtime_module_unload(module))
+		if (!kernel.unload(cast module))
 			return false;
 		module = null;
 		lease.release();
