@@ -653,6 +653,58 @@ class Parser {
 		}
 	}
 
+	function parseDelimitedType(endKind:TokenKind):AstType {
+		try {
+			var type = parseType();
+			if (recovering && !check(TokenKind.Comma) && !check(endKind)) {
+				recordExpected('comma or $endKind');
+				synchronizeTypeArgument();
+			}
+			return type;
+		}
+		catch (error:CompileError) {
+			if (!recovering)
+				throw error;
+			recordRecoveryDiagnostic(error.diagnostic);
+			synchronizeTypeArgument();
+			return ErrorType(error.diagnostic.span);
+		}
+	}
+
+	function synchronizeTypeArgument():Void {
+		var angleDepth = 0, braceDepth = 0, bracketDepth = 0, parenDepth = 0;
+		while (!check(TokenKind.Eof)) {
+			if (angleDepth == 0 && braceDepth == 0 && bracketDepth == 0 && parenDepth == 0
+				&& (check(TokenKind.Comma) || check(TokenKind.Greater) || check(TokenKind.Semicolon)
+					|| check(TokenKind.RightParen) || check(TokenKind.RightBrace) || check(TokenKind.LeftBrace)
+					|| isDeclarationBoundary(current())))
+				return;
+			switch advance().kind {
+				case TokenKind.Less:
+					angleDepth++;
+				case TokenKind.Greater:
+					if (angleDepth > 0)
+						angleDepth--;
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.LeftBracket:
+					bracketDepth++;
+				case TokenKind.RightBracket:
+					if (bracketDepth > 0)
+						bracketDepth--;
+				case TokenKind.LeftParen:
+					parenDepth++;
+				case TokenKind.RightParen:
+					if (parenDepth > 0)
+						parenDepth--;
+				default:
+			}
+		}
+	}
+
 	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
@@ -692,8 +744,8 @@ class Parser {
 			result.push(missingType("type argument"));
 		else {
 			while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
-				result.push(parseType());
-				if (!match(TokenKind.Comma))
+				result.push(parseDelimitedType(TokenKind.Greater));
+				if (!match(TokenKind.Comma) || check(TokenKind.Greater))
 					break;
 			}
 		}
@@ -2553,8 +2605,12 @@ class Parser {
 		}
 		if (match(TokenKind.Less)) {
 			var arguments = [];
-			do
-				arguments.push(parseType()) while (match(TokenKind.Comma));
+			if (!check(TokenKind.Greater) && !recoveringAtEnd()) {
+				arguments.push(parseDelimitedType(TokenKind.Greater));
+				while (match(TokenKind.Comma))
+					if (!check(TokenKind.Greater) && !recoveringAtEnd())
+						arguments.push(parseDelimitedType(TokenKind.Greater));
+			}
 			consume(TokenKind.Greater);
 			return AppliedType(name, arguments);
 		}

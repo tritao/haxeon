@@ -1833,6 +1833,32 @@ class LanguageServiceMain {
 				foundDoWhileRecoveryMember = true;
 		if (!foundDoWhileRecoveryMember)
 			throw "do/while-body recovery consumed its condition or later local";
+		var genericRecoveryService = new LanguageService(),
+			genericRecoverySource = "package genericapp; import generictypes.GenericValue; class Box<T> { public var value:T; } function retained():Void { var broken:Box<Int MissingType, String> = new Box<Int, String>(); var value:GenericValue = new GenericValue(); value.";
+		genericRecoveryService.update("generictypes/GenericValue.hx", "package generictypes; class GenericValue { public var member:Int; }");
+		genericRecoveryService.update("GenericArguments.hx", genericRecoverySource);
+		var genericRecoveryItems = genericRecoveryService.completeResult("GenericArguments.hx", genericRecoverySource.length).items,
+			foundGenericRecoveryMember = false;
+		for (item in genericRecoveryItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundGenericRecoveryMember = true;
+		var genericRecoveryState = genericRecoveryService.compiler.modules.get("GenericArguments"),
+			foundGenericRecoveryArguments = false;
+		if (genericRecoveryState.recoveredAst != null)
+			for (functionDeclaration in genericRecoveryState.recoveredAst.functions)
+				if (functionDeclaration.name == "retained")
+					for (statement in functionDeclaration.statements)
+						switch statement {
+							case VarDeclaration(name, declared, _, _) if (name == "broken"):
+								switch declared {
+									case AppliedType(_, arguments):
+										foundGenericRecoveryArguments = arguments.length == 2;
+									default:
+								}
+							default:
+						}
+		if (!foundGenericRecoveryMember || !foundGenericRecoveryArguments)
+			throw "generic argument recovery did not preserve later arguments or statements";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
