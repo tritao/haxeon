@@ -66,4 +66,16 @@ class HlTypeBridge {
 	public static function native_runtime_module_patch(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;
 
+	/** Apply one HLP transaction and retain its published native code allocation. */
+	public static function native_runtime_module_patch_code(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
+		return null;
+
+	/** Release one Haxe-owned external reference to a published code allocation. */
+	public static function native_runtime_module_release_code(code:hl.Abstract<"realtime_jit_code">):Bool
+		return false;
+
+	/** Read the immutable revision carried by one retained external code allocation. */
+	public static function native_runtime_module_code_revision(code:hl.Abstract<"realtime_jit_code">):Int
+		return -1;
+
 }

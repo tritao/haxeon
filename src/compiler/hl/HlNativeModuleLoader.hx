@@ -65,6 +65,7 @@ class HlLoadedRuntimeModule {
 	public var revision(default, null):Int;
 
 	final patchLedger:Array<HlRuntimePatchGeneration> = [];
+	final patchCodes:Array<Null<hl.Abstract<"realtime_jit_code">>> = [];
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
@@ -87,6 +88,10 @@ class HlLoadedRuntimeModule {
 			return false;
 		if (!nativeModule.unload())
 			return false;
+		for (code in patchCodes)
+			if (!nativeModule.releaseCode(code))
+				throw "HashLink external runtime patch-code release failed";
+		patchCodes.resize(0);
 		metadata.dispose();
 		disposed = true;
 		return true;
@@ -148,6 +153,13 @@ class HlLoadedRuntimeModule {
 	public function committedPatchGenerations():Array<HlRuntimePatchGeneration>
 		return [for (generation in patchLedger) generation.snapshot()];
 
+	/** Return the native revision retained by one committed patch generation. */
+	public function committedPatchCodeRevision(index:Int):Int {
+		if (index < 0 || index >= patchCodes.length)
+			throw 'HashLink runtime patch generation index $index is unavailable';
+		return nativeModule.codeRevision(patchCodes[index]);
+	}
+
 	/** Haxeon preflights the decoded HLP model before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope, ?decodedModel:HlPatch):Void {
@@ -172,11 +184,15 @@ class HlLoadedRuntimeModule {
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
 		validatePatchPolicy(patch, model);
 		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision);
-		var status = nativeModule.patch(bytes);
-		if (status != 0)
-			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
+		var publication = nativeModule.patchCode(bytes);
+		if (publication.status != 0) {
+			if (!nativeModule.releaseCode(publication.code))
+				throw "HashLink rejected the Haxe-built runtime patch and leaked its code handle";
+			throw 'HashLink rejected the Haxe-built runtime patch (status ${publication.status})';
+		}
 		applyPatchSymbols(model);
 		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions));
+		patchCodes.push(publication.code);
 		functions = nextFunctions;
 		revision = patch.revision;
 	}

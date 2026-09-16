@@ -53,6 +53,21 @@ HL_PRIM int HL_NAME(native_runtime_module_patch)( vbyte *module, realtime_bytes 
 	return (int)hl_runtime_module_apply_hlp((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length);
 }
 
+HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code)( vbyte *module, realtime_bytes *bytes, int length, vbyte *status_out ) {
+	hl_patch_code *code = NULL;
+	hl_runtime_status status = hl_runtime_module_apply_hlp_capture((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length,&code);
+	if( status_out != NULL ) memcpy(status_out,&status,sizeof(status));
+	return (vbyte*)code;
+}
+
+HL_PRIM bool HL_NAME(native_runtime_module_release_code)( vbyte *code ) {
+	return hl_patch_code_release((hl_patch_code*)code);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_code_revision)( vbyte *code ) {
+	return hl_patch_code_revision((hl_patch_code*)code);
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;

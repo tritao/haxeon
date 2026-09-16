@@ -61,6 +61,24 @@ class HlRuntimeModule {
 		return HlTypeBridge.native_runtime_module_patch(module, bytes, bytes.length);
 	}
 
+	/** Apply a patch while retaining the published native code allocation. */
+	public function patchCode(bytes:Bytes):HlRuntimePatchPublication {
+		if (!isLoaded() || bytes == null)
+			throw "HashLink external runtime patch requires a loaded module and patch bytes";
+		var status = haxe.io.Bytes.alloc(4),
+			code = HlTypeBridge.native_runtime_module_patch_code(module, bytes, bytes.length, cast status.getData()),
+			result = status.getInt32(0);
+		return new HlRuntimePatchPublication(result, code);
+	}
+
+	/** Release one externally retained patch-code allocation. */
+	public function releaseCode(code:Null<hl.Abstract<"realtime_jit_code">>):Bool
+		return code == null || HlTypeBridge.native_runtime_module_release_code(code);
+
+	/** Read the immutable revision carried by one retained patch-code allocation. */
+	public function codeRevision(code:Null<hl.Abstract<"realtime_jit_code">>):Int
+		return code == null ? -1 : HlTypeBridge.native_runtime_module_code_revision(code);
+
 	/** Retire the wrapper, preserving the metadata lease if native borrowers block it. */
 	public function unload():Bool {
 		if (!isLoaded())

@@ -89,6 +89,11 @@ retains the metadata generation in a parallel ownership ledger until native
 module teardown completes. This keeps the host compatibility fallback while
 making Haxeon-owned metadata the active path for generated runtime code.
 
+The Haxe-built external loader also retains one opaque native patch-code handle
+for each committed patch generation. It releases those handles only after the
+native runtime wrapper has retired, keeping detached JIT allocations and their
+decoded function metadata alive until Haxe-owned generation state is finished.
+
 Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
 boundary flag tells the native kernel to retain Haxeon's enum and virtual
 layout, lookup, index, and mark-bit tables instead of rebuilding them in
