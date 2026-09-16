@@ -2243,20 +2243,45 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var context = semanticQuery(path, position, null, token);
-		if (!navigableSymbol(context))
+		if (context == null)
+			return null;
+		var model = context.model,
+			symbolId = context.symbol,
+			usingRecovered = false;
+		// A valid compiler model may omit an unreachable generic function's
+		// locals. The current recovered model still has the source-level shape;
+		// use it only for a same-revision query, never for stale fallback data.
+		if (symbolId == null && !context.stale && context.state.recoveredSemanticModel != null
+			&& context.state.recoveredSemanticModel.revision == context.state.revision) {
+			var recoveredSymbol = context.state.recoveredSemanticModel.index.symbolIdAt(position, token);
+			if (recoveredSymbol != null) {
+				model = context.state.recoveredSemanticModel;
+				symbolId = recoveredSymbol;
+				usingRecovered = true;
+			}
+		}
+		if (symbolId == null || !usingRecovered && !navigableSymbol(context))
 			return null;
 		var target:Null<SemanticSymbolId> = null,
-			symbol = context.symbol == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, context.symbol);
-		if (symbol != null && isTypeDeclaration(symbol.symbol.kind))
-			target = symbol.symbol.id;
-		else {
-			var declaration = typeDeclaration(context.model.index.typeAt(position, token));
-			if (declaration != null)
-				target = compiler.semanticWorkspace.editorResolveTypeSymbolId(context.state, declaration, context.model.program, token);
-		}
+			symbol = model.index.symbol(symbolId),
+			workspaceSymbol = symbol == null ? compiler.semanticWorkspace.editorSymbol(context.state, symbolId) : null;
+		if (symbol != null && isTypeDeclaration(symbol.kind))
+			target = symbol.id;
+		else if (workspaceSymbol != null && isTypeDeclaration(workspaceSymbol.symbol.kind))
+			target = workspaceSymbol.symbol.id;
+		else
+			switch model.index.typeAt(position, token) {
+				case TTypeParameter(owner, name):
+					target = model.index.typeParameterId(owner, name);
+				default:
+					var declaration = typeDeclaration(model.index.typeAt(position, token));
+					if (declaration != null)
+						target = compiler.semanticWorkspace.editorResolveTypeSymbolId(context.state, declaration, context.model.program, token);
+			}
 		if (target == null)
 			return null;
-		var resolved = target == null ? null : compiler.semanticWorkspace.editorSymbol(context.state, target);
+		var targetSymbol = model.index.symbol(target),
+			resolved = targetSymbol == null ? compiler.semanticWorkspace.editorSymbol(context.state, target) : {state: context.state, symbol: targetSymbol};
 		return resolved == null ? null : {
 			path: resolved.symbol.declaration.file.path,
 			span: resolved.symbol.declaration,
@@ -2289,7 +2314,7 @@ class LanguageService {
 
 	static function isTypeDeclaration(kind:DeclarationKind):Bool
 		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
-			|| kind == DeclarationKind.Class;
+			|| kind == DeclarationKind.Class || kind == DeclarationKind.TypeParameter;
 
 	function indexedDefinition(path:String, position:Int, ?token:CancellationToken):Null<SymbolLocation> {
 		if (token != null)

@@ -262,7 +262,7 @@ class SemanticIndex {
 		cancellation = token;
 		checkpoint();
 		for (argument in fn.arguments) {
-			declareLocal(fn, argument.name, fn.span);
+			declareLocal(fn, argument.name, fn.span, argument.type);
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
 		}
 		if (fn.owner != null)
@@ -1912,6 +1912,10 @@ class SemanticIndex {
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
 		return signatures.get(id);
 
+	/** Return the editor-local identity for a declared generic parameter. */
+	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
+		return typeParameterIds.get(typeParameterKey(owner, name));
+
 	public function calls():Array<SemanticCallEdge> {
 		var result = callEdges.copy();
 		for (caller in symbols) {
@@ -2341,7 +2345,30 @@ class SemanticIndex {
 		return source == null || span.file == source ? span : source.span(span.start, span.end);
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return type == TUnknown || type == TError;
+		return switch type {
+			case TUnknown, TError: true;
+			case TNullable(element), TArray(element), TIterator(element): isRecoveryType(element);
+			case TMap(key, value): isRecoveryType(key) || isRecoveryType(value);
+			case TFunction(arguments, result): isRecoveryType(result) || containsRecoveryType(arguments);
+			case TAbstract(_, arguments, representation): isRecoveryType(representation) || containsRecoveryType(arguments);
+			case TInstance(_, _, arguments): containsRecoveryType(arguments);
+			case TAnonymous(_, fields):
+				var recovered = false;
+				for (field in fields)
+					if (isRecoveryType(field.type)) {
+						recovered = true;
+						break;
+					}
+				recovered;
+			default: false;
+		};
+
+	static function containsRecoveryType(types:Array<CompilerType>):Bool {
+		for (type in types)
+			if (isRecoveryType(type))
+				return true;
+		return false;
+	}
 
 	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
 		for (statement in statements) {
@@ -2391,8 +2418,10 @@ class SemanticIndex {
 	function declareLocals(fn:TypedFunction, statements:Array<TypedStatement>):Void {
 		for (statement in statements)
 			switch statement {
-				case TDeclare(name, _, span), TVar(name, _, span):
-					declareLocal(fn, name, span);
+				case TDeclare(name, type, span):
+					declareLocal(fn, name, span, type);
+				case TVar(name, value, span):
+					declareLocal(fn, name, span, value.type);
 				case TIf(_, yes, no, _):
 					declareLocals(fn, yes);
 					declareLocals(fn, no);
@@ -2410,22 +2439,24 @@ class SemanticIndex {
 			}
 	}
 
-	function declareLocal(fn:TypedFunction, identity:String, within:SourceSpan):Void {
+	function declareLocal(fn:TypedFunction, identity:String, within:SourceSpan, ?type:CompilerType):Void {
 		if (identity == "this")
 			return;
 		var id = localId(fn, identity);
-		if (symbols.exists(id))
-			return;
-		var token = declarationToken(tokens, within, sourceLocalName(identity));
-		if (token == null)
-			return;
-		symbols.set(id, {
-			id: id,
-			name: sourceLocalName(identity),
-			kind: DeclarationKind.Member,
-			declaration: token.span
-		});
-		bind(id, token.span);
+		if (!symbols.exists(id)) {
+			var token = declarationToken(tokens, within, sourceLocalName(identity));
+			if (token == null)
+				return;
+			symbols.set(id, {
+				id: id,
+				name: sourceLocalName(identity),
+				kind: DeclarationKind.Member,
+				declaration: token.span
+			});
+			bind(id, token.span);
+		}
+		if (type != null && !isRecoveryType(type))
+			declarationTypes.set(id, type);
 	}
 
 	function indexStatements(fn:TypedFunction, statements:Array<TypedStatement>, resolve:String->Null<SemanticSymbolId>,

@@ -1101,6 +1101,19 @@ class LanguageServiceMain {
 		for (item in outOfScopeTypeCompletions.items)
 			if (item.label == "T")
 				throw "workspace-visible type parameters leaked into out-of-scope completion";
+		var genericTypeDefinitionService = new LanguageService(),
+			genericTypeDefinitionSource = "function identity<T>(value:T):T { return value; } function main():Void return;";
+		genericTypeDefinitionService.update("GenericTypeDefinition.hx", genericTypeDefinitionSource);
+		genericTypeDefinitionService.compile("GenericTypeDefinition");
+		var genericValuePosition = genericTypeDefinitionSource.lastIndexOf("return value") + "return ".length,
+			genericTypeDefinition = genericTypeDefinitionService.typeDefinition("GenericTypeDefinition.hx", genericValuePosition),
+			genericParameterPosition = genericTypeDefinitionSource.indexOf("<T>") + 1,
+			genericParameterDefinition = genericTypeDefinitionService.typeDefinition("GenericTypeDefinition.hx", genericParameterPosition);
+		if (genericTypeDefinition == null
+			|| genericTypeDefinition.span.start != genericParameterPosition
+			|| genericParameterDefinition == null
+			|| genericParameterDefinition.span.start != genericParameterPosition)
+			throw "type-definition navigation did not resolve a generic parameter through its local use";
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
