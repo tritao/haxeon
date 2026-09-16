@@ -144,6 +144,30 @@ class HlFunctionVersionTable {
 		return new HlFunctionVersionTable(next, nextGeneration);
 	}
 
+	/** Advance only the stable identities replaced by a successfully published patch. */
+	public function advance(replacedStableIds:Array<Int>, nextGeneration:Int):HlFunctionVersionTable {
+		if (nextGeneration <= generation)
+			throw 'HashLink function generation must advance from $generation';
+		if (replacedStableIds == null || replacedStableIds.length == 0)
+			throw "HashLink function replacements are required";
+		var replaced:Map<Int, Bool> = [];
+		for (stableId in replacedStableIds) {
+			at(stableId);
+			if (replaced.exists(stableId))
+				throw 'Duplicate HashLink function replacement $stableId';
+			replaced.set(stableId, true);
+		}
+		var next:Array<HlFunctionVersionEntry> = [];
+		for (version in versions)
+			next.push({
+				stableId: version.stableId,
+				slot: version.slot,
+				typeIndex: version.typeIndex,
+				entrypoint: version.entrypoint
+			});
+		return new HlFunctionVersionTable(next, nextGeneration);
+	}
+
 	/**
 		Create the next function-version snapshot by replacing existing stable IDs.
 

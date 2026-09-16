@@ -5,6 +5,8 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import compiler.hl.patch.HlPatchHeaderReader;
 import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
+import runtime.hashlink.HlFunctionVersionTable;
+import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimeModule;
@@ -58,17 +60,19 @@ class HlLoadedRuntimeModule {
 	public final identity:HlRuntimeManifest;
 	public final metadata:HlMetadataGeneration;
 	public final nativeModule:HlRuntimeModule;
+	public var functions(default, null):HlFunctionVersionTable;
 	public var revision(default, null):Int;
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
-	function new(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, nativeModule:HlRuntimeModule) {
+	function new(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, nativeModule:HlRuntimeModule, functions:HlFunctionVersionTable) {
 		this.module = module;
 		this.code = module.code;
 		this.identity = identity;
 		this.metadata = metadata;
 		this.nativeModule = nativeModule;
+		this.functions = functions;
 		revision = identity.revision;
 	}
 
@@ -148,9 +152,11 @@ class HlLoadedRuntimeModule {
 		if (patch.baseRevision != revision)
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
 		validatePatchPolicy(patch);
+		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision);
 		var status = nativeModule.patch(bytes);
 		if (status != 0)
 			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
+		functions = nextFunctions;
 		revision = patch.revision;
 	}
 
@@ -239,9 +245,11 @@ class HlNativeModuleLoader {
 			metadata = HlNativeMetadataBuilder.buildModule(module);
 		var loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
+			var functions = functionVersions(module, identityModel, metadata);
 			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata,
 				new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision, [for (entry in identityModel.entries) entry.stableId],
-					[for (entry in identityModel.entries) entry.functionIndex], identityModel.initializerSlot));
+					[for (entry in identityModel.entries) entry.functionIndex], identityModel.initializerSlot),
+				functions);
 			loaded.initialize();
 			return loaded;
 		} catch (error:Dynamic) {
@@ -263,5 +271,21 @@ class HlNativeModuleLoader {
 		if (!initializerEntry)
 			throw 'HLI initializer references a slot absent from the identity table';
 		return identity;
+	}
+
+	static function functionVersions(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration):HlFunctionVersionTable {
+		var entries:Array<HlFunctionVersionEntry> = [];
+		for (entry in identity.entries) {
+			var fn = module.functionAt(entry.functionIndex);
+			if (fn == null)
+				throw 'HLI identity references missing bytecode function ${entry.functionIndex}';
+			entries.push({
+				stableId: entry.stableId,
+				slot: entry.functionIndex,
+				typeIndex: fn.type,
+				entrypoint: metadata.functionPointer(entry.functionIndex)
+			});
+		}
+		return new HlFunctionVersionTable(entries, identity.revision);
 	}
 }

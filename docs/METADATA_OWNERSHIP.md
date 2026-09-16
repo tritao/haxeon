@@ -9,7 +9,7 @@ module generation.
 | Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state, Haxeon `LoadedModule`, and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
 | Base bytecode metadata | Haxeon metadata arena for `HlNativeModuleLoader.loadRuntime`; HashLink code reader arena for the legacy host facade | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
 | Type arena entries | Haxeon metadata arena on the Haxe-built path; HashLink code arena on the legacy path | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
-| Function dispatch slots | `hl_module` | Loaded module generation | Patchable calls and staged closures | Runtime-module release |
+| Function dispatch slots | Haxe runtime manifest plus `hl_module` | Loaded module generation and Haxe `HlFunctionVersionTable` | Patchable calls and staged closures | Runtime-module release |
 | Base JIT image | HashLink executable allocator | `hl_module` | Dispatch slots, closures, active calls | Runtime-module release after calls quiesce |
 | JIT ABI wrapper image | HashLink executable allocator | Process runtime | Dynamic-call bridge and wrapper closures | Global HashLink shutdown after all modules and managed values are finished |
 | Module-registry snapshot | HashLink module registry | Debugger, profiler, stack capture, symbol resolver, or type dump operation | Module metadata during one inspection | Reader releases its pin; unload waits after removing publication |
@@ -71,8 +71,8 @@ HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
 passes that graph plus the decoded manifest to
 `hl_runtime_module_load_code_manifest`. HashLink initializes its JIT and runtime
 wrapper from those Haxe-owned records without reparsing HLI on this path. Haxeon
-owns HLI identity validation, initializer policy,
-stable-ID call-shape validation, and the external wrapper's revision state. Its
+owns HLI identity validation, initializer policy, stable-ID call-shape validation,
+function-version state, and the external wrapper's revision state. Its
 HLP operation preflights the section envelope, fixed module-ID, revision header,
 and replacement function identities before handing the bytes to HashLink; the
 native patch kernel still performs complete wire, operand, relocation, symbol,
