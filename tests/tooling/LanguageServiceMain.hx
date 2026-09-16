@@ -1980,6 +1980,17 @@ class LanguageServiceMain {
 						}
 		if (removedStaleNoReturn)
 			throw "recovered typing reused stale no-return semantics after an imported function was removed";
+		var declarationFailureService = new LanguageService(),
+			declarationFailureSource = '@:hlNative("library", "symbol") class BrokenDeclaration { public function known():Int return 1; } function usable():Int { var value:Int = 1; return value; }';
+		declarationFailureService.update("DeclarationFailure.hx", declarationFailureSource);
+		var declarationFailureModel = declarationFailureService.compiler.modules.get("DeclarationFailure").recoveredSemanticModel,
+			hasUsableTypedFunction = false;
+		if (declarationFailureModel != null && declarationFailureModel.partialTypedProgram != null)
+			for (fn in declarationFailureModel.partialTypedProgram.functions)
+				if (fn.name == "usable")
+					hasUsableTypedFunction = true;
+		if (!hasUsableTypedFunction)
+			throw "a recoverable declaration-level typing failure discarded the remaining partial typed program";
 		var contextRecoveryService = new LanguageService(),
 			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
 		contextRecoveryService.update("ContextRecovery.hx", contextSource);

@@ -187,10 +187,10 @@ class ProgramTyper {
 							}
 					]
 				}
-			], typedClasses:Array<TypedClass> = [
+		], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, reusedFunctions)
+					&& recoveredNativeLibrary(classDecl) == null) typeClass(classDecl, selected, reusedFunctions)
 			], typedFunctions:Array<TypedFunction> = [];
 		for (enumDecl in typedEnums)
 			for (caseDecl in enumDecl.cases)
@@ -272,6 +272,22 @@ class ProgramTyper {
 				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
 		};
+	}
+
+	/**
+	 * The native-library probe is repeated after native declarations are
+	 * collected. In tolerant mode an invalid metadata shape must not escape that
+	 * filter and discard the rest of the recovered typed program.
+	 */
+	function recoveredNativeLibrary(classDecl:AstClass):Null<String> {
+		try
+			return externTyper.nativeLibrary(classDecl.name, classDecl.metadata)
+		catch (error:Dynamic) {
+			if (!session.tolerant)
+				throw error;
+			rememberRecoveryError(error, classDecl.span);
+			return null;
+		}
 	}
 
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, ?reusedFunctions:Map<String, TypedFunction>):TypedClass {
