@@ -474,6 +474,7 @@ class HlMetadataGeneration {
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
 		var usesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
 		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
+		HlTypeLayout.bindFunctionReferences(functionDescriptors.pointer(), functionDescriptors.length());
 		ensureFunctionIdentities();
 		buildNativeCode();
 		validateNativeCode();

@@ -94,6 +94,16 @@ function main():Int {
 		&& descriptorReference.ref.findex == 8
 		&& descriptorReference.ref.reference == 1
 		&& descriptorReference.ref.field.ref.reference == descriptor;
+	descriptor.ref.ops = arena.allocOpcodeArray(5);
+	for (index in 0...5) {
+		descriptor.ref.ops.offset(index).ref.op = 98;
+		descriptor.ref.ops.offset(index).ref.p1 = 0;
+		descriptor.ref.ops.offset(index).ref.p2 = 0;
+		descriptor.ref.ops.offset(index).ref.p3 = 0;
+		descriptor.ref.ops.offset(index).ref.extra = RawPtr.nullPtr();
+	}
+	descriptor.ref.ops.ref.op = 24;
+	descriptor.ref.ops.ref.p2 = 8;
 	var nativeLibrary:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeName:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeTable = new HlNativeDescriptorTable(arena, 2),
@@ -210,9 +220,13 @@ function main():Int {
 	objectData.ref.fields.offset(0).ref.name = fieldName;
 	objectData.ref.proto.offset(0).ref.name = objectName;
 	HlTypeLayout.bindContiguousFunctionDescriptors(arena.typePointer(), arena.typeCountOf(), descriptorTable.pointer(), descriptorTable.length(), module);
+	HlTypeLayout.bindFunctionReferences(descriptorTable.pointer(), descriptorTable.length());
 	var descriptorBindingCorrect = descriptor.ref.object == objectData
 		&& descriptor.ref.field.ref.name == fieldName
-		&& descriptorReference.ref.object.isNull();
+		&& descriptorReference.ref.object.isNull()
+		&& descriptorReference.ref.field.ref.reference == descriptor
+		&& descriptorReference.ref.reference == 0
+		&& descriptor.ref.reference == 1;
 	HlTypeLayout.publishObjectPrototypes(derivedTable.pointer(), derivedTable.length());
 	var namesCorrect = objectData.ref.name.offset(0).load() == 79
 		&& objectData.ref.name.offset(1).load() == 98

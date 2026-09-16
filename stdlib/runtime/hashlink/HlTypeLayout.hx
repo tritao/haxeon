@@ -11,10 +11,10 @@ import runtime.hashlink.HlTypeObject.HlTypeVirtual;
 	Builds HashLink's derived layout and GC mark metadata in Haxe-owned storage.
 
 	The arithmetic mirrors HashLink's ABI helpers and is Haxe-owned. Descriptor
-	association and metadata layout remain in Haxeon; prototype method wiring is
-	a native boundary because it publishes executable function pointers and
-	closures. The non-moving object/enum/virtual layout is no longer built by the
-	metadata publication loop in C.
+	association, function-reference metadata, and metadata layout remain in Haxeon;
+	prototype method tables are still a native boundary because they publish
+	executable function pointers and closures. The non-moving object/enum/virtual
+	layout is no longer built by the metadata publication loop in C.
 */
 class HlTypeLayout {
 	/**
@@ -42,6 +42,42 @@ class HlTypeLayout {
 			throw "HashLink function descriptor binding requires a contiguous type slab, descriptors, and module context";
 		for (index in 0...count)
 			bindFunctionDescriptorsForType(types.offset(index), functions, functionCount, context);
+	}
+
+	/**
+		Derive unbound method references from call and closure opcodes.
+
+		HashLink stores a method's declaring function and overload/reference number
+		in the target descriptor. This is metadata policy and must be complete before
+		the native module is initialized, so diagnostics and JIT metadata observe the
+		same Haxe-owned graph.
+	 */
+	public static function bindFunctionReferences(functions:RawPtr<HlFunction>, functionCount:Int):Void {
+		if (functionCount < 0 || (functionCount > 0 && functions.isNull()))
+			throw "HashLink function reference binding requires a descriptor table";
+		for (index in 0...functionCount) {
+			var descriptor = functions.offset(index);
+			var realFunction = declaringFunction(descriptor);
+			if (realFunction.isNull())
+				continue;
+			var operationCount = cast(descriptor.ref.nops, Int);
+			var operationStorage = descriptor.ref.ops;
+			if (operationCount < 0 || (operationCount > 0 && operationStorage.isNull()))
+				throw 'HashLink function descriptor $index has incomplete opcode storage';
+			for (operationIndex in 0...operationCount) {
+				var operation = operationStorage.offset(operationIndex);
+				var opcode = cast(operation.ref.op, Int);
+				if (!isFunctionReferenceOpcode(opcode))
+					continue;
+				var target = findFunctionOrNull(functions, functionCount, cast(operation.ref.p2, Int));
+				if (target.isNull() || !target.ref.object.isNull())
+					continue;
+				var reference = cast(realFunction.ref.reference, Int);
+				target.ref.field.ref.reference = realFunction;
+				target.ref.reference = cast reference;
+				realFunction.ref.reference = cast(reference + 1);
+			}
+		}
 	}
 
 	/** Publish only object prototypes; Haxe-owned layout filters out other type kinds. */
@@ -326,6 +362,24 @@ class HlTypeLayout {
 		}
 		return RawPtr.nullPtr();
 	}
+
+	static function findFunctionOrNull(functions:RawPtr<HlFunction>, count:Int, findex:Int):RawPtr<HlFunction>
+		return findFunction(functions, count, findex);
+
+	static function declaringFunction(descriptor:RawPtr<HlFunction>):RawPtr<HlFunction> {
+		var current = descriptor, visited = 0;
+		while (!current.isNull() && current.ref.object.isNull() && !current.ref.field.ref.reference.isNull()) {
+			current = current.ref.field.ref.reference;
+			visited++;
+			if (visited > 65536)
+				throw "HashLink function reference metadata contains a cycle";
+		}
+		return current.isNull() || current.ref.object.isNull() ? RawPtr.nullPtr() : current;
+	}
+
+	static function isFunctionReferenceOpcode(opcode:Int):Bool
+		return opcode == 24 || opcode == 25 || opcode == 26 || opcode == 27 || opcode == 28 || opcode == 29
+			|| opcode == 33 || opcode == 34;
 
 	static function objectField(type:RawPtr<HlType>, fieldId:Int):RawPtr<HlObjectField> {
 		if (fieldId < 0)
