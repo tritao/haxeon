@@ -601,6 +601,8 @@ class BodyTyper {
 						try {
 							subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope);
 						} catch (error:Dynamic) {
+							if (Std.isOfType(error, CancellationError))
+								throw error;
 							rememberRecoveryError(error, expressionSpan(switchCase.value));
 						}
 					}
@@ -642,6 +644,8 @@ class BodyTyper {
 		try {
 			return typeEnumPattern(value, expected, scope);
 		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
 			rememberRecoveryError(error, expressionSpan(value));
 			return null;
 		}
@@ -651,6 +655,8 @@ class BodyTyper {
 		try {
 			return coerce(value, expected, contextName, code);
 		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
 			rememberRecoveryError(error, value.span);
 			return new TypedExpression(TNullLiteral, TError, value.span);
 		}
