@@ -208,6 +208,8 @@ class IrInterpreter {
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
 			case "__string_equal": Std.string(arguments[0]) == Std.string(arguments[1]);
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
+			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
+			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
 			case "__std_int_f64": Std.int(arguments[0]);
 			case "__std_int_dynamic": Std.int(arguments[0]);
 			case "__math_ceil": Std.int(Math.ceil(arguments[0]));

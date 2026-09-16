@@ -267,7 +267,7 @@ class WasmGcModuleBuilder {
 	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
 		for (native in program.natives)
-			if (used.exists(native.name) && isGcRuntimeMathImport(native.symbol)) {
+			if (used.exists(native.name) && (isGcRuntimeMathImport(native.symbol) || isGcRuntimeSystemImport(native.symbol))) {
 				var parameters = [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)],
 					results = switch native.result {
 						case Void: [];
@@ -309,6 +309,13 @@ class WasmGcModuleBuilder {
 		};
 	}
 
+	static function isGcRuntimeSystemImport(symbol:Null<String>):Bool {
+		return switch symbol {
+			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit": true;
+			default: false;
+		};
+	}
+
 	static function isSupportedGcRuntimeNative(name:String):Bool {
 		if (WasmModuleSupport.mapNativeParts(name) != null)
 			return true;
@@ -340,7 +347,9 @@ class WasmGcModuleBuilder {
 				"native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length", "__string_char_at",
 				"__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full", "__string_index_of", "__string_index_of_from",
 				"__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split",
-				"__string_substring", "__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii": true;
+				"__string_substring", "__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time",
+				"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_callback_create",
+				"native_callback_close", "native_callback_error_kind", "native_callback_take_error": true;
 			default: false;
 		};
 	}

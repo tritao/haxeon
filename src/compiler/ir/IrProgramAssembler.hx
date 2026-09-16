@@ -267,7 +267,7 @@ class IrProgramAssembler {
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
-								|| name == "__string_substring")
+								|| name == "__string_substring" || name == "__string_to_lower_case" || name == "__string_to_upper_case")
 								needsStringRuntime = true;
 							if (StringTools.startsWith(name, "__map_")) {
 								var operationStart = lastSeparatorCode(name, 95);
