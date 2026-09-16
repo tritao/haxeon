@@ -1287,14 +1287,17 @@ class SemanticIndexBuilder {
 				indexRecoveredExpression(key, mapKeyType(expected), activeFunctionKey);
 				indexRecoveredExpression(value, mapValueType(expected), activeFunctionKey);
 			case New(name, arguments, span):
-				var callee = bindNamed(resolveRecoveredSymbol, name, span);
+				var callee = bindNamed(resolveRecoveredSymbol, name, span),
+					constructionType = recoveredConstructionType(name, expected);
 				addCall(callee, span, name);
-				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, null, activeFunctionKey);
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(constructionType), null,
+					activeFunctionKey, expected);
 			case NewGeneric(name, typeArguments, arguments, span):
-				var callee = bindNamed(resolveRecoveredSymbol, name, span);
+				var callee = bindNamed(resolveRecoveredSymbol, name, span),
+					constructionType = recoveredGenericConstructionType(name, typeArguments, expected);
 				addCall(callee, span, name);
-				var receiverType = recoveredType(AppliedType(name, typeArguments));
-				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(receiverType), null, activeFunctionKey);
+				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(constructionType), null,
+					activeFunctionKey, expected);
 			case NewArray(_, length, _):
 				indexRecoveredExpression(length, TInt, activeFunctionKey);
 			case Lambda(arguments, body, span):

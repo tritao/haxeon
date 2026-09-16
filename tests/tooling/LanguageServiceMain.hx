@@ -1818,6 +1818,13 @@ class LanguageServiceMain {
 			};
 		if (boundedGenericExpectedName != "Bound")
 			throw 'recovered generic constraint did not provide an expected argument type: ${boundedGenericExpected == null ? "null" : Std.string(boundedGenericExpected)}';
+		var constructorArgumentService = new LanguageService(),
+			constructorArgumentSource = "class ConstructorBox<T> { public function new(value:T) {} } function take(value:ConstructorBox<String>):Void return; function main():Void { take(new ConstructorBox(";
+		constructorArgumentService.update("ConstructorArgument.hx", constructorArgumentSource);
+		var constructorArgumentContext = constructorArgumentService.completionContext("ConstructorArgument.hx", constructorArgumentSource.length),
+			constructorArgumentExpected = constructorArgumentContext == null ? null : constructorArgumentContext.context.expected;
+		if (constructorArgumentExpected != TString)
+			throw 'recovered constructor call did not propagate the expected generic parameter type: ${constructorArgumentExpected == null ? "null" : Std.string(constructorArgumentExpected)}';
 		var recoveredCompoundCompletionService = new LanguageService(),
 			recoveredCompoundCompletionSource = "class Item {} function take(values:Array<Item>):Void return; function main():Void { var values = []; take(";
 		recoveredCompoundCompletionService.update("RecoveredCompoundCompletion.hx", recoveredCompoundCompletionSource);
