@@ -2779,7 +2779,8 @@ class SemanticIndex {
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		completionTypes.push({span: currentSpan(expression.span), type: expression.type});
 		switch expression.expression {
-			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
+			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _),
+				TPostfixLocal(identity, _), TPostfixCellLocal(identity, _, _), TPostfixCellCaptured(identity, _, _):
 				var id = localId(fn, identity);
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)
@@ -2793,6 +2794,9 @@ class SemanticIndex {
 				TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right), TArrayPush(left, right), TArrayUnshift(left, right):
 				indexExpression(fn, left, resolve, resolveEnumCase);
 				indexExpression(fn, right, resolve, resolveEnumCase);
+			case TPostfixIndex(array, index, _):
+				indexExpression(fn, array, resolve, resolveEnumCase);
+				indexExpression(fn, index, resolve, resolveEnumCase);
 			case TConditional(condition, yes, no):
 				indexExpression(fn, condition, resolve, resolveEnumCase);
 				indexExpression(fn, yes, resolve, resolveEnumCase);
@@ -2869,9 +2873,45 @@ class SemanticIndex {
 				indexExpression(fn, callee, resolve, resolveEnumCase);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
+			case TObjectLiteral(_, fields):
+				for (field in fields)
+					indexExpression(fn, field.value, resolve, resolveEnumCase);
 			case TArrayLiteral(values):
 				for (value in values)
 					indexExpression(fn, value, resolve, resolveEnumCase);
+			case TMapLiteral(entries):
+				for (entry in entries) {
+					indexExpression(fn, entry.key, resolve, resolveEnumCase);
+					indexExpression(fn, entry.value, resolve, resolveEnumCase);
+				}
+			case TArrayComprehension(_, _, iterable, condition, value):
+				indexExpression(fn, iterable, resolve, resolveEnumCase);
+				if (condition != null)
+					indexExpression(fn, condition, resolve, resolveEnumCase);
+				indexExpression(fn, value, resolve, resolveEnumCase);
+			case TMapComprehension(_, _, iterable, condition, key, value):
+				indexExpression(fn, iterable, resolve, resolveEnumCase);
+				if (condition != null)
+					indexExpression(fn, condition, resolve, resolveEnumCase);
+				indexExpression(fn, key, resolve, resolveEnumCase);
+				indexExpression(fn, value, resolve, resolveEnumCase);
+			case TRange(start, end):
+				indexExpression(fn, start, resolve, resolveEnumCase);
+				indexExpression(fn, end, resolve, resolveEnumCase);
+			case TNewArray(_, length):
+				indexExpression(fn, length, resolve, resolveEnumCase);
+			case TStringFromCharCode(code):
+				indexExpression(fn, code, resolve, resolveEnumCase);
+			case TStringSubstring(value, start, end):
+				indexExpression(fn, value, resolve, resolveEnumCase);
+				indexExpression(fn, start, resolve, resolveEnumCase);
+				if (end != null)
+					indexExpression(fn, end, resolve, resolveEnumCase);
+			case TArrayPop(array):
+				indexExpression(fn, array, resolve, resolveEnumCase);
+			case TArraySort(array, comparator):
+				indexExpression(fn, array, resolve, resolveEnumCase);
+				indexExpression(fn, comparator, resolve, resolveEnumCase);
 			default:
 		}
 	}

@@ -183,6 +183,55 @@ class LanguageServiceMain {
 			|| localReferences.length != 2
 			|| localEdits.length != 2)
 			throw "language service local symbol scope was not preserved";
+		var exactTraversalService = new LanguageService(),
+			exactTraversalSource = "function main():Int { var value:Int = 1; var values:Array<Int> = [value]; value++; values[value]++; return values[value] + value; }";
+		exactTraversalService.update("ExactTraversal.hx", exactTraversalSource);
+		exactTraversalService.compile("ExactTraversal");
+		var exactTraversalState = exactTraversalService.compiler.modules.get("ExactTraversal"),
+			exactValuePosition = exactTraversalSource.indexOf("value"),
+			exactValueId = exactTraversalState.semanticModel.index.symbolIdAt(exactValuePosition + 1),
+			exactValueLocations = exactValueId == null ? [] : exactTraversalState.semanticModel.index.locations(exactValueId),
+			exactValueUses = [
+				exactTraversalSource.indexOf("[value]") + 1,
+			exactTraversalSource.indexOf("value++;"),
+			exactTraversalSource.indexOf("values[value]") + "values[".length,
+			exactTraversalSource.lastIndexOf("values[value]") + "values[".length,
+			exactTraversalSource.lastIndexOf("+ value") + 2
+		];
+		if (exactValueId == null)
+			throw "exact semantic traversal did not bind the local declaration";
+		for (use in exactValueUses) {
+			var foundExactValueUse = false;
+			for (location in exactValueLocations)
+				if (location.start <= use && use < location.end)
+					foundExactValueUse = true;
+			if (!foundExactValueUse)
+				throw 'exact semantic traversal dropped local reference at $use';
+		}
+		var nestedTraversalService = new LanguageService(),
+			nestedTraversalSource = "function main():Int { var value:Int = 1; var map:Map<String,Int> = [\"answer\" => value]; var values:Array<Int> = [for (item in 1...3) value]; var text:String = \"answer\"; var sliced = text.substring(value, value); return value; }";
+		nestedTraversalService.update("NestedTraversal.hx", nestedTraversalSource);
+		nestedTraversalService.compile("NestedTraversal");
+		var nestedTraversalState = nestedTraversalService.compiler.modules.get("NestedTraversal"),
+			nestedValuePosition = nestedTraversalSource.indexOf("value"),
+			nestedValueId = nestedTraversalState.semanticModel.index.symbolIdAt(nestedValuePosition + 1),
+			nestedValueLocations = nestedValueId == null ? [] : nestedTraversalState.semanticModel.index.locations(nestedValueId),
+			nestedValueUses = [
+			nestedTraversalSource.indexOf("=> value") + 3,
+			nestedTraversalSource.indexOf(") value") + 2,
+			nestedTraversalSource.indexOf("substring(value") + "substring(".length,
+			nestedTraversalSource.indexOf("substring(value") + "substring(value, ".length
+		];
+		if (nestedValueId == null)
+			throw "nested exact semantic traversal did not bind the local declaration";
+		for (use in nestedValueUses) {
+			var foundNestedValueUse = false;
+			for (location in nestedValueLocations)
+				if (location.start <= use && use < location.end)
+					foundNestedValueUse = true;
+			if (!foundNestedValueUse)
+				throw 'nested exact semantic traversal dropped local reference at $use';
+		}
 		var shadowService = new LanguageService(),
 			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
 		shadowService.update("Shadow.hx", shadowSource);
