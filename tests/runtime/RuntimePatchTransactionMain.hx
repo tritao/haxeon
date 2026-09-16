@@ -7,12 +7,25 @@ import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 class RuntimePatchTransactionMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", "function main():Int { return 40; } function make():() -> Int { return main; }");
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return 40; } function make():() -> Int { return main; } function text():String { return \"haxeon\"; } function consume(value:String):Void {} function makeObject():Box { return new Box(42); } function readObject(box:Box):Int { return box.value; }");
 		var initial = compiler.compile("Main"),
 			mainId:Int = cast initial.functionIds.get("main"),
 			makeId:Int = cast initial.functionIds.get("Main.make"),
+			textId:Int = cast initial.functionIds.get("Main.text"),
+			consumeId:Int = cast initial.functionIds.get("Main.consume"),
+			makeObjectId:Int = cast initial.functionIds.get("Main.makeObject"),
+			readObjectId:Int = cast initial.functionIds.get("Main.readObject"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
-		compiler.update("Main.hx", "function main():Int { return 42; } function make():() -> Int { return main; }");
+		if (Runtime.callString(loaded, textId) != "haxeon")
+			throw "Haxeon module kernel did not return a stable string";
+		Runtime.callStringArg(loaded, consumeId, "kernel");
+		var retainedObject = Runtime.retainObject(loaded, makeObjectId);
+		if (Runtime.callIntObject(loaded, readObjectId, retainedObject) != 42)
+			throw "Haxeon module kernel did not invoke a retained object";
+		retainedObject.release();
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return 42; } function make():() -> Int { return main; } function text():String { return \"haxeon\"; } function consume(value:String):Void {} function makeObject():Box { return new Box(42); } function readObject(box:Box):Int { return box.value; }");
 		var changed = compiler.compile("Main"),
 			patchByte = changed.patchBytes.get(0),
 			patchSet = new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions),
@@ -47,11 +60,13 @@ class RuntimePatchTransactionMain {
 			|| Runtime.jitGenerationRevision(loaded, 0) != changed.revision
 			|| Runtime.callInt(loaded, mainId) != 42)
 			throw "committed host patch transaction did not publish its generation";
+		var retained = Runtime.retainClosure(loaded, makeId);
+		if (Runtime.callRetainedClosureInt(retained) != 42)
+			throw "Haxeon module kernel did not invoke a retained closure";
 		try {
 			committed.commit();
 			throw "committed host patch transaction committed twice";
 		} catch (error:Dynamic) {}
-		var retained = Runtime.retainClosure(loaded, makeId);
 		Runtime.dispose(loaded);
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";
