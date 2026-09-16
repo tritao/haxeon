@@ -52,6 +52,12 @@ ledger, and advances those records and its decoded symbol model only after
 tracks identity, slot, signature, and generation without pretending to own the
 native JIT entrypoint addresses; those remain inside the native HashLink bridge.
 
+`Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
+the legacy host path, while `Runtime.patchSet` remains the convenience API that
+stages and commits immediately. Host policy validation and native publication
+are performed under the module mutex at commit time, so a transaction staged
+against an older generation becomes stale rather than publishing out of order.
+
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
 relocations, register and symbol bounds, opcode operands, and duplicate slots.
