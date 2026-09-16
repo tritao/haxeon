@@ -50,6 +50,7 @@ typedef struct native_fixture_padded { int8_t tag; int32_t value; } native_fixtu
 static int32_t native_fixture_borrowed_value = 42;
 typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
 typedef int32_t (*native_fixture_event_callback)( const native_fixture_point *, void * );
+typedef void (*native_fixture_surface_event_callback)( uint32_t, int32_t, int32_t, void * );
 typedef native_fixture_point (*native_fixture_point_callback)( native_fixture_point, native_fixture_point );
 typedef native_fixture_arrays (*native_fixture_arrays_callback)( native_fixture_arrays );
 typedef const char *(*native_fixture_utf8_callback)( const char * );
@@ -164,6 +165,12 @@ FIXTURE_API int32_t native_fixture_call_callback_on_thread( native_fixture_binar
 FIXTURE_API int32_t native_fixture_call_event( native_fixture_event_callback callback, int32_t with_user_data ) {
 	native_fixture_point event = {10, 11};
 	return callback == NULL ? 0 : callback(&event,with_user_data ? &native_fixture_borrowed_value : NULL);
+}
+
+FIXTURE_API int32_t native_fixture_call_surface_event( native_fixture_surface_event_callback callback, void *user_data ) {
+	if( callback == NULL ) return 42;
+	callback(7,320,240,user_data);
+	return 42;
 }
 
 FIXTURE_API int32_t native_fixture_call_point_callback( native_fixture_point_callback callback ) {
