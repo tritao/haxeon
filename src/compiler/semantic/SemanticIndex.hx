@@ -18,6 +18,7 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstEnumParameter;
 import compiler.service.CancellationToken;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
@@ -39,6 +40,11 @@ private typedef RecoveredTypeParameterScope = {
 	final name:String;
 	final owner:String;
 	final span:SourceSpan;
+}
+
+private typedef RecoveredEnumPattern = {
+	final params:Array<AstEnumParameter>;
+	final substitutions:Map<String, CompilerType>;
 }
 
 typedef SemanticCompletionLocal = {
@@ -819,9 +825,12 @@ class SemanticIndex {
 						addRecoveredLocal(functionKey, caught.name, recoveredType(caught.type), caught.span, caught.span, depth + 1);
 						indexRecoveredStatements(functionKey, caught.statements, caught.span, depth + 1);
 					}
-				case Switch(_, cases, fallback, _, span):
-					for (item in cases)
+				case Switch(value, cases, fallback, _, span):
+					var subjectType = recoveredExpressionType(value);
+					for (item in cases) {
+						indexRecoveredPatternBindings(functionKey, item.value, subjectType, item.span, depth + 1);
 						indexRecoveredStatements(functionKey, item.statements, item.span, depth + 1);
+					}
 					indexRecoveredStatements(functionKey, fallback, span, depth + 1);
 				default:
 			}
@@ -1715,6 +1724,77 @@ class SemanticIndex {
 			case TMap(_, value): value;
 			case TNullable(element): recoveredForInValueType(element);
 			default: TUnknown;
+		};
+
+	function indexRecoveredPatternBindings(functionKey:String, pattern:AstExpression, expected:CompilerType,
+			scope:SourceSpan, depth:Int):Void {
+		var recovered = recoveredEnumPattern(pattern, expected);
+		if (recovered == null)
+			return;
+		switch pattern {
+			case Call(_, arguments, _):
+				for (index in 0...arguments.length)
+					if (index < recovered.params.length)
+						indexRecoveredPatternBinding(functionKey, arguments[index], recoveredType(recovered.params[index].type,
+							recovered.substitutions), scope, depth);
+			default:
+		}
+	}
+
+	function indexRecoveredPatternBinding(functionKey:String, pattern:AstExpression, type:CompilerType,
+			scope:SourceSpan, depth:Int):Void {
+		switch pattern {
+			case Variable(name, span) if (name != "_" && name.indexOf(".") < 0):
+				addRecoveredLocal(functionKey, name, type, span, scope, depth);
+			case ArrayLiteral(values, _):
+				switch type {
+					case TArray(element):
+						for (value in values)
+							indexRecoveredPatternBinding(functionKey, value, element, scope, depth);
+					default:
+				}
+			default:
+		}
+	}
+
+	function recoveredEnumPattern(pattern:AstExpression, expected:CompilerType):Null<RecoveredEnumPattern> {
+		return switch pattern {
+			case Call(name, _, _):
+				var separator = name.lastIndexOf("."),
+					caseName = separator < 0 ? name : name.substring(separator + 1),
+					enumName:Null<String> = separator < 0 ? recoveredEnumName(expected) : name.substring(0, separator),
+					declaration:Null<compiler.syntax.Ast.AstEnum> = enumName == null ? null : declarations.enums.get(enumName);
+				if (declaration == null && separator < 0) {
+					var match:Null<compiler.syntax.Ast.AstEnum> = null;
+					for (candidate in declarations.enums)
+						for (candidateCase in candidate.cases)
+							if (candidateCase.name == caseName) {
+								if (match != null)
+									return null;
+								match = candidate;
+							}
+					declaration = match;
+				}
+				if (declaration == null)
+					null;
+				else {
+					for (candidateCase in declaration.cases)
+						if (candidateCase.name == caseName)
+							return {
+								params: candidateCase.params,
+								substitutions: recoveredTypeSubstitutions(expected)
+							};
+					null;
+				}
+			default: null;
+		};
+	}
+
+	function recoveredEnumName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(compiler.types.Type.NominalKind.Enum, name, _): name;
+			case TNullable(element): recoveredEnumName(element);
+			default: null;
 		};
 
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,

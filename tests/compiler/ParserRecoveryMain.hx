@@ -467,6 +467,20 @@ class ParserRecoveryMain {
 				throw 'AST-only recovered loop lost its element type: ${astOnlyLoopContext.receiver}';
 		}
 
+		var astOnlyPatternSource = new SourceFile("AstOnlyPatternRecovery.hx",
+			"class Payload { public var member:Int; } enum Choice { Some(value:Payload); Empty; } function main(choice:Choice):Void { switch (choice) { case Some(value): value. } }");
+		var astOnlyPatternTokens = new Lexer(astOnlyPatternSource).tokenize(),
+			astOnlyPatternProgram = new Parser(astOnlyPatternTokens).parseProgramRecovering().program,
+			astOnlyPatternModel = new SemanticModel(astOnlyPatternProgram, astOnlyPatternSource, 1, astOnlyPatternTokens);
+		astOnlyPatternModel.index.indexRecoveredSyntax(astOnlyPatternProgram);
+		var astOnlyPatternPosition = astOnlyPatternSource.text.indexOf("value. }") + "value.".length,
+			astOnlyPatternContext = astOnlyPatternModel.index.completionContext(astOnlyPatternPosition, "value");
+		switch astOnlyPatternContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered pattern lost its binding type: ${astOnlyPatternContext.receiver}';
+		}
+
 		var patternService = new LanguageService(),
 			patternSource = "enum Choice { One; Two(value:Int); } function main():Void { var choice:Choice = One; switch (choice) { case ";
 		patternService.update("ExpectedPattern.hx", patternSource);
