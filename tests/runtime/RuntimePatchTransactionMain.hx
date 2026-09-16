@@ -41,14 +41,14 @@ class RuntimePatchTransactionMain {
 	static function testObjectMethodDispatch():Void {
 		var compiler = new Compiler();
 		compiler.update("ObjectMain.hx",
-			"class Box { public function new() {} public function value():Int return 42; } function main():Int { return new Box().value(); }");
+			"class Base { public function new() {} public function value():Int return 40; } class Box extends Base { public function new() { super(); } override public function value():Int return 42; } function main():Int { var box:Base = new Box(); return box.value(); }");
 		var initial = compiler.compile("ObjectMain"),
 			mainId:Int = cast initial.functionIds.get("main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, mainId) != 42)
 			throw "Haxe-owned object metadata did not dispatch an instance method";
 		compiler.update("ObjectMain.hx",
-			"class Box { public function new() {} public function value():Int return 43; } function main():Int { return new Box().value(); }");
+			"class Base { public function new() {} public function value():Int return 40; } class Box extends Base { public function new() { super(); } override public function value():Int return 43; } function main():Int { var box:Base = new Box(); return box.value(); }");
 		var changed = compiler.compile("ObjectMain");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callInt(loaded, mainId) != 43)
