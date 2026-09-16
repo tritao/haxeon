@@ -48,9 +48,17 @@ prefix hashes rather than the original HLB snapshot.
 The legacy host `LoadedModule` follows the same ordering: it retains a
 Haxe-owned revision, stable function-version table, and private patch-generation
 ledger, and advances those records and its decoded symbol model only after
-`RuntimeNative.patch` reports success. Its host-side function table deliberately
+`RuntimeKernel.patch` reports success. Its host-side function table deliberately
 tracks identity, slot, signature, and generation without pretending to own the
-native JIT entrypoint addresses; those remain inside the native HashLink bridge.
+native JIT entrypoint addresses; those remain inside the native HashLink kernel.
+
+`RuntimeKernel` is the sole Haxe declaration of the legacy host's native
+bootstrap boundary. It exposes opaque module loading, invocation, patch
+publication, diagnostics, and retirement operations while `Runtime` owns the
+policy and transaction orchestration around them. Keeping this surface in one
+kernel type makes the remaining native responsibilities explicit and leaves
+the JIT implementation replaceable without spreading native declarations back
+through the Haxe runtime facade.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
