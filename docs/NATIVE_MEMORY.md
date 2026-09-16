@@ -245,7 +245,10 @@ not retain its target and is cleared after strong marking when the target is
 unreachable. Module teardown closes these handles before native metadata or
 executable storage can be reclaimed. Unowned `GcHandle.create` remains
 process-scoped. Updating a strong handle uses HashLink's collector-locked root
-write barrier, so replacing a rooted value cannot race a collection. Metadata publication uses `Mutex` for serialized policy
+write barrier, so replacing a rooted value cannot race a collection. Weak-root
+reads and updates use the same lock-order rule and recheck closure after the
+collector operation, so weak-handle finalization cannot deadlock or leave a
+closed slot populated. Metadata publication uses `Mutex` for serialized policy
 transitions and lease lifetime; native metadata records still contain no
 implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use

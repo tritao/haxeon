@@ -44,7 +44,16 @@ HL_PRIM vdynamic *HL_NAME(native_gc_weak_handle_get)( haxeon_gc_weak_handle *han
 	vdynamic *value;
 	if( handle == NULL ) return NULL;
 	haxeon_gc_weak_handle_lock_acquire();
-	value = handle->closed ? NULL : (vdynamic *)hl_weak_root_get(&handle->value);
+	if( handle->closed ) {
+		haxeon_gc_weak_handle_lock_release();
+		return NULL;
+	}
+	haxeon_gc_weak_handle_lock_release();
+	/* HashLink's weak-root operations may wait on the collector, so do not
+	   hold the handle lock while entering the collector lock. */
+	value = (vdynamic *)hl_weak_root_get(&handle->value);
+	haxeon_gc_weak_handle_lock_acquire();
+	if( handle->closed ) value = NULL;
 	haxeon_gc_weak_handle_lock_release();
 	return value;
 }
@@ -56,8 +65,16 @@ HL_PRIM void HL_NAME(native_gc_weak_handle_set)( haxeon_gc_weak_handle *handle, 
 		haxeon_gc_weak_handle_lock_release();
 		hl_error("Cannot update a closed weak GC handle");
 	}
-	hl_weak_root_set(&handle->value,value);
 	haxeon_gc_weak_handle_lock_release();
+	/* Match the strong-root barrier: the collector lock and handle lock must
+	   never be acquired in opposite order by a finalizer. */
+	hl_weak_root_set(&handle->value,value);
+	haxeon_gc_weak_handle_lock_acquire();
+	bool closed = handle->closed;
+	haxeon_gc_weak_handle_lock_release();
+	/* A close may have raced the collector-safe update. A closed weak handle
+	   must not retain a value in its now-unregistered slot. */
+	if( closed ) hl_weak_root_set(&handle->value,NULL);
 }
 
 HL_PRIM vbyte *HL_NAME(native_gc_weak_handle_raw)( haxeon_gc_weak_handle *handle ) {
