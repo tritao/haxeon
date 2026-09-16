@@ -73,6 +73,24 @@ class RuntimePatchTransactionMain {
 			throw "Haxe-owned interface metadata did not dispatch a patched interface method";
 		Runtime.dispose(loaded);
 	}
+
+	static function testBoundFunctionField():Void {
+		var compiler = new Compiler();
+		compiler.update("BoundFieldMain.hx",
+			"class Box { public var callback:()->Int; public function new() { callback = value; } public function value():Int return 40; } function main():Int { return new Box().callback(); }");
+		var initial = compiler.compile("BoundFieldMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 40)
+			throw "Haxe-owned binding metadata did not invoke a function-valued field";
+		compiler.update("BoundFieldMain.hx",
+			"class Box { public var callback:()->Int; public function new() { callback = value; } public function value():Int return 42; } function main():Int { return new Box().callback(); }");
+		var changed = compiler.compile("BoundFieldMain");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "Haxe-owned binding metadata did not invoke a patched function-valued field";
+		Runtime.dispose(loaded);
+	}
 	#end
 
 	static function main():Void {
@@ -218,6 +236,7 @@ class RuntimePatchTransactionMain {
 		testEnumPayloadPatch();
 		testObjectMethodDispatch();
 		testInterfaceMethodDispatch();
+		testBoundFunctionField();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
