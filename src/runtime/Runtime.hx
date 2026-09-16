@@ -2,17 +2,12 @@ package runtime;
 
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
-#if haxeon
-import compiler.hl.HlNativeMetadataBuilder;
-#end
 import compiler.hl.HlPatchPolicy;
 import compiler.hl.HlRuntimeCallPolicy;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 #if haxeon
-import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlRuntimeModuleKernel;
-import runtime.memory.RawPtr;
 #end
 import sys.thread.Mutex;
 
@@ -30,8 +25,9 @@ class Runtime {
 	static final retirementMutex = new Mutex();
 	static final jitBackend = new NativeRuntimeJitBackend();
 	#if haxeon
-	static final haxePatchCoordinator = new HaxeRuntimePatchCoordinator(jitBackend);
 	static final haxeRuntimeModuleKernel:HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
+	static final haxePatchCoordinator = new HaxeRuntimePatchCoordinator(jitBackend);
+	static final haxeRuntimeModuleLoader = new HaxeRuntimeModuleLoader(haxeRuntimeModuleKernel);
 	#end
 
 	public static var pendingRetirementCount(get, never):Int;
@@ -68,38 +64,7 @@ class Runtime {
 		}
 		retryRetirements();
 		#if haxeon
-		var metadata:HlMetadataGeneration;
-		try {
-			metadata = HlNativeMetadataBuilder.buildModule(model);
-		} catch (error:Dynamic) {
-			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the native metadata: ${Std.string(error)}');
-		}
-		var publication = metadata.snapshot(),
-			count = identityModel.entries.length,
-			stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
-			slotStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count);
-		for (index in 0...count) {
-			var entry = identityModel.entries[index];
-			stableIdStorage.offset(index).store(cast entry.stableId);
-			slotStorage.offset(index).store(cast entry.functionIndex);
-		}
-		var module = haxeRuntimeModuleKernel.loadCodeManifest(publication.nativeCode, bytes, identityModel.moduleId, identityModel.revision, stableIdStorage,
-			slotStorage, count, identityModel.initializerSlot);
-		if (module == null) {
-			metadata.dispose();
-			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
-		}
-		try {
-			return new LoadedModule(module, model, identityModel, metadata);
-		} catch (error:Dynamic) {
-			#if haxeon
-			haxeRuntimeModuleKernel.dispose(cast module);
-			#else
-			RuntimeKernel.dispose(module);
-			#end
-			metadata.dispose();
-			throw error;
-		}
+		return haxeRuntimeModuleLoader.load(bytes, model, identityModel);
 		#else
 		retryRetirements();
 		var module = RuntimeKernel.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
