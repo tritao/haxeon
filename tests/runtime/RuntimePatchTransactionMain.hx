@@ -55,6 +55,24 @@ class RuntimePatchTransactionMain {
 			throw "Haxe-owned object metadata did not dispatch a patched instance method";
 		Runtime.dispose(loaded);
 	}
+
+	static function testInterfaceMethodDispatch():Void {
+		var compiler = new Compiler();
+		compiler.update("InterfaceMain.hx",
+			"interface Value { function value():Int; } class Box implements Value { public function new() {} public function value():Int return 40; } function main():Int { var value:Value = new Box(); return value.value(); }");
+		var initial = compiler.compile("InterfaceMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 40)
+			throw "Haxe-owned interface metadata did not dispatch an interface method";
+		compiler.update("InterfaceMain.hx",
+			"interface Value { function value():Int; } class Box implements Value { public function new() {} public function value():Int return 42; } function main():Int { var value:Value = new Box(); return value.value(); }");
+		var changed = compiler.compile("InterfaceMain");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "Haxe-owned interface metadata did not dispatch a patched interface method";
+		Runtime.dispose(loaded);
+	}
 	#end
 
 	static function main():Void {
@@ -199,6 +217,7 @@ class RuntimePatchTransactionMain {
 		#if haxeon
 		testEnumPayloadPatch();
 		testObjectMethodDispatch();
+		testInterfaceMethodDispatch();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
