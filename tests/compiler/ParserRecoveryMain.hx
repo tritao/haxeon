@@ -481,6 +481,21 @@ class ParserRecoveryMain {
 				throw 'AST-only recovered pattern lost its binding type: ${astOnlyPatternContext.receiver}';
 		}
 
+		var astOnlySwitchExpressionSource = new SourceFile("AstOnlySwitchExpressionRecovery.hx",
+			"class Payload { public var member:Int; } enum Choice<T> { Some(value:T); Empty; } function main(choice:Choice<Payload>):Void { var selected = switch (choice) { case Some(value): value.; default: new Payload(); }; }");
+		var astOnlySwitchExpressionTokens = new Lexer(astOnlySwitchExpressionSource).tokenize(),
+			astOnlySwitchExpressionProgram = new Parser(astOnlySwitchExpressionTokens).parseProgramRecovering().program,
+			astOnlySwitchExpressionModel = new SemanticModel(astOnlySwitchExpressionProgram, astOnlySwitchExpressionSource, 1,
+				astOnlySwitchExpressionTokens);
+		astOnlySwitchExpressionModel.index.indexRecoveredSyntax(astOnlySwitchExpressionProgram);
+		var astOnlySwitchExpressionPosition = astOnlySwitchExpressionSource.text.indexOf("value.;") + "value.".length,
+			astOnlySwitchExpressionContext = astOnlySwitchExpressionModel.index.completionContext(astOnlySwitchExpressionPosition, "value");
+		switch astOnlySwitchExpressionContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered switch expression lost its binding type: ${astOnlySwitchExpressionContext.receiver}';
+		}
+
 		var astOnlyComprehensionSource = new SourceFile("AstOnlyComprehensionRecovery.hx",
 			"class Payload { public var member:Int; } function main(values:Array<Payload>):Void { var selected = [for (item in values) item.]; }");
 		var astOnlyComprehensionTokens = new Lexer(astOnlyComprehensionSource).tokenize(),
@@ -508,6 +523,33 @@ class ParserRecoveryMain {
 			case TInstance(NominalKind.Class, "Payload", _):
 			default:
 				throw 'inferred recovered comprehension lost its element type: ${inferredComprehensionContext.receiver}';
+		}
+
+		var memberComprehensionSource = new SourceFile("MemberComprehensionRecovery.hx",
+			"class Payload { public var member:Int; } class Item { public var payload:Payload; } function main(values:Array<Item>):Void { var selected = [for (item in values) item.payload]; var result = selected[0]; result. }");
+		var memberComprehensionTokens = new Lexer(memberComprehensionSource).tokenize(),
+			memberComprehensionProgram = new Parser(memberComprehensionTokens).parseProgramRecovering().program,
+			memberComprehensionModel = new SemanticModel(memberComprehensionProgram, memberComprehensionSource, 1, memberComprehensionTokens);
+		memberComprehensionModel.index.indexRecoveredSyntax(memberComprehensionProgram);
+		var memberComprehensionItemPosition = memberComprehensionSource.text.indexOf("item.payload]") + "item.payload".length,
+			memberComprehensionItemContext = memberComprehensionModel.index.completionContext(memberComprehensionItemPosition, "item");
+		switch memberComprehensionItemContext.receiver {
+			case TInstance(NominalKind.Class, "Item", _):
+			default:
+				throw 'AST-only comprehension binding lost its receiver type: ${memberComprehensionItemContext.receiver}';
+		}
+		var memberComprehensionPayloadContext = memberComprehensionModel.index.completionContext(memberComprehensionItemPosition, "item.payload");
+		switch memberComprehensionPayloadContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only comprehension member lost its direct type: ${memberComprehensionPayloadContext.receiver}';
+		}
+		var memberComprehensionPosition = memberComprehensionSource.text.indexOf("result. }") + "result.".length,
+			memberComprehensionContext = memberComprehensionModel.index.completionContext(memberComprehensionPosition, "result");
+		switch memberComprehensionContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered comprehension member lost its element type: ${memberComprehensionContext.receiver}';
 		}
 
 		var astOnlyNestedCollectionSource = new SourceFile("AstOnlyNestedCollectionRecovery.hx",

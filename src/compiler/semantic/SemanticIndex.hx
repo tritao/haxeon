@@ -1095,6 +1095,7 @@ class SemanticIndex {
 				var expectedPattern = recoveredExpressionType(value);
 				indexRecoveredExpression(value, null, activeFunctionKey);
 				for (item in cases) {
+					indexRecoveredPatternBindings(activeFunctionKey, item.value, expectedPattern, item.span, 1);
 					indexRecoveredExpression(item.value, expectedPattern, activeFunctionKey);
 					if (item.guard != null)
 						indexRecoveredExpression(item.guard, null, activeFunctionKey);
@@ -1769,8 +1770,65 @@ class SemanticIndex {
 	function recoveredComprehensionExpressionType(expression:AstExpression, bindings:Map<String, CompilerType>):CompilerType
 		return switch expression {
 			case Variable(name, _) if (bindings.exists(name)): bindings.get(name);
+			case Variable(name, span) if (name.indexOf(".") > 0):
+				var parts = name.split("."), current:AstExpression = Variable(parts[0], span);
+				for (index in 1...parts.length)
+					current = Member(current, parts[index], span);
+				recoveredComprehensionExpressionType(current, bindings);
+			case Member(object, name, _):
+				var memberType = recoveredComprehensionMemberType(object, name, bindings);
+				memberType;
+			case MethodCall(object, name, arguments, _):
+				var receiverType = recoveredComprehensionExpressionType(object, bindings),
+					builtinResult = recoveredBuiltinMethodResult(receiverType, name),
+					owner = memberOwner(receiverType),
+					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
+				if (builtinResult != null)
+					builtinResult;
+				else if (method != null)
+					recoveredCallResult(method.method, method.substitutions, arguments);
+				else
+					TUnknown;
+			case Call(name, arguments, span):
+				var separator = name.lastIndexOf(".");
+				if (separator > 0) {
+					var receiverName = name.substring(0, separator),
+						memberName = name.substring(separator + 1),
+						receiverType = recoveredComprehensionExpressionType(Variable(receiverName, span), bindings),
+						builtinResult = recoveredBuiltinMethodResult(receiverType, memberName),
+						owner = memberOwner(receiverType),
+						method = owner == null ? null : recoveredMethodWithSubstitutions(owner, memberName, [], recoveredTypeSubstitutions(receiverType));
+					if (builtinResult != null)
+						builtinResult;
+					else if (method != null)
+						recoveredCallResult(method.method, method.substitutions, arguments);
+					else
+						TUnknown;
+				} else
+					recoveredExpressionType(expression);
+			case Index(array, _, _):
+				var indexed = indexedValueType(recoveredComprehensionExpressionType(array, bindings));
+				indexed == null ? TUnknown : indexed;
+			case Conditional(_, whenTrue, whenFalse, _):
+				recoveredCommonType(recoveredComprehensionExpressionType(whenTrue, bindings),
+					recoveredComprehensionExpressionType(whenFalse, bindings));
+			case Cast(value, target, _):
+				target == null ? recoveredComprehensionExpressionType(value, bindings) : recoveredType(target);
 			default: recoveredExpressionType(expression);
-		};
+			};
+
+	function recoveredComprehensionMemberType(object:AstExpression, name:String, bindings:Map<String, CompilerType>):CompilerType {
+		var receiverType = recoveredComprehensionExpressionType(object, bindings),
+			owner = memberOwner(receiverType),
+			substitutions = recoveredTypeSubstitutions(receiverType);
+		if (owner == null)
+			return TUnknown;
+		var fieldType = recoveredFieldType(owner, name, [], substitutions);
+		if (fieldType != null)
+			return fieldType;
+		var functionType = recoveredFunctionType(owner + "." + name, substitutions);
+		return functionType == null ? TUnknown : functionType;
+	}
 
 	function indexRecoveredPatternBindings(functionKey:String, pattern:AstExpression, expected:CompilerType,
 			scope:SourceSpan, depth:Int):Void {
