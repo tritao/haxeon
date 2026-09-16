@@ -2182,13 +2182,19 @@ class SemanticIndex {
 	}
 
 	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {
+		var selected:Null<PositionBinding> = null;
 		for (binding in bindings) {
 			if (token != null)
 				token.check();
-			if (position >= binding.span.start && position <= binding.span.end)
-				return binding.symbol;
+			if (position < binding.span.start || position > binding.span.end)
+				continue;
+			var width = binding.span.end - binding.span.start,
+				selectedWidth = selected == null ? 0x3fffffff : selected.span.end - selected.span.start;
+			if (selected == null || width < selectedWidth
+				|| width == selectedWidth && binding.span.start > selected.span.start)
+				selected = binding;
 		}
-		return null;
+		return selected == null ? null : selected.symbol;
 	}
 
 	public function symbolAt(position:Int):Null<IndexedSemanticSymbol> {
