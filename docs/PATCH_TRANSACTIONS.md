@@ -168,6 +168,14 @@ owners, replaces append-only symbol storage, and finally advances the revision.
 Because callers use the mutex, they observe either the complete old state or the
 complete new state.
 
+The Haxe-built module wrapper now applies the same lifecycle discipline around
+its policy state. Staging, calls, patch publication, diagnostic snapshots, and
+teardown share a recursive module mutex; the registry has a separate mutex for
+current/retired publication. Retirement closes the module's borrow gate before
+queueing it, so existing leases can finish while new leases and patches are
+rejected. A failed native unload leaves the module in the retryable retirement
+queue without releasing its Haxe metadata or patch ledger.
+
 The repeatable hot-reload gate covers malformed bytes, bad prefix hashes, invalid
 metadata references, arena exhaustion, foreign identities, stale patches,
 exceptions, repeated replacement, a call overlapping publication, and two

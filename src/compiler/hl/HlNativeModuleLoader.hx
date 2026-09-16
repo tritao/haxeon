@@ -14,6 +14,7 @@ import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimePatchCode;
 import runtime.hashlink.HlRuntimeModule;
 import runtime.hashlink.HlRuntimePatchPublication;
+import runtime.memory.Mutex;
 import runtime.memory.RawPtr;
 
 /** Owns the HLB model, Haxe metadata, and native module for one loaded module. */
@@ -66,12 +67,14 @@ class HlLoadedRuntimeModule {
 	public final nativeModule:HlRuntimeModule;
 
 	final patchState:HlRuntimePatchState;
+	final lifecycleMutex:Mutex;
 
 	public var functions(get, never):HlFunctionVersionTable;
 	public var revision(get, never):Int;
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
+	var retiring:Bool = false;
 
 	function new(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, nativeModule:HlRuntimeModule, functions:HlFunctionVersionTable) {
 		this.module = module;
@@ -80,102 +83,118 @@ class HlLoadedRuntimeModule {
 		this.metadata = metadata;
 		this.nativeModule = nativeModule;
 		patchState = new HlRuntimePatchState(identity.revision, functions);
+		lifecycleMutex = Mutex.create();
 	}
 
 	function get_functions():HlFunctionVersionTable
-		return patchState.functions;
+		return withLock(function() return patchState.functions);
 
 	function get_revision():Int
-		return patchState.revision;
+		return withLock(function() return patchState.revision);
 
 	/** Retire the runtime wrapper and then release its Haxe-owned metadata arena. */
 	public function unload():Bool {
-		if (disposed)
+		return withLock(function() {
+			if (disposed)
+				return true;
+			retiring = true;
+			if (borrowers != 0)
+				return false;
+			if (!nativeModule.unload())
+				return false;
+			patchState.releaseAll();
+			metadata.dispose();
+			disposed = true;
 			return true;
-		if (borrowers != 0)
-			return false;
-		if (!nativeModule.unload())
-			return false;
-		patchState.releaseAll();
-		metadata.dispose();
-		disposed = true;
-		return true;
+		});
 	}
 
 	/** Whether the Haxe-owned runtime module is still available for calls. */
-	public inline function isLoaded():Bool
-		return !disposed && nativeModule.isLoaded();
+	public function isLoaded():Bool
+		return withLock(function() return !disposed && nativeModule.isLoaded());
 
 	/** Number of Haxe-side borrowers that currently protect this module. */
-	public inline function borrowerCount():Int
-		return borrowers;
+	public function borrowerCount():Int
+		return withLock(function() return borrowers);
 
 	/** Borrow this module until the returned lease is released. */
 	public function acquire():HlRuntimeModuleLease {
-		if (!isLoaded())
-			throw "HashLink loaded runtime module has been unloaded";
-		borrowers++;
-		return new HlRuntimeModuleLease(this);
+		return withLock(function() {
+			if (disposed)
+				throw "HashLink loaded runtime module has been unloaded";
+			if (retiring)
+				throw "HashLink loaded runtime module is retiring";
+			if (!nativeModule.isLoaded())
+				throw "HashLink loaded runtime module has been unloaded";
+			borrowers++;
+			return new HlRuntimeModuleLease(this);
+		});
 	}
 
 	/** Invoke a stable zero-argument i32 function while the loaded module is live. */
 	public function callI32(stableId:Int):Int {
-		if (disposed)
-			throw "HashLink loaded runtime module has been unloaded";
-		if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 0))
-			throw 'Invalid Haxe-built runtime i32 call (stable ID $stableId)';
-		return nativeModule.callI32(stableId);
+		return withLock(function() {
+			requireLoaded();
+			if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 0))
+				throw 'Invalid Haxe-built runtime i32 call (stable ID $stableId)';
+			return nativeModule.callI32(stableId);
+		});
 	}
 
 	/** Invoke a Haxe-owned zero-argument void function. */
 	public function callVoid(stableId:Int):Void {
-		if (disposed)
-			throw "HashLink loaded runtime module has been unloaded";
-		if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 1))
-			throw 'Invalid Haxe-built runtime void call (stable ID $stableId)';
-		nativeModule.callVoid(stableId);
+		withLock(function() {
+			requireLoaded();
+			if (!HlRuntimeCallPolicy.validFunction(module, identity, stableId, 1))
+				throw 'Invalid Haxe-built runtime void call (stable ID $stableId)';
+			nativeModule.callVoid(stableId);
+		});
 	}
 
 	/** Stage an external HLP update under Haxe-owned revision state. */
 	public function stagePatch(bytes:Bytes):HlRuntimePatchTransaction {
-		if (disposed)
-			throw "HashLink loaded runtime module has been unloaded";
-		return new HlRuntimePatchTransaction(this, bytes);
+		return withLock(function() {
+			requireMutable();
+			return new HlRuntimePatchTransaction(this, bytes);
+		});
 	}
 
 	/** Apply an external HLP update through the Haxe-owned transaction policy. */
 	public function patch(bytes:Bytes):Void {
-		if (disposed)
-			throw "HashLink loaded runtime module has been unloaded";
 		new HlRuntimePatchTransaction(this, bytes).commit();
 	}
 
 	/** Return the committed Haxe-owned patch models in revision order. */
 	public function committedPatches():Array<HlPatch>
-		return patchState.ledger.patches();
+		return withLock(function() return patchState.ledger.patches());
 
 	/** Return committed patch generations with function versions and dependencies. */
 	public function committedPatchGenerations():Array<HlRuntimePatchGeneration>
-		return patchState.ledger.snapshots();
+		return withLock(function() return patchState.ledger.snapshots());
 
 	/** Number of committed generations whose replaced functions are all superseded. */
 	public var retiredPatchCount(get, never):Int;
 
 	function get_retiredPatchCount():Int
-		return patchState.ledger.retiredCount;
+		return withLock(function() return patchState.ledger.retiredCount);
 
 	/** Return retired patch generations as isolated diagnostic snapshots. */
 	public function retiredPatchGenerations():Array<HlRuntimePatchGeneration>
-		return patchState.ledger.retiredSnapshots();
+		return withLock(function() return patchState.ledger.retiredSnapshots());
 
 	/** Return the native revision retained by one committed patch generation. */
 	public function committedPatchCodeRevision(index:Int):Int {
-		return patchState.ledger.codeRevision(index);
+		return withLock(function() return patchState.ledger.codeRevision(index));
 	}
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope, ?decodedModel:HlPatch):Void {
+		withLock(function() commitPatchUnlocked(bytes, decoded, decodedModel));
+	}
+
+	function commitPatchUnlocked(bytes:Bytes, ?decoded:HlPatchEnvelope, ?decodedModel:HlPatch):Void {
+		requireMutable();
 		var patch:HlPatchEnvelope = decoded;
 		var model:HlPatch = decodedModel;
 		if (patch == null)
@@ -233,7 +252,10 @@ class HlLoadedRuntimeModule {
 	/** Validate HLP identity and live bytecode compatibility before staging. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function validatePatchPolicy(patch:HlPatchEnvelope, model:HlPatch):Void {
-		HlPatchPolicy.validate(module, identity, revision, patch, model);
+		withLock(function() {
+			requireMutable();
+			HlPatchPolicy.validate(module, identity, patchState.revision, patch, model);
+		});
 	}
 
 	/** Advance the Haxe-owned symbol model only after native publication succeeds. */
@@ -265,9 +287,40 @@ class HlLoadedRuntimeModule {
 
 	@:allow(compiler.hl.HlRuntimeModuleLease)
 	function releaseBorrow():Void {
-		if (borrowers == 0)
-			throw "HashLink loaded runtime module lease count is already zero";
-		borrowers--;
+		withLock(function() {
+			if (borrowers == 0)
+				throw "HashLink loaded runtime module lease count is already zero";
+			borrowers--;
+		});
+	}
+
+	/** Stop new borrows before a registry removes this module from publication. */
+	@:allow(compiler.hl.HlRuntimeModuleRegistry)
+	function beginRetirement():Void {
+		withLock(function() retiring = true);
+	}
+
+	function requireLoaded():Void {
+		if (disposed)
+			throw "HashLink loaded runtime module has been unloaded";
+	}
+
+	function requireMutable():Void {
+		requireLoaded();
+		if (retiring)
+			throw "HashLink loaded runtime module is retiring";
+	}
+
+	function withLock<T>(operation:Void->T):T {
+		lifecycleMutex.acquire();
+		try {
+			var result = operation();
+			lifecycleMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			lifecycleMutex.release();
+			throw error;
+		}
 	}
 }
 

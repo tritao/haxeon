@@ -139,6 +139,13 @@ after the lease is released. Native HashLink still performs the final quiescence
 check and executable/metadata release, so this registry does not infer that a
 module is safe to unmap merely because Haxe policy no longer publishes it.
 
+The loaded-module lifecycle and registry transitions are serialized by Haxe
+mutexes. Removing a module from publication first closes its borrow gate, so a
+new lease cannot appear between retirement and disposal; existing leases remain
+valid until they are released. Calls and patch publication are serialized with
+the same module lifecycle lock, while a failed native retirement remains in the
+registry for a later retry.
+
 HashLink records module ownership when a managed allocation is created. A major
 collection removes records for dead allocations, and the runtime exposes the
 remaining per-module count for diagnostics and reclamation tests. Closure and
