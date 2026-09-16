@@ -720,6 +720,30 @@ class LanguageServiceMain {
 			|| aliasedRecoveryDefinition.path != "editor/util/Math.hx"
 			|| aliasedRecoveryReferences.length != 2)
 			throw "recovered aliased symbol resolution failed";
+		var aliasNavigationService = new LanguageService(),
+			aliasNavigationSource = "package editor; import editor.util.Math as M; function main():Int { return M.add(20, 22); }";
+		aliasNavigationService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int return a + b; function main():Void return;");
+		aliasNavigationService.compile("editor.util.Math");
+		aliasNavigationService.update("editor/AliasNavigation.hx", aliasNavigationSource);
+		var aliasNavigationPosition = aliasNavigationSource.indexOf("M.add") + "M.".length,
+			aliasNavigationDefinition = aliasNavigationService.definition("editor/AliasNavigation.hx", aliasNavigationPosition),
+			aliasNavigationReferences = aliasNavigationService.references("editor/AliasNavigation.hx", aliasNavigationPosition);
+		if (aliasNavigationDefinition == null
+			|| aliasNavigationDefinition.path != "editor/util/Math.hx"
+			|| aliasNavigationReferences.length != 2)
+			throw "aliased module function navigation did not use the authoritative identity";
+		var functionAliasNavigationService = new LanguageService(),
+			functionAliasNavigationSource = "package editor; import editor.util.Math.add as sum; function main():Int { return sum(20, 22); }";
+		functionAliasNavigationService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int return a + b; function main():Void return;");
+		functionAliasNavigationService.compile("editor.util.Math");
+		functionAliasNavigationService.update("editor/FunctionAliasNavigation.hx", functionAliasNavigationSource);
+		var functionAliasPosition = functionAliasNavigationSource.lastIndexOf("sum") + 1,
+			functionAliasDefinition = functionAliasNavigationService.definition("editor/FunctionAliasNavigation.hx", functionAliasPosition),
+			functionAliasReferences = functionAliasNavigationService.references("editor/FunctionAliasNavigation.hx", functionAliasPosition);
+		if (functionAliasDefinition == null
+			|| functionAliasDefinition.path != "editor/util/Math.hx"
+			|| functionAliasReferences.length < 2)
+			throw "aliased function navigation did not use the authoritative identity";
 		var enumService = new LanguageService();
 		enumService.update("model/Kind.hx", "package model; enum Kind { One; Two(value:Int); }");
 		var enumSource = "package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";

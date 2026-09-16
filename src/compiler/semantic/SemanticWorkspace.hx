@@ -146,6 +146,9 @@ class SemanticWorkspace {
 		var qualifiedMember = editorQualifiedMemberSymbolId(from, name, sourceProgram, token);
 		if (qualifiedMember != null)
 			return qualifiedMember;
+		var importedModuleFunction = editorImportedModuleFunction(from, name, sourceProgram, token);
+		if (importedModuleFunction.matched)
+			return uniqueIdentity(importedModuleFunction.ids);
 		var importedMember = editorImportedMemberSymbolId(from, name, sourceProgram, token);
 		if (importedMember != null)
 			return importedMember;
@@ -212,6 +215,22 @@ class SemanticWorkspace {
 				explicit = true;
 			}
 		}
+		for (alias => importPath in program.importAliases) {
+			if (token != null)
+				token.check();
+			if (alias != name)
+				continue;
+			var target = editorImportTarget(importPath);
+			// An alias of a module is used as a qualifier (M.add), while an
+			// alias of a declaration (Math.add as sum) is callable directly.
+			if (target == null || importPath == target.name)
+				continue;
+			for (id in editorTopLevelFunctionIds(target, moduleSourceName(importPath), token))
+				if (target == from || indexedSymbol(id) != null)
+					addUniqueIdentity(result, id);
+			if (result.length > 0)
+				explicit = true;
+		}
 		if (explicit)
 			return {explicit: true, ids: result};
 		for (importPath in program.imports) {
@@ -234,6 +253,55 @@ class SemanticWorkspace {
 			}
 		}
 		return {explicit: false, ids: result};
+	}
+
+	/** Resolve a top-level function through a module qualifier, including aliases. */
+	function editorImportedModuleFunction(from:ModuleState, name:String, sourceProgram:Null<AstProgram>,
+		?token:CancellationToken):{matched:Bool, ids:Array<SemanticSymbolId>} {
+		var separator = name.indexOf("."),
+			result:Array<SemanticSymbolId> = [];
+		if (separator < 1)
+			return {matched: false, ids: result};
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram;
+		if (program == null)
+			return {matched: false, ids: result};
+		var qualifier = name.substring(0, separator),
+			memberName = name.substring(separator + 1, name.length);
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != qualifier)
+				continue;
+			var target = editorImportTarget(importPath);
+			// Only an imported module exposes its top-level functions through a
+			// qualifier. A path below the module names a specific declaration.
+			if (target == null || target.name != importPath)
+				continue;
+			for (id in editorTopLevelFunctionIds(target, memberName, token))
+				if (target == from || indexedSymbol(id) != null)
+					addUniqueIdentity(result, id);
+		}
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (!isWildcardImport(importPath))
+				continue;
+			var packageName = importPath.substring(0, importPath.length - 2),
+				candidate = packageName + "." + qualifier,
+				target = modules.get(candidate);
+			if (target == null)
+				continue;
+			var targetModel = editorModel(target),
+				targetPackage = targetModel == null || targetModel.program.packageName == null ? null
+					: Std.string(targetModel.program.packageName);
+			if (targetModel == null || targetPackage != packageName)
+				continue;
+			for (id in editorTopLevelFunctionIds(target, memberName, token))
+				if (target == from || indexedSymbol(id) != null)
+					addUniqueIdentity(result, id);
+		}
+		return {matched: result.length > 0, ids: result};
 	}
 
 	function editorTopLevelFunctionIds(state:ModuleState, name:String, ?token:CancellationToken):Array<SemanticSymbolId> {
@@ -901,7 +969,7 @@ class SemanticWorkspace {
 			canonical = editorTypeName(typeId);
 		if (resolved == null || canonical == null)
 			return null;
-		return memberSymbolForType(resolved.symbol.kind, canonical, memberName);
+		return memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
 	}
 
 	function editorQualifiedMemberSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
@@ -917,7 +985,7 @@ class SemanticWorkspace {
 				var resolved = editorSymbolById(typeId),
 					canonical = editorTypeName(typeId);
 				if (resolved != null && canonical != null) {
-					var member = memberSymbolForType(resolved.symbol.kind, canonical, memberName);
+					var member = memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
 					if (member != null)
 						return member;
 				}
@@ -927,13 +995,38 @@ class SemanticWorkspace {
 		return null;
 	}
 
-	function memberSymbolForType(kind:DeclarationKind, canonical:String, memberName:String):Null<SemanticSymbolId> {
+	function memberSymbolForType(kind:DeclarationKind, canonical:String, memberName:String, ?token:CancellationToken):Null<SemanticSymbolId> {
 		return switch kind {
 			case DeclarationKind.Class: memberSymbolId(TInstance(NominalKind.Class, canonical, []), memberName);
 			case DeclarationKind.Interface: memberSymbolId(TInstance(NominalKind.Interface, canonical, []), memberName);
+			case DeclarationKind.Enum: editorEnumCaseSymbolId(canonical, memberName, token);
 			case DeclarationKind.Abstract: memberSymbolId(TAbstract(canonical, [], TUnknown), memberName);
 			default: null;
 		};
+	}
+
+	function editorEnumCaseSymbolId(canonical:String, memberName:String, ?token:CancellationToken):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (decl in model.program.enums) {
+				if (token != null)
+					token.check();
+				if (packagePrefix + decl.name != canonical && decl.name != canonical)
+					continue;
+				for (caseDecl in decl.cases)
+					if (caseDecl.name == memberName)
+						for (symbol in model.index.symbols)
+							if (symbol.kind == DeclarationKind.EnumCase && symbol.name == decl.name + "." + memberName)
+								addUniqueIdentity(matches, symbol.id);
+			}
+		}
+		return uniqueIdentity(matches);
 	}
 
 	function editorQualifiedTypeSymbolId(name:String, ?token:CancellationToken):Null<SemanticSymbolId> {

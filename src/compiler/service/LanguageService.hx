@@ -868,41 +868,6 @@ class LanguageService {
 			direct = compiler.semanticWorkspace.editorResolveSymbolId(state, qualifiedName, program, token);
 		if (direct != null)
 			return direct;
-		var separator = name.indexOf(".");
-		if (separator < 1) {
-			for (importPath in program.imports)
-				if (importQualifier(program, importPath) == name) {
-					var importedType = compiler.semanticWorkspace.resolveSymbolId(importPath);
-					if (importedType != null && !compiler.semanticWorkspace.editorSymbolVisible(state, importedType, program, token))
-						importedType = null;
-					if (importedType != null)
-						return importedType;
-				}
-			return null;
-		}
-		var qualifier = name.substring(0, separator),
-			suffix = name.substring(separator + 1, name.length);
-		for (importPath in program.imports) {
-			if (importQualifier(program, importPath) == qualifier) {
-				var imported = compiler.semanticWorkspace.resolveSymbolId(importPath + "." + suffix);
-				if (imported != null && !compiler.semanticWorkspace.editorSymbolVisible(state, imported, program, token))
-					imported = null;
-				if (imported == null)
-					imported = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, importPath, []), suffix);
-				if (imported != null)
-					return imported;
-			}
-		}
-		if (program.packageName != null && program.packageName.length > 0) {
-			var packageOwner = program.packageName + "." + qualifier,
-				packageMember = compiler.semanticWorkspace.resolveSymbolId(packageOwner + "." + suffix);
-			if (packageMember != null && !compiler.semanticWorkspace.editorSymbolVisible(state, packageMember, program, token))
-				packageMember = null;
-			if (packageMember == null)
-				packageMember = compiler.semanticWorkspace.memberSymbolId(TInstance(NominalKind.Class, packageOwner, []), suffix);
-			if (packageMember != null)
-				return packageMember;
-		}
 		return null;
 	}
 
