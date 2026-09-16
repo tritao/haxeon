@@ -29,6 +29,12 @@ class HashlinkTypeMetadataMain {
 			+
 			'import runtime.hashlink.HlFunction; import runtime.hashlink.HlFunction.HlFunctionField; import runtime.hashlink.HlNative; import runtime.hashlink.HlConstant; '
 			+ 'import runtime.hashlink.HlDebugSection; import runtime.hashlink.HlNativeCode; '
+			+
+			'import runtime.hashlink.HlPatchDebug.HlSourceSpan; import runtime.hashlink.HlPatchDebug.HlSourceSnapshot; import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug; '
+			+
+			'import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction; import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput; import runtime.hashlink.HlPatchInput.HlRuntimePatchInput; '
+			+
+			'import runtime.hashlink.HlPatchPools.HlPatchPools; import runtime.hashlink.HlPatchResolution.HlPatchFunctionResolution; import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution; '
 			+ 'function typeSize():Int return sizeof<HlType>(); '
 			+ 'function typeDataSize():Int return sizeof<HlTypeData>(); '
 			+ 'function typeDataOffset():Int return offsetof<HlType>("data"); '
@@ -57,6 +63,15 @@ class HashlinkTypeMetadataMain {
 			+ 'function constantSize():Int return sizeof<HlConstant>(); '
 			+ 'function debugSectionSize():Int return sizeof<HlDebugSection>(); '
 			+ 'function nativeCodeSize():Int return sizeof<HlNativeCode>(); '
+			+ 'function patchInstructionSize():Int return sizeof<HlRuntimePatchInstruction>(); '
+			+ 'function patchPoolsSize():Int return sizeof<HlPatchPools>(); '
+			+ 'function sourceSpanSize():Int return sizeof<HlSourceSpan>(); '
+			+ 'function sourceSnapshotSize():Int return sizeof<HlSourceSnapshot>(); '
+			+ 'function patchDebugSize():Int return sizeof<HlRuntimePatchDebug>(); '
+			+ 'function patchFunctionResolutionSize():Int return sizeof<HlPatchFunctionResolution>(); '
+			+ 'function patchResolutionSize():Int return sizeof<HlRuntimePatchResolution>(); '
+			+ 'function patchFunctionInputSize():Int return sizeof<HlRuntimePatchFunctionInput>(); '
+			+ 'function patchInputSize():Int return sizeof<HlRuntimePatchInput>(); '
 			+ 'function main():Int return typeSize() + typeDataSize() + typeDataOffset() + functionSize() + objectSize();');
 		compiler.compile("HashlinkTypeMetadata");
 		var functions = compiler.lastTypedProgram.functions;
@@ -279,6 +294,17 @@ class HashlinkTypeMetadataMain {
 		expect(constantReturn(functions, "HashlinkTypeMetadata.constantSize") == 16, "hl_constant must preserve descriptor alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.debugSectionSize") == 24, "hl_debug_section must preserve payload pointer alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.nativeCodeSize") == 224, "hl_code must preserve the complete module-record layout");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchInstructionSize") == 16, "hl_patch_instruction must preserve operand pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchPoolsSize") == 56, "hl_patch_pools must preserve scalar pool pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.sourceSpanSize") == 36, "hl_source_span must preserve its packed scalar layout");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.sourceSnapshotSize") == 16, "hl_source_snapshot must preserve content pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchDebugSize") == 32, "hl_patch_debug must preserve nested metadata pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchFunctionResolutionSize") == 32,
+			"hl_patch_function_resolution must preserve relocation pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchResolutionSize") == 16, "hl_patch_resolution must preserve its function table pointer");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchFunctionInputSize") == 80,
+			"hl_patch_function must preserve decoded instruction metadata alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.patchInputSize") == 152, "hl_patch_input must preserve the full decoded patch model layout");
 		var moduleNames = [
 			"hl_op",
 			"hl_alloc",
@@ -288,7 +314,16 @@ class HashlinkTypeMetadataMain {
 			"hl_opcode",
 			"hl_constant",
 			"hl_debug_section",
-			"hl_code"
+			"hl_code",
+			"hl_patch_instruction",
+			"hl_patch_pools",
+			"hl_source_span",
+			"hl_source_snapshot",
+			"hl_patch_debug",
+			"hl_patch_function_resolution",
+			"hl_patch_resolution",
+			"hl_patch_function",
+			"hl_patch_input"
 		],
 			moduleModel = CHeaderImporter.importHeader("vendor/hashlink/src/hlmodule.h", "x86_64-linux-gnu", ["vendor/hashlink/src"], "clang",
 				"haxeon_runtime", "HashLinkModuleMetadata", null, null, moduleNames),
@@ -373,6 +408,132 @@ class HashlinkTypeMetadataMain {
 						{nativeName: "functions", haxeName: "functions"},
 						{nativeName: "debugsections", haxeName: "debugSections"},
 						{nativeName: "falloc", haxeName: "falloc"}
+					]
+				},
+				{
+					nativeName: "hl_patch_instruction",
+					haxeName: "runtime.hashlink.HlRuntimePatchInstruction",
+					fields: [
+						{nativeName: "opcode", haxeName: "opcode"},
+						{nativeName: "operand_count", haxeName: "operandCount"},
+						{nativeName: "operands", haxeName: "operands"}
+					]
+				},
+				{
+					nativeName: "hl_patch_pools",
+					haxeName: "runtime.hashlink.HlPatchPools",
+					fields: [
+						{nativeName: "int_count", haxeName: "intCount"},
+						{nativeName: "float_count", haxeName: "floatCount"},
+						{nativeName: "string_count", haxeName: "stringCount"},
+						{nativeName: "ints", haxeName: "ints"},
+						{nativeName: "floats", haxeName: "floats"},
+						{nativeName: "strings", haxeName: "strings"},
+						{nativeName: "string_lens", haxeName: "stringLengths"},
+						{nativeName: "ustrings", haxeName: "ustrings"}
+					]
+				},
+				{
+					nativeName: "hl_source_span",
+					haxeName: "runtime.hashlink.HlSourceSpan",
+					fields: [
+						{nativeName: "file", haxeName: "file"},
+						{nativeName: "line", haxeName: "line"},
+						{nativeName: "column", haxeName: "column"},
+						{nativeName: "end_line", haxeName: "endLine"},
+						{nativeName: "end_column", haxeName: "endColumn"},
+						{nativeName: "source_hash", haxeName: "sourceHash"},
+						{nativeName: "start", haxeName: "start"},
+						{nativeName: "end", haxeName: "end"},
+						{nativeName: "flags", haxeName: "flags"}
+					]
+				},
+				{
+					nativeName: "hl_source_snapshot",
+					haxeName: "runtime.hashlink.HlSourceSnapshot",
+					fields: [
+						{nativeName: "source_hash", haxeName: "sourceHash"},
+						{nativeName: "length", haxeName: "length"},
+						{nativeName: "content", haxeName: "content"}
+					]
+				},
+				{
+					nativeName: "hl_patch_debug",
+					haxeName: "runtime.hashlink.HlRuntimePatchDebug",
+					fields: [
+						{nativeName: "function_count", haxeName: "functionCount"},
+						{nativeName: "debug_spans", haxeName: "spans"},
+						{nativeName: "source_snapshot_count", haxeName: "snapshotCount"},
+						{nativeName: "source_snapshots", haxeName: "snapshots"}
+					]
+				},
+				{
+					nativeName: "hl_patch_function_resolution",
+					haxeName: "runtime.hashlink.HlPatchFunctionResolution",
+					fields: [
+						{nativeName: "stable_id", haxeName: "stableId"},
+						{nativeName: "slot", haxeName: "slot"},
+						{nativeName: "relocation_count", haxeName: "relocationCount"},
+						{nativeName: "relocation_stable_ids", haxeName: "relocationStableIds"},
+						{nativeName: "relocation_slots", haxeName: "relocationSlots"}
+					]
+				},
+				{
+					nativeName: "hl_patch_resolution",
+					haxeName: "runtime.hashlink.HlRuntimePatchResolution",
+					fields: [
+						{nativeName: "function_count", haxeName: "functionCount"},
+						{nativeName: "functions", haxeName: "functions"}
+					]
+				},
+				{
+					nativeName: "hl_patch_function",
+					haxeName: "runtime.hashlink.HlRuntimePatchFunctionInput",
+					fields: [
+						{nativeName: "type", haxeName: "type"},
+						{nativeName: "stable_id", haxeName: "stableId"},
+						{nativeName: "findex", haxeName: "slot"},
+						{nativeName: "register_count", haxeName: "registerCount"},
+						{nativeName: "registers", haxeName: "registers"},
+						{nativeName: "instruction_count", haxeName: "instructionCount"},
+						{nativeName: "instructions", haxeName: "instructions"},
+						{nativeName: "relocation_count", haxeName: "relocationCount"},
+						{nativeName: "relocation_instructions", haxeName: "relocationInstructions"},
+						{nativeName: "relocation_stable_ids", haxeName: "relocationStableIds"},
+						{nativeName: "debug_count", haxeName: "debugCount"},
+						{nativeName: "debug_spans", haxeName: "debugSpans"}
+					]
+				},
+				{
+					nativeName: "hl_patch_input",
+					haxeName: "runtime.hashlink.HlRuntimePatchInput",
+					fields: [
+						{nativeName: "module_id", haxeName: "moduleId"},
+						{nativeName: "base_revision", haxeName: "baseRevision"},
+						{nativeName: "revision", haxeName: "revision"},
+						{nativeName: "int_prefix_hash", haxeName: "intPrefixHash"},
+						{nativeName: "float_prefix_hash", haxeName: "floatPrefixHash"},
+						{nativeName: "string_prefix_hash", haxeName: "stringPrefixHash"},
+						{nativeName: "type_prefix_hash", haxeName: "typePrefixHash"},
+						{nativeName: "base_int_count", haxeName: "baseIntCount"},
+						{nativeName: "int_count", haxeName: "intCount"},
+						{nativeName: "ints", haxeName: "ints"},
+						{nativeName: "float_count", haxeName: "floatCount"},
+						{nativeName: "base_float_count", haxeName: "baseFloatCount"},
+						{nativeName: "floats", haxeName: "floats"},
+						{nativeName: "string_count", haxeName: "stringCount"},
+						{nativeName: "base_string_count", haxeName: "baseStringCount"},
+						{nativeName: "strings", haxeName: "strings"},
+						{nativeName: "string_lens", haxeName: "stringLengths"},
+						{nativeName: "type_count", haxeName: "typeCount"},
+						{nativeName: "base_type_count", haxeName: "baseTypeCount"},
+						{nativeName: "function_count", haxeName: "functionCount"},
+						{nativeName: "functions", haxeName: "functions"},
+						{nativeName: "debug_file_count", haxeName: "debugFileCount"},
+						{nativeName: "debug_files", haxeName: "debugFiles"},
+						{nativeName: "debug_file_lens", haxeName: "debugFileLengths"},
+						{nativeName: "source_snapshot_count", haxeName: "sourceSnapshotCount"},
+						{nativeName: "source_snapshots", haxeName: "sourceSnapshots"}
 					]
 				}
 			];

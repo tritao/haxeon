@@ -191,4 +191,109 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 		p3: c_int @offset(12);
 		extra: ptr<c_int> @offset(16);
 	}
+	/**
+	 * C-layout patch debug metadata prepared by Haxe for one cumulative patch state.
+	 */
+	struct hl_patch_debug @layout(32, 8) {
+		function_count: c_int @offset(0);
+		debug_spans: ptr<ptr<hl_source_span>> @offset(8);
+		source_snapshot_count: c_int @offset(16);
+		source_snapshots: ptr<hl_source_snapshot> @offset(24);
+	}
+	struct hl_patch_function @layout(80, 8) {
+		type: c_int @offset(0);
+		stable_id: c_int @offset(4);
+		findex: c_int @offset(8);
+		register_count: c_int @offset(12);
+		registers: ptr<c_int> @offset(16);
+		instruction_count: c_int @offset(24);
+		instructions: ptr<hl_patch_instruction> @offset(32);
+		relocation_count: c_int @offset(40);
+		relocation_instructions: ptr<c_int> @offset(48);
+		relocation_stable_ids: ptr<c_int> @offset(56);
+		debug_count: c_int @offset(64);
+		debug_spans: ptr<hl_source_span> @offset(72);
+	}
+	/**
+	 * Stable-ID and relocation slots resolved by the Haxe patch policy.
+	 */
+	struct hl_patch_function_resolution @layout(32, 8) {
+		stable_id: c_int @offset(0);
+		slot: c_int @offset(4);
+		relocation_count: c_int @offset(8);
+		relocation_stable_ids: ptr<c_int> @offset(16);
+		relocation_slots: ptr<c_int> @offset(24);
+	}
+	/**
+	 * Haxe-owned decoded patch model passed directly to the native JIT boundary.
+	 */
+	struct hl_patch_input @layout(152, 8) {
+		module_id: ptr<c_uchar> @offset(0);
+		base_revision: c_int @offset(8);
+		revision: c_int @offset(12);
+		int_prefix_hash: c_uint @offset(16);
+		float_prefix_hash: c_uint @offset(20);
+		string_prefix_hash: c_uint @offset(24);
+		type_prefix_hash: c_uint @offset(28);
+		base_int_count: c_int @offset(32);
+		int_count: c_int @offset(36);
+		ints: ptr<c_int> @offset(40);
+		float_count: c_int @offset(48);
+		base_float_count: c_int @offset(52);
+		floats: ptr<f64> @offset(56);
+		string_count: c_int @offset(64);
+		base_string_count: c_int @offset(68);
+		strings: ptr<ptr<c_char>> @offset(72);
+		string_lens: ptr<c_int> @offset(80);
+		type_count: c_int @offset(88);
+		base_type_count: c_int @offset(92);
+		function_count: c_int @offset(96);
+		functions: ptr<hl_patch_function> @offset(104);
+		debug_file_count: c_int @offset(112);
+		debug_files: ptr<ptr<c_char>> @offset(120);
+		debug_file_lens: ptr<c_int> @offset(128);
+		source_snapshot_count: c_int @offset(136);
+		source_snapshots: ptr<hl_source_snapshot> @offset(144);
+	}
+	struct hl_patch_instruction @layout(16, 8) {
+		opcode: c_int @offset(0);
+		operand_count: c_int @offset(4);
+		operands: ptr<c_int> @offset(8);
+	}
+	/**
+	 * C-layout scalar pools prepared by Haxe for one cumulative patch state.
+	 */
+	struct hl_patch_pools @layout(56, 8) {
+		int_count: c_int @offset(0);
+		float_count: c_int @offset(4);
+		string_count: c_int @offset(8);
+		ints: ptr<c_int> @offset(16);
+		floats: ptr<f64> @offset(24);
+		strings: ptr<ptr<c_char>> @offset(32);
+		string_lens: ptr<c_int> @offset(40);
+		ustrings: ptr<ptr<u16>> @offset(48);
+	}
+	/**
+	 * Haxe-owned patch resolution plan checked before native publication.
+	 */
+	struct hl_patch_resolution @layout(16, 8) {
+		function_count: c_int @offset(0);
+		functions: ptr<hl_patch_function_resolution> @offset(8);
+	}
+	struct hl_source_snapshot @layout(16, 8) {
+		source_hash: c_int @offset(0);
+		length: c_int @offset(4);
+		content: ptr<c_uchar> @offset(8);
+	}
+	struct hl_source_span @layout(36, 4) {
+		file: c_int @offset(0);
+		line: c_int @offset(4);
+		column: c_int @offset(8);
+		end_line: c_int @offset(12);
+		end_column: c_int @offset(16);
+		source_hash: c_int @offset(20);
+		start: c_int @offset(24);
+		end: c_int @offset(28);
+		flags: c_int @offset(32);
+	}
 }
