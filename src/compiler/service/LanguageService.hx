@@ -2014,8 +2014,9 @@ class LanguageService {
 				token.check();
 			if (lexical.kind == Eof)
 				continue;
+			var tokenModel = semanticModelAt(state, snapshot, lexical.span.start, token);
 			var type:Null<String> = switch lexical.kind {
-				case Identifier: var semantic = semanticTokenType(model,
+				case Identifier: var semantic = semanticTokenType(tokenModel,
 						lexical.span.start); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
@@ -2026,8 +2027,8 @@ class LanguageService {
 				default: "keyword";
 			};
 			if (type != null) {
-				var indexed = model == null ? null : model.index.symbolAt(lexical.span.start), modifiers = [];
-				if (indexed != null && semanticDeclaration(model, indexed.id, lexical.span)) {
+				var indexed = tokenModel == null ? null : tokenModel.index.symbolAt(lexical.span.start), modifiers = [];
+				if (indexed != null && semanticDeclaration(tokenModel, indexed.id, lexical.span)) {
 					modifiers.push("declaration");
 					if (documentationFor(state, indexed.declaration).deprecated)
 						modifiers.push("deprecated");
@@ -2514,6 +2515,20 @@ class LanguageService {
 			confidence: confidence,
 			identityTrusted: identityTrusted
 		};
+	}
+
+	function semanticModelAt(state:ModuleState, snapshot:EditorSnapshot, position:Int,
+		?token:CancellationToken):Null<SemanticModel> {
+		var model = snapshot.semanticModel;
+		if (model == null || snapshot.confidence != EditorSnapshotConfidence.Exact
+			|| model.index.symbolAt(position) != null)
+			return model;
+		var recovered = EditorSnapshotTools.currentRecovered(state);
+		if (recovered != null && recovered.semanticModel != null
+			&& recovered.revision == state.revision
+			&& recovered.semanticModel.index.symbolAt(position) != null)
+			return recovered.semanticModel;
+		return model;
 	}
 
 	static function stableSymbol(context:Null<SemanticQueryContext>):Bool

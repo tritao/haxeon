@@ -1128,6 +1128,16 @@ class LanguageServiceMain {
 				hasGenericInlayHint = true;
 		if (!hasGenericInlayHint)
 			throw "inlay hints did not use current recovery for an unreachable generic body";
+		var genericSemanticTokens = genericTypeDefinitionService.semanticTokens("GenericTypeDefinition.hx"),
+			copyTokenStart = genericTypeDefinitionSource.indexOf("copy"),
+			hasRecoveredCopyDeclaration = false;
+		for (semanticToken in genericSemanticTokens)
+			if (semanticToken.span.start == copyTokenStart
+				&& semanticToken.type == "variable"
+				&& semanticToken.modifiers.indexOf("declaration") >= 0)
+				hasRecoveredCopyDeclaration = true;
+		if (!hasRecoveredCopyDeclaration)
+			throw "semantic tokens did not use current recovery for an unreachable generic local";
 		var genericSignatureService = new LanguageService(),
 			genericSignatureSource = "function identity<T>(value:T):T return value; function caller<T>(value:T):T { return identity(value); } function main():Void return;";
 		genericSignatureService.update("GenericSignature.hx", genericSignatureSource);
