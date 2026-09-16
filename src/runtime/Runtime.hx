@@ -227,23 +227,47 @@ class Runtime {
 	}
 
 	public static function metadataTypeCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.type_count);
+		return module.access(function(handle) {
+			#if haxeon
+			return haxeRuntimeModuleKernel.typeCount(cast handle);
+			#else
+			return RuntimeKernel.type_count(handle);
+			#end
+		});
 
 	public static function metadataTypeCapacity(module:LoadedModule):Int
-		return module.access(RuntimeKernel.type_capacity);
+		return module.access(function(handle) {
+			#if haxeon
+			return haxeRuntimeModuleKernel.typeCapacity(cast handle);
+			#else
+			return RuntimeKernel.type_capacity(handle);
+			#end
+		});
 
 	public static function liveAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.live_allocation_count);
+		return module.access(function(handle) {
+			#if haxeon
+			return haxeRuntimeModuleKernel.liveAllocationCount(cast handle);
+			#else
+			return RuntimeKernel.live_allocation_count(handle);
+			#end
+		});
 
 	public static function nativeRootCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.native_root_count);
+		return module.access(function(handle) {
+			#if haxeon
+			return haxeRuntimeModuleKernel.nativeRootCount(cast handle);
+			#else
+			return RuntimeKernel.native_root_count(handle);
+			#end
+		});
 
 	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
 		return module.access(function(handle) {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
 			#if haxeon
-			RuntimeKernel.retirement_status(handle, cast bytes.getData());
+			haxeRuntimeModuleKernel.retirementStatus(cast handle, cast bytes.getData());
 			#else
 			RuntimeKernel.retirement_status(handle, bytes.getData());
 			#end
@@ -251,7 +275,13 @@ class Runtime {
 		});
 
 	public static function liveRevision(module:LoadedModule):Int
-		return module.access(RuntimeKernel.revision);
+		return module.access(function(handle) {
+			#if haxeon
+			return haxeRuntimeModuleKernel.revision(cast handle);
+			#else
+			return RuntimeKernel.revision(handle);
+			#end
+		});
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
 		module.access(function(handle) {

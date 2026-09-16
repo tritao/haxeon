@@ -91,6 +91,29 @@ class HlTypeBridge {
 	public static function native_runtime_module_validate_call(module:hl.Abstract<"realtime_module">, stableId:Int, shape:Int):Int
 		return -1;
 
+	/** Read the number of type records currently published by an external runtime wrapper. */
+	public static function native_runtime_module_type_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Read the reserved type-record capacity of an external runtime wrapper. */
+	public static function native_runtime_module_type_capacity(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Read the number of live managed allocations attributed to an external wrapper. */
+	public static function native_runtime_module_live_allocation_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Read the number of native roots owned by an external runtime wrapper. */
+	public static function native_runtime_module_native_root_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Write the four-field retirement snapshot of an external runtime wrapper. */
+	public static function native_runtime_module_retirement_status(module:hl.Abstract<"realtime_module">, out:hl.Bytes):Void {}
+
+	/** Read the live revision published by an external runtime wrapper. */
+	public static function native_runtime_module_revision(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
 	/** Apply one HLP transaction to an externally loaded runtime wrapper. */
 	public static function native_runtime_module_patch(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;

@@ -96,6 +96,38 @@ HL_PRIM int HL_NAME(native_runtime_module_validate_call)( vbyte *module, int sta
 	return hl_runtime_module_validate_call((hl_runtime_module*)module,stable_id,shape);
 }
 
+HL_PRIM int HL_NAME(native_runtime_module_type_count)( vbyte *module ) {
+	return hl_runtime_module_type_count((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_type_capacity)( vbyte *module ) {
+	return hl_runtime_module_type_capacity((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_live_allocation_count)( vbyte *module ) {
+	return hl_runtime_module_live_allocation_count((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_native_root_count)( vbyte *module ) {
+	return hl_runtime_module_native_root_count((hl_runtime_module*)module);
+}
+
+HL_PRIM void HL_NAME(native_runtime_module_retirement_status)( vbyte *module, vbyte *out ) {
+	hl_module_retirement_status status;
+	int fields[4];
+	if( out == NULL ) return;
+	hl_runtime_module_retirement_status_get((hl_runtime_module*)module,&status);
+	fields[0] = status.live_managed_allocations;
+	fields[1] = status.owned_native_roots;
+	fields[2] = status.registry_readers;
+	fields[3] = status.flags;
+	memcpy(out,fields,sizeof(fields));
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_revision)( vbyte *module ) {
+	return hl_runtime_module_revision((hl_runtime_module*)module);
+}
+
 HL_PRIM int HL_NAME(native_runtime_module_patch)( vbyte *module, realtime_bytes *bytes, int length ) {
 	return (int)hl_runtime_module_apply_hlp((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length);
 }

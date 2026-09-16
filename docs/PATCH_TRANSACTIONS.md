@@ -118,8 +118,8 @@ The wrapper's own recursive mutex now serializes those calls, patch staging,
 code-handle release, and unload, so the lower-level owner remains safe when it
 is used without the compiler-side module registry.
 The Haxeon branch of the public `Runtime` facade now uses this same kernel for
-all stable call shapes and the native dispatch recheck; the legacy host branch
-continues to use its compatibility declarations.
+all stable call shapes, native dispatch rechecks, and module diagnostics; the
+legacy host branch continues to use its compatibility declarations.
 
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last

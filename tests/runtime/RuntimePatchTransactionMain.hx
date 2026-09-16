@@ -17,6 +17,14 @@ class RuntimePatchTransactionMain {
 			makeObjectId:Int = cast initial.functionIds.get("Main.makeObject"),
 			readObjectId:Int = cast initial.functionIds.get("Main.readObject"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var initialRetirement = Runtime.retirementStatus(loaded),
+			initialTypeCount = Runtime.metadataTypeCount(loaded);
+		if (Runtime.liveRevision(loaded) != initial.revision
+			|| initialTypeCount != initial.module.types.length
+			|| Runtime.metadataTypeCapacity(loaded) < initialTypeCount
+			|| Runtime.liveAllocationCount(loaded) != initialRetirement.liveManagedAllocations
+			|| Runtime.nativeRootCount(loaded) != initialRetirement.ownedNativeRoots)
+			throw "Haxeon module kernel did not expose consistent runtime diagnostics";
 		if (Runtime.callString(loaded, textId) != "haxeon")
 			throw "Haxeon module kernel did not return a stable string";
 		Runtime.callStringArg(loaded, consumeId, "kernel");
@@ -54,6 +62,7 @@ class RuntimePatchTransactionMain {
 		committed.commit();
 		if (committed.state != Committed
 			|| loaded.revision != changed.revision
+			|| Runtime.liveRevision(loaded) != changed.revision
 			|| loaded.functions.at(mainId).generation != changed.revision
 			|| loaded.committedPatchCount() != 1
 			|| Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationPublished
