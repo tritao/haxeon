@@ -4,8 +4,7 @@ import haxe.io.Bytes;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import compiler.hl.patch.HlPatch;
-import compiler.hl.patch.HlPatchHeaderReader;
-import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
+import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import compiler.hl.patch.HlPatchReader;
 import runtime.hashlink.HlFunctionVersionTable;
 import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
@@ -147,7 +146,7 @@ class HlLoadedRuntimeModule {
 		if (patch == null)
 			try {
 				model = HlPatchReader.decode(bytes);
-				patch = HlPatchHeaderReader.envelope(model);
+				patch = model.envelope();
 			} catch (error:Dynamic) {
 				throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
 			}

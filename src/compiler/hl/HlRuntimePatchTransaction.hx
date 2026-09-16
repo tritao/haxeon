@@ -2,8 +2,7 @@ package compiler.hl;
 
 import haxe.io.Bytes;
 import compiler.hl.patch.HlPatch;
-import compiler.hl.patch.HlPatchHeaderReader;
-import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
+import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import compiler.hl.patch.HlPatchReader;
 
 /** Lifecycle state for one staged external-runtime HLP transaction. */
@@ -43,7 +42,7 @@ class HlRuntimePatchTransaction {
 		baseRevision = owner.revision;
 		try {
 			model = HlPatchReader.decode(this.bytes);
-			patch = HlPatchHeaderReader.envelope(model);
+			patch = model.envelope();
 		} catch (error:Dynamic) {
 			throw 'Haxeon rejected the HLP transaction: ${Std.string(error)}';
 		}

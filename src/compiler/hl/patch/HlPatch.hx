@@ -2,6 +2,15 @@ package compiler.hl.patch;
 
 import compiler.hl.HlCode.HlTypeDef;
 
+/** Identity projection used by runtime publication policy. */
+typedef HlPatchEnvelope = {
+	final moduleId:haxe.io.Bytes;
+	final baseRevision:Int;
+	final revision:Int;
+	final functionStableIds:Array<Int>;
+	final relocationStableIds:Array<Int>;
+}
+
 /** Decoded HLP transaction, including expected live prefixes and replacements. */
 class HlPatch {
 	public final moduleId:haxe.io.Bytes;
@@ -48,6 +57,22 @@ class HlPatch {
 		this.debugFiles = debugFiles;
 		this.sourceSnapshots = sourceSnapshots;
 		}
+
+	/** Project this decoded patch into the stable-identity policy view. */
+	public function envelope():HlPatchEnvelope {
+		var functionStableIds = [for (fn in functions) fn.functionIndex],
+			relocationStableIds:Array<Int> = [];
+		for (fn in functions)
+			for (relocation in fn.relocations)
+				relocationStableIds.push(relocation.stableId);
+		return {
+			moduleId: moduleId,
+			baseRevision: baseRevision,
+			revision: revision,
+			functionStableIds: functionStableIds,
+			relocationStableIds: relocationStableIds
+		};
+	}
 }
 
 /** One replacement function addressed by stable identity after relocation. */
