@@ -347,9 +347,13 @@ class CallResolver {
 			] : [for (argument in arguments) typeExpression(argument, scope, null, false)];
 			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, false, preset, receiver);
 		}
+		// Generic class bodies are emitted with erased owner parameters. Keep
+		// that physical result only when the method result actually depends on
+		// an owner parameter; Bool/String/etc. remain their declared ABI types.
 		var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
 			semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
-			physicalResult = isGenericNominal(methodOwnerType) ? TDynamic : semanticResult,
+			physicalResult = isGenericNominal(methodOwnerType) ? session.declarations.resolve(method.result, method.span,
+				erasedNominalSubstitutions(methodInfo.owner)) : semanticResult,
 			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span),
 			castCall = abiBoundaryCast(call, semanticResult);
 		if (scope != null)
@@ -904,6 +908,19 @@ class CallResolver {
 
 	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType>
 		return session.declarations.inheritance.substitutions(type);
+
+	function erasedNominalSubstitutions(owner:String):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		var classDecl = session.classDecls.get(owner);
+		if (classDecl != null)
+			for (parameter in classDecl.typeParameters)
+				result.set(parameter, TDynamic);
+		var interfaceDecl = session.interfaceDecls.get(owner);
+		if (interfaceDecl != null)
+			for (parameter in interfaceDecl.typeParameters)
+				result.set(parameter, TDynamic);
+		return result;
+	}
 
 	function projectNominal(type:CompilerType, target:String):CompilerType {
 		var projected = session.declarations.inheritance.project(type, target);
