@@ -64,18 +64,23 @@ class NominalInheritance {
 
 	public function inheritedInterfaces(type:CompilerType):Array<CompilerType> {
 		var result:Array<CompilerType> = [];
-		collectInterfaces(type, result);
+		collectInterfaces(type, result, []);
 		return result;
 	}
 
-	function collectInterfaces(type:CompilerType, result:Array<CompilerType>):Void {
+	function collectInterfaces(type:CompilerType, result:Array<CompilerType>, visiting:Map<String, Bool>):Void {
+		var key = compiler.semantic.SemanticSignature.type(type);
+		if (visiting.exists(key))
+			return;
+		visiting.set(key, true);
 		switch type {
 			case TInstance(Interface, _, _):
 				result.push(type);
 			default:
 		}
 		for (parent in parents(type))
-			collectInterfaces(parent, result);
+			collectInterfaces(parent, result, visiting);
+		visiting.remove(key);
 	}
 
 	public static function name(type:CompilerType):Null<String>

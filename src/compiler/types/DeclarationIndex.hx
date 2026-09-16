@@ -177,12 +177,12 @@ class DeclarationIndex {
 			case StringType: TString;
 			case VoidType: TVoid;
 			case InferredType:
-				fail("Unresolved inferred type", span);
-				TDynamic;
+				reportRecoveryTypeError("Unresolved inferred type", span);
+				TUnknown;
 			case NativeAbstractType(declaration, tag):
 				if (!PlatformAbi.acceptsNativeTag(declaration)
 					&& (!abstracts.exists(declaration) || abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract"))
-					fail('Type "$declaration" does not accept a native ABI tag', span);
+					reportRecoveryTypeError('Type "$declaration" does not accept a native ABI tag', span);
 				TNativeAbstract(tag);
 			case NamedType(name):
 				switch name {
@@ -297,8 +297,8 @@ class DeclarationIndex {
 					validateTypeArguments(name, constraints, applied, span);
 					TInstance(declaration.kind, name, resolvedArguments);
 				} else {
-					fail('Type "$name" does not accept type arguments', span);
-					TDynamic;
+					reportRecoveryTypeError('Type "$name" does not accept type arguments', span);
+					TUnknown;
 				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
@@ -321,7 +321,7 @@ class DeclarationIndex {
 				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 				for (i in 1...fields.length)
 					if (fields[i - 1].name == fields[i].name)
-						fail('Duplicate anonymous field "${fields[i].name}"', span);
+						reportRecoveryTypeError('Duplicate anonymous field "${fields[i].name}"', span);
 				TAnonymous(compiler.semantic.SemanticSignature.anonymousTypeName(fields), fields);
 		};
 
@@ -396,8 +396,8 @@ class DeclarationIndex {
 		if (classDecl != null)
 			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class, classDecl.typeParameters.length, span);
 		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
-			fail('Unknown type "$name"', span);
-			TVoid;
+			reportRecoveryTypeError('Unknown type "$name"', span);
+			TUnknown;
 		};
 	}
 
@@ -418,8 +418,10 @@ class DeclarationIndex {
 	}
 
 	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
-		if (resolving.exists(alias.name))
-			fail('Cyclic type alias involving "${alias.name}"', alias.span);
+		if (resolving.exists(alias.name)) {
+			reportRecoveryTypeError('Cyclic type alias involving "${alias.name}"', alias.span);
+			return TUnknown;
+		}
 		resolving.set(alias.name, true);
 		var resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
 		resolving.remove(alias.name);
@@ -432,21 +434,25 @@ class DeclarationIndex {
 		if (metadata != null)
 			for (entry in metadata)
 				if (entry.name == "hlType") {
-					if (entry.arguments.length != 1)
-						fail('@:hlType requires one representation string', entry.span);
+					if (entry.arguments.length != 1) {
+						reportRecoveryTypeError('@:hlType requires one representation string', entry.span);
+						return TUnknown;
+					}
 					return switch entry.arguments[0] {
 						case StringLiteral("bytes", _): THlBytes;
 						case StringLiteral("dynamic", _): TDynamic;
 						case StringLiteral(value, _):
-							fail('Unknown HashLink representation "$value"', entry.span);
+							reportRecoveryTypeError('Unknown HashLink representation "$value"', entry.span);
 							TDynamic;
 						default:
-							fail('@:hlType argument must be a string literal', entry.span);
+							reportRecoveryTypeError('@:hlType argument must be a string literal', entry.span);
 							TDynamic;
 					};
 				}
-		if (resolving.exists(decl.name))
-			fail('Cyclic abstract representation involving "${decl.name}"', span);
+		if (resolving.exists(decl.name)) {
+			reportRecoveryTypeError('Cyclic abstract representation involving "${decl.name}"', span);
+			return TUnknown;
+		}
 		resolving.set(decl.name, true);
 		var resolved = resolveInner(decl.underlying, span, resolving, substitutions);
 		resolving.remove(decl.name);
@@ -519,10 +525,11 @@ class DeclarationIndex {
 			if (!classes.exists(name))
 				throw 'Class "$name" disappeared during cycle validation';
 			var decl = classes.get(name);
+			var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
 			for (interfaceType in decl.interfaces) {
-				var interfaceName = nominalName(resolve(interfaceType, decl.span));
+				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
 				if (interfaceName == null || !interfaces.exists(interfaceName))
-					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
+					reportRecoveryTypeError('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
 			}
 		}
 		for (name in interfaces.keys())
@@ -554,11 +561,13 @@ class DeclarationIndex {
 	function validateInterfaceSet(instances:Array<CompilerType>, span:SourceSpan):Void {
 		var inherited:Map<String, CompilerType> = [];
 		for (instance in instances) {
-			var name = requiredNominalName(instance);
+			var name = nominalName(instance);
+			if (name == null)
+				continue;
 			if (inherited.exists(name)) {
 				var previous = inherited.get(name);
 				if (!TypeRelations.equals(previous, instance))
-					fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
+					reportRecoveryTypeError('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
 			}
 			inherited.set(name, instance);
 		}
@@ -637,30 +646,46 @@ class DeclarationIndex {
 		if (!classes.exists(name)) {
 			if (PlatformAbi.isType(name))
 				return;
-			fail('Unknown base class "$name"', fallbackSpan);
+			reportRecoveryTypeError('Unknown base class "$name"', fallbackSpan);
+			return;
 		}
 		var decl = classes.get(name);
-		if (visiting.exists(name))
-			fail('Cyclic class inheritance involving "$name"', decl.span);
+		if (visiting.exists(name)) {
+			reportRecoveryTypeError('Cyclic class inheritance involving "$name"', decl.span);
+			return;
+		}
 		visiting.set(name, true);
 		var base = decl.base;
 		if (base != null) {
 			var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
-			visitClass(requiredNominalName(resolve(base, decl.span, substitutions)), visiting);
+			var resolved = resolve(base, decl.span, substitutions), baseName = nominalName(resolved);
+			if (baseName == null)
+				reportRecoveryTypeError('Unknown base class "${ModuleCanonicalizer.astTypeName(base)}"', decl.span);
+			else
+				visitClass(baseName, visiting);
 		}
 		visiting.remove(name);
 	}
 
 	function visitInterface(name:String, visiting:Map<String, Bool>):Void {
-		if (!interfaces.exists(name))
-			fail('Unknown interface "$name"', fallbackSpan);
+		if (!interfaces.exists(name)) {
+			reportRecoveryTypeError('Unknown interface "$name"', fallbackSpan);
+			return;
+		}
 		var decl = interfaces.get(name);
-		if (visiting.exists(name))
-			fail('Cyclic interface inheritance involving "$name"', decl.span);
+		if (visiting.exists(name)) {
+			reportRecoveryTypeError('Cyclic interface inheritance involving "$name"', decl.span);
+			return;
+		}
 		visiting.set(name, true);
 		var substitutions = declarationSubstitutions(decl.name, decl.typeParameters);
-		for (base in decl.bases)
-			visitInterface(requiredNominalName(resolve(base, decl.span, substitutions)), visiting);
+		for (base in decl.bases) {
+			var resolved = resolve(base, decl.span, substitutions), baseName = nominalName(resolved);
+			if (baseName == null)
+				reportRecoveryTypeError('Unknown interface "${ModuleCanonicalizer.astTypeName(base)}"', decl.span);
+			else
+				visitInterface(baseName, visiting);
+		}
 		visiting.remove(name);
 	}
 

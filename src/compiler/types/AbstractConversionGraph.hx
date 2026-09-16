@@ -230,13 +230,19 @@ class AbstractConversionGraph {
 		if (span == null) {
 			var names = [for (name in declarations.abstracts.keys()) name];
 			names.sort(Reflect.compare);
-			if (names.length == 0)
+			if (names.length == 0) {
+				if (declarations.isRecoveryMode()) {
+					declarations.recordRecoveryDiagnostic(new Diagnostic("E1007", message,
+						new compiler.Source.SourceFile("<recovered>", "").span(0, 0)));
+					return;
+				}
 				throw message;
-			var name = names[0];
-			if (!declarations.abstracts.exists(name))
-				throw message;
-			span = declarations.abstracts.get(name).span;
+			}
+			span = declarations.abstracts.get(names[0]).span;
 		}
-		throw new CompileError(new Diagnostic("E1007", message, span));
+		if (declarations.isRecoveryMode())
+			declarations.recordRecoveryDiagnostic(new Diagnostic("E1007", message, span));
+		else
+			throw new CompileError(new Diagnostic("E1007", message, span));
 	}
 }

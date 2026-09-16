@@ -196,12 +196,22 @@ class SemanticIndex {
 			declarations:DeclarationIndex):Void {
 		for (field in fields)
 			if (field.type != null)
-				try
-					setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span))
+				try {
+					var resolved = declarations.resolve(field.type, field.span);
+					// A module-local declaration index intentionally does not own
+					// imported types. Keep that unresolved result out of the type
+					// table so later semantic indexing can supply the authoritative
+					// cross-module identity instead of pinning TUnknown.
+					if (resolved != TUnknown && resolved != TError)
+						setDeclarationType(owner + "." + field.name, field.span, resolved);
+				}
 				catch (_:Dynamic) {}
 		for (method in methods)
-			try
-				setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span))
+			try {
+				var resolved = declarations.resolve(method.result, method.span);
+				if (resolved != TUnknown && resolved != TError)
+					setDeclarationType(owner + "." + method.name, method.span, resolved);
+			}
 			catch (_:Dynamic) {}
 	}
 
@@ -1302,13 +1312,15 @@ class SemanticIndex {
 				var substitution = substitutions == null ? null : substitutions.get(name),
 					parameter = currentRecoveredTypeParameters.get(name);
 				substitution != null ? substitution : parameter == null ? try {
-					declarations.resolve(type, null, substitutions);
+					var resolved = declarations.resolve(type, null, substitutions);
+					isRecoveryType(resolved) ? recoveredExternalType(name, []) : resolved;
 				} catch (_:Dynamic) {
 					recoveredExternalType(name, []);
 				} : parameter;
 			case AppliedType(name, arguments):
 				try {
-					declarations.resolve(type, null, substitutions);
+					var resolved = declarations.resolve(type, null, substitutions);
+					isRecoveryType(resolved) ? recoveredExternalType(name, [for (argument in arguments) recoveredType(argument, substitutions)]) : resolved;
 				} catch (_:Dynamic) {
 					recoveredExternalType(name, [for (argument in arguments) recoveredType(argument, substitutions)]);
 				}

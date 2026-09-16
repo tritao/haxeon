@@ -1304,6 +1304,44 @@ class LanguageServiceMain {
 				foundBoundedMember = true;
 		if (!foundBoundedMember || invalidConstraintService.diagnostics("InvalidConstraint.hx").length == 0)
 			throw "recovered type constraints collapsed a nominal receiver after an error";
+		var incompleteInheritanceService = new LanguageService(),
+			incompleteInheritanceSource = "class Base { public var inherited:Int; } class Child extends { public var own:String; } function main():Void { var child:Child = new Child(); child.";
+		incompleteInheritanceService.update("IncompleteInheritance.hx", incompleteInheritanceSource);
+		var incompleteInheritanceItems = incompleteInheritanceService.completeResult("IncompleteInheritance.hx", incompleteInheritanceSource.length).items,
+			foundOwnMember = false;
+		for (item in incompleteInheritanceItems)
+			if (item.label == "own")
+				foundOwnMember = true;
+		if (!foundOwnMember || incompleteInheritanceService.diagnostics("IncompleteInheritance.hx").length == 0)
+			throw "incomplete inheritance recovery discarded the current class shape";
+		var unknownBaseService = new LanguageService(),
+			unknownBaseSource = "class Child extends MissingBase { public var own:Int; } function main():Void { var child:Child = new Child(); child.";
+		unknownBaseService.update("UnknownBase.hx", unknownBaseSource);
+		var unknownBaseItems = unknownBaseService.completeResult("UnknownBase.hx", unknownBaseSource.length).items,
+			foundUnknownBaseMember = false;
+		for (item in unknownBaseItems)
+			if (item.label == "own")
+				foundUnknownBaseMember = true;
+		var foundUnknownBaseDiagnostic = false;
+		for (diagnostic in unknownBaseService.diagnostics("UnknownBase.hx"))
+			if (diagnostic.message.indexOf("MissingBase") >= 0)
+				foundUnknownBaseDiagnostic = true;
+		if (!foundUnknownBaseMember || !foundUnknownBaseDiagnostic)
+			throw "recovered unknown inheritance did not remain queryable with a semantic diagnostic";
+		var cyclicInheritanceService = new LanguageService(),
+			cyclicInheritanceSource = "class Left extends Right { public var left:Int; } class Right extends Left { public var right:Int; } function main():Void { var value:Left = new Left(); value.";
+		cyclicInheritanceService.update("CyclicInheritance.hx", cyclicInheritanceSource);
+		var cyclicInheritanceItems = cyclicInheritanceService.completeResult("CyclicInheritance.hx", cyclicInheritanceSource.length).items,
+			foundCyclicMember = false,
+			foundCyclicDiagnostic = false;
+		for (item in cyclicInheritanceItems)
+			if (item.label == "left")
+				foundCyclicMember = true;
+		for (diagnostic in cyclicInheritanceService.diagnostics("CyclicInheritance.hx"))
+			if (diagnostic.message.indexOf("Cyclic class inheritance") >= 0)
+				foundCyclicDiagnostic = true;
+		if (!foundCyclicMember || !foundCyclicDiagnostic)
+			throw "recovered cyclic inheritance did not remain bounded and queryable";
 		var visibilityService = new LanguageService();
 		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
 		visibilityService.analyze("unrelated.Target");

@@ -55,15 +55,13 @@ class SemanticProgram {
 			shapesAt = declaredAt,
 			signaturesAt = declaredAt;
 		if ((through : Int) >= (ShapeConnected : Int)) {
-			if (!recovered)
-				declarations.connectShapes();
+			declarations.connectShapes();
 			lifecycle.advanceAll(ShapeConnected);
 			shapesAt = Sys.time() * 1000.0;
 			signaturesAt = shapesAt;
 		}
 		if ((through : Int) >= (SignatureTyped : Int)) {
-			if (!recovered)
-				declarations.validateProgramSignatures(inferred);
+			declarations.validateProgramSignatures(inferred);
 			lifecycle.advanceAll(SignatureTyped);
 			signaturesAt = Sys.time() * 1000.0;
 		}

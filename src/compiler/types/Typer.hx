@@ -45,7 +45,9 @@ class Typer {
 			var typed = new ProgramTyper(bodyTyper).typeProgramMeasured(semantic, null, false, null, reusedFunctions).program;
 			appendRecoveryDiagnostics(diagnostics, bodyTyper.recoveryDiagnostics());
 			return typed;
-		} catch (_:CompileError) {
+		} catch (error:CompileError) {
+			if (diagnostics != null)
+				diagnostics.push(error.diagnostic);
 			appendRecoveryDiagnostics(diagnostics, bodyTyper.recoveryDiagnostics());
 			return null;
 		} catch (error:Dynamic) {
