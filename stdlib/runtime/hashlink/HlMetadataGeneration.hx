@@ -156,7 +156,7 @@ class HlMetadataGeneration {
 			throw "HashLink metadata generation already has an active type append";
 		if (nativeCode.isNull() || arena.typeCountOf() != typeTable.length())
 			throw "HashLink metadata type table is not a contiguous arena prefix";
-		var result = new HlMetadataTypeAppend(this, arena.checkpoint(), typeTable.checkpoint());
+		var result = new HlMetadataTypeAppend(this, arena.checkpoint(), typeTable.checkpoint(), modulePools);
 		activeTypeAppend = result;
 		return result;
 	}
@@ -188,13 +188,24 @@ class HlMetadataGeneration {
 	}
 
 	@:allow(runtime.hashlink.HlMetadataTypeAppend)
-	function rollbackTypeAppend(transaction:HlMetadataTypeAppend, arenaCheckpoint:HlTypeArenaCheckpoint, tableCheckpoint:HlTypeTableCheckpoint):Void {
+	function rollbackTypeAppend(transaction:HlMetadataTypeAppend, arenaCheckpoint:HlTypeArenaCheckpoint, tableCheckpoint:HlTypeTableCheckpoint,
+			previousModulePools:HlModulePools):Void {
 		requireOpen();
 		if (activeTypeAppend != transaction)
 			return;
 		typeTable.rollback(tableCheckpoint);
 		arena.rollback(arenaCheckpoint);
+		modulePools = previousModulePools;
 		activeTypeAppend = null;
+	}
+
+	/** Replace the cumulative scalar pools during an active patch transaction. */
+	@:allow(compiler.hl.HlNativeMetadataBuilder)
+	function replaceModulePools(pools:HlModulePools):Void {
+		requireOpen();
+		if (!published || pools == null || pools.arena != arena)
+			throw "HashLink patch pools must share a published metadata arena";
+		modulePools = pools;
 	}
 
 	/** Append one Haxe-owned HashLink function descriptor. */

@@ -77,7 +77,7 @@ class HlTypeBridge {
 
 	/** Apply one HLP transaction using Haxe-owned type and function metadata. */
 	public static function native_runtime_module_patch_code_haxe_metadata(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int, typeCount:Int,
-		functions:RawPtr<HlFunction>, functionCount:Int, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
+		functions:RawPtr<HlFunction>, functionCount:Int, pools:RawPtr<HlPatchPools>, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
 		return null;
 
 	/** Release one Haxe-owned external reference to a published code allocation. */

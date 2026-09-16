@@ -9,13 +9,15 @@ class HlMetadataTypeAppend {
 	final generation:HlMetadataGeneration;
 	final arenaCheckpoint:HlTypeArenaCheckpoint;
 	final tableCheckpoint:HlTypeTableCheckpoint;
+	final previousModulePools:HlModulePools;
 	var active:Bool = true;
 
 	@:allow(runtime.hashlink.HlMetadataGeneration)
-	function new(generation:HlMetadataGeneration, arenaCheckpoint:HlTypeArenaCheckpoint, tableCheckpoint:HlTypeTableCheckpoint) {
+	function new(generation:HlMetadataGeneration, arenaCheckpoint:HlTypeArenaCheckpoint, tableCheckpoint:HlTypeTableCheckpoint, previousModulePools:HlModulePools) {
 		this.generation = generation;
 		this.arenaCheckpoint = arenaCheckpoint;
 		this.tableCheckpoint = tableCheckpoint;
+		this.previousModulePools = previousModulePools;
 	}
 
 	/** Append one contiguous type record and return its module-local index. */
@@ -37,7 +39,7 @@ class HlMetadataTypeAppend {
 	public function rollback():Void {
 		if (!active)
 			return;
-		generation.rollbackTypeAppend(this, arenaCheckpoint, tableCheckpoint);
+		generation.rollbackTypeAppend(this, arenaCheckpoint, tableCheckpoint, previousModulePools);
 		active = false;
 	}
 }

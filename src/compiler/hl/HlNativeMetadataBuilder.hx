@@ -96,6 +96,33 @@ class HlNativeMetadataBuilder {
 		}
 	}
 
+	/** Prepare cumulative scalar pools in the published metadata arena. */
+	public static function preparePatchPools(module:HlModule, generation:HlMetadataGeneration, patch:HlPatch):RawPtr<runtime.hashlink.HlPatchPools> {
+		if (module == null || generation == null || patch == null)
+			throw "HashLink patch pool preparation requires a module, generation, and patch";
+		if (patch.baseInts != module.code.ints.length
+			|| patch.baseFloats != module.code.floats.length
+			|| patch.baseStrings != module.code.strings.length)
+			throw "HashLink patch pool bases do not match the live module";
+		var current = generation.modulePoolsOrNull();
+		if (current == null)
+			throw "HashLink patch pool preparation requires existing module pools";
+		var pools = new runtime.hashlink.HlModulePools(generation.arena, generation.builder, module.code.ints.concat(patch.ints),
+			module.code.floats.concat(patch.floats), module.code.strings.concat(patch.strings), module.code.bytes, module.code.bytePositions,
+			module.code.entryPoint),
+			descriptor = generation.arena.allocPatchPools();
+		descriptor.ref.intCount = cast pools.intCount;
+		descriptor.ref.floatCount = cast pools.floatCount;
+		descriptor.ref.stringCount = cast pools.stringCount;
+		descriptor.ref.ints = pools.ints;
+		descriptor.ref.floats = pools.floats;
+		descriptor.ref.strings = pools.strings;
+		descriptor.ref.stringLengths = pools.stringLengths;
+		descriptor.ref.ustrings = pools.ustrings;
+		generation.replaceModulePools(pools);
+		return descriptor;
+	}
+
 	/** Prepare patch function descriptors and opcode storage in the metadata arena. */
 	public static function preparePatchFunctions(generation:HlMetadataGeneration, patch:HlPatch, identity:HlRuntimeManifest):HlRuntimePatchFunctions {
 		if (generation == null || patch == null || identity == null)

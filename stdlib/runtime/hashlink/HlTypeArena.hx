@@ -102,6 +102,9 @@ class HlTypeArena {
 	public inline function allocNativeCode():RawPtr<HlNativeCode>
 		return storage.alloc();
 
+	public inline function allocPatchPools():RawPtr<HlPatchPools>
+		return storage.alloc();
+
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>
 		return storage.alloc(count);
 
