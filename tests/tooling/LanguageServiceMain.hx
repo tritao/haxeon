@@ -499,6 +499,21 @@ class LanguageServiceMain {
 			|| wildcardMemberDefinition == null || wildcardMemberDefinition.path != "wildnav/lib/Widget.hx"
 			|| wildcardMemberReferences.length != 2)
 			throw 'wildcard-imported navigation did not retain canonical identities: type=${wildcardTypeDefinition == null ? "null" : wildcardTypeDefinition.path}, member=${wildcardMemberDefinition == null ? "null" : wildcardMemberDefinition.path}, references=${wildcardMemberReferences.length}';
+		var wildcardFunctionService = new LanguageService();
+		wildcardFunctionService.update("wildfn/a/Run.hx",
+			"package wildfn.a; function run():String return \"wildcard\";");
+		wildcardFunctionService.update("wildfn/b/Run.hx",
+			"package wildfn.b; function run():Int return 42; function main():Void return;");
+		wildcardFunctionService.analyze("wildfn.b.Run");
+		var wildcardFunctionSource =
+			"package wildfn.app; import wildfn.a.*; import wildfn.b.Run; function main():Int return run();";
+		wildcardFunctionService.update("wildfn/app/Main.hx", wildcardFunctionSource);
+		var wildcardFunctionPosition = wildcardFunctionSource.lastIndexOf("run") + 1,
+			wildcardFunctionDefinition = wildcardFunctionService.definition("wildfn/app/Main.hx", wildcardFunctionPosition),
+			wildcardFunctionReferences = wildcardFunctionService.references("wildfn/app/Main.hx", wildcardFunctionPosition);
+		if (wildcardFunctionDefinition == null || wildcardFunctionDefinition.path != "wildfn/b/Run.hx"
+			|| wildcardFunctionReferences.length != 2)
+			throw 'explicit function import did not override wildcard candidates: definition=${wildcardFunctionDefinition == null ? "null" : wildcardFunctionDefinition.path}, references=${wildcardFunctionReferences.length}';
 		var secondaryModuleService = new LanguageService(),
 			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
 		secondaryModuleService.update("secondary/types/Container.hx",

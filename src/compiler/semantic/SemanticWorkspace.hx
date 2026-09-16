@@ -135,6 +135,14 @@ class SemanticWorkspace {
 	 */
 	public function editorResolveSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		if (name.indexOf(".") < 0) {
+			var localFunction = editorTopLevelFunctionId(from, name, token);
+			if (localFunction != null)
+				return localFunction;
+			var importedFunction = editorImportedFunctionMatches(from, sourceProgram, name, token);
+			if (importedFunction.explicit || importedFunction.ids.length > 0)
+				return uniqueIdentity(importedFunction.ids);
+		}
 		var qualifiedMember = editorQualifiedMemberSymbolId(from, name, sourceProgram, token);
 		if (qualifiedMember != null)
 			return qualifiedMember;
@@ -163,6 +171,89 @@ class SemanticWorkspace {
 		var direct = resolveSymbolId(name);
 		return direct != null && editorSymbolVisible(from, direct, sourceProgram, token) ? direct : null;
 	}
+
+	function editorTopLevelFunctionId(state:ModuleState, name:String, ?token:CancellationToken):Null<SemanticSymbolId> {
+		var model = editorModel(state), matches:Array<SemanticSymbolId> = [];
+		if (model == null)
+			return null;
+		for (fn in model.program.functions) {
+			if (token != null)
+				token.check();
+			if (fn.name != name)
+				continue;
+			for (symbol in model.index.symbols)
+				if (symbol.kind == DeclarationKind.Function && sameSpan(symbol.declaration, fn.span))
+					addUniqueIdentity(matches, symbol.id);
+		}
+		return uniqueIdentity(matches);
+	}
+
+	function editorImportedFunctionMatches(from:ModuleState, sourceProgram:Null<AstProgram>, name:String,
+		?token:CancellationToken):{explicit:Bool, ids:Array<SemanticSymbolId>} {
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram,
+			result:Array<SemanticSymbolId> = [],
+			explicit = false;
+		if (program == null)
+			return {explicit: false, ids: result};
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (isWildcardImport(importPath))
+				continue;
+			var target = editorImportTarget(importPath);
+			if (target == null)
+				continue;
+			var ids = editorTopLevelFunctionIds(target, name, token);
+			for (id in ids)
+				if (target == from || indexedSymbol(id) != null)
+					addUniqueIdentity(result, id);
+			if (result.length > 0) {
+				explicit = true;
+			}
+		}
+		if (explicit)
+			return {explicit: true, ids: result};
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (!isWildcardImport(importPath))
+				continue;
+			var packageName = importPath.substring(0, importPath.length - 2);
+			for (state in orderedStates()) {
+				if (token != null)
+					token.check();
+				var candidateModel = editorModel(state),
+					candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null
+						: Std.string(candidateModel.program.packageName);
+				if (candidateModel == null || candidatePackage != packageName)
+					continue;
+				for (id in editorTopLevelFunctionIds(state, name, token))
+					if (state == from || indexedSymbol(id) != null)
+						addUniqueIdentity(result, id);
+			}
+		}
+		return {explicit: false, ids: result};
+	}
+
+	function editorTopLevelFunctionIds(state:ModuleState, name:String, ?token:CancellationToken):Array<SemanticSymbolId> {
+		var model = editorModel(state), result:Array<SemanticSymbolId> = [];
+		if (model == null)
+			return result;
+		for (fn in model.program.functions) {
+			if (token != null)
+				token.check();
+			if (fn.name != name)
+				continue;
+			for (symbol in model.index.symbols)
+				if (symbol.kind == DeclarationKind.Function && sameSpan(symbol.declaration, fn.span))
+					addUniqueIdentity(result, symbol.id);
+		}
+		return result;
+	}
+
+	static function uniqueIdentity(ids:Array<SemanticSymbolId>):Null<SemanticSymbolId>
+		return ids.length == 1 ? ids[0] : null;
 
 	/** Resolve a recovered type name without bypassing editor visibility. */
 	public function editorResolveTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
