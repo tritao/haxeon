@@ -1,6 +1,7 @@
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlRuntimeObject.HlVirtualValue;
 import runtime.hashlink.HlTypeBridge;
+import runtime.hashlink.HlTypeSemantics;
 import runtime.hashlink.HlTypeKind;
 import runtime.hashlink.HlTypeObject.HlTypeEnum;
 import runtime.hashlink.HlTypeObject.HlTypeVirtual;
@@ -60,7 +61,7 @@ function main():Int {
 		objectMark = object.ref.markBits.isNull() ? 0 : cast(object.ref.markBits.offset(0).load(), Int),
 		enumMark = enumType.ref.markBits.isNull() ? 0 : cast(enumType.ref.markBits.offset(0).load(), Int),
 		virtualMark = virtualType.ref.markBits.isNull() ? 0 : cast(virtualType.ref.markBits.offset(0).load(), Int),
-		pointerSize = HlTypeBridge.native_pointer_size(),
+		pointerSize = HlTypeSemantics.pointerSize(),
 		virtualHeaderSize = sizeof<HlVirtualValue>(),
 		virtualBase = virtualHeaderSize + pointerSize * 2;
 	var objectCorrect = !objectRuntime.isNull()

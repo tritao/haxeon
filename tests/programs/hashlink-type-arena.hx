@@ -5,6 +5,7 @@ import runtime.hashlink.HlTypeLayout;
 import runtime.hashlink.HlTypeTable;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeKind;
+import runtime.hashlink.HlTypeSemantics;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlFunctionTable;
 import runtime.hashlink.HlFunctionDescriptorTable;
@@ -24,9 +25,9 @@ function main():Int {
 	type.ref.kind = 10;
 	type.ref.data.ref.fun = functionType;
 	var storedFunction = type.ref.data.ref.fun;
-	var nativeKind = HlTypeBridge.native_type_kind(type),
-		nativeSize = HlTypeBridge.native_type_size(type),
-		nativeArity = HlTypeBridge.native_type_function_arity(type);
+	var nativeKind:Int = cast type.ref.kind,
+		nativeSize = HlTypeSemantics.size(type),
+		nativeArity:Int = cast type.ref.data.ref.fun.ref.nargs;
 	var reused:RawPtr<HlType>;
 	arena.reset();
 	reused = arena.allocType();
@@ -45,10 +46,9 @@ function main():Int {
 		&& builtData.ref.closure.ref.ret.isNull()
 		&& builtData.ref.closure.ref.args.isNull()
 		&& builtParameter.ref.data.ref.typeParam == voidType
-		&& HlTypeBridge.native_type_kind(voidType) == 0
-		&& HlTypeBridge.native_type_kind(builtFunction) == 10
-		&& HlTypeBridge.native_type_kind(builtParameter) == 14
-		&& HlTypeBridge.native_type_function_arity(builtFunction) == 3;
+		&& cast(voidType.ref.kind, Int) == 0
+			&& cast(builtFunction.ref.kind, Int) == 10
+				&& cast(builtParameter.ref.kind, Int) == 14 && cast(builtFunction.ref.data.ref.fun.ref.nargs, Int) == 3;
 	var descriptorTable = new HlFunctionDescriptorTable(arena, 2),
 		descriptorName = builder.utf16Name("descriptor"),
 		descriptor = descriptorTable.add({
@@ -174,28 +174,28 @@ function main():Int {
 	derivedTable.add(builtEnum);
 	derivedTable.add(builtVirtual);
 	HlTypeLayout.initialize(derivedTable.pointer(), derivedTable.length(), arena);
-	var graphCorrect = HlTypeBridge.native_type_kind(builtObject) == 11
-		&& HlTypeBridge.native_type_object_field_count(builtObject) == 1
-		&& objectData.ref.nfields == 1
-		&& objectData.ref.fields.offset(0).ref.type == builtFunction
-		&& objectData.ref.fields.offset(0).ref.hashedName == 17
-		&& objectData.ref.proto.offset(0).ref.findex == 3
-		&& objectData.ref.nbindings == 1
-		&& objectData.ref.bindings.offset(0).load() == 0
-		&& objectData.ref.bindings.offset(1).load() == 3
-		&& HlTypeBridge.native_type_kind(builtEnum) == 18
-		&& HlTypeBridge.native_type_enum_constructor_count(builtEnum) == 1
-		&& enumData.ref.nconstructs == 1
-		&& enumData.ref.constructs.offset(0).ref.params.offset(0).load() == intType
-		&& enumData.ref.constructs.offset(0).ref.size == 16
-		&& enumData.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12
-		&& HlTypeBridge.native_type_kind(builtVirtual) == 15
-		&& HlTypeBridge.native_type_virtual_field_count(builtVirtual) == 1
-		&& virtualData.ref.nfields == 1
-		&& virtualData.ref.fields.offset(0).ref.type == intType
-		&& virtualData.ref.indexes.offset(0).load() == 32
-		&& virtualData.ref.dataSize == 4
-		&& !virtualData.ref.lookup.isNull();
+	var graphCorrect = cast(builtObject.ref.kind, Int) == 11
+		&& cast(objectData.ref.nfields, Int) == 1
+			&& objectData.ref.nfields == 1
+			&& objectData.ref.fields.offset(0).ref.type == builtFunction
+			&& objectData.ref.fields.offset(0).ref.hashedName == 17
+			&& objectData.ref.proto.offset(0).ref.findex == 3
+			&& objectData.ref.nbindings == 1
+			&& objectData.ref.bindings.offset(0).load() == 0
+			&& objectData.ref.bindings.offset(1).load() == 3
+			&& cast(builtEnum.ref.kind, Int) == 18
+				&& cast(enumData.ref.nconstructs, Int) == 1
+					&& enumData.ref.nconstructs == 1
+					&& enumData.ref.constructs.offset(0).ref.params.offset(0).load() == intType
+					&& enumData.ref.constructs.offset(0).ref.size == 16
+					&& enumData.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12
+					&& cast(builtVirtual.ref.kind, Int) == 15
+						&& cast(virtualData.ref.nfields, Int) == 1
+							&& virtualData.ref.nfields == 1
+							&& virtualData.ref.fields.offset(0).ref.type == intType
+							&& virtualData.ref.indexes.offset(0).load() == 32
+							&& virtualData.ref.dataSize == 4
+							&& !virtualData.ref.lookup.isNull();
 	var typeTable = new HlTypeTable(arena, 1),
 		firstIndex = typeTable.add(voidType),
 		secondIndex = typeTable.add(intType),

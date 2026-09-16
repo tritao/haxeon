@@ -1,30 +1,5 @@
 HL_API int hl_mark_size( int data_size );
 
-HL_PRIM int HL_NAME(native_type_kind)( hl_type *type ) {
-	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
-	return (int)type->kind;
-}
-
-HL_PRIM int HL_NAME(native_type_size)( hl_type *type ) {
-	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
-	return hl_type_size(type);
-}
-
-HL_PRIM int HL_NAME(native_type_pad_struct)( hl_type *type, int size ) {
-	if( type == NULL || size < 0 ) hl_error("HashLink type layout padding requires a type and non-negative size");
-	return hl_pad_struct(size,type);
-}
-
-HL_PRIM bool HL_NAME(native_type_is_ptr)( hl_type *type ) {
-	if( type == NULL ) hl_error("HashLink type metadata pointer must not be null");
-	return hl_is_ptr(type);
-}
-
-HL_PRIM int HL_NAME(native_type_mark_size)( int size ) {
-	if( size < 0 ) hl_error("HashLink mark-bit size must be non-negative");
-	return hl_mark_size(size);
-}
-
 HL_PRIM int HL_NAME(native_pointer_size)() {
 	return (int)sizeof(void*);
 }
@@ -147,28 +122,4 @@ HL_PRIM void HL_NAME(native_module_context_dispose)( hl_module_context *context 
 	hl_free(&context->alloc);
 	context->functions_ptrs = NULL;
 	context->functions_types = NULL;
-}
-
-HL_PRIM int HL_NAME(native_type_function_arity)( hl_type *type ) {
-	if( type == NULL || type->kind != HFUN || type->fun == NULL )
-		hl_error("HashLink type metadata pointer must reference a function type");
-	return type->fun->nargs;
-}
-
-HL_PRIM int HL_NAME(native_type_object_field_count)( hl_type *type ) {
-	if( type == NULL || type->kind != HOBJ || type->obj == NULL )
-		hl_error("HashLink type metadata pointer must reference an object type");
-	return type->obj->nfields;
-}
-
-HL_PRIM int HL_NAME(native_type_enum_constructor_count)( hl_type *type ) {
-	if( type == NULL || type->kind != HENUM || type->tenum == NULL )
-		hl_error("HashLink type metadata pointer must reference an enum type");
-	return type->tenum->nconstructs;
-}
-
-HL_PRIM int HL_NAME(native_type_virtual_field_count)( hl_type *type ) {
-	if( type == NULL || type->kind != HVIRTUAL || type->virt == NULL )
-		hl_error("HashLink type metadata pointer must reference a virtual type");
-	return type->virt->nfields;
 }

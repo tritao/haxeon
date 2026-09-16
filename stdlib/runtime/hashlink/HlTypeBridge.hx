@@ -6,21 +6,6 @@ import runtime.hashlink.HlFunction;
 /** Small native boundary for handing Haxe-owned type metadata to HashLink. */
 @:hlNative("haxeon_runtime")
 class HlTypeBridge {
-	public static function native_type_kind(type:RawPtr<HlType>):Int
-		return 0;
-
-	public static function native_type_size(type:RawPtr<HlType>):Int
-		return 0;
-
-	public static function native_type_pad_struct(type:RawPtr<HlType>, size:Int):Int
-		return 0;
-
-	public static function native_type_is_ptr(type:RawPtr<HlType>):Bool
-		return false;
-
-	public static function native_type_mark_size(size:Int):Int
-		return 0;
-
 	public static function native_pointer_size():Int
 		return 0;
 
@@ -77,15 +62,4 @@ class HlTypeBridge {
 	public static function native_runtime_module_patch(module:RawPtr<UInt8>, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;
 
-	public static function native_type_function_arity(type:RawPtr<HlType>):Int
-		return 0;
-
-	public static function native_type_object_field_count(type:RawPtr<HlType>):Int
-		return 0;
-
-	public static function native_type_enum_constructor_count(type:RawPtr<HlType>):Int
-		return 0;
-
-	public static function native_type_virtual_field_count(type:RawPtr<HlType>):Int
-		return 0;
 }

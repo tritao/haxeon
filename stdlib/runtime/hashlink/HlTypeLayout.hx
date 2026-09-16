@@ -146,7 +146,7 @@ class HlTypeLayout {
 		if (!parentRuntime.isNull() && fieldCount > 0)
 			copyInts(fieldIndexes, parentRuntime.ref.fieldIndexes, parentFields);
 
-		var pointerSize = HlTypeBridge.native_pointer_size(), objectKind:HlTypeKind = cast type.ref.kind,
+		var pointerSize = HlTypeSemantics.pointerSize(), objectKind:HlTypeKind = cast type.ref.kind,
 			size = parentRuntime.isNull() ? objectKind == HlTypeKind.Struct ? 0 : pointerSize : cast(parentRuntime.ref.size, Int) - cast(parentRuntime.ref.padSize, Int),
 			largestField = parentRuntime.isNull() ? size : cast(parentRuntime.ref.largestField, Int),
 			hasPtr = parentRuntime.isNull() ? false : parentRuntime.ref.hasPtr;
@@ -174,15 +174,15 @@ class HlTypeLayout {
 				if (packedRuntime.ref.hasPtr)
 					hasPtr = true;
 			} else {
-				size += HlTypeBridge.native_type_pad_struct(fieldType, size);
+				size += HlTypeSemantics.padStruct(fieldType, size);
 				fieldIndexes.offset(fieldIndex).store(cast size);
 				if (hasName(field.ref.name))
 					lookupCount = insertLookup(lookups, lookupCount, cast(field.ref.hashedName, Int), fieldType, size);
-				var fieldSize = HlTypeBridge.native_type_size(fieldType);
+				var fieldSize = HlTypeSemantics.size(fieldType);
 				size += fieldSize;
 				if (fieldSize > largestField)
 					largestField = fieldSize;
-				if (!hasPtr && HlTypeBridge.native_type_is_ptr(fieldType))
+				if (!hasPtr && HlTypeSemantics.isPointer(fieldType))
 					hasPtr = true;
 			}
 		}
@@ -326,21 +326,21 @@ class HlTypeLayout {
 		var enumData = type.ref.data.ref.enumType;
 		if (enumData.isNull())
 			throw "HashLink enum type has no enum metadata";
-		var pointerSize = HlTypeBridge.native_pointer_size(), maxMarkSize = 0, count = cast(enumData.ref.nconstructs, Int);
+		var pointerSize = HlTypeSemantics.pointerSize(), maxMarkSize = 0, count = cast(enumData.ref.nconstructs, Int);
 		for (index in 0...count) {
 			var construct = enumData.ref.constructs.offset(index), size = pointerSize + 4, hasPtr = false, parameterCount = cast(construct.ref.nparams, Int);
 			for (parameter in 0...parameterCount) {
 				var parameterType = construct.ref.params.offset(parameter).load();
-				size += HlTypeBridge.native_type_pad_struct(parameterType, size);
+				size += HlTypeSemantics.padStruct(parameterType, size);
 				construct.ref.offsets.offset(parameter).store(cast size);
-				if (HlTypeBridge.native_type_is_ptr(parameterType))
+				if (HlTypeSemantics.isPointer(parameterType))
 					hasPtr = true;
-				size += HlTypeBridge.native_type_size(parameterType);
+				size += HlTypeSemantics.size(parameterType);
 			}
 			construct.ref.size = cast size;
 			construct.ref.hasPtr = hasPtr;
 			if (hasPtr) {
-				var bodySize = size - pointerSize * 2, markSize = HlTypeBridge.native_type_mark_size(bodySize);
+				var bodySize = size - pointerSize * 2, markSize = HlTypeSemantics.markSize(bodySize);
 				if (index * 4 + markSize > maxMarkSize)
 					maxMarkSize = index * 4 + markSize;
 			}
@@ -354,7 +354,7 @@ class HlTypeLayout {
 				continue;
 			for (parameter in 0...cast(construct.ref.nparams, Int)) {
 				var parameterType = construct.ref.params.offset(parameter).load();
-				if (HlTypeBridge.native_type_is_ptr(parameterType)) {
+				if (HlTypeSemantics.isPointer(parameterType)) {
 				var position:Int = Std.int(cast(construct.ref.offsets.offset(parameter).load(), Int) / pointerSize) - 2;
 					setMarkBit(type.ref.markBits, index + (position >> 5), position & 31);
 				}
@@ -366,25 +366,25 @@ class HlTypeLayout {
 		var virtualData = type.ref.data.ref.virtualType;
 		if (virtualData.isNull())
 			throw "HashLink virtual type has no virtual metadata";
-		var pointerSize = HlTypeBridge.native_pointer_size(), count = cast(virtualData.ref.nfields, Int),
+		var pointerSize = HlTypeSemantics.pointerSize(), count = cast(virtualData.ref.nfields, Int),
 			vsize = sizeof<HlVirtualValue>() + pointerSize * count, size = vsize,
 			lookups:RawPtr<HlFieldLookup> = count == 0 ? RawPtr.nullPtr() : arena.allocFieldLookupArray(count), indexes:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : arena.allocInt32Array(count);
 		for (index in 0...count) {
 			var field = virtualData.ref.fields.offset(index), fieldType = field.ref.type;
-			size += HlTypeBridge.native_type_pad_struct(fieldType, size);
+			size += HlTypeSemantics.padStruct(fieldType, size);
 			indexes.offset(index).store(cast size);
 			insertLookup(lookups, index, cast(field.ref.hashedName, Int), fieldType, index);
-			size += HlTypeBridge.native_type_size(fieldType);
+			size += HlTypeSemantics.size(fieldType);
 		}
 		virtualData.ref.dataSize = cast(size - vsize);
 		virtualData.ref.indexes = indexes;
 		virtualData.ref.lookup = lookups;
-		type.ref.markBits = allocateZeroedMarkBits(arena, HlTypeBridge.native_type_mark_size(size));
+		type.ref.markBits = allocateZeroedMarkBits(arena, HlTypeSemantics.markSize(size));
 		if (!type.ref.markBits.isNull()) {
 			setMarkBit(type.ref.markBits, 0, 1);
 			setMarkBit(type.ref.markBits, 0, 2);
 			for (index in 0...count)
-				if (HlTypeBridge.native_type_is_ptr(virtualData.ref.fields.offset(index).ref.type)) {
+				if (HlTypeSemantics.isPointer(virtualData.ref.fields.offset(index).ref.type)) {
 					var position:Int = Std.int(cast(indexes.offset(index).load(), Int) / pointerSize);
 					setMarkBit(type.ref.markBits, position >> 5, position & 31);
 				}
@@ -397,10 +397,10 @@ class HlTypeLayout {
 			type.ref.markBits = RawPtr.nullPtr();
 			return;
 		}
-		var markSize = HlTypeBridge.native_type_mark_size(cast(runtime.ref.size, Int)), markBits = allocateZeroedMarkBits(arena, markSize);
+		var markSize = HlTypeSemantics.markSize(cast(runtime.ref.size, Int)), markBits = allocateZeroedMarkBits(arena, markSize);
 		type.ref.markBits = markBits;
 		if (!parent.isNull() && !parent.ref.type.ref.markBits.isNull())
-			copyMarkBits(markBits, parent.ref.type.ref.markBits, HlTypeBridge.native_type_mark_size(cast(parent.ref.size, Int)) >> 2, 0);
+			copyMarkBits(markBits, parent.ref.type.ref.markBits, HlTypeSemantics.markSize(cast(parent.ref.size, Int)) >> 2, 0);
 		var parentFields = parent.isNull() ? 0 : cast(parent.ref.nfields, Int), fieldCount = cast(object.ref.nfields, Int);
 		for (index in 0...fieldCount) {
 			var fieldType = object.ref.fields.offset(index).ref.type, fieldIndex = cast(runtime.ref.fieldIndexes.offset(parentFields + index).load(), Int);
@@ -408,9 +408,9 @@ class HlTypeLayout {
 			if (fieldKind == HlTypeKind.Packed) {
 				var packedRuntime = fieldType.ref.data.ref.typeParam.ref.data.ref.obj.ref.runtime;
 				if (!packedRuntime.ref.type.ref.markBits.isNull())
-					copyMarkBits(markBits, packedRuntime.ref.type.ref.markBits, HlTypeBridge.native_type_mark_size(cast(packedRuntime.ref.size, Int)) >> 2,
+					copyMarkBits(markBits, packedRuntime.ref.type.ref.markBits, HlTypeSemantics.markSize(cast(packedRuntime.ref.size, Int)) >> 2,
 						pointerIndex(cast(fieldIndex, Int), pointerSize) >> 5);
-			} else if (HlTypeBridge.native_type_is_ptr(fieldType)) {
+			} else if (HlTypeSemantics.isPointer(fieldType)) {
 				var position = pointerIndex(fieldIndex, pointerSize);
 				setMarkBit(markBits, position >> 5, position & 31);
 			}
