@@ -52,7 +52,7 @@ class Runtime {
 
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		#if haxeon
-		var summary = RuntimeKernel.inspect_patch(cast bytes.getData(), bytes.length);
+		var summary = haxeRuntimeModuleKernel.inspectPatch(cast bytes.getData(), bytes.length);
 		#else
 		var summary = RuntimeKernel.inspect_patch(bytes.getData(), bytes.length);
 		#end

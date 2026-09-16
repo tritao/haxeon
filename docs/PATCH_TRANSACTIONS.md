@@ -122,7 +122,8 @@ all stable call shapes, native dispatch rechecks, and module diagnostics; the
 legacy host branch continues to use its compatibility declarations. Its
 status-preserving dispose and deferred-retirement retry/count operations now
 also flow through that kernel, keeping Haxeon module lifetime on one native
-boundary.
+boundary. HLP summary inspection follows the same path; only the legacy host
+branch retains its compatibility declaration for that parser.
 
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last

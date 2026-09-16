@@ -35,9 +35,14 @@ class RuntimePatchTransactionMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return 42; } function make():() -> Int { return main; } function text():String { return \"haxeon\"; } function consume(value:String):Void {} function makeObject():Box { return new Box(42); } function readObject(box:Box):Int { return box.value; }");
 		var changed = compiler.compile("Main"),
+			patchSummary = Runtime.inspectPatch(changed.patchBytes),
 			patchByte = changed.patchBytes.get(0),
 			patchSet = new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions),
 			rolledBack = Runtime.stagePatch(loaded, patchSet);
+		if (patchSummary.baseRevision != initial.revision
+			|| patchSummary.revision != changed.revision
+			|| patchSummary.functionCount != changed.changedFunctions.length)
+			throw "Haxeon module kernel did not inspect the patch summary";
 		changed.patchBytes.set(0, patchByte ^ 0xFF);
 		if (patchSet.bytes.get(0) != patchByte)
 			throw "PatchSet did not take ownership of its patch bytes";
