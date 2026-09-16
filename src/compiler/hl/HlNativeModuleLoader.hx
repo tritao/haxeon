@@ -67,7 +67,7 @@ class HlLoadedRuntimeModule {
 	public var functions(default, null):HlFunctionVersionTable;
 	public var revision(default, null):Int;
 
-	final patchLedger:Array<HlRuntimePatchGeneration> = [];
+	final patchLedger = new HlRuntimePatchLedger();
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
@@ -90,9 +90,7 @@ class HlLoadedRuntimeModule {
 			return false;
 		if (!nativeModule.unload())
 			return false;
-		for (generation in patchLedger)
-			if (!generation.releaseCode())
-				throw "HashLink external runtime patch-code release failed";
+		patchLedger.releaseAll();
 		metadata.dispose();
 		disposed = true;
 		return true;
@@ -148,17 +146,25 @@ class HlLoadedRuntimeModule {
 
 	/** Return the committed Haxe-owned patch models in revision order. */
 	public function committedPatches():Array<HlPatch>
-		return [for (generation in patchLedger) generation.patch.copy()];
+		return patchLedger.patches();
 
 	/** Return committed patch generations with function versions and dependencies. */
 	public function committedPatchGenerations():Array<HlRuntimePatchGeneration>
-		return [for (generation in patchLedger) generation.snapshot()];
+		return patchLedger.snapshots();
+
+	/** Number of committed generations whose replaced functions are all superseded. */
+	public var retiredPatchCount(get, never):Int;
+
+	function get_retiredPatchCount():Int
+		return patchLedger.retiredCount;
+
+	/** Return retired patch generations as isolated diagnostic snapshots. */
+	public function retiredPatchGenerations():Array<HlRuntimePatchGeneration>
+		return patchLedger.retiredSnapshots();
 
 	/** Return the native revision retained by one committed patch generation. */
 	public function committedPatchCodeRevision(index:Int):Int {
-		if (index < 0 || index >= patchLedger.length)
-			throw 'HashLink runtime patch generation index $index is unavailable';
-		return patchLedger[index].codeRevision();
+		return patchLedger.codeRevision(index);
 	}
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
@@ -213,7 +219,7 @@ class HlLoadedRuntimeModule {
 		}
 		typeAppend.commit();
 		applyPatchSymbols(model);
-		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions, patchCode));
+		patchLedger.publish(model, patch, nextFunctions, patchCode);
 		functions = nextFunctions;
 		revision = patch.revision;
 	}

@@ -102,6 +102,15 @@ snapshots remain non-owning. The generation releases its handle only after the
 runtime wrapper has retired, so policy owns code lifetime without exposing
 executable addresses.
 
+`HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
+the module loader. It maps each stable function ID to the generation that last
+published it and records a generation in a Haxe-owned retirement list once all
+of that generation's replaced functions have been superseded. This is policy
+state only: the native dispatch-owner array and closure/JIT reclamation rules
+still decide when executable storage can actually be freed. The split makes
+generation ownership and future borrower-aware retirement explicit without
+moving bootstrap-sensitive reclamation into Haxe prematurely.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication
