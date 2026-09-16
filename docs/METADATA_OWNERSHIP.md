@@ -18,7 +18,8 @@ module generation.
 | Field-name and GUID caches | Process runtime | HashLink process | Reflection by copied name or GUID data | Global HashLink shutdown; entries do not borrow module pointers |
 | Native-library mapping | Platform loader | HashLink process | Resolved native function pointers | Process shutdown; module retirement never unloads a shared library |
 | TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
-| Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner plus one Haxe-owned external code handle per committed generation | Dispatch slots, escaped closures, active calls, Haxe generation ledger | Handle release after module retirement; native owner lists still decide normal reclamation |
+| Patch JIT image | HashLink patch transaction | `hl_module` patch-code owner plus one Haxe-owned external code handle per committed generation | Dispatch slots, escaped closures, active calls, Haxe generation ledger | Handle release after module retirement; native owner lists still decide normal reclamation |
+| Patched function descriptors, register arrays, opcodes, and debug pairs | Haxe metadata arena | Loaded Haxe generation and its patch ledger | Native JIT, dispatch slots, debugger | Generation teardown after the native module and retained code handles are released |
 | Constant and string append storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
 | Managed objects, closures, and array storage | HashLink GC with an explicit allocation owner | `hl_module` whose type or callable produced the value | Host roots, globals, other managed values | GC sweep removes ownership records when values become unreachable |
@@ -83,7 +84,10 @@ function-version state, and the external wrapper's revision state. Its HLP
 operation preflights the section envelope, fixed module-ID, revision header,
 and replacement function identities before handing the bytes to HashLink; the
 native patch kernel still performs complete wire, operand, relocation, symbol,
-and live-compatibility validation. The public host `Runtime.load` facade remains
+and live-compatibility validation. On the Haxe-built path, Haxeon also builds
+the patched `hl_function` descriptors, register arrays, opcodes, and debug
+pairs in the existing generation arena; native JIT publication borrows those
+records without taking ownership of their storage. The public host `Runtime.load` facade remains
 on the legacy native-decoder path when compiled by the pinned host Haxe
 toolchain. Haxeon-generated runtime code now takes the same decoded-manifest
 path: it builds and publishes `HlMetadataGeneration`, passes the native code

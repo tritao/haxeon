@@ -14,9 +14,10 @@ complete Haxe `HlPatch` model before native publication. Its envelope is a
 derived identity-policy view, so the external path and host path share one HLP
 wire decoder and the shared `HlPatchPolicy` compatibility validator. Native
 still rechecks live compatibility and performs the JIT publication; the Haxe
-transaction owns the decoded policy input and compatible appended type graph,
-while the native kernel retains only the machine-sensitive patch function
-storage and publication mechanism.
+transaction owns the decoded policy input, compatible appended type graph, and
+patched `hl_function` descriptors. Native retains the HLP wire decoder,
+machine-sensitive validation, and publication mechanism, while the JIT consumes
+the arena-owned registers, opcodes, and debug pairs.
 Before staging, that policy now also checks symbol-base counts and HashLink-
 compatible prefix hashes, appended type references, stable-ID-to-slot mapping,
 unchanged function signatures, register type indices, and relocation instruction
@@ -113,10 +114,13 @@ HLP version 7 also validates content-addressed source snapshots before copying
 them into the staged code owner; their lifetime therefore matches active or
 retired patch JIT code that can reference them in debugger stacks.
 On the Haxe-built external path, Haxeon has already constructed the compatible
-appended type records in the generation's contiguous arena. Native therefore
-builds combined symbol tables, creates private function metadata, and
-JIT-compiles a private code image without allocating those type records. The
-legacy native-decoder path retains the old native type staging behavior. Any
+appended type records and patched function descriptors in the generation's
+arena. Haxe resolves stable-ID relocations into the dispatch slots expected by
+the JIT; native independently resolves the same relocations while decoding the
+wire patch and validates the descriptor shape before consuming it. Native still
+builds combined symbol tables and JIT-compiles a private code image without
+allocating the Haxe-owned type or function metadata. The legacy native-decoder
+path retains the old native type and function staging behavior. Any
 failure frees staged storage; the Haxe path also rolls back its arena and type
 table cursors, leaving the published revision, symbol counts, dispatch
 pointers, and owners unchanged.
