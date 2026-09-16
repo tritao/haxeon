@@ -38,6 +38,11 @@ class HlNativeModule {
 				module = RawPtr.nullPtr();
 				throw "HashLink native module initialization failed";
 			}
+			if (!this.kernel.publishObjectPrototypes(module)) {
+				this.kernel.freeShutdown(module);
+				module = RawPtr.nullPtr();
+				throw "HashLink native object-prototype publication failed";
+			}
 			initializeConstants();
 		} catch (error:Dynamic) {
 			if (!module.isNull())

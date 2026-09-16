@@ -27,6 +27,12 @@ HL_PRIM bool HL_NAME(native_metadata_module_init)( vbyte *module, int flags ) {
 	return hl_module_init((hl_module*)module,flags | HL_MODULE_HAXE_METADATA) != 0;
 }
 
+HL_PRIM bool HL_NAME(native_metadata_module_publish_object_prototypes)( vbyte *module ) {
+	if( module == NULL ) return false;
+	hl_module_publish_haxe_object_prototypes((hl_module*)module);
+	return true;
+}
+
 HL_PRIM bool HL_NAME(native_metadata_module_initialize_constant)( vbyte *module, int index ) {
 	if( module == NULL )
 		hl_error("HashLink native constant initialization requires a module");

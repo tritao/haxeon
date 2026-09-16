@@ -24,6 +24,10 @@ class HlTypeBridge {
 	public static function native_metadata_module_init(module:RawPtr<UInt8>, flags:Int):Bool
 		return false;
 
+	/** Publish executable object-prototype tables after native JIT initialization. */
+	public static function native_metadata_module_publish_object_prototypes(module:RawPtr<UInt8>):Bool
+		return false;
+
 	/** Materialize one Haxe-owned constant through HashLink's GC-sensitive kernel. */
 	public static function native_metadata_module_initialize_constant(module:RawPtr<UInt8>, index:Int):Bool
 		return false;
@@ -60,6 +64,10 @@ class HlTypeBridge {
 	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
 		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):hl.Abstract<"realtime_module">
 		return null;
+
+	/** Publish executable object-prototype tables after external module initialization. */
+	public static function native_runtime_module_publish_object_prototypes(module:hl.Abstract<"realtime_module">):Bool
+		return false;
 
 	/** Materialize one Haxe-owned constant through an external runtime wrapper. */
 	public static function native_runtime_module_initialize_constant(module:hl.Abstract<"realtime_module">, index:Int):Bool

@@ -36,6 +36,8 @@ class HlRuntimeModule {
 			module = this.kernel.loadCodeManifest(metadata.snapshot().nativeCode, bytes, moduleId, revision, dispatch);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
+			if (!this.kernel.publishObjectPrototypes(cast module))
+				throw "HashLink external object-prototype publication failed";
 			metadata.constantDescriptors.initialize(function(index)
 				return this.kernel.initializeConstant(cast module, index));
 		} catch (error:Dynamic) {
