@@ -130,10 +130,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   a recovered AST, tokens, and editor-only semantic model immediately; the
   recovered model never becomes authoritative workspace state.
 - [~] Semantic index construction now has a dedicated `SemanticIndexBuilder`,
-  shared exhaustive typed-AST traversal, and a detached frozen query index.
-  Token-only completion-context classification now lives in a separate semantic
-  query helper, and call edges are finalized before publication. Remaining work
-  is to move the richer recovery-query algorithms fully out of the builder.
+  shared exhaustive typed-AST traversal, and an immutable query-state snapshot
+  detached from the construction workspace. Token-only completion-context
+  classification now lives in a separate semantic query helper, and call edges
+  are finalized before publication. Remaining work is to move the richer
+  recovery-query algorithms fully out of the builder.
 - [~] Recovery construction is isolated in `RecoveryEngine`; workspace name
   resolution, dependency visibility, and recovered-body reuse remain explicit
   callbacks so editor snapshots cannot publish speculative declarations.

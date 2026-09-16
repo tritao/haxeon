@@ -29,6 +29,11 @@ class SemanticModelMain {
 		exposedSymbols.remove(make.id);
 		expect(model.index.symbolAt(source.text.indexOf("make")) != null,
 			"semantic index query symbols must not expose mutable builder state");
+		var makeLocations = model.index.locations(make.id),
+			locationCount = makeLocations.length;
+		makeLocations.pop();
+		expect(model.index.locations(make.id).length == locationCount,
+			"semantic index query locations must be detached from published state");
 		var mutationRejected = false;
 		try {
 			model.indexTypeReferences(function(_name) return null);
