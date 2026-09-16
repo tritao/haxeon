@@ -103,6 +103,17 @@ class RuntimePatchTransactionMain {
 			throw "Haxe-owned inherited interface metadata did not dispatch a base interface method";
 		Runtime.dispose(loaded);
 	}
+
+	static function testModuleInitializer():Void {
+		var compiler = new Compiler();
+		compiler.update("InitializerMain.hx", "class State { public static var value:Int = 40; } function main():Int return State.value;");
+		var initial = compiler.compile("InitializerMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 40)
+			throw "Haxe-owned runtime did not execute its module initializer";
+		Runtime.dispose(loaded);
+	}
 	#end
 
 	static function main():Void {
@@ -250,6 +261,7 @@ class RuntimePatchTransactionMain {
 		testInterfaceMethodDispatch();
 		testBoundFunctionField();
 		testInheritedInterfaceMethodDispatch();
+		testModuleInitializer();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
