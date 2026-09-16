@@ -37,6 +37,24 @@ class RuntimePatchTransactionMain {
 			throw "Haxe-owned enum runtime did not execute its patched payload";
 		Runtime.dispose(loaded);
 	}
+
+	static function testObjectMethodDispatch():Void {
+		var compiler = new Compiler();
+		compiler.update("ObjectMain.hx",
+			"class Box { public function new() {} public function value():Int return 42; } function main():Int { return new Box().value(); }");
+		var initial = compiler.compile("ObjectMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "Haxe-owned object metadata did not dispatch an instance method";
+		compiler.update("ObjectMain.hx",
+			"class Box { public function new() {} public function value():Int return 43; } function main():Int { return new Box().value(); }");
+		var changed = compiler.compile("ObjectMain");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		if (Runtime.callInt(loaded, mainId) != 43)
+			throw "Haxe-owned object metadata did not dispatch a patched instance method";
+		Runtime.dispose(loaded);
+	}
 	#end
 
 	static function main():Void {
@@ -180,6 +198,7 @@ class RuntimePatchTransactionMain {
 			throw "Haxeon module kernel did not drain native retirement state";
 		#if haxeon
 		testEnumPayloadPatch();
+		testObjectMethodDispatch();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
