@@ -1,4 +1,7 @@
 import compiler.hl.HlWriter;
+import compiler.hl.HlType;
+import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlPatchWriter;
 import compiler.Compiler;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -81,6 +84,22 @@ class RuntimePatchTransactionMain {
 			committed.commit();
 			throw "committed host patch transaction committed twice";
 		} catch (error:Dynamic) {}
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return 43; } function make():() -> Int { return main; } function text():String { return \"haxeon\"; } function consume(value:String):Void {} function makeObject():Box { return new Box(42); } function readObject(box:Box):Int { return box.value; }");
+		var appended = compiler.compile("Main"),
+			decodedAppended = HlPatchReader.decode(appended.patchBytes),
+			stableIdsBySlot:Map<Int, Int> = [],
+			changedSlots:Array<Int> = [];
+		for (functionPatch in decodedAppended.functions)
+			stableIdsBySlot.set(functionPatch.slot, functionPatch.functionIndex);
+		for (functionPatch in decodedAppended.functions)
+			changedSlots.push(functionPatch.slot);
+		appended.module.types.push(Function([], 0));
+		var appendedPatch = HlPatchWriter.encode(appended.module, decodedAppended.moduleId, changedSlots, stableIdsBySlot, appended.revision - 1,
+			appended.revision, decodedAppended.baseInts, decodedAppended.baseFloats, decodedAppended.baseStrings, initial.module.types.length);
+		Runtime.patchSet(loaded, new PatchSet(changed.revision, appended.revision, appendedPatch, appended.changedFunctions));
+		if (Runtime.metadataTypeCount(loaded) != initialTypeCount + 1 || Runtime.callInt(loaded, mainId) != 43)
+			throw "public Haxeon patch publication did not append its Haxe-owned type metadata";
 		Runtime.dispose(loaded);
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";

@@ -401,7 +401,11 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
+			#if haxeon
+			var metadata = metadataFor(module), publication = jitBackend.applyPatch(handle, transaction, metadata);
+			#else
 			var publication = jitBackend.applyPatch(handle, transaction);
+			#end
 			if (publication.status == RuntimeStatus.Ok) {
 				module.commitPatch(generation);
 				recordJitPublication(module, generation.revision, publication.code);
@@ -473,6 +477,13 @@ class Runtime {
 	}
 
 	#if haxeon
+	static function metadataFor(module:LoadedModule):HlMetadataGeneration {
+		var index = metadataModules.indexOf(module);
+		if (index < 0)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime module has no Haxe-owned metadata generation");
+		return metadataGenerations[index];
+	}
+
 	static function recordMetadata(module:LoadedModule, metadata:HlMetadataGeneration):Void {
 		metadataModules.push(module);
 		metadataGenerations.push(metadata);
