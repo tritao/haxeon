@@ -1310,8 +1310,20 @@ class SemanticIndex {
 			case Range(_, _, _): TRange;
 			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
 			case MapLiteral(entries, _): recoveredMapLiteralType(entries);
-			case ArrayComprehension(_, _, _, _, value, _): TArray(recoveredExpressionType(value));
-			case MapComprehension(_, _, _, _, key, value, _): TMap(recoveredExpressionType(key), recoveredExpressionType(value));
+			case ArrayComprehension(keyName, valueName, iterable, _, value, _):
+				var iterableType = recoveredExpressionType(iterable),
+					bindings:Map<String, CompilerType> = [];
+				bindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
+				if (valueName != null)
+					bindings.set(valueName, recoveredForInValueType(iterableType));
+				TArray(recoveredComprehensionExpressionType(value, bindings));
+			case MapComprehension(keyName, valueName, iterable, _, key, value, _):
+				var iterableType = recoveredExpressionType(iterable),
+					bindings:Map<String, CompilerType> = [];
+				bindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
+				if (valueName != null)
+					bindings.set(valueName, recoveredForInValueType(iterableType));
+				TMap(recoveredComprehensionExpressionType(key, bindings), recoveredComprehensionExpressionType(value, bindings));
 			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			case NewArray(element, _, _): TArray(recoveredType(element));
@@ -1752,6 +1764,12 @@ class SemanticIndex {
 			case TMap(_, value): value;
 			case TNullable(element): recoveredForInValueType(element);
 			default: TUnknown;
+		};
+
+	function recoveredComprehensionExpressionType(expression:AstExpression, bindings:Map<String, CompilerType>):CompilerType
+		return switch expression {
+			case Variable(name, _) if (bindings.exists(name)): bindings.get(name);
+			default: recoveredExpressionType(expression);
 		};
 
 	function indexRecoveredPatternBindings(functionKey:String, pattern:AstExpression, expected:CompilerType,

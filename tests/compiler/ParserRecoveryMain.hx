@@ -495,6 +495,21 @@ class ParserRecoveryMain {
 				throw 'AST-only recovered comprehension lost its binding type: ${astOnlyComprehensionContext.receiver}';
 		}
 
+		var inferredComprehensionSource = new SourceFile("InferredComprehensionRecovery.hx",
+			"class Payload { public var member:Int; } function main(values:Array<Payload>):Void { var selected = [for (item in values) item]; var result = selected[0]; result. }");
+		var inferredComprehensionTokens = new Lexer(inferredComprehensionSource).tokenize(),
+			inferredComprehensionProgram = new Parser(inferredComprehensionTokens).parseProgramRecovering().program,
+			inferredComprehensionModel = new SemanticModel(inferredComprehensionProgram, inferredComprehensionSource, 1,
+				inferredComprehensionTokens);
+		inferredComprehensionModel.index.indexRecoveredSyntax(inferredComprehensionProgram);
+		var inferredComprehensionPosition = inferredComprehensionSource.text.indexOf("result. }") + "result.".length,
+			inferredComprehensionContext = inferredComprehensionModel.index.completionContext(inferredComprehensionPosition, "result");
+		switch inferredComprehensionContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'inferred recovered comprehension lost its element type: ${inferredComprehensionContext.receiver}';
+		}
+
 		var astOnlyNestedCollectionSource = new SourceFile("AstOnlyNestedCollectionRecovery.hx",
 			"class Payload { public var member:Int; } function main():Void { var values = [[broken], [new Payload()]]; var item = values[1][0]; item. }");
 		var astOnlyNestedCollectionTokens = new Lexer(astOnlyNestedCollectionSource).tokenize(),
