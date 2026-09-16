@@ -82,7 +82,86 @@ class InteractiveEditMain {
 					throw 'boundary edit "$tail" was not marked as incomplete';
 			}
 
+		assertRecoveryEquivalence();
+
 		Sys.println('PASS: ${tails.length + 7} interactive edits retained recovery queries');
+	}
+
+	static function assertRecoveryEquivalence():Void {
+		var service = new LanguageService(),
+			targetSource = "package matrix; class Box { public var member:Int; } function main():Void return;";
+		service.update("matrix/Box.hx", targetSource);
+		service.compile("matrix.Box");
+		var validSource = "package app; import matrix.Box; function helper(value:Box):Box return value; function main():Void { var box:Box = new Box(); box.member; var tail:Box = box; return; }";
+		service.update("app/Main.hx", validSource);
+		service.compile("app.Main");
+		var validState = service.compiler.modules.get("app.Main"),
+			validModel = validState.semanticModel,
+			validBoxDeclaration = validSource.indexOf("box:Box"),
+			validBoxUse = validSource.lastIndexOf("box;"),
+			validTailType = validSource.indexOf("tail:Box") + "tail:".length,
+			validBoxId = validModel.index.symbolIdAt(validBoxDeclaration),
+			validBoxUseId = validModel.index.symbolIdAt(validBoxUse),
+			validTypeId = validModel.index.symbolIdAt(validTailType);
+		if (validBoxId == null || validBoxUseId == null || validTypeId == null || Std.string(validBoxId) != Std.string(validBoxUseId))
+			throw "equivalence fixture did not establish valid local and type identities";
+
+		var malformedSource = "package app; import matrix.Box; function helper(value:Box):Box return value; function main():Void { var box:Box = new Box(); box.member; broken.unresolved().thing; another.unresolved().thing; var tail:Box = box; return; }";
+		service.update("app/Main.hx", malformedSource);
+		var malformedState = service.compiler.modules.get("app.Main"),
+			recoveredModel = malformedState.recoveredSemanticModel,
+			malformedBoxDeclaration = malformedSource.indexOf("box:Box"),
+			malformedBoxUse = malformedSource.lastIndexOf("box;"),
+			malformedTailType = malformedSource.indexOf("tail:Box") + "tail:".length,
+			recoveredBoxId = recoveredModel == null ? null : recoveredModel.index.symbolIdAt(malformedBoxDeclaration),
+			recoveredBoxUseId = recoveredModel == null ? null : recoveredModel.index.symbolIdAt(malformedBoxUse),
+			recoveredTypeId = recoveredModel == null ? null : recoveredModel.index.symbolIdAt(malformedTailType),
+			completion = service.completeResult("app/Main.hx", malformedSource.indexOf("box.member") + "box.".length),
+			symbols = service.documentSymbols("app/Main.hx"),
+			hasMember = false;
+		for (item in completion.items)
+			if (item.label == "member")
+				hasMember = true;
+		if (recoveredModel == null
+			|| recoveredBoxId == null
+			|| recoveredBoxUseId == null
+			|| recoveredTypeId == null
+			|| Std.string(recoveredBoxId) != Std.string(validBoxId)
+			|| Std.string(recoveredBoxUseId) != Std.string(validBoxUseId)
+			|| Std.string(recoveredTypeId) != Std.string(validTypeId)
+			|| symbols.length < 2
+			|| !hasMember
+			|| !completion.isIncomplete)
+			throw "recovered snapshot did not preserve unaffected local/type identities and current completion";
+
+		var definition = service.definition("app/Main.hx", malformedBoxUse + 1),
+			typeDefinition = service.typeDefinition("app/Main.hx", malformedTailType),
+			references = service.references("app/Main.hx", malformedBoxUse + 1),
+			currentReference = false;
+		for (reference in references)
+			if (reference.path == "app/Main.hx" && !reference.stale)
+				currentReference = true;
+		if (definition == null
+			|| definition.stale
+			|| definition.span.start != malformedBoxDeclaration
+			|| typeDefinition == null
+			|| typeDefinition.path != "matrix/Box.hx"
+			|| !currentReference)
+			throw "recovered navigation did not remain equivalent around an unrelated malformed statement";
+
+		service.update("app/Main.hx", validSource);
+		service.compile("app.Main");
+		var repairedState = service.compiler.modules.get("app.Main"),
+			repairedModel = repairedState.semanticModel,
+			repairedBoxId = repairedModel.index.symbolIdAt(validBoxDeclaration),
+			repairedBoxUseId = repairedModel.index.symbolIdAt(validBoxUse),
+			repairedCompletion = service.completeResult("app/Main.hx", validSource.length);
+		if (repairedBoxId == null
+			|| repairedBoxUseId == null
+			|| Std.string(repairedBoxId) != Std.string(validBoxId)
+			|| Std.string(repairedBoxUseId) != Std.string(validBoxUseId)
+			|| repairedCompletion.isIncomplete)
+			throw "repair did not restore the exact snapshot and stable local identity";
 	}
 
 	static function assertHealthySnapshot(service:LanguageService, source:String, tail:String):Void {
