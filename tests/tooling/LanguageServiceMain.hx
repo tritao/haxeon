@@ -1751,6 +1751,13 @@ class LanguageServiceMain {
 						}
 		if (editedLiteral != 2)
 			throw 'recovered typing reused a changed body: ${editedLiteral}';
+		var earlierEditService = new LanguageService(),
+			earlierEditSource = "function changed():Int { return 1; } function independent():Int { return 2; }";
+		earlierEditService.update("EarlierEdit.hx", earlierEditSource);
+		var earlierEditReuseCount = earlierEditService.recoveredTypedFunctionReuses;
+		earlierEditService.update("EarlierEdit.hx", "function changed():Int { return 3; } function independent():Int { return 2; }");
+		if (earlierEditService.recoveredTypedFunctionReuses != earlierEditReuseCount + 1)
+			throw "recovery retyped an unchanged declaration after an earlier body edit";
 		var classIncrementalService = new LanguageService(),
 			classIncrementalSource = "class Incremental { public function stable():Int { return 1; } public function edited():Int { return 1; } }";
 		classIncrementalService.update("ClassIncremental.hx", classIncrementalSource);

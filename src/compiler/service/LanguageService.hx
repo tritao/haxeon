@@ -488,8 +488,7 @@ class LanguageService {
 				}
 		if (currentSource == null || previousSource == null || previousSource.path != currentSource.path)
 			return [];
-		var unchangedPrefix = commonSourcePrefix(previousSource, currentSource),
-			currentAst:Map<String, AstFunction> = [],
+		var currentAst:Map<String, AstFunction> = [],
 			changedBodies:Map<String, Bool> = [],
 			result:Map<String, TypedFunction> = [];
 		for (fn in current.functions)
@@ -524,7 +523,6 @@ class LanguageService {
 			if (oldAst == null || typed == null
 				|| oldAst.span.start != fn.span.start
 				|| oldAst.span.end != fn.span.end
-				|| fn.span.end > unchangedPrefix
 				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end) != fn.span.file.slice(fn.span.start, fn.span.end))
 				return;
 			if (recoveredBodyReferencesChanged(fn, changedBodies))
@@ -617,14 +615,6 @@ class LanguageService {
 			}
 		for (child in AstChildren.expressions(expression))
 			scanRecoveredExpressionReferences(child, references);
-	}
-
-	static function commonSourcePrefix(left:SourceFile, right:SourceFile):Int {
-		var length = left.bytes.length < right.bytes.length ? left.bytes.length : right.bytes.length,
-			index = 0;
-		while (index < length && left.bytes.get(index) == right.bytes.get(index))
-			index++;
-		return index;
 	}
 
 	static function mapSize<T>(map:Map<String, T>):Int {
