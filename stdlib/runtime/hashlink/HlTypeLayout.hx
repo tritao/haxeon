@@ -89,9 +89,9 @@ class HlTypeLayout {
 		if (entrypoint.isNull())
 			return;
 		var object = builder.arena.allocTypeObject();
-		object.ref.nfields = cast 0;
-		object.ref.nproto = cast 0;
-		object.ref.nbindings = cast 0;
+		object.ref.nfields = 0;
+		object.ref.nproto = 0;
+		object.ref.nbindings = 0;
 		object.ref.name = builder.utf16Name("");
 		object.ref.superType = RawPtr.nullPtr();
 		object.ref.fields = RawPtr.nullPtr();

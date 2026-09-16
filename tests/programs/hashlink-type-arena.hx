@@ -81,29 +81,27 @@ function main():Int {
 			fieldName: RawPtr.nullPtr(),
 			fieldReference: descriptor
 		});
+	var referenceOperation = arena.allocOpcodeArray(1);
+	referenceOperation.ref.op = 24;
+	referenceOperation.ref.p1 = 0;
+	referenceOperation.ref.p2 = 8;
+	referenceOperation.ref.p3 = 0;
+	referenceOperation.ref.extra = RawPtr.nullPtr();
+	descriptor.ref.nops = 1;
+	descriptor.ref.ops = referenceOperation;
 	var descriptorCorrect = descriptorTable.length() == 2
 		&& descriptorTable.capacityOf() == 2
 		&& descriptorTable.pointer() == descriptor
 		&& descriptorReference == descriptor.offset(1)
 		&& descriptor.ref.findex == 3
 		&& descriptor.ref.nregs == 3
-		&& descriptor.ref.nops == 5
+		&& descriptor.ref.nops == 1
 		&& descriptor.ref.type == builtFunction
 		&& descriptor.ref.regs == builtData.ref.args
 		&& descriptor.ref.field.ref.name == descriptorName
 		&& descriptorReference.ref.findex == 8
 		&& descriptorReference.ref.reference == 1
 		&& descriptorReference.ref.field.ref.reference == descriptor;
-	descriptor.ref.ops = arena.allocOpcodeArray(5);
-	for (index in 0...5) {
-		descriptor.ref.ops.offset(index).ref.op = 98;
-		descriptor.ref.ops.offset(index).ref.p1 = 0;
-		descriptor.ref.ops.offset(index).ref.p2 = 0;
-		descriptor.ref.ops.offset(index).ref.p3 = 0;
-		descriptor.ref.ops.offset(index).ref.extra = RawPtr.nullPtr();
-	}
-	descriptor.ref.ops.ref.op = 24;
-	descriptor.ref.ops.ref.p2 = 8;
 	var nativeLibrary:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeName:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeTable = new HlNativeDescriptorTable(arena, 2),
