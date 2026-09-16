@@ -17,6 +17,7 @@ import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
+import haxe.Int64;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
@@ -1257,13 +1258,9 @@ class Parser {
 		}
 		if (match(TokenKind.Minus)) {
 			var start = previous().span;
-			if (check(TokenKind.Integer)) {
-				var token = advance(),
-					magnitude = integerMagnitude(token.text);
-				if (!isHexInteger(token.text) && magnitude == 2147483648.0)
-					return parsePostfix(IntegerLiteral(-2147483648, start.merge(token.span)));
-				var value = IntegerLiteral(parseIntegerToken(token), token.span);
-				return Negate(value, start.merge(token.span));
+			if (match(TokenKind.Integer)) {
+				var token = previous(), value = parseIntegerToken(token, true);
+				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
 			}
 			var value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
@@ -2146,30 +2143,37 @@ class Parser {
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
 
-	static function parseIntegerToken(token:Token):Int {
-		var text = token.text, magnitude = integerMagnitude(text);
-		if (isHexInteger(text)) {
-			if (magnitude > 4294967295.0)
-				throw new CompileError(new Diagnostic("E0002", 'Integer literal "${text}" is outside the signed 32-bit range', token.span));
-			return magnitude >= 2147483648.0 ? Std.int(magnitude - 4294967296.0) : Std.int(magnitude);
-		}
-		if (magnitude > 2147483647.0)
-			throw new CompileError(new Diagnostic("E0002", 'Integer literal "${text}" is outside the signed 32-bit range', token.span));
-		return Std.int(magnitude);
+	function parseIntegerToken(token:Token, negative:Bool = false):Int {
+		var magnitude = parseIntegerMagnitude(token), limit = Int64.parseString(negative ? "2147483648" : "2147483647");
+		if (Int64.compare(magnitude, limit) > 0)
+			fail(token, 'Integer literal "${negative ? "-" : ""}${token.text}" is outside the signed 32-bit range');
+		var signed = negative ? Int64.sub(Int64.ofInt(0), magnitude) : magnitude;
+		return Int64.toInt(signed);
 	}
 
-	static function isHexInteger(text:String):Bool
-		return text.length > 2 && text.charAt(0) == "0" && (text.charAt(1) == "x" || text.charAt(1) == "X");
-
-	static function integerMagnitude(text:String):Float {
-		var hex = isHexInteger(text), start = hex ? 2 : 0, base = hex ? 16.0 : 10.0, value = 0.0;
-		for (index in start...text.length) {
-			var code = text.charCodeAt(index),
-				digit = if (code >= "0".code && code <= "9".code) code - "0".code else if (code >= "a".code && code <= "f".code) code - "a".code + 10 else code
-					- "A".code + 10;
-			value = value * base + digit;
+	function parseIntegerMagnitude(token:Token):Int64 {
+		if (StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X")) {
+			var value = Int64.ofInt(0);
+			for (index in 2...token.text.length) {
+				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
+					fail(token, 'Integer literal "${token.text}" is outside the supported range');
+				var code = token.text.charCodeAt(index), digit = code >= "0".code && code <= "9".code ? code - "0".code
+					: code >= "A".code && code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+				value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
+			}
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
 		}
-		return value;
+		try {
+			var value = Int64.parseString(token.text);
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
+		} catch (_:Dynamic) {
+			fail(token, 'Integer literal "${token.text}" is outside the supported range');
+		}
+		return Int64.ofInt(0);
 	}
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
