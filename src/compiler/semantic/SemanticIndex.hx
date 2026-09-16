@@ -1766,17 +1766,25 @@ class SemanticIndexBuilder {
 	function recoveredMapLiteralType(entries:Array<compiler.syntax.Ast.AstMapEntry>, ?expected:CompilerType):CompilerType {
 		var expectedKey = mapKeyType(expected),
 			expectedValue = mapValueType(expected),
-			key:CompilerType = expectedKey == null ? TUnknown : expectedKey,
-			value:CompilerType = expectedValue == null ? TUnknown : expectedValue;
+			key:Null<CompilerType> = expectedKey,
+			value:Null<CompilerType> = expectedValue;
 		for (entry in entries) {
 			var entryKey = recoveredExpressionType(entry.key, expectedKey),
 				entryValue = recoveredExpressionType(entry.value, expectedValue);
-			if (isRecoveryType(key) && !isRecoveryType(entryKey))
+			if (key == null)
 				key = entryKey;
-			if (isRecoveryType(value) && !isRecoveryType(entryValue))
+			else if (isRecoveryType(key) && !isRecoveryType(entryKey))
+				key = entryKey;
+			else if (!isRecoveryType(key) && !isRecoveryType(entryKey))
+				key = recoveredCommonType(key, entryKey);
+			if (value == null)
 				value = entryValue;
+			else if (isRecoveryType(value) && !isRecoveryType(entryValue))
+				value = entryValue;
+			else if (!isRecoveryType(value) && !isRecoveryType(entryValue))
+				value = recoveredCommonType(value, entryValue);
 		}
-		return TMap(key, value);
+		return TMap(key == null ? TUnknown : key, value == null ? TUnknown : value);
 	}
 
 	function recordUnresolved(name:String, span:SourceSpan):Void {

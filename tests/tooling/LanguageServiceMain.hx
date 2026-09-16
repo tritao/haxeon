@@ -1942,6 +1942,16 @@ class LanguageServiceMain {
 				nullableArrayMember = true;
 		if (!nullableArrayMember)
 			throw "null/reference array recovery lost the known nullable element type";
+		var nullableMapService = new LanguageService(),
+			nullableMapSource = "class NullableMapValue { public var member:Int; } function main():Void { var values = [\"missing\" => null, \"known\" => new NullableMapValue()]; var value = values.get(\"known\"); value.";
+		nullableMapService.update("NullableMap.hx", nullableMapSource);
+		var nullableMapItems = nullableMapService.completeResult("NullableMap.hx", nullableMapSource.length).items,
+			nullableMapMember = false;
+		for (item in nullableMapItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				nullableMapMember = true;
+		if (!nullableMapMember)
+			throw "null/reference map recovery lost the known nullable value type";
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
