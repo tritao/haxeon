@@ -18,7 +18,7 @@ module generation.
 | Field-name and GUID caches | Process runtime | HashLink process | Reflection by copied name or GUID data | Global HashLink shutdown; entries do not borrow module pointers |
 | Native-library mapping | Platform loader | HashLink process | Resolved native function pointers | Process shutdown; module retirement never unloads a shared library |
 | TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
-| Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner | Dispatch slots, escaped closures, active calls | Retain replaced images through module release until borrower tracking exists |
+| Patch JIT image and decoded function metadata | HashLink patch transaction | `hl_module` patch-code owner plus one Haxe-owned external code handle per committed generation | Dispatch slots, escaped closures, active calls, Haxe generation ledger | Handle release after module retirement; native owner lists still decide normal reclamation |
 | Constant and string append storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
 | Managed objects, closures, and array storage | HashLink GC with an explicit allocation owner | `hl_module` whose type or callable produced the value | Host roots, globals, other managed values | GC sweep removes ownership records when values become unreachable |

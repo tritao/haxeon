@@ -12,6 +12,18 @@ class RuntimeJit {
 	public static function patch(module:RuntimeModuleHandle, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
+	/** Apply one patch and retain its newly published native code allocation. */
+	public static function patch_code(module:RuntimeModuleHandle, bytes:hl.Bytes, length:Int, status:hl.Bytes):RuntimeJitCodeHandle
+		return null;
+
+	/** Release one external owner of a native code allocation. */
+	public static function release_code(code:RuntimeJitCodeHandle):Bool
+		return false;
+
+	/** Read the immutable patch revision carried by a retained code allocation. */
+	public static function code_revision(code:RuntimeJitCodeHandle):Int
+		return -1;
+
 	public static function allocation_count(module:RuntimeModuleHandle):Int
 		return 0;
 

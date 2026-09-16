@@ -24,6 +24,7 @@ class Runtime {
 	static final jitGenerationModules:Array<LoadedModule> = [];
 	static final jitGenerationRevisions:Array<Array<Int>> = [];
 	static final jitGenerationStates:Array<Array<Int>> = [];
+	static final jitGenerationHandles:Array<Array<RuntimeJitCodeHandle>> = [];
 
 	public static var pendingRetirementCount(get, never):Int;
 
@@ -124,6 +125,14 @@ class Runtime {
 		if (ledger == null || index < 0 || index >= ledger.states.length)
 			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
 		return ledger.states[index];
+	}
+
+	/** Return the native revision held by one Haxe-owned JIT generation record. */
+	public static function jitGenerationRevision(module:LoadedModule, index:Int):Int {
+		var ledger = jitGenerationLedger(module);
+		if (ledger == null || index < 0 || index >= ledger.handles.length)
+			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
+		return jitBackend.codeRevision(ledger.handles[index]);
 	}
 
 	public static function metadataTypeCount(module:LoadedModule):Int
@@ -248,12 +257,12 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
-			var result:RuntimeStatus = jitBackend.applyPatch(handle, transaction);
-			if (result == RuntimeStatus.Ok) {
+			var publication = jitBackend.applyPatch(handle, transaction);
+			if (publication.status == RuntimeStatus.Ok) {
 				module.commitPatch(generation);
-				recordJitPublication(module, generation.revision);
+				recordJitPublication(module, generation.revision, publication.code);
 			}
-			return result;
+			return publication.status;
 		});
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
@@ -300,21 +309,27 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
 	}
 
-	static function jitGenerationLedger(module:LoadedModule):Null<{revisions:Array<Int>, states:Array<Int>}> {
+	static function jitGenerationLedger(module:LoadedModule):Null<{revisions:Array<Int>, states:Array<Int>, handles:Array<RuntimeJitCodeHandle>}> {
 		var index = jitGenerationModules.indexOf(module);
-		return index < 0 ? null : {revisions: jitGenerationRevisions[index], states: jitGenerationStates[index]};
+		return index < 0 ? null : {
+			revisions: jitGenerationRevisions[index],
+			states: jitGenerationStates[index],
+			handles: jitGenerationHandles[index]
+		};
 	}
 
-	static function recordJitPublication(module:LoadedModule, revision:Int):Void {
+	static function recordJitPublication(module:LoadedModule, revision:Int, handle:RuntimeJitCodeHandle):Void {
 		var index = jitGenerationModules.indexOf(module);
 		if (index < 0) {
 			jitGenerationModules.push(module);
 			jitGenerationRevisions.push([]);
 			jitGenerationStates.push([]);
+			jitGenerationHandles.push([]);
 			index = jitGenerationModules.length - 1;
 		}
 		jitGenerationRevisions[index].push(revision);
 		jitGenerationStates[index].push(JitGenerationPublished);
+		jitGenerationHandles[index].push(handle);
 	}
 
 	static function beginJitRetirement(module:LoadedModule):Void {
@@ -330,8 +345,11 @@ class Runtime {
 		var index = jitGenerationModules.indexOf(module);
 		if (index < 0)
 			return;
+		for (handle in jitGenerationHandles[index])
+			jitBackend.releaseCode(handle);
 		jitGenerationModules.splice(index, 1);
 		jitGenerationRevisions.splice(index, 1);
 		jitGenerationStates.splice(index, 1);
+		jitGenerationHandles.splice(index, 1);
 	}
 }

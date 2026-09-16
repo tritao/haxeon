@@ -4,8 +4,20 @@ package runtime;
 final class NativeRuntimeJitBackend implements RuntimeJitBackend {
 	public function new() {}
 
-	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeStatus
-		return RuntimeJit.patch(module, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
+	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeJitPublication {
+		var status = new hl.Bytes(4),
+			code = RuntimeJit.patch_code(module, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length, status),
+			result:RuntimeStatus = status.getI32(0);
+		if (result != RuntimeStatus.Ok && code != null)
+			RuntimeJit.release_code(code);
+		return new RuntimeJitPublication(result, code);
+	}
+
+	public inline function releaseCode(code:RuntimeJitCodeHandle):Bool
+		return RuntimeJit.release_code(code);
+
+	public inline function codeRevision(code:RuntimeJitCodeHandle):Int
+		return RuntimeJit.code_revision(code);
 
 	public inline function retainedCodeAllocationCount(module:RuntimeModuleHandle):Int
 		return RuntimeJit.allocation_count(module);

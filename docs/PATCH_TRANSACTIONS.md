@@ -47,10 +47,12 @@ prefix hashes rather than the original HLB snapshot.
 
 The legacy host `LoadedModule` follows the same ordering: it retains a
 Haxe-owned revision, stable function-version table, and private patch-generation
-ledger, and advances those records and its decoded symbol model only after
-`RuntimeJit.patch` reports success. Its host-side function table deliberately
-tracks identity, slot, signature, and generation without pretending to own the
-native JIT entrypoint addresses; those remain inside the native HashLink kernel.
+ledger, and advances those records and its decoded symbol model only after the
+native JIT publication result reports success. Its host-side function table
+tracks identity, slot, signature, and generation, while each committed record
+also holds one opaque native code handle for the published patch allocation.
+The handle is an ownership token, not a callable address or a second dispatch
+table; HashLink continues to own publication and target selection.
 
 `RuntimeKernel` and `RuntimeJit` are the two Haxe declarations of the legacy
 host's native bootstrap boundary. The kernel exposes opaque module loading,
@@ -74,12 +76,15 @@ transaction rather than an unrelated byte buffer; the current native adapter
 extracts the owned bytes at the final ABI boundary. This keeps the Haxe policy
 record and its publication input coupled for future backend implementations.
 
-`Runtime` also keeps a small side ledger of committed patch revisions and their
-JIT lifecycle codes. Native success creates a `Published` entry; a close request
-changes live entries to `Retiring`, and successful native retirement removes the
-module's ledger entry. The ledger intentionally stores policy state only: native
-HashLink continues to own executable allocations and decides when code regions
-are reclaimable, while disposed modules are not retained by Haxe bookkeeping.
+`Runtime` also keeps a small side ledger of committed patch revisions, native
+code handles, and their JIT lifecycle codes. Native success creates a
+`Published` entry and transfers one external owner for the new `hl_patch_code`
+allocation; a close request changes live entries to `Retiring`, and successful
+native retirement releases those handles and removes the module's ledger entry.
+HashLink still decides dispatch publication and executable-memory reclamation.
+When module teardown has detached an allocation from its owner lists, the
+external handle is what keeps its code and decoded function metadata alive until
+Haxeon finishes retiring the generation.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that

@@ -120,6 +120,21 @@ HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
 
+HL_PRIM hl_patch_code *HL_NAME(patch_code)( hl_runtime_module *runtime, vbyte *bytes, int length, vbyte *status_out ) {
+	hl_patch_code *code = NULL;
+	hl_runtime_status status = hl_runtime_module_apply_hlp_capture(runtime,bytes,length,&code);
+	if( status_out != NULL ) memcpy(status_out,&status,sizeof(status));
+	return code;
+}
+
+HL_PRIM bool HL_NAME(release_code)( hl_patch_code *code ) {
+	return hl_patch_code_release(code);
+}
+
+HL_PRIM int HL_NAME(code_revision)( hl_patch_code *code ) {
+	return hl_patch_code_revision(code);
+}
+
 HL_PRIM int HL_NAME(allocation_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_allocation_count(runtime);
 }
