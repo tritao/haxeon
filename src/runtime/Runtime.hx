@@ -8,87 +8,6 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import sys.thread.Mutex;
 
-/** Private declarations for the native module lifecycle and invocation ABI. */
-@:hlNative("haxeon_runtime")
-private class RuntimeNative {
-	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):hl.Abstract<"realtime_module">
-		return null;
-
-	public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int
-		return 0;
-
-	public static function call_void(module:hl.Abstract<"realtime_module">, index:Int):Void {}
-
-	public static function call_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
-		return null;
-
-	public static function call_bytes1(module:hl.Abstract<"realtime_module">, index:Int, argument:hl.Bytes):Void {}
-
-	public static function call_closure(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
-		return null;
-
-	public static function call_closure_i32(module:hl.Abstract<"realtime_module">, closure:Dynamic):Int
-		return 0;
-
-	public static function call_object(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
-		return null;
-
-	public static function call_i32_object(module:hl.Abstract<"realtime_module">, index:Int, argument:Dynamic):Int
-		return 0;
-
-	public static function validate_call(module:hl.Abstract<"realtime_module">, index:Int, shape:Int):Int
-		return -1;
-
-	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
-		return -1;
-
-	public static function allocation_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function patch_jit_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function jit_location(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
-		return null;
-
-	public static function debug_region_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function retired_allocation_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function type_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function type_capacity(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function live_allocation_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function native_root_count(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function retirement_status(module:hl.Abstract<"realtime_module">, out:hl.Bytes):Void {}
-
-	public static function revision(module:hl.Abstract<"realtime_module">):Int
-		return 0;
-
-	public static function set_patch_failure_stage(module:hl.Abstract<"realtime_module">, stage:Int):Void {}
-
-	public static function dispose(module:hl.Abstract<"realtime_module">):Int
-		return -1;
-
-	public static function retry_failed_retirements():Int
-		return 0;
-
-	public static function failed_retirement_count():Int
-		return 0;
-
-	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
-		return -1;
-}
-
 /**
  * Checked host facade for loading, invoking, patching, and disposing live modules.
  * Calls translate native status codes and exceptions into {@link RuntimeError}.
@@ -101,13 +20,13 @@ class Runtime {
 
 	static function get_pendingRetirementCount():Int {
 		retirementMutex.acquire();
-		var count = retirementBacklog.length + RuntimeNative.failed_retirement_count();
+		var count = retirementBacklog.length + RuntimeKernel.failed_retirement_count();
 		retirementMutex.release();
 		return count;
 	}
 
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
-		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
+		var summary = RuntimeKernel.inspect_patch(bytes.getData(), bytes.length);
 		if (summary < 0)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
 		return {baseRevision: summary >>> 22, revision: (summary >>> 12) & 0x3FF, functionCount: summary & 0xFFF};
@@ -122,7 +41,7 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLB module: ${Std.string(error)}');
 		}
 		retryRetirements();
-		var module = RuntimeNative.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
+		var module = RuntimeKernel.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
 		return new LoadedModule(module, model, identityModel);
@@ -141,15 +60,15 @@ class Runtime {
 	}
 
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
-		return invoke(module, stableIndex, 0, function(handle) return RuntimeNative.call_i32(handle, stableIndex));
+		return invoke(module, stableIndex, 0, function(handle) return RuntimeKernel.call_i32(handle, stableIndex));
 
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
 		invoke(module, stableIndex, 1, function(handle) {
-			RuntimeNative.call_void(handle, stableIndex);
+			RuntimeKernel.call_void(handle, stableIndex);
 		});
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
-		var bytes = invoke(module, stableIndex, 2, function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
+		var bytes = invoke(module, stableIndex, 2, function(handle) return RuntimeKernel.call_bytes(handle, stableIndex));
 		if (bytes == null)
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
@@ -157,65 +76,65 @@ class Runtime {
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		invoke(module, stableIndex, 3, function(handle) {
-			RuntimeNative.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
+			RuntimeKernel.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
 		});
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
+		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeKernel.call_closure(handle, stableIndex)));
 
 	public static function callRetainedClosureInt(closure:RetainedValue):Int
-		return closure.access(RuntimeNative.call_closure_i32);
+		return closure.access(RuntimeKernel.call_closure_i32);
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));
+		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) return RuntimeKernel.call_object(handle, stableIndex)));
 
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
-		return invoke(module, stableIndex, 6, function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
+		return invoke(module, stableIndex, 6, function(handle) return RuntimeKernel.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.allocation_count);
+		return module.access(RuntimeKernel.allocation_count);
 
 	public static function patchJitCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.patch_jit_count);
+		return module.access(RuntimeKernel.patch_jit_count);
 
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
-		var bytes = module.access(function(handle) return RuntimeNative.jit_location(handle, stableIndex));
+		var bytes = module.access(function(handle) return RuntimeKernel.jit_location(handle, stableIndex));
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
 	public static function debugRegionCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.debug_region_count);
+		return module.access(RuntimeKernel.debug_region_count);
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.retired_allocation_count);
+		return module.access(RuntimeKernel.retired_allocation_count);
 
 	public static function metadataTypeCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.type_count);
+		return module.access(RuntimeKernel.type_count);
 
 	public static function metadataTypeCapacity(module:LoadedModule):Int
-		return module.access(RuntimeNative.type_capacity);
+		return module.access(RuntimeKernel.type_capacity);
 
 	public static function liveAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.live_allocation_count);
+		return module.access(RuntimeKernel.live_allocation_count);
 
 	public static function nativeRootCount(module:LoadedModule):Int
-		return module.access(RuntimeNative.native_root_count);
+		return module.access(RuntimeKernel.native_root_count);
 
 	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
 		return module.access(function(handle) {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
-			RuntimeNative.retirement_status(handle, bytes.getData());
+			RuntimeKernel.retirement_status(handle, bytes.getData());
 			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12));
 		});
 
 	public static function liveRevision(module:LoadedModule):Int
-		return module.access(RuntimeNative.revision);
+		return module.access(RuntimeKernel.revision);
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
 		module.access(function(handle) {
-			RuntimeNative.set_patch_failure_stage(handle, stage);
+			RuntimeKernel.set_patch_failure_stage(handle, stage);
 		});
 
 	public static function dispose(module:LoadedModule):Void {
@@ -241,7 +160,7 @@ class Runtime {
 					retirementBacklog[write++] = module;
 			}
 			retirementBacklog.resize(write);
-			write += RuntimeNative.retry_failed_retirements();
+			write += RuntimeKernel.retry_failed_retirements();
 			retirementMutex.release();
 			return write;
 		} catch (error:Dynamic) {
@@ -259,7 +178,7 @@ class Runtime {
 
 	static function tryDispose(module:LoadedModule):Bool
 		return module.close(function(handle) {
-			var status:RuntimeStatus = RuntimeNative.dispose(handle);
+			var status:RuntimeStatus = RuntimeKernel.dispose(handle);
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
@@ -306,7 +225,7 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
-			var result:RuntimeStatus = RuntimeNative.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
+			var result:RuntimeStatus = RuntimeKernel.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
 			if (result == RuntimeStatus.Ok)
 				module.commitPatch(generation);
 			return result;
@@ -344,7 +263,7 @@ class Runtime {
 	/** Haxeon owns the immutable module/identity policy; native code rechecks live dispatch state. */
 	static function validateCall(module:LoadedModule, handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
 		validateCallModel(module, stableIndex, shape);
-		var status:RuntimeStatus = RuntimeNative.validate_call(handle, stableIndex, shape);
+		var status:RuntimeStatus = RuntimeKernel.validate_call(handle, stableIndex, shape);
 		if (status != RuntimeStatus.Ok)
 			throw new RuntimeError(status, 'Invalid runtime function call (stable ID $stableIndex)');
 	}
