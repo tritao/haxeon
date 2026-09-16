@@ -1197,13 +1197,11 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token, true);
 		requireExact(document);
-		var offset = positionOffset(document, position(request));
-		var state = service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))),
-			tokens = state.ast == null ? state.recoveredTokens : state.tokens;
-		for (token in tokens)
-			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
-				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
-		return null;
+		var prepared = service.prepareRename(compilerPath(document), positionOffset(document, position(request)), token);
+		return prepared == null ? null : {
+			range: document.range(prepared.span.start, prepared.span.end),
+			placeholder: prepared.placeholder
+		};
 	}
 
 	function rename(request:Dynamic, token:CancellationToken):Dynamic {

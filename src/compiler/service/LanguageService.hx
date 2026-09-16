@@ -81,6 +81,12 @@ typedef CompletionResult = {
 	final isIncomplete:Bool;
 }
 
+/** Exact-source rename target used by the LSP adapter's prepare request. */
+typedef RenamePreparation = {
+	final span:SourceSpan;
+	final placeholder:String;
+}
+
 /** Compiler-owned completion context selected from one editor snapshot. */
 typedef EditorCompletionContext = {
 	final context:SemanticCompletionContext;
@@ -1520,6 +1526,24 @@ class LanguageService {
 
 	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>
 		return completeResult(path, position, token).items;
+
+	/**
+		Return a prepare-rename range only from the exact current snapshot. The
+		protocol adapter must not inspect ModuleState's construction fields to
+		make this decision.
+	*/
+	public function prepareRename(path:String, position:Int, ?token:CancellationToken):Null<RenamePreparation> {
+		var context = semanticQuery(path, position, null, token);
+		if (context == null || context.confidence != EditorSnapshotConfidence.Exact || !stableSymbol(context))
+			return null;
+		for (lexical in context.snapshot.tokens) {
+			if (token != null)
+				token.check();
+			if (lexical.kind == Identifier && position >= lexical.span.start && position <= lexical.span.end)
+				return {span: lexical.span, placeholder: lexical.text};
+		}
+		return null;
+	}
 
 	public function completionContext(path:String, position:Int, ?qualifier:String, ?token:CancellationToken):Null<EditorCompletionContext> {
 		if (token != null)
