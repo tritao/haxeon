@@ -24,7 +24,8 @@ module generation.
 | Patch stable-ID and relocation resolution plans | Haxe-managed policy state | Haxe patch transaction/generation and patch-input projection | Haxe patch-input construction | Transaction state is discarded on failure; native publication never borrows it |
 | Decoded HLP patch input records | Haxe metadata arena | Haxe patch transaction/generation | Native JIT staging and machine-sensitive validation | Arena checkpoint rollback on failure; generation teardown after native publication retires |
 | Patched scalar pools (integers, floats, strings, lengths, and UTF-16 views) | Haxe metadata arena on the Haxe-built path; HashLink patch transaction on the legacy path | Loaded Haxe generation or `hl_module` | JIT and patched code | Haxe arena release or runtime-module release |
-| Constant storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
+| Constant descriptors | Haxe metadata arena on the Haxe-built path; HashLink patch transaction on the legacy path | Haxe `HlMetadataGeneration` or `hl_module` | Native constant-initialization kernel and module metadata | Haxe arena release or runtime-module release |
+| Materialized constant objects | HashLink module allocator through the native constant-initialization kernel | `hl_module` | Generated code, globals, and GC scanning | Runtime-module release after calls have quiesced |
 | Patch source snapshots | Haxe metadata arena on the Haxe-built path; HashLink patch transaction on the legacy path | Loaded Haxe generation or `hl_module` | Debugger and source resolver | Haxe arena release or runtime-module release |
 | Globals storage | HashLink module allocator | Loaded module generation | Generated code and rooted heap values | Runtime-module release after plugin deactivation |
 | Managed objects, closures, and array storage | HashLink GC with an explicit allocation owner | `hl_module` whose type or callable produced the value | Host roots, globals, other managed values | GC sweep removes ownership records when values become unreachable |
@@ -119,6 +120,16 @@ entrypoint table is finalized, it builds executable object-prototype state from
 the Haxe-owned records. Haxe metadata publication therefore never asks
 HashLink to construct a prototype against an uninitialized or Haxe-only
 function-pointer table.
+
+Constant initialization follows the same policy/mechanism split. Haxe validates
+and iterates the arena-owned `hl_constant` descriptors after the module's JIT
+and global tables are ready, invoking the native kernel once per descriptor.
+The kernel retains the bootstrap-sensitive work: allocating the materialized
+object through the module allocator, resolving UTF-16 strings and type entries,
+copying scalar fields, and completing the GC-visible global representation.
+Legacy modules still use HashLink's eager C loop. The Haxe path therefore moves
+constant construction policy without pretending that GC allocation or
+write-barrier-sensitive materialization has moved into Haxeon.
 
 Haxe-built patch publication follows the same single-model rule. `HlPatchReader`
 decodes each HLP once, and the generation arena owns the `hl_patch_input`
