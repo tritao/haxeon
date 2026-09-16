@@ -742,6 +742,23 @@ class ParserRecoveryMain {
 		if (!retainedForInValue || !retainedForInMember)
 			throw "for-in recovery discarded the typed map value or loop body";
 
+		var recoveredCatchSource = new SourceFile("RecoveredCatchTyping.hx",
+			"function main():Void { try { broken; } catch (error:Int) { error; } }");
+		var recoveredCatchProgram = new Parser(new Lexer(recoveredCatchSource).tokenize()).parseProgramRecovering().program,
+			recoveredCatchTyped = Typer.typeRecovered(recoveredCatchProgram);
+		var retainedCatchType = false;
+		if (recoveredCatchTyped != null && recoveredCatchTyped.functions.length == 1)
+			switch recoveredCatchTyped.functions[0].statements[0] {
+				case TTry(_, catches, _) if (catches.length == 1):
+					switch catches[0].type {
+						case TInt: retainedCatchType = true;
+						default:
+					}
+				default:
+			}
+		if (!retainedCatchType)
+			throw "try recovery discarded the declared catch type";
+
 		var switchErrorSource = new SourceFile("SwitchErrorTyping.hx",
 			"function main():Void { switch (broken) { case 1: var inside:Int = 1; default: var fallback:Int = 2; } var after:Int = 3; }");
 		var switchErrorProgram = new Parser(new Lexer(switchErrorSource).tokenize()).parseProgramRecovering().program,

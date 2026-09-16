@@ -567,23 +567,27 @@ class BodyTyper {
 				var typedCatches = [],
 					typedTry = typeStatements(tryBranch, new Scope(scope), result);
 				for (caught in catches) {
-					var catchScope = new Scope(scope);
-					catchScope.define(caught.name, TUnknown, caught.span);
-					bindCell(caught.name, caught.span, catchScope, TUnknown);
+					var catchType = resolveType(caught.type),
+						catchScope = new Scope(scope);
+					catchScope.define(caught.name, catchType, caught.span);
+					bindCell(caught.name, caught.span, catchScope, catchType);
 					typedCatches.push({
 						name: catchScope.requireId(caught.name),
-						type: TUnknown,
+						type: catchType,
 						statements: typeStatements(caught.statements, catchScope, result),
 						span: caught.span
 					});
 				}
 				return TTry(typedTry, typedCatches, span);
-			case Switch(_, cases, defaultBranch, hasDefault, span):
-				var typedCases = [];
+			case Switch(expression, cases, defaultBranch, hasDefault, span):
+				var typedSubject = typeExpression(expression, scope, null, false),
+					caseExpected = isRecoveryType(typedSubject.type) ? null : typedSubject.type,
+					typedCases = [];
 				for (switchCase in cases) {
-					var caseScope = new Scope(scope);
+					var caseScope = new Scope(scope),
+						typedValue = typeExpression(switchCase.value, caseScope, caseExpected, false);
 					typedCases.push({
-						value: new TypedExpression(TNullLiteral, TError, switchCase.span),
+						value: typedValue,
 						subjectBinding: null,
 						isCatchAll: false,
 						guard: null,
@@ -595,7 +599,7 @@ class BodyTyper {
 						span: switchCase.span
 					});
 				}
-				return TSwitch(new TypedExpression(TNullLiteral, TError, span), typedCases,
+				return TSwitch(typedSubject, typedCases,
 					typeStatements(defaultBranch, new Scope(scope), result), hasDefault, span);
 			default:
 				return null;
