@@ -291,7 +291,8 @@ class WasmLinearGc {
 			unused = builder.local("unused", I32),
 			entryCount = builder.local("entryCount", I32),
 			entryIndex = builder.local("entryIndex", I32),
-			backingType = builder.local("backingType", I32);
+			backingOwner = builder.local("backingOwner", I32),
+			enumConstructor = builder.local("enumConstructor", I32);
 		builder.localGet(value);
 		builder.i32Const(WasmLayout.GC_BLOCK_HEADER_SIZE);
 		builder.i32Sub();
@@ -308,15 +309,15 @@ class WasmLinearGc {
 		// link while allocated. Trace only the active logical entries.
 		builder.localGet(header);
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_LINK_OFFSET));
-		builder.localTee(backingType);
+		builder.localTee(backingOwner);
 		builder.i32Eqz();
 		builder.ifElse(function(_) {}, function(builder) {
-			appendGcBackingTraceCase(builder, backingType, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
-				appendGcArrayContents(builder, value, backingType, entryCount, entryIndex, mark);
+			appendGcBackingTraceCase(builder, backingOwner, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
+				appendGcArrayContents(builder, value, backingOwner, entryCount, entryIndex, mark);
 			});
 			for (mapName in mapNames)
-				appendGcBackingTraceCase(builder, backingType, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
-					appendGcMapContents(builder, value, backingType, entryCount, entryIndex, mark, mapName);
+				appendGcBackingTraceCase(builder, backingOwner, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
+					appendGcMapContents(builder, value, backingOwner, entryCount, entryIndex, mark, mapName);
 				});
 			appendGcConservativeTrace(builder, value, header, entryCount, entryIndex, mark);
 			builder.return_();
@@ -359,9 +360,9 @@ class WasmLinearGc {
 			builder.if_(function(builder) {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
-				builder.localSet(backingType);
+				builder.localSet(enumConstructor);
 				for (caseIndex in 0...enumLayout.cases.length) {
-					builder.localGet(backingType);
+					builder.localGet(enumConstructor);
 					builder.i32Const(caseIndex);
 					builder.emit(I32Eq);
 					builder.if_(function(builder) {
@@ -428,9 +429,9 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcArrayContents(builder:WasmFunctionBuilder, value:WasmLocalRef, backingType:WasmLocalRef, entryCount:WasmLocalRef,
+	static function appendGcArrayContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef, entryCount:WasmLocalRef,
 			entryIndex:WasmLocalRef, mark:Int):Void {
-		builder.localGet(backingType);
+		builder.localGet(owner);
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.localSet(entryCount);
 		builder.i32Const(0);
@@ -441,7 +442,7 @@ class WasmLinearGc {
 				builder.localGet(entryCount);
 				builder.emit(I32LtS);
 				builder.ifElse(function(builder) {
-					builder.localGet(value);
+					builder.localGet(backing);
 					builder.localGet(entryIndex);
 					builder.i32Const(4);
 					builder.emit(I32Mul);
@@ -458,13 +459,13 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcMapContents(builder:WasmFunctionBuilder, value:WasmLocalRef, backingType:WasmLocalRef, entryCount:WasmLocalRef,
+	static function appendGcMapContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef, entryCount:WasmLocalRef,
 			entryIndex:WasmLocalRef, mark:Int, mapName:String):Void {
 		var keyType = WasmLinearRuntime.mapKeyType(mapName),
 			valueType = WasmLinearRuntime.mapValueType(mapName),
 			entrySize = WasmLinearRuntime.mapEntrySize(valueType),
 			valueOffset = WasmLinearRuntime.mapValueOffset(valueType);
-		builder.localGet(backingType);
+		builder.localGet(owner);
 		builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
 		builder.localSet(entryCount);
 		builder.i32Const(0);
@@ -476,7 +477,7 @@ class WasmLinearGc {
 				builder.emit(I32LtS);
 				builder.ifElse(function(builder) {
 					if (WasmTarget.isReference(keyType)) {
-						builder.localGet(value);
+						builder.localGet(backing);
 						builder.localGet(entryIndex);
 						builder.i32Const(entrySize);
 						builder.emit(I32Mul);
@@ -485,7 +486,7 @@ class WasmLinearGc {
 						builder.call(builder.functionRef(mark));
 					}
 					if (WasmTarget.isReference(valueType)) {
-						builder.localGet(value);
+						builder.localGet(backing);
 						builder.localGet(entryIndex);
 						builder.i32Const(entrySize);
 						builder.emit(I32Mul);

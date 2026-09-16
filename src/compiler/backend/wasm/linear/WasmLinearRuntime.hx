@@ -225,7 +225,7 @@ class WasmLinearRuntime {
 			case "structGetPointer": addStructGetPointer(module, native.name, bytesDataPointer);
 			case "structSetPointer": addStructSetPointer(module, native.name, bytesDataPointer);
 			case "structGetUtf8": addStructGetUtf8(module, native.name, allocator, bytesDataPointer);
-			case "structSetUtf8": addStructSetUtf8(module, native.name, bytesDataPointer);
+			case "structSetUtf8": addStructSetUtf8(module, native.name, allocator, bytesDataPointer);
 			default: null;
 		};
 	}
@@ -836,11 +836,106 @@ class WasmLinearRuntime {
 		]));
 	}
 
-	static function addStructSetUtf8(module:WasmModule, name:String, bytesDataPointer:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
-			LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add,
-			LocalGet(2), Call(bytesDataPointer), I32Store(0), Return
-		]));
+	static function addStructSetUtf8(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32, I32], results: []}),
+			bytes = builder.parameter("bytes", 0),
+			offset = builder.parameter("offset", 1),
+			input = builder.parameter("input", 2),
+			nullable = builder.parameter("nullable", 3),
+			roots = builder.local("roots", I32),
+			rootIndex = builder.local("rootIndex", I32),
+			length = builder.local("length", I32),
+			copy = builder.local("copy", I32);
+		builder.localGet(bytes);
+		builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
+		builder.localSet(roots);
+		builder.localGet(offset);
+		builder.i32Const(2);
+		builder.emit(I32ShrU);
+		builder.i32Const(1);
+		builder.i32Add();
+		builder.localSet(rootIndex);
+		builder.localGet(rootIndex);
+		builder.localGet(roots);
+		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
+		builder.emit(I32LtS);
+		builder.i32Eqz();
+		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.localGet(input);
+		builder.i32Eqz();
+		builder.ifElse(function(builder) {
+			builder.localGet(nullable);
+			builder.i32Eqz();
+			builder.if_(function(builder) builder.emit(Unreachable));
+			builder.localGet(roots);
+			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+			builder.localGet(rootIndex);
+			builder.i32Const(4);
+			builder.emit(I32Mul);
+			builder.i32Add();
+			builder.i32Const(0);
+			builder.emit(I32Store(0));
+			builder.localGet(bytes);
+			builder.call(builder.functionRef(bytesDataPointer));
+			builder.localGet(offset);
+			builder.i32Add();
+			builder.i32Const(0);
+			builder.emit(I32Store(0));
+		}, function(builder) {
+			builder.localGet(input);
+			builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localSet(length);
+			builder.localGet(length);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET + 1);
+			builder.i32Add();
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(copy);
+			builder.localGet(copy);
+			builder.i32Const(WasmModuleSupport.typeId(Bytes));
+			builder.emit(I32Store(0));
+			builder.localGet(copy);
+			builder.localGet(length);
+			builder.i32Const(1);
+			builder.i32Add();
+			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localGet(copy);
+			builder.localGet(length);
+			builder.i32Const(1);
+			builder.i32Add();
+			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+			builder.localGet(copy);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(input);
+			builder.call(builder.functionRef(bytesDataPointer));
+			builder.localGet(length);
+			builder.emit(MemoryCopy);
+			builder.localGet(copy);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(length);
+			builder.i32Add();
+			builder.i32Const(0);
+			builder.emit(I32Store8(0));
+			builder.localGet(roots);
+			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+			builder.localGet(rootIndex);
+			builder.i32Const(4);
+			builder.emit(I32Mul);
+			builder.i32Add();
+			builder.localGet(copy);
+			builder.emit(I32Store(0));
+			builder.localGet(bytes);
+			builder.call(builder.functionRef(bytesDataPointer));
+			builder.localGet(offset);
+			builder.i32Add();
+			builder.localGet(copy);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.emit(I32Store(0));
+		});
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addStructGetUtf8(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {

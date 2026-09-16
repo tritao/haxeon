@@ -400,6 +400,16 @@ const cases = [
           const view = new DataView(retainedMemory().buffer);
           return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
         },
+        retained_check_label: pointer => {
+          const buffer = retainedMemory().buffer;
+          const view = new DataView(buffer);
+          const bytes = new Uint8Array(buffer);
+          const address = view.getUint32(pointer, true);
+          let end = address;
+          while (bytes[end] !== 0)
+            end++;
+          return new TextDecoder().decode(bytes.subarray(address, end)) === "retained-42" ? 42 : 0;
+        },
         retained_check_options: pointer => validOptions(pointer) ? 42 : 0,
         retained_check_paths: (paths, count) => {
           const buffer = retainedMemory().buffer;

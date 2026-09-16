@@ -2,11 +2,14 @@ import Retained;
 
 class RetainedHolder {
 	public var point:retained_point;
+	public var label:retained_label;
 	public var options:retained_options;
 	public var container:retained_container;
 
 	public function new() {
 		point = new retained_point();
+		label = new retained_label();
+		label.set_value("retained-" + 42);
 		options = makeOptions();
 		container = makeContainer();
 	}
@@ -52,6 +55,7 @@ function main():Int {
 		];
 		if (transient[0] != index
 			|| Retained.check(holder.point) != index + index + 1
+			|| Retained.check_label(holder.label) != 42
 			|| Retained.check_options(holder.options) != 42
 			|| Retained.check_container(holder.container, holder.container.get_value()) != 42
 			|| Retained.check_paths(["alpha", "βeta"]) != 42)
