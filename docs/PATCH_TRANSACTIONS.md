@@ -66,6 +66,11 @@ Haxe-owned interface for this mechanism; `NativeRuntimeJitBackend` is the
 current HashLink adapter and keeps its forwarding calls inline so generated
 runtime code retains direct native-call lowering.
 
+For the legacy host, `PatchSet` copies its HLP bytes at construction. The
+transaction decodes and publishes that owned snapshot, so a compiler result or
+caller-owned buffer can be reused or mutated without changing a staged native
+publication input.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication
