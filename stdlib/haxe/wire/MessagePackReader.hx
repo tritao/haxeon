@@ -25,6 +25,7 @@ class MessagePackReader {
 	final maxContainer:Int;
 	final maxDepth:Int;
 	final maxBytes:Int;
+	var bufferedMarker:Null<Int>;
 
 	public function new(bytes:Bytes, ?maxContainer:Int = DEFAULT_MAX_CONTAINER, ?maxDepth:Int = DEFAULT_MAX_DEPTH, ?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (bytes == null)
@@ -37,15 +38,26 @@ class MessagePackReader {
 		this.maxContainer = maxContainer;
 		this.maxDepth = maxDepth;
 		this.maxBytes = maxBytes;
+		this.bufferedMarker = null;
 		if (totalBytes > maxBytes)
 			throw new MessagePackError("MessagePack input exceeds configured limit");
 	}
 
 	public function position():Int
-		return input.position;
+		return input.position - (bufferedMarker == null ? 0 : 1);
 
 	public function atEnd():Bool
-		return input.position == totalBytes;
+		return bufferedMarker == null && input.position == totalBytes;
+
+	/** Returns whether the next value is nil without consuming it. */
+	public function isNil():Bool {
+		if (bufferedMarker != null)
+			return bufferedMarker == 0xc0;
+		if (input.position >= totalBytes)
+			return false;
+		bufferedMarker = input.readByte();
+		return bufferedMarker == 0xc0;
+	}
 
 	public function readNil():Void
 		expect(0xc0, "nil");
@@ -297,6 +309,11 @@ class MessagePackReader {
 			throw new MessagePackError("MessagePack container exceeds configured limit");
 
 	function readByte():Int {
+		if (bufferedMarker != null) {
+			var marker = bufferedMarker;
+			bufferedMarker = null;
+			return cast marker;
+		}
 		if (input.position >= totalBytes)
 			throw new MessagePackError("Truncated MessagePack value");
 		return input.readByte();

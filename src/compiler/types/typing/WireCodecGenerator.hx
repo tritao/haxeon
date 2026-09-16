@@ -43,19 +43,35 @@ class WireCodecGenerator {
 		var classesByName:Map<String, TypedClass> = [];
 		for (classDecl in classes)
 			classesByName.set(classDecl.name, classDecl);
-		var keys = [for (key in session.wireCodecRequests.keys()) key];
+		var roots:Array<WireCodecRequest> = [
+			for (key in session.wireCodecRequests.keys())
+				cast session.wireCodecRequests.get(key)
+		];
+		roots.sort(function(left, right) return Reflect.compare(typeKey(left.type), typeKey(right.type)));
+		var reachable:Map<String, CompilerType> = [],
+			requests:Map<String, WireCodecRequest> = [],
+			rootKeys:Map<String, Bool> = [],
+			visiting:Map<String, Bool> = [],
+			path:Array<String> = [];
+		for (request in roots) {
+			var key = typeKey(request.type);
+			requests.set(key, request);
+			rootKeys.set(key, true);
+			collectType(session, request.type, classesByName, reachable, visiting, path, request.span);
+		}
+		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
 		for (key in keys) {
-			var request:WireCodecRequest = cast session.wireCodecRequests.get(key);
+			var type = reachable.get(key), request = requests.get(key);
 			if (request == null)
-				continue;
-			var type = request.type;
-			validateType(session, type, classesByName, request.span);
-			result.push(valueEncoder(type, classesByName, request));
-			result.push(valueDecoder(type, classesByName, request));
-			result.push(encoder(type, request));
-			result.push(decoder(type, request));
+				request = {type: type, origin: roots[0].origin, span: roots[0].span};
+			result.push(valueEncoder(session, type, classesByName, request));
+			result.push(valueDecoder(session, type, classesByName, request));
+			if (rootKeys.exists(key)) {
+				result.push(encoder(type, request));
+				result.push(decoder(type, request));
+			}
 		}
 		return result;
 	}
@@ -75,28 +91,44 @@ class WireCodecGenerator {
 	static function isRequestType(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TInt, TFloat, TBool, TString, TBytes: true;
+			case TNullable(element): isRequestType(session, element);
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			default: false;
 		};
 
-	static function validateType(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, span:SourceSpan):Void {
+	static function collectType(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, reachable:Map<String, CompilerType>,
+			visiting:Map<String, Bool>, path:Array<String>, span:SourceSpan):Void {
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
+		var key = typeKey(type);
+		if (reachable.exists(key))
+			return;
+		if (visiting.exists(key))
+			BodyTyper.fail("E1024", 'MessagePack record schema cannot be recursive (${path.concat([key]).join(" -> ")})', span);
+		visiting.set(key, true);
+		path.push(key);
 		switch type {
+			case TNullable(element):
+				collectType(session, element, classes, reachable, visiting, path, span);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
 				if (declaration == null)
 					BodyTyper.fail("E1024", 'MessagePack record "$name" is not available in the typed program', span);
 				if (declaration.base != null)
 					BodyTyper.fail("E1024", 'MessagePack record "$name" cannot extend another class yet', declaration.span);
-				var fields = serializableFields(declaration, span);
+				var fields = serializableFields(session, declaration, span);
 				if (fields.length == 0)
 					BodyTyper.fail("E1024", 'MessagePack record "$name" must declare at least one instance field', declaration.span);
+				for (wireField in fields)
+					collectType(session, wireField.field.type, classes, reachable, visiting, path, wireField.field.span);
 			default:
 		}
+		path.pop();
+		visiting.remove(key);
+		reachable.set(key, type);
 	}
 
-	static function serializableFields(declaration:TypedClass, span:SourceSpan):Array<WireField> {
+	static function serializableFields(session:TypingSession, declaration:TypedClass, span:SourceSpan):Array<WireField> {
 		var result:Array<WireField> = [], ids:Map<Int, TypedField> = [];
 		for (field in declaration.fields) {
 			if (field.isStatic)
@@ -107,7 +139,7 @@ class WireCodecGenerator {
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" cannot be final yet', field.span);
 			if (!hasDirectStorage(field))
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" must have direct storage', field.span);
-			if (primitiveMethod(field.type) == null)
+			if (!isRequestType(session, field.type))
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" has unsupported type "${field.type}"', field.span);
 			var id = wireFieldId(declaration, field);
 			if (ids.exists(id))
@@ -144,43 +176,60 @@ class WireCodecGenerator {
 		return cast id;
 	}
 
-	static function valueEncoder(type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
+	static function valueEncoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
 		var writerType = classType(WRITER),
 			valueType = type,
-			statements:Array<TypedStatement> = [];
-		switch type {
-			case TInstance(NominalKind.Class, name, _):
-				var declaration = requiredClass(classes, name, request.span),
-					fields = serializableFields(declaration, request.span),
-					writer = local("writer", writerType, request.span),
-					value = local("value", valueType, request.span);
-				statements.push(expressionStatement(method(writer, "writeMapHeader", [intLiteral(fields.length, request.span)], TVoid, request.span),
-					request.span));
-				for (wireField in fields) {
-					var field = wireField.field;
-					statements.push(expressionStatement(method(writer, "writeInt", [intLiteral(wireField.id, request.span)], TVoid, request.span),
-						request.span));
-					statements.push(expressionStatement(method(writer, cast primitiveMethod(field.type),
-						[new TypedExpression(TField(value, field.name), field.type, field.span)], TVoid, request.span),
-						request.span));
-				}
-			default:
-				var methodName = cast primitiveMethod(type);
-				statements.push(expressionStatement(method(local("writer", writerType, request.span), methodName, [local("value", valueType, request.span)],
-					TVoid, request.span),
-					request.span));
-		}
+			writer = local("writer", writerType, request.span),
+			value = local("value", valueType, request.span),
+			statements = encodeValueStatements(session, classes, writer, value, type, request.span);
 		return generatedFunction(valueEncodeName(type), [{name: "writer", type: writerType}, {name: "value", type: valueType}], TVoid, statements, request);
 	}
 
-	static function valueDecoder(type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
+	static function encodeValueStatements(session:TypingSession, classes:Map<String, TypedClass>, writer:TypedExpression, value:TypedExpression,
+			type:CompilerType, span:SourceSpan):Array<TypedStatement> {
+		return switch type {
+			case TNullable(element):
+				var nonNullValue = new TypedExpression(TCast(value), element, value.span);
+				[
+					TIf(isNullValue(value, type, span), [expressionStatement(method(writer, "writeNil", [], TVoid, span), span)],
+						encodeValueStatements(session, classes, writer, nonNullValue, element, span), span)
+				];
+			case TInstance(NominalKind.Class, name, _):
+				var declaration = requiredClass(classes, name, span),
+					fields = serializableFields(session, declaration, span),
+					result:Array<TypedStatement> = [
+						expressionStatement(method(writer, "writeMapHeader", [intLiteral(fields.length, span)], TVoid, span), span)
+					];
+				for (wireField in fields) {
+					var field = wireField.field,
+						fieldValue = new TypedExpression(TField(value, field.name), field.type, field.span);
+					result.push(expressionStatement(method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span), span));
+					result = result.concat(encodeValueStatements(session, classes, writer, fieldValue, field.type, field.span));
+				}
+				result;
+			default:
+				var methodName = primitiveMethod(type);
+				if (methodName == null)
+					throw 'No MessagePack encoder for "$type"';
+				[expressionStatement(method(writer, methodName, [value], TVoid, span), span)];
+		};
+	}
+
+	static function valueDecoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, request:WireCodecRequest):TypedFunction {
 		var readerType = classType(READER),
+			reader = local("reader", readerType, request.span),
 			statements:Array<TypedStatement> = [];
 		switch type {
+			case TNullable(element):
+				var decoded = decodeValueExpression(session, classes, reader, element, request.span),
+					wrapped = new TypedExpression(TNullableWrap(decoded), type, request.span);
+				statements.push(TIf(method(reader, "isNil", [], TBool, request.span), [
+					expressionStatement(method(reader, "readNil", [], TVoid, request.span), request.span),
+					TReturn(nullValue(type, request.span), request.span)
+				], [TReturn(wrapped, request.span)], request.span));
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = requiredClass(classes, name, request.span),
-					fields = serializableFields(declaration, request.span),
-					reader = local("reader", readerType, request.span),
+					fields = serializableFields(session, declaration, request.span),
 					countName = "__wire_count",
 					indexName = "__wire_index",
 					keyName = "__wire_key",
@@ -191,7 +240,7 @@ class WireCodecGenerator {
 					statements.push(TVar(fieldLocal(index), defaultValue(fields[index].field.type, request.span), request.span));
 				statements.push(TWhile(new TypedExpression(TLess(local(indexName, TInt, request.span), local(countName, TInt, request.span)), TBool,
 					request.span),
-					decodeMapBody(fields, reader, keyName, request.span), request.span));
+					decodeMapBody(session, classes, fields, reader, keyName, request.span), request.span));
 				var resultType = type,
 					newValue = new TypedExpression(TNew(name, [], false), resultType, request.span);
 				statements.push(TVar(resultName, newValue, request.span));
@@ -200,8 +249,10 @@ class WireCodecGenerator {
 						local(fieldLocal(index), fields[index].field.type, request.span), request.span));
 				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
 			default:
-				statements.push(TReturn(method(local("reader", readerType, request.span), cast primitiveReadMethod(type), [], type, request.span),
-					request.span));
+				var methodName = primitiveReadMethod(type);
+				if (methodName == null)
+					throw 'No MessagePack decoder for "$type"';
+				statements.push(TReturn(method(reader, methodName, [], type, request.span), request.span));
 		}
 		return generatedFunction(valueDecodeName(type), [{name: "reader", type: readerType}], type, statements, request);
 	}
@@ -237,7 +288,8 @@ class WireCodecGenerator {
 		return generatedFunction(decodeName(type), [{name: "bytes", type: TBytes}], type, statements, request);
 	}
 
-	static function decodeMapBody(fields:Array<WireField>, reader:TypedExpression, keyName:String, span:SourceSpan):Array<TypedStatement> {
+	static function decodeMapBody(session:TypingSession, classes:Map<String, TypedClass>, fields:Array<WireField>, reader:TypedExpression, keyName:String,
+			span:SourceSpan):Array<TypedStatement> {
 		var result:Array<TypedStatement> = [TVar(keyName, method(reader, "readInt", [], TInt, span), span)];
 		var fallback:Array<TypedStatement> = [expressionStatement(method(reader, "skip", [], TVoid, span), span)];
 		for (index in 0...fields.length) {
@@ -245,12 +297,43 @@ class WireCodecGenerator {
 				field = wireField.field,
 				fieldIndex = fields.length - index - 1,
 				condition = new TypedExpression(TEqual(local(keyName, TInt, span), intLiteral(wireField.id, span)), TBool, span),
-				assignment = TAssign(fieldLocal(fieldIndex), method(reader, cast primitiveReadMethod(field.type), [], field.type, span), span);
-			fallback = [TIf(condition, [assignment], fallback, span)];
+				assignment = decodeFieldAssignment(session, classes, field, fieldIndex, reader, span);
+			fallback = [TIf(condition, assignment, fallback, span)];
 		}
 		result = result.concat(fallback);
 		result.push(TAssign("__wire_index", new TypedExpression(TAdd(local("__wire_index", TInt, span), intLiteral(1, span)), TInt, span), span));
 		return result;
+	}
+
+	static function decodeFieldAssignment(session:TypingSession, classes:Map<String, TypedClass>, field:TypedField, fieldIndex:Int, reader:TypedExpression,
+			span:SourceSpan):Array<TypedStatement> {
+		return switch field.type {
+			case TNullable(element):
+				var decoded = decodeValueExpression(session, classes, reader, element, span),
+					wrapped = new TypedExpression(TNullableWrap(decoded), field.type, span);
+				[
+					TIf(method(reader, "isNil", [], TBool, span), [
+						expressionStatement(method(reader, "readNil", [], TVoid, span), span),
+						TAssign(fieldLocal(fieldIndex), nullValue(field.type, span), span)
+					], [TAssign(fieldLocal(fieldIndex), wrapped, span)], span)
+				];
+			default:
+				[
+					TAssign(fieldLocal(fieldIndex), decodeValueExpression(session, classes, reader, field.type, span), span)
+				];
+		};
+	}
+
+	static function decodeValueExpression(session:TypingSession, classes:Map<String, TypedClass>, reader:TypedExpression, type:CompilerType,
+			span:SourceSpan):TypedExpression {
+		return switch type {
+			case TInstance(NominalKind.Class, _, _): new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
+			default:
+				var methodName = primitiveReadMethod(type);
+				if (methodName == null)
+					throw 'No MessagePack decoder for "$type"';
+				method(reader, methodName, [], type, span);
+		};
 	}
 
 	static function defaultValue(type:CompilerType, span:SourceSpan):TypedExpression
@@ -260,8 +343,16 @@ class WireCodecGenerator {
 			case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
 			case TString: stringLiteral("", span);
 			case TBytes: new TypedExpression(TCall("haxe.io.Bytes.alloc", [intLiteral(0, span)]), TBytes, span);
+			case TNullable(_): nullValue(type, span);
+			case TInstance(NominalKind.Class, name, _): new TypedExpression(TNew(name, [], false), type, span);
 			default: throw 'No MessagePack default for "$type"';
 		};
+
+	static function isNullValue(value:TypedExpression, type:CompilerType, span:SourceSpan):TypedExpression
+		return new TypedExpression(TEqual(value, nullValue(type, span)), TBool, span);
+
+	static function nullValue(type:CompilerType, span:SourceSpan):TypedExpression
+		return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
 
 	static function primitiveMethod(type:CompilerType):Null<String>
 		return switch type {
@@ -290,6 +381,7 @@ class WireCodecGenerator {
 			case TBool: "bool";
 			case TString: "string";
 			case TBytes: "bytes";
+			case TNullable(element): "nullable_" + typeKey(element);
 			case TInstance(NominalKind.Class, name, _): "class_" + StringTools.replace(name, ".", "_");
 			default: throw 'No MessagePack codec key for "$type"';
 		};

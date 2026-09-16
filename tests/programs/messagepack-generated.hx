@@ -11,6 +11,16 @@ class WireUser {
 	public var name:String;
 }
 
+@:wire
+class WireEnvelope {
+	@:wireId(1)
+	public var user:Null<WireUser>;
+	@:wireId(2)
+	public var note:Null<String>;
+	@:wireId(3)
+	public var count:Null<Int>;
+}
+
 function main():Int {
 	var user = new WireUser();
 	user.id = 73;
@@ -32,5 +42,26 @@ function main():Int {
 	compatible.writeInt(3);
 	compatible.writeBool(true);
 	var reordered:WireUser = MessagePack.decode(compatible.getBytes());
-	return reordered.id == 73 && reordered.active && reordered.name == "Ada" ? 43 : 2;
+	if (reordered.id != 73 || !reordered.active || reordered.name != "Ada")
+		return 2;
+
+	var envelope = new WireEnvelope();
+	envelope.user = user;
+	envelope.note = null;
+	envelope.count = 7;
+	var envelopeBytes = MessagePack.encode(envelope);
+	var restoredEnvelope:WireEnvelope = MessagePack.decode(envelopeBytes);
+	if (restoredEnvelope.user == null || restoredEnvelope.user.id != 73 || !restoredEnvelope.user.active || restoredEnvelope.user.name != "Ada"
+		|| restoredEnvelope.note != null || restoredEnvelope.count != 7)
+		return 3;
+
+	var optionalUser:Null<WireUser> = user;
+	var optionalBytes = MessagePack.encode(optionalUser);
+	var restoredOptional:Null<WireUser> = MessagePack.decode(optionalBytes);
+	if (restoredOptional == null || restoredOptional.id != 73)
+		return 4;
+	optionalUser = null;
+	var nullBytes = MessagePack.encode(optionalUser);
+	var restoredNull:Null<WireUser> = MessagePack.decode(nullBytes);
+	return restoredNull == null ? 43 : 5;
 }

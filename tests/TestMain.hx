@@ -886,6 +886,8 @@ class TestMain {
 			'MessagePack record field "MissingWireId.id" requires @:wireId(n)');
 		expectCompileError('@:wire class DuplicateWireId { @:wireId(1) public var left:Int; @:wireId(1) public var right:Int; } function main():Int { return haxe.wire.MessagePack.encode(new DuplicateWireId()).length; }',
 			'MessagePack record fields "DuplicateWireId.left" and "DuplicateWireId.right" use duplicate @:wireId(1)');
+		expectCompileError('@:wire class RecursiveWire { @:wireId(1) public var child:Null<RecursiveWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveWire()).length; }',
+			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_class_RecursiveWire -> class_RecursiveWire)');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;
