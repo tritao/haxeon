@@ -386,7 +386,8 @@ class SemanticWorkspace {
 	 */
 	public function editorLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
 		var result:Array<{state:ModuleState, span:SourceSpan}> = [],
-			authoritative = indexedSymbol(id) != null;
+			authoritativeSymbol = indexedSymbol(id),
+			authoritative = authoritativeSymbol != null;
 		for (candidate in orderedStates()) {
 			if (token != null)
 				token.check();
@@ -419,11 +420,16 @@ class SemanticWorkspace {
 				for (span in state.semanticModel.index.locations(id))
 					addLocation(result, state, span);
 			// A valid source snapshot may not type an unreachable body, while its
-			// current recovered model still owns same-module local locations. Do
-			// not merge this fallback with an exact identity of the same symbol.
-			if (result.length == 0 && state.semanticModel != null
-				&& state.semanticModel.index.symbol(id) == null
-				&& state.recoveredSemanticModel != null)
+			// current recovered model still contains references to the queried
+			// identity. Merge those current-source locations even when the exact
+			// model already contributed locations. Keep the existing same-module
+			// guard so a recovered local cannot be merged into an exact symbol that
+			// the current semantic model owns under the same identity.
+			var exactSymbol = state.semanticModel == null ? null : state.semanticModel.index.symbol(id);
+			if (state.semanticModel != null
+				&& (exactSymbol == null || authoritativeSymbol != null && authoritativeSymbol.state != state)
+				&& state.recoveredSemanticModel != null
+				&& state.recoveredSemanticModel.revision == state.revision)
 				for (span in state.recoveredSemanticModel.index.locations(id)) {
 					if (token != null)
 						token.check();

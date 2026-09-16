@@ -1155,6 +1155,22 @@ class LanguageServiceMain {
 			recoveredReferences = recoveredReferenceService.references("refs/Target.hx", targetPosition + 1);
 		if (recoveredReferences.length != 2)
 			throw 'authoritative references did not include an unreachable body recovered from a valid module: ${recoveredReferences.length}';
+		var sameModuleRecoveryService = new LanguageService(),
+			sameModuleTargetSource = "package refs; function target():Int return 1; function main():Void return;",
+			sameModuleConsumerSource = "package refs; import refs.SameModuleTarget; function live():Int return SameModuleTarget.target(); function dead<T>():Int return SameModuleTarget.target(); function main():Int return live();";
+		sameModuleRecoveryService.update("refs/SameModuleTarget.hx", sameModuleTargetSource);
+		sameModuleRecoveryService.compile("refs.SameModuleTarget");
+		sameModuleRecoveryService.update("refs/SameModuleConsumer.hx", sameModuleConsumerSource);
+		sameModuleRecoveryService.compile("refs.SameModuleConsumer");
+		var sameModuleLiveUse = sameModuleConsumerSource.indexOf("target();", sameModuleConsumerSource.indexOf("function live")),
+			sameModuleDeadUse = sameModuleConsumerSource.indexOf("target();", sameModuleConsumerSource.indexOf("function dead")),
+			sameModuleReferences = sameModuleRecoveryService.references("refs/SameModuleConsumer.hx", sameModuleLiveUse + 1),
+			hasSameModuleDeadReference = false;
+		for (reference in sameModuleReferences)
+			if (reference.path == "refs/SameModuleConsumer.hx" && reference.span.start == sameModuleDeadUse)
+				hasSameModuleDeadReference = true;
+		if (!hasSameModuleDeadReference)
+			throw 'same-module recovered references omitted a valid generic-body use: ${sameModuleReferences.length}';
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
