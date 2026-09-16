@@ -121,7 +121,8 @@ class SemanticAssembly {
 			var state = modules.get(name),
 				ast = state.parsedAst(),
 				locals:Map<String, Bool> = [],
-				aliases = context.importAliases(ast.imports, ast.importAliases);
+				importedAliases = context.importAliases(ast.imports, ast.importAliases),
+				aliases:Map<String, String> = [for (alias => target in importedAliases) alias => target];
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
 			var explicitImportNames:Map<String, Bool> = [];
@@ -217,32 +218,44 @@ class SemanticAssembly {
 				}
 				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
 			}
-			// An explicit type import must not silently overwrite another explicit
-			// import with the same local spelling. Keep the name unresolved so the
-			// typer rejects the use instead of assigning the wrong compiler identity.
-			var explicitTypeImports:Map<String, String> = [],
-				ambiguousExplicitTypes:Map<String, Bool> = [];
+			// An explicit import must not silently overwrite another explicit import
+			// with the same local spelling. Keep the name unresolved so the typer
+			// rejects the use instead of assigning the wrong compiler identity.
+			var explicitImportTargets:Map<String, String> = [],
+				ambiguousExplicitImports:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
 				if (isWildcardImport(importPath))
-					continue;
-				var importedType = sourceTypeAliases.get(importPath);
-				if (importedType == null)
 					continue;
 				var localName = compiler.QualifiedName.last(importPath);
 				for (alias => path in ast.importAliases)
 					if (path == importPath)
 						localName = alias;
-				if (ambiguousExplicitTypes.exists(localName))
+				var importedTarget = importedAliases.get(importPath);
+				if (importedTarget == null)
 					continue;
-				var previousType = explicitTypeImports.get(localName);
-				if (previousType == null)
-					explicitTypeImports.set(localName, importedType);
-				else if (previousType != importedType) {
-					explicitTypeImports.remove(localName);
-					ambiguousExplicitTypes.set(localName, true);
+				if (ambiguousExplicitImports.exists(localName))
+					continue;
+				var previousTarget = explicitImportTargets.get(localName);
+				if (previousTarget == null)
+					explicitImportTargets.set(localName, importedTarget);
+				else if (previousTarget != importedTarget) {
+					explicitImportTargets.remove(localName);
+					ambiguousExplicitImports.set(localName, true);
 				}
 			}
-			for (name in ambiguousExplicitTypes.keys())
+			for (alias => importPath in ast.importAliases) {
+				var importedTarget = importedAliases.get(importPath);
+				if (importedTarget == null || ambiguousExplicitImports.exists(alias))
+					continue;
+				var previousTarget = explicitImportTargets.get(alias);
+				if (previousTarget == null)
+					explicitImportTargets.set(alias, importedTarget);
+				else if (previousTarget != importedTarget) {
+					explicitImportTargets.remove(alias);
+					ambiguousExplicitImports.set(alias, true);
+				}
+			}
+			for (name in ambiguousExplicitImports.keys())
 				aliases.remove(name);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			for (interfaceDecl in ast.interfaces)

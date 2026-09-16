@@ -1709,6 +1709,20 @@ class TestMain {
 			ambiguousExplicitRejected = true;
 		if (!ambiguousExplicitRejected)
 			throw "ambiguous explicit imports unexpectedly compiled";
+		var ambiguousExplicitFunctionCompiler = new Compiler();
+		ambiguousExplicitFunctionCompiler.update("collision/functions/first/Source.hx",
+			"package collision.functions.first; function same():Int return 1; function main():Void return;");
+		ambiguousExplicitFunctionCompiler.update("collision/functions/second/Source.hx",
+			"package collision.functions.second; function same():Int return 2; function main():Void return;");
+		ambiguousExplicitFunctionCompiler.update("collision/functions/app/Main.hx",
+			"package collision.functions.app; import collision.functions.first.same; import collision.functions.second.same; function main():Int return same();");
+		var ambiguousExplicitFunctionRejected = false;
+		try
+			ambiguousExplicitFunctionCompiler.compile("collision.functions.app.Main")
+		catch (error:CompileError)
+			ambiguousExplicitFunctionRejected = true;
+		if (!ambiguousExplicitFunctionRejected)
+			throw "ambiguous explicit function imports unexpectedly compiled";
 		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)
