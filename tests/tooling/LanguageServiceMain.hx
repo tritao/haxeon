@@ -1309,6 +1309,33 @@ class LanguageServiceMain {
 		var externalAliasNames = [for (item in externalAliasService.complete("alias/app/Main.hx", externalAliasSource.length)) item.label];
 		if (externalAliasNames.indexOf("member") < 0)
 			throw "recovered external type aliases did not preserve the aliased receiver type";
+		var aliasedTypeService = new LanguageService(),
+			aliasedTypeSource = "package alias.app; import alias.types.Foo as F; function main():Void { var value:F = new F(); value.";
+		aliasedTypeService.update("alias/types/Foo.hx", "package alias.types; class Foo { public var member:Int; } function main():Void return;");
+		aliasedTypeService.compile("alias.types.Foo");
+		aliasedTypeService.update("alias/app/AliasedType.hx", aliasedTypeSource);
+		var aliasedTypeNames = [for (item in aliasedTypeService.complete("alias/app/AliasedType.hx", aliasedTypeSource.length)) item.label];
+		if (aliasedTypeNames.indexOf("member") < 0)
+			throw "recovered aliased imported types did not preserve the canonical receiver identity";
+		var aliasedTypePosition = aliasedTypeSource.indexOf(":F") + 2,
+			aliasedTypeDefinition = aliasedTypeService.typeDefinition("alias/app/AliasedType.hx", aliasedTypePosition),
+			aliasedTypeReferences = aliasedTypeService.references("alias/app/AliasedType.hx", aliasedTypePosition);
+		if (aliasedTypeDefinition == null
+			|| aliasedTypeDefinition.path != "alias/types/Foo.hx"
+			|| aliasedTypeReferences.length < 2)
+			throw "recovered aliased imported type identity was not preserved for navigation";
+		var genericAliasService = new LanguageService(),
+			genericAliasSource = "package alias.app; import alias.types.Box as B; function main():Void { var value:B<String> = new B<String>(); value.";
+		genericAliasService.update("alias/types/Box.hx", "package alias.types; class Box<T> { public var value:T; } function main():Void return;");
+		genericAliasService.compile("alias.types.Box");
+		genericAliasService.update("alias/app/GenericAlias.hx", genericAliasSource);
+		var genericAliasMembers = genericAliasService.completeResult("alias/app/GenericAlias.hx", genericAliasSource.length).items,
+			genericAliasValue:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in genericAliasMembers)
+			if (item.label == "value")
+				genericAliasValue = item;
+		if (genericAliasValue == null || genericAliasValue.detail != "value:String")
+			throw "recovered generic aliased type did not preserve receiver substitution";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");

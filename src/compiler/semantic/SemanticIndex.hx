@@ -1866,6 +1866,17 @@ class SemanticIndexBuilder {
 	}
 
 	function recoveredExternalType(name:String, arguments:Array<CompilerType>):CompilerType {
+		// Resolve through the editor's visibility-aware type path first. An
+		// explicit import alias such as `import pkg.Foo as F` may resolve to an
+		// authoritative symbol through the generic symbol callback, but retaining
+		// `F` as the nominal receiver name loses the canonical owner used for
+		// member lookup. The type resolver preserves that owner while remaining
+		// conservative about ambiguous or invisible declarations.
+		if (recoveryResolveType != null) {
+			var recovered = recoveryResolveType(name, arguments);
+			if (recovered != null && !isRecoveryType(recovered))
+				return recovered;
+		}
 		if (recoveryResolve != null) {
 			var id = recoveryResolve(name);
 			if (id != null) {
@@ -1877,11 +1888,6 @@ class SemanticIndexBuilder {
 				if (identity.indexOf(":enum:") >= 0)
 					return TInstance(compiler.types.Type.NominalKind.Enum, name, arguments);
 			}
-		}
-		if (recoveryResolveType != null) {
-			var recovered = recoveryResolveType(name, arguments);
-			if (recovered != null)
-				return recovered;
 		}
 		return TUnknown;
 	}
