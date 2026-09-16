@@ -1653,6 +1653,17 @@ class LanguageServiceMain {
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
+		var nestedStatementService = new LanguageService(),
+			nestedStatementSource = "package nested.app; import nested.types.NestedValue; function retained():Void { if (true) { broken statement; } var value:NestedValue = new NestedValue(); value.";
+		nestedStatementService.update("nested/types/NestedValue.hx", "package nested.types; class NestedValue { public var member:Int; }");
+		nestedStatementService.update("NestedStatements.hx", nestedStatementSource);
+		var nestedStatementItems = nestedStatementService.completeResult("NestedStatements.hx", nestedStatementSource.length).items,
+			foundNestedStatementMember = false;
+		for (item in nestedStatementItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundNestedStatementMember = true;
+		if (!foundNestedStatementMember)
+			throw "nested statement recovery consumed a valid declaration after a malformed block statement";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);

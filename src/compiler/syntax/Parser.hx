@@ -2398,10 +2398,31 @@ class Parser {
 			}
 			return parseStatements();
 		}
-		var statements = [];
-		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
-			appendStatements(statements, parseStatements());
+		var statements = parseStatementBlockBody();
 		consume(TokenKind.RightBrace);
+		return statements;
+	}
+
+	/**
+	 * Recover each statement inside a nested block independently. Catching only
+	 * in the enclosing function makes synchronization skip the block's closing
+	 * brace and any valid declarations that follow the malformed statement.
+	 */
+	function parseStatementBlockBody():Array<AstStatement> {
+		var statements:Array<AstStatement> = [], bodyStart = position;
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
+			var statementStart = position;
+			try {
+				appendStatements(statements, parseStatements());
+			}
+			catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				statements.push(ErrorStatement(error.diagnostic.span));
+				synchronizeStatement(bodyStart, statementStart);
+			}
+		}
 		return statements;
 	}
 
