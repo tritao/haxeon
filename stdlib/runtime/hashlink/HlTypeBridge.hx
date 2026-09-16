@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlFunction;
+import runtime.RuntimeModuleHandle;
 
 /** Small native boundary for handing Haxe-owned type metadata to HashLink. */
 @:hlNative("haxeon_runtime")
@@ -43,27 +44,27 @@ class HlTypeBridge {
 
 	/** Load a runtime wrapper from a Haxe-owned code record and external identity bytes. */
 	public static function native_runtime_module_load_code(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, identity:haxe.io.Bytes,
-		identityLength:Int):RawPtr<UInt8>
-		return RawPtr.nullPtr();
+		identityLength:Int):RuntimeModuleHandle
+		return null;
 
 	/** Load a runtime wrapper from a Haxe-owned code record and decoded identity tables. */
 	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
-		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):RawPtr<UInt8>
-		return RawPtr.nullPtr();
+		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):RuntimeModuleHandle
+		return null;
 
 	/** Retire an externally loaded runtime wrapper when no managed borrowers remain. */
-	public static function native_runtime_module_unload(module:RawPtr<UInt8>):Bool
+	public static function native_runtime_module_unload(module:RuntimeModuleHandle):Bool
 		return false;
 
 	/** Invoke a stable zero-argument i32 function through an externally loaded runtime wrapper. */
-	public static function native_runtime_module_call_i32(module:RawPtr<UInt8>, stableId:Int):Int
+	public static function native_runtime_module_call_i32(module:RuntimeModuleHandle, stableId:Int):Int
 		return 0;
 
 	/** Invoke a stable zero-argument void function through an externally loaded runtime wrapper. */
-	public static function native_runtime_module_call_void(module:RawPtr<UInt8>, stableId:Int):Void {}
+	public static function native_runtime_module_call_void(module:RuntimeModuleHandle, stableId:Int):Void {}
 
 	/** Apply one HLP transaction to an externally loaded runtime wrapper. */
-	public static function native_runtime_module_patch(module:RawPtr<UInt8>, bytes:haxe.io.Bytes, length:Int):Int
+	public static function native_runtime_module_patch(module:RuntimeModuleHandle, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;
 
 }

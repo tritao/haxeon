@@ -1,13 +1,14 @@
 package runtime.hashlink;
 
 import haxe.io.Bytes;
+import runtime.RuntimeModuleHandle;
 import runtime.memory.RawPtr;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
 	public final metadata:HlMetadataGeneration;
 	final lease:HlMetadataLease;
-	var module:RawPtr<UInt8>;
+	var module:Null<RuntimeModuleHandle>;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int) {
 		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
@@ -15,7 +16,7 @@ class HlRuntimeModule {
 			throw "HashLink runtime module requires metadata, HLB bytes, and a decoded HLI manifest";
 		this.metadata = metadata;
 		lease = metadata.acquire();
-		module = RawPtr.nullPtr();
+		module = null;
 		try {
 			var count = stableIds.length,
 				stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
@@ -28,7 +29,7 @@ class HlRuntimeModule {
 			}
 			module = HlTypeBridge.native_runtime_module_load_code_manifest(metadata.snapshot().nativeCode, bytes, bytes.length, moduleId, revision,
 				stableIdStorage, slotStorage, count, initializerSlot);
-			if (module.isNull())
+			if (module == null)
 				throw "HashLink external runtime module initialization failed";
 		} catch (error:Dynamic) {
 			lease.release();
@@ -38,7 +39,7 @@ class HlRuntimeModule {
 
 	/** Whether the native runtime wrapper remains initialized. */
 	public inline function isLoaded():Bool
-		return !module.isNull();
+		return module != null;
 
 	/** Invoke a stable zero-argument i32 function. */
 	public function callI32(stableId:Int):Int {
@@ -67,7 +68,7 @@ class HlRuntimeModule {
 			return true;
 		if (!HlTypeBridge.native_runtime_module_unload(module))
 			return false;
-		module = RawPtr.nullPtr();
+		module = null;
 		lease.release();
 		return true;
 	}
