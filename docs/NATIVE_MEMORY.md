@@ -192,8 +192,10 @@ and closure pointers; enum and virtual layout construction no longer calls
 HashLink's native initializers, which are no longer exposed by the bridge. The
 resulting runtime records, field indexes,
 sorted lookups, binding slots, and mark-bit maps remain arena-owned and stable.
-The view is ready for a future VM publication bridge; it does not yet replace
-the native module's contiguous `hl_code.types` array.
+The Haxe-owned runtime loader publishes this arena-backed slab directly as the
+native module's contiguous `hl_code.types` array. The legacy host facade keeps
+its native-decoder fallback, but Haxeon-generated runtime code no longer needs
+a second type-record representation.
 `HlMetadataCompatibility` owns the first hot-reload policy ring: the existing
 type prefix and module function-table size must remain stable, while only
 primitive, abstract, and function descriptors may be appended in place. Object,
