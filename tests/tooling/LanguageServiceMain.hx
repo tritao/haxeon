@@ -737,6 +737,7 @@ class LanguageServiceMain {
 		functionAliasNavigationService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int return a + b; function main():Void return;");
 		functionAliasNavigationService.compile("editor.util.Math");
 		functionAliasNavigationService.update("editor/FunctionAliasNavigation.hx", functionAliasNavigationSource);
+		functionAliasNavigationService.compile("editor.FunctionAliasNavigation");
 		var functionAliasPosition = functionAliasNavigationSource.lastIndexOf("sum") + 1,
 			functionAliasDefinition = functionAliasNavigationService.definition("editor/FunctionAliasNavigation.hx", functionAliasPosition),
 			functionAliasReferences = functionAliasNavigationService.references("editor/FunctionAliasNavigation.hx", functionAliasPosition);

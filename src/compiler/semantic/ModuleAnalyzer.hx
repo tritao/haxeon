@@ -339,6 +339,16 @@ class ModuleAnalyzer {
 			return path;
 		var packageName = QualifiedName.parentOrEmpty(sourceModule),
 			nestedName = path.substring(sourceModule.length + 1, path.length);
+		// Secondary source-module types are canonicalized into the package
+		// namespace, but top-level functions retain their owning module. An
+		// explicit function import must therefore resolve to module.function,
+		// not package.function.
+		var sourceState = modules.get(sourceModule),
+			program = sourceState == null ? null : sourceProgram(sourceState);
+		if (program != null)
+			for (fn in program.functions)
+				if (fn.name == nestedName)
+					return sourceModule + "." + nestedName;
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 

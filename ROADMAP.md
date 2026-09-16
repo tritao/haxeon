@@ -88,7 +88,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Stable function IDs, tombstones, compaction, and identity persistence.
 - [x] Typed function-value dependency invalidation.
 - [~] Package-qualified module paths and imported function/module aliases plus
-	imported class names/type annotations resolve incrementally; nominal class,
+	imported class names/type annotations resolve incrementally; explicit function
+	aliases retain their owning module identity; nominal class,
 	interface, enum, and alias identities now retain their package-qualified names.
 	Wildcard package imports now resolve direct source modules, secondary
 	declarations, enum constructors, and explicit-import precedence; conflicting
