@@ -69,7 +69,10 @@ runtime code retains direct native-call lowering.
 For the legacy host, `PatchSet` copies its HLP bytes at construction. The
 transaction decodes and publishes that owned snapshot, so a compiler result or
 caller-owned buffer can be reused or mutated without changing a staged native
-publication input.
+publication input. `RuntimeJitBackend.applyPatch` receives the staged
+transaction rather than an unrelated byte buffer; the current native adapter
+extracts the owned bytes at the final ABI boundary. This keeps the Haxe policy
+record and its publication input coupled for future backend implementations.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
