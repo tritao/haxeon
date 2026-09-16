@@ -64,10 +64,11 @@ class HlLoadedRuntimeModule {
 	public final identity:HlRuntimeManifest;
 	public final metadata:HlMetadataGeneration;
 	public final nativeModule:HlRuntimeModule;
-	public var functions(default, null):HlFunctionVersionTable;
-	public var revision(default, null):Int;
 
-	final patchLedger = new HlRuntimePatchLedger();
+	final patchState:HlRuntimePatchState;
+
+	public var functions(get, never):HlFunctionVersionTable;
+	public var revision(get, never):Int;
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
@@ -78,9 +79,14 @@ class HlLoadedRuntimeModule {
 		this.identity = identity;
 		this.metadata = metadata;
 		this.nativeModule = nativeModule;
-		this.functions = functions;
-		revision = identity.revision;
+		patchState = new HlRuntimePatchState(identity.revision, functions);
 	}
+
+	function get_functions():HlFunctionVersionTable
+		return patchState.functions;
+
+	function get_revision():Int
+		return patchState.revision;
 
 	/** Retire the runtime wrapper and then release its Haxe-owned metadata arena. */
 	public function unload():Bool {
@@ -90,7 +96,7 @@ class HlLoadedRuntimeModule {
 			return false;
 		if (!nativeModule.unload())
 			return false;
-		patchLedger.releaseAll();
+		patchState.releaseAll();
 		metadata.dispose();
 		disposed = true;
 		return true;
@@ -146,25 +152,25 @@ class HlLoadedRuntimeModule {
 
 	/** Return the committed Haxe-owned patch models in revision order. */
 	public function committedPatches():Array<HlPatch>
-		return patchLedger.patches();
+		return patchState.ledger.patches();
 
 	/** Return committed patch generations with function versions and dependencies. */
 	public function committedPatchGenerations():Array<HlRuntimePatchGeneration>
-		return patchLedger.snapshots();
+		return patchState.ledger.snapshots();
 
 	/** Number of committed generations whose replaced functions are all superseded. */
 	public var retiredPatchCount(get, never):Int;
 
 	function get_retiredPatchCount():Int
-		return patchLedger.retiredCount;
+		return patchState.ledger.retiredCount;
 
 	/** Return retired patch generations as isolated diagnostic snapshots. */
 	public function retiredPatchGenerations():Array<HlRuntimePatchGeneration>
-		return patchLedger.retiredSnapshots();
+		return patchState.ledger.retiredSnapshots();
 
 	/** Return the native revision retained by one committed patch generation. */
 	public function committedPatchCodeRevision(index:Int):Int {
-		return patchLedger.codeRevision(index);
+		return patchState.ledger.codeRevision(index);
 	}
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
@@ -190,7 +196,7 @@ class HlLoadedRuntimeModule {
 		if (patch.baseRevision != revision)
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
 		validatePatchPolicy(patch, model);
-		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision),
+		var nextFunctions = patchState.advance(patch.functionStableIds, patch.revision),
 			typeAppend = HlNativeMetadataBuilder.preparePatchTypes(module, metadata, model),
 			publication:HlRuntimePatchPublication;
 		try {
@@ -219,9 +225,7 @@ class HlLoadedRuntimeModule {
 		}
 		typeAppend.commit();
 		applyPatchSymbols(model);
-		patchLedger.publish(model, patch, nextFunctions, patchCode);
-		functions = nextFunctions;
-		revision = patch.revision;
+		patchState.publish(model, patch, nextFunctions, patchCode);
 	}
 
 	/** Validate HLP identity and live bytecode compatibility before staging. */
