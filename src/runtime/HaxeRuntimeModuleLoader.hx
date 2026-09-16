@@ -4,6 +4,7 @@ package runtime;
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
 import compiler.hl.HlNativeMetadataBuilder;
+import compiler.hl.HlRuntimeCallPolicy;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlRuntimeDispatchTable;
@@ -43,6 +44,7 @@ class HaxeRuntimeModuleLoader {
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			metadata.constantDescriptors.initialize(function(index) return kernel.initializeConstant(cast module, index));
+			initializeModule(module, model, identity);
 			return new LoadedModule(module, model, identity, metadata);
 		} catch (error:Dynamic) {
 			if (module != null)
@@ -50,6 +52,19 @@ class HaxeRuntimeModuleLoader {
 			metadata.dispose();
 			throw error;
 		}
+	}
+
+	function initializeModule(module:HlRuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest):Void {
+		if (identity.initializerSlot < 0)
+			return;
+		for (entry in identity.entries)
+			if (entry.functionIndex == identity.initializerSlot) {
+				if (!HlRuntimeCallPolicy.validFunction(model, identity, entry.stableId, 1))
+					throw new RuntimeError(RuntimeStatus.BadFunction, "Haxeon rejected an invalid module initializer");
+				kernel.callVoid(module, entry.stableId);
+				return;
+			}
+		throw new RuntimeError(RuntimeStatus.BadFormat, "Haxeon could not resolve the module initializer");
 	}
 }
 #end
