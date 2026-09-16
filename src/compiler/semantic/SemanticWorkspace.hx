@@ -305,16 +305,16 @@ class SemanticWorkspace {
 
 	/** Resolve a symbol for an editor query without publishing recovery globally. */
 	public function editorSymbol(state:ModuleState, id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {
-		if (state.ast == null && state.recoveredSemanticModel != null) {
-			var symbol = state.recoveredSemanticModel.index.symbol(id);
+		if (state.currentExact == null && state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
+			var symbol = state.currentRecovered.semanticModel.index.symbol(id);
 			if (symbol != null)
 				return {state: state, symbol: symbol};
 		}
 		var indexed = indexedSymbol(id);
 		if (indexed != null)
 			return indexed;
-		if (state.recoveredSemanticModel != null) {
-			var recovered = state.recoveredSemanticModel.index.symbol(id);
+		if (state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
+			var recovered = state.currentRecovered.semanticModel.index.symbol(id);
 			if (recovered != null)
 				return {state: state, symbol: recovered};
 		}
@@ -344,8 +344,8 @@ class SemanticWorkspace {
 
 	/** Read a signature from the current editor model when it exists. */
 	public function editorSignature(state:ModuleState, id:SemanticSymbolId):Null<SemanticSignatureInfo> {
-		if (state.ast == null && state.recoveredSemanticModel != null) {
-			var signature = state.recoveredSemanticModel.index.signature(id);
+		if (state.currentExact == null && state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
+			var signature = state.currentRecovered.semanticModel.index.signature(id);
 			if (signature != null)
 				return signature;
 		}
@@ -393,31 +393,33 @@ class SemanticWorkspace {
 				token.check();
 			if (candidate == state)
 				continue;
-			if (candidate.ast != null) {
-				if (candidate.semanticModel != null)
-					for (span in candidate.semanticModel.index.locations(id))
+			if (candidate.currentExact != null) {
+				if (candidate.currentExact.semanticModel != null)
+					for (span in candidate.currentExact.semanticModel.index.locations(id))
 						addLocation(result, candidate, span);
-				if (authoritative && candidate.semanticModel != null
-					&& candidate.semanticModel.index.symbol(id) == null
-					&& candidate.recoveredSemanticModel != null
-					&& candidate.recoveredSemanticModel.revision == candidate.revision)
-					for (span in candidate.recoveredSemanticModel.index.locations(id)) {
+				if (authoritative && candidate.currentExact.semanticModel != null
+					&& candidate.currentExact.semanticModel.index.symbol(id) == null
+					&& candidate.currentRecovered != null
+					&& candidate.currentRecovered.isCurrent(candidate.revision)
+					&& candidate.currentRecovered.semanticModel != null) {
+					for (span in candidate.currentRecovered.semanticModel.index.locations(id)) {
 						if (token != null)
 							token.check();
 						addLocation(result, candidate, span);
 					}
+				}
 				continue;
 			}
-			if (candidate.recoveredSemanticModel != null && authoritative)
-				for (span in candidate.recoveredSemanticModel.index.locations(id)) {
+			if (candidate.currentRecovered != null && candidate.currentRecovered.semanticModel != null && authoritative)
+				for (span in candidate.currentRecovered.semanticModel.index.locations(id)) {
 					if (token != null)
 						token.check();
 					addLocation(result, candidate, span);
 				}
 		}
-		if (state.ast != null) {
-			if (state.semanticModel != null)
-				for (span in state.semanticModel.index.locations(id))
+		if (state.currentExact != null) {
+			if (state.currentExact.semanticModel != null)
+				for (span in state.currentExact.semanticModel.index.locations(id))
 					addLocation(result, state, span);
 			// A valid source snapshot may not type an unreachable body, while its
 			// current recovered model still contains references to the queried
@@ -425,18 +427,20 @@ class SemanticWorkspace {
 			// model already contributed locations. Keep the existing same-module
 			// guard so a recovered local cannot be merged into an exact symbol that
 			// the current semantic model owns under the same identity.
-			var exactSymbol = state.semanticModel == null ? null : state.semanticModel.index.symbol(id);
-			if (state.semanticModel != null
-				&& (exactSymbol == null || authoritativeSymbol != null && authoritativeSymbol.state != state)
-				&& state.recoveredSemanticModel != null
-				&& state.recoveredSemanticModel.revision == state.revision)
-				for (span in state.recoveredSemanticModel.index.locations(id)) {
-					if (token != null)
-						token.check();
-					addLocation(result, state, span);
+			var exactSymbol = state.currentExact.semanticModel == null ? null : state.currentExact.semanticModel.index.symbol(id);
+			if (state.currentExact.semanticModel != null
+					&& (exactSymbol == null || authoritativeSymbol != null && authoritativeSymbol.state != state)
+					&& state.currentRecovered != null
+					&& state.currentRecovered.isCurrent(state.revision)
+					&& state.currentRecovered.semanticModel != null) {
+					for (span in state.currentRecovered.semanticModel.index.locations(id)) {
+						if (token != null)
+							token.check();
+						addLocation(result, state, span);
+					}
 				}
-		} else if (state.recoveredSemanticModel != null)
-			for (span in state.recoveredSemanticModel.index.locations(id)) {
+		} else if (state.currentRecovered != null && state.currentRecovered.semanticModel != null)
+			for (span in state.currentRecovered.semanticModel.index.locations(id)) {
 				if (token != null)
 					token.check();
 				addLocation(result, state, span);
@@ -957,8 +961,8 @@ class SemanticWorkspace {
 	public function editorVisibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
 		var result:Array<IndexedSemanticSymbol> = [],
 			seen:Map<String, Bool> = [];
-		if (from.ast == null && from.recoveredSemanticModel != null)
-			for (symbol in from.recoveredSemanticModel.index.symbols)
+		if (from.currentExact == null && from.currentRecovered != null && from.currentRecovered.semanticModel != null)
+			for (symbol in from.currentRecovered.semanticModel.index.symbols)
 				if (symbol.kind != DeclarationKind.TypeParameter) {
 					seen.set(Std.string(symbol.id), true);
 					result.push(symbol);
@@ -1549,11 +1553,24 @@ class SemanticWorkspace {
 		return packageName != null && requestedName == packageName + "." + declaredName;
 	}
 
-	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.lastGoodSemanticModel;
+	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel> {
+		if (state.currentExact != null)
+			return state.currentExact.semanticModel;
+		// During strict analysis the mutable candidate model is intentionally
+		// unpublished until all builder passes finish. Compiler resolution still
+		// needs to see that in-flight model; editor queries never reach this path
+		// after update because update clears the raw exact fields and publishes a
+		// current recovered snapshot.
+		if (state.ast != null && state.semanticModel != null
+			&& state.semanticModel.revision == state.revision
+			&& state.semanticModel.source == state.source)
+			return state.semanticModel;
+		return state.lastGood == null ? null : state.lastGood.semanticModel;
+	}
 
 	static function editorModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+		return state.currentExact != null ? state.currentExact.semanticModel : state.currentRecovered != null
+			? state.currentRecovered.semanticModel : state.lastGood == null ? null : state.lastGood.semanticModel;
 
 	static function editorSymbolAt(model:Null<compiler.semantic.SemanticModel>, span:SourceSpan):Null<IndexedSemanticSymbol> {
 		if (model == null)

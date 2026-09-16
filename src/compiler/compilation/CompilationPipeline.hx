@@ -89,13 +89,9 @@ class CompilationPipeline {
 		context.clearRehydrationBaseline();
 		for (name in names) {
 			var state:compiler.modules.ModuleState = modules.get(name);
-			if (state.lastGoodRevision != state.revision) {
+			if (state.lastGood == null || state.lastGood.revision != state.revision) {
 				state = context.writableState(name, rollbackModules);
-				state.lastGoodTokens = state.tokens;
-				state.lastGoodAst = state.ast;
-				state.lastGoodSemanticModel = state.semanticModel;
-				state.lastGoodSource = state.source;
-				state.lastGoodRevision = state.revision;
+				state.captureLastGoodSnapshot();
 			}
 		}
 		context.compiledOnce = true;

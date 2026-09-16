@@ -41,13 +41,9 @@ class AnalysisTransaction {
 			context.setLastTypedProgram(frontend.typedProgram);
 			for (name in frontend.moduleNames) {
 				var state:ModuleState = candidate.modules.get(name);
-				if (state.lastGoodRevision != state.revision) {
+				if (state.lastGood == null || state.lastGood.revision != state.revision) {
 					state = context.writableState(name, snapshot.modules);
-					state.lastGoodTokens = state.tokens;
-					state.lastGoodAst = state.ast;
-					state.lastGoodSemanticModel = state.semanticModel;
-					state.lastGoodSource = state.source;
-					state.lastGoodRevision = state.revision;
+					state.captureLastGoodSnapshot();
 				}
 			}
 			compiler.adoptCandidate(candidate);

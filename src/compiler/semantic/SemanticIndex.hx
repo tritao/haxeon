@@ -149,6 +149,7 @@ class SemanticIndexBuilder {
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
 	var frozen:Bool = false;
+	var frozenIndex:Null<SemanticIndex>;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
 		module = ModulePath.fromFile(path);
@@ -207,8 +208,11 @@ class SemanticIndexBuilder {
 
 	/** Publish a query-only view after all indexing work has completed. */
 	public function freeze():SemanticIndex {
+		if (frozenIndex != null)
+			return frozenIndex;
 		frozen = true;
-		return new SemanticIndex(this);
+		frozenIndex = new SemanticIndex(this);
+		return frozenIndex;
 	}
 
 	/** Create a view for construction-time compatibility and diagnostics. */
@@ -2711,32 +2715,38 @@ class SemanticIndexBuilder {
 	}
 
 	function declareLocals(fn:TypedFunction, statements:Array<TypedStatement>):Void {
-		for (statement in statements)
-			switch statement {
+		TypedAstChildren.statements(statements,
+			function(statement) switch statement {
 				case TDeclare(name, type, span):
 					declareLocal(fn, name, span, type);
 				case TVar(name, value, span):
 					declareLocal(fn, name, span, value.type);
-				case TIf(_, yes, no, _):
-					declareLocals(fn, yes);
-					declareLocals(fn, no);
-				case TWhile(_, body, _), TDoWhile(body, _, _), TForIn(_, _, _, body, _):
-					declareLocals(fn, body);
-				case TTry(body, catches, _):
-					declareLocals(fn, body);
+				case TForIn(name, valueName, iterable, _, _):
+					declareLocal(fn, name, iterable.span, recoveredForInKeyType(iterable.type, valueName));
+					if (valueName != null)
+						declareLocal(fn, valueName, iterable.span, recoveredForInValueType(iterable.type));
+				case TTry(_, catches, _):
 					for (caught in catches)
-						declareLocals(fn, caught.statements);
-				case TSwitch(_, cases, fallback, _, _):
+						declareLocal(fn, caught.name, caught.span, caught.type);
+				case TSwitch(_, cases, _, _, _):
 					for (item in cases) {
 						if (item.subjectBinding != null)
 							declareLocal(fn, item.subjectBinding, item.span, item.value.type);
 						for (binding in item.bindings)
 							declareLocal(fn, binding.name, item.span, binding.type);
-						declareLocals(fn, item.statements);
 					}
-					declareLocals(fn, fallback);
 				default:
-			}
+			},
+			function(expression) switch expression.expression {
+				case TSwitchExpression(_, cases, _):
+					for (item in cases) {
+						if (item.subjectBinding != null)
+							declareLocal(fn, item.subjectBinding, item.span, item.value.type);
+						for (binding in item.bindings)
+							declareLocal(fn, binding.name, item.span, binding.type);
+					}
+				default:
+			});
 	}
 
 	function declareLocal(fn:TypedFunction, identity:String, within:SourceSpan, ?type:CompilerType):Void {
@@ -2761,54 +2771,45 @@ class SemanticIndexBuilder {
 
 	function indexStatements(fn:TypedFunction, statements:Array<TypedStatement>, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
-		for (statement in statements)
-			switch statement {
-				case TVar(_, value, _), TReturn(value, _), TThrow(value, _), TExpression(value, _):
-					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TAssign(identity, value, span), TCellAssign(identity, _, value, span), TCellCapturedAssign(identity, _, value, span):
+		TypedAstChildren.statements(statements,
+			function(statement) switch statement {
+				case TAssign(identity, _, span), TCellAssign(identity, _, _, span), TCellCapturedAssign(identity, _, _, span):
 					bindLocalUse(fn, identity, span);
-					indexExpression(fn, value, resolve, resolveEnumCase);
 				case TIncrement(identity, _, span), TCellIncrement(identity, _, _, _, span), TCellCapturedIncrement(identity, _, _, _, span):
 					bindLocalUse(fn, identity, span);
-				case TFieldAssign(object, name, value, span):
+				case TFieldAssign(object, name, _, span):
 					bindMember(resolve, object.type, name, span);
-					indexExpression(fn, object, resolve, resolveEnumCase);
-					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TIndexAssign(object, _, value, _), TMapAssign(object, _, value, _):
-					indexExpression(fn, object, resolve, resolveEnumCase);
-					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TStaticFieldAssign(owner, name, value, span):
+				case TStaticFieldAssign(owner, name, _, span):
 					bindNamed(resolve, owner + "." + name, span);
-					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TIf(condition, yes, no, _):
-					indexExpression(fn, condition, resolve, resolveEnumCase);
-					indexStatements(fn, yes, resolve, resolveEnumCase);
-					indexStatements(fn, no, resolve, resolveEnumCase);
-				case TWhile(condition, body, _):
-					indexExpression(fn, condition, resolve, resolveEnumCase);
-					indexStatements(fn, body, resolve, resolveEnumCase);
-				case TDoWhile(body, condition, _):
-					indexStatements(fn, body, resolve, resolveEnumCase);
-					indexExpression(fn, condition, resolve, resolveEnumCase);
-				case TForIn(_, _, iterable, body, _):
-					indexExpression(fn, iterable, resolve, resolveEnumCase);
-					indexStatements(fn, body, resolve, resolveEnumCase);
-				case TTry(body, catches, _):
-					indexStatements(fn, body, resolve, resolveEnumCase);
-					for (caught in catches)
-						indexStatements(fn, caught.statements, resolve, resolveEnumCase);
-				case TSwitch(value, cases, fallback, _, _):
-					indexExpression(fn, value, resolve, resolveEnumCase);
-					for (item in cases) {
+				case TSwitch(_, cases, _, _, _):
+					for (item in cases)
 						bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.span);
-						indexStatements(fn, item.statements, resolve, resolveEnumCase);
-					}
-					indexStatements(fn, fallback, resolve, resolveEnumCase);
 				default:
-			}
+			},
+			function(expression) indexExpressionNode(fn, expression, resolve, resolveEnumCase));
 	}
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		TypedAstChildren.expression(expression,
+			function(statement) switch statement {
+				case TAssign(identity, _, span), TCellAssign(identity, _, _, span), TCellCapturedAssign(identity, _, _, span):
+					bindLocalUse(fn, identity, span);
+				case TIncrement(identity, _, span), TCellIncrement(identity, _, _, _, span), TCellCapturedIncrement(identity, _, _, _, span):
+					bindLocalUse(fn, identity, span);
+				case TFieldAssign(object, name, _, span):
+					bindMember(resolve, object.type, name, span);
+				case TStaticFieldAssign(owner, name, _, span):
+					bindNamed(resolve, owner + "." + name, span);
+				case TSwitch(_, cases, _, _, _):
+					for (item in cases)
+						bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.span);
+				default:
+			},
+			function(child) indexExpressionNode(fn, child, resolve, resolveEnumCase));
+	}
+
+	function indexExpressionNode(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		completionTypes.push({span: currentSpan(expression.span), type: expression.type});
 		switch expression.expression {
@@ -2818,44 +2819,16 @@ class SemanticIndexBuilder {
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)
 					bind(id, token.span);
-			case TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value), TNot(value),
-				TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value), TStringLength(value):
-				indexExpression(fn, value, resolve, resolveEnumCase);
-			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right), TBitAnd(left, right), TBitXor(left, right),
-				TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right), TUnsignedShiftRight(left, right), TLess(left, right),
-				TLessEqual(left, right), TEqual(left, right), TAnd(left, right), TOr(left, right), TIndex(left, right), TMapGet(left, right),
-				TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right), TArrayPush(left, right), TArrayUnshift(left, right):
-				indexExpression(fn, left, resolve, resolveEnumCase);
-				indexExpression(fn, right, resolve, resolveEnumCase);
-			case TPostfixIndex(array, index, _):
-				indexExpression(fn, array, resolve, resolveEnumCase);
-				indexExpression(fn, index, resolve, resolveEnumCase);
-			case TConditional(condition, yes, no):
-				indexExpression(fn, condition, resolve, resolveEnumCase);
-				indexExpression(fn, yes, resolve, resolveEnumCase);
-				indexExpression(fn, no, resolve, resolveEnumCase);
-			case TBlockExpression(statements, result):
-				indexStatements(fn, statements, resolve, resolveEnumCase);
-				indexExpression(fn, result, resolve, resolveEnumCase);
 			case TField(object, name):
 				bindMember(resolve, object.type, name, expression.span);
-				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TPostfixField(object, name, _):
 				bindMember(resolve, object.type, name, expression.span);
-				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TMethodCall(object, method, arguments):
 				var methodName = memberName(method),
 					callee = bindMember(resolve, object.type, methodName, expression.span);
 				if (callee == null && method != methodName)
 					callee = bindNamed(resolve, method, expression.span);
 				addCall(callee, expression.span, methodName);
-				indexExpression(fn, object, resolve, resolveEnumCase);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TCollectionCall(object, _, arguments):
-				indexExpression(fn, object, resolve, resolveEnumCase);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TCall(name, arguments), TCNativeCall(name, arguments):
 				var shadowed = localBindingAt(fn, name, expression.span.start);
 				if (shadowed != null) {
@@ -2863,8 +2836,6 @@ class SemanticIndexBuilder {
 						: referenceToken(tokens, expression.span, sourceLocalName(name)).span);
 				} else
 					addCall(bindNamed(resolve, name, expression.span), expression.span, name);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):
 				bindNamed(resolve, name, expression.span);
 			case TMethodRef(object, name):
@@ -2872,7 +2843,6 @@ class SemanticIndexBuilder {
 					callee = bindMember(resolve, object.type, methodName, expression.span);
 				if (callee == null && name != methodName)
 					bindNamed(resolve, name, expression.span);
-				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TClassRef(name):
 				bindNamed(resolve, name, expression.span);
 			case TStaticField(owner, name):
@@ -2881,78 +2851,16 @@ class SemanticIndexBuilder {
 				bindNamed(resolve, owner + "." + name, expression.span);
 			case TNew(name, arguments, _):
 				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TEnumLiteral(name, index):
 				bindEnumCase(resolveEnumCase, name, index, expression.span);
 			case TEnumConstruct(name, index, arguments):
 				bindEnumCase(resolveEnumCase, name, index, expression.span);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TEnumIndex(value), TEnumField(value, _, _):
-				indexExpression(fn, value, resolve, resolveEnumCase);
 			case TSwitchExpression(value, cases, fallback):
-				indexExpression(fn, value, resolve, resolveEnumCase);
 				for (item in cases) {
-					if (item.subjectBinding != null)
-						declareLocal(fn, item.subjectBinding, item.span, item.value.type);
-					for (binding in item.bindings)
-						declareLocal(fn, binding.name, item.span, binding.type);
 					bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.value.span);
-					indexExpression(fn, item.value, resolve, resolveEnumCase);
-					if (item.guard != null)
-						indexExpression(fn, item.guard, resolve, resolveEnumCase);
-					indexExpression(fn, item.result, resolve, resolveEnumCase);
 				}
-				if (fallback != null)
-					indexExpression(fn, fallback, resolve, resolveEnumCase);
-			case TClosureCall(callee, arguments):
-				indexExpression(fn, callee, resolve, resolveEnumCase);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TObjectLiteral(_, fields):
-				for (field in fields)
-					indexExpression(fn, field.value, resolve, resolveEnumCase);
-			case TArrayLiteral(values):
-				for (value in values)
-					indexExpression(fn, value, resolve, resolveEnumCase);
-			case TMapLiteral(entries):
-				for (entry in entries) {
-					indexExpression(fn, entry.key, resolve, resolveEnumCase);
-					indexExpression(fn, entry.value, resolve, resolveEnumCase);
-				}
-			case TArrayComprehension(_, _, iterable, condition, value):
-				indexExpression(fn, iterable, resolve, resolveEnumCase);
-				if (condition != null)
-					indexExpression(fn, condition, resolve, resolveEnumCase);
-				indexExpression(fn, value, resolve, resolveEnumCase);
-			case TMapComprehension(_, _, iterable, condition, key, value):
-				indexExpression(fn, iterable, resolve, resolveEnumCase);
-				if (condition != null)
-					indexExpression(fn, condition, resolve, resolveEnumCase);
-				indexExpression(fn, key, resolve, resolveEnumCase);
-				indexExpression(fn, value, resolve, resolveEnumCase);
-			case TRange(start, end):
-				indexExpression(fn, start, resolve, resolveEnumCase);
-				indexExpression(fn, end, resolve, resolveEnumCase);
-			case TNewArray(_, length):
-				indexExpression(fn, length, resolve, resolveEnumCase);
 			case TSuperCall(owner, arguments):
 				bindNamed(resolve, owner, expression.span);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TStringFromCharCode(code):
-				indexExpression(fn, code, resolve, resolveEnumCase);
-			case TStringSubstring(value, start, end):
-				indexExpression(fn, value, resolve, resolveEnumCase);
-				indexExpression(fn, start, resolve, resolveEnumCase);
-				if (end != null)
-					indexExpression(fn, end, resolve, resolveEnumCase);
-			case TArrayPop(array):
-				indexExpression(fn, array, resolve, resolveEnumCase);
-			case TArraySort(array, comparator):
-				indexExpression(fn, array, resolve, resolveEnumCase);
-				indexExpression(fn, comparator, resolve, resolveEnumCase);
 			default:
 		}
 	}

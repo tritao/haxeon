@@ -3,6 +3,7 @@ import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.semantic.SemanticModel;
+import compiler.modules.AnalysisSnapshot;
 
 class SemanticModelMain {
 	static function main():Void {
@@ -11,6 +12,9 @@ class SemanticModelMain {
 			program = new Parser(tokens).parseProgram();
 		var model = new SemanticModel(program, source, 7, tokens);
 		model.freeze();
+		var frozenIndex = model.index;
+		model.freeze();
+		expect(model.index == frozenIndex, "freezing a semantic model twice should preserve its query view");
 
 		expect(model.revision == 7, "semantic model should retain its source revision");
 		expect(model.program == program, "semantic model should retain its parsed program");
@@ -32,6 +36,32 @@ class SemanticModelMain {
 			mutationRejected = true;
 		}
 		expect(mutationRejected, "published semantic index builder accepted mutation");
+		var metadataMutationRejected = false;
+		try {
+			model.recoveredSignatureProgram = program;
+		} catch (_:Dynamic) {
+			metadataMutationRejected = true;
+		}
+		expect(metadataMutationRejected, "published semantic model accepted recovery metadata mutation");
+
+		var unfrozen = new SemanticModel(program, source, 7, tokens),
+			unfrozenPublicationRejected = false;
+		try {
+			AnalysisSnapshot.exact(source, tokens, program, unfrozen, 7);
+		} catch (_:Dynamic) {
+			unfrozenPublicationRejected = true;
+		}
+		expect(unfrozenPublicationRejected, "analysis snapshot published an unfrozen semantic model");
+		unfrozen.freeze();
+		var revisionMismatch = new SemanticModel(program, source, 8, tokens);
+		revisionMismatch.freeze();
+		var mismatchRejected = false;
+		try {
+			AnalysisSnapshot.exact(source, tokens, program, revisionMismatch, 7);
+		} catch (_:Dynamic) {
+			mismatchRejected = true;
+		}
+		expect(mismatchRejected, "analysis snapshot accepted a mismatched semantic revision");
 
 		var emptySource = new SourceFile("Empty.hx", "package demo;");
 		var emptyTokens = new Lexer(emptySource).tokenize(),

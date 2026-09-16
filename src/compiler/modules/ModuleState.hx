@@ -33,6 +33,10 @@ typedef SemanticDependency = {
 class ModuleState {
 	public final name:String;
 	public var source:SourceFile;
+	/** Atomically published exact, recovered, and last-good analysis views. */
+	public var currentExact(default, null):Null<AnalysisSnapshot>;
+	public var currentRecovered(default, null):Null<AnalysisSnapshot>;
+	public var lastGood(default, null):Null<AnalysisSnapshot>;
 	public var revision:Int = 1;
 	public var parseVersion:Int = 0;
 	public var typeVersion:Int = 0;
@@ -86,6 +90,9 @@ class ModuleState {
 	public function new(name, source) {
 		this.name = name;
 		this.source = source;
+		currentExact = null;
+		currentRecovered = null;
+		lastGood = null;
 	}
 
 	public function parsedAst():AstProgram {
@@ -96,9 +103,12 @@ class ModuleState {
 	}
 
 	public function update(source:SourceFile):Void {
-		previousEditorSemanticModel = ast != null ? semanticModel : recoveredSemanticModel;
+		previousEditorSemanticModel = currentExact != null && currentExact.semanticModel != null ? currentExact.semanticModel
+			: currentRecovered == null ? null : currentRecovered.semanticModel;
 		this.source = source;
 		revision++;
+		currentExact = null;
+		currentRecovered = null;
 		tokens = [];
 		ast = null;
 		recoveredAst = null;
@@ -111,9 +121,53 @@ class ModuleState {
 		dirty = true;
 	}
 
+	/** Publish the current strict compiler artifacts as one exact snapshot. */
+	public function publishExactSnapshot():Void {
+		if (ast == null) {
+			currentExact = null;
+			return;
+		}
+		currentExact = AnalysisSnapshot.exact(source, tokens, ast, semanticModel, revision);
+	}
+
+	/** Publish the current-source recovery artifacts as one editor snapshot. */
+	public function publishRecoveredSnapshot(recoveredTokens:Array<Token>, recoveredAst:AstProgram,
+			recoveredSemanticModel:Null<SemanticModel>):Void {
+		currentRecovered = AnalysisSnapshot.recoveredSnapshot(source, recoveredTokens, recoveredAst, recoveredSemanticModel, revision);
+		this.recoveredTokens = recoveredTokens;
+		this.recoveredAst = recoveredAst;
+		this.recoveredSemanticModel = recoveredSemanticModel;
+	}
+
+	/** Remove only the current recovery view; strict and last-good state survive. */
+	public function clearRecoveredSnapshot():Void {
+		currentRecovered = null;
+		recoveredAst = null;
+		recoveredTokens = [];
+		recoveredSemanticModel = null;
+	}
+
+	/** Capture the exact view as a stale, source/model/revision-consistent fallback. */
+	public function captureLastGoodSnapshot():Void {
+		var exact = currentExact;
+		if (exact == null && ast != null)
+			exact = AnalysisSnapshot.exact(source, tokens, ast, semanticModel, revision);
+		if (exact == null)
+			return;
+		lastGood = AnalysisSnapshot.lastGood(exact);
+		lastGoodTokens = lastGood.tokens;
+		lastGoodAst = lastGood.ast;
+		lastGoodSemanticModel = lastGood.semanticModel;
+		lastGoodSource = lastGood.source;
+		lastGoodRevision = lastGood.revision;
+	}
+
 	public function copy():ModuleState {
 		var result = new ModuleState(name, source);
 		result.revision = revision;
+		result.currentExact = currentExact;
+		result.currentRecovered = currentRecovered;
+		result.lastGood = lastGood;
 		result.parseVersion = parseVersion;
 		result.typeVersion = typeVersion;
 		result.tokens = tokens;

@@ -157,8 +157,17 @@ class FrontendCompilation {
 			var state = context.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
-			if (indexSemantics && state.semanticModel != null)
+			if (indexSemantics && state.semanticModel != null) {
+				// Candidate module states may share a published model with the
+				// previous compiler revision. Detach before adding facts for a
+				// newly selected/generated function; published builders are never
+				// mutated in place.
+				if (state.semanticModel.isFrozen) {
+					state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+					state.semanticModel.builder.indexTypeReferences(context.resolveSemanticType, token);
+				}
 				state.semanticModel.builder.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
+			}
 			var semanticOrigin = fn.genericOrigin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
 			if (!semanticallyInvalidated && StringTools.startsWith(fn.name, "$lambda:"))
@@ -182,10 +191,16 @@ class FrontendCompilation {
 		}
 		if (indexSemantics) {
 			indexTypedInitializers(context, typedNew, reindexedModules);
-			for (module in reindexedModules.keys()) {
+			// Publish every successfully parsed reachable module, not only modules
+			// whose bodies were reindexed in this transaction. A valid editor view
+			// must remain available for dependencies whose typed bodies were reused.
+			for (module in names) {
 				var state = context.modules.get(module);
-				if (state != null && state.semanticModel != null)
-					state.semanticModel.freeze();
+				if (state != null && state.ast != null) {
+					if (state.semanticModel != null)
+						state.semanticModel.freeze();
+					state.publishExactSnapshot();
+				}
 			}
 			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
 		}

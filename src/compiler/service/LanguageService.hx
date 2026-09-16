@@ -271,7 +271,7 @@ class LanguageService {
 			state = compiler.update(path, source),
 			changed = state.revision != previousRevision;
 		compiler.semanticWorkspace.invalidateResolutionCache();
-		if (state.ast == null && (state.recoveredSemanticModel == null || state.recoveredSemanticModel.revision != state.revision))
+		if (state.currentExact == null && (state.currentRecovered == null || !state.currentRecovered.isCurrent(state.revision)))
 			recoverSyntax(state);
 		if (changed)
 			refreshDependentRecovery(state);
@@ -351,9 +351,9 @@ class LanguageService {
 
 	function recoverCurrentSyntax(?token:CancellationToken):Void {
 		for (state in compiler.modules) {
-			if (state.ast != null)
+			if (state.currentExact != null)
 				continue;
-			if (state.recoveredSemanticModel != null && state.recoveredSemanticModel.revision == state.revision) {
+			if (state.currentRecovered != null && state.currentRecovered.isCurrent(state.revision)) {
 				mergeRecoveryDiagnostics(state, state.recoveryDiagnostics);
 				continue;
 			}
@@ -405,12 +405,10 @@ class LanguageService {
 				function(name, index) return resolveRecoveredEnumCase(state, recovered.program, name, index, token),
 				function(name, arguments) return resolveRecoveredType(state, recovered.program, name, arguments, token),
 				function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program),
-				state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.builder
-					: state.lastGoodSemanticModel == null ? null : state.lastGoodSemanticModel.builder);
+					state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.builder
+					: state.lastGood == null || state.lastGood.semanticModel == null ? null : state.lastGood.semanticModel.builder);
 			recoveredModel.freeze();
-			state.recoveredTokens = tokens;
-			state.recoveredAst = recovered.program;
-			state.recoveredSemanticModel = recoveredModel;
+			state.publishRecoveredSnapshot(tokens, recovered.program, recoveredModel);
 			recoveredSnapshotBuilds++;
 			publishRecoveryDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));
 		} catch (error:CompileError) {
@@ -689,7 +687,7 @@ class LanguageService {
 			if (dependencyProgram == null)
 				continue;
 			for (candidate in compiler.modules) {
-				if (candidate == dependency || candidate.ast != null || refreshed.exists(candidate.name))
+				if (candidate == dependency || candidate.currentExact != null || refreshed.exists(candidate.name))
 					continue;
 				var candidateProgram = effectiveAst(candidate);
 				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram))
@@ -706,7 +704,7 @@ class LanguageService {
 
 	/** Rebuild all non-valid snapshots after a module disappears from the workspace. */
 	function refreshAllRecovery():Void {
-		var pending:Array<ModuleState> = [for (state in compiler.modules) if (state.ast == null) state],
+		var pending:Array<ModuleState> = [for (state in compiler.modules) if (state.currentExact == null) state],
 			oldPrograms:Map<String, AstProgram> = [];
 		for (state in pending) {
 			var program = effectiveAst(state);
@@ -748,8 +746,8 @@ class LanguageService {
 		// Dependency refreshes rebuild the current source without going through
 		// ModuleState.update(). Preserve that current recovered model as the
 		// predecessor so unchanged declarations can still be considered for reuse.
-		if (state.recoveredSemanticModel != null)
-			state.previousEditorSemanticModel = state.recoveredSemanticModel;
+		if (state.currentRecovered != null && state.currentRecovered.semanticModel != null)
+			state.previousEditorSemanticModel = state.currentRecovered.semanticModel;
 		for (previous in state.recoveryDiagnostics) {
 			for (index in 0...state.diagnostics.length)
 				if (sameDiagnostic(state.diagnostics[index], previous)) {
@@ -758,9 +756,7 @@ class LanguageService {
 				}
 		}
 		state.recoveryDiagnostics = [];
-		state.recoveredAst = null;
-		state.recoveredTokens = [];
-		state.recoveredSemanticModel = null;
+		state.clearRecoveredSnapshot();
 	}
 
 	static function sameDiagnostic(left:Diagnostic, right:Diagnostic):Bool
@@ -799,7 +795,7 @@ class LanguageService {
 				model = effectiveSemanticModel(candidate);
 			if (model == null)
 				continue;
-			var valid = candidate.ast != null,
+			var valid = candidate.currentExact != null,
 				cached = recoveredTypingModules.get(candidate.name),
 				recoveredProgram:AstProgram,
 				declarations:DeclarationIndex;
@@ -1412,7 +1408,7 @@ class LanguageService {
 	/** Whether editor spans and typed data belong to the latest source revision. */
 	public function isCurrent(path:String):Bool {
 		var state = stateFor(path);
-		return state != null && state.ast != null && state.lastGoodRevision == state.revision;
+		return state != null && state.currentExact != null && state.currentExact.isCurrent(state.revision);
 	}
 
 	/** Whether the latest source has either a valid or recovered editor snapshot. */
@@ -1924,10 +1920,10 @@ class LanguageService {
 
 	function recoveredCompletionProgram(state:ModuleState, ast:AstProgram, ?token:CancellationToken):AstProgram {
 		var cached = recoveredCompletionPrograms.get(state.name),
-			valid = state.ast != null;
+			valid = state.currentExact != null;
 		if (cached != null && cached.revision == state.revision && cached.valid == valid)
 			return cached.program;
-		var recoveredModel = !valid ? state.recoveredSemanticModel : null,
+		var recoveredModel = !valid && state.currentRecovered != null ? state.currentRecovered.semanticModel : null,
 			program = recoveredModel == null || recoveredModel.recoveredSignatureProgram == null
 				? SignatureInference.inferProgram(ast, token == null ? null : token.check)
 				: recoveredModel.recoveredSignatureProgram;
@@ -2375,7 +2371,7 @@ class LanguageService {
 			if (token != null)
 				token.check();
 			var referenceState = stateFor(reference.path);
-			if (reference.stale || referenceState == null || referenceState.ast == null)
+			if (reference.stale || referenceState == null || referenceState.currentExact == null)
 				return result;
 		}
 		if (indexedRenameCollides(indexedId, replacement, targetReferences, token))
@@ -3071,7 +3067,7 @@ class LanguageService {
 
 	static function tagResults<T>(results:Array<T>, state:ModuleState):Void {
 		var snapshot = editorSnapshot(state),
-			revision = snapshot == null ? state.lastGoodRevision : snapshot.revision,
+			revision = snapshot == null ? state.lastGood == null ? 0 : state.lastGood.revision : snapshot.revision,
 			stale = snapshot == null || snapshot.stale;
 		for (result in results) {
 			Reflect.setField(result, "revision", revision);
@@ -3079,8 +3075,10 @@ class LanguageService {
 		}
 	}
 
-	static function snapshotRevision(state:ModuleState):Int
-		return editorSnapshot(state) == null ? state.lastGoodRevision : editorSnapshot(state).revision;
+	static function snapshotRevision(state:ModuleState):Int {
+		var snapshot = editorSnapshot(state);
+		return snapshot == null ? state.lastGood == null ? 0 : state.lastGood.revision : snapshot.revision;
+	}
 
 	function stateFor(path:String):Null<ModuleState>
 		return compiler.modules.get(ModulePath.fromFile(path));

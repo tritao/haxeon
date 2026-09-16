@@ -78,15 +78,13 @@ class SemanticWorkspaceMain {
 		state.tokens = new Lexer(source).tokenize();
 		state.ast = new Parser(state.tokens).parseProgram();
 		state.semanticModel = new SemanticModel(state.parsedAst(), source, state.revision, state.tokens);
+		state.semanticModel.freeze();
+		state.publishExactSnapshot();
 		return state;
 	}
 
 	static function publish(state:ModuleState):Void {
-		state.lastGoodTokens = state.tokens;
-		state.lastGoodAst = state.ast;
-		state.lastGoodSemanticModel = state.semanticModel;
-		state.lastGoodSource = state.source;
-		state.lastGoodRevision = state.revision;
+		state.captureLastGoodSnapshot();
 	}
 
 	static function expect(condition:Bool, message:String):Void {

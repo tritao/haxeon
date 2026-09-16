@@ -2,6 +2,7 @@ package compiler.service;
 
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
+import compiler.modules.AnalysisSnapshot;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Token;
@@ -29,48 +30,34 @@ typedef EditorSnapshot = {
 /** Central selection policy for source-aware editor queries. */
 class EditorSnapshotTools {
 	public static function select(state:ModuleState):Null<EditorSnapshot> {
-		if (state.ast != null)
-			return {
-				source: state.source,
-				tokens: state.tokens,
-				ast: state.ast,
-				semanticModel: state.semanticModel,
-				revision: state.revision,
-				stale: false,
-				recovered: false,
-				confidence: EditorSnapshotConfidence.Exact
-			};
+		if (state.currentExact != null && state.currentExact.isCurrent(state.revision))
+			return toEditor(state.currentExact, EditorSnapshotConfidence.Exact);
 
 		var recovered = currentRecovered(state);
 		if (recovered != null)
 			return recovered;
 
-		if (state.lastGoodAst != null && state.lastGoodSource != null && state.lastGoodSemanticModel != null)
-			return {
-				source: state.lastGoodSource,
-				tokens: state.lastGoodTokens,
-				ast: state.lastGoodAst,
-				semanticModel: state.lastGoodSemanticModel,
-				revision: state.lastGoodRevision,
-				stale: true,
-				recovered: false,
-				confidence: EditorSnapshotConfidence.LastGood
-			};
+		if (state.lastGood != null)
+			return toEditor(state.lastGood, EditorSnapshotConfidence.LastGood);
 
 		return null;
 	}
 
 	/** Return the current-source recovery view without applying fallback policy. */
 	public static function currentRecovered(state:ModuleState):Null<EditorSnapshot> {
-		return state.recoveredAst == null ? null : {
-			source: state.source,
-			tokens: state.recoveredTokens,
-			ast: state.recoveredAst,
-			semanticModel: state.recoveredSemanticModel,
-			revision: state.revision,
-			stale: false,
-			recovered: true,
-			confidence: EditorSnapshotConfidence.RecoveredPartial
-		};
+		var snapshot = state.currentRecovered;
+		return snapshot == null || !snapshot.isCurrent(state.revision) ? null : toEditor(snapshot, EditorSnapshotConfidence.RecoveredPartial);
 	}
+
+	static function toEditor(snapshot:AnalysisSnapshot, confidence:EditorSnapshotConfidence):EditorSnapshot
+		return {
+			source: snapshot.source,
+			tokens: snapshot.tokens,
+			ast: snapshot.ast,
+			semanticModel: snapshot.semanticModel,
+			revision: snapshot.revision,
+			stale: snapshot.stale,
+			recovered: snapshot.recovered,
+			confidence: confidence
+		};
 }
