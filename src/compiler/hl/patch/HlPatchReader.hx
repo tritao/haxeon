@@ -25,8 +25,11 @@ class HlPatchReader {
 			if (revision <= base)
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
-				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [],
-				haveDebug = false, haveSnapshots = false;
+				typePrefixHash = 0, ints:Array<Int> = [], floats:Array<Float> = [], strings:Array<String> = [], types:Array<HlTypeDef> = [],
+				functions:Array<HlPatchFunction> = [], debugFiles:Array<String> = [], sourceSnapshots:Array<{
+					sourceHash:Int,
+					content:Bytes
+				}> = [], haveDebug = false, haveSnapshots = false;
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -71,15 +74,16 @@ class HlPatchReader {
 							throw "HLP debug function count mismatch";
 						for (_ in 0...debugFunctions) {
 							var stableId = readUnsigned(input),
-								found:Null<HlPatchFunction> = null;
+								foundIndex = -1;
 							if (seen.exists(stableId))
 								throw "Duplicate HLP function debug metadata";
 							seen.set(stableId, true);
-							for (fn in functions)
-								if (fn.functionIndex == stableId)
-									found = fn;
-							if (found == null)
+							for (index in 0...functions.length)
+								if (functions[index].functionIndex == stableId)
+									foundIndex = index;
+							if (foundIndex < 0)
 								throw "Unknown HLP debug function";
+							var found = functions[foundIndex];
 							var count = readUnsigned(input);
 							if (count != found.instructions.length)
 								throw "HLP debug opcode count mismatch";
@@ -124,7 +128,7 @@ class HlPatchReader {
 							sourceSnapshots.push({sourceHash: sourceHash, content: content});
 						}
 					default:
-						input.position = end;
+						input.read(end - input.position);
 				}
 				if (input.position != end)
 					throw "Invalid HLP section length";
@@ -133,26 +137,8 @@ class HlPatchReader {
 				throw "Missing required HLP section";
 			if (input.position != bytes.length)
 				throw "Trailing HLP data";
-			return {
-				moduleId: moduleId,
-				baseRevision: base,
-				revision: revision,
-				baseInts: baseInts,
-				baseFloats: baseFloats,
-				baseStrings: baseStrings,
-				baseTypes: baseTypes,
-				intPrefixHash: intPrefixHash,
-				floatPrefixHash: floatPrefixHash,
-				stringPrefixHash: stringPrefixHash,
-				typePrefixHash: typePrefixHash,
-				ints: ints,
-				floats: floats,
-				strings: strings,
-				types: types,
-				functions: functions,
-				debugFiles: debugFiles,
-				sourceSnapshots: sourceSnapshots
-			};
+			return new HlPatch(moduleId, base, revision, baseInts, baseFloats, baseStrings, baseTypes, intPrefixHash, floatPrefixHash, stringPrefixHash,
+				typePrefixHash, ints, floats, strings, types, functions, debugFiles, sourceSnapshots);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated HLP data";
 		}
@@ -191,24 +177,17 @@ class HlPatchReader {
 			index = readUnsigned(input),
 			registerCount = readUnsigned(input),
 			instructionCount = readUnsigned(input);
-		var registers = [for (_ in 0...registerCount) readIndex(input)];
-		var instructions = [];
+		var registers:Array<Int> = [for (_ in 0...registerCount) readIndex(input)];
+		var instructions:Array<HlPatchInstruction> = [];
 		for (_ in 0...instructionCount) {
 			var opcode = input.readByte();
-			instructions.push({opcode: opcode, operands: readOperands(input, opcode)});
+			instructions.push(new HlPatchInstruction(opcode, readOperands(input, opcode)));
 		}
-		var relocations = [
+		var relocations:Array<{instruction:Int, stableId:Int}> = [
 			for (_ in 0...readUnsigned(input))
 				{instruction: readUnsigned(input), stableId: readUnsigned(input)}
 		];
-		return {
-			type: type,
-			functionIndex: stableId,
-			registers: registers,
-			instructions: instructions,
-			relocations: relocations,
-			debug: []
-		};
+		return new HlPatchFunction(type, stableId, registers, instructions, relocations);
 	}
 
 	static function readOperands(input:BytesInput, op:Int):Array<Int> {

@@ -2,8 +2,6 @@ package compiler.hl.patch;
 
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
-import compiler.hl.HlOpcode;
-import compiler.hl.HlOpcodeSchema;
 
 typedef HlPatchEnvelope = {
 	final moduleId:Bytes;
@@ -38,107 +36,25 @@ class HlPatchHeaderReader {
 
 	/** Decode the header and validate the complete HLP section envelope. */
 	public static function decodeComplete(bytes:Bytes):HlPatchEnvelope {
-		if (bytes == null || bytes.length < 21)
-			throw "Truncated HLP header";
-		var input = new BytesInput(bytes);
-		input.bigEndian = false;
-		try {
-			if (input.readString(3) != HlPatchFormat.MAGIC)
-				throw "Invalid HLP magic";
-			if (input.readByte() != HlPatchFormat.VERSION)
-				throw "Unsupported HLP version";
-			var moduleId = input.read(16),
-				baseRevision = readUnsigned(input),
-				revision = readUnsigned(input);
-			if (revision <= baseRevision)
-				throw "Invalid patch revision range";
-			var sectionCount = readUnsigned(input),
-				functionStableIds:Array<Int> = [],
-				relocationStableIds:Array<Int> = [];
-			if (sectionCount < 2 || sectionCount > bytes.length)
-				throw "Invalid HLP section count";
-			var symbols = false, functions = false;
-			for (_ in 0...sectionCount) {
-				var tag = input.readByte(),
-					length = readUnsigned(input),
-					end = input.position + length;
-				if (end < input.position || end > bytes.length)
-					throw "Truncated HLP section";
-				if (tag == 1) {
-					if (symbols)
-						throw "Duplicate HLP symbols section";
-					symbols = true;
-				} else if (tag == 2) {
-					if (functions)
-						throw "Duplicate HLP functions section";
-					functions = true;
-					var functionCount = readUnsigned(input);
-					for (_ in 0...functionCount) {
-						var functionLength = readUnsigned(input),
-							functionEnd = input.position + functionLength;
-						if (functionEnd < input.position || functionEnd > end)
-							throw "Truncated HLP function";
-						var stableId = readUnsigned(input);
-						for (existing in functionStableIds)
-							if (existing == stableId)
-								throw "Duplicate HLP function identity";
-						functionStableIds.push(stableId);
-						var functionBytes = input.read(functionEnd - input.position),
-							functionInput = new BytesInput(functionBytes);
-						functionInput.bigEndian = false;
-						readFunctionPolicy(functionInput, relocationStableIds);
-						if (functionInput.position != functionBytes.length)
-							throw 'Invalid HLP function length for $stableId (${functionInput.position}/${functionBytes.length})';
-					}
-				}
-				input.read(end - input.position);
-			}
-			if (!symbols || !functions || functionStableIds.length == 0)
-				throw "Missing required HLP section";
-			if (input.position != bytes.length)
-				throw "Trailing HLP data";
-			return {
-				moduleId: moduleId,
-				baseRevision: baseRevision,
-				revision: revision,
-				functionStableIds: functionStableIds,
-				relocationStableIds: relocationStableIds
-			};
-		} catch (error:haxe.io.Eof) {
-			throw "Truncated HLP section envelope";
-		}
+		return envelope(HlPatchReader.decode(bytes));
 	}
 
-	static function readFunctionPolicy(input:BytesInput, relocationStableIds:Array<Int>):Void {
-		readIndex(input);
-		readIndex(input);
-		var registerCount = readUnsigned(input),
-			instructionCount = readUnsigned(input);
-		for (_ in 0...registerCount)
-			readIndex(input);
-		for (_ in 0...instructionCount)
-			readInstructionPolicy(input);
-		for (_ in 0...readUnsigned(input)) {
-			readUnsigned(input);
-			relocationStableIds.push(readUnsigned(input));
-		}
-	}
-
-	static function readInstructionPolicy(input:BytesInput):Void {
-		var opcode = input.readByte(), arity = HlOpcodeSchema.arity(opcode);
-		if (opcode == HlOpcode.Switch || arity == HlOpcodeSchema.UNSUPPORTED)
-			throw 'Unsupported HLP patch opcode $opcode';
-		if (arity == HlOpcodeSchema.VARIABLE_ARITY) {
-			readIndex(input);
-			readIndex(input);
-			var count = readUnsigned(input);
-			if (count > 0x1000000)
-				throw "Invalid variable operand count";
-			for (_ in 0...count)
-				readIndex(input);
-		} else
-			for (_ in 0...arity)
-				readIndex(input);
+	/** Project the canonical decoded patch into the identity policy view. */
+	public static function envelope(patch:HlPatch):HlPatchEnvelope {
+		if (patch == null)
+			throw "Missing HLP patch model";
+		var functionStableIds = [for (fn in patch.functions) fn.functionIndex],
+			relocationStableIds:Array<Int> = [];
+		for (fn in patch.functions)
+			for (relocation in fn.relocations)
+				relocationStableIds.push(relocation.stableId);
+		return {
+			moduleId: patch.moduleId,
+			baseRevision: patch.baseRevision,
+			revision: patch.revision,
+			functionStableIds: functionStableIds,
+			relocationStableIds: relocationStableIds
+		};
 	}
 
 	static function readUnsigned(input:BytesInput):Int {

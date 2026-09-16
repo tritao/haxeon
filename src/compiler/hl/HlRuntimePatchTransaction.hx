@@ -1,8 +1,10 @@
 package compiler.hl;
 
 import haxe.io.Bytes;
+import compiler.hl.patch.HlPatch;
 import compiler.hl.patch.HlPatchHeaderReader;
 import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
+import compiler.hl.patch.HlPatchReader;
 
 /** Lifecycle state for one staged external-runtime HLP transaction. */
 enum HlRuntimePatchTransactionState {
@@ -22,8 +24,11 @@ class HlRuntimePatchTransaction {
 	public final owner:HlLoadedRuntimeModule;
 	public final bytes:Bytes;
 
-	/** Strict Haxe-side envelope decode retained as the transaction's policy description. */
+	/** Identity projection of the canonical Haxe-side patch model. */
 	public final patch:HlPatchEnvelope;
+
+	/** Complete Haxe-side patch model retained for policy and later publication work. */
+	public final model:HlPatch;
 
 	public final baseRevision:Int;
 	public final patchBaseRevision:Int;
@@ -37,7 +42,8 @@ class HlRuntimePatchTransaction {
 		this.bytes = bytes.sub(0, bytes.length);
 		baseRevision = owner.revision;
 		try {
-			patch = HlPatchHeaderReader.decodeComplete(this.bytes);
+			model = HlPatchReader.decode(this.bytes);
+			patch = HlPatchHeaderReader.envelope(model);
 		} catch (error:Dynamic) {
 			throw 'Haxeon rejected the HLP transaction: ${Std.string(error)}';
 		}

@@ -9,11 +9,12 @@ the new revision and fails as stale.
 Before native staging, the host `Runtime.patchSet` boundary decodes the complete
 HLP wire model and rejects malformed sections, unsupported patch opcodes,
 truncated payloads, invalid debug metadata, and invalid source snapshots. The
-Haxe-built `HlNativeModuleLoader.loadRuntime` path currently performs the
-Haxe-owned fixed-header preflight (module identity and revision), then delegates
-the complete byte-level validation to the native patch kernel. Keeping that
-external bridge narrow avoids duplicating a second mutable patch representation
-while its Haxe-owned module model remains the base generation.
+Haxe-built `HlNativeModuleLoader.loadRuntime` path decodes and retains the
+complete Haxe `HlPatch` model before native publication. Its envelope is a
+derived identity-policy view, so the external path and host path share one HLP
+wire decoder. Native still rechecks live compatibility and performs the JIT
+publication; the Haxe transaction owns the decoded policy input that can grow
+into patch-state ownership without introducing a second mutable representation.
 
 `HlRuntimeModuleRegistry` keeps module replacement separate from patch
 transactions. A patch changes the revision of the published module in place;
@@ -21,12 +22,12 @@ loading a replacement publishes a new module generation and retires the old
 wrapper. `HlRuntimeModuleLease` makes Haxe-side borrowers explicit, while native
 HashLink remains the final quiescence authority during retirement.
 
-`HlRuntimePatchTransaction` snapshots the HLP header when staging: it owns a
-copy of the patch bytes, records the base and target revisions, and rejects a
-foreign module identity before native staging. Both `patch(bytes)` and explicit
-stage/commit callers use this same transaction path. Commit still rechecks the
-live revision, so two transactions staged from one generation cannot both
-publish.
+`HlRuntimePatchTransaction` snapshots the complete HLP model when staging: it
+owns a copy of the patch bytes, records the base and target revisions, and
+rejects a foreign module identity before native staging. Both `patch(bytes)`
+and explicit stage/commit callers use this same transaction path. Commit still
+rechecks the live revision, so two transactions staged from one generation
+cannot both publish.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
