@@ -307,8 +307,9 @@ function main():Int {
 		&& publication.functionDescriptors == generationDescriptor
 		&& publication.functionDescriptorCount == 1
 		&& publication.functionDescriptorCapacity == 8
-		&& generationDescriptor.ref.object == generationObjectData
-		&& generationDescriptor.ref.field.ref.name == generationMethodName
+		&& generationDescriptor.ref.object != generationObjectData
+		&& generationDescriptor.ref.object.ref.name.offset(0).load() == 0
+		&& generationDescriptor.ref.field.ref.name.offset(0).load() == 105
 		&& publication.nativeDescriptors == generationNativeDescriptor
 		&& publication.nativeDescriptorCount == 1
 		&& publication.nativeDescriptorCapacity == 8

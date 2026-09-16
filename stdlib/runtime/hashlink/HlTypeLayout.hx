@@ -80,6 +80,30 @@ class HlTypeLayout {
 		}
 	}
 
+	/** Attach HashLink's synthetic object/name metadata to the module entrypoint. */
+	public static function bindEntrypointDescriptor(functions:RawPtr<HlFunction>, functionCount:Int, entryPoint:Int,
+		builder:HlTypeBuilder):Void {
+		if (functionCount < 0 || (functionCount > 0 && functions.isNull()) || entryPoint < 0 || builder == null)
+			throw "HashLink entrypoint metadata requires a descriptor table and builder";
+		var entrypoint = findFunction(functions, functionCount, entryPoint);
+		if (entrypoint.isNull())
+			return;
+		var object = builder.arena.allocTypeObject();
+		object.ref.nfields = cast 0;
+		object.ref.nproto = cast 0;
+		object.ref.nbindings = cast 0;
+		object.ref.name = builder.utf16Name("");
+		object.ref.superType = RawPtr.nullPtr();
+		object.ref.fields = RawPtr.nullPtr();
+		object.ref.proto = RawPtr.nullPtr();
+		object.ref.bindings = RawPtr.nullPtr();
+		object.ref.globalValue = RawPtr.nullPtr();
+		object.ref.module = RawPtr.nullPtr();
+		object.ref.runtime = RawPtr.nullPtr();
+		entrypoint.ref.object = object;
+		entrypoint.ref.field.ref.name = builder.utf16Name("init");
+	}
+
 	/** Publish only object prototypes; Haxe-owned layout filters out other type kinds. */
 	public static function publishObjectPrototypes(types:RawPtr<RawPtr<HlType>>, count:Int):Void {
 		if (count < 0 || (count > 0 && types.isNull()))
