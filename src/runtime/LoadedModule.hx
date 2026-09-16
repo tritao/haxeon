@@ -61,6 +61,10 @@ class LoadedModule {
 	public inline function committedPatchCount():Int
 		return patchState.committedPatchCount();
 
+	/** Number of committed patch generations whose functions are all superseded. */
+	public inline function retiredPatchCount():Int
+		return patchState.retiredPatchCount();
+
 	/** Return the lifecycle state for one retained JIT generation. */
 	@:allow(runtime.Runtime)
 	function jitGenerationState(index:Int):Int {

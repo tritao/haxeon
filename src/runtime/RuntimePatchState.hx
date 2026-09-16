@@ -5,18 +5,23 @@ class RuntimePatchState {
 	public var revision(default, null):Int;
 	public var functions(default, null):RuntimeFunctionVersionTable;
 
-	final generations:Array<RuntimePatchGeneration> = [];
+	public final ledger:RuntimePatchLedger;
 
 	public function new(revision:Int, functions:RuntimeFunctionVersionTable) {
 		if (revision < 0 || functions == null || functions.generation != revision)
 			throw "Runtime patch state requires a matching non-negative revision and function table";
 		this.revision = revision;
 		this.functions = functions;
+		ledger = new RuntimePatchLedger();
 	}
 
 	/** Number of successfully published patch generations. */
 	public inline function committedPatchCount():Int
-		return generations.length;
+		return ledger.length;
+
+	/** Number of committed generations whose functions are all superseded. */
+	public inline function retiredPatchCount():Int
+		return ledger.retiredCount;
 
 	/** Prepare the next immutable function-version table without publishing it. */
 	public function advance(stableIds:Array<Int>, nextRevision:Int):RuntimeFunctionVersionTable
@@ -29,7 +34,7 @@ class RuntimePatchState {
 		var envelope = generation.envelope;
 		if (envelope.baseRevision != revision || envelope.revision <= revision || generation.functions.generation != envelope.revision)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state has an invalid revision transition");
-		generations.push(generation);
+		ledger.publish(generation);
 		functions = generation.functions;
 		revision = envelope.revision;
 	}

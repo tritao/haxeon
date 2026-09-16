@@ -201,6 +201,10 @@ class Runtime {
 	public static function patchJitCount(module:LoadedModule):Int
 		return module.access(jitBackend.patchCount);
 
+	/** Return the number of Haxe-owned patch generations no longer owning a function. */
+	public static function retiredPatchCount(module:LoadedModule):Int
+		return module.retiredPatchCount();
+
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
 		var bytes = module.access(function(handle) return jitBackend.location(handle, stableIndex));

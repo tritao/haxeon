@@ -78,6 +78,7 @@ class RuntimePatchTransactionMain {
 			|| Runtime.liveRevision(loaded) != changed.revision
 			|| loaded.functions.at(mainId).generation != changed.revision
 			|| loaded.committedPatchCount() != 1
+			|| loaded.retiredPatchCount() != 0
 			|| Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationPublished
 			|| Runtime.jitGenerationRevision(loaded, 0) != changed.revision
 			|| Runtime.callInt(loaded, mainId) != 42
@@ -110,6 +111,7 @@ class RuntimePatchTransactionMain {
 		if (Runtime.metadataTypeCount(loaded) != initialTypeCount + 1
 			|| Runtime.retainedCodeAllocationCount(loaded) != 2
 			|| Runtime.patchJitCount(loaded) != changed.changedFunctions.length + appended.changedFunctions.length
+			|| loaded.retiredPatchCount() != 1
 			|| Runtime.callInt(loaded, mainId) != 43)
 			throw "public Haxeon patch publication did not append its Haxe-owned type metadata";
 		compiler.update("Main.hx",
