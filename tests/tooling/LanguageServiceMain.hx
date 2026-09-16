@@ -1341,7 +1341,15 @@ class LanguageServiceMain {
 			if (diagnostic.message.indexOf("Cyclic class inheritance") >= 0)
 				foundCyclicDiagnostic = true;
 		if (!foundCyclicMember || !foundCyclicDiagnostic)
-			throw "recovered cyclic inheritance did not remain bounded and queryable";
+		throw "recovered cyclic inheritance did not remain bounded and queryable";
+		var importedValidationService = new LanguageService();
+		importedValidationService.update("validation/Base.hx", "package validation; class Base { public var inherited:Int; }");
+		var importedValidationSource = "package validation.use; import validation.Base; class Child extends Base { public var own:Int; } function accept(value:Base):Base return value; function main():Void { var child:Child = new Child(); child.";
+		importedValidationService.update("validation/use/Child.hx", importedValidationSource);
+		for (diagnostic in importedValidationService.diagnostics("validation/use/Child.hx"))
+			if (diagnostic.message.indexOf("Unknown type \"Base\"") >= 0
+				|| diagnostic.message.indexOf("Unknown base class \"Base\"") >= 0)
+				throw "recovered validation treated a visible imported declaration as unknown";
 		var visibilityService = new LanguageService();
 		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
 		visibilityService.analyze("unrelated.Target");

@@ -34,8 +34,9 @@ class SemanticProgram {
 	}
 
 	/** Build editor declarations without allowing incomplete inheritance to abort body typing. */
-	public static function analyzeRecovered(program:AstProgram, ?checkpoint:Void->Void, ?inferredProgram:AstProgram):SemanticProgram {
-		return analyzeThroughMode(program, SignatureTyped, true, checkpoint, inferredProgram);
+	public static function analyzeRecovered(program:AstProgram, ?checkpoint:Void->Void, ?inferredProgram:AstProgram,
+		?visibleDeclarations:Array<DeclarationIndex>):SemanticProgram {
+		return analyzeThroughMode(program, SignatureTyped, true, checkpoint, inferredProgram, visibleDeclarations);
 	}
 
 	/** Build a semantic snapshot only through the requested declaration stage. */
@@ -44,7 +45,7 @@ class SemanticProgram {
 	}
 
 	static function analyzeThroughMode(program:AstProgram, through:DeclarationStage, recovered:Bool, ?checkpoint:Void->Void,
-		?inferredProgram:AstProgram):SemanticProgram {
+		?inferredProgram:AstProgram, ?visibleDeclarations:Array<DeclarationIndex>):SemanticProgram {
 		if ((through : Int) > (SignatureTyped : Int))
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
@@ -54,6 +55,9 @@ class SemanticProgram {
 			lifecycle = new DeclarationLifecycle(declarations),
 			shapesAt = declaredAt,
 			signaturesAt = declaredAt;
+		if (visibleDeclarations != null)
+			for (external in visibleDeclarations)
+				declarations.includeRecoveredDeclarations(external);
 		if ((through : Int) >= (ShapeConnected : Int)) {
 			declarations.connectShapes();
 			lifecycle.advanceAll(ShapeConnected);
@@ -110,24 +114,7 @@ class SemanticProgram {
 	 * adding its symbols to the editor module's semantic index.
 	 */
 	public function includeRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>):Void {
-		for (name => declaration in external.aliases)
-			if (!declarations.aliases.exists(name))
-				declarations.aliases.set(name, declaration);
-		for (name => declaration in external.enums)
-			if (!declarations.enums.exists(name))
-				declarations.enums.set(name, declaration);
-		for (name => declaration in external.enumAbstracts)
-			if (!declarations.enumAbstracts.exists(name))
-				declarations.enumAbstracts.set(name, declaration);
-		for (name => declaration in external.abstracts)
-			if (!declarations.abstracts.exists(name))
-				declarations.abstracts.set(name, declaration);
-		for (name => declaration in external.interfaces)
-			if (!declarations.interfaces.exists(name))
-				declarations.interfaces.set(name, declaration);
-		for (name => declaration in external.classes)
-			if (!declarations.classes.exists(name))
-				declarations.classes.set(name, declaration);
+		declarations.includeRecoveredDeclarations(external);
 
 		for (fn in program.functions) {
 			addRecoveredSignature(fn.name, fn, true);

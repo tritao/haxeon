@@ -168,6 +168,28 @@ class DeclarationIndex {
 		recoveryDiagnostics.push(diagnostic);
 	}
 
+	/** Make visible recovered module declarations available for local resolution. */
+	public function includeRecoveredDeclarations(external:DeclarationIndex):Void {
+		for (name => declaration in external.aliases)
+			if (!aliases.exists(name))
+				aliases.set(name, declaration);
+		for (name => declaration in external.enums)
+			if (!enums.exists(name))
+				enums.set(name, declaration);
+		for (name => declaration in external.enumAbstracts)
+			if (!enumAbstracts.exists(name))
+				enumAbstracts.set(name, declaration);
+		for (name => declaration in external.abstracts)
+			if (!abstracts.exists(name))
+				abstracts.set(name, declaration);
+		for (name => declaration in external.interfaces)
+			if (!interfaces.exists(name))
+				interfaces.set(name, declaration);
+		for (name => declaration in external.classes)
+			if (!classes.exists(name))
+				classes.set(name, declaration);
+	}
+
 	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case ErrorType(_): TUnknown;

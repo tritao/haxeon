@@ -37,7 +37,8 @@ class Typer {
 			?modules:Array<RecoveryTypingModule>, ?reusedFunctions:Map<String, TypedFunction>, ?inferredProgram:AstProgram):Null<TypedProgram> {
 		var bodyTyper = new BodyTyper(null, null, nativeAbiTarget, true, checkpoint);
 		try {
-			var semantic = SemanticProgram.analyzeRecovered(program, checkpoint, inferredProgram);
+			var visibleDeclarations = modules == null ? null : [for (module in modules) module.declarations],
+				semantic = SemanticProgram.analyzeRecovered(program, checkpoint, inferredProgram, visibleDeclarations);
 			appendRecoveryDiagnostics(diagnostics, semantic.declarations.recoveryDiagnostics);
 			if (modules != null)
 				for (module in modules)
