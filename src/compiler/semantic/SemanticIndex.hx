@@ -1361,6 +1361,12 @@ class SemanticIndex {
 					case "get": nullableRecoveredValue(value);
 					default: null;
 				};
+			case TIterator(element):
+				switch name {
+					case "hasNext": TBool;
+					case "next": element;
+					default: null;
+				};
 			case TNullable(element): recoveredBuiltinMethodResult(element, name);
 			default: null;
 		};
@@ -1942,6 +1948,11 @@ class SemanticIndex {
 					case "set": [key, value];
 					case "keys", "values", "clear", "size": [];
 					case "exists", "remove", "get": [key];
+					default: null;
+				};
+			case TIterator(_):
+				switch name {
+					case "hasNext", "next": [];
 					default: null;
 				};
 			case TNullable(element): recoveredBuiltinMethodArguments(element, name);

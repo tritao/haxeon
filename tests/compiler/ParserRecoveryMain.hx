@@ -510,6 +510,20 @@ class ParserRecoveryMain {
 				throw 'AST-only recovered nested collection lost its stable element type: ${astOnlyNestedCollectionContext.receiver}';
 		}
 
+		var astOnlyIteratorSource = new SourceFile("AstOnlyIteratorRecovery.hx",
+			"class Payload { public var member:Int; } function main(values:Array<Payload>):Void { var iterator = values.iterator(); var item = iterator.next(); item. }");
+		var astOnlyIteratorTokens = new Lexer(astOnlyIteratorSource).tokenize(),
+			astOnlyIteratorProgram = new Parser(astOnlyIteratorTokens).parseProgramRecovering().program,
+			astOnlyIteratorModel = new SemanticModel(astOnlyIteratorProgram, astOnlyIteratorSource, 1, astOnlyIteratorTokens);
+		astOnlyIteratorModel.index.indexRecoveredSyntax(astOnlyIteratorProgram);
+		var astOnlyIteratorPosition = astOnlyIteratorSource.text.indexOf("item. }") + "item.".length,
+			astOnlyIteratorContext = astOnlyIteratorModel.index.completionContext(astOnlyIteratorPosition, "item");
+		switch astOnlyIteratorContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered iterator method lost its element type: ${astOnlyIteratorContext.receiver}';
+		}
+
 		var patternService = new LanguageService(),
 			patternSource = "enum Choice { One; Two(value:Int); } function main():Void { var choice:Choice = One; switch (choice) { case ";
 		patternService.update("ExpectedPattern.hx", patternSource);
