@@ -232,6 +232,21 @@ class LanguageServiceMain {
 			if (!foundNestedValueUse)
 				throw 'nested exact semantic traversal dropped local reference at $use';
 		}
+		var superTraversalService = new LanguageService(),
+			superTraversalSource = "class Base { public function new(value:Int) {} } class Child extends Base { public function new(value:Int) { super(value); } } function main():Int { return 0; }";
+		superTraversalService.update("SuperTraversal.hx", superTraversalSource);
+		superTraversalService.compile("SuperTraversal");
+		var superTraversalState = superTraversalService.compiler.modules.get("SuperTraversal"),
+			superValuePosition = superTraversalSource.indexOf("value:Int", superTraversalSource.indexOf("class Child")),
+			superValueId = superTraversalState.semanticModel.index.symbolIdAt(superValuePosition + 1),
+			superValueLocations = superValueId == null ? [] : superTraversalState.semanticModel.index.locations(superValueId),
+			superArgumentPosition = superTraversalSource.indexOf("super(value)") + "super(".length;
+		var foundSuperArgument = false;
+		for (location in superValueLocations)
+			if (location.start <= superArgumentPosition && superArgumentPosition < location.end)
+				foundSuperArgument = true;
+		if (superValueId == null || !foundSuperArgument)
+			throw "exact semantic traversal dropped a super-call argument reference";
 		var shadowService = new LanguageService(),
 			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
 		shadowService.update("Shadow.hx", shadowSource);

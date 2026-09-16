@@ -2900,6 +2900,9 @@ class SemanticIndex {
 				indexExpression(fn, end, resolve, resolveEnumCase);
 			case TNewArray(_, length):
 				indexExpression(fn, length, resolve, resolveEnumCase);
+			case TSuperCall(_, arguments):
+				for (argument in arguments)
+					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TStringFromCharCode(code):
 				indexExpression(fn, code, resolve, resolveEnumCase);
 			case TStringSubstring(value, start, end):
