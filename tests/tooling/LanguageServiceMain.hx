@@ -1825,6 +1825,20 @@ class LanguageServiceMain {
 			constructorArgumentExpected = constructorArgumentContext == null ? null : constructorArgumentContext.context.expected;
 		if (constructorArgumentExpected != TString)
 			throw 'recovered constructor call did not propagate the expected generic parameter type: ${constructorArgumentExpected == null ? "null" : Std.string(constructorArgumentExpected)}';
+		var operatorExpectedService = new LanguageService(),
+			operatorExpectedSource = "function take(value:Float):Void return; function main():Void { take(1 + ";
+		operatorExpectedService.update("OperatorExpected.hx", operatorExpectedSource);
+		var operatorExpectedContext = operatorExpectedService.completionContext("OperatorExpected.hx", operatorExpectedSource.length),
+			operatorExpected = operatorExpectedContext == null ? null : operatorExpectedContext.context.expected;
+		if (operatorExpected != TFloat)
+			throw 'recovered operator operand did not retain the expected result type: ${operatorExpected == null ? "null" : Std.string(operatorExpected)}';
+		var predicateExpectedService = new LanguageService(),
+			predicateExpectedSource = "function take(value:Bool):Void return; function main():Void { take(true && ";
+		predicateExpectedService.update("PredicateExpected.hx", predicateExpectedSource);
+		var predicateExpectedContext = predicateExpectedService.completionContext("PredicateExpected.hx", predicateExpectedSource.length),
+			predicateExpected = predicateExpectedContext == null ? null : predicateExpectedContext.context.expected;
+		if (predicateExpected != TBool)
+			throw 'recovered predicate operand did not retain the boolean expected type: ${predicateExpected == null ? "null" : Std.string(predicateExpected)}';
 		var recoveredCompoundCompletionService = new LanguageService(),
 			recoveredCompoundCompletionSource = "class Item {} function take(values:Array<Item>):Void return; function main():Void { var values = []; take(";
 		recoveredCompoundCompletionService.update("RecoveredCompoundCompletion.hx", recoveredCompoundCompletionSource);

@@ -1118,15 +1118,15 @@ class SemanticIndexBuilder {
 					indexRecoveredExpression(object, null, activeFunctionKey);
 					indexRecoveredExpression(value, recoveredMemberType(object, field), activeFunctionKey);
 				case If(predicate, yes, no, _):
-					indexRecoveredExpression(predicate, null, activeFunctionKey);
+					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
 					indexRecoveredStatementUses(yes, expectedReturn, activeFunctionKey);
 					indexRecoveredStatementUses(no, expectedReturn, activeFunctionKey);
 				case While(predicate, body, _):
-					indexRecoveredExpression(predicate, null, activeFunctionKey);
+					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
 					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
 				case DoWhile(body, predicate, _):
 					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
-					indexRecoveredExpression(predicate, null, activeFunctionKey);
+					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
 				case ForIn(_, _, iterable, body, _):
 					indexRecoveredExpression(iterable, null, activeFunctionKey);
 					indexRecoveredStatementUses(body, expectedReturn, activeFunctionKey);
@@ -1231,24 +1231,36 @@ class SemanticIndexBuilder {
 				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
 					method == null ? (memberArguments == null ? recoveredBuiltinMethodArguments(receiverType, name) : memberArguments) : null,
 					activeFunctionKey, expected);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _):
+				indexRecoveredExpression(left, expected, activeFunctionKey);
+				indexRecoveredExpression(right, expected, activeFunctionKey);
+			case BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
+				UnsignedShiftRight(left, right, _):
+				indexRecoveredExpression(left, TInt, activeFunctionKey);
+				indexRecoveredExpression(right, TInt, activeFunctionKey);
+			case Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
+				NotEqual(left, right, _):
 				indexRecoveredExpression(left, null, activeFunctionKey);
 				indexRecoveredExpression(right, null, activeFunctionKey);
+			case And(left, right, _), Or(left, right, _):
+				indexRecoveredExpression(left, TBool, activeFunctionKey);
+				indexRecoveredExpression(right, TBool, activeFunctionKey);
 			case Index(array, offset, _):
-				indexRecoveredExpression(array, null, activeFunctionKey);
+				indexRecoveredExpression(array, expected == null ? null : TArray(expected), activeFunctionKey);
 				indexRecoveredExpression(offset, TInt, activeFunctionKey);
 			case Range(start, finish, _):
 				indexRecoveredExpression(start, null, activeFunctionKey);
 				indexRecoveredExpression(finish, null, activeFunctionKey);
-			case Negate(value, _), Not(value, _), ThrowExpression(value, _), PostfixIncrement(value, _, _):
+			case Negate(value, _), PostfixIncrement(value, _, _):
+				indexRecoveredExpression(value, expected, activeFunctionKey);
+			case Not(value, _):
+				indexRecoveredExpression(value, TBool, activeFunctionKey);
+			case ThrowExpression(value, _):
 				indexRecoveredExpression(value, null, activeFunctionKey);
 			case Cast(value, target, _):
 				indexRecoveredExpression(value, target == null ? expected : recoveredType(target), activeFunctionKey);
 			case Conditional(predicate, yes, no, _):
-				indexRecoveredExpression(predicate, null, activeFunctionKey);
+				indexRecoveredExpression(predicate, TBool, activeFunctionKey);
 				indexRecoveredExpression(yes, expected, activeFunctionKey);
 				indexRecoveredExpression(no, expected, activeFunctionKey);
 			case BlockExpression(statements, result, _):
