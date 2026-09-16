@@ -153,6 +153,7 @@ DEFINE_PRIM(_I32,native_runtime_module_code_revision,_ABSTRACT(realtime_jit_code
 DEFINE_PRIM(_I32,native_runtime_module_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_patch_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_BYTES,native_runtime_module_jit_location,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_BYTES,native_runtime_module_jit_location_slot,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,native_runtime_module_debug_region_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);

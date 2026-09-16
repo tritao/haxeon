@@ -255,8 +255,7 @@ HL_PRIM int HL_NAME(native_runtime_module_patch_count)( vbyte *module ) {
 	return hl_runtime_module_jit_count((hl_runtime_module*)module);
 }
 
-HL_PRIM vbyte *HL_NAME(native_runtime_module_jit_location)( vbyte *module, int stable_id ) {
-	const char *location = hl_runtime_module_resolve_jit_location((hl_runtime_module*)module,stable_id);
+static vbyte *jit_location_bytes( const char *location ) {
 	int length;
 	vbyte *bytes;
 	if( location == NULL ) return NULL;
@@ -269,6 +268,14 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_jit_location)( vbyte *module, int s
 	bytes[length * 2] = 0;
 	bytes[length * 2 + 1] = 0;
 	return bytes;
+}
+
+HL_PRIM vbyte *HL_NAME(native_runtime_module_jit_location)( vbyte *module, int stable_id ) {
+	return jit_location_bytes(hl_runtime_module_resolve_jit_location((hl_runtime_module*)module,stable_id));
+}
+
+HL_PRIM vbyte *HL_NAME(native_runtime_module_jit_location_slot)( vbyte *module, int slot ) {
+	return jit_location_bytes(hl_runtime_module_resolve_jit_location_slot((hl_runtime_module*)module,slot));
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_debug_region_count)( vbyte *module ) {

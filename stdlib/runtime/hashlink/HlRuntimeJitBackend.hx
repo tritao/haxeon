@@ -24,7 +24,7 @@ interface HlRuntimeJitBackend {
 	function codeRevision(code:Null<HlRuntimeJitCodeHandle>):Int;
 	function allocationCount(module:HlRuntimeModuleHandle):Int;
 	function patchCount(module:HlRuntimeModuleHandle):Int;
-	function location(module:HlRuntimeModuleHandle, index:Int):hl.Bytes;
+	function locationSlot(module:HlRuntimeModuleHandle, slot:Int):hl.Bytes;
 	function debugRegionCount(module:HlRuntimeModuleHandle):Int;
 	function retiredAllocationCount(module:HlRuntimeModuleHandle):Int;
 }
@@ -71,8 +71,8 @@ class NativeHlRuntimeJitBackend implements HlRuntimeJitBackend {
 	public inline function patchCount(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_patch_count(module);
 
-	public inline function location(module:HlRuntimeModuleHandle, index:Int):hl.Bytes
-		return HlTypeBridge.native_runtime_module_jit_location(module, index);
+	public inline function locationSlot(module:HlRuntimeModuleHandle, slot:Int):hl.Bytes
+		return HlTypeBridge.native_runtime_module_jit_location_slot(module, slot);
 
 	public inline function debugRegionCount(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_debug_region_count(module);

@@ -197,6 +197,10 @@ class HlTypeBridge {
 	public static function native_runtime_module_jit_location(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
 		return null;
 
+	/** Resolve one Haxe-selected dispatch slot to its current native source location. */
+	public static function native_runtime_module_jit_location_slot(module:hl.Abstract<"realtime_module">, slot:Int):hl.Bytes
+		return null;
+
 	/** Read the number of debug regions retained by an external wrapper. */
 	public static function native_runtime_module_debug_region_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;

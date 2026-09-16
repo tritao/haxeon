@@ -60,10 +60,15 @@ class NativeRuntimeJitBackend implements RuntimeJitBackend {
 
 	public inline function location(module:RuntimeModuleHandle, index:Int):hl.Bytes
 		#if haxeon
-		return haxeBackend.location(cast module, index);
+		return haxeBackend.locationSlot(cast module, index);
 		#else
 		return RuntimeJit.jit_location(module, index);
 		#end
+
+	#if haxeon
+	public inline function locationSlot(module:RuntimeModuleHandle, slot:Int):hl.Bytes
+		return haxeBackend.locationSlot(cast module, slot);
+	#end
 
 	public inline function debugRegionCount(module:RuntimeModuleHandle):Int
 		#if haxeon

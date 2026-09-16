@@ -181,7 +181,12 @@ class Runtime {
 
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
+		#if haxeon
+		var slot = module.dispatchSlot(stableIndex),
+			bytes = module.access(function(handle) return jitBackend.locationSlot(handle, slot));
+		#else
 		var bytes = module.access(function(handle) return jitBackend.location(handle, stableIndex));
+		#end
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
