@@ -105,27 +105,29 @@ class HlTypeLayout {
 	}
 
 	/** Publish only object prototypes; Haxe-owned layout filters out other type kinds. */
-	public static function publishObjectPrototypes(types:RawPtr<RawPtr<HlType>>, count:Int):Void {
+	public static function publishObjectPrototypes(types:RawPtr<RawPtr<HlType>>, count:Int, ?kernel:HlMetadataModuleKernel):Void {
 		if (count < 0 || (count > 0 && types.isNull()))
 			throw "HashLink object prototype publication requires a type table";
+		var publicationKernel = kernel == null ? new NativeHlMetadataModuleKernel() : kernel;
 		for (index in 0...count)
-			publishObjectPrototype(types.offset(index).load());
+			publishObjectPrototype(types.offset(index).load(), publicationKernel);
 	}
 
 	/** Publish object prototypes when the public type table is a contiguous native slab. */
-	public static function publishContiguousObjectPrototypes(types:RawPtr<HlType>, count:Int):Void {
+	public static function publishContiguousObjectPrototypes(types:RawPtr<HlType>, count:Int, ?kernel:HlMetadataModuleKernel):Void {
 		if (count < 0 || (count > 0 && types.isNull()))
 			throw "HashLink object prototype publication requires a contiguous type slab";
+		var publicationKernel = kernel == null ? new NativeHlMetadataModuleKernel() : kernel;
 		for (index in 0...count)
-			publishObjectPrototype(types.offset(index));
+			publishObjectPrototype(types.offset(index), publicationKernel);
 	}
 
-	static function publishObjectPrototype(type:RawPtr<HlType>):Void {
+	static function publishObjectPrototype(type:RawPtr<HlType>, kernel:HlMetadataModuleKernel):Void {
 		if (type.isNull())
 			throw "HashLink object prototype publication contains a null type";
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind == HlTypeKind.Object || kind == HlTypeKind.Struct)
-			HlTypeBridge.native_metadata_publish_object_prototype(type);
+			kernel.publishObjectPrototype(type);
 	}
 
 	static function bindFunctionDescriptorsForType(type:RawPtr<HlType>, functions:RawPtr<HlFunction>, functionCount:Int, context:RawPtr<HlModuleContext>):Void {

@@ -11,6 +11,7 @@ import runtime.memory.RawPtr;
 interface HlMetadataModuleKernel {
 	function allocate(code:RawPtr<HlNativeCode>):RawPtr<UInt8>;
 	function initialize(module:RawPtr<UInt8>, flags:Int):Bool;
+	function publishObjectPrototype(type:RawPtr<HlType>):Void;
 	function publishObjectPrototypes(module:RawPtr<UInt8>):Bool;
 	function disposeContext(context:RawPtr<HlModuleContext>):Void;
 	function initializeConstant(module:RawPtr<UInt8>, index:Int):Bool;
@@ -30,6 +31,9 @@ class NativeHlMetadataModuleKernel implements HlMetadataModuleKernel {
 
 	public inline function initialize(module:RawPtr<UInt8>, flags:Int):Bool
 		return HlTypeBridge.native_metadata_module_init(module, flags);
+
+	public inline function publishObjectPrototype(type:RawPtr<HlType>):Void
+		HlTypeBridge.native_metadata_publish_object_prototype(type);
 
 	public inline function publishObjectPrototypes(module:RawPtr<UInt8>):Bool
 		return HlTypeBridge.native_metadata_module_publish_object_prototypes(module);
