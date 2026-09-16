@@ -182,13 +182,14 @@ arena's records.
 `HlMetadataGeneration` combines these pieces into one build/publish lifecycle:
 it owns the arena, appends the type table, defines the module context, lets
 `HlTypeLayout` construct the derived object, enum, and virtual metadata in that
-same arena, and then crosses one small native publication boundary for object
-prototype wiring.
+same arena. The native kernel wires executable object prototypes only after
+module initialization has finalized the JIT entrypoint table.
 `HlTypeSemantics` centralizes the Haxe-owned size, padding, pointer-classification,
 and mark-bit rules that mirror HashLink's ABI helpers; the native bridge retains
 only host-width queries and bootstrap-sensitive publication operations.
 Object prototype wiring remains native because it publishes executable method
-and closure pointers; enum and virtual layout construction no longer calls
+and closure pointers; it is deliberately deferred until the native module has
+installed those pointers. Enum and virtual layout construction no longer calls
 HashLink's native initializers, which are no longer exposed by the bridge. The
 resulting runtime records, field indexes,
 sorted lookups, binding slots, and mark-bit maps remain arena-owned and stable.

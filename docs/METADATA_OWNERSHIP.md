@@ -112,8 +112,10 @@ Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
 boundary flag tells the native kernel to retain Haxeon's enum and virtual
 layout, lookup, index, and mark-bit tables instead of rebuilding them in
 `hl_module_init_indexes`. Native initialization still wires module context,
-globals, function associations, and JIT state; executable object-prototype
-state remains a native responsibility.
+globals, function associations, and JIT state; after the JIT entrypoint table is
+finalized, it builds executable object-prototype state from the Haxe-owned
+records. Haxe metadata publication therefore never asks HashLink to construct a
+prototype against an uninitialized or Haxe-only function-pointer table.
 
 Haxe-built patch publication follows the same single-model rule. `HlPatchReader`
 decodes each HLP once, and the generation arena owns the `hl_patch_input`

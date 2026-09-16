@@ -472,12 +472,8 @@ class HlMetadataGeneration {
 		debugSectionDescriptors.validate();
 		validateModulePools();
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
-		var contiguousTypes = arena.typePointer(), usesContiguousTypes = typeTable.isContiguousPrefix(contiguousTypes);
+		var usesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
 		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
-		if (usesContiguousTypes)
-			HlTypeLayout.publishContiguousObjectPrototypes(contiguousTypes, typeTable.length());
-		else
-			HlTypeLayout.publishObjectPrototypes(typeTable.pointer(), typeTable.length());
 		ensureFunctionIdentities();
 		buildNativeCode();
 		validateNativeCode();
