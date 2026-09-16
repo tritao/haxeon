@@ -1187,6 +1187,27 @@ class ParserRecoveryMain {
 				throw 'an unresolved closure call did not preserve its expected result type: ${expectedClosureExpression.type}';
 		}
 
+		var expectedMethodSource = new SourceFile("TolerantExpectedMethodCall.hx",
+			"class Expected {} function main():Expected { var value = missing; return value.unknown(); var after:Int = 1; }");
+		var expectedMethodProgram = new Parser(new Lexer(expectedMethodSource).tokenize()).parseProgramRecovering().program,
+			expectedMethodTyped = Typer.typeRecovered(expectedMethodProgram),
+			expectedMethodExpression:Null<TypedExpression> = null;
+		if (expectedMethodTyped != null)
+			for (fn in expectedMethodTyped.functions)
+				if (fn.name == "main")
+					for (statement in fn.statements)
+						switch statement {
+							case TReturn(expression, _): expectedMethodExpression = expression;
+							default:
+						}
+		if (expectedMethodExpression == null)
+			throw "an unresolved method call with an expected result lost its return expression";
+		switch expectedMethodExpression.type {
+			case TInstance(NominalKind.Class, "Expected", _):
+			default:
+				throw 'an unresolved method call did not preserve its expected result type: ${expectedMethodExpression.type}';
+		}
+
 		var implicitFieldCallSource = new SourceFile("TolerantImplicitFieldCall.hx",
 			"class Holder { public var callback:Int; public function run():Void { callback(); var after:Int = 1; } } function main():Void return;");
 		var implicitFieldCallProgram = new Parser(new Lexer(implicitFieldCallSource).tokenize()).parseProgramRecovering().program,
@@ -1706,6 +1727,26 @@ class ParserRecoveryMain {
 			case TInstance(NominalKind.Class, "Box", _):
 			default:
 				throw 'unfinished generic construction did not retain its nominal result: ${genericExpression.type}';
+		}
+
+		var genericExpectedSource = new SourceFile("TolerantGenericExpected.hx",
+			"class ExpectedBox<T> {} function main():ExpectedBox<String> return new ExpectedBox<");
+		var genericExpectedProgram = new Parser(new Lexer(genericExpectedSource).tokenize()).parseProgramRecovering().program,
+			genericExpectedTyped = Typer.typeRecovered(genericExpectedProgram),
+			genericExpectedExpression:Null<TypedExpression> = null;
+		if (genericExpectedTyped != null)
+			for (fn in genericExpectedTyped.functions)
+				if (fn.name == "main")
+					switch fn.statements[0] {
+						case TReturn(expression, _): genericExpectedExpression = expression;
+						default:
+					}
+		if (genericExpectedExpression == null)
+			throw "an unfinished generic constructor lost its expected return expression";
+		switch genericExpectedExpression.type {
+			case TInstance(NominalKind.Class, "ExpectedBox", arguments) if (arguments.length == 1 && Std.string(arguments[0]) == "TString"):
+			default:
+				throw 'unfinished generic construction did not retain its expected type arguments: ${genericExpectedExpression.type}';
 		}
 
 		var genericResultSource = new SourceFile("TolerantGenericResult.hx",

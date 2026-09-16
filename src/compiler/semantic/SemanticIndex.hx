@@ -1226,9 +1226,11 @@ class SemanticIndexBuilder {
 					recordUnresolved(name, span);
 				var receiverType = recoveredExpressionBindingType(object),
 					owner = memberOwner(receiverType),
-					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
+					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType)),
+					memberArguments = method == null ? anonymousFunctionArguments(anonymousMemberType(receiverType, name)) : null;
 				indexRecoveredCallArguments(arguments, method == null ? null : method.method, method == null ? null : method.substitutions,
-					method == null ? recoveredBuiltinMethodArguments(receiverType, name) : null, activeFunctionKey, expected);
+					method == null ? (memberArguments == null ? recoveredBuiltinMethodArguments(receiverType, name) : memberArguments) : null,
+					activeFunctionKey, expected);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
@@ -1387,11 +1389,12 @@ class SemanticIndexBuilder {
 
 	function isKnownRecoveredMember(object:AstExpression, name:String):Bool {
 		var receiverType = recoveredExpressionBindingType(object),
+			anonymous = anonymousMemberType(receiverType, name),
 			owner = switch receiverType {
 				case TNullable(element): memberOwner(element);
 				case type: memberOwner(type);
 			};
-		return owner != null
+		return anonymous != null || owner != null
 			&& (recoveredMemberSymbol(receiverType, name, []) != null
 				|| knownRecoveredMembers.exists(owner + "." + name)
 				|| recoveredFieldType(owner, name, []) != null
@@ -1469,6 +1472,17 @@ class SemanticIndexBuilder {
 		};
 	}
 
+	function recoveredGenericConstructionType(name:String, typeArguments:Array<AstType>, ?expected:CompilerType):CompilerType {
+		var inferred = recoveredType(AppliedType(name, typeArguments));
+		return switch expected {
+			case TInstance(_, expectedName, _) if (sourceName(expectedName) == sourceName(name)
+				&& (typeArguments.length == 0 || isRecoveryType(inferred))): expected;
+			case TAbstract(expectedName, _, _) if (sourceName(expectedName) == sourceName(name)
+				&& (typeArguments.length == 0 || isRecoveryType(inferred))): expected;
+			default: inferred;
+		};
+	}
+
 	function recoveredLambdaType(arguments:Array<compiler.syntax.Ast.AstArgument>, ?expected:CompilerType):CompilerType {
 		var expectedArguments:Array<CompilerType> = [],
 			expectedResult:CompilerType = TUnknown;
@@ -1524,12 +1538,16 @@ class SemanticIndexBuilder {
 			case MethodCall(object, name, arguments, _):
 				var receiverType = recoveredExpressionBindingType(object),
 					builtinResult = recoveredBuiltinMethodResult(receiverType, name),
+					anonymousMember = anonymousMemberType(receiverType, name),
 					owner = memberOwner(receiverType);
 			if (builtinResult != null)
 				builtinResult;
+			else if (anonymousMember != null)
+				recoveredCallableResult(anonymousMember, expected);
 			else {
 				var method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
-				method == null ? TUnknown : recoveredCallResult(method.method, method.substitutions, arguments, expected);
+				method == null ? (expected != null && !isRecoveryType(expected) ? expected : TUnknown)
+					: recoveredCallResult(method.method, method.substitutions, arguments, expected);
 			}
 			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
@@ -1553,9 +1571,7 @@ class SemanticIndexBuilder {
 					direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
 				}
 			case ClosureCall(callee, _, _):
-				var result = functionResultType(recoveredExpressionType(callee));
-				result == null || isRecoveryType(result) && expected != null && !isRecoveryType(expected) ?
-					expected != null && !isRecoveryType(expected) ? expected : TUnknown : result;
+				recoveredCallableResult(recoveredExpressionType(callee), expected);
 			case Add(left, right, _): recoveredArithmeticType(left, right, true);
 			case Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _): recoveredArithmeticType(left, right, false);
 			case BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
@@ -1603,7 +1619,7 @@ class SemanticIndexBuilder {
 				TMap(expectedKey != null && !isRecoveryType(expectedKey) ? expectedKey : keyType,
 					expectedValue != null && !isRecoveryType(expectedValue) ? expectedValue : valueType);
 			case New(name, _, _): recoveredConstructionType(name, expected);
-			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
+			case NewGeneric(name, typeArguments, _, _): recoveredGenericConstructionType(name, typeArguments, expected);
 			case NewArray(element, _, _): TArray(recoveredType(element));
 			case NewMap(key, value, _): TMap(recoveredType(key), recoveredType(value));
 			case Lambda(arguments, _, _): recoveredLambdaType(arguments, expected);
@@ -1920,6 +1936,11 @@ class SemanticIndexBuilder {
 			recoveredExpectedType(fn.result, fn, resolved));
 	}
 
+	function recoveredCallableResult(type:CompilerType, ?expected:CompilerType):CompilerType {
+		var result = functionResultType(type);
+		return result == null ? TUnknown : isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
+	}
+
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
 		checkpoint();
 		var receiverType = recoveredExpressionBindingType(object),
@@ -2081,10 +2102,13 @@ class SemanticIndexBuilder {
 			case MethodCall(object, name, arguments, _):
 				var receiverType = recoveredComprehensionExpressionType(object, bindings),
 					builtinResult = recoveredBuiltinMethodResult(receiverType, name),
+					anonymousMember = anonymousMemberType(receiverType, name),
 					owner = memberOwner(receiverType),
 					method = owner == null ? null : recoveredMethodWithSubstitutions(owner, name, [], recoveredTypeSubstitutions(receiverType));
 				if (builtinResult != null)
 					builtinResult;
+				else if (anonymousMember != null)
+					recoveredCallableResult(anonymousMember);
 				else if (method != null)
 					recoveredCallResult(method.method, method.substitutions, arguments);
 				else
@@ -2409,6 +2433,13 @@ class SemanticIndexBuilder {
 						return field.type;
 				null;
 			case TNullable(element): anonymousMemberType(element, name);
+			default: null;
+		};
+
+	function anonymousFunctionArguments(type:Null<CompilerType>):Null<Array<CompilerType>>
+		return switch type {
+			case TFunction(arguments, _): arguments;
+			case TNullable(element): anonymousFunctionArguments(element);
 			default: null;
 		};
 

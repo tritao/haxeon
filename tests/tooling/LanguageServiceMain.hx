@@ -1889,6 +1889,12 @@ class LanguageServiceMain {
 				inferredObjectMember = true;
 		if (!inferredObjectMember)
 			throw "recovered object literal did not expose inferred members at an incomplete access";
+		var inferredObjectCallService = new LanguageService(),
+			inferredObjectCallSource = "function main():Void { var holder = {run: (value:Int) -> value}; holder.run(";
+		inferredObjectCallService.update("InferredObjectCall.hx", inferredObjectCallSource);
+		var inferredObjectCallContext = inferredObjectCallService.completionContext("InferredObjectCall.hx", inferredObjectCallSource.length);
+		if (inferredObjectCallContext == null || inferredObjectCallContext.context.expected != TInt)
+			throw 'recovered anonymous callable member did not retain its argument type: ${inferredObjectCallContext == null ? "null" : Std.string(inferredObjectCallContext.context.expected)}';
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);

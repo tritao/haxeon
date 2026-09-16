@@ -132,7 +132,8 @@ class CallResolver {
 			contextualGenericArguments:Bool = true):TypedExpression {
 		try {
 			if (session.tolerant && isRecoveryType(receiver.type))
-				return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
+				return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)),
+					expectedType != null && !isRecoveryType(expectedType) ? expectedType : TUnknown, span);
 			if (isRawPointerType(receiver.type)) {
 				var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
 				if (rawPointerCall != null)
@@ -170,7 +171,8 @@ class CallResolver {
 				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
 			else
 				session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered method call", span));
-			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
+			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)),
+				expectedType != null && !isRecoveryType(expectedType) ? expectedType : TUnknown, span);
 		}
 	}
 
