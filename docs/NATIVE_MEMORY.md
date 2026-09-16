@@ -231,17 +231,21 @@ boundary.
 
 ## Runtime synchronization
 
-`runtime.memory.AtomicInt32` provides aligned unmanaged i32 operations with
-explicit `MemoryOrder` values (`Relaxed`, `Acquire`, `Release`, `AcqRel`, and
-`SeqCst`). Invalid load/store orderings are rejected at the Haxe boundary;
-compare-exchange derives the permitted failure ordering from its success
-ordering. Mutexes, condition variables, TLS, and explicit GC handles remain
-separate runtime primitives. `GcHandle.createOwned` and `Runtime.createGcHandle`
-associate a root with one loaded HashLink module; module teardown closes those
-handles before native metadata or executable storage can be reclaimed. Unowned
-`GcHandle.create` remains process-scoped. Metadata publication uses `Mutex` for serialized
-policy transitions and lease lifetime; native metadata records still contain
-no implicit managed references. A raw `currentPublication()` view is only a
+`runtime.memory.AtomicInt32` provides aligned unmanaged i32 operations, while
+`runtime.memory.AtomicPointer<T>` provides the corresponding operations for
+aligned unmanaged pointer slots. Both use explicit `MemoryOrder` values
+(`Relaxed`, `Acquire`, `Release`, `AcqRel`, and `SeqCst`). Invalid load/store
+orderings are rejected at the Haxe boundary; compare-exchange derives the
+permitted failure ordering from its success ordering. Mutexes, condition
+variables, TLS, and explicit GC handles remain separate runtime primitives.
+`GcHandle.createOwned` and `Runtime.createGcHandle` associate a strong root with
+one loaded HashLink module; `WeakRoot.create` registers a weak slot that does
+not retain its target and is cleared after strong marking when the target is
+unreachable. Module teardown closes these handles before native metadata or
+executable storage can be reclaimed. Unowned `GcHandle.create` remains
+process-scoped. Metadata publication uses `Mutex` for serialized policy
+transitions and lease lifetime; native metadata records still contain no
+implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use
 `currentLease()`.
 
@@ -249,9 +253,10 @@ point-in-time snapshot; consumers that retain native pointers use
 
 The first foundation does not add general-purpose allocation, ownership or
 borrow checking, pinning, GC write barriers, executable memory,
-`unsafe {}` syntax, indirect invocation through native function pointers,
-aggregate
-by-value calling conventions, or changes to the HashLink fork. The first
-acceptance point is a Haxe-declared, GC-free C record whose layout agrees with
-the ABI classifier, manipulated through `RawPtr<T>` in stable aligned arena
-storage, with corresponding HXI layouts calculated by that same classifier.
+`unsafe {}` syntax, indirect invocation through native function pointers, or
+aggregate by-value calling conventions. The acceptance point is a Haxe-declared,
+GC-free C record whose layout agrees with the ABI classifier, manipulated
+through `RawPtr<T>` in stable aligned arena storage, with corresponding HXI
+layouts calculated by that same classifier. The small weak-root bridge is an
+explicit HashLink GC integration point; it does not make arbitrary native
+memory visible to the collector.
