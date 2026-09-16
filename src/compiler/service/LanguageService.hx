@@ -2133,8 +2133,13 @@ class LanguageService {
 			token.check();
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
-			tokens = state == null ? null : effectiveTokens(state),
-			model = state == null ? null : effectiveSemanticModel(state);
+			model = snapshot == null ? null : snapshot.semanticModel,
+			semantic = state == null ? null : semanticQuery(path, position, null, token);
+		if (semantic != null) {
+			snapshot = semantic.snapshot;
+			model = semantic.model;
+		}
+		var tokens = snapshot == null ? null : snapshot.tokens;
 		if (state == null || tokens == null || model == null)
 			return null;
 		var open = callOpenToken(tokens, position, token);

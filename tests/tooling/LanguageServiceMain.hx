@@ -1128,6 +1128,14 @@ class LanguageServiceMain {
 				hasGenericInlayHint = true;
 		if (!hasGenericInlayHint)
 			throw "inlay hints did not use current recovery for an unreachable generic body";
+		var genericSignatureService = new LanguageService(),
+			genericSignatureSource = "function identity<T>(value:T):T return value; function caller<T>(value:T):T { return identity(value); } function main():Void return;";
+		genericSignatureService.update("GenericSignature.hx", genericSignatureSource);
+		genericSignatureService.compile("GenericSignature");
+		var genericSignaturePosition = genericSignatureSource.indexOf("identity(value") + "identity(".length,
+			genericSignature = genericSignatureService.signatureHelp("GenericSignature.hx", genericSignaturePosition);
+		if (genericSignature == null || genericSignature.label != "identity(value:T):T")
+			throw 'signature help did not use current recovery for an unreachable generic body: ${genericSignature == null ? "null" : genericSignature.label}';
 		var recoveredReferenceService = new LanguageService();
 		recoveredReferenceService.update("refs/Target.hx", "package refs; function target():Int return 1; function main():Void return;");
 		recoveredReferenceService.compile("refs.Target");
