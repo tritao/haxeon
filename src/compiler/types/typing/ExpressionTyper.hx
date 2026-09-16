@@ -575,17 +575,44 @@ class ExpressionTyper {
 			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				subjectBinding = invalidSubject ? null : switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope),
-				isCatchAll = switchRules.catchAll(switchCase.value),
-				arrayPattern = invalidSubject ? null : subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope) : null,
-				pattern = invalidSubject ? null : subjectBinding == null
-					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
-				typedValue = isCatchAll
-					|| subjectBinding != null
-					|| arrayPattern != null ? typedSubject : pattern == null
-						? (invalidSubject ? typeExpressionCallback(switchCase.value, scope, null, false)
-							: coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type, false), typedSubject.type, "switch case", "E1019"))
-						: pattern.value;
+				subjectBinding:Null<String> = null;
+			if (!invalidSubject)
+				try {
+					subjectBinding = switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope);
+				} catch (error:Dynamic) {
+					if (Std.isOfType(error, compiler.service.CancellationError))
+						throw error;
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error, switchCase.span);
+				}
+			var isCatchAll = switchRules.catchAll(switchCase.value),
+				arrayPattern:Null<TypedSwitchArrayPattern> = null;
+			if (!invalidSubject && subjectBinding == null)
+				try {
+					arrayPattern = switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope);
+				} catch (error:Dynamic) {
+					if (Std.isOfType(error, compiler.service.CancellationError))
+						throw error;
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error, switchCase.span);
+				}
+			var pattern:Null<ExpressionSwitchPattern> = null;
+			if (!invalidSubject && subjectBinding == null && arrayPattern == null)
+				try {
+					pattern = switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope);
+				} catch (error:Dynamic) {
+					if (Std.isOfType(error, compiler.service.CancellationError))
+						throw error;
+					if (!session.tolerant)
+						throw error;
+					rememberRecoveryError(error, switchCase.span);
+				}
+			var typedValue = isCatchAll || subjectBinding != null || arrayPattern != null ? typedSubject : pattern == null
+				? (invalidSubject ? typeExpressionCallback(switchCase.value, scope, null, false)
+					: recoverCoerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type, false), typedSubject.type, "switch case", "E1019"))
+				: pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : recoverCoerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
 				caseIndex = typedCases.length,
@@ -602,9 +629,13 @@ class ExpressionTyper {
 				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 			if (expectedType == null && typedResult.type != TNever) {
 				var joined = resultType == null ? typedResult.type : commonConditionalType(resultType, typedResult.type);
-				if (joined == null)
-					fail("E1003", "Switch branches must have matching types", switchCase.span);
-				resultType = joined;
+				if (joined == null) {
+					if (!session.tolerant)
+						fail("E1003", "Switch branches must have matching types", switchCase.span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1003", "Switch branches must have matching types", switchCase.span));
+					resultType = TUnknown;
+				} else
+					resultType = joined;
 			}
 			if (pattern == null) {
 				var literal = switchRules.enumLiteral(typedValue);
@@ -617,8 +648,11 @@ class ExpressionTyper {
 			if (isCatchAll || subjectBinding != null)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
-				if (seenCases.exists(caseKey))
-					fail("E1020", "Duplicate switch case", switchCase.span);
+				if (seenCases.exists(caseKey)) {
+					if (!session.tolerant)
+						fail("E1020", "Duplicate switch case", switchCase.span);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1020", "Duplicate switch case", switchCase.span));
+				}
 				seenCases.set(caseKey, true);
 			}
 			typedCases.push({
@@ -637,9 +671,13 @@ class ExpressionTyper {
 		}
 		if (typedDefault != null && expectedType == null && typedDefault.type != TNever) {
 			var joined = resultType == null ? typedDefault.type : commonConditionalType(resultType, typedDefault.type);
-			if (joined == null)
-				fail("E1003", "Switch branches must have matching types", span);
-			resultType = joined;
+			if (joined == null) {
+				if (!session.tolerant)
+					fail("E1003", "Switch branches must have matching types", span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1003", "Switch branches must have matching types", span));
+				resultType = TUnknown;
+			} else
+				resultType = joined;
 		}
 		if (resultType == null) {
 			if (!session.tolerant)
@@ -671,8 +709,11 @@ class ExpressionTyper {
 			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
 		if (typedDefault != null)
 			typedDefault = recoverCoerce(typedDefault, resultType, "switch branch", "E1003");
-		if (!invalidSubject && typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
-			fail("E1021", "Switch expression requires a default branch", span);
+		if (!invalidSubject && typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall")) {
+			if (!session.tolerant)
+				fail("E1021", "Switch expression requires a default branch", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1021", "Switch expression requires a default branch", span));
+		}
 		if (!invalidSubject && switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(switchRules.enumName(typedSubject.type)),
 				missing:Array<String> = [],
@@ -695,8 +736,11 @@ class ExpressionTyper {
 			}
 			if (switchRules.isNullableEnum(typedSubject.type) && !seenCases.exists("null"))
 				missing.push("null");
-			if (missing.length > 0)
-				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+			if (missing.length > 0) {
+				if (!session.tolerant)
+					fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span));
+			}
 		}
 		return new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 	}
@@ -750,10 +794,14 @@ class ExpressionTyper {
 				&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
 			typedFalse = typeExpressionCallback(whenFalse, falseScope, branchExpected, false),
 			resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
-		if (resultType == null)
-			fail("E1003", "Conditional branches must have matching types", span);
-		typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
-		typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
+		if (resultType == null) {
+			if (!session.tolerant)
+				fail("E1003", "Conditional branches must have matching types", span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1003", "Conditional branches must have matching types", span));
+			resultType = TUnknown;
+		}
+		typedTrue = recoverCoerce(typedTrue, resultType, "conditional branch", "E1003");
+		typedFalse = recoverCoerce(typedFalse, resultType, "conditional branch", "E1003");
 		return new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 	}
 
@@ -1163,6 +1211,14 @@ class ExpressionTyper {
 
 	static function isRecoveryType(type:CompilerType):Bool
 		return TypeRelations.containsRecovery(type);
+
+	function rememberRecoveryError(error:Dynamic, span:SourceSpan):Void {
+		if (Std.isOfType(error, CompileError)) {
+			var compileError:CompileError = cast error;
+			session.rememberRecoveryDiagnostic(compileError.diagnostic);
+		} else
+			session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered switch pattern", span));
+	}
 
 	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
 		if (!session.tolerant)

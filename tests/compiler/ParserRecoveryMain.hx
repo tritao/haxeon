@@ -1333,10 +1333,44 @@ class ParserRecoveryMain {
 					}
 			default:
 		}
-	if (!retainedRecoveredPattern)
-		throw "tolerant switch recovery discarded an enum payload binding";
+		if (!retainedRecoveredPattern)
+			throw "tolerant switch recovery discarded an enum payload binding";
 
-	var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
+		var recoveredSwitchExpressionSource = new SourceFile("TolerantRecoveredSwitchExpression.hx",
+			"class Payload { public var member:Int; } function main():Void { var value = switch (1) { case 1: new Payload(); case 2: 0; }; value. }"),
+			recoveredSwitchExpressionProgram = new Parser(new Lexer(recoveredSwitchExpressionSource).tokenize()).parseProgramRecovering().program,
+			recoveredSwitchExpressionTyped = Typer.typeRecovered(recoveredSwitchExpressionProgram),
+			retainedRecoveredSwitchExpression = false;
+		if (recoveredSwitchExpressionTyped != null && recoveredSwitchExpressionTyped.functions.length == 1)
+			switch recoveredSwitchExpressionTyped.functions[0].statements[0] {
+				case TVar(_, value, _) if (value.type == TUnknown):
+					switch value.expression {
+						case TSwitchExpression(_, cases, _) if (cases.length == 2): retainedRecoveredSwitchExpression = true;
+						default:
+					}
+				default:
+			}
+		if (!retainedRecoveredSwitchExpression)
+			throw "incompatible recovered switch branches discarded the partial expression tree";
+
+		var recoveredConditionalSource = new SourceFile("TolerantRecoveredConditional.hx",
+			"class Payload { public var member:Int; } function main():Void { var value = broken ? new Payload() : 0; value. }"),
+			recoveredConditionalProgram = new Parser(new Lexer(recoveredConditionalSource).tokenize()).parseProgramRecovering().program,
+			recoveredConditionalTyped = Typer.typeRecovered(recoveredConditionalProgram),
+			retainedRecoveredConditional = false;
+		if (recoveredConditionalTyped != null && recoveredConditionalTyped.functions.length == 1)
+			switch recoveredConditionalTyped.functions[0].statements[0] {
+				case TVar(_, value, _) if (value.type == TUnknown):
+					switch value.expression {
+						case TConditional(_, _, _) : retainedRecoveredConditional = true;
+						default:
+					}
+				default:
+			}
+		if (!retainedRecoveredConditional)
+			throw "incompatible recovered conditional branches discarded the partial expression tree";
+
+		var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
 			"function main():Void { var value = broken.unresolved().thing; var after:Int = 1; }");
 		var chainedErrorProgram = new Parser(new Lexer(chainedErrorSource).tokenize()).parseProgramRecovering().program,
 			chainedErrorTyped = Typer.typeRecovered(chainedErrorProgram);
