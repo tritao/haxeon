@@ -1970,29 +1970,39 @@ class Parser {
 		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
 		advance();
-		var start = previous().span, statements = [];
+		var start = previous().span, statements:Array<AstStatement> = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-			if (isStatementOnlyStart(current().kind)) {
-				appendStatements(statements, parseStatements());
-				continue;
-			}
-			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
-				var result = parseExpressionBranch();
-				match(TokenKind.Semicolon);
-				if (check(TokenKind.RightBrace)) {
-					var end = consume(TokenKind.RightBrace).span;
-					return BlockExpression(statements, result, start.merge(end));
+			var statementStart = position;
+			try {
+				if (isStatementOnlyStart(current().kind)) {
+					appendStatements(statements, parseStatements());
+					continue;
 				}
-				statements.push(Expression(result, expressionSpan(result)));
-				continue;
+				if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+					var result = parseExpressionBranch();
+					match(TokenKind.Semicolon);
+					if (check(TokenKind.RightBrace)) {
+						var end = consume(TokenKind.RightBrace).span;
+						return BlockExpression(statements, result, start.merge(end));
+					}
+					statements.push(Expression(result, expressionSpan(result)));
+					continue;
+				}
+				var saved = position, candidate = tryParseExpression();
+				if (candidate != null && check(TokenKind.RightBrace)) {
+					var end = consume(TokenKind.RightBrace).span;
+					return BlockExpression(statements, candidate, start.merge(end));
+				}
+				position = saved;
+				appendStatements(statements, parseStatements());
 			}
-			var saved = position, candidate = tryParseExpression();
-			if (candidate != null && check(TokenKind.RightBrace)) {
-				var end = consume(TokenKind.RightBrace).span;
-				return BlockExpression(statements, candidate, start.merge(end));
+			catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				statements.push(ErrorStatement(error.diagnostic.span));
+				synchronizeStatement(bodyStart, statementStart);
 			}
-			position = saved;
-			appendStatements(statements, parseStatements());
 		}
 		var trailing = trailingBlockResult(statements);
 		if (trailing != null) {

@@ -1711,6 +1711,17 @@ class LanguageServiceMain {
 						}
 		if (!foundSwitchExpressionArm)
 			throw "switch expression recovery consumed a valid declaration after a malformed case";
+		var blockExpressionService = new LanguageService(),
+			blockExpressionSource = "package blockapp; import blocktypes.BlockValue; function retained():BlockValue return if (true) { broken statement; var value:BlockValue = new BlockValue(); value. } else new BlockValue();";
+		blockExpressionService.update("blocktypes/BlockValue.hx", "package blocktypes; class BlockValue { public var member:Int; }");
+		blockExpressionService.update("BlockExpressions.hx", blockExpressionSource);
+		var blockExpressionItems = blockExpressionService.completeResult("BlockExpressions.hx", blockExpressionSource.length).items,
+			foundBlockExpressionLocal = false;
+		for (item in blockExpressionItems)
+			if (item.label == "value" && item.detail == "value")
+				foundBlockExpressionLocal = true;
+		if (!foundBlockExpressionLocal)
+			throw "block expression recovery consumed a valid declaration after a malformed statement";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
