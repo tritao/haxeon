@@ -135,9 +135,15 @@ class SemanticWorkspace {
 	 */
 	public function editorResolveSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		var qualifiedMember = editorQualifiedMemberSymbolId(from, name, sourceProgram, token);
+		if (qualifiedMember != null)
+			return qualifiedMember;
 		var importedMember = editorImportedMemberSymbolId(from, name, sourceProgram, token);
 		if (importedMember != null)
 			return importedMember;
+		var qualifiedType = editorQualifiedTypeSymbolId(name, token);
+		if (qualifiedType != null)
+			return qualifiedType;
 		var importedType = editorImportedTypeSymbolId(from, name, sourceProgram, token);
 		if (importedType != null)
 			return importedType;
@@ -161,6 +167,9 @@ class SemanticWorkspace {
 	/** Resolve a recovered type name without bypassing editor visibility. */
 	public function editorResolveTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		var qualifiedType = editorQualifiedTypeSymbolId(name, token);
+		if (qualifiedType != null)
+			return qualifiedType;
 		var importedType = editorImportedTypeSymbolId(from, name, sourceProgram, token);
 		if (importedType != null)
 			return importedType;
@@ -771,12 +780,50 @@ class SemanticWorkspace {
 			canonical = editorTypeName(typeId);
 		if (resolved == null || canonical == null)
 			return null;
-		return switch resolved.symbol.kind {
+		return memberSymbolForType(resolved.symbol.kind, canonical, memberName);
+	}
+
+	function editorQualifiedMemberSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var separator = name.lastIndexOf(".");
+		while (separator > 0) {
+			if (token != null)
+				token.check();
+			var receiverName = name.substring(0, separator),
+				memberName = name.substring(separator + 1),
+				typeId = editorQualifiedTypeSymbolId(receiverName, token);
+			if (typeId != null) {
+				var resolved = editorSymbolById(typeId),
+					canonical = editorTypeName(typeId);
+				if (resolved != null && canonical != null) {
+					var member = memberSymbolForType(resolved.symbol.kind, canonical, memberName);
+					if (member != null)
+						return member;
+				}
+			}
+			separator = receiverName.lastIndexOf(".");
+		}
+		return null;
+	}
+
+	function memberSymbolForType(kind:DeclarationKind, canonical:String, memberName:String):Null<SemanticSymbolId> {
+		return switch kind {
 			case DeclarationKind.Class: memberSymbolId(TInstance(NominalKind.Class, canonical, []), memberName);
 			case DeclarationKind.Interface: memberSymbolId(TInstance(NominalKind.Interface, canonical, []), memberName);
 			case DeclarationKind.Abstract: memberSymbolId(TAbstract(canonical, [], TUnknown), memberName);
 			default: null;
 		};
+	}
+
+	function editorQualifiedTypeSymbolId(name:String, ?token:CancellationToken):Null<SemanticSymbolId> {
+		if (token != null)
+			token.check();
+		var target = editorImportTarget(name),
+			model = target == null ? null : editorModel(target),
+			typeName = target == null || model == null ? null : editorImportedTypeName(target, model, name);
+		if (target == null || model == null || typeName == null)
+			return null;
+		return resolveTypeSymbolId(typeName);
 	}
 
 	function editorImportedTypeName(target:ModuleState, model:compiler.semantic.SemanticModel, importPath:String):Null<String> {

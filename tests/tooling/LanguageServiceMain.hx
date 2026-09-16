@@ -483,7 +483,7 @@ class LanguageServiceMain {
 		var secondaryModuleService = new LanguageService(),
 			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
 		secondaryModuleService.update("secondary/types/Container.hx",
-			"package secondary.types; class Entry { public var member:Int; } function main():Void return;");
+			"package secondary.types; class Entry { public var member:Int; public static function create():Void return; } function main():Void return;");
 		secondaryModuleService.compile("secondary.types.Container");
 		secondaryModuleService.update("secondary/app/Main.hx", secondaryModuleSource);
 		var secondaryModuleItems = secondaryModuleService.completeResult("secondary/app/Main.hx", secondaryModuleSource.length).items,
@@ -514,6 +514,12 @@ class LanguageServiceMain {
 		if (secondaryTypeDefinition == null || secondaryTypeDefinition.path != "secondary/types/Container.hx"
 			|| !hasSecondaryTypeReference || !hasCurrentSecondaryTypeReference)
 			throw 'recovered secondary module type did not retain its canonical type identity: definition=${secondaryTypeDefinition == null ? "null" : secondaryTypeDefinition.path}, position=$secondaryTypePosition, references=${secondaryTypeReferences.length}';
+		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
+		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
+		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,
+			qualifiedSecondaryDefinition = secondaryModuleService.definition("secondary/app/Qualified.hx", qualifiedSecondaryPosition);
+		if (qualifiedSecondaryDefinition == null || qualifiedSecondaryDefinition.path != "secondary/types/Container.hx")
+			throw 'recovered fully qualified secondary type did not navigate its static member: ${qualifiedSecondaryDefinition == null ? "null" : qualifiedSecondaryDefinition.path}';
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
