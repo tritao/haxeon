@@ -245,7 +245,8 @@ not retain its target and is cleared after strong marking when the target is
 unreachable. Module teardown closes these handles before native metadata or
 executable storage can be reclaimed. Unowned `GcHandle.create` remains
 process-scoped. Updating a strong handle uses HashLink's collector-locked root
-write barrier, so replacing a rooted value cannot race a collection. Weak-root
+write barrier, and reading it uses the matching collector-locked root read,
+so replacing or observing a rooted value cannot race a collection. Weak-root
 reads and updates use the same lock-order rule and recheck closure after the
 collector operation, so weak-handle finalization cannot deadlock or leave a
 closed slot populated. Metadata publication uses `Mutex` for serialized policy

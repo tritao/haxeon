@@ -111,8 +111,19 @@ HL_PRIM haxeon_gc_handle *HL_NAME(native_gc_handle_create_owned_raw)( vdynamic *
 
 HL_PRIM vdynamic *HL_NAME(native_gc_handle_get)( haxeon_gc_handle *handle ) {
 	vdynamic *value;
+	if( handle == NULL ) return NULL;
 	haxeon_gc_handle_lock();
-	value = handle == NULL || handle->closed ? NULL : handle->value;
+	if( handle->closed ) {
+		haxeon_gc_handle_unlock();
+		return NULL;
+	}
+	haxeon_gc_handle_unlock();
+	/* Read the registered slot under HashLink's collector lock. The handle
+	   lock must remain outside this operation for the same finalizer ordering
+	   rule used by native_gc_handle_set. */
+	value = (vdynamic *)hl_root_get(&handle->value);
+	haxeon_gc_handle_lock();
+	if( handle->closed ) value = NULL;
 	haxeon_gc_handle_unlock();
 	return value;
 }
@@ -138,11 +149,7 @@ HL_PRIM void HL_NAME(native_gc_handle_set)( haxeon_gc_handle *handle, vdynamic *
 }
 
 HL_PRIM vbyte *HL_NAME(native_gc_handle_raw)( haxeon_gc_handle *handle ) {
-	vdynamic *value;
-	haxeon_gc_handle_lock();
-	value = handle == NULL || handle->closed ? NULL : handle->value;
-	haxeon_gc_handle_unlock();
-	return (vbyte *)value;
+	return (vbyte *)HL_NAME(native_gc_handle_get)(handle);
 }
 
 HL_PRIM bool HL_NAME(native_gc_handle_close)( haxeon_gc_handle *handle ) {
