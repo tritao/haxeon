@@ -1350,6 +1350,22 @@ class LanguageServiceMain {
 			if (diagnostic.message.indexOf("Unknown type \"Base\"") >= 0
 				|| diagnostic.message.indexOf("Unknown base class \"Base\"") >= 0)
 				throw "recovered validation treated a visible imported declaration as unknown";
+		var genericNavigationService = new LanguageService(),
+			genericNavigationSource = "class Box<T> { public var value:T; public function get(argument:T):T return argument; } function identity<U>(value:U):U return value; function main():Void { var box:Box<Int> = new Box<Int>(); box.value; identity(1); }";
+		genericNavigationService.update("GenericNavigation.hx", genericNavigationSource);
+		genericNavigationService.compile("GenericNavigation");
+		var genericClassTypePosition = genericNavigationSource.indexOf("value:T") + "value:".length,
+			genericClassTypeDefinition = genericNavigationService.definition("GenericNavigation.hx", genericClassTypePosition),
+			genericFunctionTypePosition = genericNavigationSource.indexOf("value:U") + "value:".length,
+			genericFunctionTypeDefinition = genericNavigationService.definition("GenericNavigation.hx", genericFunctionTypePosition);
+		if (genericClassTypeDefinition == null
+			|| genericClassTypeDefinition.span.start != genericNavigationSource.indexOf("<T>") + 1
+			|| genericFunctionTypeDefinition == null
+			|| genericFunctionTypeDefinition.span.start != genericNavigationSource.indexOf("<U>") + 1)
+			throw "generic type parameters did not retain declaration identities for navigation";
+		var genericTypeReferences = genericNavigationService.references("GenericNavigation.hx", genericClassTypePosition);
+		if (genericTypeReferences.length < 3)
+			throw "generic type parameter references did not retain their local identity";
 		var visibilityService = new LanguageService();
 		visibilityService.update("unrelated/Target.hx", "package unrelated; function target():Int return 1; function main():Void return;");
 		visibilityService.analyze("unrelated.Target");

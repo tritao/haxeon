@@ -35,6 +35,12 @@ typedef IndexedSemanticSymbol = {
 
 private typedef PositionBinding = {final span:SourceSpan; final symbol:SemanticSymbolId;}
 
+private typedef RecoveredTypeParameterScope = {
+	final name:String;
+	final owner:String;
+	final span:SourceSpan;
+}
+
 typedef SemanticCompletionLocal = {
 	final name:String;
 	final type:CompilerType;
@@ -112,7 +118,8 @@ class SemanticIndex {
 	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
-	final recoveredTypeParameterScopes:Array<{name:String, span:SourceSpan}> = [];
+	final recoveredTypeParameterScopes:Array<RecoveredTypeParameterScope> = [];
+	final typeParameterIds:Map<String, SemanticSymbolId> = [];
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
 	final module:String;
@@ -289,6 +296,105 @@ class SemanticIndex {
 		indexingMs += (Sys.time() - started) * 1000.0;
 	}
 
+	/** Index source-level generic parameters as editor-local semantic declarations. */
+	public function indexTypeParameterDeclarations(program:AstProgram):Void {
+		for (alias in program.aliases)
+			indexTypeParameters(alias.name, alias.span, alias.typeParameters);
+		for (decl in program.enums)
+			indexTypeParameters(decl.name, decl.span, decl.typeParameters);
+		for (decl in program.abstracts)
+			indexTypeParameters(decl.name, decl.span, decl.typeParameters);
+		for (decl in program.interfaces)
+			indexTypeParameters(decl.name, decl.span, decl.typeParameters);
+		for (decl in program.classes) {
+			indexTypeParameters(decl.name, decl.span, decl.typeParameters);
+			for (method in decl.methods)
+				indexTypeParameters(decl.name + "." + method.name, method.span, method.typeParameters);
+		}
+		for (decl in program.interfaces)
+			for (method in decl.methods)
+				indexTypeParameters(decl.name + "." + method.name, method.span, method.typeParameters);
+		for (decl in program.abstracts)
+			for (method in decl.methods)
+				indexTypeParameters(decl.name + "." + method.name, method.span, method.typeParameters);
+		for (fn in program.functions)
+			indexTypeParameters(fn.name, fn.span, fn.typeParameters);
+	}
+
+	function indexTypeParameters(owner:String, declaration:SourceSpan, parameters:Null<Array<String>>):Void {
+		if (parameters == null || parameters.length == 0)
+			return;
+		var spans = typeParameterTokenSpans(owner, declaration, parameters);
+		for (name in parameters) {
+			var tokenSpan = spans.get(name);
+			if (tokenSpan == null)
+				continue;
+			var key = typeParameterKey(owner, name), id = typeParameterIds.get(key);
+			if (id == null) {
+				id = new SemanticSymbolId(module, "type-parameter:" + owner + ":" + name);
+				typeParameterIds.set(key, id);
+			}
+			if (!symbols.exists(id)) {
+				symbols.set(id, {
+					id: id,
+					name: name,
+					kind: DeclarationKind.TypeParameter,
+					declaration: tokenSpan
+				});
+				addSymbolName(name, id);
+				declarationSymbolsBySpan.set(spanKey(tokenSpan), id);
+			}
+			rememberRecoveredTypeParameter(name, declaration, owner);
+			bind(id, tokenSpan);
+		}
+	}
+
+	/** Find only the parameter identifiers at generic-list depth one. */
+	function typeParameterTokenSpans(owner:String, declaration:SourceSpan, parameters:Null<Array<String>>):Map<String, SourceSpan> {
+		var result:Map<String, SourceSpan> = [],
+			anchor = sourceName(owner),
+			index = firstTokenAtOrAfter(declaration.start),
+			anchorFound = false,
+			depth = 0,
+			expecting = false;
+		while (index < tokens.length) {
+			var token = tokens[index++];
+			if (token.span.start >= declaration.end)
+				break;
+			if (!anchorFound) {
+				if (token.kind == TokenKind.Identifier && token.text == anchor)
+					anchorFound = true;
+				continue;
+			}
+			if (depth == 0) {
+				if (token.kind != TokenKind.Less)
+					continue;
+				depth = 1;
+				expecting = true;
+				continue;
+			}
+			switch token.kind {
+				case Less:
+					depth++;
+				case Greater:
+					depth--;
+					expecting = false;
+				case Comma:
+					if (depth == 1)
+						expecting = true;
+				case Identifier:
+					if (depth == 1 && expecting && parameters.indexOf(token.text) >= 0) {
+						result.set(token.text, token.span);
+						expecting = false;
+					}
+				default:
+			}
+			if (depth == 0)
+				break;
+		}
+		return result;
+	}
+
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
 			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
@@ -307,7 +413,7 @@ class SemanticIndex {
 		}
 		for (owner in program.classes) {
 			checkpoint();
-			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span, owner.name);
 			if (owner.base != null)
 				recoveredClassBases.set(owner.name, recoveredType(owner.base));
 			for (fn in owner.methods)
@@ -315,18 +421,18 @@ class SemanticIndex {
 		}
 		for (owner in program.interfaces) {
 			checkpoint();
-			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span, owner.name);
 			for (fn in owner.methods)
 				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		}
 		for (owner in program.abstracts) {
 			checkpoint();
-			rememberRecoveredTypeParameters(owner.typeParameters, owner.span);
+			rememberRecoveredTypeParameters(owner.typeParameters, owner.span, owner.name);
 			for (fn in owner.methods)
 				recoveredFunctions.set(owner.name + "." + fn.name, fn);
 		}
 		for (fn in program.functions)
-			rememberRecoveredTypeParameters(fn.typeParameters, fn.span);
+			rememberRecoveredTypeParameters(fn.typeParameters, fn.span, fn.name);
 		for (owner in program.classes) {
 			checkpoint();
 			for (field in owner.fields)
@@ -583,7 +689,7 @@ class SemanticIndex {
 		if (fn.typeParameters != null)
 			for (name in fn.typeParameters) {
 				currentRecoveredTypeParameters.set(name, TTypeParameter(functionKey, name));
-				rememberRecoveredTypeParameter(name, fn.span);
+				rememberRecoveredTypeParameter(name, fn.span, functionKey);
 			}
 		recoveredLocalNext.set(functionKey, owner != null && !fn.isStatic ? 1 : 0);
 		var functionId = recoveredDeclaredSymbol(functionKey);
@@ -614,28 +720,44 @@ class SemanticIndex {
 		currentRecoveredTypeParameters = [];
 	}
 
-	function rememberRecoveredTypeParameters(parameters:Null<Array<String>>, span:SourceSpan):Void {
+	function rememberRecoveredTypeParameters(parameters:Null<Array<String>>, span:SourceSpan, ?owner:String):Void {
 		if (parameters == null)
 			return;
 		for (name in parameters)
-			rememberRecoveredTypeParameter(name, span);
+			rememberRecoveredTypeParameter(name, span, owner);
 	}
 
-	function rememberRecoveredTypeParameter(name:String, span:SourceSpan):Void {
+	function rememberRecoveredTypeParameter(name:String, span:SourceSpan, ?owner:String):Void {
 		if (name.length == 0)
 			return;
 		recoveredTypeParameterNames.set(name, true);
 		for (existing in recoveredTypeParameterScopes)
-			if (existing.name == name && existing.span.start == span.start && existing.span.end == span.end)
+			if (existing.name == name && existing.owner == (owner == null ? "" : owner)
+				&& existing.span.start == span.start && existing.span.end == span.end)
 				return;
-		recoveredTypeParameterScopes.push({name: name, span: span});
+		recoveredTypeParameterScopes.push({name: name, owner: owner == null ? "" : owner, span: span});
+	}
+
+	static function typeParameterKey(owner:String, name:String):String
+		return owner + ":" + name;
+
+	function typeParameterAt(position:Int, name:String):Null<SemanticSymbolId> {
+		var selected:Null<RecoveredTypeParameterScope> = null;
+		for (candidate in recoveredTypeParameterScopes) {
+			if (candidate.name != name || position < candidate.span.start || position > candidate.span.end)
+				continue;
+			if (selected == null || candidate.span.end - candidate.span.start < selected.span.end - selected.span.start)
+				selected = candidate;
+		}
+		return selected == null ? null : typeParameterIds.get(typeParameterKey(selected.owner, name));
 	}
 
 	function recoveredDeclaredSymbol(name:String):Null<SemanticSymbolId> {
 		var ids = symbolIdsByName.get(name);
 		if (ids != null)
 			for (id in ids)
-				if (Std.string(id).indexOf(":local:") < 0)
+				if (Std.string(id).indexOf(":local:") < 0
+					&& symbols.get(id).kind != DeclarationKind.TypeParameter)
 					return id;
 		return null;
 	}
@@ -1861,7 +1983,9 @@ class SemanticIndex {
 			var token = tokens[index];
 			if (token.kind != TokenKind.Identifier || !isTypeReferenceToken(index))
 				continue;
-			var name = qualifiedTokenName(index), id = resolve(name);
+			var name = qualifiedTokenName(index), id = typeParameterAt(token.span.start, token.text);
+			if (id == null)
+				id = resolve(name);
 			if (id == null)
 				id = resolve(token.text);
 			if (id != null)
