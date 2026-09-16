@@ -93,6 +93,84 @@ HL_PRIM int HL_NAME(native_atomic_i32_fetch_add)( vbyte *address, int value, int
 	return result;
 }
 
+static int64_t *native_atomic_i64_address( vbyte *address ) {
+	if( address == NULL || ((uintptr_t)address % _Alignof(int64_t)) != 0 )
+		hl_error("AtomicInt64 requires a non-null naturally aligned address");
+	return (int64_t*)address;
+}
+
+HL_PRIM int64_t HL_NAME(native_atomic_i64_load)( vbyte *address, int order ) {
+	int64_t *target = native_atomic_i64_address(address), result;
+	order = native_atomic_order(order);
+	native_validate_load_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_load(target,&result,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	result = (int64_t)_InterlockedCompareExchange64((volatile long long*)target,0,0);
+	#else
+	result = atomic_load_explicit((_Atomic int64_t*)target,order);
+	#endif
+	return result;
+}
+
+HL_PRIM void HL_NAME(native_atomic_i64_store)( vbyte *address, int64_t value, int order ) {
+	int64_t *target = native_atomic_i64_address(address);
+	order = native_atomic_order(order);
+	native_validate_store_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_store(target,&value,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	_InterlockedExchange64((volatile long long*)target,(long long)value);
+	#else
+	atomic_store_explicit((_Atomic int64_t*)target,value,order);
+	#endif
+}
+
+HL_PRIM int64_t HL_NAME(native_atomic_i64_exchange)( vbyte *address, int64_t value, int order ) {
+	int64_t *target = native_atomic_i64_address(address), result;
+	order = native_atomic_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_exchange(target,&value,&result,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	result = (int64_t)_InterlockedExchange64((volatile long long*)target,(long long)value);
+	#else
+	result = atomic_exchange_explicit((_Atomic int64_t*)target,value,order);
+	#endif
+	return result;
+}
+
+HL_PRIM int64_t HL_NAME(native_atomic_i64_compare_exchange)( vbyte *address, int64_t expected, int64_t replacement, int order ) {
+	int64_t *target = native_atomic_i64_address(address), failureOrder;
+	order = native_atomic_order(order);
+	failureOrder = order == memory_order_release ? memory_order_relaxed : order == memory_order_acq_rel ? memory_order_acquire : order;
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_compare_exchange(target,&expected,&replacement,false,order,failureOrder);
+	#elif defined(_MSC_VER)
+	(void)failureOrder;
+	expected = (int64_t)_InterlockedCompareExchange64((volatile long long*)target,(long long)replacement,(long long)expected);
+	#else
+	atomic_compare_exchange_strong_explicit((_Atomic int64_t*)target,&expected,replacement,order,failureOrder);
+	#endif
+	return expected;
+}
+
+HL_PRIM int64_t HL_NAME(native_atomic_i64_fetch_add)( vbyte *address, int64_t value, int order ) {
+	int64_t *target = native_atomic_i64_address(address), result;
+	order = native_atomic_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	result = __atomic_fetch_add(target,value,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	result = (int64_t)_InterlockedExchangeAdd64((volatile long long*)target,(long long)value);
+	#else
+	result = atomic_fetch_add_explicit((_Atomic int64_t*)target,value,order);
+	#endif
+	return result;
+}
+
 static vbyte **native_atomic_pointer_address( vbyte *address ) {
 	if( address == NULL || ((uintptr_t)address % _Alignof(void*)) != 0 )
 		hl_error("AtomicPointer requires a non-null naturally aligned address");
