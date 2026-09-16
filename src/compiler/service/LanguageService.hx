@@ -1019,9 +1019,19 @@ class LanguageService {
 				var substitution = substitutions.get(name);
 				if (substitution != null)
 					substitution;
-				else {
-					var resolved = resolveRecoveredType(state, program, name, [], token, aliasTrail);
-					resolved == null ? TUnknown : resolved;
+				else switch name {
+					case "Dynamic", "Any": TDynamic;
+					case "Int": TInt;
+					case "Bool": TBool;
+					case "Float": TFloat;
+					case "String": TString;
+					case "Void": TVoid;
+					case "haxe.Int64", "Int64": TInt64;
+					case "haxe.io.Bytes": TBytes;
+					case "hl.Bytes": THlBytes;
+					default:
+						var resolved = resolveRecoveredType(state, program, name, [], token, aliasTrail);
+						resolved == null ? TUnknown : resolved;
 				}
 			case AppliedType(name, arguments):
 				var resolvedArguments = [

@@ -1370,6 +1370,22 @@ class LanguageServiceMain {
 				genericTypedefAliasMember = item;
 		if (genericTypedefAliasMember == null || genericTypedefAliasMember.detail != "member:String")
 			throw "recovered generic aliased typedef did not preserve type-parameter substitution";
+		var importedAbstractService = new LanguageService(),
+			importedAbstractSource = "package alias.app; import alias.types.Value; function main(value:Value):Void { value.";
+		importedAbstractService.update("alias/types/Value.hx", "package alias.types; abstract Value(Int) { public function member():Int return 1; } function main():Void return;");
+		importedAbstractService.compile("alias.types.Value");
+		importedAbstractService.update("alias/app/AbstractUse.hx", importedAbstractSource);
+		var importedAbstractNames = [for (item in importedAbstractService.complete("alias/app/AbstractUse.hx", importedAbstractSource.length)) item.label];
+		if (importedAbstractNames.indexOf("member") < 0)
+			throw "recovered imported abstract did not preserve its receiver members";
+		var primitiveAliasService = new LanguageService(),
+			primitiveAliasSource = "package alias.app; import alias.types.Count as C; function main(value:C):Void { value; }";
+		primitiveAliasService.update("alias/types/Count.hx", "package alias.types; typedef Count = Int; function main():Void return;");
+		primitiveAliasService.compile("alias.types.Count");
+		primitiveAliasService.update("alias/app/PrimitiveAlias.hx", primitiveAliasSource);
+		var primitiveAliasPosition = primitiveAliasSource.lastIndexOf("value") + 1;
+		if (primitiveAliasService.hover("alias/app/PrimitiveAlias.hx", primitiveAliasPosition) != "value:Int")
+			throw "recovered primitive aliased typedef did not preserve its resolved local type";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");
