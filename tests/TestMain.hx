@@ -871,10 +871,10 @@ class TestMain {
 		moduleImportCompiler.compile("Main");
 		var wildcardImportCompiler = new Compiler();
 		wildcardImportCompiler.update("sample/lib/Types.hx",
-			"package sample.lib; class Foo { public function new() {} public function known():Int return 42; } class Bar {} ");
+			"package sample.lib; class Foo { public function new() {} public function known():Int return 42; } class Bar { public function new() {} } ");
 		wildcardImportCompiler.update("sample/lib/Kinds.hx", "package sample.lib; enum Choice { Value; }");
 		wildcardImportCompiler.update("sample/app/Main.hx",
-			"package sample.app; import sample.lib.*; function main():Int { var choice:Choice = Value; return switch choice { case Value: new Foo().known(); }; }");
+			"package sample.app; import sample.lib.*; function main():Int { var choice:Choice = Value; var secondary:Bar = new Bar(); return switch choice { case Value: new Foo().known(); }; }");
 		wildcardImportCompiler.compile("sample.app.Main");
 		var explicitOverWildcardCompiler = new Compiler();
 		explicitOverWildcardCompiler.update("wild/a/Foo.hx", "package wild.a; class Foo { public function new() {} public function answer():String return \"wildcard\"; }");
