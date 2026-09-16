@@ -172,6 +172,7 @@ class HlLoadedRuntimeModule {
 		var status = nativeModule.patch(bytes);
 		if (status != 0)
 			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
+		applyPatchSymbols(model);
 		patchLedger.push(model);
 		functions = nextFunctions;
 		revision = patch.revision;
@@ -210,15 +211,17 @@ class HlLoadedRuntimeModule {
 	}
 
 	function validatePatchBases(patch:HlPatchEnvelope, model:HlPatch):Void {
-		if (model.baseInts != module.code.ints.length
-			|| model.baseFloats != module.code.floats.length
-			|| model.baseStrings != module.code.strings.length
-			|| model.baseTypes != module.code.types.length)
+		if (patch.baseRevision == revision
+			&& (model.baseInts != module.code.ints.length
+				|| model.baseFloats != module.code.floats.length
+				|| model.baseStrings != module.code.strings.length
+				|| model.baseTypes != module.code.types.length))
 			throw "Haxeon rejected an HLP patch with stale symbol bases";
-		if (model.intPrefixHash != HlPatchHashes.ints(module.code.ints, model.baseInts)
-			|| model.floatPrefixHash != HlPatchHashes.floats(module.code.floats, model.baseFloats)
-			|| model.stringPrefixHash != HlPatchHashes.strings(module.code.strings, model.baseStrings)
-			|| model.typePrefixHash != HlPatchHashes.types(module.code.types, model.baseTypes))
+		if (patch.baseRevision == revision
+			&& (model.intPrefixHash != HlPatchHashes.ints(module.code.ints, model.baseInts)
+				|| model.floatPrefixHash != HlPatchHashes.floats(module.code.floats, model.baseFloats)
+				|| model.stringPrefixHash != HlPatchHashes.strings(module.code.strings, model.baseStrings)
+				|| model.typePrefixHash != HlPatchHashes.types(module.code.types, model.baseTypes)))
 			throw "Haxeon rejected an HLP patch with stale symbol prefix hashes";
 		validatePatchTypes(model);
 		validatePatchInstructions(model, model.baseTypes
@@ -378,6 +381,18 @@ class HlLoadedRuntimeModule {
 			if (trapTargets.length != 0)
 				throw 'Haxeon rejected unbalanced patch traps for function identity ${fn.functionIndex}';
 		}
+	}
+
+	/** Advance the Haxe-owned symbol model only after native publication succeeds. */
+	function applyPatchSymbols(model:HlPatch):Void {
+		for (value in model.ints)
+			module.code.ints.push(value);
+		for (value in model.floats)
+			module.code.floats.push(value);
+		for (value in model.strings)
+			module.code.strings.push(value);
+		for (type in model.types)
+			module.code.types.push(type);
 	}
 
 	function requireRegister(fn:compiler.hl.patch.HlPatch.HlPatchFunction, index:Int, kind:String):Void {

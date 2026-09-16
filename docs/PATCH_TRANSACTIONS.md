@@ -35,7 +35,9 @@ and explicit stage/commit callers use this same transaction path. Commit still
 rechecks the live revision, so two transactions staged from one generation
 cannot both publish. A successful commit appends that canonical model to the
 loaded module's Haxe-owned patch ledger; failed and rolled-back transactions
-never enter it.
+never enter it. The same successful transition also advances the Haxe-owned
+symbol pools, so later patches validate against the actual post-publication
+counts and prefix hashes rather than the original HLB snapshot.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
