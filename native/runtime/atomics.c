@@ -93,6 +93,71 @@ HL_PRIM int HL_NAME(native_atomic_i32_fetch_add)( vbyte *address, int value, int
 	return result;
 }
 
+static vbyte **native_atomic_pointer_address( vbyte *address ) {
+	if( address == NULL || ((uintptr_t)address % _Alignof(void*)) != 0 )
+		hl_error("AtomicPointer requires a non-null naturally aligned address");
+	return (vbyte**)address;
+}
+
+HL_PRIM vbyte *HL_NAME(native_atomic_ptr_load)( vbyte *address, int order ) {
+	vbyte **target = native_atomic_pointer_address(address), *result;
+	order = native_atomic_order(order);
+	native_validate_load_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_load(target,&result,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	result = (vbyte*)InterlockedCompareExchangePointer((PVOID volatile*)target,NULL,NULL);
+	#else
+	result = (vbyte*)(uintptr_t)atomic_load_explicit((atomic_uintptr_t*)target,order);
+	#endif
+	return result;
+}
+
+HL_PRIM void HL_NAME(native_atomic_ptr_store)( vbyte *address, vbyte *value, int order ) {
+	vbyte **target = native_atomic_pointer_address(address);
+	order = native_atomic_order(order);
+	native_validate_store_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_store(target,&value,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	InterlockedExchangePointer((PVOID volatile*)target,value);
+	#else
+	atomic_store_explicit((atomic_uintptr_t*)target,(uintptr_t)value,order);
+	#endif
+}
+
+HL_PRIM vbyte *HL_NAME(native_atomic_ptr_exchange)( vbyte *address, vbyte *value, int order ) {
+	vbyte **target = native_atomic_pointer_address(address), *result;
+	order = native_atomic_order(order);
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_exchange(target,&value,&result,order);
+	#elif defined(_MSC_VER)
+	(void)order;
+	result = (vbyte*)InterlockedExchangePointer((PVOID volatile*)target,value);
+	#else
+	result = (vbyte*)(uintptr_t)atomic_exchange_explicit((atomic_uintptr_t*)target,(uintptr_t)value,order);
+	#endif
+	return result;
+}
+
+HL_PRIM vbyte *HL_NAME(native_atomic_ptr_compare_exchange)( vbyte *address, vbyte *expected, vbyte *replacement, int order ) {
+	vbyte **target = native_atomic_pointer_address(address), *observed = expected;
+	int failureOrder;
+	order = native_atomic_order(order);
+	failureOrder = order == memory_order_release ? memory_order_relaxed : order == memory_order_acq_rel ? memory_order_acquire : order;
+	#if defined(__GNUC__) || defined(__clang__)
+	__atomic_compare_exchange(target,&observed,&replacement,false,order,failureOrder);
+	#elif defined(_MSC_VER)
+	(void)failureOrder;
+	observed = (vbyte*)InterlockedCompareExchangePointer((PVOID volatile*)target,replacement,expected);
+	#else
+	atomic_compare_exchange_strong_explicit((atomic_uintptr_t*)target,(uintptr_t*)&observed,(uintptr_t)replacement,order,failureOrder);
+	#endif
+	return observed;
+}
+
 HL_PRIM void HL_NAME(native_atomic_fence)( int order ) {
 	atomic_thread_fence(native_atomic_order(order));
 }
