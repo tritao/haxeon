@@ -61,7 +61,10 @@ separate makes the remaining native responsibilities explicit and leaves the
 JIT implementation replaceable without spreading native declarations back
 through the Haxe runtime facade. Both declarations accept the single opaque
 `RuntimeModuleHandle` type, so splitting the bridge does not create a second
-pointer representation for a loaded module.
+pointer representation for a loaded module. `RuntimeJitBackend` is the
+Haxe-owned interface for this mechanism; `NativeRuntimeJitBackend` is the
+current HashLink adapter and keeps its forwarding calls inline so generated
+runtime code retains direct native-call lowering.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
