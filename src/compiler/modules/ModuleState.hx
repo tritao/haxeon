@@ -48,11 +48,12 @@ class ModuleState {
 	public var semanticModel:Null<SemanticModel>;
 	/** Previous editor snapshot used only to preserve identities across edits. */
 	public var previousEditorSemanticModel:Null<SemanticModel>;
-	public var lastGoodTokens:Array<Token> = [];
-	public var lastGoodAst:Null<AstProgram>;
-	public var lastGoodSemanticModel:Null<SemanticModel>;
-	public var lastGoodSource:Null<SourceFile>;
-	public var lastGoodRevision:Int = 0;
+	/** Read-only compatibility views backed by the atomic last-good snapshot. */
+	public var lastGoodTokens(get, never):Array<Token>;
+	public var lastGoodAst(get, never):Null<AstProgram>;
+	public var lastGoodSemanticModel(get, never):Null<SemanticModel>;
+	public var lastGoodSource(get, never):Null<SourceFile>;
+	public var lastGoodRevision(get, never):Int;
 	public var dependencies:Array<String> = [];
 	public var conditionalDefines:Array<String> = [];
 	public var semanticDependencies:Map<String, Array<SemanticDependency>> = [];
@@ -155,11 +156,6 @@ class ModuleState {
 		if (exact == null)
 			return;
 		lastGood = AnalysisSnapshot.lastGood(exact);
-		lastGoodTokens = lastGood.tokens;
-		lastGoodAst = lastGood.ast;
-		lastGoodSemanticModel = lastGood.semanticModel;
-		lastGoodSource = lastGood.source;
-		lastGoodRevision = lastGood.revision;
 	}
 
 	public function copy():ModuleState {
@@ -177,11 +173,6 @@ class ModuleState {
 		result.recoveredSemanticModel = recoveredSemanticModel;
 		result.semanticModel = semanticModel;
 		result.previousEditorSemanticModel = previousEditorSemanticModel;
-		result.lastGoodTokens = lastGoodTokens;
-		result.lastGoodAst = lastGoodAst;
-		result.lastGoodSemanticModel = lastGoodSemanticModel;
-		result.lastGoodSource = lastGoodSource;
-		result.lastGoodRevision = lastGoodRevision;
 		result.dependencies = dependencies.copy();
 		result.conditionalDefines = conditionalDefines.copy();
 		result.semanticDependencies = copyDependencyMap(semanticDependencies);
@@ -211,6 +202,21 @@ class ModuleState {
 		result.canonicalCalls = canonicalCalls;
 		return result;
 	}
+
+	function get_lastGoodTokens():Array<Token>
+		return lastGood == null ? [] : lastGood.tokens;
+
+	function get_lastGoodAst():Null<AstProgram>
+		return lastGood == null ? null : lastGood.ast;
+
+	function get_lastGoodSemanticModel():Null<SemanticModel>
+		return lastGood == null ? null : lastGood.semanticModel;
+
+	function get_lastGoodSource():Null<SourceFile>
+		return lastGood == null ? null : lastGood.source;
+
+	function get_lastGoodRevision():Int
+		return lastGood == null ? 0 : lastGood.revision;
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
