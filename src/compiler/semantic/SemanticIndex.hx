@@ -1579,11 +1579,13 @@ class SemanticIndexBuilder {
 						recoveredCallResult(method.method, method.substitutions, arguments, expected);
 					else {
 						var direct = recoveredFunction(name);
-						direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
+						var result = direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
+						isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
 					}
 				} else {
 					var direct = recoveredFunctionForCall(name);
-					direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
+					var result = direct == null ? recoveredBuiltinCallResult(name) : recoveredCallResult(direct, null, arguments, expected);
+					isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
 				}
 			case ClosureCall(callee, _, _):
 				recoveredCallableResult(recoveredExpressionType(callee), expected);
@@ -1912,7 +1914,8 @@ class SemanticIndexBuilder {
 			if (expected != null && !isRecoveryType(expected))
 				inferRecoveredTypeParameters(fn.result, expected, fn.typeParameters, inferred);
 		}
-		return recoveredExpectedType(fn.result, fn, inferred);
+		var result = recoveredExpectedType(fn.result, fn, inferred);
+		return isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
 	}
 
 	/**
@@ -2002,7 +2005,8 @@ class SemanticIndexBuilder {
 
 	function recoveredCallableResult(type:CompilerType, ?expected:CompilerType):CompilerType {
 		var result = functionResultType(type);
-		return result == null ? TUnknown : isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
+		return result == null ? (expected != null && !isRecoveryType(expected) ? expected : TUnknown)
+			: isRecoveryType(result) && expected != null && !isRecoveryType(expected) ? expected : result;
 	}
 
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
