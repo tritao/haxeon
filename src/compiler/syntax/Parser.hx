@@ -722,7 +722,7 @@ class Parser {
 			if (match(TokenKind.Colon)) {
 				var grouped = match(TokenKind.LeftParen);
 				do {
-					var constraint = parseType();
+					var constraint = parseDelimitedType(grouped ? TokenKind.RightParen : TokenKind.Greater);
 					if (constraints != null)
 						constraints.push({parameter: parameter.text, type: constraint, span: parameter.span.merge(previous().span)});
 				} while (grouped && match(TokenKind.Comma));
@@ -2472,7 +2472,7 @@ class Parser {
 						advance();
 						advance();
 					}
-					var argument = parseType();
+					var argument = parseDelimitedType(TokenKind.RightParen);
 					arguments.push(optional ? NullableType(argument) : argument);
 				} while (match(TokenKind.Comma));
 			}
@@ -2563,7 +2563,7 @@ class Parser {
 				if (isRecoveryBoundary())
 					return ArrayType(missingType("type arguments"));
 				consume(TokenKind.Less);
-				var element = parseType();
+					var element = parseDelimitedType(TokenKind.Greater);
 				consume(TokenKind.Greater);
 				return ArrayType(element);
 			} else if (current().text == "Map") {
@@ -2574,9 +2574,9 @@ class Parser {
 					return MapType(missing, ErrorType(missingSpan));
 				}
 				consume(TokenKind.Less);
-				var key = parseType();
-				var value = if (match(TokenKind.Comma))
-					parseType();
+					var key = parseDelimitedType(TokenKind.Greater);
+					var value = if (match(TokenKind.Comma))
+						parseDelimitedType(TokenKind.Greater);
 				else if (isRecoveryBoundary() || check(TokenKind.Greater)) {
 					recordExpected("comma");
 					missingType("map value");
@@ -2591,7 +2591,7 @@ class Parser {
 				if (isRecoveryBoundary())
 					return NullableType(missingType("type arguments"));
 				consume(TokenKind.Less);
-				var element = parseType();
+					var element = parseDelimitedType(TokenKind.Greater);
 				consume(TokenKind.Greater);
 				return NullableType(element);
 			}
