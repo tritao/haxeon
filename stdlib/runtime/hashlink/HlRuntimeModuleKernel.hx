@@ -21,8 +21,6 @@ interface HlRuntimeModuleKernel {
 	function callObject(module:HlRuntimeModuleHandle, stableId:Int):Dynamic;
 	function callI32Object(module:HlRuntimeModuleHandle, stableId:Int, argument:Dynamic):Int;
 	function validateCall(module:HlRuntimeModuleHandle, stableId:Int, shape:Int):Int;
-	function typeCount(module:HlRuntimeModuleHandle):Int;
-	function typeCapacity(module:HlRuntimeModuleHandle):Int;
 	function liveAllocationCount(module:HlRuntimeModuleHandle):Int;
 	function nativeRootCount(module:HlRuntimeModuleHandle):Int;
 	function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void;
@@ -70,12 +68,6 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 
 	public inline function validateCall(module:HlRuntimeModuleHandle, stableId:Int, shape:Int):Int
 		return HlTypeBridge.native_runtime_module_validate_call(module, stableId, shape);
-
-	public inline function typeCount(module:HlRuntimeModuleHandle):Int
-		return HlTypeBridge.native_runtime_module_type_count(module);
-
-	public inline function typeCapacity(module:HlRuntimeModuleHandle):Int
-		return HlTypeBridge.native_runtime_module_type_capacity(module);
 
 	public inline function liveAllocationCount(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_live_allocation_count(module);

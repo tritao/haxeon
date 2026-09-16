@@ -100,14 +100,6 @@ HL_PRIM int HL_NAME(native_runtime_module_validate_call)( vbyte *module, int sta
 	return hl_runtime_module_validate_call((hl_runtime_module*)module,stable_id,shape);
 }
 
-HL_PRIM int HL_NAME(native_runtime_module_type_count)( vbyte *module ) {
-	return hl_runtime_module_type_count((hl_runtime_module*)module);
-}
-
-HL_PRIM int HL_NAME(native_runtime_module_type_capacity)( vbyte *module ) {
-	return hl_runtime_module_type_capacity((hl_runtime_module*)module);
-}
-
 HL_PRIM int HL_NAME(native_runtime_module_live_allocation_count)( vbyte *module ) {
 	return hl_runtime_module_live_allocation_count((hl_runtime_module*)module);
 }

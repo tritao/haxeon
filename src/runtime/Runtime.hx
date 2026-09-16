@@ -195,7 +195,7 @@ class Runtime {
 	public static function metadataTypeCount(module:LoadedModule):Int
 		return module.access(function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.typeCount(cast handle);
+			return module.metadata.typeCount();
 			#else
 			return RuntimeKernel.type_count(handle);
 			#end
@@ -204,7 +204,7 @@ class Runtime {
 	public static function metadataTypeCapacity(module:LoadedModule):Int
 		return module.access(function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.typeCapacity(cast handle);
+			return module.metadata.typeCapacity();
 			#else
 			return RuntimeKernel.type_capacity(handle);
 			#end
