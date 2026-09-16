@@ -271,8 +271,8 @@ class SemanticIndex {
 			declareLocal(fn, argument.name, fn.span, argument.type);
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
 		}
-		if (fn.owner != null && !hasFunctionReceiver(fn.span))
-			functionReceivers.push({span: currentSpan(fn.span), type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
+		if (fn.owner != null && !fn.isStatic && !hasFunctionReceiver(fn.span))
+			functionReceivers.push({span: currentSpan(fn.span), type: typedReceiverType(fn.owner, fn.span)});
 		var functionId = resolve(fn.name);
 		if (functionId != null) {
 			declarationTypes.set(functionId, fn.result);
@@ -707,7 +707,7 @@ class SemanticIndex {
 		}
 		for (argument in fn.arguments)
 			addRecoveredLocal(functionKey, argument.name, recoveredType(argument.type), argument.span, fn.span, 0);
-		if (owner != null)
+		if (owner != null && !fn.isStatic)
 			functionReceivers.push({span: fn.span, type: recoveredReceiverType(owner, ownerTypeParameters)});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
@@ -745,6 +745,31 @@ class SemanticIndex {
 		}
 		var kind = declarations.interfaces.exists(owner) ? compiler.types.Type.NominalKind.Interface : compiler.types.Type.NominalKind.Class;
 		return TInstance(kind, owner, arguments);
+	}
+
+	function typedReceiverType(owner:String, span:SourceSpan):CompilerType {
+		var parameters = ownerTypeParameters(owner),
+			arguments:Array<CompilerType> = [for (parameter in parameters) TTypeParameter(owner, parameter)];
+		if (declarations.abstracts.exists(owner)) {
+			var substitutions:Map<String, CompilerType> = [];
+			for (index in 0...parameters.length)
+				substitutions.set(parameters[index], arguments[index]);
+			return TAbstract(owner, arguments, declarations.resolve(declarations.abstracts.get(owner).underlying, span, substitutions));
+		}
+		if (declarations.interfaces.exists(owner))
+			return TInstance(compiler.types.Type.NominalKind.Interface, owner, arguments);
+		return TInstance(compiler.types.Type.NominalKind.Class, owner, arguments);
+	}
+
+	function ownerTypeParameters(owner:String):Array<String> {
+		var classDeclaration = declarations.classes.get(owner);
+		if (classDeclaration != null)
+			return classDeclaration.typeParameters;
+		var interfaceDeclaration = declarations.interfaces.get(owner);
+		if (interfaceDeclaration != null)
+			return interfaceDeclaration.typeParameters;
+		var abstractDeclaration = declarations.abstracts.get(owner);
+		return abstractDeclaration == null ? [] : abstractDeclaration.typeParameters;
 	}
 
 	function hasFunctionReceiver(span:SourceSpan):Bool {
