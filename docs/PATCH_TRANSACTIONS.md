@@ -18,9 +18,10 @@ into patch-state ownership without introducing a second mutable representation.
 Before staging, that policy now also checks symbol-base counts and HashLink-
 compatible prefix hashes, appended type references, stable-ID-to-slot mapping,
 unchanged function signatures, register type indices, and relocation instruction
-bounds against the loaded HLB model. `HlPatchHashes` is shared by the HLP writer
-and runtime policy, keeping the byte-level compatibility rule in one Haxe-owned
-implementation.
+bounds against the loaded HLB model. It also checks that every patch debug file
+is present in the loaded module's debug-file set. `HlPatchHashes` is shared by
+the HLP writer and runtime policy, keeping the byte-level compatibility rule in
+one Haxe-owned implementation.
 
 `HlRuntimeModuleRegistry` keeps module replacement separate from patch
 transactions. A patch changes the revision of the published module in place;

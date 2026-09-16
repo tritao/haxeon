@@ -182,6 +182,7 @@ class HlLoadedRuntimeModule {
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function validatePatchPolicy(patch:HlPatchEnvelope, model:HlPatch):Void {
 		validatePatchBases(patch, model);
+		validatePatchDebugFiles(model);
 		for (stableId in patch.functionStableIds) {
 			if (!hasFunctionIdentity(stableId))
 				throw 'Haxeon rejected an HLP patch for unknown function identity $stableId';
@@ -230,6 +231,32 @@ class HlLoadedRuntimeModule {
 			+ model.floats.length,
 			model.baseStrings
 			+ model.strings.length);
+	}
+
+	function validatePatchDebugFiles(model:HlPatch):Void {
+		for (path in model.debugFiles)
+			if (!hasDebugFile(path))
+				throw 'Haxeon rejected a patch debug file absent from the loaded module: $path';
+	}
+
+	function hasDebugFile(path:String):Bool {
+		var hasDebug = false;
+		for (fn in module.code.functions)
+			if (fn.debugLocations.length > 0)
+				hasDebug = true;
+		if (!hasDebug)
+			return false;
+		for (fn in module.code.functions) {
+			if (fn.debugLocations.length == 0) {
+				if (path == "<generated>")
+					return true;
+				continue;
+			}
+			for (location in fn.debugLocations)
+				if (location.path == path)
+					return true;
+		}
+		return false;
 	}
 
 	function validatePatchTypes(model:HlPatch):Void {
