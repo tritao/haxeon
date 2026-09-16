@@ -160,10 +160,25 @@ class SsaBuilder {
 	function dominancePostorder(id:Int, visited:Array<Bool>, result:Array<Int>):Void {
 		if (visited[id])
 			return;
+		// Keep DFS state on the heap. Large generated functions can have a
+		// thousand-plus block linear chain, which must not consume the compiler
+		// call stack.
+		var stack:Array<{id:Int, next:Int}> = [];
 		visited[id] = true;
-		for (successor in successors[id])
-			dominancePostorder(successor, visited, result);
-		result.push(id);
+		stack.push({id: id, next: 0});
+		while (stack.length > 0) {
+			var frame = stack[stack.length - 1], next = successors[frame.id];
+			if (frame.next < next.length) {
+				var successor = next[frame.next++];
+				if (!visited[successor]) {
+					visited[successor] = true;
+					stack.push({id: successor, next: 0});
+				}
+			} else {
+				result.push(frame.id);
+				stack.pop();
+			}
+		}
 	}
 
 	static function intersectDominators(left:Int, right:Int, immediate:Array<Int>, order:Array<Int>):Int {
@@ -300,7 +315,47 @@ class SsaBuilder {
 	function rename(id:Int):Void {
 		if (renamed[id])
 			return;
-		renamed[id] = true;
+		var pending:Array<{
+			id:Int,
+			nextChild:Int,
+			pushed:Array<String>,
+			entered:Bool
+		}> = [
+			{
+				id: id,
+				nextChild: 0,
+				pushed: [],
+				entered: false
+			}
+			];
+		while (pending.length > 0) {
+			var frame = pending[pending.length - 1];
+			if (!frame.entered) {
+				frame.entered = true;
+				renamed[frame.id] = true;
+				frame.pushed = renameBlock(frame.id);
+			}
+			if (frame.nextChild < children[frame.id].length) {
+				var child = children[frame.id][frame.nextChild++];
+				if (!renamed[child])
+					pending.push({
+						id: child,
+						nextChild: 0,
+						pushed: [],
+						entered: false
+					});
+			} else {
+				var pushedIndex = frame.pushed.length;
+				while (pushedIndex > 0) {
+					pushedIndex--;
+					stacks.get(frame.pushed[pushedIndex]).pop();
+				}
+				pending.pop();
+			}
+		}
+	}
+
+	function renameBlock(id:Int):Array<String> {
 		var block = cfg.blocks[id],
 			target = output[id],
 			pushed:Array<String> = [];
@@ -506,13 +561,7 @@ class SsaBuilder {
 					inputs.push({block: id, value: current(name)});
 				}
 			}
-		for (child in children[id])
-			rename(child);
-		var pushedIndex = pushed.length;
-		while (pushedIndex > 0) {
-			pushedIndex--;
-			stacks.get(pushed[pushedIndex]).pop();
-		}
+		return pushed;
 	}
 
 	function define(value:CfgValue):IrValue {

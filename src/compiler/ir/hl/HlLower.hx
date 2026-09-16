@@ -780,8 +780,25 @@ class HlLower {
 	static function visitPostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, id:Int):Void {
 		if (seen.exists(id) || !byId.exists(id))
 			return;
-		var block = byId.get(id);
+		var stack:Array<{id:Int, next:Int, children:Array<Int>}> = [];
 		seen.set(id, true);
+		stack.push({id: id, next: 0, children: postorderChildren(byId.get(id))});
+		while (stack.length > 0) {
+			var frame = stack[stack.length - 1];
+			if (frame.next < frame.children.length) {
+				var child = frame.children[frame.next++];
+				if (seen.exists(child) || !byId.exists(child))
+					continue;
+				seen.set(child, true);
+				stack.push({id: child, next: 0, children: postorderChildren(byId.get(child))});
+			} else {
+				output.push(byId.get(frame.id));
+				stack.pop();
+			}
+		}
+	}
+
+	static function postorderChildren(block:IrBlock):Array<Int> {
 		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
 		for (instruction in block.instructions)
 			switch instruction.value {
@@ -789,29 +806,27 @@ class HlLower {
 					region = {catchBlock: catchBlock, afterBlock: afterBlock};
 				default:
 			}
-		var successors:Array<Int> = [];
-		var terminator = block.terminator;
-		if (terminator != null)
-			switch terminator.value {
-				case Jump(target):
-					successors.push(target);
-				case Branch(_, yes, no):
-					successors.push(yes);
-					successors.push(no);
-				case Return(_), Throw(_), Rethrow(_):
-			}
+		var children:Array<Int> = [];
 		if (region != null) {
 			// Visit structural exits first because reversal places the protected
 			// body before its handler and the handler before the shared exit.
-			visitPostorder(byId, seen, output, region.afterBlock);
-			visitPostorder(byId, seen, output, region.catchBlock);
+			children.push(region.afterBlock);
+			children.push(region.catchBlock);
 		}
-		var successorIndex = successors.length;
-		while (successorIndex > 0) {
-			successorIndex--;
-			visitPostorder(byId, seen, output, successors[successorIndex]);
+		var terminator = block.terminator;
+		if (terminator != null) {
+			var successors:Array<Int> = switch terminator.value {
+				case Jump(target): [target];
+				case Branch(_, yes, no): [yes, no];
+				case Return(_), Throw(_), Rethrow(_): [];
+			};
+			var successorIndex = successors.length;
+			while (successorIndex > 0) {
+				successorIndex--;
+				children.push(successors[successorIndex]);
+			}
 		}
-		output.push(block);
+		return children;
 	}
 
 	static function edgeKey(from:Int, to:Int):String

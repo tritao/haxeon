@@ -38,6 +38,7 @@ import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.cfg.SsaBuilder;
+import compiler.ir.IrGraph;
 import compiler.ir.cfg.Cfg.CfgInstruction;
 import compiler.ir.cfg.Cfg.CfgBlock;
 import compiler.ir.cfg.Cfg.CfgFunction;
@@ -136,6 +137,9 @@ class TestMain {
 		var expressionBodyLambdaProgram = Frontend.compile('function apply(callback:Int->Int):Int return callback(42); function main():Int return apply(function(value) value);');
 		if (new IrInterpreter(expressionBodyLambdaProgram).run("main") != 42)
 			throw "An expression-bodied anonymous function did not return its expression";
+		var voidSwitchLambdaProgram = Frontend.compile('function consume(callback:Int->Void):Void callback(1); function main():Int { var ready = false; consume(function(value) switch value { case 1: ready = true; case _: }); return ready ? 42 : 0; }');
+		if (new IrInterpreter(voidSwitchLambdaProgram).run("main") != 42)
+			throw "A void switch expression did not discard non-void arms while preserving side effects";
 		var nullCoalesceProgram = Frontend.compile('function fallback(value:Null<Int>):Int return value ?? 42; function main():Int return fallback(null) + fallback(17);');
 		if (new IrInterpreter(nullCoalesceProgram).run("main") != 59)
 			throw "Null-coalescing did not preserve its left value or evaluate the fallback for null";
@@ -572,6 +576,25 @@ class TestMain {
 		if (phis != 2)
 			throw 'Pruned SSA expected two live loop phis, got $phis';
 		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
+
+		var deepBlockCount = 2048, deepBlocks:Array<CfgBlock> = [];
+		for (index in 0...deepBlockCount) {
+			var block = new CfgBlock(index), value = new CfgValue(index, I32);
+			block.instructions.push(located(ConstInt(value, 42)));
+			block.terminator = located(index
+				+ 1 == deepBlockCount ? compiler.ir.cfg.Cfg.CfgTerminator.Return(value) : compiler.ir.cfg.Cfg.CfgTerminator.Jump(index + 1));
+			deepBlocks.push(block);
+		}
+		var deepSsa = SsaBuilder.build(new CfgFunction("deep-chain", [], I32, deepBlocks, [], deepBlockCount));
+		var deepGraph = new IrGraph(deepSsa);
+		if (deepSsa.blocks.length != deepBlockCount || deepGraph.order.length != deepBlockCount)
+			throw "Deep CFG traversal lost blocks";
+		var deepProgram = new IrProgram("deep-chain");
+		deepProgram.functions = [deepSsa];
+		var deepHl = HlLower.lower(deepProgram);
+		if (deepHl.functions.length != 1)
+			throw "Deep CFG did not lower to HashLink";
+		Sys.println("PASS: deep CFG traversals remain stack-safe");
 
 		var postdomBuilder = new IrBuilder(),
 			postdomValue = postdomBuilder.constInt(42),

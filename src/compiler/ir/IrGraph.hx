@@ -50,6 +50,28 @@ class IrGraph {
 	function visit(id:Int, seen:Map<Int, Bool>):Void {
 		if (seen.exists(id))
 			return;
+		prepareVisit(id, seen);
+		var stack:Array<{id:Int, next:Int}> = [{id: id, next: 0}];
+		while (stack.length > 0) {
+			var frame = stack[stack.length - 1],
+				next = successors.get(frame.id);
+			if (frame.next < next.length) {
+				var target = next[frame.next++];
+				if (!predecessors.exists(target))
+					predecessors.set(target, []);
+				predecessors.get(target).push(frame.id);
+				if (!seen.exists(target)) {
+					prepareVisit(target, seen);
+					stack.push({id: target, next: 0});
+				}
+			} else {
+				order.push(frame.id);
+				stack.pop();
+			}
+		}
+	}
+
+	function prepareVisit(id:Int, seen:Map<Int, Bool>):Void {
 		if (!blocks.exists(id))
 			throw 'Unknown IR block $id';
 		seen.set(id, true);
@@ -75,13 +97,6 @@ class IrGraph {
 				default:
 			}
 		successors.set(id, next);
-		for (target in next) {
-			if (!predecessors.exists(target))
-				predecessors.set(target, []);
-			predecessors.get(target).push(id);
-			visit(target, seen);
-		}
-		order.push(id);
 	}
 
 	function intersect(left:Int, right:Int):Int {
