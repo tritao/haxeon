@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
+import runtime.memory.Mutex;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 
@@ -14,6 +15,7 @@ class HlRuntimeModule {
 	final lease:HlMetadataLease;
 	final kernel:HlRuntimeModuleKernel;
 	final jitBackend:HlRuntimeJitBackend;
+	final moduleMutex:Mutex = Mutex.create();
 	var module:Null<hl.Abstract<"realtime_module">>;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
@@ -47,79 +49,97 @@ class HlRuntimeModule {
 	}
 
 	/** Whether the native runtime wrapper remains initialized. */
-	public inline function isLoaded():Bool
-		return module != null;
+	public function isLoaded():Bool
+		return withLock(function() return module != null);
 
 	/** Invoke a stable zero-argument i32 function. */
-	public function callI32(stableId:Int):Int {
-		if (!isLoaded())
-			throw "HashLink external runtime module is no longer loaded";
-		return kernel.callI32(cast module, stableId);
-	}
+	public function callI32(stableId:Int):Int
+		return withModule(function(handle) return kernel.callI32(handle, stableId));
 
 	/** Invoke a stable zero-argument void function. */
-	public function callVoid(stableId:Int):Void {
-		if (!isLoaded())
-			throw "HashLink external runtime module is no longer loaded";
-		kernel.callVoid(cast module, stableId);
-	}
+	public function callVoid(stableId:Int):Void
+		withModule(function(handle) kernel.callVoid(handle, stableId));
 
 	/** Apply an HLP transaction; policy validation belongs to the owning loader. */
-	public function patch(bytes:Bytes):Int {
-		if (!isLoaded() || bytes == null)
-			throw "HashLink external runtime patch requires a loaded module and patch bytes";
-		return jitBackend.patch(cast module, bytes);
-	}
+	public function patch(bytes:Bytes):Int
+		return withModule(function(handle) {
+			if (bytes == null)
+				throw "HashLink external runtime patch requires patch bytes";
+			return jitBackend.patch(handle, bytes);
+		});
 
 	/** Inject one native patch-staging failure for external rollback tests. */
-	public function setPatchFailureStage(stage:Int):Void {
-		if (!isLoaded())
-			throw "HashLink external runtime failure injection requires a loaded module";
-		kernel.setPatchFailureStage(cast module, stage);
-	}
+	public function setPatchFailureStage(stage:Int):Void
+		withModule(function(handle) kernel.setPatchFailureStage(handle, stage));
 
 	/** Apply a patch while retaining the published native code allocation. */
-	public function patchCode(bytes:Bytes):HlRuntimePatchPublication {
-		if (!isLoaded() || bytes == null)
-			throw "HashLink external runtime patch requires a loaded module and patch bytes";
-		return patchCodeInternal(bytes, -1);
-	}
+	public function patchCode(bytes:Bytes):HlRuntimePatchPublication
+		return withModule(function(handle) {
+			if (bytes == null)
+				throw "HashLink external runtime patch requires patch bytes";
+			return patchCodeInternal(handle, bytes, -1);
+		});
 
 	/** Apply a patch while using Haxe-owned compatible appended type records. */
-	public function patchCodeWithHaxeTypes(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
-		if (!isLoaded() || bytes == null || typeCount < 0)
-			throw "HashLink external runtime patch requires a loaded module, patch bytes, and a non-negative type count";
-		return patchCodeInternal(bytes, typeCount);
-	}
+	public function patchCodeWithHaxeTypes(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication
+		return withModule(function(handle) {
+			if (bytes == null || typeCount < 0)
+				throw "HashLink external runtime patch requires patch bytes and a non-negative type count";
+			return patchCodeInternal(handle, bytes, typeCount);
+		});
 
 	/** Apply a patch while using Haxe-owned type and function metadata. */
 	public function patchCodeWithHaxeMetadata(input:RawPtr<HlRuntimePatchInput>, typeCount:Int, functions:HlRuntimePatchFunctions,
-		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication {
-		if (!isLoaded() || input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull())
-			throw "HashLink external runtime patch requires a loaded module, decoded patch input, type count, function metadata, scalar pools, and debug metadata";
-		return jitBackend.patchCodeWithHaxeMetadata(cast module, input, typeCount, functions, pools, debug);
-	}
+		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication
+		return withModule(function(handle) {
+			if (input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull())
+				throw "HashLink external runtime patch requires decoded patch input, type count, function metadata, scalar pools, and debug metadata";
+			return jitBackend.patchCodeWithHaxeMetadata(handle, input, typeCount, functions, pools, debug);
+		});
 
-	function patchCodeInternal(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
-		return typeCount < 0 ? jitBackend.patchCode(cast module, bytes) : jitBackend.patchCodeWithHaxeTypes(cast module, bytes, typeCount);
+	function patchCodeInternal(handle:HlRuntimeModuleHandle, bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
+		return typeCount < 0 ? jitBackend.patchCode(handle, bytes) : jitBackend.patchCodeWithHaxeTypes(handle, bytes, typeCount);
 	}
 
 	/** Release one externally retained patch-code allocation. */
 	public function releaseCode(code:Null<hl.Abstract<"realtime_jit_code">>):Bool
-		return jitBackend.releaseCode(cast code);
+		return withLock(function() return jitBackend.releaseCode(cast code));
 
 	/** Read the immutable revision carried by one retained patch-code allocation. */
 	public function codeRevision(code:Null<hl.Abstract<"realtime_jit_code">>):Int
-		return jitBackend.codeRevision(cast code);
+		return withLock(function() return jitBackend.codeRevision(cast code));
 
 	/** Retire the wrapper, preserving the metadata lease if native borrowers block it. */
 	public function unload():Bool {
-		if (!isLoaded())
+		return withLock(function() {
+			var current = module;
+			if (current == null)
+				return true;
+			if (!kernel.unload(cast current))
+				return false;
+			module = null;
+			lease.release();
 			return true;
-		if (!kernel.unload(cast module))
-			return false;
-		module = null;
-		lease.release();
-		return true;
+		});
+	}
+
+	function withModule<T>(operation:HlRuntimeModuleHandle->T):T {
+		return withLock(function() {
+			if (module == null)
+				throw "HashLink external runtime module is no longer loaded";
+			return operation(cast module);
+		});
+	}
+
+	function withLock<T>(operation:Void->T):T {
+		moduleMutex.acquire();
+		try {
+			var result = operation();
+			moduleMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			moduleMutex.release();
+			throw error;
+		}
 	}
 }

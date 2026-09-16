@@ -114,6 +114,9 @@ operations. `HlRuntimeModule` owns metadata leases and module policy while the
 kernel performs only native wrapper creation, stable calls, failure injection,
 and retirement. `NativeHlRuntimeModuleKernel` is the current HashLink adapter;
 the Haxe-facing module state no longer calls those native entry points directly.
+The wrapper's own recursive mutex now serializes those calls, patch staging,
+code-handle release, and unload, so the lower-level owner remains safe when it
+is used without the compiler-side module registry.
 
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last
