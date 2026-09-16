@@ -45,19 +45,19 @@ class HlPatchWriter {
 		var symbols = new BytesOutput();
 		symbols.bigEndian = false;
 		checkBase(baseInts, code.ints.length);
-		symbols.writeInt32(hashInts(code.ints, baseInts));
+		symbols.writeInt32(HlPatchHashes.ints(code.ints, baseInts));
 		writeIndex(symbols, baseInts);
 		writeIndex(symbols, code.ints.length - baseInts);
 		for (i in baseInts...code.ints.length)
 			symbols.writeInt32(code.ints[i]);
 		checkBase(baseFloats, code.floats.length);
-		symbols.writeInt32(hashFloats(code.floats, baseFloats));
+		symbols.writeInt32(HlPatchHashes.floats(code.floats, baseFloats));
 		writeIndex(symbols, baseFloats);
 		writeIndex(symbols, code.floats.length - baseFloats);
 		for (i in baseFloats...code.floats.length)
 			symbols.writeDouble(code.floats[i]);
 		checkBase(baseStrings, code.strings.length);
-		symbols.writeInt32(hashStrings(code.strings, baseStrings));
+		symbols.writeInt32(HlPatchHashes.strings(code.strings, baseStrings));
 		writeIndex(symbols, baseStrings);
 		writeIndex(symbols, code.strings.length - baseStrings);
 		for (i in baseStrings...code.strings.length) {
@@ -66,7 +66,7 @@ class HlPatchWriter {
 			symbols.write(b);
 		}
 		checkBase(baseTypes, code.types.length);
-		symbols.writeInt32(hashTypes(code.types, baseTypes));
+		symbols.writeInt32(HlPatchHashes.types(code.types, baseTypes));
 		writeIndex(symbols, baseTypes);
 		writeIndex(symbols, code.types.length - baseTypes);
 		for (i in baseTypes...code.types.length)
@@ -195,132 +195,6 @@ class HlPatchWriter {
 					instruction++;
 			}
 		return result;
-	}
-
-	static function hashBytes(bytes:HaxeBytes, hash:Int = cast 0x811C9DC5):Int {
-		var h = hash;
-		for (i in 0...bytes.length)
-			h = (h ^ bytes.get(i)) * 16777619;
-		return h;
-	}
-
-	static function intBytes(value:Int):HaxeBytes {
-		var out = new BytesOutput();
-		out.bigEndian = false;
-		out.writeInt32(value);
-		return out.getBytes();
-	}
-
-	static function hashInts(values:Array<Int>, count:Int):Int {
-		var h:Int = cast 0x811C9DC5;
-		for (i in 0...count)
-			h = hashBytes(intBytes(values[i]), h);
-		return h;
-	}
-
-	static function hashFloats(values:Array<Float>, count:Int):Int {
-		var h:Int = cast 0x811C9DC5;
-		for (i in 0...count) {
-			var out = new BytesOutput();
-			out.bigEndian = false;
-			out.writeDouble(values[i]);
-			h = hashBytes(out.getBytes(), h);
-		}
-		return h;
-	}
-
-	static function hashStrings(values:Array<String>, count:Int):Int {
-		var h:Int = cast 0x811C9DC5;
-		for (i in 0...count) {
-			var b = HaxeBytes.ofString(values[i]);
-			h = hashBytes(intBytes(b.length), h);
-			h = hashBytes(b, h);
-		}
-		return h;
-	}
-
-	static function hashTypes(values:Array<HlTypeDef>, count:Int):Int {
-		var h:Int = cast 0x811C9DC5;
-		for (i in 0...count)
-			switch values[i] {
-				case Simple(kind):
-					h = hashBytes(intBytes(kind), h);
-				case Parameterized(kind, parameter):
-					h = hashBytes(intBytes(kind), h);
-					h = hashBytes(intBytes(parameter), h);
-				case Abstract(name):
-					h = hashBytes(intBytes(HashLinkType.Abstract), h);
-					h = hashBytes(intBytes(name), h);
-				case Function(args, result):
-					h = hashBytes(intBytes(HashLinkType.Fun), h);
-					h = hashBytes(intBytes(args.length), h);
-					for (a in args)
-						h = hashBytes(intBytes(a), h);
-					h = hashBytes(intBytes(result), h);
-				case Method(args, result):
-					h = hashBytes(intBytes(HashLinkType.Method), h);
-					h = hashBytes(intBytes(args.length), h);
-					for (a in args)
-						h = hashBytes(intBytes(a), h);
-					h = hashBytes(intBytes(result), h);
-				case Object(name, base, global, fields, methods, bindings):
-					h = hashBytes(intBytes(HashLinkType.Obj), h);
-					h = hashBytes(intBytes(name), h);
-					h = hashBytes(intBytes(base), h);
-					h = hashBytes(intBytes(global), h);
-					h = hashBytes(intBytes(fields.length), h);
-					for (field in fields) {
-						h = hashBytes(intBytes(field.name), h);
-						h = hashBytes(intBytes(field.type), h);
-					}
-					h = hashBytes(intBytes(methods.length), h);
-					for (method in methods) {
-						h = hashBytes(intBytes(method.name), h);
-						h = hashBytes(intBytes(method.functionIndex), h);
-						h = hashBytes(intBytes(method.prototype), h);
-					}
-					h = hashBytes(intBytes(bindings.length), h);
-					for (binding in bindings)
-						h = hashBytes(intBytes(binding), h);
-				case Structure(name, global, fields, methods, bindings):
-					h = hashBytes(intBytes(HashLinkType.Struct), h);
-					h = hashBytes(intBytes(name), h);
-					h = hashBytes(intBytes(-1), h);
-					h = hashBytes(intBytes(global), h);
-					h = hashBytes(intBytes(fields.length), h);
-					for (field in fields) {
-						h = hashBytes(intBytes(field.name), h);
-						h = hashBytes(intBytes(field.type), h);
-					}
-					h = hashBytes(intBytes(methods.length), h);
-					for (method in methods) {
-						h = hashBytes(intBytes(method.name), h);
-						h = hashBytes(intBytes(method.functionIndex), h);
-						h = hashBytes(intBytes(method.prototype), h);
-					}
-					h = hashBytes(intBytes(bindings.length), h);
-					for (binding in bindings)
-						h = hashBytes(intBytes(binding), h);
-				case Virtual(fields):
-					h = hashBytes(intBytes(HashLinkType.Virtual), h);
-					h = hashBytes(intBytes(fields.length), h);
-					for (field in fields) {
-						h = hashBytes(intBytes(field.name), h);
-						h = hashBytes(intBytes(field.type), h);
-					}
-				case Enum(name, global, constructors):
-					h = hashBytes(intBytes(HashLinkType.Enum), h);
-					h = hashBytes(intBytes(name), h);
-					h = hashBytes(intBytes(global), h);
-					h = hashBytes(intBytes(constructors.length), h);
-					for (constructor in constructors) {
-						h = hashBytes(intBytes(constructor.name), h);
-						h = hashBytes(intBytes(constructor.params.length), h);
-						for (param in constructor.params)
-							h = hashBytes(intBytes(param), h);
-					}
-			}
-		return h;
 	}
 
 	static function checkBase(base:Int, total:Int):Void

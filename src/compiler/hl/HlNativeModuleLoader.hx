@@ -5,6 +5,7 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import compiler.hl.patch.HlPatch;
 import compiler.hl.patch.HlPatch.HlPatchEnvelope;
+import compiler.hl.patch.HlPatchHashes;
 import compiler.hl.patch.HlPatchReader;
 import runtime.hashlink.HlFunctionVersionTable;
 import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
@@ -207,6 +208,11 @@ class HlLoadedRuntimeModule {
 			|| model.baseStrings != module.code.strings.length
 			|| model.baseTypes != module.code.types.length)
 			throw "Haxeon rejected an HLP patch with stale symbol bases";
+		if (model.intPrefixHash != HlPatchHashes.ints(module.code.ints, model.baseInts)
+			|| model.floatPrefixHash != HlPatchHashes.floats(module.code.floats, model.baseFloats)
+			|| model.stringPrefixHash != HlPatchHashes.strings(module.code.strings, model.baseStrings)
+			|| model.typePrefixHash != HlPatchHashes.types(module.code.types, model.baseTypes))
+			throw "Haxeon rejected an HLP patch with stale symbol prefix hashes";
 		validatePatchTypes(model);
 	}
 
