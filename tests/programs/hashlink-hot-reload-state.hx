@@ -75,15 +75,28 @@ function requiresReload(decision:HlHotReloadDecision):Bool
 	return !isCompatible(decision);
 
 function main():Int {
-	var state = new HlHotReloadState(),
-		initial = buildGeneration(false, false),
-		initialTransaction = state.stage(initial.metadata, initial.functions),
-		initialGeneration = initialTransaction.commit(),
-		initialLease = state.currentLease(),
-		append = buildGeneration(false, true),
-		appendTransaction = state.stage(append.metadata, append.functions),
-		appendGeneration = appendTransaction.commit(),
-		appendCompatible = isCompatible(appendTransaction.decision)
+	var versionProbe = new HlFunctionVersionTable([
+		{
+			stableId: 1,
+			slot: 0,
+			typeIndex: 0,
+			entrypoint: RawPtr.nullPtr()
+		},
+		{
+			stableId: 2,
+			slot: 1,
+			typeIndex: 0,
+			entrypoint: RawPtr.nullPtr()
+		}
+	],
+		1), advancedVersionProbe = versionProbe.advance([1],
+			2), generationPolicy = advancedVersionProbe.at(1).generation == 2
+			&& advancedVersionProbe.at(2)
+				.generation == 1, state = new HlHotReloadState(), initial = buildGeneration(false,
+			false), initialTransaction = state.stage(initial.metadata,
+			initial.functions), initialGeneration = initialTransaction.commit(), initialLease = state.currentLease(), append = buildGeneration(false,
+			true), appendTransaction = state.stage(append.metadata,
+			append.functions), appendGeneration = appendTransaction.commit(), appendCompatible = isCompatible(appendTransaction.decision)
 			&& appendGeneration.revision == 2
 			&& appendGeneration.functions.at(7).generation == 2
 			&& state.retiredCount == 1;
@@ -176,7 +189,7 @@ function main():Int {
 			&& nativeState.nativeDispatchModule() != null
 			&& nativeState.nativeDispatchModule().isLoaded();
 	nativeState.dispose();
-	return appendCompatible && signatureRejected && reloadWorked && patchWorked && signatureReplacementRejected && identityRejected && transactionState
-		&& retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeDispatchStable && nativeRetired
-		&& nativeCurrentLoaded ? 42 : 1;
+	return generationPolicy && appendCompatible && signatureRejected && reloadWorked && patchWorked && signatureReplacementRejected && identityRejected
+		&& transactionState && retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeDispatchStable
+		&& nativeRetired && nativeCurrentLoaded ? 42 : 1;
 }

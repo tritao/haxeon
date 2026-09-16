@@ -3,12 +3,26 @@ package runtime.hashlink;
 import runtime.memory.RawPtr;
 
 /** One stable HashLink function identity and the code version currently at its slot. */
-typedef HlFunctionVersion = {
-	final stableId:Int;
-	final slot:Int;
-	final typeIndex:Int;
-	final entrypoint:RawPtr<UInt8>;
-	final generation:Int;
+class HlFunctionVersion {
+	public final stableId:Int;
+	public final slot:Int;
+	public final typeIndex:Int;
+	public final entrypoint:RawPtr<UInt8>;
+	final generationValue:Int;
+
+	public var generation(get, never):Int;
+
+	function get_generation():Int
+		return generationValue;
+
+	@:allow(runtime.hashlink.HlFunctionVersionTable)
+	function new(stableId:Int, slot:Int, typeIndex:Int, entrypoint:RawPtr<UInt8>, generation:Int) {
+		this.stableId = stableId;
+		this.slot = slot;
+		this.typeIndex = typeIndex;
+		this.entrypoint = entrypoint;
+		this.generationValue = generation;
+	}
 }
 
 /** Replacement for one function identity; the slot is retained by the table. */
@@ -39,7 +53,7 @@ class HlFunctionVersionTable {
 	final stableIndices:Map<Int, Int> = [];
 	final slotIndices:Map<Int, Int> = [];
 
-	public function new(entries:Array<HlFunctionVersionEntry>, ?generation:Int = 0) {
+	public function new(entries:Array<HlFunctionVersionEntry>, ?generation:Int = 0, ?entryGenerations:Map<Int, Int>) {
 		if (entries == null)
 			throw "HashLink function version entries are required";
 		if (generation < 0)
@@ -54,13 +68,9 @@ class HlFunctionVersionTable {
 			if (slotIndices.exists(entry.slot))
 				throw 'Duplicate HashLink function slot ${entry.slot}';
 			var index = versions.length;
-			versions.push({
-				stableId: entry.stableId,
-				slot: entry.slot,
-				typeIndex: entry.typeIndex,
-				entrypoint: entry.entrypoint,
-				generation: generation
-			});
+			var entryGeneration = entryGenerations == null ? null : entryGenerations.get(entry.stableId);
+			versions.push(new HlFunctionVersion(entry.stableId, entry.slot, entry.typeIndex, entry.entrypoint,
+				entryGeneration == null ? generation : entryGeneration));
 			stableIndices.set(entry.stableId, index);
 			slotIndices.set(entry.slot, index);
 		}
@@ -165,7 +175,11 @@ class HlFunctionVersionTable {
 				typeIndex: version.typeIndex,
 				entrypoint: version.entrypoint
 			});
-		return new HlFunctionVersionTable(next, nextGeneration);
+		var entryGenerations:Map<Int, Int> = [];
+		for (version in versions)
+			if (!replaced.exists(version.stableId))
+				entryGenerations.set(version.stableId, version.generation);
+		return new HlFunctionVersionTable(next, nextGeneration, entryGenerations);
 	}
 
 	/**
@@ -198,6 +212,10 @@ class HlFunctionVersionTable {
 				entrypoint: replacement == null ? version.entrypoint : replacement.entrypoint
 			});
 		}
-		return new HlFunctionVersionTable(next, nextGeneration);
+		var entryGenerations:Map<Int, Int> = [];
+		for (version in versions)
+			if (!replacementById.exists(version.stableId))
+				entryGenerations.set(version.stableId, version.generation);
+		return new HlFunctionVersionTable(next, nextGeneration, entryGenerations);
 	}
 }
