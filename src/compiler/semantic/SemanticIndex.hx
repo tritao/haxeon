@@ -106,6 +106,7 @@ class SemanticIndexBuilder {
 	public final revision:Int;
 	final symbols:Map<String, IndexedSemanticSymbol> = [];
 	public var indexingMs(default, null):Float = 0.0;
+	public var isFrozen(get, never):Bool;
 
 	final bindings:Array<PositionBinding> = [];
 	final symbolIdsByName:Map<String, Array<SemanticSymbolId>> = [];
@@ -213,6 +214,7 @@ class SemanticIndexBuilder {
 	public function freeze():SemanticIndex {
 		if (frozenIndex != null)
 			return frozenIndex;
+		completeCallEdges();
 		var published = frozenCopy();
 		frozen = true;
 		frozenIndex = new SemanticIndex(published);
@@ -364,6 +366,41 @@ class SemanticIndexBuilder {
 			symbolIdsByName.set(name, ids);
 		}
 		ids.push(id);
+	}
+
+	function get_isFrozen():Bool
+		return frozen;
+
+	/** Complete call edges before the builder is detached for publication. */
+	function completeCallEdges():Void {
+		ensureMutable();
+		for (caller in symbols) {
+			if (caller.kind != DeclarationKind.Function && caller.kind != DeclarationKind.Member)
+				continue;
+			var declarationLocations = references.get(caller.id),
+				declarationStart = declarationLocations == null || declarationLocations.length == 0 ? -1 : declarationLocations[0].start;
+			for (index in 0...tokens.length) {
+				var token = tokens[index];
+				if (token.span.start < caller.declaration.start
+					|| token.span.end > caller.declaration.end
+					|| token.kind != TokenKind.Identifier
+					|| index + 1 >= tokens.length
+					|| tokens[index + 1].kind != TokenKind.LeftParen
+					|| token.span.start == declarationStart)
+					continue;
+				var callee = symbolIdAtForConstruction(token.span.start);
+				if (callee == null)
+					continue;
+				var duplicate = false;
+				for (edge in callEdges)
+					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
+						duplicate = true;
+						break;
+					}
+				if (!duplicate)
+					callEdges.push({caller: caller.id, callee: callee, span: token.span});
+			}
+		}
 	}
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
@@ -3321,35 +3358,9 @@ class SemanticIndex {
 		return builder.typeParameterIds.get(SemanticIndexBuilder.typeParameterKey(owner, name));
 
 	public function calls():Array<SemanticCallEdge> {
-		var result = [for (edge in builder.callEdges) {caller: edge.caller, callee: edge.callee, span: edge.span}];
-		for (caller in builder.symbols) {
-			if (caller.kind != DeclarationKind.Function && caller.kind != DeclarationKind.Member)
-				continue;
-			var declarationBinding = locations(caller.id);
-			for (index in 0...builder.tokens.length) {
-				var token = builder.tokens[index];
-				if (token.span.start < caller.declaration.start
-					|| token.span.end > caller.declaration.end
-					|| token.kind != TokenKind.Identifier
-					|| index + 1 >= builder.tokens.length
-					|| builder.tokens[index + 1].kind != TokenKind.LeftParen
-					|| declarationBinding.length > 0
-					&& token.span.start == declarationBinding[0].start)
-					continue;
-				var callee = symbolIdAt(token.span.start);
-				if (callee == null)
-					continue;
-				var duplicate = false;
-				for (edge in result)
-					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
-						duplicate = true;
-						break;
-					}
-				if (!duplicate)
-					result.push({caller: caller.id, callee: callee, span: token.span});
-			}
-		}
-		return result;
+		if (!builder.isFrozen)
+			builder.completeCallEdges();
+		return [for (edge in builder.callEdges) {caller: edge.caller, callee: edge.callee, span: edge.span}];
 	}
 
 	public function resolvedDependencies():Array<ResolvedSemanticReference>
