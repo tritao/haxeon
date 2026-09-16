@@ -7,8 +7,10 @@ import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatch;
+import compiler.hl.patch.HlPatch.HlPatchFunction;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlMetadataTypeAppend;
+import runtime.hashlink.HlRuntimePatchFunctions;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
 import runtime.memory.RawPtr;
@@ -92,6 +94,21 @@ class HlNativeMetadataBuilder {
 		}
 	}
 
+	/** Prepare patch function descriptors and opcode storage in the metadata arena. */
+	public static function preparePatchFunctions(generation:HlMetadataGeneration, patch:HlPatch):HlRuntimePatchFunctions {
+		if (generation == null || patch == null)
+			throw "HashLink patch function preparation requires a generation and patch";
+		var typeCount = generation.typeCount();
+		if (typeCount != patch.baseTypes + patch.types.length)
+			throw 'HashLink patch function types require $typeCount records, got ${patch.baseTypes + patch.types.length}';
+		if (patch.functions.length == 0)
+			throw "HashLink patch function preparation requires at least one function";
+		var descriptors = generation.arena.allocFunctionArray(patch.functions.length);
+		for (index in 0...patch.functions.length)
+			writePatchFunction(descriptors.offset(index), generation, patch, patch.functions[index], typeCount);
+		return new HlRuntimePatchFunctions(descriptors, patch.functions.length);
+	}
+
 	static function allocateTypes(code:HlCode, generation:HlMetadataGeneration):Array<RawPtr<runtime.hashlink.HlType>> {
 		var result:Array<RawPtr<runtime.hashlink.HlType>> = [];
 		for (definition in code.types)
@@ -155,6 +172,73 @@ class HlNativeMetadataBuilder {
 			case Method(_, _), Object(_, _, _, _, _, _), Structure(_, _, _, _, _), Virtual(_), Enum(_, _, _):
 				throw "Unsupported appended HashLink type definition";
 		}
+	}
+
+	static function writePatchFunction(destination:RawPtr<runtime.hashlink.HlFunction>, generation:HlMetadataGeneration, patch:HlPatch,
+			patchFunction:HlPatchFunction, typeCount:Int):Void {
+		checkPatchTypeIndex(patchFunction.type, typeCount);
+		var registers:RawPtr<RawPtr<runtime.hashlink.HlType>> = patchFunction.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocTypePointerArray(patchFunction.registers.length);
+		for (index in 0...patchFunction.registers.length) {
+			checkPatchTypeIndex(patchFunction.registers[index], typeCount);
+			registers.offset(index).store(generation.type(patchFunction.registers[index]));
+		}
+		var ops:RawPtr<runtime.hashlink.HlOpcode> = patchFunction.instructions.length == 0 ? RawPtr.nullPtr() : generation.arena.allocOpcodeArray(patchFunction.instructions.length);
+		for (index in 0...patchFunction.instructions.length)
+			writePatchOpcode(ops.offset(index), generation, patchFunction.instructions[index]);
+		var debug:RawPtr<Int32> = patchFunction.debug.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(patchFunction.debug.length * 2);
+		for (index in 0...patchFunction.debug.length) {
+			var location = patchFunction.debug[index];
+			if (location.file < 0 || location.file >= patch.debugFiles.length)
+				throw 'HashLink patch function ${patchFunction.functionIndex} has an invalid debug file index';
+			debug.offset(index * 2).store(cast generation.debugFileIndex(patch.debugFiles[location.file]));
+			debug.offset(index * 2 + 1).store(cast location.line);
+		}
+		destination.ref.findex = cast patchFunction.slot;
+		destination.ref.nregs = cast patchFunction.registers.length;
+		destination.ref.nops = cast patchFunction.instructions.length;
+		destination.ref.reference = cast 0;
+		destination.ref.nassigns = cast 0;
+		destination.ref.type = generation.type(patchFunction.type);
+		destination.ref.regs = registers;
+		destination.ref.ops = ops;
+		destination.ref.debug = debug;
+		destination.ref.assigns = RawPtr.nullPtr();
+		destination.ref.object = RawPtr.nullPtr();
+		destination.ref.field.ref.name = RawPtr.nullPtr();
+	}
+
+	static function writePatchOpcode(destination:RawPtr<runtime.hashlink.HlOpcode>, generation:HlMetadataGeneration,
+			instruction:compiler.hl.patch.HlPatch.HlPatchInstruction):Void {
+		var operands = instruction.operands;
+		destination.ref.op = cast instruction.opcode;
+		destination.ref.p1 = cast operand(operands, 0);
+		destination.ref.p2 = cast operand(operands, 1);
+		destination.ref.p3 = cast operand(operands, 2);
+		destination.ref.extra = RawPtr.nullPtr();
+		var opcode:HlOpcode = cast instruction.opcode;
+		if (operands.length == 4 && !patchOpcodeHasArrayExtra(opcode))
+			destination.ref.extra = immediatePointer(operands[3]);
+		var extraCount = patchOpcodeArrayExtraCount(opcode, operands.length);
+		if (extraCount > 0) {
+			var extra = generation.arena.allocInt32Array(extraCount);
+			for (index in 0...extraCount)
+				extra.offset(index).store(cast operands[index + 3]);
+			destination.ref.extra = extra;
+		}
+	}
+
+	static function patchOpcodeHasArrayExtra(opcode:Int):Bool
+		return patchOpcodeArrayExtraCount(opcode, 4) > 0;
+
+	static function patchOpcodeArrayExtraCount(opcode:Int, operandCount:Int):Int {
+		var typedOpcode:HlOpcode = cast opcode;
+		return switch typedOpcode {
+			case HlOpcode.Call3: 2;
+			case HlOpcode.Call4: 3;
+			case HlOpcode.CallN | HlOpcode.CallMethod | HlOpcode.CallThis | HlOpcode.CallClosure | HlOpcode.MakeEnum:
+				operandCount > 3 ? operandCount - 3 : 0;
+			case _: 0;
+		};
 	}
 
 	static function patchKind(kind:HlType):HlTypeKind {
