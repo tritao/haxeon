@@ -132,16 +132,17 @@ retired patch JIT code that can reference them in debugger stacks.
 On the Haxe-built external path, Haxeon has already constructed the compatible
 appended type records, patched function descriptors, source spans, source
 snapshots, and cumulative integer, float, and string pools in the generation's
-arena. Haxe resolves stable-ID
-relocations into the dispatch slots expected by the JIT; native independently
-resolves the same relocations while decoding the wire patch and validates the
-descriptor, debug, and pool shapes before consuming them. Native borrows the
-Haxe pool and debug pointers and swaps them into the live module only during
-successful publication; the legacy native-decoder path retains the old native
-combined-pool, type, function, and debug staging behavior. Any failure frees
-staged storage; the Haxe path also rolls back its arena, pool model, and type
-table cursors, leaving the published revision, symbol counts, dispatch
-pointers, and owners unchanged.
+arena. It also constructs an arena-owned resolution plan: every replacement
+function and relocation carries its stable identity and the dispatch slot
+chosen by Haxe policy. Native checks that plan against the decoded HLP and its
+live module identity table, but does not derive the Haxe path's replacement or
+relocation mapping from the wire data. Native borrows the Haxe pool, debug, and
+resolution pointers and swaps them into the live module only during successful
+publication; the legacy native-decoder path retains the old native
+combined-pool, type, function, debug, and relocation staging behavior. Any
+failure frees staged storage; the Haxe path also rolls back its arena, pool
+model, and type-table cursors, leaving the published revision, symbol counts,
+dispatch pointers, and owners unchanged.
 
 Publication begins only after JIT finalization and owner-array capacity are
 ready. Under the same mutex, the runtime marks Haxe-prepared appended types as
