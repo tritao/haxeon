@@ -3072,8 +3072,6 @@ class SemanticIndexBuilder {
 class SemanticIndex {
 	/** Construction-only access. Null after publication. */
 	final construction:Null<SemanticIndexBuilder>;
-	/** Recovery queries are being migrated to immutable query data. */
-	final recovery:Null<SemanticIndexBuilder>;
 	final queryState:Null<SemanticIndexQueryState>;
 
 	public var revision(get, never):Int;
@@ -3082,30 +3080,29 @@ class SemanticIndex {
 
 	private function new(builder:SemanticIndexBuilder, ?queryState:SemanticIndexQueryState) {
 		this.construction = queryState == null ? builder : null;
-		this.recovery = queryState == null ? null : builder;
 		this.queryState = queryState;
 	}
 
-	function activeRecovery():SemanticIndexBuilder {
-		var builder = recovery == null ? construction : recovery;
+	function activeConstruction():SemanticIndexBuilder {
+		var builder = construction;
 		if (builder == null)
-			throw "Semantic index has no recovery query state";
+			throw "Published semantic index has no construction state";
 		return builder;
 	}
 
 	function get_revision():Int
-		return queryState == null ? activeRecovery().revision : queryState.revision;
+		return queryState == null ? activeConstruction().revision : queryState.revision;
 
 	function get_symbols():Map<String, IndexedSemanticSymbol>
-		return queryState == null ? activeRecovery().snapshotSymbols() : queryState.snapshotSymbols();
+		return queryState == null ? activeConstruction().snapshotSymbols() : queryState.snapshotSymbols();
 
 	function get_indexingMs():Float
-		return queryState == null ? activeRecovery().indexingMs : queryState.indexingMs;
+		return queryState == null ? activeConstruction().indexingMs : queryState.indexingMs;
 
 	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {
 		if (queryState != null)
 			return queryState.symbolIdAt(position, token);
-		var builder = activeRecovery();
+		var builder = activeConstruction();
 		var selected:Null<PositionBinding> = null;
 		for (binding in builder.bindings) {
 			if (token != null)
@@ -3125,31 +3122,31 @@ class SemanticIndex {
 		if (queryState != null)
 			return queryState.symbolAt(position);
 		var id = symbolIdAt(position);
-		return id == null ? null : activeRecovery().symbols.get(id);
+		return id == null ? null : activeConstruction().symbols.get(id);
 	}
 
 	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
-		return queryState == null ? activeRecovery().symbols.get(id) : queryState.symbol(id);
+		return queryState == null ? activeConstruction().symbols.get(id) : queryState.symbol(id);
 
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return queryState == null ? copySignature(activeRecovery().signatures.get(id)) : queryState.signature(id);
+		return queryState == null ? copySignature(activeConstruction().signatures.get(id)) : queryState.signature(id);
 
 	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
 		return queryState == null
-			? activeRecovery().typeParameterIds.get(SemanticIndexBuilder.typeParameterKey(owner, name))
+			? activeConstruction().typeParameterIds.get(SemanticIndexBuilder.typeParameterKey(owner, name))
 			: queryState.typeParameterId(owner, name);
 
 	public function calls():Array<SemanticCallEdge> {
 		if (queryState != null)
 			return queryState.calls();
-		var builder = activeRecovery();
+		var builder = activeConstruction();
 		if (!builder.isFrozen)
 			builder.completeCallEdges();
 		return [for (edge in builder.callEdges) {caller: edge.caller, callee: edge.callee, span: edge.span}];
 	}
 
 	public function resolvedDependencies():Array<ResolvedSemanticReference>
-		return queryState == null ? [for (reference in activeRecovery().resolvedReferences) {
+		return queryState == null ? [for (reference in activeConstruction().resolvedReferences) {
 			owner: reference.owner,
 			target: reference.target,
 			targetId: reference.targetId,
@@ -3159,21 +3156,23 @@ class SemanticIndex {
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		if (queryState != null)
 			return queryState.locations(id);
-		var result = activeRecovery().references.get(id);
+		var result = activeConstruction().references.get(id);
 		return result == null ? [] : result.copy();
 	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
-		return activeRecovery().completionContext(position, qualifier, token);
+		return queryState == null
+			? activeConstruction().completionContext(position, qualifier, token)
+			: queryState.completionContext(position, qualifier, token);
 
 	public function unresolvedSymbols():Array<UnresolvedSymbol>
-		return queryState == null ? [for (symbol in activeRecovery().unresolved)
+		return queryState == null ? [for (symbol in activeConstruction().unresolved)
 			{name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()}] : queryState.unresolvedSymbols();
 
 	public function unresolvedAt(position:Int):Null<UnresolvedSymbol> {
 		if (queryState != null)
 			return queryState.unresolvedAt(position);
-		for (symbol in activeRecovery().unresolved)
+		for (symbol in activeConstruction().unresolved)
 			if (position >= symbol.span.start && position <= symbol.span.end)
 				return {name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()};
 		return null;
@@ -3182,7 +3181,7 @@ class SemanticIndex {
 	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType> {
 		if (queryState != null)
 			return queryState.typeAt(position, token);
-		var builder = activeRecovery();
+		var builder = activeConstruction();
 		var symbol = symbolIdAt(position, token);
 		if (symbol != null && builder.declarationTypes.exists(symbol))
 			return builder.declarationTypes.get(symbol);
@@ -3207,10 +3206,14 @@ class SemanticIndex {
 	}
 
 	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
-		return copySignature(activeRecovery().recoveredSignature(name, receiverType));
+		return queryState == null
+			? copySignature(activeConstruction().recoveredSignature(name, receiverType))
+			: queryState.recoveredSignature(name, receiverType);
 
 	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
-		return copySignature(activeRecovery().callableSignature(type, name));
+		return queryState == null
+			? copySignature(activeConstruction().callableSignature(type, name))
+			: queryState.callableSignature(type, name);
 
 	static function copySignature(signature:Null<SemanticSignatureInfo>):Null<SemanticSignatureInfo>
 		return signature == null ? null : {

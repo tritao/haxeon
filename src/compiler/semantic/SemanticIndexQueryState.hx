@@ -4,6 +4,7 @@ import compiler.Source.SourceSpan;
 import compiler.service.CancellationToken;
 import compiler.types.Type.CompilerType;
 import compiler.semantic.SemanticIndex.SemanticCallEdge;
+import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticIndex.SemanticCompletionLocal;
 import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
@@ -39,8 +40,17 @@ class SemanticIndexQueryState {
 	final declarationTypes:Map<SemanticSymbolId, CompilerType>;
 	final unresolved:Array<UnresolvedSymbol>;
 	final typeParameterIds:Map<String, SemanticSymbolId>;
+	/**
+		Temporary compatibility boundary for recovery queries whose algorithms
+		still share traversal helpers with the builder. This builder is frozen and
+		is never exposed to callers or used for construction after publication.
+	*/
+	final recoveryQuery:SemanticIndexBuilder;
 
 	private function new(builder:SemanticIndexBuilder) {
+		if (!builder.isFrozen)
+			throw "Semantic query state requires a frozen recovery query";
+		recoveryQuery = builder;
 		revision = builder.revision;
 		indexingMs = builder.indexingMs;
 		symbols = builder.symbols.copy();
@@ -169,6 +179,16 @@ class SemanticIndexQueryState {
 			return result;
 		return symbol == null ? null : declarationTypes.get(symbol);
 	}
+
+	/** Recovery query compatibility while the shared algorithms are extracted. */
+	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
+		return recoveryQuery.completionContext(position, qualifier, token);
+
+	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
+		return recoveryQuery.recoveredSignature(name, receiverType);
+
+	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
+		return recoveryQuery.callableSignature(type, name);
 
 	static function copySignature(signature:Null<SemanticSignatureInfo>):Null<SemanticSignatureInfo>
 		return signature == null ? null : {
