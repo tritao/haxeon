@@ -52,6 +52,10 @@ class HlTypeBridge {
 		identityLength:Int):hl.Abstract<"realtime_module">
 		return null;
 
+	/** Load a legacy HLB/HLI pair through HashLink's native decoder. */
+	public static function native_runtime_module_load_bytes(bytes:haxe.io.Bytes, identity:haxe.io.Bytes):hl.Abstract<"realtime_module">
+		return null;
+
 	/** Load a runtime wrapper from a Haxe-owned code record and decoded identity tables. */
 	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
 		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):hl.Abstract<"realtime_module">
