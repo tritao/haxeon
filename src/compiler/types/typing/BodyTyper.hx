@@ -305,11 +305,7 @@ class BodyTyper {
 		if (abstractReceiver != null) {
 			scope.defineReceiver(abstractReceiver, fn.span);
 		} else if (owner != null && !isStatic) {
-			var receiverArguments:Array<CompilerType> = [];
-			if (session.classDecls.exists(owner))
-				for (parameter in session.classDecls.get(owner).typeParameters)
-					receiverArguments.push(context.typeSubstitutions.exists(parameter) ? context.typeSubstitutions.get(parameter) : TDynamic);
-			scope.defineReceiver(TInstance(NominalKind.Class, owner, receiverArguments), fn.span);
+			scope.defineReceiver(session.representation.receiverType(owner, context.typeSubstitutions), fn.span);
 		}
 		context.receiver = scope.resolve("this");
 		var arguments:Array<{name:String, type:CompilerType}> = [];
@@ -1710,20 +1706,7 @@ class BodyTyper {
 	}
 
 	function enumParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
-		var substitutions:Map<String, CompilerType> = [];
-		for (index in 0...typeParameters.length) {
-			var argument:CompilerType = TDynamic;
-			var resolvedInstance = instance;
-			if (resolvedInstance != null)
-				switch resolvedInstance {
-					case TInstance(Enum, _, arguments) if (index < arguments.length):
-						argument = arguments[index];
-					default:
-				}
-			substitutions.set(typeParameters[index], argument);
-		}
-		var resolved = session.declarations.resolve(parameter.type, parameter.span, substitutions);
-		return parameter.optional ? TNullable(resolved) : resolved;
+		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
 	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType

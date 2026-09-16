@@ -1867,6 +1867,12 @@ class WasmLinearRuntime {
 		builder.localSet(needleLength);
 		builder.i32Const(-1);
 		builder.localSet(result);
+		builder.localGet(needleLength);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		});
 		builder.i32Const(0);
 		builder.localSet(index);
 		builder.block(function(builder) {

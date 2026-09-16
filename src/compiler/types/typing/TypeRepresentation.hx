@@ -65,6 +65,51 @@ class TypeRepresentation {
 	public function resolveMethodArgument(receiver:CompilerType, owner:String, argument:AstArgument):TypeRepresentationResult
 		return resolveArgument(argument, methodSubstitutions(receiver, owner));
 
+	/** Adapt semantic call arguments to the physical method signature. */
+	public function adaptMethodArguments(receiver:CompilerType, owner:String, method:AstFunction, arguments:Array<TypedExpression>):Array<TypedExpression> {
+		return adaptArguments(arguments, [
+			for (representation in resolveMethodArguments(receiver, owner, method))
+				representation.physical
+		]);
+	}
+
+	/** Adapt constructor arguments, including constructors without a declaration. */
+	public function adaptConstructorArguments(receiver:CompilerType, owner:String, method:Null<AstFunction>,
+			arguments:Array<TypedExpression>):Array<TypedExpression> {
+		if (method != null)
+			return adaptMethodArguments(receiver, owner, method, arguments);
+		return isGenericNominal(receiver) ? [for (argument in arguments) boundaryCast(argument, TDynamic)] : arguments;
+	}
+
+	/** Build substitutions for a declaration when an omitted argument is erased. */
+	public function typeParameterSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (index in 0...parameters.length)
+			result.set(parameters[index], index < arguments.length ? arguments[index] : TDynamic);
+		return result;
+	}
+
+	/** Resolve an enum payload through the use-site instance. */
+	public function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {
+		var arguments = switch enumInstance(instance) {
+			case TInstance(Enum, _, values): values;
+			default: [];
+		};
+		var substitutions = typeParameterSubstitutions(typeParameters, arguments),
+			resolved = semanticType(parameter.type, parameter.span, substitutions);
+		return parameter.optional ? TNullable(resolved) : resolved;
+	}
+
+	/** Build the receiver type used while typing a generic class body. */
+	public function receiverType(owner:String, substitutions:Map<String, CompilerType>):CompilerType {
+		var arguments:Array<CompilerType> = [],
+			declaration = session.classDecls.get(owner);
+		if (declaration != null)
+			for (parameter in declaration.typeParameters)
+				arguments.push(substitutions != null && substitutions.exists(parameter) ? substitutions.get(parameter) : TDynamic);
+		return TInstance(Class, owner, arguments);
+	}
+
 	/**
 	 * Select the physical substitutions for a generic function body. This is
 	 * the only typing service entry point that applies shape specialization.
@@ -139,6 +184,20 @@ class TypeRepresentation {
 		return switch type {
 			case TInstance(Class, _, arguments), TInstance(Interface, _, arguments): arguments.length > 0;
 			default: false;
+		};
+
+	function adaptArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>):Array<TypedExpression> {
+		return [
+			for (index in 0...arguments.length)
+				boundaryCast(arguments[index], expected[index])
+		];
+	}
+
+	function enumInstance(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TInstance(Enum, _, _): type;
+			case TNullable(inner), TAbstract(_, _, inner): enumInstance(inner);
+			default: null;
 		};
 
 	function resolve(type:AstType, span:SourceSpan,

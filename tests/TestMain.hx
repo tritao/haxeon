@@ -1347,24 +1347,42 @@ class TestMain {
 		Frontend.compile('class NullableRepresentation<T> { var value:Null<T>; public function new(value:Null<T>) this.value = value; public function read():Null<T> return value; } function main():Int { var box:NullableRepresentation<Int> = new NullableRepresentation<Int>(null); var value:Null<Int> = box.read(); return value == null ? 42 : 0; }');
 		Frontend.compile('abstract NestedRepresentation<T>(T) { public function new(value:T) this = value; public function unwrap():T return this; } function makeNested<T>(value:T):NestedRepresentation<T> return new NestedRepresentation<T>(value); function main():Int { var value:NestedRepresentation<Int> = makeNested(42); return 42; }');
 		var representationProgram = new Parser(new Lexer(new SourceFile("representation-service.hx",
-			'class RepresentationProbe<T> { var value:T; public function new(value:T) this.value = value; public function ready():Bool return true; public function generic():T return value; } function inspect(value:RepresentationProbe<Int>):Int return value.generic(); function main():Int return inspect(new RepresentationProbe<Int>(42));'))
+			'interface RepresentationProbeReader<T> { function read():T; } class RepresentationProbeReaderImpl implements RepresentationProbeReader<Int> { public function new() {} public function read():Int return 42; } class RepresentationProbe<T> { var value:T; public var ready(get, never):Bool; public var genericProperty(get, never):T; public var nullable(get, never):Null<T>; public function new(value:T) this.value = value; function get_ready():Bool return true; function get_genericProperty():T return value; function get_nullable():Null<T> return value; public function generic():T return value; } function inspect(value:RepresentationProbe<Int>):Int return value.generic(); function inspectReader(value:RepresentationProbeReader<Int>):Int return value.read(); function main():Int return inspect(new RepresentationProbe<Int>(42));'))
 			.tokenize()).parseProgram(),
 			representationModel = compiler.semantic.SemanticProgram.analyze(representationProgram),
 			representationSession = new TypingSession(null, null);
 		representationSession.bindSemantic(representationModel);
 		representationSession.bindNominalDeclarations();
 		var probeType = representationModel.declarations.resolve(representationProgram.functions[0].arguments[0].type),
+			readerType = representationModel.declarations.resolve(representationProgram.functions[1].arguments[0].type),
 			genericMethod = representationModel.signatures.get("RepresentationProbe.generic"),
-			readyMethod = representationModel.signatures.get("RepresentationProbe.ready");
-		if (genericMethod == null || readyMethod == null)
+			readyMethod = representationModel.signatures.get("RepresentationProbe.get_ready"),
+			propertyMethod = representationModel.signatures.get("RepresentationProbe.get_genericProperty"),
+			nullableMethod = representationModel.signatures.get("RepresentationProbe.get_nullable"),
+			constructor = representationModel.signatures.get("RepresentationProbe.new"),
+			readerMethod = representationModel.signatures.get("RepresentationProbeReader.read");
+		if (genericMethod == null || readyMethod == null || propertyMethod == null || nullableMethod == null || constructor == null || readerMethod == null)
 			throw "Representation service fixture methods were not indexed";
 		var genericResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", genericMethod),
 			readyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", readyMethod),
+			propertyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", propertyMethod),
+			nullableResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", nullableMethod),
+			readerResult = representationSession.representation.resolveMethodResult(readerType, "RepresentationProbeReader", readerMethod),
+			constructorArgument = representationSession.representation.resolveMethodArgument(probeType, "RepresentationProbe", constructor.arguments[0]),
 			fieldResult = representationSession.representation.resolveField(probeType, "value", representationProgram.classes[0].span);
 		if (genericResult.semantic != compiler.types.Type.CompilerType.TInt
 			|| genericResult.physical != compiler.types.Type.CompilerType.TDynamic
 			|| readyResult.semantic != compiler.types.Type.CompilerType.TBool
 			|| readyResult.physical != compiler.types.Type.CompilerType.TBool
+			|| propertyResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| propertyResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| !compiler.types.TypeRelations.equals(nullableResult.semantic, compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TInt))
+			|| !compiler.types.TypeRelations.equals(nullableResult.physical,
+				compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TDynamic))
+			|| readerResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| readerResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| constructorArgument.semantic != compiler.types.Type.CompilerType.TInt
+			|| constructorArgument.physical != compiler.types.Type.CompilerType.TDynamic
 			|| fieldResult.semantic != compiler.types.Type.CompilerType.TInt
 			|| fieldResult.physical != compiler.types.Type.CompilerType.TDynamic)
 			throw "Representation service did not preserve semantic and physical type pairs";

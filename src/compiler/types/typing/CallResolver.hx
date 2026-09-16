@@ -348,11 +348,7 @@ class CallResolver {
 			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, false, preset, receiver);
 		}
 		var semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
-			methodRepresentations = session.representation.resolveMethodArguments(methodOwnerType, methodInfo.owner, method),
-			physicalArguments = [
-				for (index in 0...semanticArguments.length)
-					session.representation.boundaryCast(semanticArguments[index], methodRepresentations[index].physical)
-			],
+			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical, span),
 			castCall = session.representation.boundaryCast(call, methodResult.semantic);
@@ -380,9 +376,7 @@ class CallResolver {
 			fail("E1007", 'Unknown abstract method "$abstractName.$name"', span);
 		var methodKey = abstractName + "." + name,
 			signature = requiredMapValue(session.signatures, methodKey),
-			substitutions:Map<String, CompilerType> = [];
-		for (index in 0...declaration.typeParameters.length)
-			substitutions.set(declaration.typeParameters[index], typeArguments[index]);
+			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, typeArguments);
 		if (declaration.isExtern == true) {
 			var typed = typeDeclaredCallArguments(arguments, signature.arguments, scope, methodKey, span, substitutions),
 				callArguments:Array<TypedExpression> = [
@@ -553,11 +547,7 @@ class CallResolver {
 			methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
 			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
-			methodRepresentations = session.representation.resolveMethodArguments(methodOwnerType, methodInfo.owner, method),
-			physicalArguments = [
-				for (index in 0...semanticArguments.length)
-					session.representation.boundaryCast(semanticArguments[index], methodRepresentations[index].physical)
-			],
+			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical, span);
 		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
@@ -672,18 +662,7 @@ class CallResolver {
 	}
 
 	function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {
-		var substitutions:Map<String, CompilerType> = [];
-		for (index in 0...typeParameters.length) {
-			var argument:CompilerType = TDynamic;
-			switch enumInstance(instance) {
-				case TInstance(Enum, _, arguments) if (index < arguments.length):
-					argument = arguments[index];
-				default:
-			}
-			substitutions.set(typeParameters[index], argument);
-		}
-		var resolved = session.declarations.resolve(parameter.type, parameter.span, substitutions);
-		return parameter.optional ? TNullable(resolved) : resolved;
+		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
 	static function requiredEnumParameters(parameters:Array<AstEnumParameter>):Int {
@@ -739,21 +718,8 @@ class CallResolver {
 			fail("E1008", 'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments, scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
-			physicalArguments:Array<TypedExpression>;
-		if (hasConstructor) {
-			var method = requiredMapValue(session.signatures, constructorName),
-				representations = session.representation.resolveMethodArguments(baseInstance, resolvedBase, method);
-			physicalArguments = [
-				for (index in 0...semanticArguments.length)
-					session.representation.boundaryCast(semanticArguments[index], representations[index].physical)
-			];
-		} else if (session.representation.isGenericNominal(baseInstance))
-			physicalArguments = [
-				for (argument in semanticArguments)
-					session.representation.boundaryCast(argument, TDynamic)
-			];
-		else
-			physicalArguments = semanticArguments;
+			method = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+			physicalArguments = session.representation.adaptConstructorArguments(baseInstance, resolvedBase, method, semanticArguments);
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
 	}
 
@@ -1364,17 +1330,7 @@ class CallResolver {
 		}
 		var typeArguments = [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
 			valueType = TInstance(NominalKind.Class, typeName, typeArguments),
-			representationSubstitutions:Map<String, CompilerType> = [];
-		for (parameter in parameters)
-			representationSubstitutions.set(parameter, TDynamic);
-		var representationExpected:Array<CompilerType> = [];
-		if (constructor != null)
-			for (parameter in constructor.arguments)
-				representationExpected.push(argumentType(parameter, representationSubstitutions));
-		var representationArguments = [
-			for (index in 0...typed.length)
-				session.representation.boundaryCast(typed[index], representationExpected[index])
-		];
+			representationArguments = session.representation.adaptConstructorArguments(valueType, typeName, constructor, typed);
 		return new TypedExpression(TNew(typeName, representationArguments, hasConstructor || implicitConstructor), valueType, span);
 	}
 
@@ -1400,15 +1356,7 @@ class CallResolver {
 			var constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
 				semanticArguments = constructor == null ? [] : typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span,
 					substitutions),
-				representationSubstitutions = session.representation.erasedNominalSubstitutions(typeName);
-			var representationExpected:Array<CompilerType> = constructor == null ? [] : [
-				for (parameter in constructor.arguments)
-					argumentType(parameter, representationSubstitutions)
-			];
-			var typed = [
-				for (index in 0...semanticArguments.length)
-					session.representation.boundaryCast(semanticArguments[index], representationExpected[index])
-			];
+				typed = session.representation.adaptConstructorArguments(valueType, typeName, constructor, semanticArguments);
 			return new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 		}
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || session.interfaceDecls.exists(typeName))
@@ -1451,14 +1399,11 @@ class CallResolver {
 			var typed = typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span);
 			return new TypedExpression(TCall(constructorName, typed), valueType, span);
 		}
-		var substitutions:Map<String, CompilerType> = [],
-			representation = session.representation.abstractUnderlying(valueType);
-		switch valueType {
+		var substitutions = switch valueType {
 			case TAbstract(_, appliedArguments, _):
-				for (index in 0...decl.typeParameters.length)
-					substitutions.set(decl.typeParameters[index], appliedArguments[index]);
-			default:
-		}
+				session.representation.typeParameterSubstitutions(decl.typeParameters, appliedArguments);
+			default: new Map<String, CompilerType>();
+		}, representation = session.representation.abstractUnderlying(valueType);
 		var normalized = AbstractConstructorNormalizer.normalize(constructor, decl.underlying),
 			typedArguments = [for (argument in arguments) typeExpression(argument, scope, null, false)],
 			constructed:TypedExpression;
