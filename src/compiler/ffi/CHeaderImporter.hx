@@ -159,8 +159,13 @@ class CHeaderImporter {
 		if (node == null)
 			return currentFile;
 		var id:String = field(node, "id");
-		if (id != null)
-			nodesById.set(id, node);
+		if (id != null) {
+			var previous = nodesById.get(id);
+			// Clang repeats canonical declarations as lightweight references. Keep a
+			// complete record when a later reference reuses the same AST id.
+			if (previous == null || field(node, "completeDefinition") == true || field(previous, "completeDefinition") != true)
+				nodesById.set(id, node);
+		}
 		var locationFile:String = locationPath(node);
 		if (locationFile != null)
 			currentFile = FileSystem.fullPath(locationFile);
@@ -238,9 +243,11 @@ class CHeaderImporter {
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType"),
 					callback = functionPointer(qualified);
-				var anonymousRecord = typedefTag(node, "RecordDecl", nodesById);
-				if (anonymousRecord != null && isAnonymous(anonymousRecord) && field(anonymousRecord, "completeDefinition") == true)
-					return importRecord(name, anonymousRecord, layouts, documentation, additionalDeclarations);
+				var record = typedefTag(node, "RecordDecl", nodesById);
+				if (record != null
+					&& field(record, "completeDefinition") == true
+					&& (isAnonymous(record) || field(record, "name") != name))
+					return importRecord(name, record, layouts, documentation, additionalDeclarations);
 				var anonymousEnum = typedefTag(node, "EnumDecl", nodesById);
 				if (anonymousEnum != null && isAnonymous(anonymousEnum) && children(anonymousEnum).length > 0)
 					return importEnumeration(name, anonymousEnum, "c_int", documentation);
@@ -478,11 +485,23 @@ class CHeaderImporter {
 		};
 
 	static function typedefTag(node:Dynamic, kind:String, nodesById:Map<String, Dynamic>):Dynamic {
+		var typeKind = kind == "RecordDecl" ? "RecordType" : "EnumType";
 		for (child in children(node)) {
 			var owned = field(child, "ownedTagDecl");
 			if (owned != null && field(owned, "kind") == kind) {
 				var id:String = field(owned, "id"),
 					resolved = id == null ? null : nodesById.get(id);
+				if (resolved != null && field(resolved, "completeDefinition") == true)
+					return resolved;
+				for (typeNode in children(child)) {
+					var declaration:Dynamic = field(typeNode, "decl");
+					if (field(typeNode, "kind") != typeKind || declaration == null)
+						continue;
+					var declarationId:String = field(declaration, "id"),
+						definition = declarationId == null ? null : nodesById.get(declarationId);
+					if (definition != null && field(definition, "completeDefinition") == true)
+						return definition;
+				}
 				return resolved == null ? owned : resolved;
 			}
 		}
@@ -531,6 +550,12 @@ class CHeaderImporter {
 		var named = layouts.get(name);
 		if (named != null)
 			return named;
+		var recordName:String = field(node, "name");
+		if (recordName != null) {
+			named = layouts.get(recordName);
+			if (named != null)
+				return named;
+		}
 		var loc:Dynamic = field(node, "loc"),
 			key = loc == null ? null : anonymousLayoutKey(field(node, "tagUsed"), field(loc, "line"), field(loc, "col"));
 		return key == null ? null : layouts.get(key);

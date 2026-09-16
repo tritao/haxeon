@@ -168,6 +168,8 @@ class CHeaderImporterMain {
 		HxiValidator.validate(parsedHashlink, []);
 		expect(hashlinkSource == checkedInHashlinkSource
 			&& hashlinkSource.indexOf("enum hl_type_kind : c_int") >= 0
+			&& hashlinkSource.indexOf("struct hl_field_lookup @layout(16, 8)") >= 0
+			&& hashlinkSource.indexOf("field_index: c_int @offset(12)") >= 0
 			&& hashlinkSource.indexOf("struct hl_type @layout(40, 8)") >= 0
 			&& hashlinkSource.indexOf("abs_name: ptr<const<u16>> @offset(8) @union") >= 0
 			&& hashlinkSource.indexOf("struct hl_type_fun @layout(80, 8)") >= 0
@@ -245,6 +247,9 @@ class CHeaderImporterMain {
 		var result:Map<String, String> = [];
 		for (mapping in [
 			{owner: "hl_alloc", native: "cur", haxe: "current"},
+			{owner: "hl_field_lookup", native: "t", haxe: "type"},
+			{owner: "hl_field_lookup", native: "hashed_name", haxe: "hashedName"},
+			{owner: "hl_field_lookup", native: "field_index", haxe: "fieldIndex"},
 			{owner: "hl_enum_construct", native: "name", haxe: "name"},
 			{owner: "hl_enum_construct", native: "nparams", haxe: "nparams"},
 			{owner: "hl_enum_construct", native: "params", haxe: "params"},

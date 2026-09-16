@@ -23,7 +23,8 @@ class HashlinkTypeMetadataMain {
 			+ 'import runtime.hashlink.HlTypeObject.HlObjectField; import runtime.hashlink.HlTypeObject.HlObjectProto; '
 			+ 'import runtime.hashlink.HlTypeObject.HlTypeVirtual; import runtime.hashlink.HlTypeObject.HlTypeEnum; '
 			+ 'import runtime.hashlink.HlTypeObject.HlEnumConstruct; import runtime.hashlink.HlModuleContext; '
-			+ 'import runtime.hashlink.HlRuntimeObject; import runtime.hashlink.HlRuntimeObject.HlRuntimeBinding; '
+			+
+			'import runtime.hashlink.HlRuntimeObject; import runtime.hashlink.HlRuntimeObject.HlFieldLookup; import runtime.hashlink.HlRuntimeObject.HlRuntimeBinding; '
 			+
 			'import runtime.hashlink.HlFunction; import runtime.hashlink.HlFunction.HlFunctionField; import runtime.hashlink.HlNative; import runtime.hashlink.HlConstant; '
 			+ 'import runtime.hashlink.HlDebugSection; import runtime.hashlink.HlNativeCode; '
@@ -37,6 +38,7 @@ class HashlinkTypeMetadataMain {
 			+ 'function objectSize():Int return sizeof<HlTypeObject>(); '
 			+ 'function objectRuntimeOffset():Int return offsetof<HlTypeObject>("runtime"); '
 			+ 'function fieldSize():Int return sizeof<HlObjectField>(); '
+			+ 'function fieldLookupSize():Int return sizeof<HlFieldLookup>(); '
 			+ 'function protoSize():Int return sizeof<HlObjectProto>(); '
 			+ 'function virtualSize():Int return sizeof<HlTypeVirtual>(); '
 			+ 'function enumSize():Int return sizeof<HlTypeEnum>(); '
@@ -63,6 +65,15 @@ class HashlinkTypeMetadataMain {
 				nativeName: "hl_alloc",
 				haxeName: "runtime.hashlink.HlAllocation",
 				fields: [{nativeName: "cur", haxeName: "current"}]
+			},
+			{
+				nativeName: "hl_field_lookup",
+				haxeName: "runtime.hashlink.HlFieldLookup",
+				fields: [
+					{nativeName: "t", haxeName: "type"},
+					{nativeName: "hashed_name", haxeName: "hashedName"},
+					{nativeName: "field_index", haxeName: "fieldIndex"}
+				]
 			},
 			{
 				nativeName: "hl_module_context",
@@ -238,6 +249,7 @@ class HashlinkTypeMetadataMain {
 		expect(constantReturn(functions, "HashlinkTypeMetadata.objectSize") == 80, "hl_type_obj must preserve pointer alignment and tail padding");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.objectRuntimeOffset") == 72, "hl_type_obj.runtime must preserve pointer offsets");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.fieldSize") == 24, "hl_obj_field must preserve pointer alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.fieldLookupSize") == 16, "hl_field_lookup must preserve pointer alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.protoSize") == 24, "hl_obj_proto must preserve tail padding");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.virtualSize") == 32, "hl_type_virtual must preserve lookup pointer alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.enumSize") == 32, "hl_type_enum must preserve global value alignment");
