@@ -6,7 +6,9 @@ import compiler.hl.HlValidator;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlWriter;
+import compiler.hl.patch.HlPatch;
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
 import runtime.memory.RawPtr;
@@ -63,6 +65,33 @@ class HlNativeMetadataBuilder {
 		}
 	}
 
+	/** Prepare compatible appended patch types in the published Haxe-owned arena. */
+	public static function preparePatchTypes(module:HlModule, generation:HlMetadataGeneration, patch:HlPatch):HlMetadataTypeAppend {
+		if (module == null || generation == null || patch == null)
+			throw "HashLink patch type preparation requires a module, generation, and patch";
+		if (patch.baseTypes != generation.typeCount())
+			throw 'HashLink patch type base ${patch.baseTypes} does not match the live metadata count ${generation.typeCount()}';
+		var append = generation.beginTypeAppend(),
+			baseTypes:Array<RawPtr<runtime.hashlink.HlType>> = [];
+		try {
+			for (index in 0...patch.baseTypes)
+				baseTypes.push(generation.type(index));
+			var appended:Array<RawPtr<runtime.hashlink.HlType>> = [];
+			for (definition in patch.types) {
+				var type = allocatePatchType(module, patch, generation.builder, definition);
+				appended.push(type);
+				append.add(type);
+			}
+			var allTypes = baseTypes.concat(appended);
+			for (index in 0...patch.types.length)
+				definePatchType(generation.builder, appended[index], patch.types[index], allTypes);
+			return append;
+		} catch (error:Dynamic) {
+			append.rollback();
+			throw error;
+		}
+	}
+
 	static function allocateTypes(code:HlCode, generation:HlMetadataGeneration):Array<RawPtr<runtime.hashlink.HlType>> {
 		var result:Array<RawPtr<runtime.hashlink.HlType>> = [];
 		for (definition in code.types)
@@ -92,6 +121,64 @@ class HlNativeMetadataBuilder {
 				builder.enumTypeSkeleton();
 		};
 	}
+
+	static function allocatePatchType(module:HlModule, patch:HlPatch, builder:HlTypeBuilder, definition:HlTypeDef):RawPtr<runtime.hashlink.HlType> {
+		return switch definition {
+			case Simple(kind):
+				if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed || kind == HlType.Obj || kind == HlType.Virtual
+					|| kind == HlType.Enum || kind == HlType.Method || kind == HlType.Struct)
+					throw 'Unsupported appended HashLink type kind $kind';
+				builder.primitive(runtimeKind(kind));
+			case Parameterized(kind, _):
+				builder.parameterizedType(patchKind(kind), RawPtr.nullPtr());
+			case Abstract(name):
+				builder.abstractType(builder.utf16Name(patchString(module, patch, name)));
+			case Function(_, _):
+				builder.functionTypeSkeleton(HlTypeKind.Function);
+			case Method(_, _), Object(_, _, _, _, _, _), Structure(_, _, _, _, _), Virtual(_), Enum(_, _, _):
+				throw "Unsupported appended HashLink type definition";
+		};
+	}
+
+	static function definePatchType(builder:HlTypeBuilder, type:RawPtr<runtime.hashlink.HlType>, definition:HlTypeDef,
+			allTypes:Array<RawPtr<runtime.hashlink.HlType>>):Void {
+		switch definition {
+			case Simple(_), Abstract(_):
+			case Parameterized(_, parameter):
+				checkPatchTypeIndex(parameter, allTypes.length);
+				type.ref.data.ref.typeParam = allTypes[parameter];
+			case Function(arguments, result):
+				for (argument in arguments)
+					checkPatchTypeIndex(argument, allTypes.length);
+				checkPatchTypeIndex(result, allTypes.length);
+				builder.defineFunctionType(type, typePointers(allTypes, arguments), allTypes[result]);
+			case Method(_, _), Object(_, _, _, _, _, _), Structure(_, _, _, _, _), Virtual(_), Enum(_, _, _):
+				throw "Unsupported appended HashLink type definition";
+		}
+	}
+
+	static function patchKind(kind:HlType):HlTypeKind {
+		return switch kind {
+			case HlType.Ref: HlTypeKind.Reference;
+			case HlType.Null: HlTypeKind.Nullable;
+			case _: throw 'Unsupported parameterized appended HashLink type kind $kind';
+		};
+	}
+
+	static function patchString(module:HlModule, patch:HlPatch, index:Int):String {
+		if (index < 0)
+			throw 'Invalid appended HashLink string index $index';
+		if (index < patch.baseStrings)
+			return module.code.strings[index];
+		var appended = index - patch.baseStrings;
+		if (appended < 0 || appended >= patch.strings.length)
+			throw 'Invalid appended HashLink string index $index';
+		return patch.strings[appended];
+	}
+
+	static function checkPatchTypeIndex(index:Int, count:Int):Void
+		if (index < 0 || index >= count)
+			throw 'Invalid appended HashLink type reference $index';
 
 	static function defineTypes(code:HlCode, generation:HlMetadataGeneration, types:Array<RawPtr<runtime.hashlink.HlType>>,
 			module:RawPtr<runtime.hashlink.HlModuleContext>, globals:RawPtr<RawPtr<UInt8>>):Void {

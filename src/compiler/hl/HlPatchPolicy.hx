@@ -102,7 +102,10 @@ class HlPatchPolicy {
 						throw 'Haxeon rejected an appended abstract name index $name';
 				case Parameterized(_, parameter):
 					validatePatchTypeIndex(parameter, totalTypes);
-				case Simple(_):
+				case Simple(kind):
+					if (kind == HlType.Packed || kind == HlType.Ref || kind == HlType.Null || kind == HlType.Obj || kind == HlType.Virtual
+						|| kind == HlType.Enum || kind == HlType.Method || kind == HlType.Struct)
+						throw 'Haxeon rejected unsupported appended HLP type kind $kind';
 				case Method(_, _), Object(_, _, _, _, _, _), Structure(_, _, _, _, _), Virtual(_), Enum(_, _, _):
 					throw "Haxeon rejected an unsupported appended HLP type";
 			}
