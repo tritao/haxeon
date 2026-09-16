@@ -20,8 +20,13 @@ function main():Int {
 	var recovered:GcHandleValue = cast handle.get();
 	if (recovered == null || recovered.value != 17)
 		return 2;
-	handle.set(new GcHandleValue(29));
-	if (cast(handle.get(), GcHandleValue).value != 29 || handle.close() == false || !handle.isClosed() || !handle.raw().isNull() || handle.close())
+	var replacement = new GcHandleValue(29);
+	handle.set(replacement);
+	replacement = null;
+	Gc.collect();
+	if (cast(handle.get(), GcHandleValue).value != 29)
+		return 3;
+	if (handle.close() == false || !handle.isClosed() || !handle.raw().isNull() || handle.close())
 		return 3;
 	return 42;
 }

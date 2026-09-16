@@ -118,13 +118,23 @@ HL_PRIM vdynamic *HL_NAME(native_gc_handle_get)( haxeon_gc_handle *handle ) {
 }
 
 HL_PRIM void HL_NAME(native_gc_handle_set)( haxeon_gc_handle *handle, vdynamic *value ) {
+	bool closed;
 	haxeon_gc_handle_lock();
 	if( handle == NULL || handle->closed ) {
 		haxeon_gc_handle_unlock();
 		hl_error("Cannot update a closed GC handle");
 	}
-	handle->value = value;
 	haxeon_gc_handle_unlock();
+	/* Update the registered slot under HashLink's collector lock. Do not hold
+	   the handle registry lock across this operation: a collector finalizer may
+	   need that lock while a mutator waits for the world lock. */
+	hl_root_set(&handle->value,value);
+	haxeon_gc_handle_lock();
+	closed = handle->closed;
+	haxeon_gc_handle_unlock();
+	/* Close may have raced the collector-safe update. A closed handle must
+	   never leave a managed value in its now-unregistered slot. */
+	if( closed ) hl_root_set(&handle->value,NULL);
 }
 
 HL_PRIM vbyte *HL_NAME(native_gc_handle_raw)( haxeon_gc_handle *handle ) {
