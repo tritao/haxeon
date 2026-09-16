@@ -231,13 +231,14 @@ boundary.
 
 ## Runtime synchronization
 
-`runtime.memory.AtomicInt32` provides aligned unmanaged i32 operations, while
-`runtime.memory.AtomicPointer<T>` provides the corresponding operations for
-aligned unmanaged pointer slots. Both use explicit `MemoryOrder` values
-(`Relaxed`, `Acquire`, `Release`, `AcqRel`, and `SeqCst`). Invalid load/store
-orderings are rejected at the Haxe boundary; compare-exchange derives the
-permitted failure ordering from its success ordering. Mutexes, condition
-variables, TLS, and explicit GC handles remain separate runtime primitives.
+`runtime.memory.AtomicInt32` and `runtime.memory.AtomicInt64` provide aligned
+unmanaged integer operations, while `runtime.memory.AtomicPointer<T>` provides
+the corresponding operations for aligned unmanaged pointer slots. All use
+explicit `MemoryOrder` values (`Relaxed`, `Acquire`, `Release`, `AcqRel`, and
+`SeqCst`). Invalid load/store orderings are rejected at the Haxe boundary;
+compare-exchange derives the permitted failure ordering from its success
+ordering. Mutexes, condition variables, TLS, and explicit GC handles remain
+separate runtime primitives.
 `GcHandle.createOwned` and `Runtime.createGcHandle` associate a strong root with
 one loaded HashLink module; `WeakRoot.create` registers a weak slot that does
 not retain its target and is cleared after strong marking when the target is
