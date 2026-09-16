@@ -1722,6 +1722,17 @@ class LanguageServiceMain {
 				foundBlockExpressionLocal = true;
 		if (!foundBlockExpressionLocal)
 			throw "block expression recovery consumed a valid declaration after a malformed statement";
+		var objectLiteralService = new LanguageService(),
+			objectLiteralSource = "package objectapp; import objecttypes.ObjectValue; function retained():Void { var object = { valid: 1, broken, later: 2 }; var value:ObjectValue = new ObjectValue(); value.";
+		objectLiteralService.update("objecttypes/ObjectValue.hx", "package objecttypes; class ObjectValue { public var member:Int; }");
+		objectLiteralService.update("ObjectLiterals.hx", objectLiteralSource);
+		var objectLiteralItems = objectLiteralService.completeResult("ObjectLiterals.hx", objectLiteralSource.length).items,
+			foundObjectLiteralMember = false;
+		for (item in objectLiteralItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundObjectLiteralMember = true;
+		if (!foundObjectLiteralMember)
+			throw "object literal recovery consumed later statements after a malformed field";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);

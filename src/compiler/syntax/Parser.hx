@@ -576,6 +576,33 @@ class Parser {
 		}
 	}
 
+	function synchronizeObjectField():Void {
+		var braceDepth = 0, bracketDepth = 0, parenDepth = 0;
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0
+				&& (check(TokenKind.Comma) || check(TokenKind.RightBrace)))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.LeftBracket:
+					bracketDepth++;
+				case TokenKind.RightBracket:
+					if (bracketDepth > 0)
+						bracketDepth--;
+				case TokenKind.LeftParen:
+					parenDepth++;
+				case TokenKind.RightParen:
+					if (parenDepth > 0)
+						parenDepth--;
+				default:
+			}
+		}
+	}
+
 	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
@@ -1844,12 +1871,24 @@ class Parser {
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {
-				while (true) {
-					var name = consumeDeclarationToken("object field");
-					consume(TokenKind.Colon);
-					var value = parseExpression();
-					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
-					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
+				while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
+					var fieldName = "<missing>", fieldStart = current().span;
+					try {
+						var name = consumeDeclarationToken("object field");
+						fieldName = name.text;
+						fieldStart = name.span;
+						consume(TokenKind.Colon);
+						var value = parseExpression();
+						fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
+					}
+					catch (error:CompileError) {
+						if (!recovering)
+							throw error;
+						recordRecoveryDiagnostic(error.diagnostic);
+						fields.push({name: fieldName, value: ErrorExpression(error.diagnostic.span), span: fieldStart.merge(error.diagnostic.span)});
+						synchronizeObjectField();
+					}
+					if (!match(TokenKind.Comma))
 						break;
 				}
 			}
