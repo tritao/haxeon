@@ -249,8 +249,9 @@ write barrier, and reading it uses the matching collector-locked root read,
 so replacing or observing a rooted value cannot race a collection. Weak-root
 reads and updates use the same lock-order rule and recheck closure after the
 collector operation, so weak-handle finalization cannot deadlock or leave a
-closed slot populated. Metadata publication uses `Mutex` for serialized policy
-transitions and lease lifetime; native metadata records still contain no
+closed slot populated. Closing a strong handle also clears its slot through
+the collector barrier before root removal. Metadata publication uses `Mutex` for
+serialized policy transitions and lease lifetime; native metadata records still contain no
 implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use
 `currentLease()`.

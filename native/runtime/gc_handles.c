@@ -48,7 +48,6 @@ static void haxeon_gc_handle_release_owner_link( haxeon_gc_handle_owner_link *li
 static bool haxeon_gc_handle_prepare_close_locked( haxeon_gc_handle *handle, haxeon_gc_handle_owner_link **owner_link ) {
 	if( owner_link != NULL ) *owner_link = NULL;
 	if( handle == NULL || handle->closed ) return false;
-	handle->value = NULL;
 	handle->closed = true;
 	if( owner_link != NULL ) *owner_link = haxeon_gc_handle_unlink_owner_locked(handle);
 	return true;
@@ -61,6 +60,9 @@ static bool haxeon_gc_handle_close_internal( haxeon_gc_handle *handle ) {
 	closed = haxeon_gc_handle_prepare_close_locked(handle,&owner_link);
 	haxeon_gc_handle_unlock();
 	if( closed ) {
+		/* Clear the registered slot under HashLink's collector lock before
+		   unregistering it. */
+		hl_root_set(&handle->value,NULL);
 		hl_remove_root(&handle->value);
 		haxeon_gc_handle_release_owner_link(owner_link);
 	}
@@ -192,6 +194,7 @@ void haxeon_gc_handle_detach_owner( void *owner ) {
 		closed = haxeon_gc_handle_prepare_close_locked(handle,&link);
 		haxeon_gc_handle_unlock();
 		if( closed ) {
+			hl_root_set(&handle->value,NULL);
 			hl_remove_root(&handle->value);
 			haxeon_gc_handle_release_owner_link(link);
 		}
