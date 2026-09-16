@@ -1814,6 +1814,20 @@ class SemanticIndex {
 					recoveredComprehensionExpressionType(whenFalse, bindings));
 			case Cast(value, target, _):
 				target == null ? recoveredComprehensionExpressionType(value, bindings) : recoveredType(target);
+			case ArrayComprehension(keyName, valueName, iterable, _, value, _):
+				var iterableType = recoveredComprehensionExpressionType(iterable, bindings),
+					innerBindings:Map<String, CompilerType> = [];
+				innerBindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
+				if (valueName != null)
+					innerBindings.set(valueName, recoveredForInValueType(iterableType));
+				TArray(recoveredComprehensionExpressionType(value, innerBindings));
+			case MapComprehension(keyName, valueName, iterable, _, key, value, _):
+				var iterableType = recoveredComprehensionExpressionType(iterable, bindings),
+					innerBindings:Map<String, CompilerType> = [];
+				innerBindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
+				if (valueName != null)
+					innerBindings.set(valueName, recoveredForInValueType(iterableType));
+				TMap(recoveredComprehensionExpressionType(key, innerBindings), recoveredComprehensionExpressionType(value, innerBindings));
 			default: recoveredExpressionType(expression);
 			};
 
