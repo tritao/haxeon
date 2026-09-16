@@ -396,6 +396,15 @@ class SemanticWorkspace {
 				if (candidate.semanticModel != null)
 					for (span in candidate.semanticModel.index.locations(id))
 						addLocation(result, candidate, span);
+				if (authoritative && candidate.semanticModel != null
+					&& candidate.semanticModel.index.symbol(id) == null
+					&& candidate.recoveredSemanticModel != null
+					&& candidate.recoveredSemanticModel.revision == candidate.revision)
+					for (span in candidate.recoveredSemanticModel.index.locations(id)) {
+						if (token != null)
+							token.check();
+						addLocation(result, candidate, span);
+					}
 				continue;
 			}
 			if (candidate.recoveredSemanticModel != null && authoritative)

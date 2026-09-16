@@ -1121,6 +1121,15 @@ class LanguageServiceMain {
 			|| genericValueHover != "value:T"
 			|| genericValueReferences.length != 2)
 			throw "semantic queries did not use current recovery for an unreachable generic body";
+		var recoveredReferenceService = new LanguageService();
+		recoveredReferenceService.update("refs/Target.hx", "package refs; function target():Int return 1; function main():Void return;");
+		recoveredReferenceService.compile("refs.Target");
+		recoveredReferenceService.update("refs/Use.hx", "package refs; import refs.Target; function dead():Void { Target.target(); } function main():Void return;");
+		recoveredReferenceService.compile("refs.Use");
+		var targetPosition = recoveredReferenceService.compiler.modules.get("refs.Target").source.text.indexOf("target"),
+			recoveredReferences = recoveredReferenceService.references("refs/Target.hx", targetPosition + 1);
+		if (recoveredReferences.length != 2)
+			throw 'authoritative references did not include an unreachable body recovered from a valid module: ${recoveredReferences.length}';
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
