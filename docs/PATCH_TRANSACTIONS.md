@@ -59,7 +59,9 @@ publication and executable/code-region diagnostics. `Runtime` owns the policy
 and transaction orchestration around both. Keeping these surfaces small and
 separate makes the remaining native responsibilities explicit and leaves the
 JIT implementation replaceable without spreading native declarations back
-through the Haxe runtime facade.
+through the Haxe runtime facade. Both declarations accept the single opaque
+`RuntimeModuleHandle` type, so splitting the bridge does not create a second
+pointer representation for a loaded module.
 
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
