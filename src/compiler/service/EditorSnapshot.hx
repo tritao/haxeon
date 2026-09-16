@@ -3,6 +3,7 @@ package compiler.service;
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.modules.AnalysisSnapshot;
+import compiler.modules.EditorWorkspaceView;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Token;
@@ -30,23 +31,15 @@ typedef EditorSnapshot = {
 /** Central selection policy for source-aware editor queries. */
 class EditorSnapshotTools {
 	public static function select(state:ModuleState):Null<EditorSnapshot> {
-		if (state.currentExact != null && state.currentExact.isCurrent(state.revision))
-			return toEditor(state.currentExact, EditorSnapshotConfidence.Exact);
-
-		var recovered = currentRecovered(state);
-		if (recovered != null)
-			return recovered;
-
-		if (state.lastGood != null)
-			return toEditor(state.lastGood, EditorSnapshotConfidence.LastGood);
-
-		return null;
+		var snapshot = EditorWorkspaceView.select(state);
+		return snapshot == null ? null : toEditor(snapshot, snapshot.kind == AnalysisSnapshotKind.Exact ? EditorSnapshotConfidence.Exact
+			: snapshot.kind == AnalysisSnapshotKind.Recovered ? EditorSnapshotConfidence.RecoveredPartial : EditorSnapshotConfidence.LastGood);
 	}
 
 	/** Return the current-source recovery view without applying fallback policy. */
 	public static function currentRecovered(state:ModuleState):Null<EditorSnapshot> {
-		var snapshot = state.currentRecovered;
-		return snapshot == null || !snapshot.isCurrent(state.revision) ? null : toEditor(snapshot, EditorSnapshotConfidence.RecoveredPartial);
+		var snapshot = EditorWorkspaceView.currentRecovered(state);
+		return snapshot == null ? null : toEditor(snapshot, EditorSnapshotConfidence.RecoveredPartial);
 	}
 
 	static function toEditor(snapshot:AnalysisSnapshot, confidence:EditorSnapshotConfidence):EditorSnapshot

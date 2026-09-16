@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.Source.SourceSpan;
 import compiler.modules.ModuleState;
+import compiler.modules.EditorWorkspaceView;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -305,18 +306,19 @@ class SemanticWorkspace {
 
 	/** Resolve a symbol for an editor query without publishing recovery globally. */
 	public function editorSymbol(state:ModuleState, id:SemanticSymbolId):Null<{state:ModuleState, symbol:IndexedSemanticSymbol}> {
-		if (state.currentExact == null && state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
-			var symbol = state.currentRecovered.semanticModel.index.symbol(id);
+		var recovered = EditorWorkspaceView.currentRecovered(state);
+		if (EditorWorkspaceView.currentExact(state) == null && recovered != null && recovered.semanticModel != null) {
+			var symbol = recovered.semanticModel.index.symbol(id);
 			if (symbol != null)
 				return {state: state, symbol: symbol};
 		}
 		var indexed = indexedSymbol(id);
 		if (indexed != null)
 			return indexed;
-		if (state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
-			var recovered = state.currentRecovered.semanticModel.index.symbol(id);
-			if (recovered != null)
-				return {state: state, symbol: recovered};
+		if (recovered != null && recovered.semanticModel != null) {
+			var recoveredSymbol = recovered.semanticModel.index.symbol(id);
+			if (recoveredSymbol != null)
+				return {state: state, symbol: recoveredSymbol};
 		}
 		return null;
 	}
@@ -344,8 +346,9 @@ class SemanticWorkspace {
 
 	/** Read a signature from the current editor model when it exists. */
 	public function editorSignature(state:ModuleState, id:SemanticSymbolId):Null<SemanticSignatureInfo> {
-		if (state.currentExact == null && state.currentRecovered != null && state.currentRecovered.semanticModel != null) {
-			var signature = state.currentRecovered.semanticModel.index.signature(id);
+		var recovered = EditorWorkspaceView.currentRecovered(state);
+		if (EditorWorkspaceView.currentExact(state) == null && recovered != null && recovered.semanticModel != null) {
+			var signature = recovered.semanticModel.index.signature(id);
 			if (signature != null)
 				return signature;
 		}
@@ -961,8 +964,9 @@ class SemanticWorkspace {
 	public function editorVisibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
 		var result:Array<IndexedSemanticSymbol> = [],
 			seen:Map<String, Bool> = [];
-		if (from.currentExact == null && from.currentRecovered != null && from.currentRecovered.semanticModel != null)
-			for (symbol in from.currentRecovered.semanticModel.index.symbols)
+		var recovered = EditorWorkspaceView.currentRecovered(from);
+		if (EditorWorkspaceView.currentExact(from) == null && recovered != null && recovered.semanticModel != null)
+			for (symbol in recovered.semanticModel.index.symbols)
 				if (symbol.kind != DeclarationKind.TypeParameter) {
 					seen.set(Std.string(symbol.id), true);
 					result.push(symbol);
@@ -1569,8 +1573,7 @@ class SemanticWorkspace {
 	}
 
 	static function editorModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.currentExact != null ? state.currentExact.semanticModel : state.currentRecovered != null
-			? state.currentRecovered.semanticModel : state.lastGood == null ? null : state.lastGood.semanticModel;
+		return EditorWorkspaceView.semanticModel(state);
 
 	static function editorSymbolAt(model:Null<compiler.semantic.SemanticModel>, span:SourceSpan):Null<IndexedSemanticSymbol> {
 		if (model == null)
