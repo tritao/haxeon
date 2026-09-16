@@ -1,14 +1,13 @@
 package runtime.hashlink;
 
 import haxe.io.Bytes;
-import runtime.RuntimeModuleHandle;
 import runtime.memory.RawPtr;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
 	public final metadata:HlMetadataGeneration;
 	final lease:HlMetadataLease;
-	var module:Null<RuntimeModuleHandle>;
+	var module:Null<hl.Abstract<"realtime_module">>;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int) {
 		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null

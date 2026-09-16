@@ -71,16 +71,18 @@ HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
 passes that graph plus the decoded manifest to
 `hl_runtime_module_load_code_manifest`. HashLink initializes its JIT and runtime
 wrapper from those Haxe-owned records without reparsing HLI on this path. Both
-the external loader and the legacy host facade now represent that wrapper with
-the same opaque `RuntimeModuleHandle`; only C-layout records remain `RawPtr<T>`
-values. Haxeon owns HLI identity validation, initializer policy, stable-ID
-call-shape validation, function-version state, and the external wrapper's
-revision state. Its HLP operation preflights the section envelope, fixed
-module-ID, revision header, and replacement function identities before handing
-the bytes to HashLink; the native patch kernel still performs complete wire,
-operand, relocation, symbol, and live-compatibility validation. The public host
-`Runtime.load` facade remains on the legacy native-decoder path until it can be
-compiled against the Haxeon-only native-memory classes.
+the external loader and the legacy host facade use the same native opaque
+`hl.Abstract<"realtime_module">` ABI type; the host source exposes a local
+`RuntimeModuleHandle` alias while standalone stdlib builds use the native type
+directly. Only C-layout records remain `RawPtr<T>` values. Haxeon owns HLI
+identity validation, initializer policy, stable-ID call-shape validation,
+function-version state, and the external wrapper's revision state. Its HLP
+operation preflights the section envelope, fixed module-ID, revision header,
+and replacement function identities before handing the bytes to HashLink; the
+native patch kernel still performs complete wire, operand, relocation, symbol,
+and live-compatibility validation. The public host `Runtime.load` facade remains
+on the legacy native-decoder path until it can be compiled against the
+Haxeon-only native-memory classes.
 
 Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
 boundary flag tells the native kernel to retain Haxeon's enum and virtual
