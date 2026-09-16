@@ -68,9 +68,10 @@ unverified and is intentionally not attempted.
 
 The Haxeon-native loader now exercises the external metadata boundary: it decodes
 HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
-passes that graph to `hl_runtime_module_load_code`. HashLink initializes its JIT
-and runtime wrapper from those Haxe-owned records without decoding a second copy
-of the module metadata. Haxeon owns HLI identity validation, initializer policy,
+passes that graph plus the decoded manifest to
+`hl_runtime_module_load_code_manifest`. HashLink initializes its JIT and runtime
+wrapper from those Haxe-owned records without reparsing HLI on this path. Haxeon
+owns HLI identity validation, initializer policy,
 stable-ID call-shape validation, and the external wrapper's revision state. Its
 HLP operation preflights the fixed module-ID and revision header before handing
 the bytes to HashLink; the native patch kernel still performs complete wire,
