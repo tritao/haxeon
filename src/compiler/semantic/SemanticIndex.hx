@@ -100,10 +100,10 @@ typedef ResolvedSemanticReference = {
 	final kind:SemanticDependencyKind;
 }
 
-/** Revision-local declaration and resolved-local facts emitted by the compiler. */
-class SemanticIndex {
+/** Mutable construction state for one revision-local semantic index. */
+class SemanticIndexBuilder {
 	public final revision:Int;
-	public final symbols:Map<String, IndexedSemanticSymbol> = [];
+	final symbols:Map<String, IndexedSemanticSymbol> = [];
 	public var indexingMs(default, null):Float = 0.0;
 
 	final bindings:Array<PositionBinding> = [];
@@ -148,6 +148,7 @@ class SemanticIndex {
 	var currentCallerName:Null<String>;
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
+	var frozen:Bool = false;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
 		module = ModulePath.fromFile(path);
@@ -202,6 +203,25 @@ class SemanticIndex {
 			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
 		for (fn in declarations.abstracts)
 			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
+	}
+
+	/** Publish a query-only view after all indexing work has completed. */
+	public function freeze():SemanticIndex {
+		frozen = true;
+		return new SemanticIndex(this);
+	}
+
+	/** Create a view for construction-time compatibility and diagnostics. */
+	public function view():SemanticIndex
+		return new SemanticIndex(this);
+
+	/** Return a read-only-by-convention copy for the query facade. */
+	public function snapshotSymbols():Map<String, IndexedSemanticSymbol>
+		return symbols.copy();
+
+	inline function ensureMutable():Void {
+		if (frozen)
+			throw "Semantic index builder was used after publication";
 	}
 
 	function indexDeclarationTypes(owner:String, fields:Array<compiler.syntax.Ast.AstField>, methods:Array<compiler.syntax.Ast.AstFunction>,
@@ -262,6 +282,7 @@ class SemanticIndex {
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
 			?token:CancellationToken, ?deferBindingSort = false):Void {
+		ensureMutable();
 		var started = Sys.time();
 		if (token != null)
 			token.check();
@@ -303,6 +324,7 @@ class SemanticIndex {
 
 	/** Index source-level generic parameters as editor-local semantic declarations. */
 	public function indexTypeParameterDeclarations(program:AstProgram):Void {
+		ensureMutable();
 		for (alias in program.aliases)
 			indexTypeParameters(alias.name, alias.span, alias.typeParameters);
 		for (decl in program.enums)
@@ -403,7 +425,8 @@ class SemanticIndex {
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
 			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
-			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndex):Void {
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndexBuilder):Void {
+		ensureMutable();
 		cancellation = token;
 		recoveryResolve = resolve;
 		recoveryCandidates = candidates;
@@ -510,7 +533,7 @@ class SemanticIndex {
 	 * every later local in a recovered editor model. The fallback remains the
 	 * existing revision-local ordinal when no safe predecessor exists.
 	 */
-	function prepareRecoveredLocalReuse(previous:Null<SemanticIndex>):Void {
+	function prepareRecoveredLocalReuse(previous:Null<SemanticIndexBuilder>):Void {
 		recoveryPreviousLocalIds = [];
 		recoveryPreviousLocalSpans = [];
 		recoveryUsedLocalIds = [];
@@ -569,6 +592,7 @@ class SemanticIndex {
 
 	/** Index signatures from a visible module for editor-only recovery queries. */
 	public function indexRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>, ?token:CancellationToken):Void {
+		ensureMutable();
 		cancellation = token;
 		for (name => declaration in external.aliases)
 			if (!declarations.aliases.exists(name))
@@ -2250,6 +2274,7 @@ class SemanticIndex {
 	/** Index a typed field initializer under its field declaration identity. */
 	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		ensureMutable();
 		currentCaller = resolve(owner);
 		currentCallerName = owner;
 		currentDependencyKind = SemanticDependencyKind.Initializer;
@@ -2272,6 +2297,7 @@ class SemanticIndex {
 	}
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
+		ensureMutable();
 		var started = Sys.time();
 		if (token != null)
 			token.check();
@@ -3337,4 +3363,72 @@ class SemanticIndex {
 			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",") + ")->" + displayAstType(result);
 			default: Std.string(type);
 		};
+}
+
+/**
+ * Frozen query facade for one semantic revision. Construction is deliberately
+ * unavailable here; callers must obtain a SemanticIndexBuilder and publish it
+ * with SemanticIndexBuilder.freeze().
+ */
+class SemanticIndex {
+	final builder:SemanticIndexBuilder;
+
+	public var revision(get, never):Int;
+	public var symbols(get, never):Map<String, IndexedSemanticSymbol>;
+	public var indexingMs(get, never):Float;
+
+	public function new(builder:SemanticIndexBuilder) {
+		this.builder = builder;
+	}
+
+	function get_revision():Int
+		return builder.revision;
+
+	function get_symbols():Map<String, IndexedSemanticSymbol>
+		return builder.snapshotSymbols();
+
+	function get_indexingMs():Float
+		return builder.indexingMs;
+
+	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId>
+		return builder.symbolIdAt(position, token);
+
+	public function symbolAt(position:Int):Null<IndexedSemanticSymbol>
+		return builder.symbolAt(position);
+
+	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
+		return builder.symbol(id);
+
+	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
+		return builder.signature(id);
+
+	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
+		return builder.typeParameterId(owner, name);
+
+	public function calls():Array<SemanticCallEdge>
+		return builder.calls();
+
+	public function resolvedDependencies():Array<ResolvedSemanticReference>
+		return builder.resolvedDependencies();
+
+	public function locations(id:SemanticSymbolId):Array<SourceSpan>
+		return builder.locations(id);
+
+	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
+		return builder.completionContext(position, qualifier, token);
+
+	public function unresolvedSymbols():Array<UnresolvedSymbol>
+		return builder.unresolvedSymbols();
+
+	public function unresolvedAt(position:Int):Null<UnresolvedSymbol>
+		return builder.unresolvedAt(position);
+
+	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType>
+		return builder.typeAt(position, token);
+
+	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
+		return builder.recoveredSignature(name, receiverType);
+
+	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
+		return builder.callableSignature(type, name);
 }

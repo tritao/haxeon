@@ -124,7 +124,7 @@ class FrontendCompilation {
 				if (state != null) {
 					var model = state.semanticModel;
 					if (model != null)
-						model.index.indexTypeReferences(context.resolveSemanticType, token);
+						model.builder.indexTypeReferences(context.resolveSemanticType, token);
 				}
 			}
 		}
@@ -158,7 +158,7 @@ class FrontendCompilation {
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			if (indexSemantics && state.semanticModel != null)
-				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
+				state.semanticModel.builder.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			var semanticOrigin = fn.genericOrigin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
 			if (!semanticallyInvalidated && StringTools.startsWith(fn.name, "$lambda:"))
@@ -182,6 +182,11 @@ class FrontendCompilation {
 		}
 		if (indexSemantics) {
 			indexTypedInitializers(context, typedNew, reindexedModules);
+			for (module in reindexedModules.keys()) {
+				var state = context.modules.get(module);
+				if (state != null && state.semanticModel != null)
+					state.semanticModel.freeze();
+			}
 			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
 		}
 		for (module in touchedModules.keys())
@@ -388,7 +393,7 @@ class FrontendCompilation {
 					continue;
 				for (field in classDecl.fields)
 					if (field.initializer != null)
-						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
+						model.builder.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
 							context.resolveSemanticEnumCase);
 			}
 	}

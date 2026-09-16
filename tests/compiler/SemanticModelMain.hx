@@ -10,6 +10,7 @@ class SemanticModelMain {
 		var tokens = new Lexer(source).tokenize(),
 			program = new Parser(tokens).parseProgram();
 		var model = new SemanticModel(program, source, 7, tokens);
+		model.freeze();
 
 		expect(model.revision == 7, "semantic model should retain its source revision");
 		expect(model.program == program, "semantic model should retain its parsed program");
@@ -20,11 +21,23 @@ class SemanticModelMain {
 		expect(make != null
 			&& make.name == "make"
 			&& Std.string(make.id) == "Types:function:make", "semantic model should bind declaration positions");
+		var exposedSymbols = model.index.symbols;
+		exposedSymbols.remove(make.id);
+		expect(model.index.symbolAt(source.text.indexOf("make")) != null,
+			"semantic index query symbols must not expose mutable builder state");
+		var mutationRejected = false;
+		try {
+			model.builder.indexTypeReferences(function(_name) return null);
+		} catch (_:Dynamic) {
+			mutationRejected = true;
+		}
+		expect(mutationRejected, "published semantic index builder accepted mutation");
 
 		var emptySource = new SourceFile("Empty.hx", "package demo;");
 		var emptyTokens = new Lexer(emptySource).tokenize(),
 			emptyProgram = new Parser(emptyTokens).parseProgram();
-		new SemanticModel(emptyProgram, emptySource, 1, emptyTokens);
+		var emptyModel = new SemanticModel(emptyProgram, emptySource, 1, emptyTokens);
+		emptyModel.freeze();
 
 		Sys.println("PASS: revision-bound semantic model");
 	}

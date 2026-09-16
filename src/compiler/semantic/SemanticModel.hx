@@ -6,13 +6,16 @@ import compiler.types.DeclarationIndex;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;
+import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */
 class SemanticModel {
 	public final revision:Int;
 	public final program:AstProgram;
 	public final declarations:DeclarationIndex;
-	public final index:SemanticIndex;
+	public var index(default, null):SemanticIndex;
+	/** Mutable semantic construction state, never published as the query view. */
+	public final builder:SemanticIndexBuilder;
 
 	/** Optional partial typed output owned only by a recovered editor model. */
 	public var partialTypedProgram:Null<TypedProgram>;
@@ -24,9 +27,14 @@ class SemanticModel {
 		this.revision = revision;
 		this.program = program;
 		this.declarations = DeclarationIndex.forModule(program, source);
-		this.index = new SemanticIndex(source.path, revision, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
-		this.index.indexTypeParameterDeclarations(program);
+		this.builder = new SemanticIndexBuilder(source.path, revision, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
+		this.builder.indexTypeParameterDeclarations(program);
+		this.index = builder.view();
 		this.partialTypedProgram = null;
 		this.recoveredSignatureProgram = null;
 	}
+
+	/** Seal construction state before this model is published to the workspace. */
+	public function freeze():Void
+		index = builder.freeze();
 }
