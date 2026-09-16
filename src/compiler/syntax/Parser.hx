@@ -544,7 +544,7 @@ class Parser {
 		return statements;
 	}
 
-	function synchronizeStatement(bodyStart:Int, statementStart:Int, stopAtSwitchBoundary:Bool = false):Void {
+	function synchronizeStatement(bodyStart:Int, statementStart:Int, stopAtSwitchBoundary:Bool = false, stopAtCatch:Bool = false):Void {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
 			switch tokens[index].kind {
@@ -559,7 +559,8 @@ class Parser {
 			advance();
 		while (!check(TokenKind.Eof)) {
 			if (braceDepth == 0 && (check(TokenKind.RightBrace)
-				|| stopAtSwitchBoundary && (check(TokenKind.Case) || check(TokenKind.Default))))
+				|| stopAtSwitchBoundary && (check(TokenKind.Case) || check(TokenKind.Default))
+				|| stopAtCatch && check(TokenKind.Catch)))
 				return;
 			var consumed = advance().kind;
 			switch consumed {
@@ -1367,7 +1368,22 @@ class Parser {
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		var expression = parseExpression();
+		var bodyStart = position, expression:AstExpression;
+		try {
+			expression = parseExpression();
+			if (recovering && !check(TokenKind.Semicolon) && !check(TokenKind.Catch)
+				&& !check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
+				recordExpected("semicolon or catch");
+				synchronizeStatement(bodyStart, bodyStart, false, true);
+			}
+		}
+		catch (error:CompileError) {
+			if (!recovering)
+				throw error;
+			recordRecoveryDiagnostic(error.diagnostic);
+			synchronizeStatement(bodyStart, bodyStart, false, true);
+			return [ErrorStatement(error.diagnostic.span)];
+		}
 		match(TokenKind.Semicolon);
 		return [Expression(expression, expressionSpan(expression))];
 	}

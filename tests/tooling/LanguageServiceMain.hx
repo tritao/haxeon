@@ -1811,6 +1811,17 @@ class LanguageServiceMain {
 						}
 		if (!foundCallRecoveryMember || !foundRecoveredCall)
 			throw "call argument recovery did not preserve later arguments or statements";
+		var tryRecoveryService = new LanguageService(),
+			tryRecoverySource = "package tryapp; import trytypes.TryValue; function retained():Void { try broken statement; catch (error:Dynamic) { var value:TryValue = new TryValue(); value.";
+		tryRecoveryService.update("trytypes/TryValue.hx", "package trytypes; class TryValue { public var member:Int; }");
+		tryRecoveryService.update("TryRecovery.hx", tryRecoverySource);
+		var tryRecoveryItems = tryRecoveryService.completeResult("TryRecovery.hx", tryRecoverySource.length).items,
+			foundTryRecoveryMember = false;
+		for (item in tryRecoveryItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundTryRecoveryMember = true;
+		if (!foundTryRecoveryMember)
+			throw "try-body recovery consumed its catch handler or later local";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
