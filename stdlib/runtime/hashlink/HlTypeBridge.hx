@@ -8,10 +8,6 @@ import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 /** Small native boundary for handing Haxe-owned type metadata to HashLink. */
 @:hlNative("haxeon_runtime")
 class HlTypeBridge {
-	/** Read the compact HLP summary used by the runtime facade. */
-	public static function inspect_patch(bytes:hl.Bytes, length:Int):Int
-		return -1;
-
 	public static function native_pointer_size():Int
 		return 0;
 

@@ -30,7 +30,6 @@ interface HlRuntimeModuleKernel {
 	function unload(module:HlRuntimeModuleHandle):Bool;
 	function retryFailedRetirements():Int;
 	function failedRetirementCount():Int;
-	function inspectPatch(bytes:hl.Bytes, length:Int):Int;
 }
 
 /** Current HashLink implementation of the narrow runtime-module kernel. */
@@ -96,6 +95,4 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public inline function failedRetirementCount():Int
 		return HlTypeBridge.native_runtime_failed_retirement_count();
 
-	public inline function inspectPatch(bytes:hl.Bytes, length:Int):Int
-		return HlTypeBridge.inspect_patch(bytes, length);
 }

@@ -6,6 +6,7 @@ import compiler.hl.HlPatchPolicy;
 import compiler.hl.HlRuntimeCallPolicy;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+import compiler.hl.patch.HlPatchReader;
 #if haxeon
 import runtime.hashlink.HlRuntimeModuleKernel;
 #end
@@ -45,13 +46,20 @@ class Runtime {
 
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		#if haxeon
-		var summary = haxeRuntimeModuleKernel.inspectPatch(cast bytes.getData(), bytes.length);
+		if (bytes == null)
+			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
+		try {
+			var patch = HlPatchReader.decode(bytes);
+			return {baseRevision: patch.baseRevision, revision: patch.revision, functionCount: patch.functions.length};
+		} catch (error:Dynamic) {
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'HashLink rejected the HLP bytes: ${Std.string(error)}');
+		}
 		#else
 		var summary = RuntimeKernel.inspect_patch(bytes.getData(), bytes.length);
-		#end
 		if (summary < 0)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
 		return {baseRevision: summary >>> 22, revision: (summary >>> 12) & 0x3FF, functionCount: summary & 0xFFF};
+		#end
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
