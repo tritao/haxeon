@@ -102,6 +102,13 @@ snapshots remain non-owning. The generation releases its handle only after the
 runtime wrapper has retired, so policy owns code lifetime without exposing
 executable addresses.
 
+`HlRuntimeJitBackend` now isolates the corresponding Haxe-built path. `HlRuntimeModule`
+retains module loading, stable calls, and unload policy, while patch publication,
+Haxe-metadata staging, code-handle release, and code-revision queries flow through
+the injectable backend. `NativeHlRuntimeJitBackend` is the current HashLink
+adapter; alternative backends can exercise or replace the executable-code
+mechanism without changing Haxe-owned patch policy or generation ownership.
+
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last
 published it and records a generation in a Haxe-owned retirement list once all

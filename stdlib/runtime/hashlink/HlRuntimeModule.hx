@@ -7,15 +7,20 @@ import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
+	public static var defaultJitBackend(default, null):HlRuntimeJitBackend = new NativeHlRuntimeJitBackend();
+
 	public final metadata:HlMetadataGeneration;
 	final lease:HlMetadataLease;
+	final jitBackend:HlRuntimeJitBackend;
 	var module:Null<hl.Abstract<"realtime_module">>;
 
-	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int) {
+	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
+		?jitBackend:HlRuntimeJitBackend) {
 		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
-			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1)
+			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1 || jitBackend == null && defaultJitBackend == null)
 			throw "HashLink runtime module requires metadata, HLB bytes, and a decoded HLI manifest";
 		this.metadata = metadata;
+		this.jitBackend = jitBackend == null ? defaultJitBackend : jitBackend;
 		lease = metadata.acquire();
 		module = null;
 		try {
@@ -60,7 +65,7 @@ class HlRuntimeModule {
 	public function patch(bytes:Bytes):Int {
 		if (!isLoaded() || bytes == null)
 			throw "HashLink external runtime patch requires a loaded module and patch bytes";
-		return HlTypeBridge.native_runtime_module_patch(module, bytes, bytes.length);
+		return jitBackend.patch(cast module, bytes);
 	}
 
 	/** Inject one native patch-staging failure for external rollback tests. */
@@ -89,28 +94,20 @@ class HlRuntimeModule {
 		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication {
 		if (!isLoaded() || input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull())
 			throw "HashLink external runtime patch requires a loaded module, decoded patch input, type count, function metadata, scalar pools, and debug metadata";
-		var status = haxe.io.Bytes.alloc(4),
-			code = HlTypeBridge.native_runtime_module_patch_code_haxe_metadata(module, input, typeCount, functions.pointer, functions.count,
-				pools, debug, cast status.getData()),
-			result = status.getInt32(0);
-		return new HlRuntimePatchPublication(result, code);
+		return jitBackend.patchCodeWithHaxeMetadata(cast module, input, typeCount, functions, pools, debug);
 	}
 
 	function patchCodeInternal(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
-		var status = haxe.io.Bytes.alloc(4),
-			code = typeCount < 0 ? HlTypeBridge.native_runtime_module_patch_code(module, bytes, bytes.length, cast status.getData())
-				: HlTypeBridge.native_runtime_module_patch_code_haxe_types(module, bytes, bytes.length, typeCount, cast status.getData()),
-			result = status.getInt32(0);
-		return new HlRuntimePatchPublication(result, code);
+		return typeCount < 0 ? jitBackend.patchCode(cast module, bytes) : jitBackend.patchCodeWithHaxeTypes(cast module, bytes, typeCount);
 	}
 
 	/** Release one externally retained patch-code allocation. */
 	public function releaseCode(code:Null<hl.Abstract<"realtime_jit_code">>):Bool
-		return code == null || HlTypeBridge.native_runtime_module_release_code(code);
+		return jitBackend.releaseCode(cast code);
 
 	/** Read the immutable revision carried by one retained patch-code allocation. */
 	public function codeRevision(code:Null<hl.Abstract<"realtime_jit_code">>):Int
-		return code == null ? -1 : HlTypeBridge.native_runtime_module_code_revision(code);
+		return jitBackend.codeRevision(cast code);
 
 	/** Retire the wrapper, preserving the metadata lease if native borrowers block it. */
 	public function unload():Bool {

@@ -6,7 +6,7 @@ class HlRuntimePatchCode {
 	public final revision:Int;
 
 	final module:HlRuntimeModule;
-	var code:Null<hl.Abstract<"realtime_jit_code">>;
+	var code:Null<HlRuntimeJitCodeHandle>;
 	var released:Bool = false;
 
 	public function new(module:HlRuntimeModule, publication:HlRuntimePatchPublication) {
