@@ -12,6 +12,7 @@ import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.TypedAst.TypedStatement;
 
 class ParserRecoveryMain {
 	static function main():Void {
@@ -1152,6 +1153,27 @@ class ParserRecoveryMain {
 				}
 			default:
 				throw "a non-callable closure expression collapsed its outer member expression";
+		}
+
+		var implicitFieldCallSource = new SourceFile("TolerantImplicitFieldCall.hx",
+			"class Holder { public var callback:Int; public function run():Void { callback(); var after:Int = 1; } } function main():Void return;");
+		var implicitFieldCallProgram = new Parser(new Lexer(implicitFieldCallSource).tokenize()).parseProgramRecovering().program,
+			implicitFieldCallTyped = Typer.typeRecovered(implicitFieldCallProgram),
+			implicitFieldCallBody:Array<TypedStatement> = null;
+		if (implicitFieldCallTyped != null)
+			for (fn in implicitFieldCallTyped.functions)
+				if (fn.name == "Holder.run")
+					implicitFieldCallBody = fn.statements;
+		if (implicitFieldCallBody == null || implicitFieldCallBody.length != 2)
+			throw "a non-callable implicit field discarded the surrounding declaration";
+		switch implicitFieldCallBody[0] {
+			case TExpression(expression, _) if (expression.type == TUnknown):
+				switch expression.expression {
+					case TClosureCall(callee, arguments) if (callee.type == TInt && arguments.length == 0):
+					default: throw "a non-callable implicit field did not preserve its call shape";
+				}
+			default:
+				throw "a non-callable implicit field did not remain an expression statement";
 		}
 
 		var postErrorService = new LanguageService(),

@@ -163,10 +163,13 @@ class CallResolver {
 			if (fieldCall != null)
 				return fieldCall;
 			return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName, contextualGenericArguments);
-		} catch (error:CompileError) {
-			if (!session.tolerant)
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError) || !session.tolerant)
 				throw error;
-			session.rememberRecoveryDiagnostic(error.diagnostic);
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			else
+				session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered method call", span));
 			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
 		}
 	}
@@ -494,8 +497,10 @@ class CallResolver {
 				};
 				new TypedExpression(TClosureCall(typeCallableField(receiver, name, span), typed), result, span);
 			default:
-				fail("E1007", 'Cannot call non-function field "$name"', span);
-				null;
+				if (!session.tolerant)
+					fail("E1007", 'Cannot call non-function field "$name"', span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1007", 'Cannot call non-function field "$name"', span));
+				new TypedExpression(TClosureCall(typeCallableField(receiver, name, span), recoveredCallArguments(arguments, scope, name)), TUnknown, span);
 		};
 	}
 
@@ -520,8 +525,10 @@ class CallResolver {
 				};
 				new TypedExpression(TClosureCall(fieldCallable, typed), result, span);
 			default:
-				fail("E1007", 'Cannot call non-function field "$name"', span);
-				null;
+				if (!session.tolerant)
+					fail("E1007", 'Cannot call non-function field "$name"', span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1007", 'Cannot call non-function field "$name"', span));
+				new TypedExpression(TClosureCall(fieldCallable, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
 		};
 	}
 
