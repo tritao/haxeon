@@ -42,15 +42,15 @@ class SemanticIndexQueryState {
 	final typeParameterIds:Map<String, SemanticSymbolId>;
 	/**
 		Temporary compatibility boundary for recovery queries whose algorithms
-		still share traversal helpers with the builder. This builder is frozen and
-		is never exposed to callers or used for construction after publication.
+		still share traversal helpers with the builder. The builder is hidden by
+		SemanticIndexRecoveryQuery and is never exposed to callers after publication.
 	*/
-	final recoveryQuery:SemanticIndexBuilder;
+	final recoveryQuery:SemanticIndexRecoveryQuery;
 
 	private function new(builder:SemanticIndexBuilder) {
 		if (!builder.isFrozen)
 			throw "Semantic query state requires a frozen recovery query";
-		recoveryQuery = builder;
+		recoveryQuery = new SemanticIndexRecoveryQuery(builder);
 		revision = builder.revision;
 		indexingMs = builder.indexingMs;
 		symbols = builder.symbols.copy();

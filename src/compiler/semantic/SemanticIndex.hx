@@ -1816,6 +1816,8 @@ class SemanticIndexBuilder {
 	}
 
 	function recordUnresolved(name:String, span:SourceSpan):Void {
+		if (frozen)
+			return;
 		if (name.length == 0)
 			return;
 		for (existing in unresolved) {
@@ -2862,6 +2864,8 @@ class SemanticIndexBuilder {
 	}
 
 	function addCall(callee:Null<SemanticSymbolId>, expression:SourceSpan, name:String):Void {
+		if (frozen)
+			return;
 		if (currentCaller == null || callee == null)
 			return;
 		var token = referenceToken(tokens, expression, sourceName(name));
@@ -2913,6 +2917,8 @@ class SemanticIndexBuilder {
 	}
 
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
+		if (frozen)
+			return;
 		span = currentSpan(span);
 		checkpoint();
 		var locations = references.get(id);
@@ -2930,6 +2936,8 @@ class SemanticIndexBuilder {
 	}
 
 	inline function checkpoint():Void {
+		if (frozen)
+			return;
 		checkpointCount++;
 		if ((checkpointCount & 127) == 0 && cancellation != null)
 			cancellation.check();
@@ -3128,6 +3136,8 @@ class SemanticIndexBuilder {
 	}
 
 	function recordResolvedReference(target:String, targetId:SemanticSymbolId):Void {
+		if (frozen)
+			return;
 		if (currentCallerName == null)
 			return;
 		for (edge in resolvedReferences)
