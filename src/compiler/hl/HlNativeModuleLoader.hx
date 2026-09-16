@@ -188,7 +188,8 @@ class HlLoadedRuntimeModule {
 			typeAppend = HlNativeMetadataBuilder.preparePatchTypes(module, metadata, model),
 			publication:HlRuntimePatchPublication;
 		try {
-			publication = nativeModule.patchCodeWithHaxeTypes(bytes, model.types.length);
+			var patchFunctions = HlNativeMetadataBuilder.preparePatchFunctions(metadata, model);
+			publication = nativeModule.patchCodeWithHaxeMetadata(bytes, model.types.length, patchFunctions);
 		} catch (error:Dynamic) {
 			typeAppend.rollback();
 			throw error;

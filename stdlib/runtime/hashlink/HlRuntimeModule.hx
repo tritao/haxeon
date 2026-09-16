@@ -75,6 +75,17 @@ class HlRuntimeModule {
 		return patchCodeInternal(bytes, typeCount);
 	}
 
+	/** Apply a patch while using Haxe-owned type and function metadata. */
+	public function patchCodeWithHaxeMetadata(bytes:Bytes, typeCount:Int, functions:HlRuntimePatchFunctions):HlRuntimePatchPublication {
+		if (!isLoaded() || bytes == null || typeCount < 0 || functions == null)
+			throw "HashLink external runtime patch requires a loaded module, patch bytes, type count, and function metadata";
+		var status = haxe.io.Bytes.alloc(4),
+			code = HlTypeBridge.native_runtime_module_patch_code_haxe_metadata(module, bytes, bytes.length, typeCount, functions.pointer, functions.count,
+				cast status.getData()),
+			result = status.getInt32(0);
+		return new HlRuntimePatchPublication(result, code);
+	}
+
 	function patchCodeInternal(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
 		var status = haxe.io.Bytes.alloc(4),
 			code = typeCount < 0 ? HlTypeBridge.native_runtime_module_patch_code(module, bytes, bytes.length, cast status.getData())
