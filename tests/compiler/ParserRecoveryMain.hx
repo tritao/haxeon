@@ -1054,6 +1054,30 @@ class ParserRecoveryMain {
 			default: throw "invalid array element did not remain a typed declaration";
 		}
 
+		var inferredCollectionSource = new SourceFile("TolerantInferredCollections.hx",
+			"class Item { public var member:Int; } function main():Void { var values = [missing, new Item()]; var lookup = [missing => null, 1 => new Item()]; var after:Int = 1; }");
+		var inferredCollectionProgram = new Parser(new Lexer(inferredCollectionSource).tokenize()).parseProgramRecovering().program,
+			inferredCollectionTyped = Typer.typeRecovered(inferredCollectionProgram),
+			inferredCollectionMain = inferredCollectionTyped == null ? null : [for (fn in inferredCollectionTyped.functions) if (fn.name == "main") fn][0];
+		if (inferredCollectionMain == null || inferredCollectionMain.statements.length != 3)
+			throw "recovery discarded declarations around malformed inferred collections";
+		switch inferredCollectionMain.statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TArray(TInstance(NominalKind.Class, "Item", _)):
+					default: throw 'a malformed first array element prevented later type inference: ${value.type}';
+				}
+			default: throw "recovered inferred array did not remain a declaration";
+		}
+		switch inferredCollectionMain.statements[1] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TMap(TInt, TNullable(TInstance(NominalKind.Class, "Item", _))):
+					default: throw 'malformed map entries did not refine key/value types: ${value.type}';
+				}
+			default: throw "recovered inferred map did not remain a declaration";
+		}
+
 		var astOnlySource = new SourceFile("TolerantAstOnlyIndex.hx",
 			"function main(text:String):Void { var result = text.indexOf(; var conditional = missing ? 1 : 2; var after:Int = 1; }");
 		var astOnlyProgram = new Parser(new Lexer(astOnlySource).tokenize()).parseProgramRecovering().program,

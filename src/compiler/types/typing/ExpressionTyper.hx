@@ -283,6 +283,15 @@ class ExpressionTyper {
 			if (elementType == null) {
 				resolvedElement = isRecoveryType(typedValue.type) ? TUnknown : typedValue.type;
 				elementType = resolvedElement;
+			} else if (session.tolerant) {
+				// Do not let an incomplete element permanently determine an
+				// inferred collection. A later concrete element can still tell us
+				// what the user is building, while null remains nullable when a
+				// concrete element arrives afterwards.
+				var refined = recoveredCollectionType(elementType, typedValue.type);
+				if (refined != null)
+					elementType = refined;
+				resolvedElement = elementType;
 			} else
 				resolvedElement = elementType;
 			typedValues.push(recoverCoerce(typedValue, resolvedElement, "array element", "E1003"));
@@ -304,12 +313,22 @@ class ExpressionTyper {
 				resolvedValue:CompilerType;
 			if (keyType == null) {
 				resolvedKey = key.type;
-				keyType = resolvedKey;
+				keyType = isRecoveryType(resolvedKey) ? TUnknown : resolvedKey;
+			} else if (session.tolerant) {
+				var refinedKey = recoveredCollectionType(keyType, key.type);
+				if (refinedKey != null)
+					keyType = refinedKey;
+				resolvedKey = keyType;
 			} else
 				resolvedKey = keyType;
 			if (valueType == null) {
 				resolvedValue = value.type;
-				valueType = resolvedValue;
+				valueType = isRecoveryType(resolvedValue) ? TUnknown : resolvedValue;
+			} else if (session.tolerant) {
+				var refinedValue = recoveredCollectionType(valueType, value.type);
+				if (refinedValue != null)
+					valueType = refinedValue;
+				resolvedValue = valueType;
 			} else
 				resolvedValue = valueType;
 			typedEntries.push({key: recoverCoerce(key, resolvedKey, "map key", "E1003"), value: recoverCoerce(value, resolvedValue, "map value", "E1003")});
@@ -326,6 +345,22 @@ class ExpressionTyper {
 			session.rememberRecoveryDiagnostic(new Diagnostic("E1016", "This map key/value type has no compiler-owned runtime ABI", span));
 		}
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
+	}
+
+	/**
+		Refine an inferred collection component without allowing one malformed
+		element to erase information established by the rest of the literal.
+	*/
+	function recoveredCollectionType(current:CompilerType, candidate:CompilerType):Null<CompilerType> {
+		if (!session.tolerant)
+			return current;
+		if (isRecoveryType(current))
+			return isRecoveryType(candidate) ? current : candidate;
+		if (isRecoveryType(candidate))
+			return current;
+		if (current == TNull || candidate == TNull)
+			return commonConditionalType(current, candidate);
+		return current;
 	}
 
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
