@@ -19,12 +19,22 @@ class HlRuntimePatchGeneration {
 			throw "HashLink runtime patch generations require a patch, envelope, and function versions";
 		if (patch.baseRevision != envelope.baseRevision || patch.revision != envelope.revision)
 			throw "HashLink runtime patch generation envelope does not match its patch";
-		this.patch = patch;
-		this.envelope = envelope;
+		this.patch = patch.copy();
+		this.envelope = {
+			moduleId: envelope.moduleId.sub(0, envelope.moduleId.length),
+			baseRevision: envelope.baseRevision,
+			revision: envelope.revision,
+			functionStableIds: envelope.functionStableIds.copy(),
+			relocationStableIds: envelope.relocationStableIds.copy()
+		};
 		this.functions = functions;
 		baseRevision = envelope.baseRevision;
 		revision = envelope.revision;
 		functionStableIds = envelope.functionStableIds.copy();
 		relocationStableIds = envelope.relocationStableIds.copy();
 	}
+
+	/** Return an isolated diagnostic snapshot of this committed generation. */
+	public function snapshot():HlRuntimePatchGeneration
+		return new HlRuntimePatchGeneration(patch, envelope, functions);
 }

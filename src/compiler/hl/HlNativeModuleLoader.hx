@@ -143,11 +143,11 @@ class HlLoadedRuntimeModule {
 
 	/** Return the committed Haxe-owned patch models in revision order. */
 	public function committedPatches():Array<HlPatch>
-		return [for (generation in patchLedger) generation.patch];
+		return [for (generation in patchLedger) generation.patch.copy()];
 
 	/** Return committed patch generations with function versions and dependencies. */
 	public function committedPatchGenerations():Array<HlRuntimePatchGeneration>
-		return patchLedger.copy();
+		return [for (generation in patchLedger) generation.snapshot()];
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
