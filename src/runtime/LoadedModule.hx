@@ -218,6 +218,7 @@ class LoadedModule {
 					dispose(current);
 					handle = null;
 					deferredDispose = null;
+					closeGcHandles();
 				} catch (error:RuntimeError) {
 					if (error.status == RuntimeStatus.RetirementBlocked) {
 						mutex.release();
@@ -244,7 +245,6 @@ class LoadedModule {
 			return true;
 		}
 		closeRequested = true;
-		closeGcHandles();
 		if (borrowers > 0) {
 			deferredDispose = dispose;
 			mutex.release();
@@ -253,6 +253,7 @@ class LoadedModule {
 		try {
 			dispose(current);
 			handle = null;
+			closeGcHandles();
 			mutex.release();
 			return true;
 		} catch (error:RuntimeError) {

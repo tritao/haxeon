@@ -22,13 +22,17 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code_manifest)( vbyte *code, r
 }
 
 HL_PRIM bool HL_NAME(native_runtime_module_unload)( vbyte *module ) {
-	haxeon_gc_handle_detach_owner(module);
-	return module != NULL && hl_runtime_module_release((hl_runtime_module*)module) == HL_RUNTIME_OK;
+	void *owner = module;
+	bool released = module != NULL && hl_runtime_module_release((hl_runtime_module*)module) == HL_RUNTIME_OK;
+	if( released ) haxeon_gc_handle_detach_owner(owner);
+	return released;
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_dispose)( vbyte *module ) {
-	haxeon_gc_handle_detach_owner(module);
-	return hl_runtime_module_release((hl_runtime_module*)module);
+	void *owner = module;
+	int status = hl_runtime_module_release((hl_runtime_module*)module);
+	if( status == HL_RUNTIME_OK ) haxeon_gc_handle_detach_owner(owner);
+	return status;
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_call_i32)( vbyte *module, int stable_id ) {
@@ -364,8 +368,9 @@ HL_PRIM void HL_NAME(set_patch_failure_stage)( hl_runtime_module *runtime, int s
 }
 
 HL_PRIM int HL_NAME(dispose)( hl_runtime_module *runtime ) {
-	haxeon_gc_handle_detach_owner(runtime);
-	return hl_runtime_module_release(runtime);
+	int status = hl_runtime_module_release(runtime);
+	if( status == HL_RUNTIME_OK ) haxeon_gc_handle_detach_owner(runtime);
+	return status;
 }
 
 HL_PRIM int HL_NAME(retry_failed_retirements)() {

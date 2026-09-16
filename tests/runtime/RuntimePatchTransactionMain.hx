@@ -147,13 +147,15 @@ class RuntimePatchTransactionMain {
 			|| Runtime.callInt(loaded, mainId) != 43)
 			throw "Haxeon kernel patch failure injection changed published state";
 		Runtime.dispose(loaded);
-		if (!moduleRoot.isClosed() || moduleRoot.get() != null)
-			throw "runtime module retirement did not close its owned GC handles";
+		if (moduleRoot.isClosed() || cast(moduleRoot.get(), RuntimeGcHandleValue).value != 7)
+			throw "blocked runtime module retirement closed its owned GC handles too early";
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";
 		retained.release();
 		if (Runtime.retryRetirements() != 0)
 			throw "host JIT generation retirement did not drain after releasing its closure";
+		if (!moduleRoot.isClosed() || moduleRoot.get() != null)
+			throw "runtime module retirement did not close its owned GC handles";
 		if (Runtime.pendingRetirementCount != 0)
 			throw "Haxeon module kernel did not drain native retirement state";
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");

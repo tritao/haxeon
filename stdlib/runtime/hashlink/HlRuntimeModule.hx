@@ -117,9 +117,9 @@ class HlRuntimeModule {
 			var current = module;
 			if (current == null)
 				return true;
-			closeGcHandles();
 			if (!kernel.unload(cast current))
 				return false;
+			closeGcHandles();
 			module = null;
 			lease.release();
 			return true;
