@@ -515,41 +515,54 @@ class BodyTyper {
 
 	/** Preserve nested scopes when a compound statement fails before its body is typed. */
 	function recoverCompoundStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>):Null<TypedStatement> {
-		var errorCondition = function(expression:AstExpression):TypedExpression
-			return new TypedExpression(TNullLiteral, TError, expressionSpan(expression));
 		switch statement {
 			case If(predicate, thenBranch, elseBranch, span):
-				return TIf(errorCondition(predicate), typeStatements(thenBranch, new Scope(scope), result),
-					typeStatements(elseBranch, new Scope(scope), result), span);
+				var typedCondition = typeExpression(predicate, scope, null, false),
+					thenScope = recoveredBranchScope(scope, typedCondition, true),
+					elseScope = recoveredBranchScope(scope, typedCondition, false);
+				return TIf(typedCondition, typeStatements(thenBranch, thenScope, result),
+					typeStatements(elseBranch, elseScope, result), span);
 			case While(predicate, body, span):
+				var typedCondition = typeExpression(predicate, scope, null, false);
 				var context = session.currentContext;
 				context.loopEarlyExits[context.loopDepth] = true;
 				context.loopDepth++;
 				var typedBody = typeStatements(body, new Scope(scope), result);
 				context.loopDepth--;
-				return TWhile(errorCondition(predicate), typedBody, span);
+				return TWhile(typedCondition, typedBody, span);
 			case DoWhile(body, predicate, span):
 				var context = session.currentContext;
 				context.loopEarlyExits[context.loopDepth] = false;
 				context.loopDepth++;
-				var typedBody = typeStatements(body, new Scope(scope), result);
+				var bodyScope = new Scope(scope),
+					typedBody = typeStatements(body, bodyScope, result),
+					typedCondition = typeExpression(predicate, bodyScope, null, false);
 				context.loopDepth--;
-				return TDoWhile(typedBody, errorCondition(predicate), span);
-			case ForIn(name, valueName, _, body, span):
-				var loopScope = new Scope(scope);
-				loopScope.define(name, TUnknown, span);
-				bindCell(name, span, loopScope, TUnknown);
+				return TDoWhile(typedBody, typedCondition, span);
+			case ForIn(name, valueName, iterable, body, span):
+				var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false)),
+					originalIterable = typedIterable,
+					element = recoveredForInElement(originalIterable, valueName),
+					loopScope = new Scope(scope);
+				loopScope.define(name, element, span);
+				bindCell(name, span, loopScope, element);
 				if (valueName != null) {
-					loopScope.define(valueName, TUnknown, span);
-					bindCell(valueName, span, loopScope, TUnknown);
+					var value = recoveredForInValue(originalIterable);
+					loopScope.define(valueName, value, span);
+					bindCell(valueName, span, loopScope, value);
 				}
 				var context = session.currentContext;
 				context.loopEarlyExits[context.loopDepth] = true;
 				context.loopDepth++;
 				var typedBody = typeStatements(body, loopScope, result);
 				context.loopDepth--;
+				var loopIterable = switch originalIterable.type {
+					case TMap(_, value) if (valueName == null):
+						new TypedExpression(TCollectionCall(originalIterable, "values", []), TArray(value), span);
+					default: originalIterable;
+				};
 				return TForIn(loopScope.requireId(name), valueName == null ? null : loopScope.requireId(valueName),
-					new TypedExpression(TNullLiteral, TError, span), typedBody, span);
+					loopIterable, typedBody, span);
 			case Try(tryBranch, catches, span):
 				var typedCatches = [],
 					typedTry = typeStatements(tryBranch, new Scope(scope), result);
@@ -588,6 +601,27 @@ class BodyTyper {
 				return null;
 		}
 	}
+
+	function recoveredBranchScope(scope:Scope, condition:TypedExpression, positive:Bool):Scope {
+		return TypeRelations.equals(condition.type, TBool)
+			? FlowAnalysis.narrowedScope(scope, condition, positive)
+			: new Scope(scope);
+	}
+
+	function recoveredForInElement(iterable:TypedExpression, valueName:Null<String>):CompilerType {
+		return switch iterable.type {
+			case TArray(element), TIterator(element): element;
+			case TRange: TInt;
+			case TMap(key, value): valueName == null ? value : key;
+			default: TUnknown;
+		};
+	}
+
+	function recoveredForInValue(iterable:TypedExpression):CompilerType
+		return switch iterable.type {
+			case TMap(_, value): value;
+			default: TUnknown;
+		};
 
 	function typeStatementsStrict(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output = [];

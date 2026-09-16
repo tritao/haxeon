@@ -687,6 +687,61 @@ class ParserRecoveryMain {
 		if (!retainedCompoundLocal)
 			throw "tolerant typing discarded a valid local inside a conditionally malformed branch";
 
+		var recoveredConditionSource = new SourceFile("RecoveredConditionTyping.hx",
+			"class Item { public var member:Int; } function main():Void { var item:Item = new Item(); if (item) { item.member; } }");
+		var recoveredConditionProgram = new Parser(new Lexer(recoveredConditionSource).tokenize()).parseProgramRecovering().program,
+			recoveredConditionTyped = Typer.typeRecovered(recoveredConditionProgram);
+		var retainedConditionType = false,
+			retainedConditionMember = false;
+		if (recoveredConditionTyped != null && recoveredConditionTyped.functions.length == 1)
+			switch recoveredConditionTyped.functions[0].statements[1] {
+				case TIf(condition, thenBranch, _, _):
+					switch condition.type {
+						case TInstance(NominalKind.Class, "Item", _): retainedConditionType = true;
+						default:
+					}
+					for (statement in thenBranch)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+									case TField(_, "member"): retainedConditionMember = true;
+									default:
+								}
+							default:
+						}
+				default:
+			}
+		if (!retainedConditionType || !retainedConditionMember)
+			throw "compound recovery discarded a typed condition or branch expression";
+
+		var recoveredForInSource = new SourceFile("RecoveredForInTyping.hx",
+			"class Item { public var member:Int; } function main(map:Map<Bool, Item>):Void { for (key => value in map) { value.member; } }");
+		var recoveredForInProgram = new Parser(new Lexer(recoveredForInSource).tokenize()).parseProgramRecovering().program,
+			recoveredForInTyped = Typer.typeRecovered(recoveredForInProgram);
+		var retainedForInValue = false,
+			retainedForInMember = false;
+		if (recoveredForInTyped != null && recoveredForInTyped.functions.length == 1)
+			switch recoveredForInTyped.functions[0].statements[0] {
+				case TForIn(_, valueName, iterable, body, _):
+					if (valueName != null)
+						switch iterable.type {
+							case TMap(_, TInstance(NominalKind.Class, "Item", _)): retainedForInValue = true;
+							default:
+						}
+					for (statement in body)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+									case TField(_, "member"): retainedForInMember = true;
+									default:
+								}
+							default:
+						}
+				default:
+			}
+		if (!retainedForInValue || !retainedForInMember)
+			throw "for-in recovery discarded the typed map value or loop body";
+
 		var switchErrorSource = new SourceFile("SwitchErrorTyping.hx",
 			"function main():Void { switch (broken) { case 1: var inside:Int = 1; default: var fallback:Int = 2; } var after:Int = 3; }");
 		var switchErrorProgram = new Parser(new Lexer(switchErrorSource).tokenize()).parseProgramRecovering().program,
