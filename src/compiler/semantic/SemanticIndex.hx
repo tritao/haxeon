@@ -2672,6 +2672,8 @@ class SemanticIndex {
 					}
 				case TSwitch(_, cases, fallback, _, span):
 					for (item in cases) {
+						if (item.subjectBinding != null)
+							addCompletionLocal(item.subjectBinding, item.value.type, item.span, item.span, depth + 1);
 						for (binding in item.bindings)
 							addCompletionLocal(binding.name, binding.type, item.span, item.span, depth + 1);
 						indexCompletionLocals(item.statements, item.span, depth + 1);
@@ -2699,8 +2701,13 @@ class SemanticIndex {
 					for (caught in catches)
 						declareLocals(fn, caught.statements);
 				case TSwitch(_, cases, fallback, _, _):
-					for (item in cases)
+					for (item in cases) {
+						if (item.subjectBinding != null)
+							declareLocal(fn, item.subjectBinding, item.span, item.value.type);
+						for (binding in item.bindings)
+							declareLocal(fn, binding.name, item.span, binding.type);
 						declareLocals(fn, item.statements);
+					}
 					declareLocals(fn, fallback);
 				default:
 			}
@@ -2861,6 +2868,10 @@ class SemanticIndex {
 			case TSwitchExpression(value, cases, fallback):
 				indexExpression(fn, value, resolve, resolveEnumCase);
 				for (item in cases) {
+					if (item.subjectBinding != null)
+						declareLocal(fn, item.subjectBinding, item.span, item.value.type);
+					for (binding in item.bindings)
+						declareLocal(fn, binding.name, item.span, binding.type);
 					bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.value.span);
 					indexExpression(fn, item.value, resolve, resolveEnumCase);
 					if (item.guard != null)

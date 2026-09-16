@@ -657,6 +657,7 @@ class ExpressionTyper {
 			}
 			typedCases.push({
 				value: typedValue,
+				span: switchCase.span,
 				subjectBinding: subjectBinding,
 				arrayPattern: arrayPattern,
 				span: switchCase.span,
@@ -692,6 +693,7 @@ class ExpressionTyper {
 					result = deferred == null ? switchCase.result : typeExpressionCallback(deferred.expression, deferred.scope, resultType, false);
 				{
 					value: switchCase.value,
+					span: switchCase.span,
 					subjectBinding: switchCase.subjectBinding,
 					arrayPattern: switchCase.arrayPattern,
 					span: switchCase.span,

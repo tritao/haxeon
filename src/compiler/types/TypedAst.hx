@@ -129,6 +129,7 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 /** Type-checked, guarded arm of a switch expression. */
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
+	final span:SourceSpan;
 	final subjectBinding:Null<String>;
 	final arrayPattern:Null<TypedSwitchArrayPattern>;
 	final span:SourceSpan;
@@ -569,8 +570,9 @@ class TypedAstTools {
 			case TSwitchExpression(value, cases, defaultExpression):
 				TSwitchExpression(rebaseExpression(value, source, delta),
 					[for (item in cases) {
-						value: rebaseExpression(item.value, source, delta),
-						subjectBinding: item.subjectBinding,
+					value: rebaseExpression(item.value, source, delta),
+					span: rebaseSpan(item.span, source, delta),
+					subjectBinding: item.subjectBinding,
 						isCatchAll: item.isCatchAll,
 						guard: item.guard == null ? null : rebaseExpression(item.guard, source, delta),
 						result: rebaseExpression(item.result, source, delta),

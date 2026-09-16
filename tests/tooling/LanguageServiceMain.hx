@@ -257,6 +257,36 @@ class LanguageServiceMain {
 					foundSuperOwnerReference = true;
 		if (superOwnerId == null || !foundSuperOwnerReference)
 			throw "exact semantic traversal dropped the super-call owner reference";
+		var switchTraversalService = new LanguageService(),
+			switchTraversalSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function main():Int return 0;";
+		switchTraversalService.update("SwitchTraversal.hx", switchTraversalSource);
+		switchTraversalService.compile("SwitchTraversal");
+		var switchTraversalState = switchTraversalService.compiler.modules.get("SwitchTraversal"),
+			switchBindingPosition = switchTraversalSource.indexOf("value", switchTraversalSource.indexOf("case Ok")),
+			switchBindingId = switchTraversalState.semanticModel.index.symbolIdAt(switchBindingPosition + 1),
+			switchBindingLocations = switchBindingId == null ? [] : switchTraversalState.semanticModel.index.locations(switchBindingId),
+			switchUsePosition = switchTraversalSource.indexOf("return value") + "return ".length;
+		var foundSwitchBindingUse = false;
+		for (location in switchBindingLocations)
+			if (location.start <= switchUsePosition && switchUsePosition < location.end)
+				foundSwitchBindingUse = true;
+		if (switchBindingId == null || !foundSwitchBindingUse)
+			throw "exact semantic traversal dropped a switch payload binding reference";
+		var switchExpressionService = new LanguageService(),
+			switchExpressionSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int return switch result { case Ok(value): value; case Err: 0; }; function main():Int return 0;";
+		switchExpressionService.update("SwitchExpressionTraversal.hx", switchExpressionSource);
+		switchExpressionService.compile("SwitchExpressionTraversal");
+		var switchExpressionState = switchExpressionService.compiler.modules.get("SwitchExpressionTraversal"),
+			switchExpressionBindingPosition = switchExpressionSource.indexOf("value", switchExpressionSource.indexOf("case Ok")),
+			switchExpressionBindingId = switchExpressionState.semanticModel.index.symbolIdAt(switchExpressionBindingPosition + 1),
+			switchExpressionUsePosition = switchExpressionSource.indexOf(": value") + 2,
+			switchExpressionLocations = switchExpressionBindingId == null ? [] : switchExpressionState.semanticModel.index.locations(switchExpressionBindingId);
+		var foundSwitchExpressionUse = false;
+		for (location in switchExpressionLocations)
+			if (location.start <= switchExpressionUsePosition && switchExpressionUsePosition < location.end)
+				foundSwitchExpressionUse = true;
+		if (switchExpressionBindingId == null || !foundSwitchExpressionUse)
+			throw "exact semantic traversal dropped a switch expression payload binding reference";
 		var shadowService = new LanguageService(),
 			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
 		shadowService.update("Shadow.hx", shadowSource);
