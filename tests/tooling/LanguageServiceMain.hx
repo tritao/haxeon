@@ -214,6 +214,20 @@ class LanguageServiceMain {
 			|| importedReferences.length != 2
 			|| importedEdits.length != 2)
 			throw "language service imported symbol resolution failed";
+		var receiverPrecisionService = new LanguageService(),
+			receiverPrecisionSource = "class First { public function run():Int return 1; } class Second { public function run():Int return 2; } function main():Int { var first:First = new First(); return first.run(); }";
+		receiverPrecisionService.update("ReceiverPrecision.hx", receiverPrecisionSource);
+		receiverPrecisionService.compile("ReceiverPrecision");
+		var receiverPrecisionPosition = receiverPrecisionSource.indexOf("first.run") + "first.".length,
+			receiverPrecisionDefinition = receiverPrecisionService.definition("ReceiverPrecision.hx", receiverPrecisionPosition),
+			receiverPrecisionReferences = receiverPrecisionService.references("ReceiverPrecision.hx", receiverPrecisionPosition);
+		var firstMethodStart = receiverPrecisionSource.indexOf("run"),
+			secondMethodStart = receiverPrecisionSource.indexOf("run", firstMethodStart + 1);
+		if (receiverPrecisionDefinition == null
+			|| receiverPrecisionDefinition.span.start > firstMethodStart
+			|| receiverPrecisionDefinition.span.start >= secondMethodStart
+			|| receiverPrecisionReferences.length != 2)
+			throw "typed receiver method identity was not used for navigation and references";
 		var importedMemberSource = "package editor; import editor.util.Math; function main():Int { return Math.";
 		importService.update("editor/Main.hx", importedMemberSource);
 		var importedMemberCompletion = importService.completeResult("editor/Main.hx", importedMemberSource.length),

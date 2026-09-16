@@ -2509,7 +2509,11 @@ class SemanticIndex {
 				bindMember(resolve, object.type, name, expression.span);
 				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TMethodCall(object, method, arguments):
-				addCall(bindNamed(resolve, method, expression.span), expression.span, method);
+				var methodName = memberName(method),
+					callee = bindMember(resolve, object.type, methodName, expression.span);
+				if (callee == null && method != methodName)
+					callee = bindNamed(resolve, method, expression.span);
+				addCall(callee, expression.span, methodName);
 				indexExpression(fn, object, resolve, resolveEnumCase);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
@@ -2529,7 +2533,10 @@ class SemanticIndex {
 			case TFunctionRef(name):
 				bindNamed(resolve, name, expression.span);
 			case TMethodRef(object, name):
-				bindNamed(resolve, name, expression.span);
+				var methodName = memberName(name),
+					callee = bindMember(resolve, object.type, methodName, expression.span);
+				if (callee == null && name != methodName)
+					bindNamed(resolve, name, expression.span);
 				indexExpression(fn, object, resolve, resolveEnumCase);
 			case TClassRef(name):
 				bindNamed(resolve, name, expression.span);
@@ -2789,13 +2796,17 @@ class SemanticIndex {
 		return originEnd < 0 ? name.substr(originStart) : name.substring(originStart, originEnd);
 	}
 
-	function bindMember(resolve:String->Null<SemanticSymbolId>, type:CompilerType, name:String, span:SourceSpan):Void {
+	function bindMember(resolve:String->Null<SemanticSymbolId>, type:CompilerType, name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var owner = switch type {
 			case TNullable(element): memberOwner(element);
 			default: memberOwner(type);
 		};
-		if (owner != null)
-			bindNamed(resolve, owner + "." + name, span);
+		return owner == null ? null : bindNamed(resolve, owner + "." + name, span);
+	}
+
+	static function memberName(name:String):String {
+		var separator = name.lastIndexOf(".");
+		return separator < 0 ? name : name.substring(separator + 1);
 	}
 
 	function bindEnumCase(resolve:(String, Int) -> Null<SemanticSymbolId>, enumName:Null<String>, index:Int, span:SourceSpan):Void {
