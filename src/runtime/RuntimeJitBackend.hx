@@ -1,9 +1,5 @@
 package runtime;
 
-#if haxeon
-import runtime.hashlink.HlMetadataGeneration;
-#end
-
 /**
 	Haxe-owned seam for executable-code publication and JIT diagnostics.
 
@@ -11,7 +7,7 @@ import runtime.hashlink.HlMetadataGeneration;
 	function generations, or module lifetime. Those remain in the runtime facade.
  */
 interface RuntimeJitBackend {
-	function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction #if haxeon, metadata:HlMetadataGeneration #end):RuntimeJitPublication;
+	function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeJitPublication;
 	function releaseCode(code:RuntimeJitCodeHandle):Bool;
 	function codeRevision(code:RuntimeJitCodeHandle):Int;
 	function retainedCodeAllocationCount(module:RuntimeModuleHandle):Int;

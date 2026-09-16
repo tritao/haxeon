@@ -1,9 +1,6 @@
 package runtime;
 
 #if haxeon
-import compiler.hl.HlNativeMetadataBuilder;
-import runtime.hashlink.HlMetadataGeneration;
-import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlRuntimeJitBackend;
 import runtime.hashlink.HlRuntimeJitBackend.NativeHlRuntimeJitBackend;
 #end
@@ -20,41 +17,9 @@ class NativeRuntimeJitBackend implements RuntimeJitBackend {
 	public function new() {}
 	#end
 
-	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction
-			#if haxeon, metadata:HlMetadataGeneration #end):RuntimeJitPublication {
+	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeJitPublication {
 		#if haxeon
-		if (metadata == null)
-			return new RuntimeJitPublication(RuntimeStatus.BadArgument, null);
-		var typeAppend:HlMetadataTypeAppend = null;
-		try {
-			typeAppend = HlNativeMetadataBuilder.preparePatchTypes(transaction.owner.model, metadata, transaction.model);
-			var patchPools = HlNativeMetadataBuilder.preparePatchPools(transaction.owner.model, metadata, transaction.model);
-			var patchFunctions = HlNativeMetadataBuilder.preparePatchFunctions(metadata, transaction.model, transaction.owner.identity);
-			var patchDebug = HlNativeMetadataBuilder.preparePatchDebug(metadata, transaction.model);
-			var patchResolution = HlNativeMetadataBuilder.preparePatchResolution(metadata, transaction.model, transaction.owner.identity);
-			var patchInput = HlNativeMetadataBuilder.preparePatchInput(metadata, transaction.model, patchDebug, patchResolution);
-			var publication = haxeBackend.patchCodeWithHaxeMetadata(cast module, patchInput, transaction.model.types.length, patchFunctions, patchPools,
-				patchDebug);
-			if (publication.status != RuntimeStatus.Ok) {
-				typeAppend.rollback();
-				if (publication.code != null)
-					haxeBackend.releaseCode(publication.code);
-				return new RuntimeJitPublication(cast publication.status, null);
-			}
-			try {
-				typeAppend.commit();
-			} catch (error:Dynamic) {
-				if (publication.code != null)
-					haxeBackend.releaseCode(publication.code);
-				typeAppend.rollback();
-				throw error;
-			}
-			return new RuntimeJitPublication(cast publication.status, cast publication.code);
-		} catch (error:Dynamic) {
-			if (typeAppend != null)
-				typeAppend.rollback();
-			throw error;
-		}
+		return HaxeRuntimePatchPublisher.publish(haxeBackend, module, transaction);
 		#else
 		var status = new hl.Bytes(4),
 			code = RuntimeJit.patch_code(module, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length, status),
