@@ -7,7 +7,7 @@ package runtime;
 	function generations, or module lifetime. Those remain in the runtime facade.
  */
 interface RuntimeJitBackend {
-	function applyPatch(module:RuntimeModuleHandle, bytes:hl.Bytes, length:Int):RuntimeStatus;
+	function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeStatus;
 	function retainedCodeAllocationCount(module:RuntimeModuleHandle):Int;
 	function patchCount(module:RuntimeModuleHandle):Int;
 	function location(module:RuntimeModuleHandle, index:Int):hl.Bytes;

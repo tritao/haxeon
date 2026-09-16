@@ -226,7 +226,7 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
-			var result:RuntimeStatus = jitBackend.applyPatch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
+			var result:RuntimeStatus = jitBackend.applyPatch(handle, transaction);
 			if (result == RuntimeStatus.Ok)
 				module.commitPatch(generation);
 			return result;

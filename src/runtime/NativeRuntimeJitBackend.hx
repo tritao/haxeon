@@ -4,8 +4,8 @@ package runtime;
 final class NativeRuntimeJitBackend implements RuntimeJitBackend {
 	public function new() {}
 
-	public inline function applyPatch(module:RuntimeModuleHandle, bytes:hl.Bytes, length:Int):RuntimeStatus
-		return RuntimeJit.patch(module, bytes, length);
+	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeStatus
+		return RuntimeJit.patch(module, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
 
 	public inline function retainedCodeAllocationCount(module:RuntimeModuleHandle):Int
 		return RuntimeJit.allocation_count(module);
