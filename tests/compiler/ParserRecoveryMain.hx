@@ -1037,6 +1037,40 @@ class ParserRecoveryMain {
 		if (conditionalNames.indexOf("value") < 0)
 			throw "recovered indexing discarded a partial typed local in favor of an unknown AST type";
 
+		var compoundConditionalSource = new SourceFile("TolerantCompoundConditional.hx",
+			"class Item { public var value:Int; } function main():Void { var items = broken ? [] : [new Item()]; }"),
+			compoundConditionalProgram = new Parser(new Lexer(compoundConditionalSource).tokenize()).parseProgramRecovering().program,
+			compoundConditionalTyped = Typer.typeRecovered(compoundConditionalProgram);
+		if (compoundConditionalTyped == null || compoundConditionalTyped.functions.length != 1)
+			throw "tolerant typing discarded a conditional with a nested recovery type";
+		switch compoundConditionalTyped.functions[0].statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TArray(TInstance(NominalKind.Class, "Item", _)):
+					default: throw 'nested conditional recovery poisoned its known branch type: ${value.type}';
+				}
+			default: throw "nested conditional recovery did not retain its declaration";
+		}
+
+		var compoundCoercionSource = new SourceFile("TolerantCompoundCoercion.hx",
+			"class Item {} function take(items:Array<Item>):Void return; function main():Void { var items = []; take(items); }");
+		var compoundCoercionProgram = new Parser(new Lexer(compoundCoercionSource).tokenize()).parseProgramRecovering().program,
+			compoundCoercionTyped = Typer.typeRecovered(compoundCoercionProgram);
+		if (compoundCoercionTyped == null || compoundCoercionTyped.functions.length != 2)
+			throw "tolerant typing discarded a call with a nested recovery argument type";
+		switch compoundCoercionTyped.functions[1].statements[1] {
+			case TExpression(expression, _):
+				switch expression.expression {
+					case TCall(_, arguments) if (arguments.length == 1):
+						switch arguments[0].type {
+							case TArray(TInstance(NominalKind.Class, "Item", _)):
+							default: throw 'nested recovery argument was not coerced to its expected type: ${arguments[0].type}';
+						}
+					default: throw "nested recovery call did not retain its argument";
+				}
+			default: throw "nested recovery call did not remain a typed expression";
+		}
+
 		var switchSource = new SourceFile("TolerantSwitch.hx",
 			"function main():Int { var value = switch (broken) { case 1: 1; default: 2; }; return value; }");
 		var switchProgram = new Parser(new Lexer(switchSource).tokenize()).parseProgramRecovering().program,

@@ -1360,9 +1360,9 @@ class SemanticIndex {
 	function recoveredCommonType(left:CompilerType, right:CompilerType):CompilerType {
 		if (TypeRelations.equals(left, right))
 			return left;
-		if (left == TUnknown || left == TError)
+		if (isRecoveryType(left))
 			return right;
-		if (right == TUnknown || right == TError)
+		if (isRecoveryType(right))
 			return left;
 		if ((TypeRelations.equals(left, TInt) && TypeRelations.equals(right, TFloat))
 			|| (TypeRelations.equals(left, TFloat) && TypeRelations.equals(right, TInt)))

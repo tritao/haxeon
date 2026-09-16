@@ -20,7 +20,7 @@ class ConversionResolver {
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
-		if (session.tolerant && (value.type == TUnknown || value.type == TError))
+		if (session.tolerant && TypeRelations.containsRecovery(value.type))
 			return new TypedExpression(value.expression, expected, value.span);
 		switch expected {
 			case TNullable(element) if (value.type != TNull && !isNullable(value.type)):

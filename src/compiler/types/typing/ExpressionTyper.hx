@@ -823,9 +823,9 @@ class ExpressionTyper {
 		if (right == TNever || sameType(left, right))
 			return left;
 		if (session.tolerant) {
-			if (left == TUnknown || left == TError)
+			if (isRecoveryType(left))
 				return right;
-			if (right == TUnknown || right == TError)
+			if (isRecoveryType(right))
 				return left;
 		}
 		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
