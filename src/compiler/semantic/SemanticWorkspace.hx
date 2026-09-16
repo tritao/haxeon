@@ -739,17 +739,47 @@ class SemanticWorkspace {
 		if (program == null)
 			return null;
 		var matches:Array<SemanticSymbolId> = [];
+		var explicitName = false;
 		for (importPath in program.imports)
-			if (editorImportQualifier(program, importPath) == name)
+			if (!isWildcardImport(importPath) && editorImportQualifier(program, importPath) == name) {
+				explicitName = true;
 				addImportedTypeMatches(from, program, importPath, matches, token);
+			}
 		for (alias => importPath in program.importAliases)
-			if (alias == name)
+			if (alias == name) {
+				explicitName = true;
 				addImportedTypeMatches(from, program, importPath, matches, token);
+			}
+		if (!explicitName)
+			for (importPath in program.imports)
+				if (isWildcardImport(importPath))
+					addWildcardTypeMatches(from, program, importPath, name, matches, token);
 		var unique:Array<SemanticSymbolId> = [];
 		for (id in matches)
 			if (unique.indexOf(id) < 0)
 				unique.push(id);
 		return unique.length == 1 ? unique[0] : null;
+	}
+
+	/** Resolve a type imported from all direct modules in a wildcard package. */
+	function addWildcardTypeMatches(from:ModuleState, program:AstProgram, importPath:String, name:String,
+		result:Array<SemanticSymbolId>, ?token:CancellationToken):Void {
+		var packageName = importPath.substring(0, importPath.length - 2);
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state),
+				candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
+			if (model == null || candidatePackage != packageName)
+				continue;
+			for (symbol in model.index.symbols) {
+				if (token != null)
+					token.check();
+				if (isTypeKind(symbol.kind) && symbol.name == name
+					&& editorSymbolVisible(from, symbol.id, program, token))
+					addUniqueIdentity(result, symbol.id);
+			}
+		}
 	}
 
 	function addImportedTypeMatches(from:ModuleState, program:AstProgram, importPath:String,
@@ -761,7 +791,7 @@ class SemanticWorkspace {
 			typeName = target == null || model == null ? null : editorImportedTypeName(target, model, importPath);
 		if (target == null || model == null || typeName == null)
 			return;
-		var id = resolveTypeSymbolId(typeName);
+		var id = editorTypeIdentityByName(typeName, token);
 		if (id != null && editorSymbolVisible(from, id, program, token))
 			result.push(id);
 	}
@@ -818,12 +848,38 @@ class SemanticWorkspace {
 	function editorQualifiedTypeSymbolId(name:String, ?token:CancellationToken):Null<SemanticSymbolId> {
 		if (token != null)
 			token.check();
+		var direct = editorTypeIdentityByName(name, token, false);
+		if (direct != null)
+			return direct;
 		var target = editorImportTarget(name),
 			model = target == null ? null : editorModel(target),
 			typeName = target == null || model == null ? null : editorImportedTypeName(target, model, name);
 		if (target == null || model == null || typeName == null)
 			return null;
-		return resolveTypeSymbolId(typeName);
+		return editorTypeIdentityByName(typeName, token, false);
+	}
+
+	/** Resolve a canonical type name from the current editor-visible models. */
+	function editorTypeIdentityByName(name:String, ?token:CancellationToken, includeShort:Bool = true):Null<SemanticSymbolId> {
+		var matches:Array<SemanticSymbolId> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (symbol in model.index.symbols) {
+				if (token != null)
+					token.check();
+				if (!isTypeKind(symbol.kind))
+					continue;
+				var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".",
+					canonical = packagePrefix + symbol.name;
+				if (canonical == name || includeShort && symbol.name == name)
+					addUniqueIdentity(matches, symbol.id);
+			}
+		}
+		return matches.length == 1 ? matches[0] : null;
 	}
 
 	function editorImportedTypeName(target:ModuleState, model:compiler.semantic.SemanticModel, importPath:String):Null<String> {
@@ -1119,6 +1175,9 @@ class SemanticWorkspace {
 		var separator = name.lastIndexOf(".");
 		return separator < 0 ? name : name.substring(separator + 1);
 	}
+
+	static function isWildcardImport(path:String):Bool
+		return path.length > 2 && StringTools.endsWith(path, ".*");
 
 	static function addImplementation(result:Array<WorkspaceDeclaration>, seen:Map<String, Bool>, state:ModuleState, key:String, span:SourceSpan):Void {
 		var identity = span.file.path + ":" + span.start + ":" + span.end;

@@ -483,6 +483,22 @@ class LanguageServiceMain {
 		var wildcardTypingNames = [for (item in wildcardTypingService.complete("wild/Main.hx", wildcardTypingSource.length)) item.label];
 		if (wildcardTypingNames.indexOf("known") < 0)
 			throw "wildcard-imported recovered type did not retain its member completion";
+		var wildcardNavigationService = new LanguageService();
+		wildcardNavigationService.update("wildnav/lib/Widget.hx",
+			"package wildnav.lib; class Widget { public var known:Int; } function main():Void return;");
+		wildcardNavigationService.analyze("wildnav.lib.Widget");
+		var wildcardNavigationSource =
+			"package wildnav.app; import wildnav.lib.*; function main():Void { var widget:Widget = new Widget(); widget.known; }";
+		wildcardNavigationService.update("wildnav/app/Main.hx", wildcardNavigationSource);
+		var wildcardTypePosition = wildcardNavigationSource.indexOf("Widget"),
+			wildcardMemberPosition = wildcardNavigationSource.lastIndexOf("known") + 1,
+			wildcardTypeDefinition = wildcardNavigationService.definition("wildnav/app/Main.hx", wildcardTypePosition + 1),
+			wildcardMemberDefinition = wildcardNavigationService.definition("wildnav/app/Main.hx", wildcardMemberPosition),
+			wildcardMemberReferences = wildcardNavigationService.references("wildnav/app/Main.hx", wildcardMemberPosition);
+		if (wildcardTypeDefinition == null || wildcardTypeDefinition.path != "wildnav/lib/Widget.hx"
+			|| wildcardMemberDefinition == null || wildcardMemberDefinition.path != "wildnav/lib/Widget.hx"
+			|| wildcardMemberReferences.length != 2)
+			throw 'wildcard-imported navigation did not retain canonical identities: type=${wildcardTypeDefinition == null ? "null" : wildcardTypeDefinition.path}, member=${wildcardMemberDefinition == null ? "null" : wildcardMemberDefinition.path}, references=${wildcardMemberReferences.length}';
 		var secondaryModuleService = new LanguageService(),
 			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
 		secondaryModuleService.update("secondary/types/Container.hx",
