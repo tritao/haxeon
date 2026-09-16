@@ -298,9 +298,17 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP function generation: ${Std.string(error)}');
 			}
+			var generation:RuntimePatchGeneration;
+			try {
+				generation = new RuntimePatchGeneration(decoded, envelope, nextFunctions);
+			} catch (error:RuntimeError) {
+				throw error;
+			} catch (error:Dynamic) {
+				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
+			}
 			var result:RuntimeStatus = RuntimeNative.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
 			if (result == RuntimeStatus.Ok)
-				module.commitPatch(decoded, envelope, nextFunctions);
+				module.commitPatch(generation);
 			return result;
 		});
 		if (status != RuntimeStatus.Ok) {

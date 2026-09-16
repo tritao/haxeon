@@ -1,8 +1,6 @@
 package runtime;
 
 import compiler.hl.HlModule;
-import compiler.hl.patch.HlPatch;
-import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import sys.thread.Mutex;
 
@@ -44,12 +42,14 @@ class LoadedModule {
 
 	/** Advance Haxe-owned state after the native patch has been published. */
 	@:allow(runtime.Runtime)
-	function commitPatch(patchModel:HlPatch, envelope:HlPatchEnvelope, nextFunctions:RuntimeFunctionVersionTable):Void {
-		if (patchModel == null || envelope == null || nextFunctions == null)
-			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state requires a model, envelope, and function versions");
+	function commitPatch(generation:RuntimePatchGeneration):Void {
+		if (generation == null)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state requires a prepared generation");
+		var patchModel = generation.patch,
+			envelope = generation.envelope,
+			nextFunctions = generation.functions;
 		if (envelope.baseRevision != revision || envelope.revision <= revision)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state has an invalid revision transition");
-		var generation = new RuntimePatchGeneration(patchModel, envelope, nextFunctions);
 		for (value in patchModel.ints)
 			model.code.ints.push(value);
 		for (value in patchModel.floats)
