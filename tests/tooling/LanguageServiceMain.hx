@@ -1664,6 +1664,18 @@ class LanguageServiceMain {
 				foundNestedStatementMember = true;
 		if (!foundNestedStatementMember)
 			throw "nested statement recovery consumed a valid declaration after a malformed block statement";
+		var switchStatementService = new LanguageService(),
+		switchStatementSource = "package switchapp; import switchtypes.SwitchValue; function retained():Void { switch (1) { case 1: broken statement; case 2: var value:SwitchValue = new SwitchValue(); value. } }";
+		switchStatementService.update("switchtypes/SwitchValue.hx", "package switchtypes; class SwitchValue { public var member:Int; }");
+		switchStatementService.update("SwitchStatements.hx", switchStatementSource);
+		var switchStatementPosition = switchStatementSource.indexOf("value.") + "value.".length,
+			switchStatementItems = switchStatementService.completeResult("SwitchStatements.hx", switchStatementPosition).items,
+			foundSwitchStatementMember = false;
+		for (item in switchStatementItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundSwitchStatementMember = true;
+		if (!foundSwitchStatementMember)
+			throw "switch statement recovery consumed a valid declaration after a malformed case";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);

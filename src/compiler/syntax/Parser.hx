@@ -526,7 +526,25 @@ class Parser {
 		};
 	}
 
-	function synchronizeStatement(bodyStart:Int, statementStart:Int):Void {
+	function parseSwitchCaseBody():Array<AstStatement> {
+		var statements:Array<AstStatement> = [], bodyStart = position;
+		while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default) && !check(TokenKind.Eof)) {
+			var statementStart = position;
+			try {
+				appendStatements(statements, parseStatements());
+			}
+			catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				statements.push(ErrorStatement(error.diagnostic.span));
+				synchronizeStatement(bodyStart, statementStart, true);
+			}
+		}
+		return statements;
+	}
+
+	function synchronizeStatement(bodyStart:Int, statementStart:Int, stopAtSwitchBoundary:Bool = false):Void {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
 			switch tokens[index].kind {
@@ -540,7 +558,8 @@ class Parser {
 		if (position <= statementStart && !check(TokenKind.Eof))
 			advance();
 		while (!check(TokenKind.Eof)) {
-			if (braceDepth == 0 && check(TokenKind.RightBrace))
+			if (braceDepth == 0 && (check(TokenKind.RightBrace)
+				|| stopAtSwitchBoundary && (check(TokenKind.Case) || check(TokenKind.Default))))
 				return;
 			var consumed = advance().kind;
 			switch consumed {
@@ -1149,9 +1168,7 @@ class Parser {
 					appendExpressions(values, expandPatternAlternatives(parseExpression()));
 				var guard = parseSwitchGuard();
 				consume(TokenKind.Colon);
-				var statements = [];
-				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default) && !check(TokenKind.Eof))
-					appendStatements(statements, parseStatements());
+				var statements = parseSwitchCaseBody();
 				var caseEnd = statements.length == 0 ? expressionSpan(values[values.length - 1]) : statementSpan(statements[statements.length - 1]);
 				for (value in values)
 					cases.push({
@@ -1164,8 +1181,7 @@ class Parser {
 			var defaultBranch = [], hasDefault = match(TokenKind.Default);
 			if (hasDefault) {
 				consume(TokenKind.Colon);
-				while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
-					appendStatements(defaultBranch, parseStatements());
+				defaultBranch = parseSwitchCaseBody();
 			}
 			var end = consume(TokenKind.RightBrace).span;
 			if (match(TokenKind.Semicolon))
