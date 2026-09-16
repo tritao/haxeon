@@ -2,7 +2,7 @@ import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
-import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
+import compiler.modules.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedStatement;

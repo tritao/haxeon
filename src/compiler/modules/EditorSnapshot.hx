@@ -1,9 +1,7 @@
-package compiler.service;
+package compiler.modules;
 
 import compiler.Source.SourceFile;
-import compiler.modules.ModuleState;
-import compiler.modules.AnalysisSnapshot;
-import compiler.modules.EditorWorkspaceView;
+import compiler.modules.AnalysisSnapshot.AnalysisSnapshotKind;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Token;
@@ -32,8 +30,11 @@ typedef EditorSnapshot = {
 class EditorSnapshotTools {
 	public static function select(state:ModuleState):Null<EditorSnapshot> {
 		var snapshot = EditorWorkspaceView.select(state);
-		return snapshot == null ? null : toEditor(snapshot, snapshot.kind == AnalysisSnapshotKind.Exact ? EditorSnapshotConfidence.Exact
-			: snapshot.kind == AnalysisSnapshotKind.Recovered ? EditorSnapshotConfidence.RecoveredPartial : EditorSnapshotConfidence.LastGood);
+		return snapshot == null ? null : toEditor(snapshot, switch snapshot.kind {
+			case AnalysisSnapshotKind.Exact: EditorSnapshotConfidence.Exact;
+			case AnalysisSnapshotKind.Recovered: EditorSnapshotConfidence.RecoveredPartial;
+			case AnalysisSnapshotKind.LastGood: EditorSnapshotConfidence.LastGood;
+		});
 	}
 
 	/** Return the current-source recovery view without applying fallback policy. */
