@@ -1336,6 +1336,18 @@ class LanguageServiceMain {
 				genericAliasValue = item;
 		if (genericAliasValue == null || genericAliasValue.detail != "value:String")
 			throw "recovered generic aliased type did not preserve receiver substitution";
+		var enumAliasService = new LanguageService(),
+			enumAliasSource = "package alias.app; import alias.types.Kind as K; function main():Void { K.Value; }";
+		enumAliasService.update("alias/types/Kind.hx", "package alias.types; enum Kind { Value; } function main():Void return;");
+		enumAliasService.compile("alias.types.Kind");
+		enumAliasService.update("alias/app/EnumAlias.hx", enumAliasSource);
+		var enumAliasPosition = enumAliasSource.indexOf("Value") + 1,
+			enumAliasDefinition = enumAliasService.definition("alias/app/EnumAlias.hx", enumAliasPosition),
+			enumAliasReferences = enumAliasService.references("alias/app/EnumAlias.hx", enumAliasPosition);
+		if (enumAliasDefinition == null
+			|| enumAliasDefinition.path != "alias/types/Kind.hx"
+			|| enumAliasReferences.length < 2)
+			throw "recovered aliased enum case identity was not preserved for navigation";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");
