@@ -65,6 +65,8 @@ class HlLoadedRuntimeModule {
 	public var functions(default, null):HlFunctionVersionTable;
 	public var revision(default, null):Int;
 
+	final patchLedger:Array<HlPatch> = [];
+
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
@@ -139,6 +141,10 @@ class HlLoadedRuntimeModule {
 		new HlRuntimePatchTransaction(this, bytes).commit();
 	}
 
+	/** Return the committed Haxe-owned patch models in revision order. */
+	public function committedPatches():Array<HlPatch>
+		return patchLedger.copy();
+
 	/** Haxeon preflights the decoded HLP model before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
 	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope, ?decodedModel:HlPatch):Void {
@@ -166,6 +172,7 @@ class HlLoadedRuntimeModule {
 		var status = nativeModule.patch(bytes);
 		if (status != 0)
 			throw 'HashLink rejected the Haxe-built runtime patch (status $status)';
+		patchLedger.push(model);
 		functions = nextFunctions;
 		revision = patch.revision;
 	}

@@ -33,7 +33,9 @@ owns a copy of the patch bytes, records the base and target revisions, and
 rejects a foreign module identity before native staging. Both `patch(bytes)`
 and explicit stage/commit callers use this same transaction path. Commit still
 rechecks the live revision, so two transactions staged from one generation
-cannot both publish.
+cannot both publish. A successful commit appends that canonical model to the
+loaded module's Haxe-owned patch ledger; failed and rolled-back transactions
+never enter it.
 
 Native staging then validates module identity, revision and symbol bases,
 prefix hashes, the complete appended-type delta, stable function identity,
