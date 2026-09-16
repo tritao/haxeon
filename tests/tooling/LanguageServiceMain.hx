@@ -1546,6 +1546,14 @@ class LanguageServiceMain {
 		var nominalStaticHover = nominalStaticService.hover("nominal/app/StaticUse.hx", nominalStaticPosition);
 		if (nominalStaticHover != "shared:String")
 			throw 'recovered nominal typing lost the imported type identity during static-member hover: ${nominalStaticHover == null ? "null" : nominalStaticHover}';
+		var nominalStaticReferences = nominalStaticService.references("nominal/b/StaticValue.hx",
+			"package nominal.b; class StaticValue { public static var shared:Int; } function main():Void return;".indexOf("shared") + 1),
+			hasNominalStaticUse = false;
+		for (reference in nominalStaticReferences)
+			if (reference.path == "nominal/app/StaticUse.hx" && reference.span.start == nominalStaticSource.lastIndexOf("shared"))
+				hasNominalStaticUse = true;
+		if (!hasNominalStaticUse)
+			throw "recovered imported static-member references did not retain the authoritative field identity";
 		var inheritedStaticService = new LanguageService(),
 			inheritedStaticSource = "class StaticBase { public static function inherited():Int return 1; } class StaticChild extends StaticBase {} function main():Void { StaticChild.";
 		inheritedStaticService.update("InheritedStatic.hx", inheritedStaticSource);
@@ -1934,6 +1942,44 @@ class LanguageServiceMain {
 			throw "recovered typing reused a body after an imported callee changed";
 		if (externalDependencyService.recoveredTypedFunctionReuses <= externalReuseBefore)
 			throw 'cross-module recovery regression did not exercise recovered body reuse: before=$externalReuseBefore after=${externalDependencyService.recoveredTypedFunctionReuses}';
+		var removedDependencyService = new LanguageService(),
+			removedDependencySource = "package removed; function changed():Void { throw 1; }",
+			removedConsumerSource = "package removed.app; import removed.Dependency; function stable():Void { changed(); return; }";
+		removedDependencyService.update("removed/Dependency.hx", removedDependencySource);
+		removedDependencyService.update("removed/Consumer.hx", removedConsumerSource);
+		var removedInitialModel = removedDependencyService.compiler.modules.get("removed.Consumer").recoveredSemanticModel,
+			removedInitialNoReturn = false;
+		if (removedInitialModel != null && removedInitialModel.partialTypedProgram != null)
+			for (fn in removedInitialModel.partialTypedProgram.functions)
+				if (fn.name == "stable")
+					for (statement in fn.statements)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+									case TNoReturn(_): removedInitialNoReturn = true;
+									default:
+								}
+							default:
+						}
+		if (!removedInitialNoReturn)
+			throw "recovered typing did not resolve the removed-dependency baseline";
+		removedDependencyService.update("removed/Dependency.hx", "package removed; function replacement():Void return;");
+		var removedModel = removedDependencyService.compiler.modules.get("removed.Consumer").recoveredSemanticModel,
+			removedStaleNoReturn = false;
+		if (removedModel != null && removedModel.partialTypedProgram != null)
+			for (fn in removedModel.partialTypedProgram.functions)
+				if (fn.name == "stable")
+					for (statement in fn.statements)
+						switch statement {
+							case TExpression(expression, _):
+								switch expression.expression {
+									case TNoReturn(_): removedStaleNoReturn = true;
+									default:
+								}
+							default:
+						}
+		if (removedStaleNoReturn)
+			throw "recovered typing reused stale no-return semantics after an imported function was removed";
 		var contextRecoveryService = new LanguageService(),
 			contextSource = "function stable():Int { return 1; } class Context { public static var value:Int = 1; }";
 		contextRecoveryService.update("ContextRecovery.hx", contextSource);

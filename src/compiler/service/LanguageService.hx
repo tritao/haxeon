@@ -654,6 +654,12 @@ class LanguageService {
 			if (oldFunction == null || !sameRecoveredFunctionSource(oldFunction, currentFunction))
 				result.set(name, true);
 		}
+		// A removed declaration is also a dependency change. Without recording
+		// it, a recovered consumer that still calls the old name can reuse its
+		// previous typed body and retain stale result/no-return semantics.
+		for (name in oldFunctions.keys())
+			if (!currentFunctions.exists(name))
+				result.set(name, true);
 		return result;
 	}
 
