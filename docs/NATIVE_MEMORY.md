@@ -244,7 +244,8 @@ one loaded HashLink module; `WeakRoot.create` registers a weak slot that does
 not retain its target and is cleared after strong marking when the target is
 unreachable. Module teardown closes these handles before native metadata or
 executable storage can be reclaimed. Unowned `GcHandle.create` remains
-process-scoped. Metadata publication uses `Mutex` for serialized policy
+process-scoped. Updating a strong handle uses HashLink's collector-locked root
+write barrier, so replacing a rooted value cannot race a collection. Metadata publication uses `Mutex` for serialized policy
 transitions and lease lifetime; native metadata records still contain no
 implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use
@@ -253,7 +254,7 @@ point-in-time snapshot; consumers that retain native pointers use
 ## Deliberate exclusions
 
 The first foundation does not add general-purpose allocation, ownership or
-borrow checking, pinning, GC write barriers, executable memory,
+borrow checking, pinning, general managed-memory write barriers, executable memory,
 `unsafe {}` syntax, indirect invocation through native function pointers, or
 aggregate by-value calling conventions. The acceptance point is a Haxe-declared,
 GC-free C record whose layout agrees with the ABI classifier, manipulated

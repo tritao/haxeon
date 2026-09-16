@@ -195,6 +195,9 @@ the loaded `hl_module` as that owner, and the runtime reports them separately
 from managed allocations. Process-global runtime roots remain unowned. Removing
 a root removes its ownership record in the same GC-locked operation, so the
 count describes the current root set rather than historical registrations.
+Replacing the value in an existing `GcHandle` uses the collector-locked root
+update barrier; callers do not write the registered slot directly and cannot
+publish a new managed target concurrently with a collection.
 
 `WeakRoot<T>` uses a separate collector registration and never marks its target
 as reachable. HashLink clears the target slot after strong marking when the
