@@ -16,7 +16,7 @@ class PatchSet {
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Patch artifact and changed functions are required");
 		this.baseRevision = baseRevision;
 		this.revision = revision;
-		this.bytes = bytes;
+		this.bytes = bytes.sub(0, bytes.length);
 		this.changedFunctions = changedFunctions.copy();
 	}
 }

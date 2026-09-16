@@ -13,10 +13,19 @@ class RuntimePatchTransactionMain {
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		compiler.update("Main.hx", "function main():Int { return 42; }");
 		var changed = compiler.compile("Main"),
+			patchByte = changed.patchBytes.get(0),
 			patchSet = new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions),
 			rolledBack = Runtime.stagePatch(loaded, patchSet);
+		changed.patchBytes.set(0, patchByte ^ 0xFF);
+		if (patchSet.bytes.get(0) != patchByte)
+			throw "PatchSet did not take ownership of its patch bytes";
+		changed.patchBytes.set(0, patchByte);
 		if (rolledBack.state != Staged || rolledBack.baseRevision != initial.revision)
 			throw "host patch transaction did not capture its staging revision";
+		if (rolledBack.envelope.baseRevision != initial.revision
+			|| rolledBack.envelope.revision != changed.revision
+			|| rolledBack.envelope.functionStableIds.length != changed.changedFunctions.length)
+			throw "host patch transaction did not retain its publication input";
 		rolledBack.rollback();
 		if (rolledBack.state != RolledBack)
 			throw "host patch transaction did not record rollback";
