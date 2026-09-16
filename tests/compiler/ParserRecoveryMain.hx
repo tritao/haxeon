@@ -453,6 +453,20 @@ class ParserRecoveryMain {
 				throw 'object field did not retain expected Foo type: ${objectContext.expected}';
 		}
 
+		var astOnlyLoopSource = new SourceFile("AstOnlyLoopRecovery.hx",
+			"class Item { public var member:Int; } function main(values:Array<Item>):Void { for (item in values) { item. } }");
+		var astOnlyLoopTokens = new Lexer(astOnlyLoopSource).tokenize(),
+			astOnlyLoopProgram = new Parser(astOnlyLoopTokens).parseProgramRecovering().program,
+			astOnlyLoopModel = new SemanticModel(astOnlyLoopProgram, astOnlyLoopSource, 1, astOnlyLoopTokens);
+		astOnlyLoopModel.index.indexRecoveredSyntax(astOnlyLoopProgram);
+		var astOnlyLoopPosition = astOnlyLoopSource.text.indexOf("item. }") + "item.".length,
+			astOnlyLoopContext = astOnlyLoopModel.index.completionContext(astOnlyLoopPosition, "item");
+		switch astOnlyLoopContext.receiver {
+			case TInstance(NominalKind.Class, "Item", _):
+			default:
+				throw 'AST-only recovered loop lost its element type: ${astOnlyLoopContext.receiver}';
+		}
+
 		var patternService = new LanguageService(),
 			patternSource = "enum Choice { One; Two(value:Int); } function main():Void { var choice:Choice = One; switch (choice) { case ";
 		patternService.update("ExpectedPattern.hx", patternSource);

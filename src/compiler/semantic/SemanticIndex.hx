@@ -804,7 +804,14 @@ class SemanticIndex {
 				case If(_, yes, no, span):
 					indexRecoveredStatements(functionKey, yes, span, depth + 1);
 					indexRecoveredStatements(functionKey, no, span, depth + 1);
-				case While(_, body, span), DoWhile(body, _, span), ForIn(_, _, _, body, span):
+				case While(_, body, span), DoWhile(body, _, span):
+					indexRecoveredStatements(functionKey, body, span, depth + 1);
+				case ForIn(name, valueName, iterable, body, span):
+					var iterableType = recoveredExpressionType(iterable),
+						keyType = recoveredForInKeyType(iterableType, valueName);
+					addRecoveredLocal(functionKey, name, keyType, span, span, depth + 1);
+					if (valueName != null)
+						addRecoveredLocal(functionKey, valueName, recoveredForInValueType(iterableType), span, span, depth + 1);
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
 				case Try(body, catches, span):
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
@@ -1694,6 +1701,22 @@ class SemanticIndex {
 		return TUnknown;
 	}
 
+	function recoveredForInKeyType(type:CompilerType, valueName:Null<String>):CompilerType
+		return switch type {
+			case TArray(element), TIterator(element): element;
+			case TRange: TInt;
+			case TMap(key, value): valueName == null ? value : key;
+			case TNullable(element): recoveredForInKeyType(element, valueName);
+			default: TUnknown;
+		};
+
+	function recoveredForInValueType(type:CompilerType):CompilerType
+		return switch type {
+			case TMap(_, value): value;
+			case TNullable(element): recoveredForInValueType(element);
+			default: TUnknown;
+		};
+
 	function indexRecoveredCallArguments(arguments:Array<AstExpression>, fn:Null<AstFunction>, ?substitutions:Map<String, CompilerType>,
 			?explicitExpected:Array<CompilerType>, ?functionKey:String, ?resultExpected:CompilerType):Void {
 		var inferredSubstitutions:Map<String, CompilerType> = [];
@@ -2361,18 +2384,10 @@ class SemanticIndex {
 				case TWhile(_, body, span), TDoWhile(body, _, span):
 					indexCompletionLocals(body, span, depth + 1);
 				case TForIn(name, valueName, iterable, body, span):
-					var keyType = switch iterable.type {
-						case TArray(element), TIterator(element): element;
-						case TRange: TInt;
-						case TMap(element, _): element;
-						default: TUnknown;
-					};
+					var keyType = recoveredForInKeyType(iterable.type, valueName);
 					addCompletionLocal(name, keyType, span, span, depth + 1);
 					if (valueName != null) {
-						var valueType = switch iterable.type {
-							case TMap(_, value): value;
-							default: TUnknown;
-						};
+						var valueType = recoveredForInValueType(iterable.type);
 						addCompletionLocal(valueName, valueType, span, span, depth + 1);
 					}
 					indexCompletionLocals(body, span, depth + 1);
