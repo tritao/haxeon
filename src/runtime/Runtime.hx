@@ -29,9 +29,7 @@ class Runtime {
 	static final retirementMutex = new Mutex();
 	static final jitBackend = new NativeRuntimeJitBackend();
 	static final jitGenerationModules:Array<LoadedModule> = [];
-	static final jitGenerationRevisions:Array<Array<Int>> = [];
-	static final jitGenerationStates:Array<Array<Int>> = [];
-	static final jitGenerationHandles:Array<Array<RuntimeJitCodeHandle>> = [];
+	static final jitGenerations:Array<Array<RuntimeJitGeneration>> = [];
 	#if haxeon
 	static final metadataModules:Array<LoadedModule> = [];
 	static final metadataGenerations:Array<HlMetadataGeneration> = [];
@@ -175,17 +173,17 @@ class Runtime {
 	/** Return the Haxe-side lifecycle code for one live JIT generation record. */
 	public static function jitGenerationState(module:LoadedModule, index:Int):Int {
 		var ledger = jitGenerationLedger(module);
-		if (ledger == null || index < 0 || index >= ledger.states.length)
+		if (ledger == null || index < 0 || index >= ledger.length)
 			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
-		return ledger.states[index];
+		return ledger[index].state;
 	}
 
 	/** Return the native revision held by one Haxe-owned JIT generation record. */
 	public static function jitGenerationRevision(module:LoadedModule, index:Int):Int {
 		var ledger = jitGenerationLedger(module);
-		if (ledger == null || index < 0 || index >= ledger.handles.length)
+		if (ledger == null || index < 0 || index >= ledger.length)
 			throw new RuntimeError(RuntimeStatus.BadArgument, 'Runtime JIT generation index $index is unavailable');
-		return jitBackend.codeRevision(ledger.handles[index]);
+		return ledger[index].codeRevision();
 	}
 
 	public static function metadataTypeCount(module:LoadedModule):Int
@@ -369,27 +367,19 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFunction, 'Invalid runtime function call (stable ID $stableIndex)');
 	}
 
-	static function jitGenerationLedger(module:LoadedModule):Null<{revisions:Array<Int>, states:Array<Int>, handles:Array<RuntimeJitCodeHandle>}> {
+	static function jitGenerationLedger(module:LoadedModule):Null<Array<RuntimeJitGeneration>> {
 		var index = jitGenerationModules.indexOf(module);
-		return index < 0 ? null : {
-			revisions: jitGenerationRevisions[index],
-			states: jitGenerationStates[index],
-			handles: jitGenerationHandles[index]
-		};
+		return index < 0 ? null : jitGenerations[index];
 	}
 
 	static function recordJitPublication(module:LoadedModule, revision:Int, handle:RuntimeJitCodeHandle):Void {
 		var index = jitGenerationModules.indexOf(module);
 		if (index < 0) {
 			jitGenerationModules.push(module);
-			jitGenerationRevisions.push([]);
-			jitGenerationStates.push([]);
-			jitGenerationHandles.push([]);
+			jitGenerations.push([]);
 			index = jitGenerationModules.length - 1;
 		}
-		jitGenerationRevisions[index].push(revision);
-		jitGenerationStates[index].push(JitGenerationPublished);
-		jitGenerationHandles[index].push(handle);
+		jitGenerations[index].push(new RuntimeJitGeneration(jitBackend, revision, handle, JitGenerationPublished));
 	}
 
 	#if haxeon
@@ -412,20 +402,18 @@ class Runtime {
 		var index = jitGenerationModules.indexOf(module);
 		if (index < 0)
 			return;
-		var states = jitGenerationStates[index];
-		for (generation in 0...states.length)
-			states[generation] = JitGenerationRetiring;
+		for (generation in jitGenerations[index])
+			generation.markRetiring(JitGenerationRetiring);
 	}
 
 	static function finishJitRetirement(module:LoadedModule):Void {
 		var index = jitGenerationModules.indexOf(module);
 		if (index < 0)
 			return;
-		for (handle in jitGenerationHandles[index])
-			jitBackend.releaseCode(handle);
+		for (generation in jitGenerations[index])
+			if (!generation.release())
+				throw new RuntimeError(RuntimeStatus.RetirementBlocked, "Runtime JIT generation release failed");
 		jitGenerationModules.splice(index, 1);
-		jitGenerationRevisions.splice(index, 1);
-		jitGenerationStates.splice(index, 1);
-		jitGenerationHandles.splice(index, 1);
+		jitGenerations.splice(index, 1);
 	}
 }
