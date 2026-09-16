@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.memory.GcHandle;
 
 /** Owns one initialized native HashLink module and its metadata lease. */
 class HlNativeModule {
@@ -12,6 +13,7 @@ class HlNativeModule {
 	public final metadata:HlMetadataGeneration;
 	public final publication:HlMetadataPublication;
 	final lease:HlMetadataLease;
+	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:RawPtr<UInt8>;
 
 	public function new(metadata:HlMetadataGeneration, ?flags:Int = 0) {
@@ -56,6 +58,15 @@ class HlNativeModule {
 		return HlTypeBridge.native_metadata_module_call_i32(module, functionIndex);
 	}
 
+	/** Create a managed root whose lifetime is bounded by this native module. */
+	public function createGcHandle<T>(value:T):GcHandle<T> {
+		if (!isLoaded())
+			throw "HashLink native module is no longer loaded";
+		var result:GcHandle<T> = GcHandle.createOwnedRaw(value, module);
+		gcHandles.push(cast result);
+		return result;
+	}
+
 	/** Redirect this patchable module to the compatible function generation. */
 	public function patchGeneration(generation:HlNativeModule):Bool {
 		if (!isLoaded() || generation == null || !generation.isLoaded())
@@ -90,9 +101,16 @@ class HlNativeModule {
 			return true;
 		if (!HlTypeBridge.native_metadata_module_unload(module))
 			return false;
+		closeGcHandles();
 		module = RawPtr.nullPtr();
 		lease.release();
 		return true;
+	}
+
+	function closeGcHandles():Void {
+		for (handle in gcHandles)
+			handle.close();
+		gcHandles.resize(0);
 	}
 
 	/** Require native retirement and report a live-allocation failure to the caller. */

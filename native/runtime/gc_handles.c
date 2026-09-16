@@ -74,6 +74,10 @@ HL_PRIM haxeon_gc_handle *HL_NAME(native_gc_handle_create_owned)( vdynamic *valu
 	return haxeon_gc_handle_create(value,owner);
 }
 
+HL_PRIM haxeon_gc_handle *HL_NAME(native_gc_handle_create_owned_raw)( vdynamic *value, vbyte *owner ) {
+	return haxeon_gc_handle_create(value,owner);
+}
+
 HL_PRIM vdynamic *HL_NAME(native_gc_handle_get)( haxeon_gc_handle *handle ) {
 	if( handle == NULL || handle->closed ) return NULL;
 	return handle->value;

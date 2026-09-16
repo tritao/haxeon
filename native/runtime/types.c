@@ -28,8 +28,11 @@ HL_PRIM bool HL_NAME(native_metadata_module_init)( vbyte *module, int flags ) {
 }
 
 HL_PRIM bool HL_NAME(native_metadata_module_unload)( vbyte *module ) {
+	bool unloaded;
 	if( module == NULL ) return false;
-	return hl_module_unload((hl_module*)module) != 0;
+	unloaded = hl_module_unload((hl_module*)module) != 0;
+	if( unloaded ) haxeon_gc_handle_detach_owner(module);
+	return unloaded;
 }
 
 HL_PRIM bool HL_NAME(native_metadata_module_patch_generation)( vbyte *target, vbyte *generation ) {
@@ -45,7 +48,10 @@ HL_PRIM bool HL_NAME(native_metadata_module_patch_slots)( vbyte *target, vbyte *
 }
 
 HL_PRIM void HL_NAME(native_metadata_module_free_shutdown)( vbyte *module ) {
-	if( module != NULL ) hl_module_free_shutdown((hl_module*)module);
+	if( module != NULL ) {
+		haxeon_gc_handle_detach_owner(module);
+		hl_module_free_shutdown((hl_module*)module);
+	}
 }
 
 HL_PRIM int HL_NAME(native_metadata_module_call_i32)( vbyte *module, int findex ) {
