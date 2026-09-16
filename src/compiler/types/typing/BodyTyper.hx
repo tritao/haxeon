@@ -317,7 +317,7 @@ class BodyTyper {
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
 		for (argument in fn.arguments) {
-			var type = argumentType(argument);
+			var type = argumentType(argument, substitutions);
 			scope.define(argument.name, type, argument.span);
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
@@ -1490,8 +1490,11 @@ class BodyTyper {
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
 			var method = requiredMapValue(session.signatures, getter);
-			return new TypedExpression(TMethodCall(typedObject, getter, []),
-				session.declarations.resolve(method.result, method.span, nominalSubstitutions(typedObject.type)), span);
+			var substitutions = nominalSubstitutions(typedObject.type),
+				semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
+				physicalResult = isGenericNominal(typedObject.type) ? TDynamic : semanticResult,
+				call = new TypedExpression(TMethodCall(typedObject, getter, []), physicalResult, span);
+			return abiBoundaryCast(call, semanticResult);
 		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;

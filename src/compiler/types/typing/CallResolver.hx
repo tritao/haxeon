@@ -348,13 +348,18 @@ class CallResolver {
 			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, false, preset, receiver);
 		}
 		// Generic class bodies are emitted with erased owner parameters. Keep
-		// that physical result only when the method result actually depends on
-		// an owner parameter; Bool/String/etc. remain their declared ABI types.
-		var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
+		// erased owner parameters at the physical call boundary; parameters and
+		// results independent of the owner remain at their declared ABI types.
+		var semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
+			representationSubstitutions = erasedNominalSubstitutions(methodInfo.owner),
+			physicalArguments = isGenericNominal(methodOwnerType) ? [
+				for (index in 0...semanticArguments.length)
+					abiBoundaryCast(semanticArguments[index], argumentType(method.arguments[index], representationSubstitutions))
+			] : semanticArguments,
 			semanticResult = session.declarations.resolve(method.result, method.span, substitutions),
 			physicalResult = isGenericNominal(methodOwnerType) ? session.declarations.resolve(method.result, method.span,
-				erasedNominalSubstitutions(methodInfo.owner)) : semanticResult,
-			call = new TypedExpression(TMethodCall(receiver, methodKey, typed), physicalResult, span),
+				representationSubstitutions) : semanticResult,
+			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), physicalResult, span),
 			castCall = abiBoundaryCast(call, semanticResult);
 		if (scope != null)
 			scope.invalidateAllExpressions();
@@ -1395,7 +1400,7 @@ class CallResolver {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
 				fail("E1007", 'Unknown class "$typeName"', span);
 			var classDecl = requiredMapValue(session.classDecls, typeName),
-				valueType = session.declarations.resolve(AppliedType(typeName, typeArguments), span),
+				valueType = session.declarations.resolve(AppliedType(typeName, typeArguments), span, session.currentContext.typeSubstitutions),
 				substitutions = nominalSubstitutions(valueType),
 				constructorName = typeName + ".new",
 				hasConstructor = session.signatures.exists(constructorName),
@@ -1405,9 +1410,20 @@ class CallResolver {
 				].length > 0;
 			if (!hasConstructor && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
-			var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, constructorName).arguments,
-				scope, constructorName, span, substitutions) : [];
-			var typed = [for (argument in semanticArguments) abiBoundaryCast(argument, TDynamic)];
+			var constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+				semanticArguments = constructor == null ? [] : typeDeclaredCallArguments(arguments, constructor.arguments, scope, constructorName, span,
+					substitutions),
+				representationSubstitutions:Map<String, CompilerType> = [];
+			for (parameter in classDecl.typeParameters)
+				representationSubstitutions.set(parameter, TDynamic);
+			var representationExpected:Array<CompilerType> = constructor == null ? [] : [
+				for (parameter in constructor.arguments)
+					argumentType(parameter, representationSubstitutions)
+			];
+			var typed = [
+				for (index in 0...semanticArguments.length)
+					abiBoundaryCast(semanticArguments[index], representationExpected[index])
+			];
 			return new TypedExpression(TNew(typeName, typed, hasConstructor || implicitConstructor), valueType, span);
 		}
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName)) || session.interfaceDecls.exists(typeName))

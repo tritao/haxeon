@@ -98,9 +98,31 @@ class LexicalStorageAnalysis {
 				var block = copy(environment);
 				walkStatements(statements, block, writes, captures, exceptions);
 				walkExpression(value, block, writes, captures, exceptions, insideLambda);
+			case And(left, right, _):
+				walkLogicalExpression(left, right, true, environment, writes, captures, exceptions, insideLambda);
+			case Or(left, right, _):
+				walkLogicalExpression(left, right, false, environment, writes, captures, exceptions, insideLambda);
 			default:
 				for (child in compiler.syntax.AstChildren.expressions(expression))
 					walkExpression(child, environment, writes, captures, exceptions, insideLambda);
+		}
+	}
+
+	static function walkLogicalExpression(left:AstExpression, right:AstExpression, and:Bool, environment:Map<String, String>, writes:Map<String, Bool>,
+			captures:Null<Map<String, Bool>>, exceptions:Null<Map<String, Bool>>, insideLambda:Bool):Void {
+		var pending:Array<AstExpression> = [right, left];
+		while (pending.length > 0) {
+			var current:AstExpression = cast pending.pop();
+			switch current {
+				case And(nestedLeft, nestedRight, _) if (and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				case Or(nestedLeft, nestedRight, _) if (!and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				default:
+					walkExpression(current, environment, writes, captures, exceptions, insideLambda);
+			}
 		}
 	}
 

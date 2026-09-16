@@ -1790,26 +1790,48 @@ class IrGenerator {
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var resultName = '$' + 'logical:${left.span.start}:${right.span.end}';
 		localTypes.set(resultName, Bool);
-		var leftValue = lowerExpression(left, builder, localTypes),
-			rightBlock = builder.createBlock(),
-			shortBlock = builder.createBlock();
-		if (and)
-			builder.branch(leftValue, rightBlock, shortBlock);
-		else
-			builder.branch(leftValue, shortBlock, rightBlock);
-		builder.select(rightBlock);
-		var rightValue = lowerExpression(right, builder, localTypes),
-			rightActive = !builder.isTerminated(),
-			rightExit = builder.currentBlock();
-		if (rightActive)
-			builder.store(resultName, rightValue);
+		var operands:Array<TypedExpression> = [],
+			pending:Array<TypedExpression> = [right, left];
+		while (pending.length > 0) {
+			var current:TypedExpression = cast pending.pop();
+			switch current.expression {
+				case TAnd(nestedLeft, nestedRight) if (and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				case TOr(nestedLeft, nestedRight) if (!and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				default:
+					operands.push(current);
+			}
+		}
+		var shortBlock = builder.createBlock(),
+			joinBlock = builder.createBlock(),
+			valueActive = true,
+			valueExit:CfgBlock = builder.currentBlock();
+		for (index in 0...operands.length) {
+			var value = lowerExpression(operands[index], builder, localTypes);
+			valueActive = !builder.isTerminated();
+			valueExit = builder.currentBlock();
+			if (!valueActive)
+				break;
+			if (index == operands.length - 1)
+				builder.store(resultName, value);
+			else {
+				var nextBlock = builder.createBlock();
+				if (and)
+					builder.branch(value, nextBlock, shortBlock);
+				else
+					builder.branch(value, shortBlock, nextBlock);
+				builder.select(nextBlock);
+			}
+		}
+		if (valueActive)
+			builder.jumpFrom(valueExit, joinBlock);
 		builder.select(shortBlock);
 		builder.store(resultName, builder.constBool(and ? false : true));
 		var shortActive = !builder.isTerminated(),
-			shortExit = builder.currentBlock(),
-			joinBlock = builder.createBlock();
-		if (rightActive)
-			builder.jumpFrom(rightExit, joinBlock);
+			shortExit = builder.currentBlock();
 		if (shortActive)
 			builder.jumpFrom(shortExit, joinBlock);
 		builder.select(joinBlock);
