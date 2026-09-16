@@ -5,6 +5,8 @@ import compiler.hl.patch.HlPatchWriter;
 import compiler.Compiler;
 import runtime.PatchSet;
 import runtime.Runtime;
+import runtime.RuntimeError;
+import runtime.RuntimeStatus;
 import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 
 class RuntimePatchTransactionMain {
@@ -26,7 +28,10 @@ class RuntimePatchTransactionMain {
 			|| initialTypeCount != initial.module.types.length
 			|| Runtime.metadataTypeCapacity(loaded) < initialTypeCount
 			|| Runtime.liveAllocationCount(loaded) != initialRetirement.liveManagedAllocations
-			|| Runtime.nativeRootCount(loaded) != initialRetirement.ownedNativeRoots)
+			|| Runtime.nativeRootCount(loaded) != initialRetirement.ownedNativeRoots
+			|| Runtime.retainedCodeAllocationCount(loaded) != 1
+			|| Runtime.patchJitCount(loaded) != 0
+			|| Runtime.debugRegionCount(loaded) != 0)
 			throw "Haxeon module kernel did not expose consistent runtime diagnostics";
 		if (Runtime.callString(loaded, textId) != "haxeon")
 			throw "Haxeon module kernel did not return a stable string";
@@ -75,7 +80,11 @@ class RuntimePatchTransactionMain {
 			|| loaded.committedPatchCount() != 1
 			|| Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationPublished
 			|| Runtime.jitGenerationRevision(loaded, 0) != changed.revision
-			|| Runtime.callInt(loaded, mainId) != 42)
+			|| Runtime.callInt(loaded, mainId) != 42
+			|| Runtime.retainedCodeAllocationCount(loaded) != 2
+			|| Runtime.patchJitCount(loaded) != changed.changedFunctions.length
+			|| Runtime.debugRegionCount(loaded) != 1
+			|| Runtime.jitLocation(loaded, mainId) == null)
 			throw "committed host patch transaction did not publish its generation";
 		var retained = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.callRetainedClosureInt(retained) != 42)
@@ -98,8 +107,26 @@ class RuntimePatchTransactionMain {
 		var appendedPatch = HlPatchWriter.encode(appended.module, decodedAppended.moduleId, changedSlots, stableIdsBySlot, appended.revision - 1,
 			appended.revision, decodedAppended.baseInts, decodedAppended.baseFloats, decodedAppended.baseStrings, initial.module.types.length);
 		Runtime.patchSet(loaded, new PatchSet(changed.revision, appended.revision, appendedPatch, appended.changedFunctions));
-		if (Runtime.metadataTypeCount(loaded) != initialTypeCount + 1 || Runtime.callInt(loaded, mainId) != 43)
+		if (Runtime.metadataTypeCount(loaded) != initialTypeCount + 1
+			|| Runtime.retainedCodeAllocationCount(loaded) != 2
+			|| Runtime.patchJitCount(loaded) != changed.changedFunctions.length + appended.changedFunctions.length
+			|| Runtime.callInt(loaded, mainId) != 43)
 			throw "public Haxeon patch publication did not append its Haxe-owned type metadata";
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return 44; } function make():() -> Int { return main; } function text():String { return \"haxeon\"; } function consume(value:String):Void {} function makeObject():Box { return new Box(42); } function readObject(box:Box):Int { return box.value; }");
+		var failed = compiler.compile("Main");
+		Runtime.injectPatchFailure(loaded, 1);
+		var failureRejected = false;
+		try {
+			Runtime.patchSet(loaded, new PatchSet(appended.revision, failed.revision, failed.patchBytes, failed.changedFunctions));
+		} catch (error:RuntimeError) {
+			failureRejected = error.status == RuntimeStatus.Incompatible;
+		}
+		if (!failureRejected
+			|| loaded.revision != appended.revision
+			|| Runtime.metadataTypeCount(loaded) != initialTypeCount + 1
+			|| Runtime.callInt(loaded, mainId) != 43)
+			throw "Haxeon kernel patch failure injection changed published state";
 		Runtime.dispose(loaded);
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";

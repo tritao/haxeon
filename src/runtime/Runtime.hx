@@ -293,7 +293,11 @@ class Runtime {
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
 		module.access(function(handle) {
+			#if haxeon
+			haxeRuntimeModuleKernel.setPatchFailureStage(cast handle, stage);
+			#else
 			jitBackend.injectPatchFailure(handle, stage);
+			#end
 		});
 
 	public static function dispose(module:LoadedModule):Void {

@@ -157,6 +157,26 @@ class HlTypeBridge {
 
 	/** Read the immutable revision carried by one retained external code allocation. */
 	public static function native_runtime_module_code_revision(code:hl.Abstract<"realtime_jit_code">):Int
-		return -1;
+	return -1;
+
+	/** Read the number of native code allocations retained by an external wrapper. */
+	public static function native_runtime_module_allocation_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Read the number of JIT-compiled patch functions published by an external wrapper. */
+	public static function native_runtime_module_patch_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Resolve one stable function's current native source location. */
+	public static function native_runtime_module_jit_location(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
+		return null;
+
+	/** Read the number of debug regions retained by an external wrapper. */
+	public static function native_runtime_module_debug_region_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Read the number of detached native code allocations awaiting reclamation. */
+	public static function native_runtime_module_retired_allocation_count(module:hl.Abstract<"realtime_module">):Int
+		return 0;
 
 }

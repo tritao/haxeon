@@ -80,20 +80,42 @@ class NativeRuntimeJitBackend implements RuntimeJitBackend {
 		#end
 
 	public inline function retainedCodeAllocationCount(module:RuntimeModuleHandle):Int
+		#if haxeon
+		return haxeBackend.allocationCount(cast module);
+		#else
 		return RuntimeJit.allocation_count(module);
+		#end
 
 	public inline function patchCount(module:RuntimeModuleHandle):Int
+		#if haxeon
+		return haxeBackend.patchCount(cast module);
+		#else
 		return RuntimeJit.patch_jit_count(module);
+		#end
 
 	public inline function location(module:RuntimeModuleHandle, index:Int):hl.Bytes
+		#if haxeon
+		return haxeBackend.location(cast module, index);
+		#else
 		return RuntimeJit.jit_location(module, index);
+		#end
 
 	public inline function debugRegionCount(module:RuntimeModuleHandle):Int
+		#if haxeon
+		return haxeBackend.debugRegionCount(cast module);
+		#else
 		return RuntimeJit.debug_region_count(module);
+		#end
 
 	public inline function retiredCodeAllocationCount(module:RuntimeModuleHandle):Int
+		#if haxeon
+		return haxeBackend.retiredAllocationCount(cast module);
+		#else
 		return RuntimeJit.retired_allocation_count(module);
+		#end
 
+	#if !haxeon
 	public inline function injectPatchFailure(module:RuntimeModuleHandle, stage:Int):Void
 		RuntimeJit.set_patch_failure_stage(module, stage);
+	#end
 }

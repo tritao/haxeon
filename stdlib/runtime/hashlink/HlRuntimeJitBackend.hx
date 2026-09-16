@@ -22,6 +22,11 @@ interface HlRuntimeJitBackend {
 		functions:HlRuntimePatchFunctions, pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication;
 	function releaseCode(code:Null<HlRuntimeJitCodeHandle>):Bool;
 	function codeRevision(code:Null<HlRuntimeJitCodeHandle>):Int;
+	function allocationCount(module:HlRuntimeModuleHandle):Int;
+	function patchCount(module:HlRuntimeModuleHandle):Int;
+	function location(module:HlRuntimeModuleHandle, index:Int):hl.Bytes;
+	function debugRegionCount(module:HlRuntimeModuleHandle):Int;
+	function retiredAllocationCount(module:HlRuntimeModuleHandle):Int;
 }
 
 /** Current HashLink implementation of the narrow Haxe-built JIT seam. */
@@ -59,4 +64,19 @@ class NativeHlRuntimeJitBackend implements HlRuntimeJitBackend {
 
 	public inline function codeRevision(code:Null<HlRuntimeJitCodeHandle>):Int
 		return code == null ? -1 : HlTypeBridge.native_runtime_module_code_revision(code);
+
+	public inline function allocationCount(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_allocation_count(module);
+
+	public inline function patchCount(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_patch_count(module);
+
+	public inline function location(module:HlRuntimeModuleHandle, index:Int):hl.Bytes
+		return HlTypeBridge.native_runtime_module_jit_location(module, index);
+
+	public inline function debugRegionCount(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_debug_region_count(module);
+
+	public inline function retiredAllocationCount(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_retired_allocation_count(module);
 }

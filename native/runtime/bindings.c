@@ -143,6 +143,11 @@ DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code_haxe_t
 DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code_haxe_metadata,_ABSTRACT(realtime_module) _BYTES _I32 _BYTES _I32 _BYTES _BYTES _BYTES);
 DEFINE_PRIM(_BOOL,native_runtime_module_release_code,_ABSTRACT(realtime_jit_code));
 DEFINE_PRIM(_I32,native_runtime_module_code_revision,_ABSTRACT(realtime_jit_code));
+DEFINE_PRIM(_I32,native_runtime_module_allocation_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,native_runtime_module_patch_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_BYTES,native_runtime_module_jit_location,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,native_runtime_module_debug_region_count,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,native_runtime_module_retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);

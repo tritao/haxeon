@@ -19,5 +19,7 @@ interface RuntimeJitBackend {
 	function location(module:RuntimeModuleHandle, index:Int):hl.Bytes;
 	function debugRegionCount(module:RuntimeModuleHandle):Int;
 	function retiredCodeAllocationCount(module:RuntimeModuleHandle):Int;
+	#if !haxeon
 	function injectPatchFailure(module:RuntimeModuleHandle, stage:Int):Void;
+	#end
 }

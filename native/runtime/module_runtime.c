@@ -179,6 +179,38 @@ HL_PRIM int HL_NAME(native_runtime_module_code_revision)( vbyte *code ) {
 	return hl_patch_code_revision((hl_patch_code*)code);
 }
 
+HL_PRIM int HL_NAME(native_runtime_module_allocation_count)( vbyte *module ) {
+	return hl_runtime_module_allocation_count((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_patch_count)( vbyte *module ) {
+	return hl_runtime_module_jit_count((hl_runtime_module*)module);
+}
+
+HL_PRIM vbyte *HL_NAME(native_runtime_module_jit_location)( vbyte *module, int stable_id ) {
+	const char *location = hl_runtime_module_resolve_jit_location((hl_runtime_module*)module,stable_id);
+	int length;
+	vbyte *bytes;
+	if( location == NULL ) return NULL;
+	length = (int)strlen(location);
+	bytes = (vbyte*)hl_gc_alloc_noptr((length + 1) * 2);
+	for(int i=0;i<length;i++) {
+		bytes[i * 2] = (vbyte)location[i];
+		bytes[i * 2 + 1] = 0;
+	}
+	bytes[length * 2] = 0;
+	bytes[length * 2 + 1] = 0;
+	return bytes;
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_debug_region_count)( vbyte *module ) {
+	return hl_runtime_module_debug_region_count((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_module_retired_allocation_count)( vbyte *module ) {
+	return hl_runtime_module_retired_allocation_count((hl_runtime_module*)module);
+}
+
 HL_PRIM int HL_NAME(call_i32)( hl_runtime_module *runtime, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;
