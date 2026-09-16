@@ -2400,7 +2400,7 @@ class SemanticIndexBuilder {
 			if (position >= candidate.span.start && position <= candidate.span.end && typeParameters.indexOf(candidate.name) < 0)
 				typeParameters.push(candidate.name);
 		typeParameters.sort(Reflect.compare);
-		var overrideContext = isOverrideContext(position, token),
+		var overrideContext = CompletionContextSyntax.isOverrideContext(tokens, position, token),
 			receiver:Null<CompilerType> = null;
 		if (qualifier != null) {
 			if (qualifier == "this")
@@ -2438,12 +2438,12 @@ class SemanticIndexBuilder {
 				}
 			}
 		}
-		var kind = isImportContext(position, token) ? SemanticCompletionContextKind.Import : qualifier != null ? SemanticCompletionContextKind.Member : overrideContext
+		var kind = CompletionContextSyntax.isImportContext(tokens, position, token) ? SemanticCompletionContextKind.Import : qualifier != null ? SemanticCompletionContextKind.Member : overrideContext
 			? SemanticCompletionContextKind.Override : expected != null
-			&& isObjectFieldContext(position,
-				token) ? SemanticCompletionContextKind.ObjectField : isTypeContext(position,
+			&& CompletionContextSyntax.isObjectFieldContext(tokens, position,
+				token) ? SemanticCompletionContextKind.ObjectField : CompletionContextSyntax.isTypeContext(tokens, position,
 				token) ? SemanticCompletionContextKind.Type : expected != null
-			&& isPatternContext(position,
+			&& CompletionContextSyntax.isPatternContext(tokens, position,
 				token) ? SemanticCompletionContextKind.Pattern : expected != null ? SemanticCompletionContextKind.Argument : SemanticCompletionContextKind.Expression;
 		return {
 			locals: locals,
@@ -2466,184 +2466,6 @@ class SemanticIndexBuilder {
 			expression = Member(expression, parts[index], span);
 		var type = recoveredExpressionBindingType(expression);
 		return isRecoveryType(type) ? null : type;
-	}
-
-	function isTypeContext(position:Int, ?token:CancellationToken):Bool {
-		var previous:Null<Token> = null, previousIndex = -1;
-		for (lexical in tokens) {
-			if (token != null)
-				token.check();
-			if (lexical.kind == TokenKind.Eof)
-				break;
-			if (lexical.span.end > position)
-				break;
-			previous = lexical;
-			previousIndex++;
-		}
-		if (previous == null)
-			return false;
-		return switch previous.kind {
-			case TokenKind.Colon: isTypeColon(previousIndex, token);
-			case TokenKind.Extends, TokenKind.Implements, TokenKind.New: true;
-			case TokenKind.Identifier, TokenKind.Comma: isTypeNameContext(previousIndex, token);
-			case TokenKind.Less: isGenericTypeContext(previousIndex, token);
-			default: false;
-		};
-	}
-
-	function isTypeColon(index:Int, ?token:CancellationToken):Bool {
-		var cursor = index - 1;
-		while (cursor >= 0) {
-			if (token != null)
-				token.check();
-			switch tokens[cursor].kind {
-				case TokenKind.Function, TokenKind.Var, TokenKind.For, TokenKind.Catch:
-					return true;
-				case TokenKind.Question, TokenKind.Case, TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign,
-					TokenKind.Return, TokenKind.Arrow:
-					return false;
-				default:
-			}
-			cursor--;
-		}
-		return false;
-	}
-
-	function isTypeNameContext(index:Int, ?token:CancellationToken):Bool {
-		var cursor = index - 1;
-		while (cursor >= 0) {
-			if (token != null)
-				token.check();
-			switch tokens[cursor].kind {
-				case TokenKind.Colon:
-					return isTypeColon(cursor, token);
-				case TokenKind.Extends, TokenKind.Implements, TokenKind.New:
-					return true;
-				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign, TokenKind.Return:
-					return false;
-				default:
-			}
-			cursor--;
-		}
-		return false;
-	}
-
-	function isGenericTypeContext(index:Int, ?token:CancellationToken):Bool {
-		var cursor = index, depth = 0;
-		while (cursor >= 0) {
-			if (token != null)
-				token.check();
-			switch tokens[cursor].kind {
-				case TokenKind.Greater:
-					depth++;
-				case TokenKind.Less:
-					if (depth == 0)
-						return isTypeNameContext(cursor, token);
-					depth--;
-				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign, TokenKind.Return:
-					return false;
-				default:
-			}
-			cursor--;
-		}
-		return false;
-	}
-
-	function isImportContext(position:Int, ?cancellation:CancellationToken):Bool {
-		var previous:Null<Token> = null, previousIndex = -1;
-		for (index in 0...tokens.length) {
-			if (cancellation != null)
-				cancellation.check();
-			if (tokens[index].kind == TokenKind.Eof || tokens[index].span.end > position)
-				break;
-			previous = tokens[index];
-			previousIndex = index;
-		}
-		if (previous == null)
-			return false;
-		if (previous.kind == TokenKind.Import)
-			return true;
-		if (previous.kind != TokenKind.Identifier && previous.kind != TokenKind.Dot)
-			return false;
-		var index = previousIndex - 1;
-		while (index >= 0) {
-			if (cancellation != null)
-				cancellation.check();
-			var kind = tokens[index].kind;
-			if (kind == TokenKind.Import)
-				return true;
-			if (kind == TokenKind.Semicolon || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
-				return false;
-			index--;
-		}
-		return false;
-	}
-
-	function isObjectFieldContext(position:Int, ?cancellation:CancellationToken):Bool {
-		var previous:Null<Token> = null;
-		for (token in tokens) {
-			if (cancellation != null)
-				cancellation.check();
-			if (token.kind == TokenKind.Eof || token.span.end > position)
-				break;
-			previous = token;
-		}
-		if (previous == null || previous.kind != TokenKind.Colon)
-			return false;
-		var depth = 0;
-		var index = tokens.length - 1;
-		while (index >= 0) {
-			if (cancellation != null)
-				cancellation.check();
-			var token = tokens[index];
-			if (token.span.start >= position) {
-				index--;
-				continue;
-			}
-			switch token.kind {
-				case TokenKind.RightBrace:
-					depth++;
-				case TokenKind.LeftBrace:
-					if (depth == 0)
-						return true;
-					depth--;
-				default:
-			}
-			index--;
-		}
-		return false;
-	}
-
-	function isPatternContext(position:Int, ?cancellation:CancellationToken):Bool {
-		var index = lastTokenBefore(position);
-		while (index >= 0) {
-			if (cancellation != null)
-				cancellation.check();
-			var kind = tokens[index].kind;
-			if (kind == TokenKind.Case)
-				return true;
-			if (kind == TokenKind.Colon || kind == TokenKind.Semicolon || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
-				return false;
-			index--;
-		}
-		return false;
-	}
-
-	function isOverrideContext(position:Int, ?cancellation:CancellationToken):Bool {
-		var index = lastTokenBefore(position);
-		if (cancellation != null)
-			cancellation.check();
-		return index >= 0 && tokens[index].kind == TokenKind.Identifier && tokens[index].text == "override";
-	}
-
-	function lastTokenBefore(position:Int):Int {
-		var result = -1;
-		for (index in 0...tokens.length) {
-			if (tokens[index].kind == TokenKind.Eof || tokens[index].span.end > position)
-				break;
-			result = index;
-		}
-		return result;
 	}
 
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
