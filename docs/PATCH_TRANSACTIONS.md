@@ -38,7 +38,9 @@ cannot both publish. A successful commit appends an `HlRuntimePatchGeneration`
 record to the loaded module's Haxe-owned patch ledger. That record retains the
 canonical patch model, envelope, published function-version snapshot, and
 stable-ID dependency lists; failed and rolled-back transactions never enter the
-ledger. The same successful transition also advances the Haxe-owned symbol
+ledger. Committed records and diagnostic accessors use deep HLP-model snapshots,
+so mutating a transaction or returned diagnostic model cannot rewrite published
+history. The same successful transition also advances the Haxe-owned symbol
 pools, so later patches validate against the actual post-publication counts and
 prefix hashes rather than the original HLB snapshot.
 
