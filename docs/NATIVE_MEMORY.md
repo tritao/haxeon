@@ -219,10 +219,12 @@ the versioned entrypoint/signature state separate from those native arrays.
 Its metadata adapter reads entrypoints and signature indices directly from the
 generation's `HlFunctionTable`, making that mapping explicit at construction.
 `HlHotReloadState` stages metadata and a complete function-version snapshot as
-one single-threaded policy transaction, rejects stable slot or signature drift
-for in-place patches, and exposes borrower-aware retired generations. It still
-does not install executable addresses; that remains the deliberately small
-native JIT/kernel boundary.
+one mutex-serialized policy transaction, rejects stable slot or signature drift
+for in-place patches, and exposes borrower-aware retired generations. Retired
+generations close their borrow gate before native/module reclamation, so a
+direct lease cannot race a retirement check. It still does not install
+executable addresses; that remains the deliberately small native JIT/kernel
+boundary.
 
 ## Runtime synchronization
 

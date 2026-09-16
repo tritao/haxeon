@@ -1,5 +1,7 @@
 package runtime.hashlink;
 
+import runtime.memory.Mutex;
+
 /** Decision made by Haxe-side hot-reload policy before native publication. */
 enum HlHotReloadDecision {
 	Compatible;
@@ -14,6 +16,8 @@ class HlHotReloadGeneration {
 	public final functions:HlFunctionVersionTable;
 	public final nativeModule:Null<HlNativeModule>;
 	var borrowers:Int = 0;
+	final borrowerMutex:Mutex;
+	var retiring:Bool = false;
 
 	@:allow(runtime.hashlink.HlHotReloadState)
 	function new(revision:Int, metadata:HlMetadataGeneration, publication:HlMetadataPublication, functions:HlFunctionVersionTable,
@@ -23,41 +27,104 @@ class HlHotReloadGeneration {
 		this.publication = publication;
 		this.functions = functions;
 		this.nativeModule = nativeModule;
+		borrowerMutex = Mutex.create();
 	}
 
 	/** Borrow this generation until the lease is released. */
-	public function acquire():HlHotReloadLease
-		return new HlHotReloadLease(this);
+	public function acquire():HlHotReloadLease {
+		borrowerMutex.acquire();
+		try {
+			if (retiring)
+				throw "HashLink hot-reload generation is retiring";
+			var metadataLease = metadata.acquire(), result = new HlHotReloadLease(this, metadataLease);
+			borrowers++;
+			borrowerMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
+	}
 
-	public function borrowerCount():Int
-		return borrowers;
+	public function borrowerCount():Int {
+		borrowerMutex.acquire();
+		try {
+			var result = borrowers;
+			borrowerMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
+	}
 
-	@:allow(runtime.hashlink.HlHotReloadLease)
-	function retainBorrow():Void
-		borrowers++;
+	/** Prevent future borrows and report whether this generation is currently idle. */
+	@:allow(runtime.hashlink.HlHotReloadState)
+	function beginRetirement():Bool {
+		borrowerMutex.acquire();
+		try {
+			if (borrowers != 0) {
+				borrowerMutex.release();
+				return false;
+			}
+			retiring = true;
+			borrowerMutex.release();
+			return true;
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
+	}
+
+	/** Reopen a generation when a state-level shutdown attempt fails. */
+	@:allow(runtime.hashlink.HlHotReloadState)
+	function cancelRetirement():Void {
+		borrowerMutex.acquire();
+		try {
+			retiring = false;
+			borrowerMutex.release();
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
+	}
 
 	@:allow(runtime.hashlink.HlHotReloadLease)
 	function releaseBorrow():Void {
-		if (borrowers == 0)
-			throw "HashLink hot-reload generation lease count is already zero";
-		borrowers--;
+		borrowerMutex.acquire();
+		try {
+			if (borrowers == 0)
+				throw "HashLink hot-reload generation lease count is already zero";
+			borrowers--;
+			borrowerMutex.release();
+		} catch (error:Dynamic) {
+			borrowerMutex.release();
+			throw error;
+		}
 	}
+}
+
+typedef HlHotReloadStateStage = {
+	final revision:Int;
+	final decision:HlHotReloadDecision;
 }
 
 /**
 	Owns Haxe-side hot-reload state and retirement policy.
 
-	This is deliberately single-threaded until atomic publication is available.
-	It stages a complete candidate, validates metadata and stable function identity,
-	then publishes both as one policy transition. Native commits retain one stable
+	Publication, transaction, and retirement transitions are serialized by a
+	runtime mutex. It stages a complete candidate, validates metadata and stable
+	function identity, then publishes both as one policy transition. Native commits retain one stable
 	dispatch target and hand code-address installation to the small kernel bridge.
 */
 class HlHotReloadState {
 	public final metadata:HlMetadataRegistry;
-	public var revision(default, null):Int = 0;
+	var revisionValue:Int = 0;
+	public var revision(get, never):Int;
 	public var retiredCount(get, never):Int;
 	public var retiredBorrowedCount(get, never):Int;
 
+	final stateMutex:Mutex;
 	var current:Null<HlHotReloadGeneration>;
 	final retired:Array<HlHotReloadGeneration> = [];
 	var nativePatchTarget:Null<HlNativeModule>;
@@ -66,21 +133,31 @@ class HlHotReloadState {
 
 	public function new(?metadata:HlMetadataRegistry) {
 		this.metadata = metadata == null ? new HlMetadataRegistry() : metadata;
-		revision = this.metadata.revision;
+		stateMutex = Mutex.create();
+		revisionValue = this.metadata.revision;
 	}
 
+	function get_revision():Int
+		return withLock(function() return revisionValue);
+
 	function get_retiredCount():Int
-		return retired.length;
+		return withLock(function() return retired.length);
 
 	function get_retiredBorrowedCount():Int {
-		var count = 0;
-		for (generation in retired)
-			count += generation.borrowerCount();
-		return count;
+		return withLock(function() {
+			var count = 0;
+			for (generation in retired)
+				count += generation.borrowerCount();
+			return count;
+		});
 	}
 
 	/** Compare candidate metadata and stable function identities with the live state. */
 	public function compatibility(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):HlHotReloadDecision {
+		return withLock(function() return compatibilityUnlocked(candidate, functions));
+	}
+
+	function compatibilityUnlocked(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):HlHotReloadDecision {
 		requireOpen();
 		validateFunctionTable(candidate, functions);
 		if (current == null)
@@ -111,95 +188,166 @@ class HlHotReloadState {
 	public function stage(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, ?structuralReload:Bool = false):HlHotReloadTransaction
 		return new HlHotReloadTransaction(this, candidate, functions, structuralReload);
 
+	/** Capture a transaction decision and revision under one publication lock. */
+	@:allow(runtime.hashlink.HlHotReloadTransaction)
+	function stageCandidate(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable):HlHotReloadStateStage {
+		return withLock(function() {
+			requireOpen();
+			return {
+				revision: revisionValue,
+				decision: compatibilityUnlocked(candidate, functions)
+			};
+		});
+	}
+
 	public function currentGeneration():HlHotReloadGeneration {
-		requireOpen();
-		if (current == null)
-			throw "HashLink hot-reload state has no published generation";
-		return current;
+		return withLock(function() {
+			requireOpen();
+			if (current == null)
+				throw "HashLink hot-reload state has no published generation";
+			return current;
+		});
 	}
 
 	/** Borrow the current metadata and function-version generation. */
 	public function currentLease():HlHotReloadLease
-		return currentGeneration().acquire();
+		return withLock(function() {
+			requireOpen();
+			if (current == null)
+				throw "HashLink hot-reload state has no published generation";
+			return current.acquire();
+		});
 
 	/** Return the stable native dispatch target, when native commits are active. */
 	public function nativeDispatchModule():Null<HlNativeModule> {
-		requireOpen();
-		return nativePatchTarget;
+		return withLock(function() {
+			requireOpen();
+			return nativePatchTarget;
+		});
 	}
 
 	/** Dispose unborrowed superseded generations and return the number reclaimed. */
 	public function disposeRetired():Int {
-		requireOpen();
-		var count = 0, remaining:Array<HlHotReloadGeneration> = [];
-		for (generation in retired) {
-			if (generation.borrowerCount() == 0 && unloadNativeModule(generation) && generation.metadata.borrowerCount() == 0) {
-				count++;
-			} else
-				remaining.push(generation);
-		}
-		retired.resize(0);
-		for (generation in remaining)
-			retired.push(generation);
-		metadata.disposeRetired();
-		return count;
+		return withLock(function() {
+			requireOpen();
+			var count = 0, remaining:Array<HlHotReloadGeneration> = [];
+			for (generation in retired)
+				if (generation.beginRetirement() && unloadNativeModule(generation) && generation.metadata.borrowerCount() == 0)
+					count++;
+				else
+					remaining.push(generation);
+			retired.resize(0);
+			for (generation in remaining)
+				retired.push(generation);
+			metadata.disposeRetired();
+			return count;
+		});
 	}
 
 	/** Dispose the current and retired policy state when no generation is borrowed. */
 	public function dispose():Void {
-		if (disposed)
-			return;
-		for (generation in retired)
-			if (generation.borrowerCount() != 0)
-				throw "HashLink hot-reload state has borrowed retired generations";
-		var currentGeneration = current;
-		if (currentGeneration != null && currentGeneration.borrowerCount() != 0)
-			throw "HashLink hot-reload state has a borrowed current generation";
-		if (nativePatchTarget != null) {
-			for (index in 0...nativePatchOwners.length) {
-				var nativeModule = nativePatchOwners[nativePatchOwners.length - index - 1];
-				if (!nativeModule.unload())
+		var marked:Array<HlHotReloadGeneration> = [];
+		stateMutex.acquire();
+		try {
+			if (disposed) {
+				stateMutex.release();
+				return;
+			}
+			for (generation in retired)
+				if (generation.borrowerCount() != 0)
+					throw "HashLink hot-reload state has borrowed retired generations";
+			var currentGeneration = current;
+			if (currentGeneration != null && currentGeneration.borrowerCount() != 0)
+				throw "HashLink hot-reload state has a borrowed current generation";
+			for (generation in retired)
+				if (generation.beginRetirement())
+					marked.push(generation);
+			if (currentGeneration != null)
+				if (currentGeneration.beginRetirement())
+					marked.push(currentGeneration);
+			if (nativePatchTarget != null) {
+				for (index in 0...nativePatchOwners.length) {
+					var nativeModule = nativePatchOwners[nativePatchOwners.length - index - 1];
+					if (!nativeModule.unload())
+						throw "HashLink native hot-reload module could not be unloaded";
+				}
+				nativePatchOwners.resize(0);
+				nativePatchTarget = null;
+			} else {
+				for (generation in retired)
+					if (!unloadNativeModule(generation))
+						throw "HashLink native hot-reload module could not be unloaded";
+				if (currentGeneration != null && !unloadNativeModule(currentGeneration))
 					throw "HashLink native hot-reload module could not be unloaded";
 			}
-			nativePatchOwners.resize(0);
-			nativePatchTarget = null;
-		} else {
 			for (generation in retired)
-				if (!unloadNativeModule(generation))
-					throw "HashLink native hot-reload module could not be unloaded";
-			if (currentGeneration != null && !unloadNativeModule(currentGeneration))
-				throw "HashLink native hot-reload module could not be unloaded";
+				if (generation.metadata.borrowerCount() != 0)
+					throw "HashLink hot-reload state has borrowed retired metadata";
+			if (currentGeneration != null && currentGeneration.metadata.borrowerCount() != 0)
+				throw "HashLink hot-reload state has borrowed current metadata";
+			metadata.dispose();
+			retired.resize(0);
+			current = null;
+			disposed = true;
+			stateMutex.release();
+		} catch (error:Dynamic) {
+			for (generation in marked)
+				generation.cancelRetirement();
+			stateMutex.release();
+			throw error;
 		}
-		for (generation in retired)
-			if (generation.metadata.borrowerCount() != 0)
-				throw "HashLink hot-reload state has borrowed retired metadata";
-		if (currentGeneration != null && currentGeneration.metadata.borrowerCount() != 0)
-			throw "HashLink hot-reload state has borrowed current metadata";
-		metadata.dispose();
-		retired.resize(0);
-		current = null;
-		disposed = true;
 	}
 
 	@:allow(runtime.hashlink.HlHotReloadTransaction)
-	function commit(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, structuralReload:Bool):HlHotReloadGeneration {
+	function commitTransaction(transaction:HlHotReloadTransaction):HlHotReloadGeneration {
+		return withLock(function() {
+			requireOpen();
+			if (revisionValue != transaction.baseRevision)
+				throw 'HashLink hot-reload transaction is stale (expected revision ${transaction.baseRevision}, got $revisionValue)';
+			if (!transaction.structuralReload)
+				switch transaction.decision {
+					case Compatible:
+					case RequiresReload(reason):
+						throw 'HashLink hot-reload transaction requires a structural reload: $reason';
+				}
+			return commitUnlocked(transaction.candidate, transaction.functions, transaction.structuralReload);
+		});
+	}
+
+	function commitUnlocked(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable,
+			structuralReload:Bool):HlHotReloadGeneration {
 		requireOpen();
 		if (nativePatchTarget != null)
 			throw "HashLink native hot-reload state requires native commits after its dispatch target is initialized";
-		if (metadata.revision != revision)
-			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
+		if (metadata.revision != revisionValue)
+			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revisionValue, got ${metadata.revision})';
 		var publication = structuralReload ? metadata.reload(candidate) : metadata.publish(candidate);
 		return finishCommit(candidate, functions, publication, null);
 	}
 
 	@:allow(runtime.hashlink.HlHotReloadTransaction)
-	function commitNative(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, flags:Int,
+	function commitNativeTransaction(transaction:HlHotReloadTransaction, flags:Int):HlHotReloadGeneration {
+		return withLock(function() {
+			requireOpen();
+			if (revisionValue != transaction.baseRevision)
+				throw 'HashLink hot-reload transaction is stale (expected revision ${transaction.baseRevision}, got $revisionValue)';
+			if (!transaction.structuralReload)
+				switch transaction.decision {
+					case Compatible:
+					case RequiresReload(reason):
+						throw 'HashLink hot-reload transaction requires a structural reload: $reason';
+					}
+			return commitNativeUnlocked(transaction.candidate, transaction.functions, flags, transaction.structuralReload);
+		});
+	}
+
+	function commitNativeUnlocked(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, flags:Int,
 			structuralReload:Bool):HlHotReloadGeneration {
 		requireOpen();
 		if (nativePatchTarget != null && structuralReload)
 			throw "HashLink native structural reload requires a new dispatch target";
-		if (metadata.revision != revision)
-			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revision, got ${metadata.revision})';
+		if (metadata.revision != revisionValue)
+			throw 'HashLink metadata registry advanced outside hot-reload state (expected revision $revisionValue, got ${metadata.revision})';
 		var nativeModule:Null<HlNativeModule> = null;
 		try {
 			if (!candidate.isPublished())
@@ -229,12 +377,12 @@ class HlHotReloadState {
 
 	function finishCommit(candidate:HlMetadataGeneration, functions:HlFunctionVersionTable, publication:HlMetadataPublication,
 			nativeModule:Null<HlNativeModule>):HlHotReloadGeneration {
-		var nextRevision = revision + 1,
+		var nextRevision = revisionValue + 1,
 			publishedFunctions = functions.withGeneration(nextRevision),
 			published = new HlHotReloadGeneration(metadata.revision, candidate, publication, publishedFunctions, nativeModule),
 			previous = current;
 		current = published;
-		revision = metadata.revision;
+		revisionValue = metadata.revision;
 		if (previous != null)
 			retired.push(previous);
 		return published;
@@ -273,6 +421,18 @@ class HlHotReloadState {
 		if (disposed)
 			throw "HashLink hot-reload state has been disposed";
 	}
+
+	function withLock<T>(operation:Void->T):T {
+		stateMutex.acquire();
+		try {
+			var result = operation();
+			stateMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			stateMutex.release();
+			throw error;
+		}
+	}
 }
 
 /** Borrowed view of one hot-reload generation. */
@@ -282,15 +442,9 @@ class HlHotReloadLease {
 	var released:Bool = false;
 
 	@:allow(runtime.hashlink.HlHotReloadGeneration)
-	function new(generation:HlHotReloadGeneration) {
+	function new(generation:HlHotReloadGeneration, metadata:HlMetadataLease) {
 		this.generation = generation;
-		generation.retainBorrow();
-		try {
-			metadata = generation.metadata.acquire();
-		} catch (error:Dynamic) {
-			generation.releaseBorrow();
-			throw error;
-		}
+		this.metadata = metadata;
 	}
 
 	/** Release this borrow. Repeated release is safe. */

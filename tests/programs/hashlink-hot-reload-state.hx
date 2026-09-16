@@ -166,7 +166,22 @@ function main():Int {
 		disposedBeforeRelease = state.disposeRetired() == 3 && state.retiredCount == 1;
 	initialLease.release();
 	var released = initialLease.isReleased() && state.retiredBorrowedCount == 0 && state.disposeRetired() == 1 && state.retiredCount == 0;
+	var retiredAcquireRejected = false;
+	try
+		initialGeneration.acquire()
+	catch (error:Dynamic)
+		retiredAcquireRejected = true;
 
+	var metadataOnlyLease = advanceGeneration.metadata.acquire(),
+		metadataDisposeBlocked = false;
+	try
+		state.dispose()
+	catch (error:Dynamic)
+		metadataDisposeBlocked = true;
+	metadataOnlyLease.release();
+	var reopenedLease = state.currentLease(),
+		reopenedAfterMetadataFailure = !reopenedLease.isReleased();
+	reopenedLease.release();
 	var currentLease = state.currentLease(), disposeBlocked = false;
 	try
 		state.dispose()
@@ -190,6 +205,6 @@ function main():Int {
 			&& nativeState.nativeDispatchModule().isLoaded();
 	nativeState.dispose();
 	return generationPolicy && appendCompatible && signatureRejected && reloadWorked && patchWorked && signatureReplacementRejected && identityRejected
-		&& transactionState && retiredBorrowed && disposedBeforeRelease && released && disposeBlocked && nativeInitialLoaded && nativeDispatchStable
-		&& nativeRetired && nativeCurrentLoaded ? 42 : 1;
+		&& transactionState && retiredBorrowed && disposedBeforeRelease && released && retiredAcquireRejected && metadataDisposeBlocked
+		&& reopenedAfterMetadataFailure && disposeBlocked && nativeInitialLoaded && nativeDispatchStable && nativeRetired && nativeCurrentLoaded ? 42 : 1;
 }
