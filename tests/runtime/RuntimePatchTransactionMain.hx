@@ -91,6 +91,18 @@ class RuntimePatchTransactionMain {
 			throw "Haxe-owned binding metadata did not invoke a patched function-valued field";
 		Runtime.dispose(loaded);
 	}
+
+	static function testInheritedInterfaceMethodDispatch():Void {
+		var compiler = new Compiler();
+		compiler.update("InheritedInterfaceMain.hx",
+			"interface Base { function value():Int; } interface Derived extends Base { function extra():Int; } class Box implements Derived { public function new() {} public function value():Int return 40; public function extra():Int return 2; } function main():Int { var value:Base = new Box(); return value.value(); }");
+		var initial = compiler.compile("InheritedInterfaceMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 40)
+			throw "Haxe-owned inherited interface metadata did not dispatch a base interface method";
+		Runtime.dispose(loaded);
+	}
 	#end
 
 	static function main():Void {
@@ -237,6 +249,7 @@ class RuntimePatchTransactionMain {
 		testObjectMethodDispatch();
 		testInterfaceMethodDispatch();
 		testBoundFunctionField();
+		testInheritedInterfaceMethodDispatch();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
