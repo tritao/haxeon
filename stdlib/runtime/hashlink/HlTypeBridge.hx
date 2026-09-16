@@ -46,6 +46,11 @@ class HlTypeBridge {
 		identityLength:Int):RawPtr<UInt8>
 		return RawPtr.nullPtr();
 
+	/** Load a runtime wrapper from a Haxe-owned code record and decoded identity tables. */
+	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
+		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):RawPtr<UInt8>
+		return RawPtr.nullPtr();
+
 	/** Retire an externally loaded runtime wrapper when no managed borrowers remain. */
 	public static function native_runtime_module_unload(module:RawPtr<UInt8>):Bool
 		return false;

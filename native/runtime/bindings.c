@@ -116,6 +116,7 @@ DEFINE_PRIM(_DYN,native_invoke_16,_BYTES _BYTES _BYTES _DYN _DYN _DYN _DYN _DYN 
 DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),load_code,_BYTES _BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_BYTES,native_runtime_module_load_code,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32);
+DEFINE_PRIM(_BYTES,native_runtime_module_load_code_manifest,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _BYTES _BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,native_runtime_module_unload,_BYTES);
 DEFINE_PRIM(_I32,native_runtime_module_call_i32,_BYTES _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_call_void,_BYTES _I32);

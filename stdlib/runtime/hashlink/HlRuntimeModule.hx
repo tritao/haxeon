@@ -9,14 +9,25 @@ class HlRuntimeModule {
 	final lease:HlMetadataLease;
 	var module:RawPtr<UInt8>;
 
-	public function new(metadata:HlMetadataGeneration, bytes:Bytes, identity:Bytes) {
-		if (metadata == null || bytes == null || identity == null)
-			throw "HashLink runtime module requires metadata, HLB bytes, and HLI bytes";
+	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int) {
+		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
+			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1)
+			throw "HashLink runtime module requires metadata, HLB bytes, and a decoded HLI manifest";
 		this.metadata = metadata;
 		lease = metadata.acquire();
 		module = RawPtr.nullPtr();
 		try {
-			module = HlTypeBridge.native_runtime_module_load_code(metadata.snapshot().nativeCode, bytes, bytes.length, identity, identity.length);
+			var count = stableIds.length,
+				stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
+				slotStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count);
+			for (index in 0...count) {
+				if (stableIds[index] < 0 || slots[index] < 0)
+					throw "HashLink runtime module manifest entries must be non-negative";
+				stableIdStorage.offset(index).store(cast stableIds[index]);
+				slotStorage.offset(index).store(cast slots[index]);
+			}
+			module = HlTypeBridge.native_runtime_module_load_code_manifest(metadata.snapshot().nativeCode, bytes, bytes.length, moduleId, revision,
+				stableIdStorage, slotStorage, count, initializerSlot);
 			if (module.isNull())
 				throw "HashLink external runtime module initialization failed";
 		} catch (error:Dynamic) {

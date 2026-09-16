@@ -217,7 +217,9 @@ class HlNativeModuleLoader {
 			metadata = HlNativeMetadataBuilder.buildModule(module);
 		var loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
-			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata, new HlRuntimeModule(metadata, bytes, identity));
+			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata,
+				new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision, [for (entry in identityModel.entries) entry.stableId],
+					[for (entry in identityModel.entries) entry.functionIndex], identityModel.initializerSlot));
 			loaded.initialize();
 			return loaded;
 		} catch (error:Dynamic) {
