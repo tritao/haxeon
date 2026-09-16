@@ -36,8 +36,7 @@ class HxiFlagsMain {
 		var compiler = new Compiler();
 		compiler.addSourceRoot("stdlib");
 		compiler.addFfiInterface("flag-widths.hxi", source);
-		compiler.update("FlagsMain.hx",
-			'import flag_widths; function main():Int { return WideFlags.low().contains(WideFlags.low()) ? 42 : 0; }');
+		compiler.update("FlagsMain.hx", 'import flag_widths; function main():Int { return WideFlags.low().contains(WideFlags.low()) ? 42 : 0; }');
 		compiler.compile("FlagsMain");
 
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "unsigned 8/16/32/64-bit integer representation");

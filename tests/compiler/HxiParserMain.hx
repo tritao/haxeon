@@ -14,6 +14,9 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.Source.SourceFile;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 
 class HxiParserMain {
 	static final valid = '// generated ABI\n'
@@ -43,7 +46,15 @@ class HxiParserMain {
 		var parsed = parseValidated("nativekit.hxi", valid);
 		var minimumIntCompiler = new Compiler();
 		minimumIntCompiler.addSourceRoot("stdlib");
-		minimumIntCompiler.update("MinimumInt.hx", "function main():Int return -2147483648; function hexadecimal():Int return -0x80000000;");
+		minimumIntCompiler.update("MinimumInt.hx",
+			"function main():Int return -2147483648; function hexadecimal():Int return -0x80000000; function hexadecimalPositive():Int return 0x80000000; function hexadecimalAllBits():Int return 0xFFFFFFFF;");
+		var minimumIntProgram = new Parser(new Lexer(new SourceFile("MinimumInt.hx", "function main():Int return 0x80000000;")).tokenize()).parseProgram();
+		switch minimumIntProgram.functions[0].statements[0] {
+			case Return(IntegerLiteral(value, _), _):
+				expect(value == -2147483648, "hexadecimal high-bit literals should preserve their Int bit pattern");
+			case _:
+				throw "expected a hexadecimal integer return";
+		}
 		minimumIntCompiler.compile("MinimumInt");
 		var serialized = HxiWriter.write(parsed);
 		expect(HxiWriter.write(HxiParser.parse("roundtrip.hxi", serialized)) == serialized, "HXI serialization should be deterministic");
