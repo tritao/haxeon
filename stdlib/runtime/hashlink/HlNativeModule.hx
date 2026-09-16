@@ -7,6 +7,7 @@ import runtime.memory.Mutex;
 /** Owns one initialized native HashLink module and its metadata lease. */
 class HlNativeModule {
 	static final moduleMutex:Mutex = Mutex.create();
+	public static final defaultKernel:HlMetadataModuleKernel = new NativeHlMetadataModuleKernel();
 	/** HashLink flag that installs stable entries for native generation patches. */
 	public static inline final PatchableFlag:Int = 8;
 	/** HashLink flag that preserves Haxeon-derived enum and virtual metadata. */
@@ -15,30 +16,32 @@ class HlNativeModule {
 	public final metadata:HlMetadataGeneration;
 	public final publication:HlMetadataPublication;
 	final lease:HlMetadataLease;
+	final kernel:HlMetadataModuleKernel;
 	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:RawPtr<UInt8>;
 	var constantsInitialized:Bool = false;
 
-	public function new(metadata:HlMetadataGeneration, ?flags:Int = 0) {
+	public function new(metadata:HlMetadataGeneration, ?flags:Int = 0, ?kernel:HlMetadataModuleKernel) {
 		if (metadata == null)
 			throw "HashLink native module requires metadata";
 		this.metadata = metadata;
+		this.kernel = kernel == null ? defaultKernel : kernel;
 		lease = metadata.acquire();
 		publication = lease.publication;
 		module = RawPtr.nullPtr();
 		try {
-			module = HlTypeBridge.native_metadata_module_alloc(publication.nativeCode);
+			module = this.kernel.allocate(publication.nativeCode);
 			if (module.isNull())
 				throw "HashLink native module allocation failed";
-			if (!HlTypeBridge.native_metadata_module_init(module, flags | HaxeMetadataFlag)) {
-				HlTypeBridge.native_metadata_module_free_shutdown(module);
+			if (!this.kernel.initialize(module, flags | HaxeMetadataFlag)) {
+				this.kernel.freeShutdown(module);
 				module = RawPtr.nullPtr();
 				throw "HashLink native module initialization failed";
 			}
 			initializeConstants();
 		} catch (error:Dynamic) {
 			if (!module.isNull())
-				HlTypeBridge.native_metadata_module_free_shutdown(module);
+				this.kernel.freeShutdown(module);
 			lease.release();
 			throw error;
 		}
@@ -48,7 +51,7 @@ class HlNativeModule {
 		if (constantsInitialized)
 			throw "HashLink native module constants were already initialized";
 		metadata.constantDescriptors.initialize(function(index)
-			return HlTypeBridge.native_metadata_module_initialize_constant(module, index));
+			return kernel.initializeConstant(module, index));
 		constantsInitialized = true;
 	}
 
@@ -70,7 +73,7 @@ class HlNativeModule {
 		return withLock(function() {
 			if (module.isNull())
 				throw "HashLink native module is no longer loaded";
-			return HlTypeBridge.native_metadata_module_call_i32(module, functionIndex);
+			return kernel.callI32(module, functionIndex);
 		});
 	}
 
@@ -92,7 +95,7 @@ class HlNativeModule {
 				throw "HashLink native module patch requires two loaded modules";
 			if (generation == this)
 				throw "HashLink native module cannot patch itself";
-			return HlTypeBridge.native_metadata_module_patch_generation(module, generation.module);
+			return kernel.patchGeneration(module, generation.module);
 		});
 	}
 
@@ -113,7 +116,7 @@ class HlNativeModule {
 				seen.set(slot, true);
 				indices.offset(index).store(cast slot);
 			}
-			return HlTypeBridge.native_metadata_module_patch_slots(module, generation.module, indices, slots.length);
+			return kernel.patchSlots(module, generation.module, indices, slots.length);
 		});
 	}
 
@@ -122,7 +125,7 @@ class HlNativeModule {
 		return withLock(function() {
 			if (module.isNull())
 				return true;
-			if (!HlTypeBridge.native_metadata_module_unload(module))
+			if (!kernel.unload(module))
 				return false;
 			closeGcHandles();
 			module = RawPtr.nullPtr();
