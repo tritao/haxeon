@@ -53,6 +53,10 @@ HL_PRIM int HL_NAME(native_runtime_module_patch)( vbyte *module, realtime_bytes 
 	return (int)hl_runtime_module_apply_hlp((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length);
 }
 
+HL_PRIM void HL_NAME(native_runtime_module_set_patch_failure_stage)( vbyte *module, int stage ) {
+	if( module != NULL ) hl_runtime_module_set_patch_failure_stage((hl_runtime_module*)module,stage);
+}
+
 HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code)( vbyte *module, realtime_bytes *bytes, int length, vbyte *status_out ) {
 	hl_patch_code *code = NULL;
 	hl_runtime_status status = hl_runtime_module_apply_hlp_capture((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length,&code);

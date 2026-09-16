@@ -111,6 +111,12 @@ still decide when executable storage can actually be freed. The split makes
 generation ownership and future borrower-aware retirement explicit without
 moving bootstrap-sensitive reclamation into Haxe prematurely.
 
+The external wrapper exposes the existing native staging-failure checkpoints
+only for tests. Exercising all three checkpoints proves that Haxe arena cursors,
+symbol models, revisions, dispatch results, and the retirement ledger remain
+unchanged when native publication rejects a candidate, and that the same HLP
+can be retried successfully afterward.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication

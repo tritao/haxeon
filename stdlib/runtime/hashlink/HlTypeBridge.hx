@@ -67,6 +67,9 @@ class HlTypeBridge {
 	public static function native_runtime_module_patch(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;
 
+	/** Inject one native patch-staging failure for rollback tests. */
+	public static function native_runtime_module_set_patch_failure_stage(module:hl.Abstract<"realtime_module">, stage:Int):Void {}
+
 	/** Apply one HLP transaction and retain its published native code allocation. */
 	public static function native_runtime_module_patch_code(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
 		return null;

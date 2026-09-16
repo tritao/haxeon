@@ -62,6 +62,13 @@ class HlRuntimeModule {
 		return HlTypeBridge.native_runtime_module_patch(module, bytes, bytes.length);
 	}
 
+	/** Inject one native patch-staging failure for external rollback tests. */
+	public function setPatchFailureStage(stage:Int):Void {
+		if (!isLoaded())
+			throw "HashLink external runtime failure injection requires a loaded module";
+		HlTypeBridge.native_runtime_module_set_patch_failure_stage(module, stage);
+	}
+
 	/** Apply a patch while retaining the published native code allocation. */
 	public function patchCode(bytes:Bytes):HlRuntimePatchPublication {
 		if (!isLoaded() || bytes == null)
