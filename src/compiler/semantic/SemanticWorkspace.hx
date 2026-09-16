@@ -409,6 +409,17 @@ class SemanticWorkspace {
 			if (state.semanticModel != null)
 				for (span in state.semanticModel.index.locations(id))
 					addLocation(result, state, span);
+			// A valid source snapshot may not type an unreachable body, while its
+			// current recovered model still owns same-module local locations. Do
+			// not merge this fallback with an exact identity of the same symbol.
+			if (result.length == 0 && state.semanticModel != null
+				&& state.semanticModel.index.symbol(id) == null
+				&& state.recoveredSemanticModel != null)
+				for (span in state.recoveredSemanticModel.index.locations(id)) {
+					if (token != null)
+						token.check();
+					addLocation(result, state, span);
+				}
 		} else if (state.recoveredSemanticModel != null)
 			for (span in state.recoveredSemanticModel.index.locations(id)) {
 				if (token != null)
