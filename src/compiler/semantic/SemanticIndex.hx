@@ -1061,6 +1061,27 @@ class SemanticIndex {
 					indexRecoveredExpression(entry.key, mapKeyType(expected), activeFunctionKey);
 					indexRecoveredExpression(entry.value, mapValueType(expected), activeFunctionKey);
 				}
+			case ArrayComprehension(keyName, valueName, iterable, predicate, value, span):
+				var iterableType = recoveredExpressionType(iterable),
+					keyType = recoveredForInKeyType(iterableType, valueName);
+				indexRecoveredExpression(iterable, null, activeFunctionKey);
+				addRecoveredLocal(activeFunctionKey, keyName, keyType, span, span, 1);
+				if (valueName != null)
+					addRecoveredLocal(activeFunctionKey, valueName, recoveredForInValueType(iterableType), span, span, 1);
+				if (predicate != null)
+					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
+				indexRecoveredExpression(value, indexedValueType(expected), activeFunctionKey);
+			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
+				var iterableType = recoveredExpressionType(iterable),
+					keyType = recoveredForInKeyType(iterableType, valueName);
+				indexRecoveredExpression(iterable, null, activeFunctionKey);
+				addRecoveredLocal(activeFunctionKey, keyName, keyType, span, span, 1);
+				if (valueName != null)
+					addRecoveredLocal(activeFunctionKey, valueName, recoveredForInValueType(iterableType), span, span, 1);
+				if (predicate != null)
+					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
+				indexRecoveredExpression(key, mapKeyType(expected), activeFunctionKey);
+				indexRecoveredExpression(value, mapValueType(expected), activeFunctionKey);
 			case New(name, arguments, _):
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, null, activeFunctionKey);
 			case NewGeneric(name, typeArguments, arguments, _):
@@ -1392,9 +1413,9 @@ class SemanticIndex {
 		for (entry in entries) {
 			var entryKey = recoveredExpressionType(entry.key),
 				entryValue = recoveredExpressionType(entry.value);
-			if (key == TUnknown && entryKey != TUnknown && entryKey != TError)
+			if (isRecoveryType(key) && !isRecoveryType(entryKey))
 				key = entryKey;
-			if (value == TUnknown && entryValue != TUnknown && entryValue != TError)
+			if (isRecoveryType(value) && !isRecoveryType(entryValue))
 				value = entryValue;
 		}
 		return TMap(key, value);
@@ -1702,12 +1723,13 @@ class SemanticIndex {
 	}
 
 	function recoveredArrayElementType(values:Array<AstExpression>):CompilerType {
+		var result:Null<CompilerType> = null;
 		for (value in values) {
 			var type = recoveredExpressionType(value);
-			if (type != TUnknown && type != TError)
-				return type;
+			if (result == null || isRecoveryType(result) && !isRecoveryType(type))
+				result = type;
 		}
-		return TUnknown;
+		return result == null ? TUnknown : result;
 	}
 
 	function recoveredForInKeyType(type:CompilerType, valueName:Null<String>):CompilerType

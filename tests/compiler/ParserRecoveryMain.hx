@@ -481,6 +481,35 @@ class ParserRecoveryMain {
 				throw 'AST-only recovered pattern lost its binding type: ${astOnlyPatternContext.receiver}';
 		}
 
+		var astOnlyComprehensionSource = new SourceFile("AstOnlyComprehensionRecovery.hx",
+			"class Payload { public var member:Int; } function main(values:Array<Payload>):Void { var selected = [for (item in values) item.]; }");
+		var astOnlyComprehensionTokens = new Lexer(astOnlyComprehensionSource).tokenize(),
+			astOnlyComprehensionProgram = new Parser(astOnlyComprehensionTokens).parseProgramRecovering().program,
+			astOnlyComprehensionModel = new SemanticModel(astOnlyComprehensionProgram, astOnlyComprehensionSource, 1, astOnlyComprehensionTokens);
+		astOnlyComprehensionModel.index.indexRecoveredSyntax(astOnlyComprehensionProgram);
+		var astOnlyComprehensionPosition = astOnlyComprehensionSource.text.indexOf("item.]") + "item.".length,
+			astOnlyComprehensionContext = astOnlyComprehensionModel.index.completionContext(astOnlyComprehensionPosition, "item");
+		switch astOnlyComprehensionContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered comprehension lost its binding type: ${astOnlyComprehensionContext.receiver}';
+		}
+
+		var astOnlyNestedCollectionSource = new SourceFile("AstOnlyNestedCollectionRecovery.hx",
+			"class Payload { public var member:Int; } function main():Void { var values = [[broken], [new Payload()]]; var item = values[1][0]; item. }");
+		var astOnlyNestedCollectionTokens = new Lexer(astOnlyNestedCollectionSource).tokenize(),
+			astOnlyNestedCollectionProgram = new Parser(astOnlyNestedCollectionTokens).parseProgramRecovering().program,
+			astOnlyNestedCollectionModel = new SemanticModel(astOnlyNestedCollectionProgram, astOnlyNestedCollectionSource, 1,
+				astOnlyNestedCollectionTokens);
+		astOnlyNestedCollectionModel.index.indexRecoveredSyntax(astOnlyNestedCollectionProgram);
+		var astOnlyNestedCollectionPosition = astOnlyNestedCollectionSource.text.indexOf("item. }") + "item.".length,
+			astOnlyNestedCollectionContext = astOnlyNestedCollectionModel.index.completionContext(astOnlyNestedCollectionPosition, "item");
+		switch astOnlyNestedCollectionContext.receiver {
+			case TInstance(NominalKind.Class, "Payload", _):
+			default:
+				throw 'AST-only recovered nested collection lost its stable element type: ${astOnlyNestedCollectionContext.receiver}';
+		}
+
 		var patternService = new LanguageService(),
 			patternSource = "enum Choice { One; Two(value:Int); } function main():Void { var choice:Choice = One; switch (choice) { case ";
 		patternService.update("ExpectedPattern.hx", patternSource);
