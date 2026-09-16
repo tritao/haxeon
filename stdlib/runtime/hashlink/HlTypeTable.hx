@@ -30,6 +30,21 @@ class HlTypeTable {
 	public inline function pointer():RawPtr<RawPtr<HlType>>
 		return entries;
 
+	/** Capture the append-only table cursor before a metadata transaction. */
+	public function checkpoint():HlTypeTableCheckpoint
+		return new HlTypeTableCheckpoint(this, entries, capacity, count);
+
+	/** Restore the table cursor after rolling back its arena allocations. */
+	public function rollback(checkpoint:HlTypeTableCheckpoint):Void {
+		if (checkpoint == null || checkpoint.table != this)
+			throw "HashLink type-table checkpoint belongs to another table";
+		if (checkpoint.count < 0 || checkpoint.count > count || checkpoint.capacity < 0)
+			throw "HashLink type-table checkpoint is no longer valid";
+		entries = checkpoint.entries;
+		capacity = checkpoint.capacity;
+		count = checkpoint.count;
+	}
+
 	/** Append one type pointer and return its stable table index. */
 	public function add(type:RawPtr<HlType>):Int {
 		ensureCapacity(count + 1);
@@ -87,4 +102,20 @@ class HlTypeTable {
 	function checkIndex(index:Int):Void
 		if (index < 0 || index >= count)
 			throw 'HashLink type table index $index is outside 0...$count';
+}
+
+/** Append cursor for one Haxe-owned HashLink type-pointer table transaction. */
+class HlTypeTableCheckpoint {
+	final table:HlTypeTable;
+	final entries:RawPtr<RawPtr<HlType>>;
+	final capacity:Int;
+	final count:Int;
+
+	@:allow(runtime.hashlink.HlTypeTable)
+	function new(table:HlTypeTable, entries:RawPtr<RawPtr<HlType>>, capacity:Int, count:Int) {
+		this.table = table;
+		this.entries = entries;
+		this.capacity = capacity;
+		this.count = count;
+	}
 }

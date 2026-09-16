@@ -60,6 +60,26 @@ class Arena {
 		blockCursor = 0;
 	}
 
+	/** Capture the current allocation cursors for a recoverable append transaction. */
+	public function checkpoint():ArenaCheckpoint
+		return new ArenaCheckpoint(this, blocks.length, [for (block in blocks) block.used], blockCursor);
+
+	/** Roll back allocations made after a checkpoint, releasing any new blocks. */
+	public function rollback(checkpoint:ArenaCheckpoint):Void {
+		if (checkpoint == null || checkpoint.arena != this)
+			throw "Arena checkpoint belongs to another arena";
+		if (checkpoint.blockCount < 0 || checkpoint.blockCount > blocks.length || checkpoint.used.length != checkpoint.blockCount)
+			throw "Arena checkpoint is no longer valid";
+		while (blocks.length > checkpoint.blockCount) {
+			var block = blocks[blocks.length - 1];
+			ArenaNativeMemory.native_free(block.memory);
+			blocks.pop();
+		}
+		for (index in 0...checkpoint.blockCount)
+			blocks[index].used = checkpoint.used[index];
+		blockCursor = checkpoint.blockCursor;
+	}
+
 	/** Release every backing block. Repeated disposal is safe. */
 	public function dispose():Void {
 		for (block in blocks)
@@ -109,5 +129,21 @@ class ArenaBlock {
 		this.memory = memory;
 		this.capacity = capacity;
 		this.baseAlignment = baseAlignment;
+	}
+}
+
+/** Allocation cursors retained by an Arena until a transaction commits or rolls back. */
+class ArenaCheckpoint {
+	final arena:Arena;
+	final blockCount:Int;
+	final used:Array<Int>;
+	final blockCursor:Int;
+
+	@:allow(runtime.memory.Arena)
+	function new(arena:Arena, blockCount:Int, used:Array<Int>, blockCursor:Int) {
+		this.arena = arena;
+		this.blockCount = blockCount;
+		this.used = used;
+		this.blockCursor = blockCursor;
 	}
 }

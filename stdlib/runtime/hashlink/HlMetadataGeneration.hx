@@ -10,6 +10,8 @@ import runtime.hashlink.HlModulePools;
 import runtime.hashlink.HlDebugSection;
 import runtime.hashlink.HlDebugSectionTable;
 import runtime.hashlink.HlNativeCode;
+import runtime.hashlink.HlTypeArena.HlTypeArenaCheckpoint;
+import runtime.hashlink.HlTypeTable.HlTypeTableCheckpoint;
 
 /** Stable native view handed to a future HashLink publication boundary. */
 typedef HlMetadataPublication = {
@@ -90,6 +92,7 @@ class HlMetadataGeneration {
 	var published:Bool = false;
 	var publishedContiguousTypeCount:Int = 0;
 	var publishedUsesContiguousTypes:Bool = false;
+	var activeTypeAppend:Null<HlMetadataTypeAppend>;
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
 
@@ -142,6 +145,56 @@ class HlMetadataGeneration {
 	public function typeIndex(type:RawPtr<HlType>):Int {
 		requireOpen();
 		return typeTable.indexOf(type);
+	}
+
+	/** Start an append-only transaction for Haxe-owned compatible patch types. */
+	public function beginTypeAppend():HlMetadataTypeAppend {
+		requireOpen();
+		if (!published)
+			throw "HashLink metadata type appends require a published generation";
+		if (activeTypeAppend != null)
+			throw "HashLink metadata generation already has an active type append";
+		if (nativeCode.isNull() || arena.typeCountOf() != typeTable.length())
+			throw "HashLink metadata type table is not a contiguous arena prefix";
+		var result = new HlMetadataTypeAppend(this, arena.checkpoint(), typeTable.checkpoint());
+		activeTypeAppend = result;
+		return result;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataTypeAppend)
+	function appendType(transaction:HlMetadataTypeAppend, type:RawPtr<HlType>):Int {
+		requireOpen();
+		if (activeTypeAppend != transaction)
+			throw "HashLink metadata type append is no longer active";
+		if (type.isNull())
+			throw "HashLink metadata type append contains a null type";
+		var index = typeTable.length();
+		if (arena.typeCountOf() != index || type != arena.typePointer().offset(index))
+			throw "HashLink metadata type append is not contiguous with the published type table";
+		return typeTable.add(type);
+	}
+
+	@:allow(runtime.hashlink.HlMetadataTypeAppend)
+	function commitTypeAppend(transaction:HlMetadataTypeAppend):Void {
+		requireOpen();
+		if (activeTypeAppend != transaction)
+			throw "HashLink metadata type append is no longer active";
+		if (nativeCode.isNull() || arena.typeCountOf() != typeTable.length())
+			throw "HashLink metadata type append did not produce a contiguous type table";
+		nativeCode.ref.typeCount = cast typeTable.length();
+		publishedContiguousTypeCount = arena.typeCountOf();
+		publishedUsesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
+		activeTypeAppend = null;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataTypeAppend)
+	function rollbackTypeAppend(transaction:HlMetadataTypeAppend, arenaCheckpoint:HlTypeArenaCheckpoint, tableCheckpoint:HlTypeTableCheckpoint):Void {
+		requireOpen();
+		if (activeTypeAppend != transaction)
+			return;
+		typeTable.rollback(tableCheckpoint);
+		arena.rollback(arenaCheckpoint);
+		activeTypeAppend = null;
 	}
 
 	/** Append one Haxe-owned HashLink function descriptor. */

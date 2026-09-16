@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.Arena;
+import runtime.memory.Arena.ArenaCheckpoint;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlType;
 import runtime.hashlink.HlTypeData;
@@ -56,6 +57,26 @@ class HlTypeArena {
 	/** Number of type records acquired from the contiguous slab. */
 	public inline function typeCountOf():Int
 		return typeCount;
+
+	/** Capture every arena cursor used by one append-only metadata transaction. */
+	public function checkpoint():HlTypeArenaCheckpoint
+		return new HlTypeArenaCheckpoint(this, storage.checkpoint(), typeStorage.checkpoint(), typeCount, moduleContexts.length);
+
+	/** Roll back metadata allocations and derived module contexts made after a checkpoint. */
+	public function rollback(checkpoint:HlTypeArenaCheckpoint):Void {
+		if (checkpoint == null || checkpoint.arena != this)
+			throw "HashLink type-arena checkpoint belongs to another arena";
+		if (checkpoint.moduleContextCount < 0 || checkpoint.moduleContextCount > moduleContexts.length)
+			throw "HashLink type-arena checkpoint is no longer valid";
+		while (moduleContexts.length > checkpoint.moduleContextCount) {
+			var context = moduleContexts[moduleContexts.length - 1];
+			HlTypeBridge.native_module_context_dispose(context);
+			moduleContexts.pop();
+		}
+		storage.rollback(checkpoint.storage);
+		typeStorage.rollback(checkpoint.typeStorage);
+		typeCount = checkpoint.typeCount;
+	}
 
 	public inline function allocTypeData():RawPtr<HlTypeData>
 		return storage.alloc();
@@ -171,5 +192,23 @@ class HlTypeArena {
 		for (context in moduleContexts)
 			HlTypeBridge.native_module_context_dispose(context);
 		moduleContexts.resize(0);
+	}
+}
+
+/** Allocation cursors for one append-only HashLink type arena transaction. */
+class HlTypeArenaCheckpoint {
+	final arena:HlTypeArena;
+	final storage:ArenaCheckpoint;
+	final typeStorage:ArenaCheckpoint;
+	final typeCount:Int;
+	final moduleContextCount:Int;
+
+	@:allow(runtime.hashlink.HlTypeArena)
+	function new(arena:HlTypeArena, storage:ArenaCheckpoint, typeStorage:ArenaCheckpoint, typeCount:Int, moduleContextCount:Int) {
+		this.arena = arena;
+		this.storage = storage;
+		this.typeStorage = typeStorage;
+		this.typeCount = typeCount;
+		this.moduleContextCount = moduleContextCount;
 	}
 }
