@@ -182,7 +182,8 @@ arena's records.
 `HlMetadataGeneration` combines these pieces into one build/publish lifecycle:
 it owns the arena, appends the type table, defines the module context, lets
 `HlTypeLayout` construct the derived object, enum, and virtual metadata in that
-same arena, and then hands the table to one small native publication call.
+same arena, and then crosses one small native publication boundary for object
+prototype wiring.
 `HlTypeSemantics` centralizes the Haxe-owned size, padding, pointer-classification,
 and mark-bit rules that mirror HashLink's ABI helpers; the native bridge retains
 only host-width queries and bootstrap-sensitive publication operations.

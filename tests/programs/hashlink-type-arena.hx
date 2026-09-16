@@ -213,7 +213,7 @@ function main():Int {
 	var descriptorBindingCorrect = descriptor.ref.object == objectData
 		&& descriptor.ref.field.ref.name == fieldName
 		&& descriptorReference.ref.object.isNull();
-	HlTypeBridge.native_metadata_publish_prototypes(derivedTable.pointer(), derivedTable.length(), module);
+	HlTypeLayout.publishObjectPrototypes(derivedTable.pointer(), derivedTable.length());
 	var namesCorrect = objectData.ref.name.offset(0).load() == 79
 		&& objectData.ref.name.offset(1).load() == 98
 		&& objectData.ref.name.offset(2).load() == 106

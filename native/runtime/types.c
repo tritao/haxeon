@@ -1,31 +1,11 @@
-HL_API int hl_mark_size( int data_size );
-
 HL_PRIM int HL_NAME(native_pointer_size)() {
 	return (int)sizeof(void*);
 }
 
-static void native_metadata_publish_prototype( hl_type *type ) {
-	switch( type->kind ) {
-	case HOBJ:
-	case HSTRUCT:
-		if( type->obj == NULL || type->obj->m == NULL )
-			hl_error("HashLink object metadata publication requires a module context");
-		hl_get_obj_proto(type);
-		break;
-	case HENUM:
-		if( type->tenum == NULL ) hl_error("HashLink metadata publication contains an invalid enum");
-		break;
-	case HVIRTUAL:
-		if( type->virt == NULL ) hl_error("HashLink metadata publication contains an invalid virtual type");
-		break;
-	default:
-		break;
-	}
-}
-
-static void native_metadata_validate_publication( int count, void *types, hl_module_context *context ) {
-	if( count < 0 || (count > 0 && types == NULL) || context == NULL )
-		hl_error("HashLink metadata publication requires a type table and module context");
+HL_PRIM void HL_NAME(native_metadata_publish_object_prototype)( hl_type *type ) {
+	if( type == NULL || type->obj == NULL || type->obj->m == NULL )
+		hl_error("HashLink object metadata publication requires an initialized object context");
+	hl_get_obj_proto(type);
 }
 
 static hl_function *native_metadata_find_function( hl_function *functions, int count, int findex ) {
@@ -98,23 +78,6 @@ on_exception:
 	hl_endtrap(trap);
 	hl_error("HashLink native module function raised an exception");
 	return 0;
-}
-
-HL_PRIM void HL_NAME(native_metadata_publish_prototypes)( hl_type **types, int count, hl_module_context *context ) {
-	int i;
-	native_metadata_validate_publication(count,types,context);
-	for( i = 0; i < count; i++ ) {
-		hl_type *type = types[i];
-		if( type == NULL ) hl_error("HashLink metadata publication contains a null type");
-		native_metadata_publish_prototype(type);
-	}
-}
-
-HL_PRIM void HL_NAME(native_metadata_publish_contiguous_prototypes)( hl_type *types, int count, hl_module_context *context ) {
-	int i;
-	native_metadata_validate_publication(count,types,context);
-	for( i = 0; i < count; i++ )
-		native_metadata_publish_prototype(types + i);
 }
 
 HL_PRIM void HL_NAME(native_module_context_dispose)( hl_module_context *context ) {

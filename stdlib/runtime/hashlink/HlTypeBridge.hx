@@ -9,9 +9,8 @@ class HlTypeBridge {
 	public static function native_pointer_size():Int
 		return 0;
 
-	public static function native_metadata_publish_prototypes(types:RawPtr<RawPtr<HlType>>, count:Int, context:RawPtr<HlModuleContext>):Void {}
-
-	public static function native_metadata_publish_contiguous_prototypes(types:RawPtr<HlType>, count:Int, context:RawPtr<HlModuleContext>):Void {}
+	/** Publish one object prototype through HashLink's executable-pointer machinery. */
+	public static function native_metadata_publish_object_prototype(type:RawPtr<HlType>):Void {}
 
 	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
 

@@ -43,6 +43,30 @@ class HlTypeLayout {
 			bindFunctionDescriptorsForType(types.offset(index), functions, functionCount, context);
 	}
 
+	/** Publish only object prototypes; Haxe-owned layout filters out other type kinds. */
+	public static function publishObjectPrototypes(types:RawPtr<RawPtr<HlType>>, count:Int):Void {
+		if (count < 0 || (count > 0 && types.isNull()))
+			throw "HashLink object prototype publication requires a type table";
+		for (index in 0...count)
+			publishObjectPrototype(types.offset(index).load());
+	}
+
+	/** Publish object prototypes when the public type table is a contiguous native slab. */
+	public static function publishContiguousObjectPrototypes(types:RawPtr<HlType>, count:Int):Void {
+		if (count < 0 || (count > 0 && types.isNull()))
+			throw "HashLink object prototype publication requires a contiguous type slab";
+		for (index in 0...count)
+			publishObjectPrototype(types.offset(index));
+	}
+
+	static function publishObjectPrototype(type:RawPtr<HlType>):Void {
+		if (type.isNull())
+			throw "HashLink object prototype publication contains a null type";
+		var kind:HlTypeKind = cast type.ref.kind;
+		if (kind == HlTypeKind.Object || kind == HlTypeKind.Struct)
+			HlTypeBridge.native_metadata_publish_object_prototype(type);
+	}
+
 	static function bindFunctionDescriptorsForType(type:RawPtr<HlType>, functions:RawPtr<HlFunction>, functionCount:Int, context:RawPtr<HlModuleContext>):Void {
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
