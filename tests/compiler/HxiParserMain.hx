@@ -41,6 +41,10 @@ class HxiParserMain {
 		}
 		expectError(rawSource, "Output parameter");
 		var parsed = parseValidated("nativekit.hxi", valid);
+		var minimumIntCompiler = new Compiler();
+		minimumIntCompiler.addSourceRoot("stdlib");
+		minimumIntCompiler.update("MinimumInt.hx", "function main():Int return -2147483648;");
+		minimumIntCompiler.compile("MinimumInt");
 		var serialized = HxiWriter.write(parsed);
 		expect(HxiWriter.write(HxiParser.parse("roundtrip.hxi", serialized)) == serialized, "HXI serialization should be deterministic");
 		expect(parsed.name == "nativekit" && parsed.target == "x86_64-linux-gnu" && parsed.library == "nativekit", "interface metadata should parse");

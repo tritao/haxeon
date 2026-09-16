@@ -1239,7 +1239,13 @@ class Parser {
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
 		}
 		if (match(TokenKind.Minus)) {
-			var start = previous().span, value = parsePrimary();
+			var start = previous().span;
+			if (match(TokenKind.Integer)) {
+				var token = previous(), value = token.text == "2147483648" || token.text == "0x80000000" || token.text == "0X80000000"
+					? -2147483647 - 1 : -parseIntegerToken(token);
+				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
+			}
+			var value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Not)) {
@@ -1251,7 +1257,7 @@ class Parser {
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Integer))
-			return parsePostfix(IntegerLiteral(Std.parseInt(previous().text), previous().span));
+			return parsePostfix(IntegerLiteral(parseIntegerToken(previous()), previous().span));
 		if (match(TokenKind.Float))
 			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
@@ -2056,6 +2062,13 @@ class Parser {
 
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
+
+	function parseIntegerToken(token:Token):Int {
+		var value = Std.parseInt(token.text);
+		if (value == null)
+			fail(token, 'Integer literal "${token.text}" is outside the signed 32-bit range');
+		return value;
+	}
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
