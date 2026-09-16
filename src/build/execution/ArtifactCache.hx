@@ -9,6 +9,7 @@ import sys.io.File;
 private typedef CachedOutput = {
 	final file:String;
 	final checksum:String;
+	final mode:Int;
 }
 
 private typedef CachedManifest = {
@@ -45,7 +46,7 @@ class ArtifactCache {
 		} catch (_:Dynamic) {
 			return false;
 		}
-		if (manifest.version != 1 || manifest.outputs == null || manifest.outputs.length != action.outputs.length)
+		if (manifest.version != 2 || manifest.outputs == null || manifest.outputs.length != action.outputs.length)
 			return false;
 		var temporary:Array<String> = [];
 		try {
@@ -69,6 +70,7 @@ class ArtifactCache {
 					else
 						FileSystem.deleteFile(output);
 				FileSystem.rename(temporary[index], output);
+				applyMode(output, manifest.outputs[index].mode);
 			}
 			return true;
 		} catch (_:Dynamic) {
@@ -95,9 +97,9 @@ class ArtifactCache {
 					cachedFile = 'output-$index',
 					destination = Path.join([temporary, cachedFile]);
 				File.copy(output, destination);
-				outputs.push({file: cachedFile, checksum: Sha256.make(File.getBytes(destination)).toHex()});
+				outputs.push({file: cachedFile, checksum: Sha256.make(File.getBytes(destination)).toHex(), mode: FileSystem.stat(output).mode & 0x1ff});
 			}
-			File.saveContent(Path.join([temporary, "manifest.json"]), Json.stringify({version: 1, outputs: outputs}) + "\n");
+			File.saveContent(Path.join([temporary, "manifest.json"]), Json.stringify({version: 2, outputs: outputs}) + "\n");
 			ensureDirectory(cacheRoot);
 			if (!FileSystem.exists(directory))
 				FileSystem.rename(temporary, directory);
@@ -134,6 +136,16 @@ class ArtifactCache {
 			ensureDirectory(parent);
 		if (!FileSystem.exists(path))
 			FileSystem.createDirectory(path);
+	}
+
+	static function applyMode(path:String, mode:Int):Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		var digits = new StringBuf();
+		for (shift in [6, 3, 0])
+			digits.add((mode >> shift) & 7);
+		if (Sys.command("chmod", [digits.toString(), path]) != 0)
+			throw 'Could not restore permissions for $path';
 	}
 
 	static function removeTree(path:String):Void {

@@ -268,6 +268,8 @@ class BuildSystemMain {
 			secondOutput = Path.join([secondRoot, "output.txt"]);
 		File.saveContent(firstSource, "same input\n");
 		File.saveContent(secondSource, "same input\n");
+		if (Sys.systemName() != "Windows" && Sys.command("chmod", ["751", firstSource]) != 0)
+			throw "Could not prepare executable artifact-cache fixture";
 		Sys.putEnv("HAXEON_ARTIFACT_CACHE", cache);
 		var firstAction = new ExecutionAction(new ActionId("portable-copy"), [], [firstSource], [firstOutput], "portable copy",
 			Process("sh", ["-c", 'cp "$firstSource" "$firstOutput"'], firstRoot, new Map())),
@@ -280,8 +282,9 @@ class BuildSystemMain {
 		expect(firstResult.exitCode == 0
 			&& secondResult.exitCode == 0
 			&& secondResult.actions[0].skipped
-			&& File.getContent(secondOutput) == "same input\n",
-			"portable process artifacts should restore from the global cache");
+			&& File.getContent(secondOutput) == "same input\n"
+			&& (Sys.systemName() == "Windows" || (FileSystem.stat(secondOutput).mode & 0x40) != 0),
+			"portable process artifacts should restore from the global cache with executable permissions");
 		removeTree(cache);
 		removeTree(firstRoot);
 		removeTree(secondRoot);

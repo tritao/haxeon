@@ -66,7 +66,7 @@ class ActionFingerprint {
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
 	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>):String {
-		var fields:Array<String> = ["artifact-action-v1", action.id.key(), target, action.description];
+		var fields:Array<String> = ["artifact-action-v2", action.id.key(), target, action.description];
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
 				fields.push('command:${Path.withoutDirectory(command)}');
