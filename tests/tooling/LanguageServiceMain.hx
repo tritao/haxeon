@@ -1370,6 +1370,12 @@ class LanguageServiceMain {
 				genericTypedefAliasMember = item;
 		if (genericTypedefAliasMember == null || genericTypedefAliasMember.detail != "member:String")
 			throw "recovered generic aliased typedef did not preserve type-parameter substitution";
+		var genericTypedefAliasNavigationSource = "package alias.app; import alias.types.Alias as A; function main():Void { var value:A<String>; value.member; }";
+		genericTypedefAliasService.update("alias/app/GenericTypedefAlias.hx", genericTypedefAliasNavigationSource);
+		var genericTypedefAliasMemberPosition = genericTypedefAliasNavigationSource.indexOf("value.member") + "value.".length + 1,
+			genericTypedefAliasDefinition = genericTypedefAliasService.definition("alias/app/GenericTypedefAlias.hx", genericTypedefAliasMemberPosition);
+		if (genericTypedefAliasDefinition == null || genericTypedefAliasDefinition.path != "alias/types/Box.hx")
+			throw 'recovered generic aliased typedef did not navigate its substituted member: ${genericTypedefAliasDefinition == null ? "null" : genericTypedefAliasDefinition.path}';
 		var importedAbstractService = new LanguageService(),
 			importedAbstractSource = "package alias.app; import alias.types.Value; function main(value:Value):Void { value.";
 		importedAbstractService.update("alias/types/Value.hx", "package alias.types; abstract Value(Int) { public function member():Int return 1; } function main():Void return;");
