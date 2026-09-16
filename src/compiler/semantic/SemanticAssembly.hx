@@ -356,7 +356,7 @@ class SemanticAssembly {
 			if (!modules.exists(moduleName))
 				continue;
 			var state = modules.get(moduleName);
-			if (state.lastGoodRevision != 0)
+			if (state.lastGood != null)
 				initialBuild = false;
 		}
 		if (initialBuild) {
@@ -456,8 +456,12 @@ class SemanticAssembly {
 				invalidModules.set(owner, true);
 		}
 		for (moduleName in names)
-			if (modules.exists(moduleName) && modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
-				invalidModules.set(moduleName, true);
+			if (modules.exists(moduleName)) {
+				var moduleState = modules.get(moduleName),
+					lastGood = moduleState.lastGood;
+				if (lastGood == null || lastGood.revision != moduleState.revision)
+					invalidModules.set(moduleName, true);
+			}
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
 			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name))

@@ -396,16 +396,17 @@ class SemanticWorkspace {
 				token.check();
 			if (candidate == state)
 				continue;
-			if (candidate.currentExact != null) {
-				if (candidate.currentExact.semanticModel != null)
-					for (span in candidate.currentExact.semanticModel.index.locations(id))
+			var exact = EditorWorkspaceView.currentExact(candidate),
+				recovered = EditorWorkspaceView.currentRecovered(candidate);
+			if (exact != null) {
+				if (exact.semanticModel != null)
+					for (span in exact.semanticModel.index.locations(id))
 						addLocation(result, candidate, span);
-				if (authoritative && candidate.currentExact.semanticModel != null
-					&& candidate.currentExact.semanticModel.index.symbol(id) == null
-					&& candidate.currentRecovered != null
-					&& candidate.currentRecovered.isCurrent(candidate.revision)
-					&& candidate.currentRecovered.semanticModel != null) {
-					for (span in candidate.currentRecovered.semanticModel.index.locations(id)) {
+				if (authoritative && exact.semanticModel != null
+					&& exact.semanticModel.index.symbol(id) == null
+					&& recovered != null
+					&& recovered.semanticModel != null) {
+					for (span in recovered.semanticModel.index.locations(id)) {
 						if (token != null)
 							token.check();
 						addLocation(result, candidate, span);
@@ -413,16 +414,18 @@ class SemanticWorkspace {
 				}
 				continue;
 			}
-			if (candidate.currentRecovered != null && candidate.currentRecovered.semanticModel != null && authoritative)
-				for (span in candidate.currentRecovered.semanticModel.index.locations(id)) {
+			if (recovered != null && recovered.semanticModel != null && authoritative)
+				for (span in recovered.semanticModel.index.locations(id)) {
 					if (token != null)
 						token.check();
 					addLocation(result, candidate, span);
 				}
 		}
-		if (state.currentExact != null) {
-			if (state.currentExact.semanticModel != null)
-				for (span in state.currentExact.semanticModel.index.locations(id))
+		var exact = EditorWorkspaceView.currentExact(state),
+			recovered = EditorWorkspaceView.currentRecovered(state);
+		if (exact != null) {
+			if (exact.semanticModel != null)
+				for (span in exact.semanticModel.index.locations(id))
 					addLocation(result, state, span);
 			// A valid source snapshot may not type an unreachable body, while its
 			// current recovered model still contains references to the queried
@@ -430,20 +433,19 @@ class SemanticWorkspace {
 			// model already contributed locations. Keep the existing same-module
 			// guard so a recovered local cannot be merged into an exact symbol that
 			// the current semantic model owns under the same identity.
-			var exactSymbol = state.currentExact.semanticModel == null ? null : state.currentExact.semanticModel.index.symbol(id);
-			if (state.currentExact.semanticModel != null
+			var exactSymbol = exact.semanticModel == null ? null : exact.semanticModel.index.symbol(id);
+			if (exact.semanticModel != null
 					&& (exactSymbol == null || authoritativeSymbol != null && authoritativeSymbol.state != state)
-					&& state.currentRecovered != null
-					&& state.currentRecovered.isCurrent(state.revision)
-					&& state.currentRecovered.semanticModel != null) {
-					for (span in state.currentRecovered.semanticModel.index.locations(id)) {
+					&& recovered != null
+					&& recovered.semanticModel != null) {
+					for (span in recovered.semanticModel.index.locations(id)) {
 						if (token != null)
 							token.check();
 						addLocation(result, state, span);
 					}
 				}
-		} else if (state.currentRecovered != null && state.currentRecovered.semanticModel != null)
-			for (span in state.currentRecovered.semanticModel.index.locations(id)) {
+		} else if (recovered != null && recovered.semanticModel != null)
+			for (span in recovered.semanticModel.index.locations(id)) {
 				if (token != null)
 					token.check();
 				addLocation(result, state, span);
@@ -1558,8 +1560,9 @@ class SemanticWorkspace {
 	}
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel> {
-		if (state.currentExact != null)
-			return state.currentExact.semanticModel;
+		var exact = EditorWorkspaceView.currentExact(state);
+		if (exact != null)
+			return exact.semanticModel;
 		// During strict analysis the mutable candidate model is intentionally
 		// unpublished until all builder passes finish. Compiler resolution still
 		// needs to see that in-flight model; editor queries never reach this path
