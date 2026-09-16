@@ -2064,15 +2064,24 @@ class Parser {
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
 
 	function parseIntegerToken(token:Token, negative:Bool = false):Int {
-		var magnitude = parseIntegerMagnitude(token), limit = Int64.parseString(negative ? "2147483648" : "2147483647");
+		var hexadecimal = isHexIntegerToken(token),
+			limit = hexadecimal
+				? Int64.parseString(negative ? "2147483648" : "4294967295")
+				: Int64.parseString(negative ? "2147483648" : "2147483647"),
+			magnitude = parseIntegerMagnitude(token);
 		if (Int64.compare(magnitude, limit) > 0)
-			fail(token, 'Integer literal "${negative ? "-" : ""}${token.text}" is outside the signed 32-bit range');
+			fail(token, 'Integer literal "${negative ? "-" : ""}${token.text}" is outside the ${hexadecimal && !negative ? "unsigned" : "signed"} 32-bit range');
 		var signed = negative ? Int64.sub(Int64.ofInt(0), magnitude) : magnitude;
+		if (hexadecimal && !negative && Int64.compare(signed, Int64.parseString("2147483647")) > 0)
+			signed = Int64.sub(signed, Int64.parseString("4294967296"));
 		return Int64.toInt(signed);
 	}
 
+	static function isHexIntegerToken(token:Token):Bool
+		return StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X");
+
 	function parseIntegerMagnitude(token:Token):Int64 {
-		if (StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X")) {
+		if (isHexIntegerToken(token)) {
 			var value = Int64.ofInt(0);
 			for (index in 2...token.text.length) {
 				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
