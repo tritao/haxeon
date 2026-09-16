@@ -1628,6 +1628,12 @@ class LanguageServiceMain {
 			default:
 				throw 'exact generic this receiver lost its type parameter shape: ${exactGenericThisReceiver == null ? "null" : Std.string(exactGenericThisReceiver)}';
 		}
+		var exactGenericThisValue = false;
+		for (item in genericThisService.completeResult("GenericThis.hx", genericThisPosition).items)
+			if (item.label == "value" && item.detail == "value:T")
+				exactGenericThisValue = true;
+		if (!exactGenericThisValue)
+			throw "exact generic this completion lost the owner type parameter substitution";
 		var abstractThisService = new LanguageService(),
 			abstractThisSource = "abstract GenericAbstract<T>(T) { public function read():T return this.; } function main():Void return;";
 		abstractThisService.update("GenericAbstract.hx", abstractThisSource);
