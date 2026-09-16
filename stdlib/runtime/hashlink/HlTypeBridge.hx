@@ -3,6 +3,7 @@ package runtime.hashlink;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
 
 /** Small native boundary for handing Haxe-owned type metadata to HashLink. */
@@ -80,8 +81,8 @@ class HlTypeBridge {
 		status:hl.Bytes):hl.Abstract<"realtime_jit_code">
 		return null;
 
-	/** Apply one HLP transaction using Haxe-owned type and function metadata. */
-	public static function native_runtime_module_patch_code_haxe_metadata(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int, typeCount:Int,
+	/** Apply one Haxe-decoded patch model using Haxe-owned metadata. */
+	public static function native_runtime_module_patch_code_haxe_metadata(module:hl.Abstract<"realtime_module">, input:RawPtr<HlRuntimePatchInput>, typeCount:Int,
 		functions:RawPtr<HlFunction>, functionCount:Int, pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>, resolution:RawPtr<HlRuntimePatchResolution>,
 		status:hl.Bytes):hl.Abstract<"realtime_jit_code">
 		return null;

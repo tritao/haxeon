@@ -117,6 +117,14 @@ symbol models, revisions, dispatch results, and the retirement ledger remain
 unchanged when native publication rejects a candidate, and that the same HLP
 can be retried successfully afterward.
 
+The Haxe-built external path decodes HLP exactly once. `HlPatchReader` owns the
+wire-format parse and `HlNativeMetadataBuilder` projects the resulting model
+into an arena-owned `HlRuntimePatchInput`, including native-layout instruction,
+relocation, debug-file, and source-snapshot records. The native bridge consumes
+that model directly; it does not call `hl_patch_read` or allocate a second HLP
+model for this path. The legacy byte-oriented entry points retain the native
+HLP parser for ordinary HashLink compatibility.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication

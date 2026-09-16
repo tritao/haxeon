@@ -14,10 +14,15 @@ import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlRuntimePatchFunctions;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
+import runtime.hashlink.HlPatchDebug.HlSourceSpan;
 import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
+import runtime.memory.NativeString;
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction;
 
 /** Imports one validated HLB module into Haxe-owned HashLink metadata. */
 class HlNativeMetadataBuilder {
@@ -177,6 +182,128 @@ class HlNativeMetadataBuilder {
 		var result = generation.arena.allocPatchResolution();
 		result.ref.functionCount = cast patch.functions.length;
 		result.ref.functions = functions;
+		return result;
+	}
+
+	/** Project the decoded HLP model into an arena-owned native patch input. */
+	public static function preparePatchInput(generation:HlMetadataGeneration, patch:HlPatch, debug:RawPtr<HlRuntimePatchDebug>):RawPtr<HlRuntimePatchInput> {
+		if (generation == null || patch == null || debug.isNull())
+			throw "HashLink patch input requires a generation, patch, and debug metadata";
+		if (patch.moduleId == null || patch.moduleId.length != 16)
+			throw "HashLink patch input requires a 16-byte module identity";
+		var moduleId = generation.arena.allocUInt8Array(16);
+		for (index in 0...16)
+			moduleId.offset(index).store(cast patch.moduleId.get(index));
+
+		var ints:RawPtr<Int32> = patch.ints.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(patch.ints.length);
+		for (index in 0...patch.ints.length)
+			ints.offset(index).store(cast patch.ints[index]);
+		var floats:RawPtr<Float> = patch.floats.length == 0 ? RawPtr.nullPtr() : generation.arena.allocFloat64Array(patch.floats.length);
+		for (index in 0...patch.floats.length)
+			floats.offset(index).store(patch.floats[index]);
+		var strings:RawPtr<RawPtr<UInt8>> = patch.strings.length == 0 ? RawPtr.nullPtr() : generation.arena.allocNativePointerArray(patch.strings.length),
+			stringLengths:RawPtr<Int32> = patch.strings.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(patch.strings.length);
+		for (index in 0...patch.strings.length) {
+			var bytes = NativeString.utf8Bytes(patch.strings[index]),
+				pointer = generation.arena.allocUInt8Array(bytes.length + 1);
+			for (byte in 0...bytes.length)
+				pointer.offset(byte).store(cast bytes[byte]);
+			pointer.offset(bytes.length).store(cast 0);
+			strings.offset(index).store(pointer);
+			stringLengths.offset(index).store(cast bytes.length);
+		}
+
+		var debugFiles:RawPtr<RawPtr<UInt8>> = patch.debugFiles.length == 0 ? RawPtr.nullPtr() : generation.arena.allocNativePointerArray(patch.debugFiles.length),
+			debugFileLengths:RawPtr<Int32> = patch.debugFiles.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(patch.debugFiles.length);
+		for (index in 0...patch.debugFiles.length) {
+			var debugBytes = NativeString.utf8Bytes(patch.debugFiles[index]),
+				debugPointer = generation.arena.allocUInt8Array(debugBytes.length + 1);
+			for (byte in 0...debugBytes.length)
+				debugPointer.offset(byte).store(cast debugBytes[byte]);
+			debugPointer.offset(debugBytes.length).store(cast 0);
+			debugFiles.offset(index).store(debugPointer);
+			debugFileLengths.offset(index).store(cast debugBytes.length);
+		}
+
+		var functions = generation.arena.allocPatchFunctionInputArray(patch.functions.length);
+		for (index in 0...patch.functions.length) {
+			var source = patch.functions[index],
+				destination = functions.offset(index);
+			var registerStorage:RawPtr<Int32> = source.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.registers.length),
+				instructionStorage:RawPtr<HlRuntimePatchInstruction> = source.instructions.length == 0 ? RawPtr.nullPtr() : generation.arena.allocPatchInstructionArray(source.instructions.length),
+				relocationInstructions:RawPtr<Int32> = source.relocations.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.relocations.length),
+				relocationStableIds:RawPtr<Int32> = source.relocations.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.relocations.length),
+				debugSpans:RawPtr<HlSourceSpan> = source.debug.length == 0 ? RawPtr.nullPtr() : generation.arena.allocSourceSpanArray(source.debug.length);
+			destination.ref.type = cast source.type;
+			destination.ref.stableId = cast source.functionIndex;
+			destination.ref.slot = cast source.slot;
+			destination.ref.registerCount = cast source.registers.length;
+			destination.ref.registers = registerStorage;
+			for (register in 0...source.registers.length)
+				registerStorage.offset(register).store(cast source.registers[register]);
+			destination.ref.instructionCount = cast source.instructions.length;
+			destination.ref.instructions = instructionStorage;
+			for (instructionIndex in 0...source.instructions.length) {
+				var instruction = source.instructions[instructionIndex],
+					instructionDestination = instructionStorage.offset(instructionIndex),
+					operands:RawPtr<Int32> = instruction.operands.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(instruction.operands.length);
+				instructionDestination.ref.opcode = cast instruction.opcode;
+				instructionDestination.ref.operandCount = cast instruction.operands.length;
+				instructionDestination.ref.operands = operands;
+				for (operand in 0...instruction.operands.length)
+					operands.offset(operand).store(cast instruction.operands[operand]);
+			}
+			destination.ref.relocationCount = cast source.relocations.length;
+			destination.ref.relocationInstructions = relocationInstructions;
+			destination.ref.relocationStableIds = relocationStableIds;
+			for (relocation in 0...source.relocations.length) {
+				relocationInstructions.offset(relocation).store(cast source.relocations[relocation].instruction);
+				relocationStableIds.offset(relocation).store(cast source.relocations[relocation].stableId);
+			}
+			destination.ref.debugCount = cast source.debug.length;
+			destination.ref.debugSpans = debugSpans;
+			for (locationIndex in 0...source.debug.length) {
+				var sourceLocation = source.debug[locationIndex],
+					location = debugSpans.offset(locationIndex);
+				location.ref.file = cast sourceLocation.file;
+				location.ref.line = cast sourceLocation.line;
+				location.ref.column = cast sourceLocation.column;
+				location.ref.endLine = cast sourceLocation.endLine;
+				location.ref.endColumn = cast sourceLocation.endColumn;
+				location.ref.sourceHash = cast sourceLocation.sourceHash;
+				location.ref.start = cast sourceLocation.start;
+				location.ref.end = cast sourceLocation.end;
+				location.ref.flags = cast sourceLocation.flags;
+			}
+		}
+
+		var result = generation.arena.allocPatchInput();
+		result.ref.moduleId = moduleId;
+		result.ref.baseRevision = cast patch.baseRevision;
+		result.ref.revision = cast patch.revision;
+		result.ref.intPrefixHash = cast patch.intPrefixHash;
+		result.ref.floatPrefixHash = cast patch.floatPrefixHash;
+		result.ref.stringPrefixHash = cast patch.stringPrefixHash;
+		result.ref.typePrefixHash = cast patch.typePrefixHash;
+		result.ref.baseIntCount = cast patch.baseInts;
+		result.ref.intCount = cast patch.ints.length;
+		result.ref.ints = ints;
+		result.ref.floatCount = cast patch.floats.length;
+		result.ref.baseFloatCount = cast patch.baseFloats;
+		result.ref.floats = floats;
+		result.ref.stringCount = cast patch.strings.length;
+		result.ref.baseStringCount = cast patch.baseStrings;
+		result.ref.strings = strings;
+		result.ref.stringLengths = stringLengths;
+		result.ref.typeCount = cast patch.types.length;
+		result.ref.baseTypeCount = cast patch.baseTypes;
+		result.ref.functionCount = cast patch.functions.length;
+		result.ref.functions = functions;
+		result.ref.debugFileCount = cast patch.debugFiles.length;
+		result.ref.debugFiles = debugFiles;
+		result.ref.debugFileLengths = debugFileLengths;
+		result.ref.sourceSnapshotCount = cast patch.sourceSnapshots.length;
+		result.ref.sourceSnapshots = debug.ref.snapshots;
 		return result;
 	}
 

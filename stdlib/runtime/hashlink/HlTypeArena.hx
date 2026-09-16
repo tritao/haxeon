@@ -26,6 +26,9 @@ import runtime.hashlink.HlPatchDebug.HlSourceSnapshot;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlPatchResolution.HlPatchFunctionResolution;
 import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput;
+import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
@@ -117,6 +120,15 @@ class HlTypeArena {
 		return storage.alloc();
 
 	public inline function allocPatchFunctionResolutionArray(count:Int):RawPtr<HlPatchFunctionResolution>
+		return storage.alloc(count);
+
+	public inline function allocPatchInput():RawPtr<HlRuntimePatchInput>
+		return storage.alloc();
+
+	public inline function allocPatchFunctionInputArray(count:Int):RawPtr<HlRuntimePatchFunctionInput>
+		return storage.alloc(count);
+
+	public inline function allocPatchInstructionArray(count:Int):RawPtr<HlRuntimePatchInstruction>
 		return storage.alloc(count);
 
 	public inline function allocSourceSpanArray(count:Int):RawPtr<HlSourceSpan>
