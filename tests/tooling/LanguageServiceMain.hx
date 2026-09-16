@@ -1733,6 +1733,32 @@ class LanguageServiceMain {
 				foundObjectLiteralMember = true;
 		if (!foundObjectLiteralMember)
 			throw "object literal recovery consumed later statements after a malformed field";
+		var arrayLiteralService = new LanguageService(),
+			arrayLiteralSource = "package arrayapp; import arraytypes.ArrayValue; function retained():Void { var values = [1, broken thing, 2]; var value:ArrayValue = new ArrayValue(); value.";
+		arrayLiteralService.update("arraytypes/ArrayValue.hx", "package arraytypes; class ArrayValue { public var member:Int; }");
+		arrayLiteralService.update("ArrayLiterals.hx", arrayLiteralSource);
+		var arrayLiteralItems = arrayLiteralService.completeResult("ArrayLiterals.hx", arrayLiteralSource.length).items,
+			foundArrayLiteralMember = false;
+		for (item in arrayLiteralItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundArrayLiteralMember = true;
+		var arrayLiteralState = arrayLiteralService.compiler.modules.get("ArrayLiterals"),
+			foundArrayLiteralElement = false;
+		if (arrayLiteralState.recoveredAst != null)
+			for (functionDeclaration in arrayLiteralState.recoveredAst.functions)
+				if (functionDeclaration.name == "retained")
+					for (statement in functionDeclaration.statements)
+						switch statement {
+							case VarDeclaration(name, _, initializer, _) if (name == "values"):
+								switch initializer {
+									case ArrayLiteral(values, _):
+										foundArrayLiteralElement = values.length == 3;
+									default:
+								}
+							default:
+						}
+		if (!foundArrayLiteralMember || !foundArrayLiteralElement)
+			throw "array literal recovery did not preserve later elements or statements";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);

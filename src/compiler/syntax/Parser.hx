@@ -603,6 +603,53 @@ class Parser {
 		}
 	}
 
+	function parseDelimitedExpression(endKind:TokenKind, allowAssign:Bool):AstExpression {
+		try {
+			var expression = parseExpression();
+			if (recovering && !check(TokenKind.Comma) && !check(endKind)
+				&& (!allowAssign || !check(TokenKind.Assign))) {
+				recordExpected('comma or $endKind');
+				synchronizeDelimited(endKind);
+			}
+			return expression;
+		}
+		catch (error:CompileError) {
+			if (!recovering)
+				throw error;
+			recordRecoveryDiagnostic(error.diagnostic);
+			synchronizeDelimited(endKind);
+			return ErrorExpression(error.diagnostic.span);
+		}
+	}
+
+	function synchronizeDelimited(endKind:TokenKind):Void {
+		var braceDepth = 0, bracketDepth = 0, parenDepth = 0;
+		while (!check(TokenKind.Eof)) {
+			if (braceDepth == 0 && bracketDepth == 0 && parenDepth == 0
+				&& (check(TokenKind.Comma) || check(endKind) || check(TokenKind.Semicolon)
+					|| check(TokenKind.RightParen) || isDeclarationBoundary(current())))
+				return;
+			switch advance().kind {
+				case TokenKind.LeftBrace:
+					braceDepth++;
+				case TokenKind.RightBrace:
+					if (braceDepth > 0)
+						braceDepth--;
+				case TokenKind.LeftBracket:
+					bracketDepth++;
+				case TokenKind.RightBracket:
+					if (bracketDepth > 0)
+						bracketDepth--;
+				case TokenKind.LeftParen:
+					parenDepth++;
+				case TokenKind.RightParen:
+					if (parenDepth > 0)
+						parenDepth--;
+				default:
+			}
+		}
+	}
+
 	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
@@ -1687,18 +1734,18 @@ class Parser {
 				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
 			}
 			if (!check(TokenKind.RightBracket)) {
-				var first = parseExpression();
+				var first = parseDelimitedExpression(TokenKind.RightBracket, true);
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
-					var entries = [], value = parseExpression();
+					var entries = [], value = parseDelimitedExpression(TokenKind.RightBracket, false);
 					entries.push({key: first, value: value, span: expressionSpan(first).merge(expressionSpan(value))});
 					while (match(TokenKind.Comma)) {
 						if (check(TokenKind.RightBracket))
 							break;
-						var key = parseExpression();
+						var key = parseDelimitedExpression(TokenKind.RightBracket, true);
 						consume(TokenKind.Assign);
 						consume(TokenKind.Greater);
-						var entryValue = parseExpression();
+						var entryValue = parseDelimitedExpression(TokenKind.RightBracket, false);
 						entries.push({key: key, value: entryValue, span: expressionSpan(key).merge(expressionSpan(entryValue))});
 					}
 					var end = consume(TokenKind.RightBracket).span;
@@ -1707,7 +1754,7 @@ class Parser {
 				values.push(first);
 				while (match(TokenKind.Comma))
 					if (!check(TokenKind.RightBracket))
-						values.push(parseExpression());
+						values.push(parseDelimitedExpression(TokenKind.RightBracket, false));
 			}
 			var end = consume(TokenKind.RightBracket).span;
 			return parsePostfix(ArrayLiteral(values, start.merge(end)));
