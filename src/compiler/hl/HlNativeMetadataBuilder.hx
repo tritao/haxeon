@@ -15,6 +15,7 @@ import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlRuntimePatchFunctions;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlPatchDebug.HlSourceSpan;
+import runtime.hashlink.HlPatchResolution.HlPatchFunctionResolution;
 import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
@@ -146,52 +147,37 @@ class HlNativeMetadataBuilder {
 	}
 
 	/** Prepare Haxe-resolved stable-ID and relocation slots for native validation. */
-	public static function preparePatchResolution(generation:HlMetadataGeneration, patch:HlPatch, identity:HlRuntimeManifest):RawPtr<HlRuntimePatchResolution> {
+	public static function preparePatchResolution(generation:HlMetadataGeneration, patch:HlPatch, identity:HlRuntimeManifest):HlRuntimePatchResolution {
 		if (generation == null || patch == null || identity == null)
 			throw "HashLink patch resolution requires a generation, patch, and runtime identity";
 		if (patch.functions.length == 0)
 			throw "HashLink patch resolution requires at least one function";
-		var functions = generation.arena.allocPatchFunctionResolutionArray(patch.functions.length);
+		var functions:Array<HlPatchFunctionResolution> = [];
 		for (index in 0...patch.functions.length) {
 			var source = patch.functions[index],
-				destination = functions.offset(index),
 				expectedSlot = identitySlot(identity, source.functionIndex);
 			if (expectedSlot < 0 || expectedSlot != source.slot)
 				throw 'HashLink patch resolution has an invalid slot for function identity ${source.functionIndex}';
-			destination.ref.stableId = cast source.functionIndex;
-			destination.ref.slot = cast source.slot;
-			destination.ref.relocationCount = cast source.relocations.length;
-			if (source.relocations.length == 0) {
-				destination.ref.relocationStableIds = RawPtr.nullPtr();
-				destination.ref.relocationSlots = RawPtr.nullPtr();
-				continue;
-			}
-			var stableIds = generation.arena.allocInt32Array(source.relocations.length),
-				slots = generation.arena.allocInt32Array(source.relocations.length);
+			var stableIds:Array<Int> = [], slots:Array<Int> = [];
 			for (relocationIndex in 0...source.relocations.length) {
 				var relocation = source.relocations[relocationIndex],
 					targetSlot = identitySlot(identity, relocation.stableId);
 				if (targetSlot < 0)
 					throw 'HashLink patch resolution references unknown function identity ${relocation.stableId}';
-				stableIds.offset(relocationIndex).store(cast relocation.stableId);
-				slots.offset(relocationIndex).store(cast targetSlot);
+				stableIds.push(relocation.stableId);
+				slots.push(targetSlot);
 			}
-			destination.ref.relocationStableIds = stableIds;
-			destination.ref.relocationSlots = slots;
+			functions.push(new HlPatchFunctionResolution(source.functionIndex, source.slot, stableIds, slots));
 		}
-		var result = generation.arena.allocPatchResolution();
-		result.ref.functionCount = cast patch.functions.length;
-		result.ref.functions = functions;
-		return result;
+		return new HlRuntimePatchResolution(functions);
 	}
 
 	/** Project the decoded HLP model into an arena-owned native patch input. */
 	public static function preparePatchInput(generation:HlMetadataGeneration, patch:HlPatch, debug:RawPtr<HlRuntimePatchDebug>,
-			resolution:RawPtr<HlRuntimePatchResolution>):RawPtr<HlRuntimePatchInput> {
-		if (generation == null || patch == null || debug.isNull() || resolution.isNull())
+			resolution:HlRuntimePatchResolution):RawPtr<HlRuntimePatchInput> {
+		if (generation == null || patch == null || debug.isNull() || resolution == null)
 			throw "HashLink patch input requires a generation, patch, debug metadata, and resolution metadata";
-		if (cast(resolution.ref.functionCount, Int) != patch.functions.length
-			|| (patch.functions.length > 0 && resolution.ref.functions.isNull()))
+		if (resolution.functions.length != patch.functions.length)
 			throw "HashLink patch input resolution count does not match the patch";
 		if (patch.moduleId == null || patch.moduleId.length != 16)
 			throw "HashLink patch input requires a 16-byte module identity";
@@ -233,12 +219,12 @@ class HlNativeMetadataBuilder {
 		for (index in 0...patch.functions.length) {
 			var source = patch.functions[index],
 				destination = functions.offset(index),
-				resolved = resolution.ref.functions.offset(index);
-			if (cast(resolved.ref.stableId, Int) != source.functionIndex
-				|| cast(resolved.ref.slot, Int) != source.slot || cast(resolved.ref.relocationCount, Int) != source.relocations.length)
+				resolved = resolution.functions[index];
+			if (resolved.stableId != source.functionIndex
+				|| resolved.slot != source.slot
+				|| resolved.relocationStableIds.length != source.relocations.length
+				|| resolved.relocationSlots.length != source.relocations.length)
 				throw 'HashLink patch input resolution does not match function identity ${source.functionIndex}';
-			if (source.relocations.length > 0 && (resolved.ref.relocationStableIds.isNull() || resolved.ref.relocationSlots.isNull()))
-				throw 'HashLink patch input resolution has no relocation slots for function identity ${source.functionIndex}';
 			var registerStorage:RawPtr<Int32> = source.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.registers.length),
 				instructionStorage:RawPtr<HlRuntimePatchInstruction> = source.instructions.length == 0 ? RawPtr.nullPtr() : generation.arena.allocPatchInstructionArray(source.instructions.length),
 				relocationInstructions:RawPtr<Int32> = source.relocations.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.relocations.length),
@@ -268,8 +254,8 @@ class HlNativeMetadataBuilder {
 			destination.ref.relocationStableIds = relocationStableIds;
 			for (relocation in 0...source.relocations.length) {
 				var relocationModel = source.relocations[relocation],
-					resolvedStableId:Int = cast(resolved.ref.relocationStableIds.offset(relocation).load(), Int),
-					resolvedSlot:Int = cast(resolved.ref.relocationSlots.offset(relocation).load(), Int);
+					resolvedStableId = resolved.relocationStableIds[relocation],
+					resolvedSlot = resolved.relocationSlots[relocation];
 				if (resolvedStableId != relocationModel.stableId)
 					throw 'HashLink patch input relocation identity does not match function identity ${source.functionIndex}';
 				if (relocationModel.instruction < 0 || relocationModel.instruction >= source.instructions.length)

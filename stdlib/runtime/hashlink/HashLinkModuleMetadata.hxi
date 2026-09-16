@@ -215,16 +215,6 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 		debug_spans: ptr<hl_source_span> @offset(72);
 	}
 	/**
-	 * Stable-ID and relocation slots resolved by the Haxe patch policy.
-	 */
-	struct hl_patch_function_resolution @layout(32, 8) {
-		stable_id: c_int @offset(0);
-		slot: c_int @offset(4);
-		relocation_count: c_int @offset(8);
-		relocation_stable_ids: ptr<c_int> @offset(16);
-		relocation_slots: ptr<c_int> @offset(24);
-	}
-	/**
 	 * Haxe-owned decoded patch model passed directly to the native JIT boundary.
 	 */
 	struct hl_patch_input @layout(152, 8) {
@@ -272,13 +262,6 @@ interface HashLinkModuleMetadata @target("x86_64-linux-gnu") @library("haxeon_ru
 		strings: ptr<ptr<c_char>> @offset(32);
 		string_lens: ptr<c_int> @offset(40);
 		ustrings: ptr<ptr<u16>> @offset(48);
-	}
-	/**
-	 * Haxe-owned patch resolution plan checked before native publication.
-	 */
-	struct hl_patch_resolution @layout(16, 8) {
-		function_count: c_int @offset(0);
-		functions: ptr<hl_patch_function_resolution> @offset(8);
 	}
 	struct hl_source_snapshot @layout(16, 8) {
 		source_hash: c_int @offset(0);

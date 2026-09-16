@@ -22,8 +22,6 @@ exec "$root_dir/scripts/haxeon-ffi-import" \
   --only=hl_source_span \
   --only=hl_source_snapshot \
   --only=hl_patch_debug \
-  --only=hl_patch_function_resolution \
-  --only=hl_patch_resolution \
   --only=hl_patch_function \
   --only=hl_patch_input \
   "$root_dir/vendor/hashlink/src/hlmodule.h"

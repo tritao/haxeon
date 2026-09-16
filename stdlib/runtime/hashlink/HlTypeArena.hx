@@ -24,8 +24,6 @@ import runtime.hashlink.HlNativeCode;
 import runtime.hashlink.HlPatchDebug.HlSourceSpan;
 import runtime.hashlink.HlPatchDebug.HlSourceSnapshot;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
-import runtime.hashlink.HlPatchResolution.HlPatchFunctionResolution;
-import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction;
@@ -115,12 +113,6 @@ class HlTypeArena {
 
 	public inline function allocPatchDebug():RawPtr<HlRuntimePatchDebug>
 		return storage.alloc();
-
-	public inline function allocPatchResolution():RawPtr<HlRuntimePatchResolution>
-		return storage.alloc();
-
-	public inline function allocPatchFunctionResolutionArray(count:Int):RawPtr<HlPatchFunctionResolution>
-		return storage.alloc(count);
 
 	public inline function allocPatchInput():RawPtr<HlRuntimePatchInput>
 		return storage.alloc();

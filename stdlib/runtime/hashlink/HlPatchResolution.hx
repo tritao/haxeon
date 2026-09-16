@@ -1,20 +1,29 @@
 package runtime.hashlink;
 
-import runtime.memory.RawPtr;
-
 /** Haxe-resolved stable-ID and relocation slots for one HLP transaction. */
-@:value @:repr("C")
 class HlPatchFunctionResolution {
-	public var stableId:Int32;
-	public var slot:Int32;
-	public var relocationCount:Int32;
-	public var relocationStableIds:RawPtr<Int32>;
-	public var relocationSlots:RawPtr<Int32>;
+	public final stableId:Int;
+	public final slot:Int;
+	public final relocationStableIds:Array<Int>;
+	public final relocationSlots:Array<Int>;
+
+	public function new(stableId:Int, slot:Int, relocationStableIds:Array<Int>, relocationSlots:Array<Int>) {
+		if (stableId < 0 || slot < 0 || relocationStableIds == null || relocationSlots == null || relocationStableIds.length != relocationSlots.length)
+			throw "HashLink patch function resolution is incomplete";
+		this.stableId = stableId;
+		this.slot = slot;
+		this.relocationStableIds = relocationStableIds;
+		this.relocationSlots = relocationSlots;
+	}
 }
 
-/** Arena-owned resolution plan handed to the native patch validator. */
-@:value @:repr("C")
+/** Haxe-owned resolution plan used while projecting a patch for native publication. */
 class HlRuntimePatchResolution {
-	public var functionCount:Int32;
-	public var functions:RawPtr<HlPatchFunctionResolution>;
+	public final functions:Array<HlPatchFunctionResolution>;
+
+	public function new(functions:Array<HlPatchFunctionResolution>) {
+		if (functions == null || functions.length == 0)
+			throw "HashLink patch resolution requires at least one function";
+		this.functions = functions;
+	}
 }

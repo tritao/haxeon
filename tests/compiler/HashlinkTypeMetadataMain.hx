@@ -33,8 +33,7 @@ class HashlinkTypeMetadataMain {
 			'import runtime.hashlink.HlPatchDebug.HlSourceSpan; import runtime.hashlink.HlPatchDebug.HlSourceSnapshot; import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug; '
 			+
 			'import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction; import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput; import runtime.hashlink.HlPatchInput.HlRuntimePatchInput; '
-			+
-			'import runtime.hashlink.HlPatchPools.HlPatchPools; import runtime.hashlink.HlPatchResolution.HlPatchFunctionResolution; import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution; '
+			+ 'import runtime.hashlink.HlPatchPools.HlPatchPools; '
 			+ 'function typeSize():Int return sizeof<HlType>(); '
 			+ 'function typeDataSize():Int return sizeof<HlTypeData>(); '
 			+ 'function typeDataOffset():Int return offsetof<HlType>("data"); '
@@ -68,8 +67,6 @@ class HashlinkTypeMetadataMain {
 			+ 'function sourceSpanSize():Int return sizeof<HlSourceSpan>(); '
 			+ 'function sourceSnapshotSize():Int return sizeof<HlSourceSnapshot>(); '
 			+ 'function patchDebugSize():Int return sizeof<HlRuntimePatchDebug>(); '
-			+ 'function patchFunctionResolutionSize():Int return sizeof<HlPatchFunctionResolution>(); '
-			+ 'function patchResolutionSize():Int return sizeof<HlRuntimePatchResolution>(); '
 			+ 'function patchFunctionInputSize():Int return sizeof<HlRuntimePatchFunctionInput>(); '
 			+ 'function patchInputSize():Int return sizeof<HlRuntimePatchInput>(); '
 			+ 'function main():Int return typeSize() + typeDataSize() + typeDataOffset() + functionSize() + objectSize();');
@@ -299,9 +296,6 @@ class HashlinkTypeMetadataMain {
 		expect(constantReturn(functions, "HashlinkTypeMetadata.sourceSpanSize") == 36, "hl_source_span must preserve its packed scalar layout");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.sourceSnapshotSize") == 16, "hl_source_snapshot must preserve content pointer alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.patchDebugSize") == 32, "hl_patch_debug must preserve nested metadata pointer alignment");
-		expect(constantReturn(functions, "HashlinkTypeMetadata.patchFunctionResolutionSize") == 32,
-			"hl_patch_function_resolution must preserve relocation pointer alignment");
-		expect(constantReturn(functions, "HashlinkTypeMetadata.patchResolutionSize") == 16, "hl_patch_resolution must preserve its function table pointer");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.patchFunctionInputSize") == 80,
 			"hl_patch_function must preserve decoded instruction metadata alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.patchInputSize") == 152, "hl_patch_input must preserve the full decoded patch model layout");
@@ -320,8 +314,6 @@ class HashlinkTypeMetadataMain {
 			"hl_source_span",
 			"hl_source_snapshot",
 			"hl_patch_debug",
-			"hl_patch_function_resolution",
-			"hl_patch_resolution",
 			"hl_patch_function",
 			"hl_patch_input"
 		],
@@ -465,25 +457,6 @@ class HashlinkTypeMetadataMain {
 						{nativeName: "debug_spans", haxeName: "spans"},
 						{nativeName: "source_snapshot_count", haxeName: "snapshotCount"},
 						{nativeName: "source_snapshots", haxeName: "snapshots"}
-					]
-				},
-				{
-					nativeName: "hl_patch_function_resolution",
-					haxeName: "runtime.hashlink.HlPatchFunctionResolution",
-					fields: [
-						{nativeName: "stable_id", haxeName: "stableId"},
-						{nativeName: "slot", haxeName: "slot"},
-						{nativeName: "relocation_count", haxeName: "relocationCount"},
-						{nativeName: "relocation_stable_ids", haxeName: "relocationStableIds"},
-						{nativeName: "relocation_slots", haxeName: "relocationSlots"}
-					]
-				},
-				{
-					nativeName: "hl_patch_resolution",
-					haxeName: "runtime.hashlink.HlRuntimePatchResolution",
-					fields: [
-						{nativeName: "function_count", haxeName: "functionCount"},
-						{nativeName: "functions", haxeName: "functions"}
 					]
 				},
 				{

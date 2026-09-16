@@ -140,7 +140,7 @@ retired patch JIT code that can reference them in debugger stacks.
 On the Haxe-built external path, Haxeon has already constructed the compatible
 appended type records, patched function descriptors, source spans, source
 snapshots, and cumulative integer, float, and string pools in the generation's
-arena. It also constructs an arena-owned resolution plan: every replacement
+arena. It also constructs a Haxe-owned resolution plan: every replacement
 function and relocation carries its stable identity and the dispatch slot
 chosen by Haxe policy. The projection applies those slots directly to the
 instruction operands before publication. Native validates the resolved model
