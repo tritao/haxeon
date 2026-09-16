@@ -7,8 +7,8 @@ module generation.
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
 | Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state, Haxeon `LoadedModule`, and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
-| Base bytecode metadata | HashLink code reader arena for the host facade; Haxeon metadata arena for `HlNativeModuleLoader.loadRuntime` | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
-| Type arena entries | Base code arena; patch type append allocations | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
+| Base bytecode metadata | Haxeon metadata arena for `HlNativeModuleLoader.loadRuntime`; HashLink code reader arena for the legacy host facade | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
+| Type arena entries | Haxeon metadata arena on the Haxe-built path; HashLink code arena on the legacy path | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
 | Function dispatch slots | `hl_module` | Loaded module generation | Patchable calls and staged closures | Runtime-module release |
 | Base JIT image | HashLink executable allocator | `hl_module` | Dispatch slots, closures, active calls | Runtime-module release after calls quiesce |
 | JIT ABI wrapper image | HashLink executable allocator | Process runtime | Dynamic-call bridge and wrapper closures | Global HashLink shutdown after all modules and managed values are finished |
@@ -77,6 +77,13 @@ the bytes to HashLink; the native patch kernel still performs complete wire,
 operand, symbol, and live-compatibility validation. The public host `Runtime.load`
 facade remains on the legacy native-decoder path until it can be compiled against
 the Haxeon-only native-memory classes.
+
+For Haxe-built object and enum descriptors, `globalValue` follows HashLink's
+two-stage representation: `HlMetadataGeneration.globalIndex()` stores the
+1-based module-global index while the record is being handed to HashLink, and
+`hl_module_init_indexes` rebases it to the native module's global storage during
+initialization. `globalPointer()` remains the Haxe-owned value-slot accessor; the
+two APIs must not be conflated.
 
 `HlRuntimeModuleRegistry` owns publication and retirement for the Haxe-built
 external path. Loading a candidate publishes it as the current module and moves
