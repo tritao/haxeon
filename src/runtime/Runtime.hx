@@ -92,22 +92,22 @@ class Runtime {
 		return invoke(module, stableIndex, 6, function(handle) return RuntimeKernel.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.allocation_count);
+		return module.access(RuntimeJit.allocation_count);
 
 	public static function patchJitCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.patch_jit_count);
+		return module.access(RuntimeJit.patch_jit_count);
 
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
-		var bytes = module.access(function(handle) return RuntimeKernel.jit_location(handle, stableIndex));
+		var bytes = module.access(function(handle) return RuntimeJit.jit_location(handle, stableIndex));
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
 	public static function debugRegionCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.debug_region_count);
+		return module.access(RuntimeJit.debug_region_count);
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeKernel.retired_allocation_count);
+		return module.access(RuntimeJit.retired_allocation_count);
 
 	public static function metadataTypeCount(module:LoadedModule):Int
 		return module.access(RuntimeKernel.type_count);
@@ -134,7 +134,7 @@ class Runtime {
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
 		module.access(function(handle) {
-			RuntimeKernel.set_patch_failure_stage(handle, stage);
+			RuntimeJit.set_patch_failure_stage(handle, stage);
 		});
 
 	public static function dispose(module:LoadedModule):Void {
@@ -225,7 +225,7 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
-			var result:RuntimeStatus = RuntimeKernel.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
+			var result:RuntimeStatus = RuntimeJit.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
 			if (result == RuntimeStatus.Ok)
 				module.commitPatch(generation);
 			return result;
