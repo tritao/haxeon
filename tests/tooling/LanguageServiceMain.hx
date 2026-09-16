@@ -1822,6 +1822,17 @@ class LanguageServiceMain {
 				foundTryRecoveryMember = true;
 		if (!foundTryRecoveryMember)
 			throw "try-body recovery consumed its catch handler or later local";
+		var doWhileRecoveryService = new LanguageService(),
+			doWhileRecoverySource = "package dowhileapp; import dowhiletypes.DoWhileValue; function retained():Void { do broken statement; while (true); var value:DoWhileValue = new DoWhileValue(); value.";
+		doWhileRecoveryService.update("dowhiletypes/DoWhileValue.hx", "package dowhiletypes; class DoWhileValue { public var member:Int; }");
+		doWhileRecoveryService.update("DoWhileRecovery.hx", doWhileRecoverySource);
+		var doWhileRecoveryItems = doWhileRecoveryService.completeResult("DoWhileRecovery.hx", doWhileRecoverySource.length).items,
+			foundDoWhileRecoveryMember = false;
+		for (item in doWhileRecoveryItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundDoWhileRecoveryMember = true;
+		if (!foundDoWhileRecoveryMember)
+			throw "do/while-body recovery consumed its condition or later local";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
