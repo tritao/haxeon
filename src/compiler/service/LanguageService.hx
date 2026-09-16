@@ -27,7 +27,6 @@ import compiler.types.Type.NominalKind;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.DeclarationIndex;
 import compiler.types.TypeRelations;
-import compiler.types.Typer;
 import compiler.types.Typer.RecoveryTypingModule;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedAstTools;
@@ -41,7 +40,6 @@ import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
 import compiler.Diagnostic.CompileError;
-import compiler.Diagnostic.DiagnosticSeverity;
 import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
@@ -256,12 +254,25 @@ class LanguageService {
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	final recoveredCompletionPrograms:Map<String, {revision:Int, valid:Bool, program:AstProgram}> = [];
 	final recoveredTypingModules:Map<String, RecoveredTypingModuleCache> = [];
+	final recoveryEngine:RecoveryEngine;
 	var editorDefines:Map<String, String> = [];
 	var editorScopeIdentity = "default";
 
 	public function new(?identityState:haxe.io.Bytes) {
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
 		compiler.addSourceRoot("stdlib");
+		recoveryEngine = new RecoveryEngine({
+			editorDefines: function() return editorDefines,
+			typingModules: function(state, program, token) return recoveryTypingModules(state, program, token),
+			reuseFunctions: function(state, program, changedBodies, forceNoReuse)
+				return recoveredTypedFunctionReuse(state, program, changedBodies, forceNoReuse),
+			resolveSymbol: function(state, program, name, token) return resolveRecoveredSymbol(state, program, name, token),
+			resolveEnumCase: function(state, program, name, index, token) return resolveRecoveredEnumCase(state, program, name, index, token),
+			resolveType: function(state, program, name, arguments, token) return resolveRecoveredType(state, program, name, arguments, token),
+			symbolCandidates: function(state, name, token, program)
+				return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, program),
+			publishDiagnostics: function(state, diagnostics) publishRecoveryDiagnostics(state, diagnostics)
+		});
 	}
 
 	public function update(path:String, source:String):ModuleState {
@@ -364,68 +375,10 @@ class LanguageService {
 
 	function recoverSyntax(state:ModuleState, ?token:CancellationToken, ?externalChangedBodies:Map<String, Bool>,
 		forceNoReuse:Bool = false):Void {
-		if (token != null)
-			token.check();
-		state.recoveryDiagnostics = [];
-		var conditional:ConditionalSource;
-		try
-			conditional = ConditionalCompilation.process(state.source, editorDefines)
-		catch (error:CompileError) {
-			state.conditionalDefines = [];
-			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
-			publishRecoveryDiagnostics(state, [error.diagnostic]);
-			return;
-		}
-		state.conditionalDefines = conditional.defines;
-		var checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
-			tokens:Array<compiler.syntax.Token>;
-		try
-			tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize()
-		catch (error:CompileError) {
-			error.diagnostic.origin = DiagnosticOrigin.Lexical;
-			publishRecoveryDiagnostics(state, [error.diagnostic]);
-			return;
-		}
-		try {
-			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering();
-			var inferredProgram = SignatureInference.inferProgram(recovered.program, checkpoint),
-				recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
-				typingDiagnostics:Array<Diagnostic> = [],
-				typingModules = recoveryTypingModules(state, recovered.program, token),
-				reusedFunctions = recoveredTypedFunctionReuse(state, recovered.program, externalChangedBodies, forceNoReuse);
-			recoveredModel.recoveredSignatureProgram = inferredProgram;
-			recoveredModel.partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics, typingModules,
-				reusedFunctions, inferredProgram);
-			if (recoveredModel.partialTypedProgram != null)
-				recoveredTypedFunctionReuses += mapSize(reusedFunctions);
-			for (module in typingModules)
-				recoveredModel.builder.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
-				recoveredModel.builder.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
-				function(name) return resolveRecoveredSymbol(state, recovered.program, name, token),
-				function(name, index) return resolveRecoveredEnumCase(state, recovered.program, name, index, token),
-				function(name, arguments) return resolveRecoveredType(state, recovered.program, name, arguments, token),
-				function(name) return compiler.semanticWorkspace.editorSymbolCandidates(state, name, token, recovered.program),
-					state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.builder
-					: state.lastGood == null || state.lastGood.semanticModel == null ? null : state.lastGood.semanticModel.builder);
-			recoveredModel.freeze();
-			state.publishRecoveredSnapshot(tokens, recovered.program, recoveredModel);
+		var result = recoveryEngine.recover(state, token, externalChangedBodies, forceNoReuse);
+		if (result.published)
 			recoveredSnapshotBuilds++;
-			publishRecoveryDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));
-		} catch (error:CompileError) {
-			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
-			// Parser recovery itself failed. Keep the last-good semantic snapshot
-			// available; do not destroy it.
-			publishRecoveryDiagnostics(state, [error.diagnostic]);
-		} catch (error:Dynamic) {
-			if (Std.isOfType(error, CancellationError))
-				throw error;
-			// Unexpected recovery failures must not escape an editor update. Keep
-			// the last-good semantic snapshot and expose one bounded diagnostic.
-			publishRecoveryDiagnostics(state, [
-				new Diagnostic("E0002", "Unable to recover editor syntax", state.source.span(0, 0), DiagnosticSeverity.Error, null,
-					DiagnosticOrigin.ParserRecovery)
-			]);
-		}
+		recoveredTypedFunctionReuses += result.reusedFunctions;
 	}
 
 	/**
