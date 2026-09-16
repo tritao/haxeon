@@ -15,14 +15,14 @@ class LoadedModule {
 	/** Validated Haxe-owned runtime identity retained beside the native handle. */
 	public final identity:HlRuntimeManifest;
 
+	/** Haxe-owned revision, function-version, and generation state. */
+	final patchState:RuntimePatchState;
+
 	/** Haxe-owned revision corresponding to the last successful native publication. */
-	public var revision(default, null):Int;
+	public var revision(get, never):Int;
 
 	/** Stable function identities and their current Haxe-side generations. */
-	public var functions(default, null):RuntimeFunctionVersionTable;
-
-	/** Haxe-owned snapshots of successfully published patch generations. */
-	final patchLedger:Array<RuntimePatchGeneration> = [];
+	public var functions(get, never):RuntimeFunctionVersionTable;
 
 	/** Haxe-owned JIT allocations retained by this module's patch generations. */
 	final jitGenerations:Array<RuntimeJitGeneration> = [];
@@ -48,13 +48,18 @@ class LoadedModule {
 		this.handle = handle;
 		this.model = model;
 		this.identity = identity;
-		this.revision = identity.revision;
-		this.functions = functionVersions(model, identity);
+		patchState = new RuntimePatchState(identity.revision, functionVersions(model, identity));
 	}
+
+	function get_revision():Int
+		return patchState.revision;
+
+	function get_functions():RuntimeFunctionVersionTable
+		return patchState.functions;
 
 	/** Number of successfully published Haxe-owned patch generations. */
 	public inline function committedPatchCount():Int
-		return patchLedger.length;
+		return patchState.committedPatchCount();
 
 	/** Return the lifecycle state for one retained JIT generation. */
 	@:allow(runtime.Runtime)
@@ -98,11 +103,7 @@ class LoadedModule {
 	function commitPatch(generation:RuntimePatchGeneration):Void {
 		if (generation == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state requires a prepared generation");
-		var patchModel = generation.patch,
-			envelope = generation.envelope,
-			nextFunctions = generation.functions;
-		if (envelope.baseRevision != revision || envelope.revision <= revision)
-			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state has an invalid revision transition");
+		var patchModel = generation.patch;
 		for (value in patchModel.ints)
 			model.code.ints.push(value);
 		for (value in patchModel.floats)
@@ -111,9 +112,7 @@ class LoadedModule {
 			model.code.strings.push(value);
 		for (type in patchModel.types)
 			model.code.types.push(type);
-		patchLedger.push(generation);
-		functions = nextFunctions;
-		revision = envelope.revision;
+		patchState.publish(generation);
 	}
 
 	static function functionVersions(model:HlModule, identity:HlRuntimeManifest):RuntimeFunctionVersionTable {
