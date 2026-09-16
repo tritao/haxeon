@@ -1905,6 +1905,16 @@ class LanguageServiceMain {
 				emptySwitchMember = true;
 		if (!emptySwitchMember)
 			throw "unreachable switch recovery branch poisoned the known branch type";
+		var nullableConditionalService = new LanguageService(),
+			nullableConditionalSource = "class NullableValue { public var member:Int; } function main():Void { var value = true ? new NullableValue() : null; value.";
+		nullableConditionalService.update("NullableConditional.hx", nullableConditionalSource);
+		var nullableConditionalItems = nullableConditionalService.completeResult("NullableConditional.hx", nullableConditionalSource.length).items,
+			nullableConditionalMember = false;
+		for (item in nullableConditionalItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				nullableConditionalMember = true;
+		if (!nullableConditionalMember)
+			throw "null/reference conditional recovery lost the known nullable branch type";
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);

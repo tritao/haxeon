@@ -1717,6 +1717,16 @@ class SemanticIndexBuilder {
 			return right;
 		if (isRecoveryType(right))
 			return left;
+		if (left == TNull && TypeRelations.isReference(right))
+			return switch right {
+				case TNullable(_): right;
+				default: TNullable(right);
+			};
+		if (right == TNull && TypeRelations.isReference(left))
+			return switch left {
+				case TNullable(_): left;
+				default: TNullable(left);
+			};
 		if ((TypeRelations.equals(left, TInt) && TypeRelations.equals(right, TFloat))
 			|| (TypeRelations.equals(left, TFloat) && TypeRelations.equals(right, TInt)))
 			return TFloat;
