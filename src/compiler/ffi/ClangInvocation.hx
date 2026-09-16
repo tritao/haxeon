@@ -33,13 +33,17 @@ class ClangInvocation {
 			"-x",
 			options.language,
 			'-std=${options.standard}',
-			"-ffreestanding",
 			"-target",
 			options.target,
 			"-w",
 			"-ferror-limit=1",
 			"-fno-caret-diagnostics"
 		];
+		// C++ headers commonly depend on the hosted standard library. Keeping
+		// -ffreestanding for C preserves the existing C ABI import behavior, but
+		// passing it to clang++ makes headers such as <vector> unusable.
+		if (options.language == "c")
+			result.insert(3, "-ffreestanding");
 		var compileFlags = options.compileCommands == null ? [] : compileDatabaseFlags(options.compileCommands, options.header);
 		for (flag in compileFlags)
 			result.push(flag);

@@ -120,6 +120,12 @@ class CxxHeaderImporterMain {
 		expect(trivialText.indexOf("struct __cxx_Point @layout(8, 4)") >= 0
 			&& trivialText.indexOf("extern fn __cxx_make_point() -> __cxx_Point") >= 0,
 			"validated standard-layout records should lower by value only under the explicit trivial-value policy");
+		var hosted = CxxHeaderImporter.importHeader("tests/ffi/cxx_hosted_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+		expect(hosted.model.records.length == 1
+			&& hosted.model.records[0].qualifiedName == "nkui::HostedDisplayList"
+			&& hosted.model.records[0].size > 0
+			&& hosted.model.records[0].align > 0,
+			"C++ imports should support hosted standard-library headers without importing their declarations");
 	}
 
 	static function expect(value:Bool, message:String):Void {

@@ -37,8 +37,8 @@ scripts/haxeon-ffi-import \
   --library=nativekit \
   --interface=NativeKit \
   --haxe-output-dir=generated/nativekit-cxx \
-  --output=generated/nativekit.hxi \
-/path/to/nativekit/include/nativekit.hpp
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
 ```
 
 Add the projection directory as a source root when compiling the application,
@@ -47,7 +47,7 @@ alongside the generated HXI interface:
 ```sh
 haxeon-compiler \
   --root=generated/nativekit-cxx \
-  --ffi-interface=generated/nativekit.hxi \
+  --ffi-interface=generated/library.hxi \
   --entry=app.Main \
   sources.manifest
 ```
@@ -56,6 +56,24 @@ The generated `DisplayList.hx`-style modules are intentionally thin. They do
 not allocate or destroy C++ objects; callers supply a native pointer obtained
 from an API with an explicit ownership contract. Overloaded methods receive
 stable numeric suffixes until a richer Haxe overload policy is added.
+
+NativeKit integration currently uses its stable public C ABI through the C
+importer. Its `nkui::DisplayList` implementation is an internal C++ class:
+its methods are not `noexcept`, and the shared UI library hides its C++ symbols.
+It therefore must not be presented as a direct CXX_ABI_V1 success case. An
+opt-in audit checks the real header and NativeKit compilation database and
+asserts that Haxeon reports the expected actionable diagnostics:
+
+```sh
+NATIVEKIT_ROOT=/path/to/nativekit \
+NATIVEKIT_BUILD_DIR=/path/to/nativekit/build-ui-integrated \
+tests/integration/test-nativekit-cxx-profile.sh
+```
+
+When NativeKit exposes a supported C++ surface, or after C++ thunk support is
+added, this audit is the integration point for promoting `DisplayList` to a
+positive direct-call test. The existing C API remains the correct binding for
+the current NativeKit build.
 
 Use repeatable `--define=<name[=value]>` options for explicit preprocessor
 definitions. `--compile-commands=<path>` accepts a Clang
