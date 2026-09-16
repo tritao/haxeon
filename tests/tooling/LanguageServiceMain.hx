@@ -1172,8 +1172,8 @@ class LanguageServiceMain {
 		if (!hasSameModuleDeadReference)
 			throw 'same-module recovered references omitted a valid generic-body use: ${sameModuleReferences.length}';
 		var constructorRecoveryService = new LanguageService(),
-			constructorTargetSource = "package refs; class Constructed { public function new() {} } function main():Void return;",
-			constructorConsumerSource = "package refs; import refs.Constructed; function live():Void { new Constructed(); } function dead<T>():Void { new Constructed(); } function main():Void live();";
+			constructorTargetSource = "package refs; class Constructed<T> { public function new(value:T) {} } function main():Void return;",
+			constructorConsumerSource = "package refs; import refs.Constructed; function live():Void { new Constructed<Int>(1); } function dead<T>():Void { new Constructed<Int>(1); } function main():Void live();";
 		constructorRecoveryService.update("refs/Constructed.hx", constructorTargetSource);
 		constructorRecoveryService.compile("refs.Constructed");
 		constructorRecoveryService.update("refs/ConstructorConsumer.hx", constructorConsumerSource);
