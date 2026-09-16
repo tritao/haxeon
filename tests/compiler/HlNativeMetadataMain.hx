@@ -53,7 +53,7 @@ class HlNativeMetadataMain {
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
-			'var complexCode = new HlCode(); complexCode.strings = ["NativeObject", "value", "run", "NativeEnum"]; complexCode.types = [Simple(HlType.I32), Simple(HlType.Void), Function([0], 1), Object(0, -1, 0, [{name: 1, type: 0}], [{name: 2, functionIndex: 0, prototype: 0}], []), Virtual([{name: 1, type: 0}]), Enum(3, 0, [{name: 1, params: [0]}])]; complexCode.functions = [new compiler.hl.HlFunction(2, 0, [0], [Return(0)])]; complexCode.entryPoint = 0; var complexLoaded = HlNativeModuleLoader.load(HlWriter.encode(complexCode)), complexInitialized = complexLoaded.nativeModule.isLoaded(), complexUnloaded = complexLoaded.unload(); '
+			'var complexCode = new HlCode(); complexCode.strings = ["NativeObject", "value", "run", "NativeEnum"]; complexCode.types = [Simple(HlType.I32), Simple(HlType.Void), Function([0], 1), Object(0, -1, 1, [{name: 1, type: 0}], [{name: 2, functionIndex: 0, prototype: 0}], []), Virtual([{name: 1, type: 0}]), Enum(3, 2, [{name: 1, params: [0]}])]; complexCode.globals = [3, 5]; complexCode.functions = [new compiler.hl.HlFunction(2, 0, [0], [Return(0)])]; complexCode.entryPoint = 0; var complexLoaded = HlNativeModuleLoader.load(HlWriter.encode(complexCode)), complexInitialized = complexLoaded.nativeModule.isLoaded(), complexUnloaded = complexLoaded.unload(); '
 			+
 			'var externalIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["main" => 0], ["main" => 101]), externalLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), externalIdentity), '
 			+ 'externalValue = externalLoaded.callI32(101); '
@@ -104,7 +104,7 @@ class HlNativeMetadataMain {
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
-			+ '&& object.ref.data.ref.obj.ref.globalValue == publication.globals '
+			+ '&& object.ref.data.ref.obj.ref.globalValue == generation.globalIndex(1) '
 			+ '&& publication.nativeCode.ref.version == 7 && publication.nativeCode.ref.typeCount == 12 '
 			+ '&& publication.nativeCode.ref.typeCapacity == 65536 && publication.nativeCode.ref.globalCount == 2 '
 			+ '&& publication.nativeCode.ref.nativeCount == 1 && publication.nativeCode.ref.functionCount == 1 '

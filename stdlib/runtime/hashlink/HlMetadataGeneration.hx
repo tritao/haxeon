@@ -344,6 +344,15 @@ class HlMetadataGeneration {
 		return globals.offset(index - 1);
 	}
 
+	/** Return HashLink's pre-module-init 1-based global reference representation. */
+	public function globalIndex(index:Int):RawPtr<RawPtr<UInt8>> {
+		requireOpen();
+		if (!globalsDefined || index <= 0 || index > globalCount)
+			throw 'HashLink metadata global index $index is outside 1...$globalCount';
+		var reference:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
+		return reference.byteOffset(index);
+	}
+
 	/** Read one HLB global type-table entry. */
 	public function globalType(index:Int):RawPtr<HlType> {
 		requireOpen();
@@ -579,7 +588,7 @@ class HlMetadataGeneration {
 
 	function containsGlobalSlot(value:RawPtr<RawPtr<UInt8>>):Bool {
 		for (index in 0...globalCount)
-			if (globals.offset(index) == value)
+			if (globals.offset(index) == value || globalIndex(index + 1) == value)
 				return true;
 		return false;
 	}

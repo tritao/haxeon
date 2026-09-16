@@ -112,7 +112,7 @@ class HlNativeMetadataBuilder {
 						RawPtr.nullPtr());
 				case Enum(name, global, constructors):
 					generation.builder.defineEnumType(types[index], generation.builder.utf16Name(code.strings[name]),
-						enumConstructors(code, generation, constructors, types), generation.globalPointer(global));
+						enumConstructors(code, generation, constructors, types), global == 0 ? RawPtr.nullPtr() : generation.globalIndex(global));
 			}
 	}
 
@@ -135,7 +135,7 @@ class HlNativeMetadataBuilder {
 			throw "HashLink object definition kind does not match its type skeleton";
 		generation.builder.defineObjectType(type, generation.builder.utf16Name(code.strings[name]), base < 0 ? RawPtr.nullPtr() : types[base],
 			objectFields(code, generation.builder, fields, types), objectPrototypes(code, generation.builder, methods), objectBindings,
-			global == 0 ? RawPtr.nullPtr() : globals.offset(global - 1), module, RawPtr.nullPtr());
+			global == 0 ? RawPtr.nullPtr() : generation.globalIndex(global), module, RawPtr.nullPtr());
 	}
 
 	static function objectFields(code:HlCode, builder:HlTypeBuilder, fields:Array<HlCode.HlObjectField>,
