@@ -77,10 +77,12 @@ extracts the owned bytes at the final ABI boundary. This keeps the Haxe policy
 record and its publication input coupled for future backend implementations.
 
 `Runtime` also keeps a small side ledger of committed patch revisions, native
-code handles, and their JIT lifecycle codes. Native success creates a
-`Published` entry and transfers one external owner for the new `hl_patch_code`
-allocation; a close request changes live entries to `Retiring`, and successful
-native retirement releases those handles and removes the module's ledger entry.
+code handles, and their JIT lifecycle codes. Each entry is a
+`RuntimeJitGeneration` owner rather than a set of independently synchronized
+arrays. Native success creates a `Published` entry and transfers one external
+owner for the new `hl_patch_code` allocation; a close request changes live
+entries to `Retiring`, and successful native retirement releases those handles
+and removes the module's ledger entry.
 HashLink still decides dispatch publication and executable-memory reclamation.
 When module teardown has detached an allocation from its owner lists, the
 external handle is what keeps its code and decoded function metadata alive until
