@@ -183,6 +183,9 @@ arena's records.
 it owns the arena, appends the type table, defines the module context, lets
 `HlTypeLayout` construct the derived object, enum, and virtual metadata in that
 same arena, and then hands the table to one small native publication call.
+`HlTypeSemantics` centralizes the Haxe-owned size, padding, pointer-classification,
+and mark-bit rules that mirror HashLink's ABI helpers; the native bridge retains
+only host-width queries and bootstrap-sensitive publication operations.
 Object prototype wiring remains native because it publishes executable method
 and closure pointers; enum and virtual layout construction no longer calls
 HashLink's native initializers, which are no longer exposed by the bridge. The

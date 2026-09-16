@@ -37,10 +37,11 @@ parsed and laid out by Clang; only the named declarations are emitted.
 HashLink's type-metadata ring is checked in as
 `stdlib/runtime/hashlink/HashLinkMetadata.hxi`; regenerate it from the pinned
 HashLink header with `scripts/haxeon-hashlink-metadata-import` (the command uses
-`--only` for `hl_type_kind`, `hl_runtime_binding`, `hl_runtime_obj`,
-`hl_alloc`, `hl_module_context`, `hl_type_fun`, `hl_obj_field`, `hl_obj_proto`,
-`hl_type_obj`, `hl_type_virtual`, `hl_enum_construct`, `hl_type_enum`, and
-`hl_type`. The importer adds pointer-only dependencies as opaque declarations;
+`--only` for `hl_type_kind`, `hl_field_lookup`, `vvirtual`,
+`hl_runtime_binding`, `hl_runtime_obj`, `hl_alloc`, `hl_module_context`,
+`hl_type_fun`, `hl_obj_field`, `hl_obj_proto`, `hl_type_obj`, `hl_type_virtual`,
+`hl_enum_construct`, `hl_type_enum`, and `hl_type`. The importer adds
+pointer-only dependencies as opaque declarations;
 callback declarations remain available to native-record projection, while
 opaque and `void *` slots continue to use raw pointer projections.
 Plain C integer types retain ABI-specific names such as `c_int` and `c_long`;

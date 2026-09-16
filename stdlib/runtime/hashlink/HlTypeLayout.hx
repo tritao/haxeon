@@ -9,11 +9,11 @@ import runtime.hashlink.HlTypeObject.HlTypeVirtual;
 /**
 	Builds HashLink's derived layout and GC mark metadata in Haxe-owned storage.
 
-	The arithmetic follows HashLink's ABI helpers. Descriptor association and
-	metadata layout are Haxe-owned; prototype method wiring remains a native
-	boundary because it publishes executable function pointers and closures. The
-	non-moving object/enum/virtual layout is no longer built by the metadata
-	publication loop in C.
+	The arithmetic mirrors HashLink's ABI helpers and is Haxe-owned. Descriptor
+	association and metadata layout remain in Haxeon; prototype method wiring is
+	a native boundary because it publishes executable function pointers and
+	closures. The non-moving object/enum/virtual layout is no longer built by the
+	metadata publication loop in C.
 */
 class HlTypeLayout {
 	/**
