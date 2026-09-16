@@ -1933,7 +1933,7 @@ class Parser {
 							throw error;
 						recordRecoveryDiagnostic(error.diagnostic);
 						fields.push({name: fieldName, value: ErrorExpression(error.diagnostic.span), span: fieldStart.merge(error.diagnostic.span)});
-						synchronizeObjectField();
+					synchronizeObjectField();
 					}
 					if (!match(TokenKind.Comma))
 						break;
@@ -2419,26 +2419,43 @@ class Parser {
 		if (match(TokenKind.LeftBrace)) {
 			var fields = [];
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-				var optional = false;
-				for (metadata in parseMetadata())
-					if (metadata.name == "optional")
-						optional = true;
-				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
-					if (match(TokenKind.Question)) {
-						if (optional)
-							fail(previous(), "Duplicate optional field marker");
-						optional = true;
-					} else
-						advance();
-				var name = consumeDeclarationToken("anonymous field");
-				consume(TokenKind.Colon);
-				var type = parseType();
-				fields.push({
-					name: name.text,
-					type: type,
-					optional: optional,
-					span: name.span.merge(previous().span)
-				});
+				var fieldName = "<missing>", fieldStart = current().span;
+				try {
+					var optional = false;
+					for (metadata in parseMetadata())
+						if (metadata.name == "optional")
+							optional = true;
+					while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
+						if (match(TokenKind.Question)) {
+							if (optional)
+								fail(previous(), "Duplicate optional field marker");
+							optional = true;
+						} else
+							advance();
+					var name = consumeDeclarationToken("anonymous field");
+					fieldName = name.text;
+					fieldStart = name.span;
+					consume(TokenKind.Colon);
+					var type = parseType();
+					fields.push({
+						name: name.text,
+						type: type,
+						optional: optional,
+						span: name.span.merge(previous().span)
+					});
+				}
+				catch (error:CompileError) {
+					if (!recovering)
+						throw error;
+					recordRecoveryDiagnostic(error.diagnostic);
+					fields.push({
+						name: fieldName,
+						type: ErrorType(error.diagnostic.span),
+						optional: false,
+						span: fieldStart.merge(error.diagnostic.span)
+					});
+						synchronizeObjectField();
+				}
 				if (!match(TokenKind.Comma))
 					match(TokenKind.Semicolon);
 			}

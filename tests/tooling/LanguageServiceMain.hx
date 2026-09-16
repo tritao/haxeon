@@ -6,6 +6,7 @@ import compiler.modules.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedExpressionKind;
@@ -1759,6 +1760,32 @@ class LanguageServiceMain {
 						}
 		if (!foundArrayLiteralMember || !foundArrayLiteralElement)
 			throw "array literal recovery did not preserve later elements or statements";
+		var anonymousTypeService = new LanguageService(),
+			anonymousTypeSource = "package anonymousapp; import anonymoustypes.AnonymousValue; function retained():Void { var options:{valid:Int, broken, later:String} = {valid: 1, later: \"\"}; var value:AnonymousValue = new AnonymousValue(); value.";
+		anonymousTypeService.update("anonymoustypes/AnonymousValue.hx", "package anonymoustypes; class AnonymousValue { public var member:Int; }");
+		anonymousTypeService.update("AnonymousTypes.hx", anonymousTypeSource);
+		var anonymousTypeItems = anonymousTypeService.completeResult("AnonymousTypes.hx", anonymousTypeSource.length).items,
+			foundAnonymousTypeMember = false;
+		for (item in anonymousTypeItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundAnonymousTypeMember = true;
+		var anonymousTypeState = anonymousTypeService.compiler.modules.get("AnonymousTypes"),
+			foundAnonymousTypeFields = false;
+		if (anonymousTypeState.recoveredAst != null)
+			for (functionDeclaration in anonymousTypeState.recoveredAst.functions)
+				if (functionDeclaration.name == "retained")
+					for (statement in functionDeclaration.statements)
+						switch statement {
+							case VarDeclaration(name, declared, _, _) if (name == "options"):
+								switch declared {
+									case AnonymousType(fields):
+										foundAnonymousTypeFields = fields.length == 3;
+									default:
+								}
+							default:
+						}
+		if (!foundAnonymousTypeMember || !foundAnonymousTypeFields)
+			throw "anonymous type recovery did not preserve later fields or statements";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
