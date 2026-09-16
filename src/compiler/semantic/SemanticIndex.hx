@@ -151,12 +151,14 @@ class SemanticIndexBuilder {
 	var frozen:Bool = false;
 	var frozenIndex:Null<SemanticIndex>;
 
-	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
+	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>, ?initialize:Bool = true) {
 		module = ModulePath.fromFile(path);
 		this.revision = revision;
 		this.declarations = declarations;
 		this.tokens = tokens;
 		this.source = tokens.length == 0 ? null : tokens[0].span.file;
+		if (!initialize)
+			return;
 		var keys = [for (key in declarations.symbols.keys()) key];
 		keys.sort(Reflect.compare);
 		for (key in keys) {
@@ -210,8 +212,9 @@ class SemanticIndexBuilder {
 	public function freeze():SemanticIndex {
 		if (frozenIndex != null)
 			return frozenIndex;
+		var published = frozenCopy();
 		frozen = true;
-		frozenIndex = new SemanticIndex(this);
+		frozenIndex = new SemanticIndex(published);
 		return frozenIndex;
 	}
 
@@ -222,6 +225,84 @@ class SemanticIndexBuilder {
 	/** Return a read-only-by-convention copy for the query facade. */
 	public function snapshotSymbols():Map<String, IndexedSemanticSymbol>
 		return symbols.copy();
+
+	/**
+		Detach the query state before publication. The builder remains available
+		to construction callers for diagnostics, but the published facade no
+		longer shares its mutable maps and arrays.
+	*/
+	function frozenCopy():SemanticIndexBuilder {
+		var copy = new SemanticIndexBuilder(module, revision, declarations, tokens.copy(), false);
+		copy.indexingMs = indexingMs;
+		for (id => symbol in symbols)
+			copy.symbols.set(id, symbol);
+		for (binding in bindings)
+			copy.bindings.push({span: binding.span, symbol: binding.symbol});
+		for (name => ids in symbolIdsByName)
+			copy.symbolIdsByName.set(name, ids.copy());
+		for (id => spans in references)
+			copy.references.set(id, spans.copy());
+		for (id => keys in referenceKeys) {
+			var copiedKeys:Map<String, Bool> = [];
+			for (key => value in keys)
+				copiedKeys.set(key, value);
+			copy.referenceKeys.set(id, copiedKeys);
+		}
+		for (id => signature in signatures)
+			copy.signatures.set(id, {
+				label: signature.label,
+				parameters: signature.parameters.copy(),
+				result: signature.result
+			});
+		for (edge in callEdges)
+			copy.callEdges.push({caller: edge.caller, callee: edge.callee, span: edge.span});
+		for (reference in resolvedReferences)
+			copy.resolvedReferences.push({
+				owner: reference.owner,
+				target: reference.target,
+				targetId: reference.targetId,
+				kind: reference.kind
+			});
+		for (local in completionLocals)
+			copy.completionLocals.push({
+				name: local.name,
+				type: local.type,
+				declaration: local.declaration,
+				scope: local.scope,
+				depth: local.depth
+			});
+		for (receiver in functionReceivers)
+			copy.functionReceivers.push({span: receiver.span, type: receiver.type});
+		for (completion in completionTypes)
+			copy.completionTypes.push({span: completion.span, type: completion.type});
+		for (id => type in declarationTypes)
+			copy.declarationTypes.set(id, type);
+		for (span => id in declarationSymbolsBySpan)
+			copy.declarationSymbolsBySpan.set(span, id);
+		for (name => id in recoveredMembers)
+			copy.recoveredMembers.set(name, id);
+		for (name => value in knownRecoveredMembers)
+			copy.knownRecoveredMembers.set(name, value);
+		for (name => fn in recoveredFunctions)
+			copy.recoveredFunctions.set(name, fn);
+		for (name => type in recoveredClassBases)
+			copy.recoveredClassBases.set(name, type);
+		for (name => next in recoveredLocalNext)
+			copy.recoveredLocalNext.set(name, next);
+		for (symbol in unresolved)
+			copy.unresolved.push({name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()});
+		for (scope in recoveredTypeParameterScopes)
+			copy.recoveredTypeParameterScopes.push({name: scope.name, owner: scope.owner, span: scope.span});
+		for (key => id in typeParameterIds)
+			copy.typeParameterIds.set(key, id);
+		for (name => type in currentRecoveredTypeParameters)
+			copy.currentRecoveredTypeParameters.set(name, type);
+		copy.currentRecoveredFunctionKey = currentRecoveredFunctionKey;
+		copy.currentDependencyKind = currentDependencyKind;
+		copy.checkpointCount = checkpointCount;
+		copy.frozen = true;
+		return copy;
+	}
 
 	inline function ensureMutable():Void {
 		if (frozen)
@@ -3278,6 +3359,7 @@ class SemanticIndexBuilder {
  * unavailable here; callers must obtain a SemanticIndexBuilder and publish it
  * with SemanticIndexBuilder.freeze().
  */
+@:allow(compiler.semantic.SemanticIndexBuilder)
 class SemanticIndex {
 	final builder:SemanticIndexBuilder;
 
@@ -3285,7 +3367,7 @@ class SemanticIndex {
 	public var symbols(get, never):Map<String, IndexedSemanticSymbol>;
 	public var indexingMs(get, never):Float;
 
-	public function new(builder:SemanticIndexBuilder) {
+	private function new(builder:SemanticIndexBuilder) {
 		this.builder = builder;
 	}
 
@@ -3308,7 +3390,7 @@ class SemanticIndex {
 		return builder.symbol(id);
 
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return builder.signature(id);
+		return copySignature(builder.signature(id));
 
 	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
 		return builder.typeParameterId(owner, name);
@@ -3326,17 +3408,27 @@ class SemanticIndex {
 		return builder.completionContext(position, qualifier, token);
 
 	public function unresolvedSymbols():Array<UnresolvedSymbol>
-		return builder.unresolvedSymbols();
+		return [for (symbol in builder.unresolvedSymbols())
+			{name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()}];
 
-	public function unresolvedAt(position:Int):Null<UnresolvedSymbol>
-		return builder.unresolvedAt(position);
+	public function unresolvedAt(position:Int):Null<UnresolvedSymbol> {
+		var symbol = builder.unresolvedAt(position);
+		return symbol == null ? null : {name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()};
+	}
 
 	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType>
 		return builder.typeAt(position, token);
 
 	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
-		return builder.recoveredSignature(name, receiverType);
+		return copySignature(builder.recoveredSignature(name, receiverType));
 
 	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
-		return builder.callableSignature(type, name);
+		return copySignature(builder.callableSignature(type, name));
+
+	static function copySignature(signature:Null<SemanticSignatureInfo>):Null<SemanticSignatureInfo>
+		return signature == null ? null : {
+			label: signature.label,
+			parameters: signature.parameters.copy(),
+			result: signature.result
+		};
 }
