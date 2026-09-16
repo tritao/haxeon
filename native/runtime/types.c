@@ -24,7 +24,7 @@ HL_PRIM vbyte * HL_NAME(native_metadata_module_alloc)( hl_code *code ) {
 HL_PRIM bool HL_NAME(native_metadata_module_init)( vbyte *module, int flags ) {
 	if( module == NULL )
 		hl_error("HashLink native module initialization requires a module");
-	return hl_module_init((hl_module*)module,flags) != 0;
+	return hl_module_init((hl_module*)module,flags | HL_MODULE_HAXE_METADATA) != 0;
 }
 
 HL_PRIM bool HL_NAME(native_metadata_module_unload)( vbyte *module ) {

@@ -14,7 +14,7 @@ module generation.
 | JIT ABI wrapper image | HashLink executable allocator | Process runtime | Dynamic-call bridge and wrapper closures | Global HashLink shutdown after all modules and managed values are finished |
 | Module-registry snapshot | HashLink module registry | Debugger, profiler, stack capture, symbol resolver, or type dump operation | Module metadata during one inspection | Reader releases its pin; unload waits after removing publication |
 | Platform JIT registration | Windows unwind service or Intel VTune | `hl_module` JIT image | Native unwinding and profiler symbol lookup | Notify or unregister before releasing executable code or debug metadata |
-| Object/prototype runtime metadata | Module arena | `hl_module` type descriptors | Reflection and dynamic dispatch | Module teardown after managed borrowers are gone |
+| Object/prototype runtime metadata | Haxeon metadata arena for derived layout; HashLink module arena for native prototype state | `HlMetadataGeneration` plus `hl_module` | Reflection and dynamic dispatch | Module teardown after managed borrowers are gone |
 | Field-name and GUID caches | Process runtime | HashLink process | Reflection by copied name or GUID data | Global HashLink shutdown; entries do not borrow module pointers |
 | Native-library mapping | Platform loader | HashLink process | Resolved native function pointers | Process shutdown; module retirement never unloads a shared library |
 | TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
@@ -78,6 +78,13 @@ the bytes to HashLink; the native patch kernel still performs complete wire,
 operand, symbol, and live-compatibility validation. The public host `Runtime.load`
 facade remains on the legacy native-decoder path until it can be compiled against
 the Haxeon-only native-memory classes.
+
+Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
+boundary flag tells the native kernel to retain Haxeon's enum and virtual
+layout, lookup, index, and mark-bit tables instead of rebuilding them in
+`hl_module_init_indexes`. Native initialization still wires module context,
+globals, function associations, and JIT state; executable object-prototype
+state remains a native responsibility.
 
 For Haxe-built object and enum descriptors, `globalValue` follows HashLink's
 two-stage representation: `HlMetadataGeneration.globalIndex()` stores the

@@ -6,6 +6,8 @@ import runtime.memory.RawPtr;
 class HlNativeModule {
 	/** HashLink flag that installs stable entries for native generation patches. */
 	public static inline final PatchableFlag:Int = 8;
+	/** HashLink flag that preserves Haxeon-derived enum and virtual metadata. */
+	public static inline final HaxeMetadataFlag:Int = 16;
 
 	public final metadata:HlMetadataGeneration;
 	public final publication:HlMetadataPublication;
@@ -23,7 +25,7 @@ class HlNativeModule {
 			module = HlTypeBridge.native_metadata_module_alloc(publication.nativeCode);
 			if (module.isNull())
 				throw "HashLink native module allocation failed";
-			if (!HlTypeBridge.native_metadata_module_init(module, flags)) {
+			if (!HlTypeBridge.native_metadata_module_init(module, flags | HaxeMetadataFlag)) {
 				HlTypeBridge.native_metadata_module_free_shutdown(module);
 				module = RawPtr.nullPtr();
 				throw "HashLink native module initialization failed";

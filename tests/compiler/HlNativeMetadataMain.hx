@@ -95,14 +95,14 @@ class HlNativeMetadataMain {
 			+
 			'kernelEnum = kernel.builder.enumType(kernel.builder.utf16Name("NativeEnum"), [{name: kernel.builder.utf16Name("value"), parameters: [kernelInt], size: 0, hasPtr: false, offsets: [0]}], RawPtr.nullPtr()), '
 			+
-			'kernelVirtual = kernel.builder.virtualType([{name: kernel.builder.utf16Name("value"), type: kernelInt, hashedName: HlTypeBuilder.hashUtf16("value")}], 0, [0], RawPtr.nullPtr()), kernelVirtualLookupBeforeInit = kernelVirtual.ref.data.ref.virtualType.ref.lookup; '
+			'kernelVirtual = kernel.builder.virtualType([{name: kernel.builder.utf16Name("value"), type: kernelInt, hashedName: HlTypeBuilder.hashUtf16("value")}], 0, [0], RawPtr.nullPtr()); '
 			+
 			'kernel.addType(kernelInt); kernel.addType(kernelFunction); kernel.addType(kernelObject); kernel.addType(kernelEnum); kernel.addType(kernelVirtual); kernel.defineGlobalTypes([kernelInt]); '
 			+ 'kernel.addFunctionDescriptor({findex: 0, nregs: 1, nops: 1, reference: 0, nassigns: 0, type: kernelFunction, regs: kernelRegs, ops: kernelOps, '
 			+ 'debug: RawPtr.nullPtr(), assigns: RawPtr.nullPtr(), object: RawPtr.nullPtr(), fieldName: RawPtr.nullPtr(), fieldReference: RawPtr.nullPtr()}); '
-			+ 'kernel.publish(); '
+			+ 'kernel.publish(); var kernelVirtualLookupBeforeInit = kernelVirtual.ref.data.ref.virtualType.ref.lookup; '
 			+
-			'var kernelModule = new HlNativeModule(kernel), kernelInitialized = kernelModule.isLoaded(), kernelObjectInitialized = !kernelObject.ref.data.ref.obj.ref.runtime.isNull(), kernelEnumInitialized = kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.size == 16 && kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12, kernelVirtualInitialized = kernelVirtual.ref.data.ref.virtualType.ref.dataSize == 4 && !kernelVirtual.ref.data.ref.virtualType.ref.lookup.isNull() && kernelVirtual.ref.data.ref.virtualType.ref.lookup != kernelVirtualLookupBeforeInit, kernelUnloaded = kernelModule.unload(); kernel.dispose(); '
+			'var kernelModule = new HlNativeModule(kernel), kernelInitialized = kernelModule.isLoaded(), kernelObjectInitialized = !kernelObject.ref.data.ref.obj.ref.runtime.isNull(), kernelEnumInitialized = kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.size == 16 && kernelEnum.ref.data.ref.enumType.ref.constructs.offset(0).ref.offsets.offset(0).load() == 12, kernelVirtualInitialized = kernelVirtual.ref.data.ref.virtualType.ref.dataSize == 4 && !kernelVirtual.ref.data.ref.virtualType.ref.lookup.isNull() && kernelVirtual.ref.data.ref.virtualType.ref.lookup == kernelVirtualLookupBeforeInit, kernelUnloaded = kernelModule.unload(); kernel.dispose(); '
 			+ 'var correct = publication.typeCount == 12 && publication.usesContiguousTypes && publication.functionCount == 2 '
 			+ '&& publication.globalCount == 2 && publication.globalTypes.offset(0).load() == generation.type(0) '
 			+ '&& publication.globalTypes.offset(1).load() == generation.type(0) '
