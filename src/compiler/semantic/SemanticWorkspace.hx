@@ -310,7 +310,15 @@ class SemanticWorkspace {
 			if (symbol != null)
 				return {state: state, symbol: symbol};
 		}
-		return indexedSymbol(id);
+		var indexed = indexedSymbol(id);
+		if (indexed != null)
+			return indexed;
+		if (state.recoveredSemanticModel != null) {
+			var recovered = state.recoveredSemanticModel.index.symbol(id);
+			if (recovered != null)
+				return {state: state, symbol: recovered};
+		}
+		return null;
 	}
 
 	/** Resolve a hierarchy item from current editor models without publishing them. */

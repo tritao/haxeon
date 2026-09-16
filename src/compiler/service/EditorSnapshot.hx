@@ -41,17 +41,9 @@ class EditorSnapshotTools {
 				confidence: EditorSnapshotConfidence.Exact
 			};
 
-		if (state.recoveredAst != null)
-			return {
-				source: state.source,
-				tokens: state.recoveredTokens,
-				ast: state.recoveredAst,
-				semanticModel: state.recoveredSemanticModel,
-				revision: state.revision,
-				stale: false,
-				recovered: true,
-				confidence: EditorSnapshotConfidence.RecoveredPartial
-			};
+		var recovered = currentRecovered(state);
+		if (recovered != null)
+			return recovered;
 
 		if (state.lastGoodAst != null && state.lastGoodSource != null && state.lastGoodSemanticModel != null)
 			return {
@@ -66,5 +58,19 @@ class EditorSnapshotTools {
 			};
 
 		return null;
+	}
+
+	/** Return the current-source recovery view without applying fallback policy. */
+	public static function currentRecovered(state:ModuleState):Null<EditorSnapshot> {
+		return state.recoveredAst == null ? null : {
+			source: state.source,
+			tokens: state.recoveredTokens,
+			ast: state.recoveredAst,
+			semanticModel: state.recoveredSemanticModel,
+			revision: state.revision,
+			stale: false,
+			recovered: true,
+			confidence: EditorSnapshotConfidence.RecoveredPartial
+		};
 	}
 }

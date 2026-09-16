@@ -2047,12 +2047,13 @@ class LanguageService {
 		if (token != null)
 			token.check();
 		var state = stateFor(path),
-			snapshot = state == null ? null : editorSnapshot(state),
+			semantic = state == null ? null : semanticQuery(path, position, null, token),
+			snapshot = semantic == null ? state == null ? null : editorSnapshot(state) : semantic.snapshot,
 			ast = snapshot == null ? null : snapshot.ast;
 		if (state == null || ast == null)
 			return null;
-		var model = snapshot.semanticModel,
-			indexedId = model == null ? null : model.index.symbolIdAt(position, token),
+		var model = semantic == null ? snapshot.semanticModel : semantic.model,
+			indexedId = semantic == null ? model == null ? null : model.index.symbolIdAt(position, token) : semantic.symbol,
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId),
 			indexed = indexedId == null || model == null ? null : model.index.symbol(indexedId),
 			name = indexed == null ? identifierPrefix(snapshot.source, position) : sourceName(indexed.name),
@@ -2475,11 +2476,28 @@ class LanguageService {
 			snapshot = state == null ? null : editorSnapshot(state),
 			model = snapshot == null ? null : snapshot.semanticModel,
 			symbol = model == null ? null : model.index.symbolIdAt(position, token),
-			authoritativeIdentity = symbol != null && compiler.semanticWorkspace.indexedSymbol(symbol) != null,
+			usedRecoveredSemanticModel = false;
+		// A valid compiler snapshot can intentionally omit unreachable bodies.
+		// If the current recovery model has a position-level identity, use that
+		// source-aware view for this query without publishing it globally.
+		if (symbol == null && snapshot != null && snapshot.confidence == EditorSnapshotConfidence.Exact && state != null) {
+			var recovered = EditorSnapshotTools.currentRecovered(state);
+			if (recovered != null && recovered.semanticModel != null && recovered.revision == state.revision) {
+				var recoveredSymbol = recovered.semanticModel.index.symbolIdAt(position, token);
+				if (recoveredSymbol != null) {
+					snapshot = recovered;
+					model = recovered.semanticModel;
+					symbol = recoveredSymbol;
+					usedRecoveredSemanticModel = true;
+				}
+			}
+		}
+		var authoritativeIdentity = symbol != null && compiler.semanticWorkspace.indexedSymbol(symbol) != null,
 			currentIdentity = symbol != null && model != null && snapshot != null && model.index.symbol(symbol) != null && !snapshot.stale,
 			confidence = snapshot == null ? null : snapshot.confidence == EditorSnapshotConfidence.RecoveredPartial
 				&& authoritativeIdentity ? EditorSnapshotConfidence.RecoveredStable : snapshot.confidence,
-			identityTrusted = symbol != null && snapshot != null && !snapshot.stale && (authoritativeIdentity || currentIdentity);
+			identityTrusted = symbol != null && snapshot != null && !snapshot.stale && (authoritativeIdentity || currentIdentity)
+				|| usedRecoveredSemanticModel && symbol != null && model != null && model.index.symbol(symbol) != null;
 		return state == null || snapshot == null || model == null ? null : {
 			state: state,
 			snapshot: snapshot,

@@ -1107,13 +1107,18 @@ class LanguageServiceMain {
 		genericTypeDefinitionService.compile("GenericTypeDefinition");
 		var genericValuePosition = genericTypeDefinitionSource.lastIndexOf("return value") + "return ".length,
 			genericTypeDefinition = genericTypeDefinitionService.typeDefinition("GenericTypeDefinition.hx", genericValuePosition),
+			genericValueDefinition = genericTypeDefinitionService.definition("GenericTypeDefinition.hx", genericValuePosition),
+			genericValueHover = genericTypeDefinitionService.hover("GenericTypeDefinition.hx", genericValuePosition),
 			genericParameterPosition = genericTypeDefinitionSource.indexOf("<T>") + 1,
 			genericParameterDefinition = genericTypeDefinitionService.typeDefinition("GenericTypeDefinition.hx", genericParameterPosition);
 		if (genericTypeDefinition == null
 			|| genericTypeDefinition.span.start != genericParameterPosition
 			|| genericParameterDefinition == null
-			|| genericParameterDefinition.span.start != genericParameterPosition)
-			throw "type-definition navigation did not resolve a generic parameter through its local use";
+			|| genericParameterDefinition.span.start != genericParameterPosition
+			|| genericValueDefinition == null
+			|| genericValueDefinition.span.start != genericTypeDefinitionSource.indexOf("(value") + 1
+			|| genericValueHover != "value:T")
+			throw "semantic queries did not use current recovery for an unreachable generic body";
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
