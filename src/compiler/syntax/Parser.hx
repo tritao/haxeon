@@ -17,6 +17,7 @@ import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Diagnostic.CompileError;
+import haxe.Int64;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
@@ -1241,8 +1242,7 @@ class Parser {
 		if (match(TokenKind.Minus)) {
 			var start = previous().span;
 			if (match(TokenKind.Integer)) {
-				var token = previous(), value = token.text == "2147483648" || token.text == "0x80000000" || token.text == "0X80000000"
-					? -2147483647 - 1 : -parseIntegerToken(token);
+				var token = previous(), value = parseIntegerToken(token, true);
 				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
 			}
 			var value = parsePrimary();
@@ -2063,11 +2063,37 @@ class Parser {
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
 
-	function parseIntegerToken(token:Token):Int {
-		var value = Std.parseInt(token.text);
-		if (value == null)
-			fail(token, 'Integer literal "${token.text}" is outside the signed 32-bit range');
-		return value;
+	function parseIntegerToken(token:Token, negative:Bool = false):Int {
+		var magnitude = parseIntegerMagnitude(token), limit = Int64.parseString(negative ? "2147483648" : "2147483647");
+		if (Int64.compare(magnitude, limit) > 0)
+			fail(token, 'Integer literal "${negative ? "-" : ""}${token.text}" is outside the signed 32-bit range');
+		var signed = negative ? Int64.sub(Int64.ofInt(0), magnitude) : magnitude;
+		return Int64.toInt(signed);
+	}
+
+	function parseIntegerMagnitude(token:Token):Int64 {
+		if (StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X")) {
+			var value = Int64.ofInt(0);
+			for (index in 2...token.text.length) {
+				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
+					fail(token, 'Integer literal "${token.text}" is outside the supported range');
+				var code = token.text.charCodeAt(index), digit = code >= "0".code && code <= "9".code ? code - "0".code
+					: code >= "A".code && code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+				value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
+			}
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
+		}
+		try {
+			var value = Int64.parseString(token.text);
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
+		} catch (_:Dynamic) {
+			fail(token, 'Integer literal "${token.text}" is outside the supported range');
+		}
+		return Int64.ofInt(0);
 	}
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
