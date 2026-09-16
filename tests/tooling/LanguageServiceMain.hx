@@ -1073,6 +1073,15 @@ class LanguageServiceMain {
 		if (!foundUnresolvedType
 			|| unresolvedService.unresolvedSymbolAt("UnresolvedType.hx", unresolvedTypeSource.indexOf("MissingType") + 1) == null)
 			throw "recovered unresolved type references were not exposed through the language service";
+		var outOfScopeTypeParameterSource = "function identity<T>(value:T):T return value; function main():Void { var value:T; }";
+		unresolvedService.update("OutOfScopeTypeParameter.hx", outOfScopeTypeParameterSource);
+		var outOfScopeTypeParameter = unresolvedService.unresolvedSymbols("OutOfScopeTypeParameter.hx"),
+			foundOutOfScopeTypeParameter = false;
+		for (symbol in outOfScopeTypeParameter)
+			if (symbol.name == "T")
+				foundOutOfScopeTypeParameter = true;
+		if (!foundOutOfScopeTypeParameter)
+			throw "recovered generic type-parameter names leaked outside their lexical scope";
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);

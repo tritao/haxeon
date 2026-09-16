@@ -129,7 +129,6 @@ class SemanticIndex {
 	var currentRecoveredTypeParameters:Map<String, CompilerType> = [];
 	/** Function key used to keep recovered lambda locals distinct and stable. */
 	var currentRecoveredFunctionKey:String = "";
-	final recoveredTypeParameterNames:Map<String, Bool> = [];
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
 	var recoveryCandidates:Null<String->Array<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
@@ -730,7 +729,6 @@ class SemanticIndex {
 	function rememberRecoveredTypeParameter(name:String, span:SourceSpan, ?owner:String):Void {
 		if (name.length == 0)
 			return;
-		recoveredTypeParameterNames.set(name, true);
 		for (existing in recoveredTypeParameterScopes)
 			if (existing.name == name && existing.owner == (owner == null ? "" : owner)
 				&& existing.span.start == span.start && existing.span.end == span.end)
@@ -1990,7 +1988,7 @@ class SemanticIndex {
 				id = resolve(token.text);
 			if (id != null)
 				bind(id, token.span);
-			else if (!recoveredTypeParameterNames.exists(token.text))
+			else
 				recordUnresolved(name, token.span);
 		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
