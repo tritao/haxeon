@@ -520,6 +520,22 @@ class LanguageServiceMain {
 			qualifiedSecondaryDefinition = secondaryModuleService.definition("secondary/app/Qualified.hx", qualifiedSecondaryPosition);
 		if (qualifiedSecondaryDefinition == null || qualifiedSecondaryDefinition.path != "secondary/types/Container.hx")
 			throw 'recovered fully qualified secondary type did not navigate its static member: ${qualifiedSecondaryDefinition == null ? "null" : qualifiedSecondaryDefinition.path}';
+		var secondaryEnumService = new LanguageService(),
+			secondaryEnumSource = "package secondary.app; import secondary.types.EnumContainer.Choice; function main():Void { Choice.Value; }";
+		secondaryEnumService.update("secondary/types/EnumContainer.hx",
+			"package secondary.types; enum Choice { Value; } function main():Void return;");
+		secondaryEnumService.compile("secondary.types.EnumContainer");
+		secondaryEnumService.update("secondary/app/EnumUse.hx", secondaryEnumSource);
+		var secondaryEnumPosition = secondaryEnumSource.lastIndexOf("Value") + 1,
+			secondaryEnumDefinition = secondaryEnumService.definition("secondary/app/EnumUse.hx", secondaryEnumPosition);
+		if (secondaryEnumDefinition == null || secondaryEnumDefinition.path != "secondary/types/EnumContainer.hx")
+			throw 'recovered secondary module enum case did not navigate: ${secondaryEnumDefinition == null ? "null" : secondaryEnumDefinition.path}';
+		var qualifiedSecondaryEnumSource = "package secondary.app; function main():Void { secondary.types.EnumContainer.Choice.Value; }";
+		secondaryEnumService.update("secondary/app/QualifiedEnumUse.hx", qualifiedSecondaryEnumSource);
+		var qualifiedSecondaryEnumPosition = qualifiedSecondaryEnumSource.lastIndexOf("Value") + 1,
+			qualifiedSecondaryEnumDefinition = secondaryEnumService.definition("secondary/app/QualifiedEnumUse.hx", qualifiedSecondaryEnumPosition);
+		if (qualifiedSecondaryEnumDefinition == null || qualifiedSecondaryEnumDefinition.path != "secondary/types/EnumContainer.hx")
+			throw 'recovered fully qualified secondary enum case did not navigate: ${qualifiedSecondaryEnumDefinition == null ? "null" : qualifiedSecondaryEnumDefinition.path}';
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
