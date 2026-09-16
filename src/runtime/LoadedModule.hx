@@ -78,7 +78,7 @@ class LoadedModule {
 	}
 
 	/** Retain one successfully published JIT allocation with this module. */
-	@:allow(runtime.Runtime)
+	@:allow(runtime.Runtime, runtime.HaxeRuntimePatchCoordinator)
 	function recordJitPublication(backend:RuntimeJitBackend, revision:Int, code:RuntimeJitCodeHandle):Void
 		jitGenerations.push(new RuntimeJitGeneration(backend, revision, code, Runtime.JitGenerationPublished));
 
@@ -99,7 +99,7 @@ class LoadedModule {
 	}
 
 	/** Advance Haxe-owned state after the native patch has been published. */
-	@:allow(runtime.Runtime)
+	@:allow(runtime.Runtime, runtime.HaxeRuntimePatchCoordinator)
 	function commitPatch(generation:RuntimePatchGeneration):Void {
 		if (generation == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state requires a prepared generation");
@@ -130,7 +130,7 @@ class LoadedModule {
 		return new RuntimeFunctionVersionTable(entries, identity.revision);
 	}
 
-	@:allow(runtime.Runtime)
+	@:allow(runtime.Runtime, runtime.HaxeRuntimePatchCoordinator)
 	function access<T>(operation:RuntimeModuleHandle->T):T {
 		mutex.acquire();
 		var current = handle;

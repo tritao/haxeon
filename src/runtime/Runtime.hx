@@ -30,6 +30,7 @@ class Runtime {
 	static final retirementMutex = new Mutex();
 	static final jitBackend = new NativeRuntimeJitBackend();
 	#if haxeon
+	static final haxePatchCoordinator = new HaxeRuntimePatchCoordinator(jitBackend);
 	static final haxeRuntimeModuleKernel:HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	#end
 
@@ -363,6 +364,9 @@ class Runtime {
 	/** Commit one staged host transaction while holding the module mutex. */
 	@:allow(runtime.RuntimePatchTransaction)
 	static function commitPatch(transaction:RuntimePatchTransaction):Void {
+		#if haxeon
+		var status:RuntimeStatus = haxePatchCoordinator.commit(transaction);
+		#else
 		var module = transaction.owner,
 			envelope = transaction.envelope,
 			decoded = transaction.model;
@@ -400,6 +404,7 @@ class Runtime {
 			}
 			return publication.status;
 		});
+		#end
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
