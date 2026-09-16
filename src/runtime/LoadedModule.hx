@@ -1,6 +1,8 @@
 package runtime;
 
 import compiler.hl.HlModule;
+import compiler.hl.patch.HlPatch;
+import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import sys.thread.Mutex;
 
@@ -11,6 +13,15 @@ class LoadedModule {
 
 	/** Validated Haxe-owned runtime identity retained beside the native handle. */
 	public final identity:HlRuntimeManifest;
+
+	/** Haxe-owned revision corresponding to the last successful native publication. */
+	public var revision(default, null):Int;
+
+	/** Stable function identities and their current Haxe-side generations. */
+	public var functions(default, null):RuntimeFunctionVersionTable;
+
+	/** Haxe-owned snapshots of successfully published patch generations. */
+	final patchLedger:Array<RuntimePatchGeneration> = [];
 
 	final mutex = new Mutex();
 	var handle:Null<hl.Abstract<"realtime_module">>;
@@ -23,6 +34,48 @@ class LoadedModule {
 		this.handle = handle;
 		this.model = model;
 		this.identity = identity;
+		this.revision = identity.revision;
+		this.functions = functionVersions(model, identity);
+	}
+
+	/** Number of successfully published Haxe-owned patch generations. */
+	public inline function committedPatchCount():Int
+		return patchLedger.length;
+
+	/** Advance Haxe-owned state after the native patch has been published. */
+	@:allow(runtime.Runtime)
+	function commitPatch(patchModel:HlPatch, envelope:HlPatchEnvelope, nextFunctions:RuntimeFunctionVersionTable):Void {
+		if (patchModel == null || envelope == null || nextFunctions == null)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state requires a model, envelope, and function versions");
+		if (envelope.baseRevision != revision || envelope.revision <= revision)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime patch state has an invalid revision transition");
+		var generation = new RuntimePatchGeneration(patchModel, envelope, nextFunctions);
+		for (value in patchModel.ints)
+			model.code.ints.push(value);
+		for (value in patchModel.floats)
+			model.code.floats.push(value);
+		for (value in patchModel.strings)
+			model.code.strings.push(value);
+		for (type in patchModel.types)
+			model.code.types.push(type);
+		patchLedger.push(generation);
+		functions = nextFunctions;
+		revision = envelope.revision;
+	}
+
+	static function functionVersions(model:HlModule, identity:HlRuntimeManifest):RuntimeFunctionVersionTable {
+		var entries:Array<{stableId:Int, slot:Int, typeIndex:Int}> = [];
+		for (entry in identity.entries) {
+			var fn = model.functionAt(entry.functionIndex);
+			if (fn == null)
+				throw new RuntimeError(RuntimeStatus.BadFormat, 'HLI identity references missing bytecode function ${entry.functionIndex}');
+			entries.push({
+				stableId: entry.stableId,
+				slot: entry.functionIndex,
+				typeIndex: fn.type
+			});
+		}
+		return new RuntimeFunctionVersionTable(entries, identity.revision);
 	}
 
 	@:allow(runtime.Runtime)

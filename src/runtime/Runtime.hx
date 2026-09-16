@@ -2,7 +2,10 @@ package runtime;
 
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
+import compiler.hl.HlPatchPolicy;
 import compiler.hl.HlRuntimeCallPolicy;
+import compiler.hl.patch.HlPatch;
+import compiler.hl.patch.HlPatch.HlPatchEnvelope;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
@@ -266,23 +269,61 @@ class Runtime {
 		});
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
-		validatePatchFormat(patch.bytes);
-		var status:RuntimeStatus = module.access(function(handle) return RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length));
+		var decoded:HlPatch;
+		try {
+			decoded = HlPatchReader.decode(patch.bytes);
+		} catch (error:RuntimeError) {
+			throw error;
+		} catch (error:Dynamic) {
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLP patch: ${Std.string(error)}');
+		}
+		var envelope:HlPatchEnvelope = decoded.envelope();
+		if (envelope.moduleId.compare(module.identity.moduleId) != 0)
+			throw new RuntimeError(RuntimeStatus.Incompatible, "Haxeon rejected an HLP patch for another module");
+		if (patch.baseRevision != envelope.baseRevision || patch.revision != envelope.revision)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "PatchSet revision metadata does not match the HLP envelope");
+		if (!sameFunctionIds(patch.changedFunctions, envelope.functionStableIds))
+			throw new RuntimeError(RuntimeStatus.BadArgument, "PatchSet function metadata does not match the HLP envelope");
+		var status:RuntimeStatus = module.access(function(handle) {
+			if (envelope.baseRevision != module.revision)
+				throw new RuntimeError(RuntimeStatus.StalePatch,
+					'Patch base revision ${envelope.baseRevision} does not match live revision ${module.revision}');
+			try {
+				HlPatchPolicy.validate(module.model, module.identity, module.revision, envelope, decoded);
+			} catch (error:RuntimeError) {
+				throw error;
+			} catch (error:Dynamic) {
+				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP patch: ${Std.string(error)}');
+			}
+			var nextFunctions;
+			try {
+				nextFunctions = module.functions.advance(envelope.functionStableIds, envelope.revision);
+			} catch (error:RuntimeError) {
+				throw error;
+			} catch (error:Dynamic) {
+				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP function generation: ${Std.string(error)}');
+			}
+			var result:RuntimeStatus = RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length);
+			if (result == RuntimeStatus.Ok)
+				module.commitPatch(decoded, envelope, nextFunctions);
+			return result;
+		});
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
 		}
 	}
 
-	/** Haxeon owns HLP wire validation; native code remains responsible for live compatibility and publication. */
-	static function validatePatchFormat(payload:Bytes):Void {
-		try {
-			HlPatchReader.decode(payload);
-		} catch (error:RuntimeError) {
-			throw error;
-		} catch (error:Dynamic) {
-			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLP patch: ${Std.string(error)}');
+	static function sameFunctionIds(left:Array<Int>, right:Array<Int>):Bool {
+		if (left == null || right == null || left.length != right.length)
+			return false;
+		var seen:Map<Int, Bool> = [];
+		for (stableId in left) {
+			if (seen.exists(stableId) || right.indexOf(stableId) < 0)
+				return false;
+			seen.set(stableId, true);
 		}
+		return true;
 	}
 
 	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T

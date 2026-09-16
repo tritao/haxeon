@@ -76,6 +76,9 @@ class HotReloadMain {
 			|| loaded.model.functionCount() != initial.module.functions.length
 			|| loaded.model.dispatchSlotCount <= 0
 			|| loaded.identity.revision != initial.revision
+			|| loaded.revision != initial.revision
+			|| loaded.functions.at(valueIndex).generation != initial.revision
+			|| loaded.committedPatchCount() != 0
 			|| loaded.identity.moduleId.compare(initial.runtimeIdentity.sub(4, 16)) != 0
 			|| loaded.identity.entries.length == 0
 			|| !identityFound)
@@ -139,6 +142,10 @@ class HotReloadMain {
 		}
 		Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		liveRevision = changed.revision;
+		if (loaded.revision != liveRevision
+			|| loaded.functions.at(valueIndex).generation != liveRevision
+			|| loaded.committedPatchCount() != 1)
+			throw "host runtime patch state did not publish the first function generation";
 		if (Runtime.patchJitCount(loaded) != 1)
 			throw "one-function patch did not JIT exactly one function";
 		if (Runtime.callInt(loaded, valueIndex) != 43)
