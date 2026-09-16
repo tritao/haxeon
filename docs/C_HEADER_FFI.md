@@ -1,5 +1,36 @@
 # C header FFI import
 
+## C++ direct-call import (CXX_ABI_V1)
+
+The importer also has an intentionally small C++ path. Select it explicitly;
+the generated artifact is still ordinary HXI, so the existing native ABI
+classifier and runtime handle the call:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --std=c++20 \
+  --target=x86_64-linux-gnu \
+  --include=/path/to/library/include \
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
+```
+
+The current direct profile imports namespaces, aliases, enum classes, opaque
+records, free functions, static methods, and public non-virtual `noexcept`
+methods. A member method is lowered to an HXI function with a synthetic
+`__this` pointer, while the `@symbol` value is exactly Clang's mangled name.
+References are represented as non-null pointer ABI values. Constructors,
+destructors, virtual methods, inheritance, rvalue references, throwing calls,
+and non-trivial class values produce `CXX` diagnostics instead of an unsafe
+binding. Trivial record values are opt-in through `--cxx-trivial-values`.
+
+Use repeatable `--define=<name[=value]>` options for explicit preprocessor
+definitions. `--compile-commands=<path>` accepts a Clang
+`compile_commands.json` database and contributes the selected command's
+include/define/toolchain flags while the requested target and language mode
+remain authoritative.
+
 Haxeon can use Clang to turn the ABI-visible subset of a C header into a
 deterministic raw HXI description:
 

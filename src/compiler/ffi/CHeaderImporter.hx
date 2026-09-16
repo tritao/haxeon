@@ -1,6 +1,5 @@
 package compiler.ffi;
 
-import haxe.Json;
 import haxe.Int64;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -19,11 +18,7 @@ import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.documentation.Documentation.DocumentationTools;
 
-typedef CLayout = {
-	var size:Int;
-	var align:Int;
-	var offsets:Map<String, Int>;
-}
+typedef CLayout = ClangRecordLayouts.RecordLayout;
 
 /** Imports the ABI-visible subset of a C header into a raw typed HXI model. */
 class CHeaderImporter {
@@ -32,52 +27,40 @@ class CHeaderImporter {
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
-		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders);
+		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders, null, null);
+	}
+
+	/** C importer entry point with the shared Clang frontend options. */
+	public static function importHeaderWithOptions(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String,
+			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>, ?compileCommands:String):HxiInterface {
+		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders, defines, compileCommands);
 	}
 
 	static function importHeaderModel(header:String, target:String, includes:Array<String>, clang:String, ?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>, ?compileCommands:String):HxiInterface {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
 		if (dependencies != null)
 			for (dependency in dependencies)
 				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
 					throw 'Invalid HXI dependency name "$dependency"';
-		// Keep failures bounded for Haxe's eval Process implementation; warnings are not part of the importer result.
-		var base = [
-			"-x",
-			"c",
-			"-std=c11",
-			"-ffreestanding",
-			"-target",
-			target,
-			"-w",
-			"-ferror-limit=1",
-			"-fno-caret-diagnostics"
-		];
-		for (include in includes)
-			base.push('-I$include');
-		var astProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", header]),
-			ProcessOutputCapture.defaultDiagnosticLimit);
-		if (astProcess.exitCode != 0)
-			throw 'Clang could not import $header:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
-		// Record layouts are semantic ABI data, not diagnostics. Keep the complete dump so
-		// large platform headers cannot truncate the records needed by the importer.
-		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]), null);
-		if (layoutProcess.exitCode != 0)
-			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
-		var astText = astProcess.stdout,
-			layoutText = layoutProcess.stdout + layoutProcess.stderr;
-		var layouts = parseLayouts(layoutText),
-			declarations:Array<Dynamic> = [],
-			roots = [FileSystem.fullPath(Path.directory(header))];
+		var frontend = ClangFrontend.run({
+			header: header,
+			target: target,
+			language: "c",
+			standard: "c11",
+			includes: includes,
+			defines: defines == null ? [] : defines,
+			clang: clang,
+			compileCommands: compileCommands
+		}), layouts = frontend.layouts, declarations:Array<Dynamic> = [], roots = [FileSystem.fullPath(Path.directory(header))];
 		var excluded = [];
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
 				excluded.push(pathKey(FileSystem.fullPath(excludedHeader)));
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
-		collect(Json.parse(astText), declarations, roots, FileSystem.fullPath(header), excluded);
+		collect(frontend.ast, declarations, roots, FileSystem.fullPath(header), excluded);
 		for (declaration in declarations) {
 			if (field(declaration, "kind") != "EnumDecl")
 				continue;
@@ -129,9 +112,6 @@ class CHeaderImporter {
 		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library, dependencies == null ? [] : dependencies.copy(),
 			hxiDeclarations, source.span(0, source.bytes.length), documentation);
 	}
-
-	static function diagnostics(text:String, truncated:Bool):String
-		return truncated ? '$text\n[Clang diagnostics truncated after ${ProcessOutputCapture.defaultDiagnosticLimit} bytes]' : text;
 
 	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>):String {
 		if (node == null)
@@ -775,50 +755,7 @@ class CHeaderImporter {
 	}
 
 	static function parseLayouts(text:String):Map<String, CLayout> {
-		var result:Map<String, CLayout> = [],
-			current:String = null,
-			offsets:Map<String, Int> = [],
-			size:Null<Int> = null,
-			align:Null<Int> = null;
-		for (rawLine in text.split("\n")) {
-			// Clang emits CRLF on Windows.  Keep the layout grammar independent
-			// of the host line ending so the record marker and size trailer are
-			// still parsed before they reach the HXI model.
-			var line = StringTools.endsWith(rawLine, "\r") ? rawLine.substring(0, rawLine.length - 1) : rawLine;
-			// A top-level record marker has one space after the separator. Field
-			// lines are indented further; otherwise a by-value nested record field
-			// would replace the layout currently being collected.
-			var record = ~/^\s*[0-9]+\s*\|\s(?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
-			if (record.match(line)) {
-				current = record.matched(1);
-				offsets = [];
-				size = null;
-				align = null;
-				continue;
-			}
-			if (current == null)
-				continue;
-			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
-			if (fieldLine.match(line))
-				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
-			var sizeValue = ~/sizeof=([0-9]+)/;
-			if (sizeValue.match(line))
-				size = Std.parseInt(sizeValue.matched(1));
-			var alignValue = ~/align=([0-9]+)/;
-			if (alignValue.match(line))
-				align = Std.parseInt(alignValue.matched(1));
-			var sizeLabel = ~/\bSize:\s*([0-9]+)/;
-			if (sizeLabel.match(line))
-				size = Std.parseInt(sizeLabel.matched(1));
-			var alignLabel = ~/\bAlignment:\s*([0-9]+)/;
-			if (alignLabel.match(line))
-				align = Std.parseInt(alignLabel.matched(1));
-			if (size != null && align != null) {
-				result.set(current, {size: size, align: align, offsets: offsets});
-				current = null;
-			}
-		}
-		return result;
+		return ClangRecordLayouts.parse(text);
 	}
 
 	static function children(node:Dynamic):Array<Dynamic> {
