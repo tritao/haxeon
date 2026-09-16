@@ -1131,6 +1131,29 @@ class ParserRecoveryMain {
 				throw "an unresolved member chain collapsed its outer member expression";
 		}
 
+		var closureSource = new SourceFile("TolerantClosureCall.hx",
+			"class Foo { public var known:Int; } function main():Void { var callback = missing; var result = callback().known; var after:Int = 1; }");
+		var closureProgram = new Parser(new Lexer(closureSource).tokenize()).parseProgramRecovering().program,
+			closureTyped = Typer.typeRecovered(closureProgram);
+		if (closureTyped == null || closureTyped.functions.length != 1
+			|| closureTyped.functions[0].statements.length != 3)
+			throw "a non-callable closure expression discarded the surrounding declarations";
+		var closureExpression = switch closureTyped.functions[0].statements[1] {
+			case TVar(_, value, _): value;
+			default: null;
+		};
+		if (closureExpression == null || closureExpression.type != TUnknown)
+			throw 'a non-callable closure expression did not retain an unknown result: ${closureExpression == null ? "null" : Std.string(closureExpression.type)}';
+		switch closureExpression.expression {
+			case TField(call, "known"):
+				switch call.expression {
+					case TClosureCall(callee, arguments) if (callee.type == TError && arguments.length == 0):
+					default: throw "a non-callable closure expression did not preserve its call shape";
+				}
+			default:
+				throw "a non-callable closure expression collapsed its outer member expression";
+		}
+
 		var postErrorService = new LanguageService(),
 			postErrorSource = "class Foo { public var value:Int; } function main():Void { var foo:Foo = new Foo(); broken.unresolved().thing; foo. }";
 		postErrorService.update("TolerantPostError.hx", postErrorSource);

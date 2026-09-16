@@ -130,38 +130,38 @@ class CallResolver {
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
-		if (session.tolerant && isRecoveryType(receiver.type))
-			return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
-		if (isRawPointerType(receiver.type)) {
-			var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
-			if (rawPointerCall != null)
-				return rawPointerCall;
-		}
-		var platformMethod = PlatformAbi.method(receiver.type, name);
-		if (platformFirst && platformMethod != null) {
-			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
-			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
-		}
-		var stringCall = typeStringMethod(receiver, name, arguments, span, scope);
-		if (stringCall != null)
-			return stringCall;
-		if (isMap(receiver.type))
-			return typeMapMethod(receiver, name, arguments, span, scope);
-		if (isArray(receiver.type))
-			return typeArrayMethod(receiver, name, arguments, span, scope);
-		if (isIterator(receiver.type))
-			return typeIteratorMethod(receiver, name, arguments, span);
-		if (!platformFirst && platformMethod != null) {
-			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
-			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
-		}
-		var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
-		if (abstractCall != null)
-			return abstractCall;
-		var fieldCall = typeFunctionFieldCall(receiver, name, arguments, span, scope);
-		if (fieldCall != null)
-			return fieldCall;
 		try {
+			if (session.tolerant && isRecoveryType(receiver.type))
+				return new TypedExpression(TMethodCall(receiver, name, recoveredCallArguments(arguments, scope, name)), TUnknown, span);
+			if (isRawPointerType(receiver.type)) {
+				var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
+				if (rawPointerCall != null)
+					return rawPointerCall;
+			}
+			var platformMethod = PlatformAbi.method(receiver.type, name);
+			if (platformFirst && platformMethod != null) {
+				var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
+				return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
+			}
+			var stringCall = typeStringMethod(receiver, name, arguments, span, scope);
+			if (stringCall != null)
+				return stringCall;
+			if (isMap(receiver.type))
+				return typeMapMethod(receiver, name, arguments, span, scope);
+			if (isArray(receiver.type))
+				return typeArrayMethod(receiver, name, arguments, span, scope);
+			if (isIterator(receiver.type))
+				return typeIteratorMethod(receiver, name, arguments, span);
+			if (!platformFirst && platformMethod != null) {
+				var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
+				return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
+			}
+			var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
+			if (abstractCall != null)
+				return abstractCall;
+			var fieldCall = typeFunctionFieldCall(receiver, name, arguments, span, scope);
+			if (fieldCall != null)
+				return fieldCall;
 			return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName, contextualGenericArguments);
 		} catch (error:CompileError) {
 			if (!session.tolerant)
@@ -532,8 +532,14 @@ class CallResolver {
 				case TFunction(parameters, result): {arguments: parameters, result: result};
 				default: null;
 			};
-		if (functionType == null)
-			fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
+		if (functionType == null) {
+			if (!session.tolerant)
+				fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
+			session.rememberRecoveryDiagnostic(new Diagnostic("E1007",
+				callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span));
+			return new TypedExpression(TClosureCall(typedCallee, recoveredCallArguments(arguments, scope,
+				callableName == null ? "function expression" : callableName)), TUnknown, span);
+		}
 		if (!session.tolerant && arguments.length != functionType.arguments.length)
 			fail("E1008",
 				callableName == null ? 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}' : 'Function value "$callableName" expects ${functionType.arguments.length} arguments, got ${arguments.length}',
