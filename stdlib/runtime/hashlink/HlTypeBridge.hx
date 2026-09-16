@@ -64,6 +64,33 @@ class HlTypeBridge {
 	/** Invoke a stable zero-argument void function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_void(module:hl.Abstract<"realtime_module">, stableId:Int):Void {}
 
+	/** Invoke a stable zero-argument bytes-returning function through an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_bytes(module:hl.Abstract<"realtime_module">, stableId:Int):hl.Bytes
+		return null;
+
+	/** Invoke a stable bytes-argument function through an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_bytes1(module:hl.Abstract<"realtime_module">, stableId:Int, argument:hl.Bytes):Void {}
+
+	/** Retain the closure returned by a stable function in an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_closure(module:hl.Abstract<"realtime_module">, stableId:Int):Dynamic
+		return null;
+
+	/** Invoke one retained closure through its externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_closure_i32(module:hl.Abstract<"realtime_module">, closure:Dynamic):Int
+		return 0;
+
+	/** Retain the object returned by a stable function in an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_object(module:hl.Abstract<"realtime_module">, stableId:Int):Dynamic
+		return null;
+
+	/** Invoke a stable object-argument function through an externally loaded runtime wrapper. */
+	public static function native_runtime_module_call_i32_object(module:hl.Abstract<"realtime_module">, stableId:Int, argument:Dynamic):Int
+		return 0;
+
+	/** Recheck one stable call shape against the live native dispatch table. */
+	public static function native_runtime_module_validate_call(module:hl.Abstract<"realtime_module">, stableId:Int, shape:Int):Int
+		return -1;
+
 	/** Apply one HLP transaction to an externally loaded runtime wrapper. */
 	public static function native_runtime_module_patch(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;

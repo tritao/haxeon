@@ -120,6 +120,13 @@ DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code_manifest,
 DEFINE_PRIM(_BOOL,native_runtime_module_unload,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_call_void,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_BYTES,native_runtime_module_call_bytes,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_VOID,native_runtime_module_call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
+DEFINE_PRIM(_DYN,native_runtime_module_call_closure,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,native_runtime_module_call_closure_i32,_ABSTRACT(realtime_module) _DYN);
+DEFINE_PRIM(_DYN,native_runtime_module_call_object,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,native_runtime_module_call_i32_object,_ABSTRACT(realtime_module) _I32 _DYN);
+DEFINE_PRIM(_I32,native_runtime_module_validate_call,_ABSTRACT(realtime_module) _I32 _I32);
 DEFINE_PRIM(_I32,native_runtime_module_patch,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32 _BYTES);
