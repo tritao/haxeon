@@ -74,6 +74,13 @@ transaction rather than an unrelated byte buffer; the current native adapter
 extracts the owned bytes at the final ABI boundary. This keeps the Haxe policy
 record and its publication input coupled for future backend implementations.
 
+`Runtime` also keeps a small side ledger of committed patch revisions and their
+JIT lifecycle codes. Native success creates a `Published` entry; a close request
+changes live entries to `Retiring`, and successful native retirement removes the
+module's ledger entry. The ledger intentionally stores policy state only: native
+HashLink continues to own executable allocations and decides when code regions
+are reclaimable, while disposed modules are not retained by Haxe bookkeeping.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication
