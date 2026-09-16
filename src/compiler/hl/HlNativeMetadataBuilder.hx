@@ -13,6 +13,7 @@ import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlRuntimePatchFunctions;
+import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlTypeBuilder;
 import runtime.hashlink.HlTypeKind;
 import runtime.memory.RawPtr;
@@ -136,6 +137,62 @@ class HlNativeMetadataBuilder {
 		for (index in 0...patch.functions.length)
 			writePatchFunction(descriptors.offset(index), generation, patch, patch.functions[index], typeCount, identity);
 		return new HlRuntimePatchFunctions(descriptors, patch.functions.length);
+	}
+
+	/** Prepare source spans and snapshots in the metadata arena. */
+	public static function preparePatchDebug(generation:HlMetadataGeneration, patch:HlPatch):RawPtr<HlRuntimePatchDebug> {
+		if (generation == null || patch == null)
+			throw "HashLink patch debug preparation requires a generation and patch";
+		var spans = generation.arena.allocSourceSpanPointerArray(patch.functions.length);
+		for (index in 0...patch.functions.length) {
+			var source = patch.functions[index].debug;
+			if (source.length == 0) {
+				spans.offset(index).store(RawPtr.nullPtr());
+				continue;
+			}
+			if (source.length != patch.functions[index].instructions.length)
+				throw 'HashLink patch debug count does not match function ${patch.functions[index].functionIndex} opcodes';
+			var destination = generation.arena.allocSourceSpanArray(source.length);
+			for (opcode in 0...source.length) {
+				var location = source[opcode];
+				if (location.file < 0 || location.file >= patch.debugFiles.length)
+					throw 'HashLink patch function ${patch.functions[index].functionIndex} has an invalid debug file index';
+				var file = generation.debugFileIndex(patch.debugFiles[location.file]);
+				if (file < 0)
+					throw 'HashLink patch debug file "${patch.debugFiles[location.file]}" is not present in the loaded module';
+				var span = destination.offset(opcode);
+				span.ref.file = cast file;
+				span.ref.line = cast location.line;
+				span.ref.column = cast location.column;
+				span.ref.endLine = cast location.endLine;
+				span.ref.endColumn = cast location.endColumn;
+				span.ref.sourceHash = cast location.sourceHash;
+				span.ref.start = cast location.start;
+				span.ref.end = cast location.end;
+				span.ref.flags = cast location.flags;
+			}
+			spans.offset(index).store(destination);
+		}
+
+		var snapshots:RawPtr<runtime.hashlink.HlPatchDebug.HlSourceSnapshot> = patch.sourceSnapshots.length == 0 ? RawPtr.nullPtr() : generation.arena.allocSourceSnapshotArray(patch.sourceSnapshots.length);
+		for (index in 0...patch.sourceSnapshots.length) {
+			var source = patch.sourceSnapshots[index];
+			if (source.sourceHash == 0 || source.content == null)
+				throw "HashLink patch source snapshot is incomplete";
+			var content:RawPtr<UInt8> = source.content.length == 0 ? RawPtr.nullPtr() : generation.arena.allocUInt8Array(source.content.length);
+			for (byte in 0...source.content.length)
+				content.offset(byte).store(cast source.content.get(byte));
+			var destination = snapshots.offset(index);
+			destination.ref.sourceHash = cast source.sourceHash;
+			destination.ref.length = cast source.content.length;
+			destination.ref.content = content;
+		}
+		var descriptor = generation.arena.allocPatchDebug();
+		descriptor.ref.functionCount = cast patch.functions.length;
+		descriptor.ref.spans = spans;
+		descriptor.ref.snapshotCount = cast patch.sourceSnapshots.length;
+		descriptor.ref.snapshots = snapshots;
+		return descriptor;
 	}
 
 	static function allocateTypes(code:HlCode, generation:HlMetadataGeneration):Array<RawPtr<runtime.hashlink.HlType>> {

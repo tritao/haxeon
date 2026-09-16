@@ -68,10 +68,10 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code_haxe_types)( vbyte *modu
 }
 
 HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code_haxe_metadata)( vbyte *module, realtime_bytes *bytes, int length, int type_count,
-	vbyte *functions, int function_count, vbyte *pools, vbyte *status_out ) {
+	vbyte *functions, int function_count, vbyte *pools, vbyte *debug, vbyte *status_out ) {
 	hl_patch_code *code = NULL;
 	hl_runtime_status status = hl_runtime_module_apply_hlp_capture_metadata((hl_runtime_module*)module,bytes == NULL ? NULL : bytes->data,length,
-		type_count,(hl_function*)functions,function_count,(hl_patch_pools*)pools,&code);
+		type_count,(hl_function*)functions,function_count,(hl_patch_pools*)pools,(hl_patch_debug*)debug,&code);
 	if( status_out != NULL ) memcpy(status_out,&status,sizeof(status));
 	return (vbyte*)code;
 }

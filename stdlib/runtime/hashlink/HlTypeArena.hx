@@ -21,6 +21,9 @@ import runtime.hashlink.HlNative;
 import runtime.hashlink.HlConstant;
 import runtime.hashlink.HlDebugSection;
 import runtime.hashlink.HlNativeCode;
+import runtime.hashlink.HlPatchDebug.HlSourceSpan;
+import runtime.hashlink.HlPatchDebug.HlSourceSnapshot;
+import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 
 /** Owns stable unmanaged storage for Haxe-constructed HashLink metadata. */
 class HlTypeArena {
@@ -104,6 +107,18 @@ class HlTypeArena {
 
 	public inline function allocPatchPools():RawPtr<HlPatchPools>
 		return storage.alloc();
+
+	public inline function allocPatchDebug():RawPtr<HlRuntimePatchDebug>
+		return storage.alloc();
+
+	public inline function allocSourceSpanArray(count:Int):RawPtr<HlSourceSpan>
+		return storage.alloc(count);
+
+	public inline function allocSourceSpanPointerArray(count:Int):RawPtr<RawPtr<HlSourceSpan>>
+		return storage.alloc(count);
+
+	public inline function allocSourceSnapshotArray(count:Int):RawPtr<HlSourceSnapshot>
+		return storage.alloc(count);
 
 	public inline function allocTypePointerArray(count:Int):RawPtr<RawPtr<HlType>>
 		return storage.alloc(count);
