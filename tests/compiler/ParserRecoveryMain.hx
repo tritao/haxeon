@@ -1306,11 +1306,37 @@ class ParserRecoveryMain {
 					default:
 						throw "invalid switch subject discarded its typed cases";
 				}
-			default:
-				throw "invalid switch subject poisoned its known result type";
-		}
+		default:
+			throw "invalid switch subject poisoned its known result type";
+	}
 
-		var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
+	var recoveredPatternSource = new SourceFile("TolerantRecoveredPattern.hx",
+		"class Payload { public var member:Int; } enum Choice<T> { Some(value:T); Empty; } function main(choice:Choice<Payload>):Void { switch (choice) { case Some(value): value.member; case Some(other): other.member; default: } }");
+	var recoveredPatternProgram = new Parser(new Lexer(recoveredPatternSource).tokenize()).parseProgramRecovering().program,
+		recoveredPatternTyped = Typer.typeRecovered(recoveredPatternProgram);
+	var retainedRecoveredPattern = false;
+	if (recoveredPatternTyped != null && recoveredPatternTyped.functions.length == 1)
+		switch recoveredPatternTyped.functions[0].statements[0] {
+			case TSwitch(_, cases, _, _, _) if (cases.length >= 1):
+				for (statement in cases[0].statements)
+					switch statement {
+						case TExpression(expression, _):
+							switch expression.expression {
+								case TField(object, "member"):
+									switch object.type {
+									case TInstance(NominalKind.Class, "Payload", _): retainedRecoveredPattern = true;
+									default:
+								}
+								default:
+							}
+						default:
+					}
+			default:
+		}
+	if (!retainedRecoveredPattern)
+		throw "tolerant switch recovery discarded an enum payload binding";
+
+	var chainedErrorSource = new SourceFile("TolerantChainedError.hx",
 			"function main():Void { var value = broken.unresolved().thing; var after:Int = 1; }");
 		var chainedErrorProgram = new Parser(new Lexer(chainedErrorSource).tokenize()).parseProgramRecovering().program,
 			chainedErrorTyped = Typer.typeRecovered(chainedErrorProgram);

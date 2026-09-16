@@ -581,21 +581,47 @@ class BodyTyper {
 				return TTry(typedTry, typedCatches, span);
 			case Switch(expression, cases, defaultBranch, hasDefault, span):
 				var typedSubject = typeExpression(expression, scope, null, false),
-					caseExpected = isRecoveryType(typedSubject.type) ? null : typedSubject.type,
+					invalidSubject = !TypeRelations.equals(typedSubject.type, TInt)
+						&& !TypeRelations.equals(typedSubject.type, TString)
+						&& !isEnum(typedSubject.type),
+					caseExpected = invalidSubject ? null : typedSubject.type,
 					typedCases = [];
 				for (switchCase in cases) {
 					var caseScope = new Scope(scope),
-						typedValue = typeExpression(switchCase.value, caseScope, caseExpected, false);
+						subjectBinding:Null<String> = null,
+						isCatchAll = isSwitchCatchAll(switchCase.value),
+						pattern:Null<{
+							value:TypedExpression,
+							enumName:String,
+							index:Int,
+							bindings:Array<TypedSwitchBinding>,
+							predicates:Array<TypedSwitchPredicate>
+						}> = null;
+					if (!invalidSubject) {
+						try {
+							subjectBinding = switchSubjectBinding(switchCase.value, typedSubject.type, caseScope);
+						} catch (error:Dynamic) {
+							rememberRecoveryError(error, expressionSpan(switchCase.value));
+						}
+					}
+					if (!invalidSubject && subjectBinding == null && !isCatchAll)
+						pattern = recoverSwitchPattern(switchCase.value, typedSubject.type, caseScope);
+					var typedValue = isCatchAll || subjectBinding != null ? typedSubject : pattern == null
+						? typeExpression(switchCase.value, caseScope, caseExpected, false) : pattern.value,
+						typedGuard = switchCase.guard == null ? null : recoverCoerce(typeExpression(switchCase.guard, caseScope, TBool, false), TBool,
+							"switch guard", "E1003");
+					if (typedGuard != null)
+						caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
 					typedCases.push({
 						value: typedValue,
-						subjectBinding: null,
-						isCatchAll: false,
-						guard: null,
+						subjectBinding: subjectBinding,
+						isCatchAll: isCatchAll,
+						guard: typedGuard,
 						statements: typeStatements(switchCase.statements, caseScope, result),
-						enumName: null,
-						constructorIndex: -1,
-						bindings: [],
-						predicates: [],
+						enumName: pattern == null ? null : pattern.enumName,
+						constructorIndex: pattern == null ? -1 : pattern.index,
+						bindings: pattern == null ? [] : pattern.bindings,
+						predicates: pattern == null ? [] : pattern.predicates,
 						span: switchCase.span
 					});
 				}
@@ -603,6 +629,30 @@ class BodyTyper {
 					typeStatements(defaultBranch, new Scope(scope), result), hasDefault, span);
 			default:
 				return null;
+		}
+	}
+
+	function recoverSwitchPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
+		value:TypedExpression,
+		enumName:String,
+		index:Int,
+		bindings:Array<TypedSwitchBinding>,
+			predicates:Array<TypedSwitchPredicate>
+		}> {
+		try {
+			return typeEnumPattern(value, expected, scope);
+		} catch (error:Dynamic) {
+			rememberRecoveryError(error, expressionSpan(value));
+			return null;
+		}
+	}
+
+	function recoverCoerce(value:TypedExpression, expected:CompilerType, contextName:String, code:String):TypedExpression {
+		try {
+			return coerce(value, expected, contextName, code);
+		} catch (error:Dynamic) {
+			rememberRecoveryError(error, value.span);
+			return new TypedExpression(TNullLiteral, TError, value.span);
 		}
 	}
 
