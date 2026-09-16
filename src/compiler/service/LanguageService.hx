@@ -1124,7 +1124,8 @@ class LanguageService {
 				var name = tokens[index + 1],
 					after = index + 2 < tokens.length ? tokens[index + 2] : null;
 				if (name.span.end >= start && name.span.end <= end && (after == null || after.kind != Colon)) {
-					var context = model.index.completionContext(name.span.end, null, token),
+					var semantic = semanticQuery(path, name.span.end, null, token),
+						context = semantic == null ? model.index.completionContext(name.span.end, null, token) : semantic.completion,
 						localType:Null<CompilerType> = null;
 					for (local in context.locals)
 						if (local.name == name.text)

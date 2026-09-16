@@ -1102,7 +1102,7 @@ class LanguageServiceMain {
 			if (item.label == "T")
 				throw "workspace-visible type parameters leaked into out-of-scope completion";
 		var genericTypeDefinitionService = new LanguageService(),
-			genericTypeDefinitionSource = "function identity<T>(value:T):T { return value; } function main():Void return;";
+			genericTypeDefinitionSource = "function identity<T>(value:T):T { var copy = value; return value; } function main():Void return;";
 		genericTypeDefinitionService.update("GenericTypeDefinition.hx", genericTypeDefinitionSource);
 		genericTypeDefinitionService.compile("GenericTypeDefinition");
 		var genericValuePosition = genericTypeDefinitionSource.lastIndexOf("return value") + "return ".length,
@@ -1119,8 +1119,15 @@ class LanguageServiceMain {
 			|| genericValueDefinition == null
 			|| genericValueDefinition.span.start != genericTypeDefinitionSource.indexOf("(value") + 1
 			|| genericValueHover != "value:T"
-			|| genericValueReferences.length != 2)
+			|| genericValueReferences.length != 3)
 			throw "semantic queries did not use current recovery for an unreachable generic body";
+		var genericInlayHints = genericTypeDefinitionService.inlayHints("GenericTypeDefinition.hx", 0, genericTypeDefinitionSource.length),
+			hasGenericInlayHint = false;
+		for (hint in genericInlayHints)
+			if (hint.label == ": T" && hint.position == genericTypeDefinitionSource.indexOf("copy") + "copy".length)
+				hasGenericInlayHint = true;
+		if (!hasGenericInlayHint)
+			throw "inlay hints did not use current recovery for an unreachable generic body";
 		var recoveredReferenceService = new LanguageService();
 		recoveredReferenceService.update("refs/Target.hx", "package refs; function target():Int return 1; function main():Void return;");
 		recoveredReferenceService.compile("refs.Target");
