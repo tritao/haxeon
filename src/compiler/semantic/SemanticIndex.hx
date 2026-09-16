@@ -101,6 +101,7 @@ typedef ResolvedSemanticReference = {
 }
 
 /** Mutable construction state for one revision-local semantic index. */
+@:allow(compiler.semantic.SemanticIndex)
 class SemanticIndexBuilder {
 	public final revision:Int;
 	final symbols:Map<String, IndexedSemanticSymbol> = [];
@@ -2290,72 +2291,6 @@ class SemanticIndexBuilder {
 		return fn == null ? recoveredFunction(name + ".new") : fn;
 	}
 
-	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {
-		var selected:Null<PositionBinding> = null;
-		for (binding in bindings) {
-			if (token != null)
-				token.check();
-			if (position < binding.span.start || position > binding.span.end)
-				continue;
-			var width = binding.span.end - binding.span.start,
-				selectedWidth = selected == null ? 0x3fffffff : selected.span.end - selected.span.start;
-			if (selected == null || width < selectedWidth
-				|| width == selectedWidth && binding.span.start > selected.span.start)
-				selected = binding;
-		}
-		return selected == null ? null : selected.symbol;
-	}
-
-	public function symbolAt(position:Int):Null<IndexedSemanticSymbol> {
-		var id = symbolIdAt(position);
-		return id == null ? null : symbols.get(id);
-	}
-
-	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
-		return symbols.get(id);
-
-	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return signatures.get(id);
-
-	/** Return the editor-local identity for a declared generic parameter. */
-	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
-		return typeParameterIds.get(typeParameterKey(owner, name));
-
-	public function calls():Array<SemanticCallEdge> {
-		var result = callEdges.copy();
-		for (caller in symbols) {
-			if (caller.kind != DeclarationKind.Function && caller.kind != DeclarationKind.Member)
-				continue;
-			var declarationBinding = locations(caller.id);
-			for (index in 0...tokens.length) {
-				var token = tokens[index];
-				if (token.span.start < caller.declaration.start
-					|| token.span.end > caller.declaration.end
-					|| token.kind != TokenKind.Identifier
-					|| index + 1 >= tokens.length
-					|| tokens[index + 1].kind != TokenKind.LeftParen
-					|| declarationBinding.length > 0
-					&& token.span.start == declarationBinding[0].start)
-					continue;
-				var callee = symbolIdAt(token.span.start);
-				if (callee == null)
-					continue;
-				var duplicate = false;
-				for (edge in result)
-					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
-						duplicate = true;
-						break;
-					}
-				if (!duplicate)
-					result.push({caller: caller.id, callee: callee, span: token.span});
-			}
-		}
-		return result;
-	}
-
-	public function resolvedDependencies():Array<ResolvedSemanticReference>
-		return resolvedReferences.copy();
-
 	/** Index a typed field initializer under its field declaration identity. */
 	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
@@ -2406,11 +2341,6 @@ class SemanticIndexBuilder {
 		checkpoint();
 		cancellation = null;
 		indexingMs += (Sys.time() - started) * 1000.0;
-	}
-
-	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
-		var result = references.get(id);
-		return result == null ? [] : result.copy();
 	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext {
@@ -2679,40 +2609,6 @@ class SemanticIndexBuilder {
 		return result;
 	}
 
-	public function unresolvedSymbols():Array<UnresolvedSymbol>
-		return unresolved.copy();
-
-	public function unresolvedAt(position:Int):Null<UnresolvedSymbol> {
-		for (symbol in unresolved)
-			if (position >= symbol.span.start && position <= symbol.span.end)
-				return symbol;
-		return null;
-	}
-
-	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType> {
-		var symbol = symbolIdAt(position, token);
-		if (symbol != null && declarationTypes.exists(symbol))
-			return declarationTypes.get(symbol);
-		var result:Null<CompilerType> = null, width = 0x3fffffff;
-		for (candidate in completionTypes) {
-			if (token != null)
-				token.check();
-			if (position >= candidate.span.start && position <= candidate.span.end && candidate.span.end - candidate.span.start < width) {
-				result = candidate.type;
-				width = candidate.span.end - candidate.span.start;
-			}
-		}
-		for (local in completionLocals) {
-			if (token != null)
-				token.check();
-			if (position >= local.declaration.start && position <= local.declaration.end)
-				return local.type;
-		}
-		if (result != null)
-			return result;
-		return symbol == null ? null : declarationTypes.get(symbol);
-	}
-
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
 		var token = declarationToken(tokens, declaration, sourceLocalName(identity));
 		if (token == null)
@@ -2971,7 +2867,7 @@ class SemanticIndexBuilder {
 				|| index > 1 && tokens[index - 2].kind == TokenKind.Dot
 				|| index >= tokens.length
 				|| tokens[index].kind != TokenKind.LeftParen
-				|| symbolIdAt(token.span.start) != null
+				|| symbolIdAtForConstruction(token.span.start) != null
 				|| declaration != null
 				&& token.span.start == declaration.span.start)
 				continue;
@@ -2981,6 +2877,20 @@ class SemanticIndexBuilder {
 				addCall(callee, token.span, token.text);
 			}
 		}
+	}
+
+	function symbolIdAtForConstruction(position:Int):Null<SemanticSymbolId> {
+		var selected:Null<PositionBinding> = null;
+		for (binding in bindings) {
+			if (position < binding.span.start || position > binding.span.end)
+				continue;
+			var width = binding.span.end - binding.span.start,
+				selectedWidth = selected == null ? 0x3fffffff : selected.span.end - selected.span.start;
+			if (selected == null || width < selectedWidth
+				|| width == selectedWidth && binding.span.start > selected.span.start)
+				selected = binding;
+		}
+		return selected == null ? null : selected.symbol;
 	}
 
 	function bind(id:SemanticSymbolId, span:SourceSpan):Void {
@@ -3380,44 +3290,118 @@ class SemanticIndex {
 	function get_indexingMs():Float
 		return builder.indexingMs;
 
-	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId>
-		return builder.symbolIdAt(position, token);
+	public function symbolIdAt(position:Int, ?token:CancellationToken):Null<SemanticSymbolId> {
+		var selected:Null<PositionBinding> = null;
+		for (binding in builder.bindings) {
+			if (token != null)
+				token.check();
+			if (position < binding.span.start || position > binding.span.end)
+				continue;
+			var width = binding.span.end - binding.span.start,
+				selectedWidth = selected == null ? 0x3fffffff : selected.span.end - selected.span.start;
+			if (selected == null || width < selectedWidth
+				|| width == selectedWidth && binding.span.start > selected.span.start)
+				selected = binding;
+		}
+		return selected == null ? null : selected.symbol;
+	}
 
-	public function symbolAt(position:Int):Null<IndexedSemanticSymbol>
-		return builder.symbolAt(position);
+	public function symbolAt(position:Int):Null<IndexedSemanticSymbol> {
+		var id = symbolIdAt(position);
+		return id == null ? null : builder.symbols.get(id);
+	}
 
 	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
-		return builder.symbol(id);
+		return builder.symbols.get(id);
 
 	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return copySignature(builder.signature(id));
+		return copySignature(builder.signatures.get(id));
 
 	public function typeParameterId(owner:String, name:String):Null<SemanticSymbolId>
-		return builder.typeParameterId(owner, name);
+		return builder.typeParameterIds.get(SemanticIndexBuilder.typeParameterKey(owner, name));
 
-	public function calls():Array<SemanticCallEdge>
-		return builder.calls();
+	public function calls():Array<SemanticCallEdge> {
+		var result = [for (edge in builder.callEdges) {caller: edge.caller, callee: edge.callee, span: edge.span}];
+		for (caller in builder.symbols) {
+			if (caller.kind != DeclarationKind.Function && caller.kind != DeclarationKind.Member)
+				continue;
+			var declarationBinding = locations(caller.id);
+			for (index in 0...builder.tokens.length) {
+				var token = builder.tokens[index];
+				if (token.span.start < caller.declaration.start
+					|| token.span.end > caller.declaration.end
+					|| token.kind != TokenKind.Identifier
+					|| index + 1 >= builder.tokens.length
+					|| builder.tokens[index + 1].kind != TokenKind.LeftParen
+					|| declarationBinding.length > 0
+					&& token.span.start == declarationBinding[0].start)
+					continue;
+				var callee = symbolIdAt(token.span.start);
+				if (callee == null)
+					continue;
+				var duplicate = false;
+				for (edge in result)
+					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
+						duplicate = true;
+						break;
+					}
+				if (!duplicate)
+					result.push({caller: caller.id, callee: callee, span: token.span});
+			}
+		}
+		return result;
+	}
 
 	public function resolvedDependencies():Array<ResolvedSemanticReference>
-		return builder.resolvedDependencies();
+		return [for (reference in builder.resolvedReferences) {
+			owner: reference.owner,
+			target: reference.target,
+			targetId: reference.targetId,
+			kind: reference.kind
+		}];
 
-	public function locations(id:SemanticSymbolId):Array<SourceSpan>
-		return builder.locations(id);
+	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
+		var result = builder.references.get(id);
+		return result == null ? [] : result.copy();
+	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
 		return builder.completionContext(position, qualifier, token);
 
 	public function unresolvedSymbols():Array<UnresolvedSymbol>
-		return [for (symbol in builder.unresolvedSymbols())
+		return [for (symbol in builder.unresolved)
 			{name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()}];
 
 	public function unresolvedAt(position:Int):Null<UnresolvedSymbol> {
-		var symbol = builder.unresolvedAt(position);
-		return symbol == null ? null : {name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()};
+		for (symbol in builder.unresolved)
+			if (position >= symbol.span.start && position <= symbol.span.end)
+				return {name: symbol.name, span: symbol.span, candidates: symbol.candidates.copy()};
+		return null;
 	}
 
-	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType>
-		return builder.typeAt(position, token);
+	public function typeAt(position:Int, ?token:CancellationToken):Null<CompilerType> {
+		var symbol = symbolIdAt(position, token);
+		if (symbol != null && builder.declarationTypes.exists(symbol))
+			return builder.declarationTypes.get(symbol);
+		var result:Null<CompilerType> = null, width = 0x3fffffff;
+		for (candidate in builder.completionTypes) {
+			if (token != null)
+				token.check();
+			if (position >= candidate.span.start && position <= candidate.span.end && candidate.span.end - candidate.span.start < width) {
+				result = candidate.type;
+				width = candidate.span.end - candidate.span.start;
+			}
+		}
+		for (local in builder.completionLocals) {
+			if (token != null)
+				token.check();
+			if (position >= local.declaration.start && position <= local.declaration.end)
+				return local.type;
+		}
+		if (result != null)
+			return result;
+		return symbol == null ? null : builder.declarationTypes.get(symbol);
+	}
 
 	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
 		return copySignature(builder.recoveredSignature(name, receiverType));
