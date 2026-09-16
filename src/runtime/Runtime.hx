@@ -15,6 +15,7 @@ import sys.thread.Mutex;
 class Runtime {
 	static final retirementBacklog:Array<LoadedModule> = [];
 	static final retirementMutex = new Mutex();
+	static final jitBackend = new NativeRuntimeJitBackend();
 
 	public static var pendingRetirementCount(get, never):Int;
 
@@ -92,22 +93,22 @@ class Runtime {
 		return invoke(module, stableIndex, 6, function(handle) return RuntimeKernel.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeJit.allocation_count);
+		return module.access(jitBackend.retainedCodeAllocationCount);
 
 	public static function patchJitCount(module:LoadedModule):Int
-		return module.access(RuntimeJit.patch_jit_count);
+		return module.access(jitBackend.patchCount);
 
 	/** Resolve the currently published JIT target to its function/opcode location. */
 	public static function jitLocation(module:LoadedModule, stableIndex:Int):Null<String> {
-		var bytes = module.access(function(handle) return RuntimeJit.jit_location(handle, stableIndex));
+		var bytes = module.access(function(handle) return jitBackend.location(handle, stableIndex));
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
 
 	public static function debugRegionCount(module:LoadedModule):Int
-		return module.access(RuntimeJit.debug_region_count);
+		return module.access(jitBackend.debugRegionCount);
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
-		return module.access(RuntimeJit.retired_allocation_count);
+		return module.access(jitBackend.retiredCodeAllocationCount);
 
 	public static function metadataTypeCount(module:LoadedModule):Int
 		return module.access(RuntimeKernel.type_count);
@@ -134,7 +135,7 @@ class Runtime {
 
 	@:noCompletion public static function injectPatchFailure(module:LoadedModule, stage:Int):Void
 		module.access(function(handle) {
-			RuntimeJit.set_patch_failure_stage(handle, stage);
+			jitBackend.injectPatchFailure(handle, stage);
 		});
 
 	public static function dispose(module:LoadedModule):Void {
@@ -225,7 +226,7 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
-			var result:RuntimeStatus = RuntimeJit.patch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
+			var result:RuntimeStatus = jitBackend.applyPatch(handle, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length);
 			if (result == RuntimeStatus.Ok)
 				module.commitPatch(generation);
 			return result;
