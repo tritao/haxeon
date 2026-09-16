@@ -42,9 +42,10 @@ class ModuleState {
 	public var typeVersion:Int = 0;
 	public var tokens:Array<Token> = [];
 	public var ast:Null<AstProgram>;
-	public var recoveredAst:Null<AstProgram>;
-	public var recoveredTokens:Array<Token> = [];
-	public var recoveredSemanticModel:Null<SemanticModel>;
+	/** Read-only compatibility views backed by the atomic recovered snapshot. */
+	public var recoveredAst(get, never):Null<AstProgram>;
+	public var recoveredTokens(get, never):Array<Token>;
+	public var recoveredSemanticModel(get, never):Null<SemanticModel>;
 	public var semanticModel:Null<SemanticModel>;
 	/** Previous editor snapshot used only to preserve identities across edits. */
 	public var previousEditorSemanticModel:Null<SemanticModel>;
@@ -112,9 +113,6 @@ class ModuleState {
 		currentRecovered = null;
 		tokens = [];
 		ast = null;
-		recoveredAst = null;
-		recoveredTokens = [];
-		recoveredSemanticModel = null;
 		semanticModel = null;
 		conditionalDefines = [];
 		diagnostics = [];
@@ -135,17 +133,11 @@ class ModuleState {
 	public function publishRecoveredSnapshot(recoveredTokens:Array<Token>, recoveredAst:AstProgram,
 			recoveredSemanticModel:Null<SemanticModel>):Void {
 		currentRecovered = AnalysisSnapshot.recoveredSnapshot(source, recoveredTokens, recoveredAst, recoveredSemanticModel, revision);
-		this.recoveredTokens = recoveredTokens;
-		this.recoveredAst = recoveredAst;
-		this.recoveredSemanticModel = recoveredSemanticModel;
 	}
 
 	/** Remove only the current recovery view; strict and last-good state survive. */
 	public function clearRecoveredSnapshot():Void {
 		currentRecovered = null;
-		recoveredAst = null;
-		recoveredTokens = [];
-		recoveredSemanticModel = null;
 	}
 
 	/** Capture the exact view as a stale, source/model/revision-consistent fallback. */
@@ -168,9 +160,6 @@ class ModuleState {
 		result.typeVersion = typeVersion;
 		result.tokens = tokens;
 		result.ast = ast;
-		result.recoveredAst = recoveredAst;
-		result.recoveredTokens = recoveredTokens;
-		result.recoveredSemanticModel = recoveredSemanticModel;
 		result.semanticModel = semanticModel;
 		result.previousEditorSemanticModel = previousEditorSemanticModel;
 		result.dependencies = dependencies.copy();
@@ -217,6 +206,15 @@ class ModuleState {
 
 	function get_lastGoodRevision():Int
 		return lastGood == null ? 0 : lastGood.revision;
+
+	function get_recoveredAst():Null<AstProgram>
+		return currentRecovered == null ? null : currentRecovered.ast;
+
+	function get_recoveredTokens():Array<Token>
+		return currentRecovered == null ? [] : currentRecovered.tokens;
+
+	function get_recoveredSemanticModel():Null<SemanticModel>
+		return currentRecovered == null ? null : currentRecovered.semanticModel;
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
