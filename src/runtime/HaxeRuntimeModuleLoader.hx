@@ -42,8 +42,7 @@ class HaxeRuntimeModuleLoader {
 			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
-			metadata.constantDescriptors.initialize(function(index)
-				return kernel.initializeConstant(cast module, index));
+			metadata.constantDescriptors.initialize(function(index) return kernel.initializeConstant(cast module, index));
 			return new LoadedModule(module, model, identity, metadata);
 		} catch (error:Dynamic) {
 			if (module != null)
