@@ -114,16 +114,16 @@ HLP version 7 also validates content-addressed source snapshots before copying
 them into the staged code owner; their lifetime therefore matches active or
 retired patch JIT code that can reference them in debugger stacks.
 On the Haxe-built external path, Haxeon has already constructed the compatible
-appended type records and patched function descriptors in the generation's
-arena. Haxe resolves stable-ID relocations into the dispatch slots expected by
-the JIT; native independently resolves the same relocations while decoding the
-wire patch and validates the descriptor shape before consuming it. Native still
-builds combined symbol tables and JIT-compiles a private code image without
-allocating the Haxe-owned type or function metadata. The legacy native-decoder
-path retains the old native type and function staging behavior. Any
-failure frees staged storage; the Haxe path also rolls back its arena and type
-table cursors, leaving the published revision, symbol counts, dispatch
-pointers, and owners unchanged.
+appended type records, patched function descriptors, and cumulative integer,
+float, and string pools in the generation's arena. Haxe resolves stable-ID
+relocations into the dispatch slots expected by the JIT; native independently
+resolves the same relocations while decoding the wire patch and validates the
+descriptor and pool shapes before consuming them. Native borrows the Haxe pool
+pointers and swaps them into the live module only during successful publication;
+the legacy native-decoder path retains the old native combined-pool, type, and
+function staging behavior. Any failure frees staged storage; the Haxe path also
+rolls back its arena, pool model, and type table cursors, leaving the published
+revision, symbol counts, dispatch pointers, and owners unchanged.
 
 Publication begins only after JIT finalization and owner-array capacity are
 ready. Under the same mutex, the runtime marks Haxe-prepared appended types as
