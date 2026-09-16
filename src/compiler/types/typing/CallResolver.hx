@@ -274,7 +274,7 @@ class CallResolver {
 		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return type == TUnknown || type == TError;
+		return TypeRelations.containsRecovery(type);
 
 	function recoveredCallArguments(arguments:Array<AstExpression>, scope:Scope, name:String):Array<TypedExpression> {
 		var expected = [for (_ in arguments) TUnknown];

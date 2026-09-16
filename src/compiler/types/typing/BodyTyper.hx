@@ -2295,5 +2295,5 @@ class BodyTyper {
 		return TypeRelations.equals(left, right);
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return type == TUnknown || type == TError;
+		return TypeRelations.containsRecovery(type);
 }

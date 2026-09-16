@@ -6,6 +6,9 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
+import compiler.types.TypeRelations;
 
 class TyperBoundaryMain {
 	static function main():Void {
@@ -25,11 +28,24 @@ class TyperBoundaryMain {
 			measured = Typer.typeAnalyzedMeasured(SemanticProgram.analyze(program), null, null, null, specializations),
 			typed = measured.program;
 		assertProgramShape(typed);
+		assertRecoveryTypeClassification();
 		expect(specializations.exportState().length > 0, "generic calls should preserve emitted specialization state");
 		expect(hasRuntimeDependency(measured.runtimeDependencies, "main", "Std"), "Float string conversion should retain the Std runtime dependency");
 		assertDiagnostic("function main():Int { var value:Int; return value; }", "E1023", "may be used before assignment");
 		assertDiagnostic("function identity(value:Int):Int return value; function main():Int return identity(\"wrong\");", "E1009", "argument 1");
 		Sys.println("PASS: Typer subsystem boundaries preserve typed output and diagnostics");
+	}
+
+	static function assertRecoveryTypeClassification():Void {
+		expect(!TypeRelations.containsRecovery(TInt), "primitive types should be stable");
+		expect(!TypeRelations.containsRecovery(TTypeParameter("owner", "T")), "resolved type parameters should be stable");
+		expect(!TypeRelations.containsRecovery(TFunction([TInt], TString)), "resolved function types should be stable");
+		expect(TypeRelations.containsRecovery(TArray(TUnknown)), "recovery should be detected inside arrays");
+		expect(TypeRelations.containsRecovery(TFunction([TInt], TError)), "recovery should be detected inside function results");
+		expect(TypeRelations.containsRecovery(TInstance(NominalKind.Class, "Box", [TUnknown])),
+			"recovery should be detected inside nominal arguments");
+		expect(TypeRelations.containsRecovery(TAnonymous("Recovered", [{name: "value", type: TUnknown, optional: false}])),
+			"recovery should be detected inside anonymous fields");
 	}
 
 	static function assertProgramShape(program:TypedProgram):Void {

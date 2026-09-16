@@ -25,6 +25,37 @@ class TypeRelations {
 	public function new(declarations:DeclarationIndex)
 		this.declarations = declarations;
 
+	/**
+	 * Returns whether a type contains information produced by tolerant
+	 * recovery. A compound type is not stable when any of its components are
+	 * unknown or errored, even if its outer constructor was resolved.
+	 */
+	public static function containsRecovery(type:CompilerType):Bool
+		return switch type {
+			case TUnknown, TError: true;
+			case TNullable(element), TArray(element), TIterator(element): containsRecovery(element);
+			case TMap(key, value): containsRecovery(key) || containsRecovery(value);
+			case TFunction(arguments, result): containsRecovery(result) || containsRecoveryTypes(arguments);
+			case TAbstract(_, arguments, representation): containsRecovery(representation) || containsRecoveryTypes(arguments);
+			case TInstance(_, _, arguments): containsRecoveryTypes(arguments);
+			case TAnonymous(_, fields):
+				var recovered = false;
+				for (field in fields)
+					if (containsRecovery(field.type)) {
+						recovered = true;
+						break;
+					}
+				recovered;
+			default: false;
+		};
+
+	static function containsRecoveryTypes(types:Array<CompilerType>):Bool {
+		for (type in types)
+			if (containsRecovery(type))
+				return true;
+		return false;
+	}
+
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		if (equals(actual, expected))
 			return Identity;

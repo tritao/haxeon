@@ -1162,7 +1162,7 @@ class ExpressionTyper {
 		};
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return type == TUnknown || type == TError;
+		return TypeRelations.containsRecovery(type);
 
 	function recoverCoerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
 		if (!session.tolerant)

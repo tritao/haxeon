@@ -1147,7 +1147,7 @@ class LanguageService {
 	}
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return type == TUnknown || type == TError;
+		return TypeRelations.containsRecovery(type);
 
 	public function prepareCallHierarchy(path:String, position:Int, ?token:CancellationToken):Null<CallHierarchyItem> {
 		if (token != null)

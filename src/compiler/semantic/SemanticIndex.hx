@@ -2345,30 +2345,7 @@ class SemanticIndex {
 		return source == null || span.file == source ? span : source.span(span.start, span.end);
 
 	static function isRecoveryType(type:CompilerType):Bool
-		return switch type {
-			case TUnknown, TError: true;
-			case TNullable(element), TArray(element), TIterator(element): isRecoveryType(element);
-			case TMap(key, value): isRecoveryType(key) || isRecoveryType(value);
-			case TFunction(arguments, result): isRecoveryType(result) || containsRecoveryType(arguments);
-			case TAbstract(_, arguments, representation): isRecoveryType(representation) || containsRecoveryType(arguments);
-			case TInstance(_, _, arguments): containsRecoveryType(arguments);
-			case TAnonymous(_, fields):
-				var recovered = false;
-				for (field in fields)
-					if (isRecoveryType(field.type)) {
-						recovered = true;
-						break;
-					}
-				recovered;
-			default: false;
-		};
-
-	static function containsRecoveryType(types:Array<CompilerType>):Bool {
-		for (type in types)
-			if (isRecoveryType(type))
-				return true;
-		return false;
-	}
+		return TypeRelations.containsRecovery(type);
 
 	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
 		for (statement in statements) {
