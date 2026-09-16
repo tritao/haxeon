@@ -1,5 +1,10 @@
 import compiler.hl.HlWriter;
 import compiler.hl.HlType;
+import compiler.hl.HlCode;
+import compiler.hl.HlFunction;
+import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.Compiler;
@@ -112,6 +117,27 @@ class RuntimePatchTransactionMain {
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, mainId) != 40)
 			throw "Haxe-owned runtime did not execute its module initializer";
+		Runtime.dispose(loaded);
+	}
+
+	static function testPublicObjectConstant():Void {
+		var code = new HlCode();
+		code.strings = ["ConstantObject", "value"];
+		code.ints = [42];
+		code.types = [
+			Simple(HlType.I32),
+			Simple(HlType.Void),
+			Function([], 0),
+			Object(0, -1, 1, [{name: 1, type: 0}], [], [])
+		];
+		code.globals = [3];
+		code.constants = [{global: 0, fields: [0]}];
+		code.functions = [new HlFunction(2, 0, [3, 0], [GlobalGet(0, 0), FieldGet(1, 0, 0), Return(1)])];
+		code.entryPoint = 0;
+		var identity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["main" => 0], ["main" => 101]),
+			loaded = Runtime.load(HlWriter.encode(code), identity);
+		if (Runtime.callInt(loaded, 101) != 42)
+			throw "public Haxeon runtime did not materialize an object constant";
 		Runtime.dispose(loaded);
 	}
 	#end
@@ -262,6 +288,7 @@ class RuntimePatchTransactionMain {
 		testBoundFunctionField();
 		testInheritedInterfaceMethodDispatch();
 		testModuleInitializer();
+		testPublicObjectConstant();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
