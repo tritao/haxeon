@@ -89,8 +89,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [x] Typed function-value dependency invalidation.
 - [~] Package-qualified module paths and imported function/module aliases plus
 	imported class names/type annotations resolve incrementally; nominal class,
-	interface, enum, and alias identities now retain their package-qualified names,
-	while wildcard/alias imports and deeper namespace semantics remain.
+	interface, enum, and alias identities now retain their package-qualified names.
+	Wildcard package imports now resolve direct source modules, secondary
+	declarations, enum constructors, and explicit-import precedence; deeper
+	namespace and broader alias semantics remain.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
   snapshot without mutating the live source, including through the JSON-lines
   protocol; cooperative request cancellation now unwinds compiler phase
