@@ -99,8 +99,8 @@ class HlMetadataGeneration {
 	final borrowerMutex:Mutex;
 
 	public function new(?blockSize:Int = 65536, ?initialTypeCapacity:Int = 8, ?typeCapacity:Int = 65536, ?functionDescriptorCapacity:Int = 8,
-		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8, ?debugSectionCapacity:Int = 8) {
-		arena = new HlTypeArena(blockSize, typeCapacity);
+		?nativeDescriptorCapacity:Int = 8, ?constantCapacity:Int = 8, ?debugSectionCapacity:Int = 8, ?kernel:HlMetadataModuleKernel) {
+		arena = new HlTypeArena(blockSize, typeCapacity, kernel);
 		builder = new HlTypeBuilder(arena);
 		functionDescriptors = new HlFunctionDescriptorTable(arena, functionDescriptorCapacity);
 		nativeDescriptors = new HlNativeDescriptorTable(arena, nativeDescriptorCapacity);

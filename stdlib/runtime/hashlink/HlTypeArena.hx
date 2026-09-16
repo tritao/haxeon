@@ -34,12 +34,14 @@ class HlTypeArena {
 	final typeStorage:Arena;
 	final typeEntries:RawPtr<HlType>;
 	final typeCapacity:Int;
+	final kernel:HlMetadataModuleKernel;
 	final moduleContexts:Array<RawPtr<HlModuleContext>> = [];
 	var typeCount:Int = 0;
 
-	public function new(?blockSize:Int = 65536, ?typeCapacity:Int = 65536) {
+	public function new(?blockSize:Int = 65536, ?typeCapacity:Int = 65536, ?kernel:HlMetadataModuleKernel) {
 		if (typeCapacity <= 0)
 			throw "HashLink type arena capacity must be positive";
+		this.kernel = kernel == null ? new NativeHlMetadataModuleKernel() : kernel;
 		storage = new Arena(blockSize);
 		typeStorage = new Arena(blockSize);
 		this.typeCapacity = typeCapacity;
@@ -76,7 +78,7 @@ class HlTypeArena {
 			throw "HashLink type-arena checkpoint is no longer valid";
 		while (moduleContexts.length > checkpoint.moduleContextCount) {
 			var context = moduleContexts[moduleContexts.length - 1];
-			HlTypeBridge.native_module_context_dispose(context);
+			kernel.disposeContext(context);
 			moduleContexts.pop();
 		}
 		storage.rollback(checkpoint.storage);
@@ -220,7 +222,7 @@ class HlTypeArena {
 
 	function disposeModuleContexts():Void {
 		for (context in moduleContexts)
-			HlTypeBridge.native_module_context_dispose(context);
+			kernel.disposeContext(context);
 		moduleContexts.resize(0);
 	}
 }
