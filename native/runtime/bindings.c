@@ -118,6 +118,7 @@ DEFINE_PRIM(_ABSTRACT(realtime_module),load_code,_BYTES _BYTES _I32 _BYTES _I32)
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code_manifest,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _BYTES _BYTES _I32 _I32);
 DEFINE_PRIM(_BOOL,native_runtime_module_unload,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,native_runtime_module_dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,native_runtime_module_call_bytes,_ABSTRACT(realtime_module) _I32);
@@ -133,6 +134,8 @@ DEFINE_PRIM(_I32,native_runtime_module_live_allocation_count,_ABSTRACT(realtime_
 DEFINE_PRIM(_I32,native_runtime_module_native_root_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,native_runtime_module_retirement_status,_ABSTRACT(realtime_module) _BYTES);
 DEFINE_PRIM(_I32,native_runtime_module_revision,_ABSTRACT(realtime_module));
+DEFINE_PRIM(_I32,native_runtime_retry_failed_retirements,_NO_ARG);
+DEFINE_PRIM(_I32,native_runtime_failed_retirement_count,_NO_ARG);
 DEFINE_PRIM(_I32,native_runtime_module_patch,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_VOID,native_runtime_module_set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32 _BYTES);

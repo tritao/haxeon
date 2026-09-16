@@ -41,7 +41,11 @@ class Runtime {
 
 	static function get_pendingRetirementCount():Int {
 		retirementMutex.acquire();
+		#if haxeon
+		var count = retirementBacklog.length + haxeRuntimeModuleKernel.failedRetirementCount();
+		#else
 		var count = retirementBacklog.length + RuntimeKernel.failed_retirement_count();
+		#end
 		retirementMutex.release();
 		return count;
 	}
@@ -93,7 +97,11 @@ class Runtime {
 			recordMetadata(loaded, metadata);
 			return loaded;
 		} catch (error:Dynamic) {
+			#if haxeon
+			haxeRuntimeModuleKernel.dispose(cast module);
+			#else
 			RuntimeKernel.dispose(module);
+			#end
 			metadata.dispose();
 			throw error;
 		}
@@ -311,7 +319,11 @@ class Runtime {
 					retirementBacklog[write++] = module;
 			}
 			retirementBacklog.resize(write);
+			#if haxeon
+			write += haxeRuntimeModuleKernel.retryFailedRetirements();
+			#else
 			write += RuntimeKernel.retry_failed_retirements();
+			#end
 			retirementMutex.release();
 			return write;
 		} catch (error:Dynamic) {
@@ -329,7 +341,11 @@ class Runtime {
 
 	static function tryDispose(module:LoadedModule):Bool {
 		var disposed = module.close(function(handle) {
+			#if haxeon
+			var status:RuntimeStatus = haxeRuntimeModuleKernel.dispose(cast handle);
+			#else
 			var status:RuntimeStatus = RuntimeKernel.dispose(handle);
+			#end
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');

@@ -119,7 +119,10 @@ code-handle release, and unload, so the lower-level owner remains safe when it
 is used without the compiler-side module registry.
 The Haxeon branch of the public `Runtime` facade now uses this same kernel for
 all stable call shapes, native dispatch rechecks, and module diagnostics; the
-legacy host branch continues to use its compatibility declarations.
+legacy host branch continues to use its compatibility declarations. Its
+status-preserving dispose and deferred-retirement retry/count operations now
+also flow through that kernel, keeping Haxeon module lifetime on one native
+boundary.
 
 `HlRuntimePatchLedger` now owns the Haxe-side generation history separately from
 the module loader. It maps each stable function ID to the generation that last

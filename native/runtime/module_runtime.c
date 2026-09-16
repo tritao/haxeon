@@ -25,6 +25,10 @@ HL_PRIM bool HL_NAME(native_runtime_module_unload)( vbyte *module ) {
 	return module != NULL && hl_runtime_module_release((hl_runtime_module*)module) == HL_RUNTIME_OK;
 }
 
+HL_PRIM int HL_NAME(native_runtime_module_dispose)( vbyte *module ) {
+	return hl_runtime_module_release((hl_runtime_module*)module);
+}
+
 HL_PRIM int HL_NAME(native_runtime_module_call_i32)( vbyte *module, int stable_id ) {
 	int result = 0;
 	vdynamic *exception = NULL;
@@ -126,6 +130,14 @@ HL_PRIM void HL_NAME(native_runtime_module_retirement_status)( vbyte *module, vb
 
 HL_PRIM int HL_NAME(native_runtime_module_revision)( vbyte *module ) {
 	return hl_runtime_module_revision((hl_runtime_module*)module);
+}
+
+HL_PRIM int HL_NAME(native_runtime_retry_failed_retirements)() {
+	return hl_runtime_failed_retirements_retry();
+}
+
+HL_PRIM int HL_NAME(native_runtime_failed_retirement_count)() {
+	return hl_runtime_failed_retirements_count();
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_patch)( vbyte *module, realtime_bytes *bytes, int length ) {

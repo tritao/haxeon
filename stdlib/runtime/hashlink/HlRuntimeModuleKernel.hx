@@ -27,8 +27,11 @@ interface HlRuntimeModuleKernel {
 	function nativeRootCount(module:HlRuntimeModuleHandle):Int;
 	function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void;
 	function revision(module:HlRuntimeModuleHandle):Int;
+	function dispose(module:HlRuntimeModuleHandle):Int;
 	function setPatchFailureStage(module:HlRuntimeModuleHandle, stage:Int):Void;
 	function unload(module:HlRuntimeModuleHandle):Bool;
+	function retryFailedRetirements():Int;
+	function failedRetirementCount():Int;
 }
 
 /** Current HashLink implementation of the narrow runtime-module kernel. */
@@ -85,9 +88,18 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public inline function revision(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_revision(module);
 
+	public inline function dispose(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_dispose(module);
+
 	public inline function setPatchFailureStage(module:HlRuntimeModuleHandle, stage:Int):Void
 		HlTypeBridge.native_runtime_module_set_patch_failure_stage(module, stage);
 
 	public inline function unload(module:HlRuntimeModuleHandle):Bool
 		return HlTypeBridge.native_runtime_module_unload(module);
+
+	public inline function retryFailedRetirements():Int
+		return HlTypeBridge.native_runtime_retry_failed_retirements();
+
+	public inline function failedRetirementCount():Int
+		return HlTypeBridge.native_runtime_failed_retirement_count();
 }

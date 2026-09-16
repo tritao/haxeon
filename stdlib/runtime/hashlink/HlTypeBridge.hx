@@ -57,6 +57,10 @@ class HlTypeBridge {
 	public static function native_runtime_module_unload(module:hl.Abstract<"realtime_module">):Bool
 		return false;
 
+	/** Retire an externally loaded runtime wrapper and preserve its native status code. */
+	public static function native_runtime_module_dispose(module:hl.Abstract<"realtime_module">):Int
+		return -1;
+
 	/** Invoke a stable zero-argument i32 function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_i32(module:hl.Abstract<"realtime_module">, stableId:Int):Int
 		return 0;
@@ -112,6 +116,14 @@ class HlTypeBridge {
 
 	/** Read the live revision published by an external runtime wrapper. */
 	public static function native_runtime_module_revision(module:hl.Abstract<"realtime_module">):Int
+		return 0;
+
+	/** Retry native runtime-module retirements that were deferred by borrowers. */
+	public static function native_runtime_retry_failed_retirements():Int
+		return 0;
+
+	/** Count native runtime-module retirements that remain deferred. */
+	public static function native_runtime_failed_retirement_count():Int
 		return 0;
 
 	/** Apply one HLP transaction to an externally loaded runtime wrapper. */

@@ -82,6 +82,8 @@ class RuntimePatchTransactionMain {
 		retained.release();
 		if (Runtime.retryRetirements() != 0)
 			throw "host JIT generation retirement did not drain after releasing its closure";
+		if (Runtime.pendingRetirementCount != 0)
+			throw "Haxeon module kernel did not drain native retirement state";
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
 }
