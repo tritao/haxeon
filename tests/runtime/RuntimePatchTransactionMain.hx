@@ -19,6 +19,24 @@ class RuntimeGcHandleValue {
 }
 
 class RuntimePatchTransactionMain {
+	static function testEnumPayloadPatch():Void {
+		var compiler = new Compiler();
+		compiler.update("EnumMain.hx",
+			"enum Value { Number(n:Int); } function main():Int { var value = Value.Number(40); return switch value { case Number(n): n; }; }");
+		var initial = compiler.compile("EnumMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		if (Runtime.callInt(loaded, mainId) != 40)
+			throw "Haxe-owned enum runtime did not execute its initial payload";
+		compiler.update("EnumMain.hx",
+			"enum Value { Number(n:Int); } function main():Int { var value = Value.Number(42); return switch value { case Number(n): n; }; }");
+		var changed = compiler.compile("EnumMain");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		if (Runtime.callInt(loaded, mainId) != 42)
+			throw "Haxe-owned enum runtime did not execute its patched payload";
+		Runtime.dispose(loaded);
+	}
+
 	static function main():Void {
 		var compiler = new Compiler();
 		compiler.update("Main.hx",
@@ -158,6 +176,7 @@ class RuntimePatchTransactionMain {
 			throw "runtime module retirement did not close its owned GC handles";
 		if (Runtime.pendingRetirementCount != 0)
 			throw "Haxeon module kernel did not drain native retirement state";
+		testEnumPayloadPatch();
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
 }
