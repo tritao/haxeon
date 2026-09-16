@@ -1600,6 +1600,16 @@ class LanguageServiceMain {
 			};
 		if (boundedGenericExpectedName != "Bound")
 			throw 'recovered generic constraint did not provide an expected argument type: ${boundedGenericExpected == null ? "null" : Std.string(boundedGenericExpected)}';
+		var recoveredCompoundCompletionService = new LanguageService(),
+			recoveredCompoundCompletionSource = "class Item {} function take(values:Array<Item>):Void return; function main():Void { var values = []; take(";
+		recoveredCompoundCompletionService.update("RecoveredCompoundCompletion.hx", recoveredCompoundCompletionSource);
+		var recoveredCompoundCompletion:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in recoveredCompoundCompletionService.completeResult("RecoveredCompoundCompletion.hx", recoveredCompoundCompletionSource.length).items)
+			if (item.label == "values")
+				recoveredCompoundCompletion = item;
+		if (recoveredCompoundCompletion == null || recoveredCompoundCompletion.sortText == null
+			|| !StringTools.startsWith(recoveredCompoundCompletion.sortText, "0_"))
+			throw "completion did not treat a nested recovery type as compatible with its expected type";
 		var appliedBoundedGenericService = new LanguageService(),
 			appliedBoundedGenericSource = "class Bound {} class Box<T> {} function take<T:Bound>(value:Box<T>):Void return; function main():Void { take(";
 		appliedBoundedGenericService.update("AppliedBoundedGeneric.hx", appliedBoundedGenericSource);

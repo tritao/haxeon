@@ -2809,7 +2809,7 @@ class LanguageService {
 	}
 
 	static function completionTypeCompatible(actual:CompilerType, expected:CompilerType):Bool {
-		if (actual == TUnknown || actual == TError || expected == TUnknown || expected == TError)
+		if (TypeRelations.containsRecovery(actual) || TypeRelations.containsRecovery(expected))
 			return true;
 		if (TypeRelations.equals(actual, expected))
 			return true;
