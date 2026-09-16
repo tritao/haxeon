@@ -2152,38 +2152,52 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
-		var statements = [], start = current().span;
+		var statements:Array<AstStatement> = [], start = current().span, bodyStart = position;
 		while (true) {
-			if (atSwitchBranchEnd() && statements.length == 0)
-				return EmptyExpression(start.merge(current().span));
-			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
-				var end = statementSpan(statements[statements.length - 1]);
-				return BlockExpression(statements, Unreachable(end), start.merge(end));
-			}
-			if (isStatementOnlyStart(current().kind)) {
-				appendStatements(statements, parseStatements());
-				continue;
-			}
-			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
-				var result = parseExpressionBranch();
-				match(TokenKind.Semicolon);
-				if (atSwitchBranchEnd())
-					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
-				statements.push(Expression(result, expressionSpan(result)));
-				continue;
-			}
-			var saved = position, result = tryParseExpression();
-			if (result != null && match(TokenKind.Semicolon)) {
-				if (atSwitchBranchEnd())
+			var statementStart = position;
+			try {
+				if (atSwitchBranchEnd() && statements.length == 0)
+					return EmptyExpression(start.merge(current().span));
+				if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
+					var end = statementSpan(statements[statements.length - 1]);
+					return BlockExpression(statements, Unreachable(end), start.merge(end));
+				}
+				if (isStatementOnlyStart(current().kind)) {
+					appendStatements(statements, parseStatements());
+					continue;
+				}
+				if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+					var result = parseExpressionBranch();
+					match(TokenKind.Semicolon);
+					if (atSwitchBranchEnd())
+						return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+					statements.push(Expression(result, expressionSpan(result)));
+					continue;
+				}
+				var saved = position, result = tryParseExpression();
+				if (result != null && match(TokenKind.Semicolon)) {
+					if (atSwitchBranchEnd())
+						return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+					position = saved;
+					appendStatements(statements, parseStatements());
+					continue;
+				}
+				if (result != null && atSwitchBranchEnd())
 					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
 				position = saved;
 				appendStatements(statements, parseStatements());
-				continue;
 			}
-			if (result != null && atSwitchBranchEnd())
-				return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
-			position = saved;
-			appendStatements(statements, parseStatements());
+			catch (error:CompileError) {
+				if (!recovering)
+					throw error;
+				recordRecoveryDiagnostic(error.diagnostic);
+				statements.push(ErrorStatement(error.diagnostic.span));
+				synchronizeStatement(bodyStart, statementStart, true);
+				if (atSwitchBranchEnd()) {
+					var end = error.diagnostic.span;
+					return BlockExpression(statements, ErrorExpression(end), start.merge(end));
+				}
+			}
 		}
 	}
 

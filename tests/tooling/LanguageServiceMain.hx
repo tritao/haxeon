@@ -4,6 +4,8 @@ import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
 import compiler.modules.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedExpressionKind;
@@ -1676,6 +1678,39 @@ class LanguageServiceMain {
 				foundSwitchStatementMember = true;
 		if (!foundSwitchStatementMember)
 			throw "switch statement recovery consumed a valid declaration after a malformed case";
+		var switchExpressionService = new LanguageService(),
+			switchExpressionSource = "package switchapp; import switchtypes.SwitchValue; function retained():SwitchValue return switch (1) { case 1: broken statement; case 2: var value:SwitchValue = new SwitchValue(); value.";
+		switchExpressionService.update("switchtypes/SwitchValue.hx", "package switchtypes; class SwitchValue { public var member:Int; }");
+		switchExpressionService.update("SwitchExpressionStatements.hx", switchExpressionSource);
+		var switchExpressionState = switchExpressionService.compiler.modules.get("SwitchExpressionStatements");
+		var foundSwitchExpressionArm = false;
+		if (switchExpressionState.recoveredAst != null)
+			for (functionDeclaration in switchExpressionState.recoveredAst.functions)
+				if (functionDeclaration.name == "retained")
+					for (statement in functionDeclaration.statements)
+						switch statement {
+							case Return(expression, _):
+								switch expression {
+									case SwitchExpression(_, cases, _, _):
+										if (cases.length != 2)
+											throw "switch expression recovery did not preserve the later case";
+										switch cases[1].result {
+											case BlockExpression(statements, _, _):
+												for (armStatement in statements)
+													switch armStatement {
+														case VarDeclaration(name, _, _, _):
+															if (name == "value")
+																foundSwitchExpressionArm = true;
+														default:
+													}
+											default:
+										}
+									default:
+								}
+							default:
+						}
+		if (!foundSwitchExpressionArm)
+			throw "switch expression recovery consumed a valid declaration after a malformed case";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);
