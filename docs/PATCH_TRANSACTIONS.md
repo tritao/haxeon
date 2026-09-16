@@ -160,6 +160,9 @@ and eager C-side constants. `hl_runtime_module_load_code` and
 `hl_runtime_module_load_code_manifest` are the Haxe-owned paths: they retain
 the Haxe-built metadata records, defer constant materialization, and let the
 Haxe wrapper invoke the narrow native constant kernel after JIT initialization.
+For the decoded-manifest entrypoint, the native wrapper borrows Haxe's stable-ID
+and dispatch-slot arrays for its lifetime; only the legacy encoded HLI entrypoint
+allocates a native copy of those identity entries.
 This keeps the compatibility facade behaviorally unchanged while making the
 ownership transition explicit at the loader boundary.
 

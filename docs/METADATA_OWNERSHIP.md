@@ -6,7 +6,7 @@ module generation.
 
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
-| Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state, Haxeon `LoadedModule`, and `hl_runtime_module` copy | Host reconnect logic, stable-ID resolver | Compiler state deletion and runtime-module release |
+| Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state and Haxeon `LoadedModule`; the decoded Haxe manifest is borrowed by `hl_runtime_module` | Host reconnect logic, stable-ID resolver, native call validation | Compiler state and `LoadedModule` release; legacy native copies release with the runtime module |
 | Base bytecode metadata | Haxeon metadata arena for `HlNativeModuleLoader.loadRuntime`; HashLink code reader arena for the legacy host facade | `hl_module` | JIT code, globals, objects, closures, reflection | Runtime-module release after calls have quiesced |
 | Type arena entries | Haxeon metadata arena on the Haxe-built path; HashLink code arena on the legacy path | `hl_module` | JIT code, heap values, globals, reflection | Runtime-module release; future GC pinning may permit earlier generation retirement |
 | Function dispatch slots | Haxe runtime manifest plus `hl_module` | Loaded module generation and Haxe `HlFunctionVersionTable` | Patchable calls and staged closures | Runtime-module release |
@@ -105,6 +105,12 @@ stable identities to slots in Haxe before active calls, and retains the metadata
 generation in a parallel ownership ledger until native module teardown
 completes. This keeps the host compatibility fallback while making Haxeon-owned
 metadata and dispatch policy the active path for generated runtime code.
+
+The decoded Haxe manifest's stable-ID and dispatch-slot arrays are borrowed by
+the native runtime wrapper; `LoadedModule` retains the dispatch table for the
+entire native module lifetime. The legacy encoded HLI path still copies those
+entries into native storage, so its ownership and teardown behavior remain
+independent of Haxe-managed arrays.
 
 The metadata-only `HlNativeModule` wrapper follows the same boundary through
 `HlMetadataModuleKernel`. Its Haxe-facing owner handles leases, constants,
