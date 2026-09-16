@@ -46,8 +46,11 @@ ID and decoded by ID; this makes field renames and declaration reordering
 wire-compatible. Unknown fields are skipped, missing primitive fields receive
 their zero value, missing nullable fields receive `null`, and missing array
 fields receive an empty array. Recursive record schemas are rejected because
-the value codec does not represent object identity or cycles. Maps and enums
-remain explicit next-step extensions to the generator.
+the value codec does not represent object identity or cycles. `Map<String, T>`
+is also supported for the same value profile: keys are encoded as strings and
+sorted lexicographically for deterministic output, while missing map fields
+receive an empty map. Maps with other key types and enums remain explicit
+next-step extensions to the generator.
 
 ## Example shape
 

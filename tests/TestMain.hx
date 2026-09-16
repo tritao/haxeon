@@ -890,6 +890,8 @@ class TestMain {
 			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_class_RecursiveWire -> class_RecursiveWire)');
 		expectCompileError('@:wire class RecursiveArrayWire { @:wireId(1) public var children:Array<RecursiveArrayWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveArrayWire()).length; }',
 			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_class_RecursiveArrayWire -> class_RecursiveArrayWire)');
+		expectCompileError('@:wire class RecursiveMapWire { @:wireId(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
+			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_class_RecursiveMapWire -> class_RecursiveMapWire)');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;
