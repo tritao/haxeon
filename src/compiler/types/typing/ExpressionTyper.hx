@@ -107,7 +107,8 @@ class ExpressionTyper {
 	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
 	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
 		return switch expression {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_):
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
+				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): dispatchRules.variable(name, span, scope, expectedType);
 			case Lambda(arguments, body, span): dispatchRules.lambda(arguments, body, span, scope, expectedType, inferDynamicLambdaResult);
@@ -770,6 +771,7 @@ class ExpressionTyper {
 			case BoolLiteral(value, span): new TypedExpression(TBoolLiteral(value), TBool, span);
 			case NullLiteral(span): new TypedExpression(TNullLiteral, TNull, span);
 			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
+			case EmptyExpression(span): new TypedExpression(TVoidLiteral, TVoid, span);
 			case ErrorExpression(span): new TypedExpression(TNullLiteral, TDynamic, span);
 			default: throw "ExpressionTyper.typeLiteral requires a literal expression";
 		};

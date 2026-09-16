@@ -328,7 +328,7 @@ class CaptureAnalysis {
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
-				ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
+				EmptyExpression(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
 		}
 
 	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>, writesOnly:Bool = false):Void
@@ -434,7 +434,7 @@ class CaptureAnalysis {
 				return;
 			case StringLiteral(_, _):
 				return;
-			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _):
+			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _):
 				return;
 		}
 

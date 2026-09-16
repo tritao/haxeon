@@ -1377,6 +1377,10 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
+		if (expectedType == TVoid && typedResult.type != TVoid && typedResult.type != TNever) {
+			typedStatements.push(TExpression(typedResult, typedResult.span));
+			typedResult = new TypedExpression(TVoidLiteral, TVoid, typedResult.span);
+		}
 		// The final expression of a block is an expression branch, not a return
 		// statement, so it does not pass through StatementTyper's return coercion.
 		// TNull is also used as the provisional result while a switch expression is

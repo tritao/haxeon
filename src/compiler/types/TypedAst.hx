@@ -38,6 +38,7 @@ enum TypedExpressionKind {
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
 	TNullLiteral;
 	TUnreachable;
+	TVoidLiteral;
 	TNullableWrap(value:TypedExpression);
 	TIntToFloat(value:TypedExpression);
 	TIntToInt64(value:TypedExpression);

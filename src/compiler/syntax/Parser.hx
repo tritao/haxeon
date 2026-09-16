@@ -1768,6 +1768,8 @@ class Parser {
 			return parseExpressionBranch();
 		var statements = [], start = current().span;
 		while (true) {
+			if (atSwitchBranchEnd() && statements.length == 0)
+				return EmptyExpression(start.merge(current().span));
 			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
 				var end = statementSpan(statements[statements.length - 1]);
 				return BlockExpression(statements, Unreachable(end), start.merge(end));
@@ -2189,8 +2191,8 @@ class Parser {
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
-				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
-				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
+				EmptyExpression(span), ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
+				Div(_, _, span), Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),

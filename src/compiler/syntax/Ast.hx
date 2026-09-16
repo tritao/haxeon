@@ -144,6 +144,7 @@ enum AstExpression {
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
 	Unreachable(span:SourceSpan);
+	EmptyExpression(span:SourceSpan);
 
 	/** Recovery-only placeholder for an incomplete or malformed expression. */
 	ErrorExpression(span:SourceSpan);

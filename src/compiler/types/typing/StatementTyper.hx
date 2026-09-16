@@ -184,7 +184,10 @@ class StatementTyper {
 					fail("E1017", "continue in do-while is not supported by the current CFG backend", span);
 				[TContinue(span)];
 			case Expression(expression, span):
-				[TExpression(typeExpression(expression, scope, null, false), span)];
+				[
+					TExpression(typeExpression(expression, scope, result == TVoid
+						|| context.contextualVoidLambda ? TVoid : null, false), span)
+				];
 			default: null;
 		};
 	}
