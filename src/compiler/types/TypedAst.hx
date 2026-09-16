@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
+import compiler.Source.SourceFile;
 import compiler.syntax.Ast.AstType;
 
 /** Expression paired with its resolved semantic type and original source span. */
@@ -405,4 +406,291 @@ typedef TypedNative = {
 enum NativeConvention {
 	HashLinkNative;
 	CNative(signature:String);
+}
+
+/** Utilities for moving a safely reusable typed body to a new source offset. */
+class TypedAstTools {
+	/** Generated lambda bodies are tied to their generated names, so do not reuse them across offsets. */
+	public static function canRebase(fn:TypedFunction):Bool {
+		for (statement in fn.statements)
+			if (containsLambdaStatement(statement))
+				return false;
+		return true;
+	}
+
+	/** Rebase all source spans in a typed function while preserving semantic identities and types. */
+	public static function rebaseFunction(fn:TypedFunction, source:SourceFile, delta:Int):TypedFunction {
+		return {
+			name: fn.name,
+			genericOrigin: fn.genericOrigin,
+			typeArguments: fn.typeArguments,
+			owner: fn.owner,
+			isStatic: fn.isStatic,
+			isConstructor: fn.isConstructor,
+			arguments: fn.arguments.copy(),
+			result: fn.result,
+			statements: [for (statement in fn.statements) rebaseStatement(statement, source, delta)],
+			cells: fn.cells,
+			cellCaptures: fn.cellCaptures,
+			span: rebaseSpan(fn.span, source, delta)
+		};
+	}
+
+	static function rebaseSpan(span:SourceSpan, source:SourceFile, delta:Int):SourceSpan {
+		return span.file.path == source.path ? source.span(span.start + delta, span.end + delta) : span;
+	}
+
+	static function rebaseStatement(statement:TypedStatement, source:SourceFile, delta:Int):TypedStatement {
+		return switch statement {
+			case TDeclare(name, type, span): TDeclare(name, type, rebaseSpan(span, source, delta));
+			case TVar(name, initializer, span): TVar(name, rebaseExpression(initializer, source, delta), rebaseSpan(span, source, delta));
+			case TAssign(name, value, span): TAssign(name, rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TCellAssign(name, cellClass, value, span): TCellAssign(name, cellClass, rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TCellCapturedAssign(name, cellClass, value, span):
+				TCellCapturedAssign(name, cellClass, rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TFieldAssign(object, name, value, span):
+				TFieldAssign(rebaseExpression(object, source, delta), name, rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TStaticFieldAssign(owner, name, value, span):
+				TStaticFieldAssign(owner, name, rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TIndexAssign(array, index, value, span):
+				TIndexAssign(rebaseExpression(array, source, delta), rebaseExpression(index, source, delta),
+					rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TMapAssign(map, key, value, span):
+				TMapAssign(rebaseExpression(map, source, delta), rebaseExpression(key, source, delta),
+					rebaseExpression(value, source, delta), rebaseSpan(span, source, delta));
+			case TReturn(expression, span): TReturn(rebaseExpression(expression, source, delta), rebaseSpan(span, source, delta));
+			case TReturnVoid(span): TReturnVoid(rebaseSpan(span, source, delta));
+			case TThrow(expression, span): TThrow(rebaseExpression(expression, source, delta), rebaseSpan(span, source, delta));
+			case TTry(body, catches, span):
+				TTry(
+					[for (nested in body) rebaseStatement(nested, source, delta)],
+					[for (caught in catches) {
+						name: caught.name,
+						type: caught.type,
+						statements: [for (nested in caught.statements) rebaseStatement(nested, source, delta)],
+						span: rebaseSpan(caught.span, source, delta)
+					}],
+					rebaseSpan(span, source, delta));
+			case TIf(condition, thenBranch, elseBranch, span):
+				TIf(rebaseExpression(condition, source, delta),
+					[for (nested in thenBranch) rebaseStatement(nested, source, delta)],
+					[for (nested in elseBranch) rebaseStatement(nested, source, delta)], rebaseSpan(span, source, delta));
+			case TWhile(condition, body, span):
+				TWhile(rebaseExpression(condition, source, delta),
+					[for (nested in body) rebaseStatement(nested, source, delta)], rebaseSpan(span, source, delta));
+			case TDoWhile(body, condition, span):
+				TDoWhile([for (nested in body) rebaseStatement(nested, source, delta)],
+					rebaseExpression(condition, source, delta), rebaseSpan(span, source, delta));
+			case TForIn(keyName, valueName, iterable, body, span):
+				TForIn(keyName, valueName, rebaseExpression(iterable, source, delta),
+					[for (nested in body) rebaseStatement(nested, source, delta)], rebaseSpan(span, source, delta));
+			case TBreak(span): TBreak(rebaseSpan(span, source, delta));
+			case TContinue(span): TContinue(rebaseSpan(span, source, delta));
+			case TSwitch(expression, cases, defaultBranch, hasDefault, span):
+				TSwitch(rebaseExpression(expression, source, delta),
+					[for (item in cases) {
+						value: rebaseExpression(item.value, source, delta),
+						subjectBinding: item.subjectBinding,
+						isCatchAll: item.isCatchAll,
+						guard: item.guard == null ? null : rebaseExpression(item.guard, source, delta),
+						statements: [for (nested in item.statements) rebaseStatement(nested, source, delta)],
+						enumName: item.enumName,
+						constructorIndex: item.constructorIndex,
+						bindings: item.bindings,
+						predicates: item.predicates,
+						span: rebaseSpan(item.span, source, delta)
+					}],
+					[for (nested in defaultBranch) rebaseStatement(nested, source, delta)], hasDefault, rebaseSpan(span, source, delta));
+			case TIncrement(name, deltaValue, span): TIncrement(name, deltaValue, rebaseSpan(span, source, delta));
+			case TCellIncrement(name, cellClass, valueType, deltaValue, span):
+				TCellIncrement(name, cellClass, valueType, deltaValue, rebaseSpan(span, source, delta));
+			case TCellCapturedIncrement(name, cellClass, valueType, deltaValue, span):
+				TCellCapturedIncrement(name, cellClass, valueType, deltaValue, rebaseSpan(span, source, delta));
+			case TExpression(expression, span): TExpression(rebaseExpression(expression, source, delta), rebaseSpan(span, source, delta));
+		};
+	}
+
+	static function rebaseExpression(expression:TypedExpression, source:SourceFile, delta:Int):TypedExpression {
+		var rebased:TypedExpressionKind = switch expression.expression {
+			case TEnumConstruct(name, index, arguments): TEnumConstruct(name, index, rebaseExpressions(arguments, source, delta));
+			case TNullableWrap(value): TNullableWrap(rebaseExpression(value, source, delta));
+			case TIntToFloat(value): TIntToFloat(rebaseExpression(value, source, delta));
+			case TIntToInt64(value): TIntToInt64(rebaseExpression(value, source, delta));
+			case TFloatToInt(value): TFloatToInt(rebaseExpression(value, source, delta));
+			case TToDynamic(value): TToDynamic(rebaseExpression(value, source, delta));
+			case TNegate(value): TNegate(rebaseExpression(value, source, delta));
+			case TNot(value): TNot(rebaseExpression(value, source, delta));
+			case TThrowExpression(value): TThrowExpression(rebaseExpression(value, source, delta));
+			case TNoReturn(value): TNoReturn(rebaseExpression(value, source, delta));
+			case TCast(value): TCast(rebaseExpression(value, source, delta));
+			case TAbiCast(value): TAbiCast(rebaseExpression(value, source, delta));
+			case TToInterface(value, name): TToInterface(rebaseExpression(value, source, delta), name);
+			case TArrayLength(value): TArrayLength(rebaseExpression(value, source, delta));
+			case TStringLength(value): TStringLength(rebaseExpression(value, source, delta));
+			case TAdd(left, right): TAdd(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TSub(left, right): TSub(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TMul(left, right): TMul(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TDiv(left, right): TDiv(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TMod(left, right): TMod(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TBitAnd(left, right): TBitAnd(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TBitXor(left, right): TBitXor(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TBitOr(left, right): TBitOr(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TShiftLeft(left, right): TShiftLeft(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TShiftRight(left, right): TShiftRight(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TUnsignedShiftRight(left, right): TUnsignedShiftRight(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TLess(left, right): TLess(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TLessEqual(left, right): TLessEqual(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TEqual(left, right): TEqual(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TAnd(left, right): TAnd(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TOr(left, right): TOr(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TIndex(left, right): TIndex(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TMapGet(left, right): TMapGet(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TStringIndexOf(left, right): TStringIndexOf(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TStringCharAt(left, right): TStringCharAt(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TStringCharCodeAt(left, right): TStringCharCodeAt(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TArrayPush(left, right): TArrayPush(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TArrayUnshift(left, right): TArrayUnshift(rebaseExpression(left, source, delta), rebaseExpression(right, source, delta));
+			case TConditional(condition, whenTrue, whenFalse):
+				TConditional(rebaseExpression(condition, source, delta), rebaseExpression(whenTrue, source, delta), rebaseExpression(whenFalse, source, delta));
+			case TBlockExpression(statements, result):
+				TBlockExpression([for (statement in statements) rebaseStatement(statement, source, delta)], rebaseExpression(result, source, delta));
+			case TField(object, name): TField(rebaseExpression(object, source, delta), name);
+			case TPostfixField(object, name, deltaValue): TPostfixField(rebaseExpression(object, source, delta), name, deltaValue);
+			case TMethodCall(object, name, arguments):
+				TMethodCall(rebaseExpression(object, source, delta), name, rebaseExpressions(arguments, source, delta));
+			case TCollectionCall(object, operation, arguments):
+				TCollectionCall(rebaseExpression(object, source, delta), operation, rebaseExpressions(arguments, source, delta));
+			case TCall(name, arguments): TCall(name, rebaseExpressions(arguments, source, delta));
+			case TCNativeCall(name, arguments): TCNativeCall(name, rebaseExpressions(arguments, source, delta));
+			case TFunctionRef(name): TFunctionRef(name);
+			case TMethodRef(object, name): TMethodRef(rebaseExpression(object, source, delta), name);
+			case TNew(name, arguments, hasConstructor): TNew(name, rebaseExpressions(arguments, source, delta), hasConstructor);
+			case TNewArray(element, length): TNewArray(element, rebaseExpression(length, source, delta));
+			case TSwitchExpression(value, cases, defaultExpression):
+				TSwitchExpression(rebaseExpression(value, source, delta),
+					[for (item in cases) {
+						value: rebaseExpression(item.value, source, delta),
+						subjectBinding: item.subjectBinding,
+						isCatchAll: item.isCatchAll,
+						guard: item.guard == null ? null : rebaseExpression(item.guard, source, delta),
+						result: rebaseExpression(item.result, source, delta),
+						enumName: item.enumName,
+						constructorIndex: item.constructorIndex,
+						bindings: item.bindings,
+						predicates: item.predicates
+					}],
+					defaultExpression == null ? null : rebaseExpression(defaultExpression, source, delta));
+			case TObjectLiteral(name, fields):
+				TObjectLiteral(name, [for (field in fields) {name: field.name, value: rebaseExpression(field.value, source, delta)}]);
+			case TArrayLiteral(values): TArrayLiteral(rebaseExpressions(values, source, delta));
+			case TMapLiteral(entries):
+				TMapLiteral([for (entry in entries) {key: rebaseExpression(entry.key, source, delta), value: rebaseExpression(entry.value, source, delta)}]);
+			case TArrayComprehension(keyName, valueName, iterable, condition, value):
+				TArrayComprehension(keyName, valueName, rebaseExpression(iterable, source, delta),
+					condition == null ? null : rebaseExpression(condition, source, delta), rebaseExpression(value, source, delta));
+			case TMapComprehension(keyName, valueName, iterable, condition, key, value):
+				TMapComprehension(keyName, valueName, rebaseExpression(iterable, source, delta),
+					condition == null ? null : rebaseExpression(condition, source, delta), rebaseExpression(key, source, delta),
+					rebaseExpression(value, source, delta));
+			case TRange(start, end): TRange(rebaseExpression(start, source, delta), rebaseExpression(end, source, delta));
+			case TClosureCall(callee, arguments): TClosureCall(rebaseExpression(callee, source, delta), rebaseExpressions(arguments, source, delta));
+			case TStaticField(owner, name): TStaticField(owner, name);
+			case TPostfixStaticField(owner, name, deltaValue): TPostfixStaticField(owner, name, deltaValue);
+			case TPostfixIndex(array, index, deltaValue):
+				TPostfixIndex(rebaseExpression(array, source, delta), rebaseExpression(index, source, delta), deltaValue);
+			case TSuperCall(owner, arguments): TSuperCall(owner, rebaseExpressions(arguments, source, delta));
+			case TStringFromCharCode(code): TStringFromCharCode(rebaseExpression(code, source, delta));
+			case TStringSubstring(value, start, end):
+				TStringSubstring(rebaseExpression(value, source, delta), rebaseExpression(start, source, delta),
+					end == null ? null : rebaseExpression(end, source, delta));
+			case TArrayPop(array): TArrayPop(rebaseExpression(array, source, delta));
+			case TArraySort(array, comparator): TArraySort(rebaseExpression(array, source, delta), rebaseExpression(comparator, source, delta));
+			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral,
+				TUnreachable, TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_),
+				TLambda(_, _, _), TNewMap(_, _), TPostfixLocal(_, _), TPostfixCellLocal(_, _, _), TPostfixCellCaptured(_, _, _):
+				expression.expression;
+		};
+		return new TypedExpression(rebased, expression.type, rebaseSpan(expression.span, source, delta));
+	}
+
+	static function rebaseExpressions(expressions:Array<TypedExpression>, source:SourceFile, delta:Int):Array<TypedExpression>
+		return [for (expression in expressions) rebaseExpression(expression, source, delta)];
+
+	static function containsLambdaStatement(statement:TypedStatement):Bool {
+		return switch statement {
+			case TVar(_, value, _), TAssign(_, value, _), TCellAssign(_, _, value, _), TCellCapturedAssign(_, _, value, _),
+				TReturn(value, _), TThrow(value, _), TExpression(value, _): containsLambdaExpression(value);
+			case TFieldAssign(object, _, value, _): containsLambdaExpression(object) || containsLambdaExpression(value);
+			case TStaticFieldAssign(_, _, value, _): containsLambdaExpression(value);
+			case TIndexAssign(array, index, value, _), TMapAssign(array, index, value, _):
+				containsLambdaExpression(array) || containsLambdaExpression(index) || containsLambdaExpression(value);
+			case TTry(body, catches, _):
+				containsLambdaStatements(body) || [for (caught in catches) containsLambdaStatements(caught.statements)].indexOf(true) >= 0;
+			case TIf(condition, thenBranch, elseBranch, _):
+				containsLambdaExpression(condition) || containsLambdaStatements(thenBranch) || containsLambdaStatements(elseBranch);
+			case TWhile(condition, body, _): containsLambdaExpression(condition) || containsLambdaStatements(body);
+			case TDoWhile(body, condition, _): containsLambdaStatements(body) || containsLambdaExpression(condition);
+			case TForIn(_, _, iterable, body, _): containsLambdaExpression(iterable) || containsLambdaStatements(body);
+			case TSwitch(expression, cases, defaultBranch, _, _):
+				containsLambdaExpression(expression) || [for (item in cases)
+					containsLambdaExpression(item.value) || item.guard != null && containsLambdaExpression(item.guard)
+					|| containsLambdaStatements(item.statements)].indexOf(true) >= 0 || containsLambdaStatements(defaultBranch);
+			case TDeclare(_, _, _), TReturnVoid(_), TBreak(_), TContinue(_), TIncrement(_, _, _), TCellIncrement(_, _, _, _, _),
+				TCellCapturedIncrement(_, _, _, _, _): false;
+		};
+	}
+
+	static function containsLambdaStatements(statements:Array<TypedStatement>):Bool {
+		for (statement in statements)
+			if (containsLambdaStatement(statement))
+				return true;
+		return false;
+	}
+
+	static function containsLambdaExpression(expression:TypedExpression):Bool {
+		return switch expression.expression {
+			case TLambda(_, _, _): true;
+			case TEnumConstruct(_, _, arguments), TCall(_, arguments), TCNativeCall(_, arguments), TArrayLiteral(arguments),
+				TClosureCall(_, arguments): [for (argument in arguments) containsLambdaExpression(argument)].indexOf(true) >= 0;
+			case TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value), TNot(value),
+				TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TArrayLength(value), TStringLength(value),
+				TStringFromCharCode(value), TArrayPop(value): containsLambdaExpression(value);
+			case TToInterface(value, _): containsLambdaExpression(value);
+			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right), TBitAnd(left, right),
+				TBitXor(left, right), TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right), TUnsignedShiftRight(left, right),
+				TLess(left, right), TLessEqual(left, right), TEqual(left, right), TAnd(left, right), TOr(left, right), TIndex(left, right),
+				TMapGet(left, right), TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right),
+				TArrayPush(left, right), TArrayUnshift(left, right), TPostfixIndex(left, right, _):
+				containsLambdaExpression(left) || containsLambdaExpression(right);
+			case TConditional(condition, whenTrue, whenFalse):
+				containsLambdaExpression(condition) || containsLambdaExpression(whenTrue) || containsLambdaExpression(whenFalse);
+			case TBlockExpression(statements, result): containsLambdaStatements(statements) || containsLambdaExpression(result);
+			case TField(object, _), TPostfixField(object, _, _), TMethodRef(object, _): containsLambdaExpression(object);
+			case TCollectionCall(object, _, arguments):
+				containsLambdaExpression(object) || [for (argument in arguments) containsLambdaExpression(argument)].indexOf(true) >= 0;
+			case TMethodCall(object, _, arguments): containsLambdaExpression(object) || [for (argument in arguments) containsLambdaExpression(argument)].indexOf(true) >= 0;
+			case TNew(_, arguments, _), TSuperCall(_, arguments): [for (argument in arguments) containsLambdaExpression(argument)].indexOf(true) >= 0;
+			case TNewArray(_, length): containsLambdaExpression(length);
+			case TSwitchExpression(value, cases, defaultExpression):
+				containsLambdaExpression(value) || [for (item in cases)
+					containsLambdaExpression(item.value) || item.guard != null && containsLambdaExpression(item.guard)
+					|| containsLambdaExpression(item.result)].indexOf(true) >= 0
+					|| defaultExpression != null && containsLambdaExpression(defaultExpression);
+			case TObjectLiteral(_, fields): [for (field in fields) containsLambdaExpression(field.value)].indexOf(true) >= 0;
+			case TMapLiteral(entries): [for (entry in entries)
+				containsLambdaExpression(entry.key) || containsLambdaExpression(entry.value)].indexOf(true) >= 0;
+			case TArrayComprehension(_, _, iterable, condition, value):
+				containsLambdaExpression(iterable) || condition != null && containsLambdaExpression(condition) || containsLambdaExpression(value);
+			case TMapComprehension(_, _, iterable, condition, key, value):
+				containsLambdaExpression(iterable) || condition != null && containsLambdaExpression(condition)
+					|| containsLambdaExpression(key) || containsLambdaExpression(value);
+			case TRange(start, end): containsLambdaExpression(start) || containsLambdaExpression(end);
+			case TStringSubstring(value, start, end):
+				containsLambdaExpression(value) || containsLambdaExpression(start) || end != null && containsLambdaExpression(end);
+			case TArraySort(array, comparator): containsLambdaExpression(array) || containsLambdaExpression(comparator);
+			case TFunctionRef(_), TClassRef(_), TStaticField(_, _), TPostfixStaticField(_, _, _), TLocal(_), TCellLocal(_, _), TCaptured(_),
+				TCellCaptured(_, _), TPostfixLocal(_, _), TPostfixCellLocal(_, _, _), TPostfixCellCaptured(_, _, _), TIntLiteral(_), TFloatLiteral(_),
+				TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral, TUnreachable, TNewMap(_, _): false;
+		};
+	}
 }

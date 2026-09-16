@@ -30,6 +30,7 @@ import compiler.types.TypeRelations;
 import compiler.types.Typer;
 import compiler.types.Typer.RecoveryTypingModule;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedAstTools;
 import compiler.types.SignatureInference;
 import compiler.service.EditorSnapshot.EditorSnapshot;
 import compiler.service.EditorSnapshot.EditorSnapshotConfidence;
@@ -431,11 +432,12 @@ class LanguageService {
 	/**
 	 * Select unchanged recovered bodies from the previous editor snapshot.
 	 *
-	 * A candidate must retain its source span and exact declaration text so the
-	 * reused typed spans still point at the same source coordinates. Independent
-	 * declarations can therefore be reused after an earlier body edit. The
-	 * declaration context and body-reference checks cover changes that could
-	 * alter its meaning (imports, signatures, fields, inheritance, or callees).
+	 * A candidate must retain its exact declaration text. If an unrelated edit
+	 * shifts the declaration, its typed spans are rebased to the current source
+	 * before publication. Independent declarations can therefore be reused after
+	 * an earlier body edit or insertion. The declaration context and
+	 * body-reference checks cover changes that could alter its meaning (imports,
+	 * signatures, fields, inheritance, or callees).
 	 */
 	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram, ?externalChangedBodies:Map<String, Bool>,
 		forceNoReuse:Bool = false):Map<String, TypedFunction> {
@@ -505,11 +507,7 @@ class LanguageService {
 		// overload selection, and resolved identities may all have changed.
 		for (name in currentAst.keys()) {
 			var fn = currentAst.get(name), oldAst = previousAst.get(name);
-			if (oldAst == null
-				|| oldAst.span.start != fn.span.start
-				|| oldAst.span.end != fn.span.end
-				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end)
-					!= fn.span.file.slice(fn.span.start, fn.span.end))
+			if (oldAst == null || !sameRecoveredFunctionSource(oldAst, fn))
 				changedBodies.set(name, true);
 		}
 		if (externalChangedBodies != null)
@@ -520,13 +518,13 @@ class LanguageService {
 			if (fn.isExtern == true || (fn.typeParameters != null && fn.typeParameters.length > 0))
 				return;
 			var oldAst = previousAst.get(name), typed = previousTyped.get(name);
-			if (oldAst == null || typed == null
-				|| oldAst.span.start != fn.span.start
-				|| oldAst.span.end != fn.span.end
-				|| oldAst.span.file.slice(oldAst.span.start, oldAst.span.end) != fn.span.file.slice(fn.span.start, fn.span.end))
+			if (oldAst == null || typed == null || !sameRecoveredFunctionSource(oldAst, fn)
+				|| !TypedAstTools.canRebase(typed))
 				return;
-			if (recoveredBodyReferencesChanged(fn, changedBodies))
-				return;
+		if (recoveredBodyReferencesChanged(fn, changedBodies))
+			return;
+			if (oldAst.span.start != fn.span.start)
+				typed = TypedAstTools.rebaseFunction(typed, fn.span.file, fn.span.start - oldAst.span.start);
 			result.set(name, typed);
 		};
 		for (fn in current.functions)
@@ -638,9 +636,7 @@ class LanguageService {
 	}
 
 	static function sameRecoveredFunctionSource(left:AstFunction, right:AstFunction):Bool
-		return left.span.start == right.span.start
-			&& left.span.end == right.span.end
-			&& left.span.file.path == right.span.file.path
+		return left.span.file.path == right.span.file.path
 			&& left.span.file.slice(left.span.start, left.span.end) == right.span.file.slice(right.span.start, right.span.end);
 
 	/** Names of function bodies that changed between two editor snapshots. */

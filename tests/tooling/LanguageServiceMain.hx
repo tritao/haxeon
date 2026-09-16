@@ -2000,6 +2000,33 @@ class LanguageServiceMain {
 		earlierEditService.update("EarlierEdit.hx", "function changed():Int { return 3; } function independent():Int { return 2; }");
 		if (earlierEditService.recoveredTypedFunctionReuses != earlierEditReuseCount + 1)
 			throw "recovery retyped an unchanged declaration after an earlier body edit";
+		var shiftedReuseService = new LanguageService(),
+			shiftedReuseSource = "function independent():Int { return 2; } function edited():Int { var value:Int = 1; return value; }";
+		shiftedReuseService.update("ShiftedReuse.hx", shiftedReuseSource);
+		var shiftedInitialReuseCount = shiftedReuseService.recoveredTypedFunctionReuses,
+			shiftedCurrentSource = "// unrelated prefix\n" + shiftedReuseSource;
+		shiftedReuseService.update("ShiftedReuse.hx", shiftedCurrentSource);
+		if (shiftedReuseService.recoveredTypedFunctionReuses != shiftedInitialReuseCount + 2)
+			throw 'recovered typing did not reuse declarations after an unrelated source-offset shift: ${shiftedReuseService.recoveredTypedFunctionReuses}';
+		var shiftedModel = shiftedReuseService.compiler.modules.get("ShiftedReuse").recoveredSemanticModel,
+			shiftedFunctionStart = shiftedCurrentSource.indexOf("function edited"),
+			shiftedReturnExpressionStart = shiftedCurrentSource.indexOf("return value") + "return ".length,
+			foundRebasedFunction = false,
+			foundRebasedExpression = false;
+		if (shiftedModel != null && shiftedModel.partialTypedProgram != null)
+			for (fn in shiftedModel.partialTypedProgram.functions)
+				if (fn.name == "edited") {
+					foundRebasedFunction = fn.span.start == shiftedFunctionStart;
+					for (statement in fn.statements)
+						switch statement {
+							case TReturn(expression, _):
+								if (expression.span.start == shiftedReturnExpressionStart)
+									foundRebasedExpression = true;
+							default:
+						}
+				}
+		if (!foundRebasedFunction || !foundRebasedExpression)
+			throw "reused typed spans were not rebased to the current source";
 		var classIncrementalService = new LanguageService(),
 			classIncrementalSource = "class Incremental { public function stable():Int { return 1; } public function edited():Int { return 1; } }";
 		classIncrementalService.update("ClassIncremental.hx", classIncrementalSource);
