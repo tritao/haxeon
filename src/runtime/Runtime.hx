@@ -251,7 +251,7 @@ class Runtime {
 	public static function liveRevision(module:LoadedModule):Int
 		return module.access(function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.revision(cast handle);
+			return module.revision;
 			#else
 			return RuntimeKernel.revision(handle);
 			#end

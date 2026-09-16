@@ -120,10 +120,6 @@ HL_PRIM void HL_NAME(native_runtime_module_retirement_status)( vbyte *module, vb
 	memcpy(out,fields,sizeof(fields));
 }
 
-HL_PRIM int HL_NAME(native_runtime_module_revision)( vbyte *module ) {
-	return hl_runtime_module_revision((hl_runtime_module*)module);
-}
-
 HL_PRIM int HL_NAME(native_runtime_retry_failed_retirements)() {
 	return hl_runtime_failed_retirements_retry();
 }

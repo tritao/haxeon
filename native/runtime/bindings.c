@@ -131,7 +131,6 @@ DEFINE_PRIM(_I32,native_runtime_module_validate_call,_ABSTRACT(realtime_module) 
 DEFINE_PRIM(_I32,native_runtime_module_live_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_module_native_root_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,native_runtime_module_retirement_status,_ABSTRACT(realtime_module) _BYTES);
-DEFINE_PRIM(_I32,native_runtime_module_revision,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,native_runtime_retry_failed_retirements,_NO_ARG);
 DEFINE_PRIM(_I32,native_runtime_failed_retirement_count,_NO_ARG);
 DEFINE_PRIM(_I32,native_runtime_module_patch,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32);

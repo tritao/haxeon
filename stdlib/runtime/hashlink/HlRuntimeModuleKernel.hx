@@ -24,7 +24,6 @@ interface HlRuntimeModuleKernel {
 	function liveAllocationCount(module:HlRuntimeModuleHandle):Int;
 	function nativeRootCount(module:HlRuntimeModuleHandle):Int;
 	function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void;
-	function revision(module:HlRuntimeModuleHandle):Int;
 	function dispose(module:HlRuntimeModuleHandle):Int;
 	function setPatchFailureStage(module:HlRuntimeModuleHandle, stage:Int):Void;
 	function unload(module:HlRuntimeModuleHandle):Bool;
@@ -76,9 +75,6 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 
 	public inline function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void
 		HlTypeBridge.native_runtime_module_retirement_status(module, out);
-
-	public inline function revision(module:HlRuntimeModuleHandle):Int
-		return HlTypeBridge.native_runtime_module_revision(module);
 
 	public inline function dispose(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_dispose(module);
