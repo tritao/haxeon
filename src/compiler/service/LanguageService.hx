@@ -940,6 +940,18 @@ class LanguageService {
 		if (direct == null && qualifiedName != name)
 			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, qualifiedName, program, token);
 		if (direct != null) {
+			var resolvedSymbol = compiler.semanticWorkspace.editorSymbol(state, direct),
+				resolvedProgram = resolvedSymbol == null ? null : effectiveAst(resolvedSymbol.state);
+			if (resolvedSymbol != null && resolvedSymbol.symbol.kind == DeclarationKind.Alias && resolvedProgram != null)
+				for (alias in resolvedProgram.aliases)
+					if (sameSpan(alias.span, resolvedSymbol.symbol.declaration)) {
+						var aliasKey = resolvedSymbol.state.name + ":" + alias.name;
+						if (trail.exists(aliasKey))
+							return null;
+						var nextTrail:Map<String, Bool> = [for (key => value in trail) key => value];
+						nextTrail.set(aliasKey, true);
+						return recoveredAliasType(resolvedSymbol.state, resolvedProgram, alias, arguments, token, nextTrail);
+					}
 			var resolved = recoveredTypeForIdentity(direct, name, arguments);
 			if (!isRecoveryType(resolved))
 				return resolved;

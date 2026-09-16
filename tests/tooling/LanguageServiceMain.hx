@@ -1409,6 +1409,17 @@ class LanguageServiceMain {
 			|| qualifiedTypeNameDefinition == null
 			|| qualifiedTypeNameDefinition.path != "deep/types/Foo.hx")
 			throw 'recovered fully qualified type resolution did not preserve static completion or navigation: completion=$qualifiedTypeCompletion, definition=${qualifiedTypeDefinition == null ? "null" : qualifiedTypeDefinition.path}, typeDefinition=${qualifiedTypeNameDefinition == null ? "null" : qualifiedTypeNameDefinition.path}, context=${qualifiedTypeContext == null ? "null" : Std.string(qualifiedTypeContext.identityTrusted)}, unresolved=${qualifiedTypeUnresolved == null ? "null" : qualifiedTypeUnresolved.name}';
+		var qualifiedAliasService = new LanguageService(),
+			qualifiedAliasSource = "package alias.app; function main():Void { var value:alias.types.Alias; value.";
+		qualifiedAliasService.update("alias/types/Foo.hx",
+			"package alias.types; class Foo { public var member:Int; } function main():Void return;");
+		qualifiedAliasService.update("alias/types/Alias.hx",
+			"package alias.types; typedef Alias = Foo; function main():Void return;");
+		qualifiedAliasService.compile("alias.types.Alias");
+		qualifiedAliasService.update("alias/app/QualifiedAlias.hx", qualifiedAliasSource);
+		var qualifiedAliasNames = [for (item in qualifiedAliasService.complete("alias/app/QualifiedAlias.hx", qualifiedAliasSource.length)) item.label];
+		if (qualifiedAliasNames.indexOf("member") < 0)
+			throw "recovered fully qualified typedef did not expand its underlying receiver type";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");
