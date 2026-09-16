@@ -1082,9 +1082,13 @@ class SemanticIndex {
 					indexRecoveredExpression(predicate, TBool, activeFunctionKey);
 				indexRecoveredExpression(key, mapKeyType(expected), activeFunctionKey);
 				indexRecoveredExpression(value, mapValueType(expected), activeFunctionKey);
-			case New(name, arguments, _):
+			case New(name, arguments, span):
+				var callee = bindNamed(resolveRecoveredSymbol, name, span);
+				addCall(callee, span, name);
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, null, activeFunctionKey);
-			case NewGeneric(name, typeArguments, arguments, _):
+			case NewGeneric(name, typeArguments, arguments, span):
+				var callee = bindNamed(resolveRecoveredSymbol, name, span);
+				addCall(callee, span, name);
 				var receiverType = recoveredType(AppliedType(name, typeArguments));
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(receiverType), null, activeFunctionKey);
 			case NewArray(_, length, _):

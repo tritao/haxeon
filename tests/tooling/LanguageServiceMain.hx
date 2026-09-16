@@ -1171,6 +1171,22 @@ class LanguageServiceMain {
 				hasSameModuleDeadReference = true;
 		if (!hasSameModuleDeadReference)
 			throw 'same-module recovered references omitted a valid generic-body use: ${sameModuleReferences.length}';
+		var constructorRecoveryService = new LanguageService(),
+			constructorTargetSource = "package refs; class Constructed { public function new() {} } function main():Void return;",
+			constructorConsumerSource = "package refs; import refs.Constructed; function live():Void { new Constructed(); } function dead<T>():Void { new Constructed(); } function main():Void live();";
+		constructorRecoveryService.update("refs/Constructed.hx", constructorTargetSource);
+		constructorRecoveryService.compile("refs.Constructed");
+		constructorRecoveryService.update("refs/ConstructorConsumer.hx", constructorConsumerSource);
+		constructorRecoveryService.compile("refs.ConstructorConsumer");
+		var constructorTargetPosition = constructorTargetSource.indexOf("Constructed"),
+			constructorDeadUse = constructorConsumerSource.indexOf("Constructed", constructorConsumerSource.indexOf("function dead")),
+			constructorReferences = constructorRecoveryService.references("refs/Constructed.hx", constructorTargetPosition + 1),
+			hasRecoveredConstructorReference = false;
+		for (reference in constructorReferences)
+			if (reference.path == "refs/ConstructorConsumer.hx" && reference.span.start == constructorDeadUse)
+				hasRecoveredConstructorReference = true;
+		if (!hasRecoveredConstructorReference)
+			throw 'recovered constructor references omitted a valid generic-body use: ${constructorReferences.length}';
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
