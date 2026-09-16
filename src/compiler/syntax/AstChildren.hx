@@ -4,6 +4,29 @@ import compiler.syntax.Ast;
 
 /** Immediate expression operands; lexical statement bodies are visited by their owner. */
 class AstChildren {
+	/**
+	 * Immediate source-type operands. Type names themselves are leaves, but
+	 * every compound type can contain more declaration-bearing type syntax.
+	 * Keep this switch exhaustive so a new AstType constructor cannot silently
+	 * disappear from recovery indexing.
+	 */
+	public static function types(type:AstType):Array<AstType>
+		return switch type {
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_), NativeAbstractType(_, _), NamedType(_): [];
+			case AppliedType(_, arguments): arguments;
+			case ArrayType(element), NullableType(element): [element];
+			case MapType(key, value): [key, value];
+			case FunctionType(arguments, result): arguments.concat([result]);
+			case AnonymousType(fields): [for (field in fields) field.type];
+		};
+
+	/** Visit a complete source type tree, including its root node. */
+	public static function walkType(type:AstType, visit:AstType->Void):Void {
+		visit(type);
+		for (child in types(type))
+			walkType(child, visit);
+	}
+
 	public static function expressions(expression:AstExpression):Array<AstExpression>
 		return switch expression {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),

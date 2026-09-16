@@ -5,6 +5,7 @@ import compiler.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.AstChildren;
 import compiler.types.DeclarationIndex;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -559,6 +560,7 @@ class SemanticIndexBuilder {
 		prepareRecoveredLocalReuse(previous);
 		if (token != null)
 			token.check();
+		indexRecoveredProgramTypes(program);
 		for (fn in program.functions) {
 			checkpoint();
 			recoveredFunctions.set(fn.name, fn);
@@ -649,6 +651,92 @@ class SemanticIndexBuilder {
 		recoveryUsedLocalIds = [];
 		recoveryPreviousLambdaKeys = [];
 		recoveryCurrentLambdaOrdinals = [];
+	}
+
+	/**
+	 * Visit every declaration-level source type before indexing expressions.
+	 * AstType does not currently carry token spans, so the final identifier
+	 * binding is still performed by indexTypeReferences(). This pass keeps
+	 * recovery resolution and type traversal in lockstep with the source AST,
+	 * including type positions which do not occur in an expression walker.
+	 */
+	function indexRecoveredProgramTypes(program:AstProgram):Void {
+		for (alias in program.aliases) {
+			indexRecoveredTypeSyntax(alias.type);
+			indexRecoveredTypeConstraints(alias.typeConstraints);
+		}
+		for (decl in program.enums) {
+			indexRecoveredTypeConstraints(decl.typeConstraints);
+			for (caseDecl in decl.cases)
+				for (parameter in caseDecl.params)
+					indexRecoveredTypeSyntax(parameter.type);
+		}
+		for (decl in program.enumAbstracts) {
+			indexRecoveredTypeSyntax(decl.underlying);
+			for (type in decl.fromTypes)
+				indexRecoveredTypeSyntax(type);
+			for (type in decl.toTypes)
+				indexRecoveredTypeSyntax(type);
+		}
+		for (decl in program.abstracts) {
+			indexRecoveredTypeConstraints(decl.typeConstraints);
+			indexRecoveredTypeSyntax(decl.underlying);
+			for (type in decl.fromTypes)
+				indexRecoveredTypeSyntax(type);
+			for (type in decl.toTypes)
+				indexRecoveredTypeSyntax(type);
+		}
+		for (decl in program.interfaces) {
+			indexRecoveredTypeConstraints(decl.typeConstraints);
+			for (base in decl.bases)
+				indexRecoveredTypeSyntax(base);
+		}
+		for (decl in program.classes) {
+			indexRecoveredTypeConstraints(decl.typeConstraints);
+			if (decl.base != null)
+				indexRecoveredTypeSyntax(decl.base);
+			for (interfaceType in decl.interfaces)
+				indexRecoveredTypeSyntax(interfaceType);
+			for (field in decl.fields) {
+				if (field.type != null)
+					indexRecoveredTypeSyntax(field.type);
+			}
+		}
+		for (fn in program.functions)
+			indexRecoveredFunctionTypes(fn);
+		for (decl in program.classes)
+			for (fn in decl.methods)
+				indexRecoveredFunctionTypes(fn);
+		for (decl in program.interfaces)
+			for (fn in decl.methods)
+				indexRecoveredFunctionTypes(fn);
+		for (decl in program.abstracts)
+			for (fn in decl.methods)
+				indexRecoveredFunctionTypes(fn);
+	}
+
+	function indexRecoveredFunctionTypes(fn:AstFunction):Void {
+		indexRecoveredTypeSyntax(fn.result);
+		indexRecoveredTypeConstraints(fn.typeConstraints);
+		for (argument in fn.arguments)
+			indexRecoveredTypeSyntax(argument.type);
+	}
+
+	function indexRecoveredTypeConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Void {
+		if (constraints == null)
+			return;
+		for (constraint in constraints)
+			indexRecoveredTypeSyntax(constraint.type);
+	}
+
+	/** Walk all nested source types through the shared exhaustive AST helper. */
+	function indexRecoveredTypeSyntax(type:AstType):Void {
+		AstChildren.walkType(type, function(child:AstType):Void {
+			checkpoint();
+			// Resolve each node under the current recovery visibility context.
+			// Token-level binding below supplies the exact source span.
+			recoveredType(child);
+		});
 	}
 
 	/**
@@ -1003,8 +1091,11 @@ class SemanticIndexBuilder {
 			checkpoint();
 			switch statement {
 				case UninitializedDeclaration(name, type, span):
+					indexRecoveredTypeSyntax(type);
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
 				case VarDeclaration(name, type, initializer, span):
+					if (type != null)
+						indexRecoveredTypeSyntax(type);
 					var localType = type == null ? recoveredExpressionType(initializer) : recoveredType(type);
 					addRecoveredLocal(functionKey, name, localType, span, scope, depth);
 					if (type != null)
@@ -1024,6 +1115,7 @@ class SemanticIndexBuilder {
 				case Try(body, catches, span):
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
 					for (caught in catches) {
+						indexRecoveredTypeSyntax(caught.type);
 						addRecoveredLocal(functionKey, caught.name, recoveredType(caught.type), caught.span, caught.span, depth + 1);
 						indexRecoveredStatements(functionKey, caught.statements, caught.span, depth + 1);
 					}
@@ -1034,7 +1126,8 @@ class SemanticIndexBuilder {
 						indexRecoveredStatements(functionKey, item.statements, item.span, depth + 1);
 					}
 					indexRecoveredStatements(functionKey, fallback, span, depth + 1);
-				default:
+				case ErrorStatement(_), Assignment(_, _, _), IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _), Return(_, _), ReturnVoid(_),
+					Throw(_, _), Break(_), Continue(_), Increment(_, _, _), Expression(_, _):
 			}
 		}
 	}
@@ -1144,7 +1237,7 @@ class SemanticIndexBuilder {
 						indexRecoveredStatementUses(item.statements, expectedReturn, activeFunctionKey);
 					}
 					indexRecoveredStatementUses(fallback, expectedReturn, activeFunctionKey);
-				default:
+				case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_):
 			}
 		}
 	}
@@ -1259,6 +1352,8 @@ class SemanticIndexBuilder {
 			case ThrowExpression(value, _):
 				indexRecoveredExpression(value, null, activeFunctionKey);
 			case Cast(value, target, _):
+				if (target != null)
+					indexRecoveredTypeSyntax(target);
 				indexRecoveredExpression(value, target == null ? expected : recoveredType(target), activeFunctionKey);
 			case Conditional(predicate, yes, no, _):
 				indexRecoveredExpression(predicate, TBool, activeFunctionKey);
@@ -1306,13 +1401,21 @@ class SemanticIndexBuilder {
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(constructionType), null,
 					activeFunctionKey, expected);
 			case NewGeneric(name, typeArguments, arguments, span):
+				for (typeArgument in typeArguments)
+					indexRecoveredTypeSyntax(typeArgument);
 				var callee = bindNamed(resolveRecoveredSymbol, name, span),
 					constructionType = recoveredGenericConstructionType(name, typeArguments, expected);
 				addCall(callee, span, name);
 				indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), recoveredTypeSubstitutions(constructionType), null,
 					activeFunctionKey, expected);
-			case NewArray(_, length, _):
+			case NewArray(element, length, _):
+				indexRecoveredTypeSyntax(element);
 				indexRecoveredExpression(length, TInt, activeFunctionKey);
+			case NewMap(key, value, _):
+				indexRecoveredTypeSyntax(key);
+				indexRecoveredTypeSyntax(value);
+			case NativeLayoutQuery(_, type, _, _):
+				indexRecoveredTypeSyntax(type);
 			case Lambda(arguments, body, span):
 				indexRecoveredLambda(activeFunctionKey, arguments, body, span, expected);
 			case SwitchExpression(value, cases, fallback, _):
@@ -1327,7 +1430,7 @@ class SemanticIndexBuilder {
 				}
 				if (fallback != null)
 					indexRecoveredExpression(fallback, expected, activeFunctionKey);
-			default:
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
 		}
 	}
 
@@ -1351,6 +1454,7 @@ class SemanticIndexBuilder {
 					case InferredType: TUnknown;
 					default: recoveredType(argument.type);
 				};
+			indexRecoveredTypeSyntax(argument.type);
 			if (argument.name != "_")
 				addRecoveredLocal(lambdaKey, argument.name, argumentType, argument.span, span, 1);
 		}
@@ -2271,7 +2375,14 @@ class SemanticIndexBuilder {
 					if (index < recovered.params.length)
 						indexRecoveredPatternBinding(functionKey, arguments[index], recoveredType(recovered.params[index].type,
 							recovered.substitutions), scope, depth);
-			default:
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_),
+				Variable(_, _), Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
+				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Negate(_, _), Less(_, _, _), LessEqual(_, _, _),
+				Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _), Or(_, _, _), Conditional(_, _, _, _),
+				BlockExpression(_, _, _), ThrowExpression(_, _), Cast(_, _, _), SwitchExpression(_, _, _, _), ObjectLiteral(_, _), MapLiteral(_, _),
+				ArrayComprehension(_, _, _, _, _, _), MapComprehension(_, _, _, _, _, _, _), Range(_, _, _), NativeLayoutQuery(_, _, _, _), ClosureCall(_, _, _),
+				MethodCall(_, _, _, _), New(_, _, _), NewGeneric(_, _, _, _), NewArray(_, _, _), NewMap(_, _, _), Index(_, _, _), PostfixIncrement(_, _, _),
+				Lambda(_, _, _), ArrayLiteral(_, _):
 		}
 	}
 
@@ -2287,7 +2398,14 @@ class SemanticIndexBuilder {
 							indexRecoveredPatternBinding(functionKey, value, element, scope, depth);
 					default:
 				}
-			default:
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+				ErrorExpression(_), Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
+				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Negate(_, _), Less(_, _, _), LessEqual(_, _, _),
+				Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _), Or(_, _, _), Conditional(_, _, _, _),
+				BlockExpression(_, _, _), ThrowExpression(_, _), Cast(_, _, _), SwitchExpression(_, _, _, _), ObjectLiteral(_, _), MapLiteral(_, _),
+				ArrayComprehension(_, _, _, _, _, _), MapComprehension(_, _, _, _, _, _, _), Range(_, _, _), Call(_, _, _), NativeLayoutQuery(_, _, _, _),
+				ClosureCall(_, _, _), MethodCall(_, _, _, _), New(_, _, _), NewGeneric(_, _, _, _), NewArray(_, _, _), NewMap(_, _, _), Index(_, _, _),
+				PostfixIncrement(_, _, _), Lambda(_, _, _):
 		}
 	}
 
@@ -2956,9 +3074,82 @@ class SemanticIndexBuilder {
 			return precededBy(TokenKind.Typedef, index);
 		if (previous == TokenKind.Dot)
 			return typePathStartsInContext(index);
+		if (previous == TokenKind.LeftParen)
+			return startsFunctionTypeAt(index - 1);
+		if (previous == TokenKind.Arrow)
+			return functionTypeResultAt(index);
 		if (previous == TokenKind.Comma)
-			return insideTypeArguments(index) || precededByEither(TokenKind.Extends, TokenKind.Implements, index);
+			return insideTypeArguments(index) || insideFunctionType(index) || precededByEither(TokenKind.Extends, TokenKind.Implements, index);
 		return precededBy(TokenKind.Import, index) && followedBy(TokenKind.Semicolon, index);
+	}
+
+	/** Whether the parenthesized group at open starts a source function type. */
+	function startsFunctionTypeAt(open:Int):Bool {
+		if (open < 0 || open >= tokens.length || tokens[open].kind != TokenKind.LeftParen)
+			return false;
+		var close = matchingRightParen(open);
+		return close >= 0 && close + 1 < tokens.length && tokens[close + 1].kind == TokenKind.Arrow
+			&& typeContextBeforeFunctionType(open);
+	}
+
+	function matchingRightParen(open:Int):Int {
+		var depth = 0;
+		for (index in open...tokens.length)
+			switch tokens[index].kind {
+				case LeftParen:
+					depth++;
+				case RightParen:
+					depth--;
+					if (depth == 0)
+						return index;
+				default:
+				}
+		return -1;
+	}
+
+	function typeContextBeforeFunctionType(open:Int):Bool {
+		if (open <= 0)
+			return false;
+		return switch tokens[open - 1].kind {
+			case Colon, Less, Comma: true;
+			case Arrow: true;
+			case Assign: precededBy(TokenKind.Typedef, open);
+			case LeftParen: insideFunctionType(open - 1);
+			default: false;
+		};
+	}
+
+	/** Whether an identifier is one of the argument types in a function type. */
+	function insideFunctionType(index:Int):Bool {
+		if (index <= 0)
+			return false;
+		for (open in 0...index)
+			if (tokens[open].kind == TokenKind.LeftParen && startsFunctionTypeAt(open)) {
+				var close = matchingRightParen(open);
+				if (close > index)
+					return true;
+			}
+		return false;
+	}
+
+	/** Whether an identifier starts the result type after a function-type arrow. */
+	function functionTypeResultAt(index:Int):Bool {
+		if (index <= 1 || tokens[index - 1].kind != TokenKind.Arrow || tokens[index - 2].kind != TokenKind.RightParen)
+			return false;
+		var close = index - 2, depth = 0;
+		for (open in 0...(close + 1)) {
+			var cursor = close - open;
+			switch tokens[cursor].kind {
+				case RightParen:
+					depth++;
+				case LeftParen:
+					depth--;
+					if (depth == 0)
+						return startsFunctionTypeAt(cursor);
+				default:
+			}
+		}
+		return false;
 	}
 
 	function qualifiedTokenName(index:Int):String {

@@ -918,6 +918,51 @@ class LanguageServiceMain {
 			|| typeReferences.length != 8
 			|| typeRename.length != 8)
 			throw 'language service type-reference index failed: explicit=${explicitTypeDefinition != null}, value=${valueTypeDefinition != null}, field=${fieldTypeDefinition != null}, method=${methodTypeDefinition != null}, primitive=${primitiveTypeDefinition != null}, references=${typeReferences.length}, rename=${typeRename.length}';
+		var functionTypeService = new LanguageService();
+		functionTypeService.update("types/Foo.hx", "package types; class Foo {} function main():Void return;");
+		functionTypeService.update("types/Bar.hx", "package types; class Bar {} function main():Void return;");
+		functionTypeService.update("types/Result.hx", "package types; class Result {} function main():Void return;");
+		functionTypeService.compile("types.Foo");
+		functionTypeService.compile("types.Bar");
+		functionTypeService.compile("types.Result");
+		var functionTypeSource = "package app; import types.Foo; import types.Bar; import types.Result; class Child extends Foo {} function use<T:Foo>(callback:(Foo,Bar)->Result, shape:{field:Foo}):Result { var list = new Array<Foo>(0); var map = new Map<Bar,Result>(); var casted = (list:Foo); var size = sizeof<Result>(); try { var lambda = (item:Bar) -> item; } catch (error:Foo) {} return callback(";
+		functionTypeService.update("app/FunctionTypes.hx", functionTypeSource);
+		var functionTypeFoo = functionTypeSource.indexOf("(Foo") + 1,
+			functionTypeBar = functionTypeSource.indexOf("Bar", functionTypeFoo) + 1,
+			functionTypeResult = functionTypeSource.indexOf("->Result") + 2,
+			arrayTypeFoo = functionTypeSource.indexOf("Array<Foo>") + "Array<".length,
+			mapTypeBar = functionTypeSource.indexOf("Map<Bar") + "Map<".length,
+			mapTypeResult = functionTypeSource.indexOf("Map<Bar,Result>") + "Map<Bar,".length,
+			castTypeFoo = functionTypeSource.indexOf("list:Foo") + "list:".length,
+			layoutTypeResult = functionTypeSource.indexOf("sizeof<Result>") + "sizeof<".length,
+			lambdaTypeBar = functionTypeSource.indexOf("item:Bar") + "item:".length,
+			catchTypeFoo = functionTypeSource.indexOf("error:Foo") + "error:".length,
+			anonymousFieldFoo = functionTypeSource.indexOf("field:Foo") + "field:".length,
+			constraintTypeFoo = functionTypeSource.indexOf("T:Foo") + "T:".length,
+			functionTypePositions = [functionTypeFoo, functionTypeBar, functionTypeResult, arrayTypeFoo, mapTypeBar, mapTypeResult, castTypeFoo,
+				layoutTypeResult, lambdaTypeBar, catchTypeFoo, anonymousFieldFoo, constraintTypeFoo],
+			functionTypePaths = ["types/Foo.hx", "types/Bar.hx", "types/Result.hx", "types/Foo.hx", "types/Bar.hx", "types/Result.hx", "types/Foo.hx",
+				"types/Result.hx", "types/Bar.hx", "types/Foo.hx", "types/Foo.hx", "types/Foo.hx"];
+		for (index in 0...functionTypePositions.length) {
+			var location = functionTypeService.typeDefinition("app/FunctionTypes.hx", functionTypePositions[index]);
+			if (location == null || location.path != functionTypePaths[index])
+				throw 'recovered source type traversal missed function/type constructor position $index: ${location == null ? "null" : location.path}';
+		}
+		var functionTypeReferences = functionTypeService.references("app/FunctionTypes.hx", functionTypeFoo),
+			hasArrayTypeReference = false,
+			hasCastTypeReference = false;
+		for (reference in functionTypeReferences) {
+			if (reference.path == "app/FunctionTypes.hx"
+				&& reference.span.start <= arrayTypeFoo
+				&& arrayTypeFoo <= reference.span.end)
+				hasArrayTypeReference = true;
+			if (reference.path == "app/FunctionTypes.hx"
+				&& reference.span.start <= castTypeFoo
+				&& castTypeFoo <= reference.span.end)
+				hasCastTypeReference = true;
+		}
+		if (!hasArrayTypeReference || !hasCastTypeReference)
+			throw "recovered source type traversal did not retain references from constructor and cast type positions";
 		var collisionService = new LanguageService(),
 			collisionSource = "class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
 		collisionService.update("Collision.hx", collisionSource);
