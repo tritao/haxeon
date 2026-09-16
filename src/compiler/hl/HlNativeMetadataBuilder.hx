@@ -8,6 +8,8 @@ import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatch;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
+import compiler.hl.patch.HlPatch.HlPatchInstruction;
+import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlRuntimePatchFunctions;
@@ -95,9 +97,9 @@ class HlNativeMetadataBuilder {
 	}
 
 	/** Prepare patch function descriptors and opcode storage in the metadata arena. */
-	public static function preparePatchFunctions(generation:HlMetadataGeneration, patch:HlPatch):HlRuntimePatchFunctions {
-		if (generation == null || patch == null)
-			throw "HashLink patch function preparation requires a generation and patch";
+	public static function preparePatchFunctions(generation:HlMetadataGeneration, patch:HlPatch, identity:HlRuntimeManifest):HlRuntimePatchFunctions {
+		if (generation == null || patch == null || identity == null)
+			throw "HashLink patch function preparation requires a generation, patch, and runtime identity";
 		var typeCount = generation.typeCount();
 		if (typeCount != patch.baseTypes + patch.types.length)
 			throw 'HashLink patch function types require $typeCount records, got ${patch.baseTypes + patch.types.length}';
@@ -105,7 +107,7 @@ class HlNativeMetadataBuilder {
 			throw "HashLink patch function preparation requires at least one function";
 		var descriptors = generation.arena.allocFunctionArray(patch.functions.length);
 		for (index in 0...patch.functions.length)
-			writePatchFunction(descriptors.offset(index), generation, patch, patch.functions[index], typeCount);
+			writePatchFunction(descriptors.offset(index), generation, patch, patch.functions[index], typeCount, identity);
 		return new HlRuntimePatchFunctions(descriptors, patch.functions.length);
 	}
 
@@ -175,7 +177,7 @@ class HlNativeMetadataBuilder {
 	}
 
 	static function writePatchFunction(destination:RawPtr<runtime.hashlink.HlFunction>, generation:HlMetadataGeneration, patch:HlPatch,
-			patchFunction:HlPatchFunction, typeCount:Int):Void {
+			patchFunction:HlPatchFunction, typeCount:Int, identity:HlRuntimeManifest):Void {
 		checkPatchTypeIndex(patchFunction.type, typeCount);
 		var registers:RawPtr<RawPtr<runtime.hashlink.HlType>> = patchFunction.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocTypePointerArray(patchFunction.registers.length);
 		for (index in 0...patchFunction.registers.length) {
@@ -184,7 +186,7 @@ class HlNativeMetadataBuilder {
 		}
 		var ops:RawPtr<runtime.hashlink.HlOpcode> = patchFunction.instructions.length == 0 ? RawPtr.nullPtr() : generation.arena.allocOpcodeArray(patchFunction.instructions.length);
 		for (index in 0...patchFunction.instructions.length)
-			writePatchOpcode(ops.offset(index), generation, patchFunction.instructions[index]);
+			writePatchOpcode(ops.offset(index), generation, resolvedPatchInstruction(patchFunction, index, identity));
 		var debug:RawPtr<Int32> = patchFunction.debug.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(patchFunction.debug.length * 2);
 		for (index in 0...patchFunction.debug.length) {
 			var location = patchFunction.debug[index];
@@ -205,6 +207,30 @@ class HlNativeMetadataBuilder {
 		destination.ref.assigns = RawPtr.nullPtr();
 		destination.ref.object = RawPtr.nullPtr();
 		destination.ref.field.ref.name = RawPtr.nullPtr();
+	}
+
+	static function resolvedPatchInstruction(patchFunction:HlPatchFunction, index:Int, identity:HlRuntimeManifest):HlPatchInstruction {
+		var source = patchFunction.instructions[index],
+			resolved:Null<HlPatchInstruction> = null;
+		for (relocation in patchFunction.relocations)
+			if (relocation.instruction == index) {
+				if (source.operands.length < 2)
+					throw 'HashLink patch relocation for function ${patchFunction.functionIndex} has no target operand';
+				var target = identitySlot(identity, relocation.stableId);
+				if (target < 0)
+					throw 'HashLink patch relocation references unknown function identity ${relocation.stableId}';
+				var operands = source.operands.copy();
+				operands[1] = target;
+				resolved = new HlPatchInstruction(source.opcode, operands);
+			}
+		return resolved == null ? source : resolved;
+	}
+
+	static function identitySlot(identity:HlRuntimeManifest, stableId:Int):Int {
+		for (entry in identity.entries)
+			if (entry.stableId == stableId)
+				return entry.functionIndex;
+		return -1;
 	}
 
 	static function writePatchOpcode(destination:RawPtr<runtime.hashlink.HlOpcode>, generation:HlMetadataGeneration,
