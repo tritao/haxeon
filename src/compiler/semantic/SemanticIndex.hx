@@ -1716,6 +1716,33 @@ class SemanticIndexBuilder {
 			return left;
 		if (TypeRelations.equals(left, right))
 			return left;
+		if (left == TNull)
+			switch right {
+				case TNullable(_): return right;
+				default:
+			}
+		if (right == TNull)
+			switch left {
+				case TNullable(_): return left;
+				default:
+			}
+		switch left {
+			case TNullable(element):
+				var common = switch right {
+					case TNullable(other): recoveredCommonType(element, other);
+				default: TypeRelations.isReference(right) ? recoveredCommonType(element, right) : TUnknown;
+				};
+				if (!isRecoveryType(common))
+					return TNullable(common);
+			default:
+		}
+		switch right {
+			case TNullable(element):
+				var common = TypeRelations.isReference(left) ? recoveredCommonType(left, element) : TUnknown;
+				if (!isRecoveryType(common))
+					return TNullable(common);
+			default:
+		}
 		if (isRecoveryType(left))
 			return right;
 		if (isRecoveryType(right))

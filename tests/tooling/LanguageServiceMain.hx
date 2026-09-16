@@ -1922,6 +1922,16 @@ class LanguageServiceMain {
 				nullableConditionalMember = true;
 		if (!nullableConditionalMember)
 			throw "null/reference conditional recovery lost the known nullable branch type";
+		var nullableBranchService = new LanguageService(),
+			nullableBranchSource = "class NullableBranchValue { public var member:Int; } function main():Void { var maybe:Null<NullableBranchValue> = null; var value = true ? maybe : new NullableBranchValue(); value.";
+		nullableBranchService.update("NullableBranch.hx", nullableBranchSource);
+		var nullableBranchItems = nullableBranchService.completeResult("NullableBranch.hx", nullableBranchSource.length).items,
+			nullableBranchMember = false;
+		for (item in nullableBranchItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				nullableBranchMember = true;
+		if (!nullableBranchMember)
+			throw "nullable/reference conditional join lost the known member type";
 		var nullableArrayService = new LanguageService(),
 			nullableArraySource = "class NullableArrayValue { public var member:Int; } function main():Void { var values = [null, new NullableArrayValue()]; var value = values[1]; value.";
 		nullableArrayService.update("NullableArray.hx", nullableArraySource);
