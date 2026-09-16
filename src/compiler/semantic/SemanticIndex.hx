@@ -2064,8 +2064,7 @@ class SemanticIndexBuilder {
 		var result:Null<CompilerType> = null;
 		for (value in values) {
 			var type = recoveredExpressionType(value);
-			if (result == null || isRecoveryType(result) && !isRecoveryType(type))
-				result = type;
+			result = result == null ? type : recoveredCommonType(result, type);
 		}
 		return result == null ? TUnknown : result;
 	}

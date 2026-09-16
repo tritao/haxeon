@@ -1915,6 +1915,16 @@ class LanguageServiceMain {
 				nullableConditionalMember = true;
 		if (!nullableConditionalMember)
 			throw "null/reference conditional recovery lost the known nullable branch type";
+		var nullableArrayService = new LanguageService(),
+			nullableArraySource = "class NullableArrayValue { public var member:Int; } function main():Void { var values = [null, new NullableArrayValue()]; var value = values[1]; value.";
+		nullableArrayService.update("NullableArray.hx", nullableArraySource);
+		var nullableArrayItems = nullableArrayService.completeResult("NullableArray.hx", nullableArraySource.length).items,
+			nullableArrayMember = false;
+		for (item in nullableArrayItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				nullableArrayMember = true;
+		if (!nullableArrayMember)
+			throw "null/reference array recovery lost the known nullable element type";
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
