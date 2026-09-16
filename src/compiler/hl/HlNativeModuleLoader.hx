@@ -10,6 +10,7 @@ import runtime.hashlink.HlFunctionVersionTable;
 import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
 import runtime.hashlink.HlMetadataGeneration;
 import runtime.hashlink.HlNativeModule;
+import runtime.hashlink.HlRuntimePatchCode;
 import runtime.hashlink.HlRuntimeModule;
 import runtime.memory.RawPtr;
 
@@ -65,7 +66,7 @@ class HlLoadedRuntimeModule {
 	public var revision(default, null):Int;
 
 	final patchLedger:Array<HlRuntimePatchGeneration> = [];
-	final patchCodes:Array<Null<hl.Abstract<"realtime_jit_code">>> = [];
+	final patchCodes:Array<HlRuntimePatchCode> = [];
 
 	var disposed:Bool = false;
 	var borrowers:Int = 0;
@@ -89,7 +90,7 @@ class HlLoadedRuntimeModule {
 		if (!nativeModule.unload())
 			return false;
 		for (code in patchCodes)
-			if (!nativeModule.releaseCode(code))
+			if (!code.release())
 				throw "HashLink external runtime patch-code release failed";
 		patchCodes.resize(0);
 		metadata.dispose();
@@ -157,7 +158,7 @@ class HlLoadedRuntimeModule {
 	public function committedPatchCodeRevision(index:Int):Int {
 		if (index < 0 || index >= patchCodes.length)
 			throw 'HashLink runtime patch generation index $index is unavailable';
-		return nativeModule.codeRevision(patchCodes[index]);
+		return patchCodes[index].revision;
 	}
 
 	/** Haxeon preflights the decoded HLP model before native publication. */
@@ -190,9 +191,17 @@ class HlLoadedRuntimeModule {
 				throw "HashLink rejected the Haxe-built runtime patch and leaked its code handle";
 			throw 'HashLink rejected the Haxe-built runtime patch (status ${publication.status})';
 		}
+		var patchCode:HlRuntimePatchCode;
+		try {
+			patchCode = new HlRuntimePatchCode(nativeModule, publication);
+		} catch (error:Dynamic) {
+			if (!nativeModule.releaseCode(publication.code))
+				throw "HashLink accepted the Haxe-built runtime patch but leaked its code handle";
+			throw error;
+		}
 		applyPatchSymbols(model);
 		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions));
-		patchCodes.push(publication.code);
+		patchCodes.push(patchCode);
 		functions = nextFunctions;
 		revision = patch.revision;
 	}
