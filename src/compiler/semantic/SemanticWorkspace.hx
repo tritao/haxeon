@@ -903,11 +903,17 @@ class SemanticWorkspace {
 				continue;
 			var model = effectiveModel(state);
 			if (model != null)
-				for (symbol in model.index.symbols)
+				for (symbol in model.index.symbols) {
+					// Type parameters are lexical declarations. This workspace-wide
+					// list has no cursor scope, so exposing them here would make a
+					// generic from one function appear in unrelated completions.
+					if (symbol.kind == DeclarationKind.TypeParameter)
+						continue;
 					if (!seen.exists(symbol.id)) {
 						seen.set(symbol.id, true);
 						result.push(symbol);
 					}
+				}
 		}
 		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		return result;
@@ -918,10 +924,11 @@ class SemanticWorkspace {
 		var result:Array<IndexedSemanticSymbol> = [],
 			seen:Map<String, Bool> = [];
 		if (from.ast == null && from.recoveredSemanticModel != null)
-			for (symbol in from.recoveredSemanticModel.index.symbols) {
-				seen.set(Std.string(symbol.id), true);
-				result.push(symbol);
-			}
+			for (symbol in from.recoveredSemanticModel.index.symbols)
+				if (symbol.kind != DeclarationKind.TypeParameter) {
+					seen.set(Std.string(symbol.id), true);
+					result.push(symbol);
+				}
 		for (symbol in visibleSymbols(from, token))
 			if (!seen.exists(Std.string(symbol.id))) {
 				seen.set(Std.string(symbol.id), true);

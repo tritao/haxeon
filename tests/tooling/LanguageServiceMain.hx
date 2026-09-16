@@ -1082,6 +1082,11 @@ class LanguageServiceMain {
 				foundOutOfScopeTypeParameter = true;
 		if (!foundOutOfScopeTypeParameter)
 			throw "recovered generic type-parameter names leaked outside their lexical scope";
+		var outOfScopeTypeCompletions = unresolvedService.completeResult("OutOfScopeTypeParameter.hx",
+			outOfScopeTypeParameterSource.indexOf("T;"));
+		for (item in outOfScopeTypeCompletions.items)
+			if (item.label == "T")
+				throw "workspace-visible type parameters leaked into out-of-scope completion";
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);
