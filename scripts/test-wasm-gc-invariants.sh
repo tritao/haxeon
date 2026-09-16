@@ -21,6 +21,7 @@ mkdir -p "$root_dir/out"
 	--export=wasm-gc-invariants.referenceArrayGrowthExercise \
 	--export=wasm-gc-invariants.cycleExercise --export=wasm-gc-invariants.enumRootExercise \
 	--export=wasm-gc-invariants.closureRootExercise --export=wasm-gc-invariants.iteratorRootExercise --output="$artifact" \
+	--export=wasm-gc-invariants.returnRootExercise \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
 "$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
@@ -94,6 +95,8 @@ const mapArtifact = process.argv[4];
 		throw new Error("GC failed to trace a bound closure receiver");
 	if (exports["wasm-gc-invariants.iteratorRootExercise"]() !== 39)
 		throw new Error("GC failed to trace an iterator's source array");
+	if (exports["wasm-gc-invariants.returnRootExercise"]() !== 42)
+		throw new Error("GC failed to retain a reference used only by a return terminator");
 	assertHeapBlocks();
 	if (exports["wasm-gc-invariants.exercise"](24) !== 42)
 		throw new Error("GC free-list exercise returned the wrong value");
