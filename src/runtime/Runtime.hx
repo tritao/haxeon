@@ -236,7 +236,7 @@ class Runtime {
 		}
 	}
 
-	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T
+	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:RuntimeModuleHandle->T):T
 		return module.access(function(handle) {
 			validateCall(module, handle, stableIndex, shape);
 			try {
@@ -248,7 +248,7 @@ class Runtime {
 			}
 		});
 
-	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
+	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:RuntimeModuleHandle->Dynamic):Dynamic
 		return module.accessRetained(function(handle) {
 			validateCall(module, handle, stableIndex, shape);
 			try {
@@ -261,7 +261,7 @@ class Runtime {
 		});
 
 	/** Haxeon owns the immutable module/identity policy; native code rechecks live dispatch state. */
-	static function validateCall(module:LoadedModule, handle:hl.Abstract<"realtime_module">, stableIndex:Int, shape:Int):Void {
+	static function validateCall(module:LoadedModule, handle:RuntimeModuleHandle, stableIndex:Int, shape:Int):Void {
 		validateCallModel(module, stableIndex, shape);
 		var status:RuntimeStatus = RuntimeKernel.validate_call(handle, stableIndex, shape);
 		if (status != RuntimeStatus.Ok)

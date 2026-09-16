@@ -22,13 +22,13 @@ class LoadedModule {
 	final patchLedger:Array<RuntimePatchGeneration> = [];
 
 	final mutex = new Mutex();
-	var handle:Null<hl.Abstract<"realtime_module">>;
+	var handle:Null<RuntimeModuleHandle>;
 	var closeRequested = false;
 	var borrowers = 0;
-	var deferredDispose:Null<hl.Abstract<"realtime_module">->Void>;
+	var deferredDispose:Null<RuntimeModuleHandle->Void>;
 
 	@:allow(runtime.Runtime)
-	function new(handle:hl.Abstract<"realtime_module">, model:HlModule, identity:HlRuntimeManifest) {
+	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest) {
 		this.handle = handle;
 		this.model = model;
 		this.identity = identity;
@@ -79,7 +79,7 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.Runtime)
-	function access<T>(operation:hl.Abstract<"realtime_module">->T):T {
+	function access<T>(operation:RuntimeModuleHandle->T):T {
 		mutex.acquire();
 		var current = handle;
 		if (current == null || closeRequested) {
@@ -97,7 +97,7 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.Runtime)
-	function accessRetained(operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic {
+	function accessRetained(operation:RuntimeModuleHandle->Dynamic):Dynamic {
 		mutex.acquire();
 		var current = handle;
 		if (current == null || closeRequested) {
@@ -116,7 +116,7 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.RetainedValue)
-	function accessBorrowed<T>(operation:hl.Abstract<"realtime_module">->T):T {
+	function accessBorrowed<T>(operation:RuntimeModuleHandle->T):T {
 		mutex.acquire();
 		var current = handle;
 		if (current == null || borrowers <= 0) {
@@ -165,7 +165,7 @@ class LoadedModule {
 	}
 
 	@:allow(runtime.Runtime)
-	function close(dispose:hl.Abstract<"realtime_module">->Void):Bool {
+	function close(dispose:RuntimeModuleHandle->Void):Bool {
 		mutex.acquire();
 		var current = handle;
 		if (current == null) {

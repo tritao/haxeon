@@ -19,7 +19,7 @@ class RetainedValue {
 	}
 
 	@:allow(runtime.Runtime)
-	function access<T>(operation:hl.Abstract<"realtime_module">->Dynamic->T):T {
+	function access<T>(operation:RuntimeModuleHandle->Dynamic->T):T {
 		var retained = value;
 		if (retained == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Retained runtime value has been released");
