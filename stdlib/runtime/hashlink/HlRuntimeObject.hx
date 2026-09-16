@@ -1,7 +1,13 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.memory.NativeFunctionPointer;
 import runtime.hashlink.HlType;
+
+typedef HlToStringFunction = (object:RawPtr<UInt8>)->RawPtr<UInt8>;
+typedef HlCompareFunction = (left:RawPtr<UInt8>, right:RawPtr<UInt8>)->Int32;
+typedef HlCastFunction = (object:RawPtr<UInt8>, type:RawPtr<HlType>)->RawPtr<UInt8>;
+typedef HlGetFieldFunction = (object:RawPtr<UInt8>, fieldHash:Int32)->RawPtr<UInt8>;
 
 /** C-layout equivalent of HashLink's sorted field-lookup entry. */
 @:value @:repr("C")
@@ -35,10 +41,10 @@ class HlRuntimeObject {
 	public var fieldIndexes:RawPtr<Int32>;
 	public var bindings:RawPtr<HlRuntimeBinding>;
 	public var parent:RawPtr<HlRuntimeObject>;
-	public var toStringFun:RawPtr<UInt8>;
-	public var compareFun:RawPtr<UInt8>;
-	public var castFun:RawPtr<UInt8>;
-	public var getFieldFun:RawPtr<UInt8>;
+	public var toStringFun:NativeFunctionPointer<HlToStringFunction>;
+	public var compareFun:NativeFunctionPointer<HlCompareFunction>;
+	public var castFun:NativeFunctionPointer<HlCastFunction>;
+	public var getFieldFun:NativeFunctionPointer<HlGetFieldFunction>;
 	public var nlookup:Int32;
 	public var ninterfaces:Int32;
 	public var lookup:RawPtr<HlFieldLookup>;

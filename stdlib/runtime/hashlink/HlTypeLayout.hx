@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.memory.NativeFunctionPointer;
 import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 import runtime.hashlink.HlRuntimeObject.HlVirtualValue;
 import runtime.hashlink.HlTypeObject.HlTypeEnum;
@@ -231,10 +232,10 @@ class HlTypeLayout {
 		runtime.ref.bindings = bindingStorage;
 		initializeBindings(runtime.ref.bindings, bindingCount, object, parentRuntime);
 	runtime.ref.parent = parentRuntime;
-	runtime.ref.toStringFun = RawPtr.nullPtr();
-	runtime.ref.compareFun = RawPtr.nullPtr();
-	runtime.ref.castFun = RawPtr.nullPtr();
-	runtime.ref.getFieldFun = RawPtr.nullPtr();
+	runtime.ref.toStringFun = NativeFunctionPointer.nullPtr();
+	runtime.ref.compareFun = NativeFunctionPointer.nullPtr();
+	runtime.ref.castFun = NativeFunctionPointer.nullPtr();
+	runtime.ref.getFieldFun = NativeFunctionPointer.nullPtr();
 	runtime.ref.nlookup = cast lookupCount;
 	runtime.ref.ninterfaces = 0;
 	runtime.ref.lookup = lookups;
