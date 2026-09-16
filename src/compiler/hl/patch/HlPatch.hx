@@ -54,6 +54,7 @@ class HlPatch {
 class HlPatchFunction {
 	public final type:Int;
 	public final functionIndex:Int;
+	public final slot:Int;
 	public final registers:Array<Int>;
 	public final instructions:Array<HlPatchInstruction>;
 	public final relocations:Array<{instruction:Int, stableId:Int}>;
@@ -69,10 +70,11 @@ class HlPatchFunction {
 		flags:Int
 	}>;
 
-	public function new(type:Int, functionIndex:Int, registers:Array<Int>, instructions:Array<HlPatchInstruction>,
+	public function new(type:Int, functionIndex:Int, slot:Int, registers:Array<Int>, instructions:Array<HlPatchInstruction>,
 			relocations:Array<{instruction:Int, stableId:Int}>) {
 		this.type = type;
 		this.functionIndex = functionIndex;
+		this.slot = slot;
 		this.registers = registers;
 		this.instructions = instructions;
 		this.relocations = relocations;

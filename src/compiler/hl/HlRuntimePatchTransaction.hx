@@ -49,7 +49,7 @@ class HlRuntimePatchTransaction {
 		}
 		if (patch.moduleId.compare(owner.identity.moduleId) != 0)
 			throw "Haxeon rejected an HLP transaction for another module";
-		owner.validatePatchPolicy(patch);
+		owner.validatePatchPolicy(patch, model);
 		patchBaseRevision = patch.baseRevision;
 		patchRevision = patch.revision;
 	}
@@ -61,7 +61,7 @@ class HlRuntimePatchTransaction {
 			throw 'HashLink runtime patch transaction is stale (expected revision $baseRevision, got ${owner.revision})';
 		if (patchBaseRevision != baseRevision)
 			throw 'HashLink runtime patch transaction has the wrong base revision (expected $baseRevision, got $patchBaseRevision)';
-		owner.commitPatch(bytes, patch);
+		owner.commitPatch(bytes, patch, model);
 		state = Committed;
 	}
 

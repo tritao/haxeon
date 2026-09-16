@@ -56,10 +56,17 @@ class HlPatchReader {
 					case 2:
 						if (functions.length > 0)
 							throw "Duplicate HLP functions section";
+						var seenFunctionIds:Map<Int, Bool> = [],
+							seenFunctionSlots:Map<Int, Bool> = [];
 						for (_ in 0...readUnsigned(input)) {
 							var functionLength = readUnsigned(input),
 								functionEnd = input.position + functionLength;
-							functions.push(readFunction(input));
+							var decodedFunction = readFunction(input);
+							if (seenFunctionIds.exists(decodedFunction.functionIndex) || seenFunctionSlots.exists(decodedFunction.slot))
+								throw "Duplicate HLP function identity";
+							seenFunctionIds.set(decodedFunction.functionIndex, true);
+							seenFunctionSlots.set(decodedFunction.slot, true);
+							functions.push(decodedFunction);
 							if (input.position != functionEnd)
 								throw "Invalid patch function length";
 						}
@@ -187,7 +194,7 @@ class HlPatchReader {
 			for (_ in 0...readUnsigned(input))
 				{instruction: readUnsigned(input), stableId: readUnsigned(input)}
 		];
-		return new HlPatchFunction(type, stableId, registers, instructions, relocations);
+		return new HlPatchFunction(type, stableId, index, registers, instructions, relocations);
 	}
 
 	static function readOperands(input:BytesInput, op:Int):Array<Int> {

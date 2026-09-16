@@ -3,8 +3,10 @@ package compiler.hl;
 import haxe.io.Bytes;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+import compiler.hl.patch.HlPatch;
 import compiler.hl.patch.HlPatchHeaderReader;
 import compiler.hl.patch.HlPatchHeaderReader.HlPatchEnvelope;
+import compiler.hl.patch.HlPatchReader;
 import runtime.hashlink.HlFunctionVersionTable;
 import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
 import runtime.hashlink.HlMetadataGeneration;
@@ -137,13 +139,21 @@ class HlLoadedRuntimeModule {
 		new HlRuntimePatchTransaction(this, bytes).commit();
 	}
 
-	/** Haxeon preflights the HLP envelope, identity, and revision before native publication. */
+	/** Haxeon preflights the decoded HLP model before native publication. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
-	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope):Void {
+	function commitPatch(bytes:Bytes, ?decoded:HlPatchEnvelope, ?decodedModel:HlPatch):Void {
 		var patch:HlPatchEnvelope = decoded;
+		var model:HlPatch = decodedModel;
 		if (patch == null)
 			try {
-				patch = HlPatchHeaderReader.decodeComplete(bytes);
+				model = HlPatchReader.decode(bytes);
+				patch = HlPatchHeaderReader.envelope(model);
+			} catch (error:Dynamic) {
+				throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
+			}
+		if (model == null)
+			try {
+				model = HlPatchReader.decode(bytes);
 			} catch (error:Dynamic) {
 				throw 'Haxeon rejected the HLP patch: ${Std.string(error)}';
 			}
@@ -151,7 +161,7 @@ class HlLoadedRuntimeModule {
 			throw "Haxeon rejected an HLP patch for another module";
 		if (patch.baseRevision != revision)
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
-		validatePatchPolicy(patch);
+		validatePatchPolicy(patch, model);
 		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision);
 		var status = nativeModule.patch(bytes);
 		if (status != 0)
@@ -160,9 +170,10 @@ class HlLoadedRuntimeModule {
 		revision = patch.revision;
 	}
 
-	/** Validate patch identities before a staged transaction can publish. */
+	/** Validate HLP identity and live bytecode compatibility before staging. */
 	@:allow(compiler.hl.HlRuntimePatchTransaction)
-	function validatePatchPolicy(patch:HlPatchEnvelope):Void {
+	function validatePatchPolicy(patch:HlPatchEnvelope, model:HlPatch):Void {
+		validatePatchBases(patch, model);
 		for (stableId in patch.functionStableIds) {
 			if (!hasFunctionIdentity(stableId))
 				throw 'Haxeon rejected an HLP patch for unknown function identity $stableId';
@@ -170,6 +181,59 @@ class HlLoadedRuntimeModule {
 		for (stableId in patch.relocationStableIds)
 			if (!hasFunctionIdentity(stableId))
 				throw 'Haxeon rejected an HLP relocation for unknown function identity $stableId';
+		var totalTypes = model.baseTypes + model.types.length;
+		for (fn in model.functions) {
+			var slot = identitySlot(fn.functionIndex);
+			if (slot < 0)
+				throw 'Haxeon rejected an HLP patch for unknown function identity ${fn.functionIndex}';
+			if (fn.slot != slot)
+				throw 'Haxeon rejected function identity ${fn.functionIndex} for dispatch slot ${fn.slot} (expected $slot)';
+			var live = module.functionAt(fn.slot);
+			if (live == null)
+				throw 'Haxeon rejected a patch for missing bytecode slot ${fn.slot}';
+			if (fn.type != live.type)
+				throw 'Haxeon rejected a signature change for function identity ${fn.functionIndex}';
+			for (registerType in fn.registers)
+				if (registerType < 0 || registerType >= totalTypes)
+					throw 'Haxeon rejected an invalid register type $registerType for function identity ${fn.functionIndex}';
+			for (relocation in fn.relocations)
+				if (relocation.instruction < 0 || relocation.instruction >= fn.instructions.length)
+					throw 'Haxeon rejected an out-of-range relocation instruction ${relocation.instruction} for function identity ${fn.functionIndex}';
+		}
+	}
+
+	function validatePatchBases(patch:HlPatchEnvelope, model:HlPatch):Void {
+		if (model.baseInts != module.code.ints.length
+			|| model.baseFloats != module.code.floats.length
+			|| model.baseStrings != module.code.strings.length
+			|| model.baseTypes != module.code.types.length)
+			throw "Haxeon rejected an HLP patch with stale symbol bases";
+		validatePatchTypes(model);
+	}
+
+	function validatePatchTypes(model:HlPatch):Void {
+		var totalTypes = model.baseTypes + model.types.length,
+			totalStrings = model.baseStrings + model.strings.length;
+		for (type in model.types)
+			switch type {
+				case Function(arguments, result):
+					for (argument in arguments)
+						validatePatchTypeIndex(argument, totalTypes);
+					validatePatchTypeIndex(result, totalTypes);
+				case Abstract(name):
+					if (name < 0 || name >= totalStrings)
+						throw 'Haxeon rejected an appended abstract name index $name';
+				case Parameterized(_, parameter):
+					validatePatchTypeIndex(parameter, totalTypes);
+				case Simple(_):
+				case Method(_, _), Object(_, _, _, _, _, _), Structure(_, _, _, _, _), Virtual(_), Enum(_, _, _):
+					throw "Haxeon rejected an unsupported appended HLP type";
+			}
+	}
+
+	function validatePatchTypeIndex(index:Int, totalTypes:Int):Void {
+		if (index < 0 || index >= totalTypes)
+			throw 'Haxeon rejected an appended type reference $index';
 	}
 
 	function hasFunctionIdentity(stableId:Int):Bool {
@@ -177,6 +241,13 @@ class HlLoadedRuntimeModule {
 			if (entry.stableId == stableId)
 				return true;
 		return false;
+	}
+
+	function identitySlot(stableId:Int):Int {
+		for (entry in identity.entries)
+			if (entry.stableId == stableId)
+				return entry.functionIndex;
+		return -1;
 	}
 
 	/** Execute the manifest initializer through the Haxe-owned runtime policy. */

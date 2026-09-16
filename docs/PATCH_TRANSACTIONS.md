@@ -15,6 +15,9 @@ derived identity-policy view, so the external path and host path share one HLP
 wire decoder. Native still rechecks live compatibility and performs the JIT
 publication; the Haxe transaction owns the decoded policy input that can grow
 into patch-state ownership without introducing a second mutable representation.
+Before staging, that policy now also checks symbol-base counts, appended type
+references, stable-ID-to-slot mapping, unchanged function signatures, register
+type indices, and relocation instruction bounds against the loaded HLB model.
 
 `HlRuntimeModuleRegistry` keeps module replacement separate from patch
 transactions. A patch changes the revision of the published module in place;
