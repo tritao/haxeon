@@ -271,7 +271,7 @@ class SemanticIndex {
 			declareLocal(fn, argument.name, fn.span, argument.type);
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
 		}
-		if (fn.owner != null)
+		if (fn.owner != null && !hasFunctionReceiver(fn.span))
 			functionReceivers.push({span: currentSpan(fn.span), type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
 		if (functionId != null) {
@@ -708,7 +708,7 @@ class SemanticIndex {
 		for (argument in fn.arguments)
 			addRecoveredLocal(functionKey, argument.name, recoveredType(argument.type), argument.span, fn.span, 0);
 		if (owner != null)
-			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, owner, [])});
+			functionReceivers.push({span: fn.span, type: recoveredReceiverType(owner, ownerTypeParameters)});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
 		indexRecoveredStatementUses(fn.statements, recoveredType(fn.result));
@@ -723,6 +723,35 @@ class SemanticIndex {
 		currentCaller = null;
 		currentRecoveredFunctionKey = "";
 		currentRecoveredTypeParameters = [];
+	}
+
+	/**
+	 * Keep the receiver's declaration kind and generic context while indexing a
+	 * recovered method. A plain Class<T> receiver is incorrect for interface or
+	 * abstract methods, and dropping owner type parameters prevents recovered
+	 * member signatures from being substituted inside generic methods.
+	 */
+	function recoveredReceiverType(owner:String, ownerTypeParameters:Null<Array<String>>):CompilerType {
+		var parameters = ownerTypeParameters == null ? [] : ownerTypeParameters,
+			arguments:Array<CompilerType> = [
+				for (parameter in parameters)
+					currentRecoveredTypeParameters.exists(parameter) ? currentRecoveredTypeParameters.get(parameter) : TUnknown
+			];
+		if (declarations.abstracts.exists(owner)) {
+			var substitutions:Map<String, CompilerType> = [];
+			for (index in 0...parameters.length)
+				substitutions.set(parameters[index], arguments[index]);
+			return TAbstract(owner, arguments, recoveredType(declarations.abstracts.get(owner).underlying, substitutions));
+		}
+		var kind = declarations.interfaces.exists(owner) ? compiler.types.Type.NominalKind.Interface : compiler.types.Type.NominalKind.Class;
+		return TInstance(kind, owner, arguments);
+	}
+
+	function hasFunctionReceiver(span:SourceSpan):Bool {
+		for (candidate in functionReceivers)
+			if (candidate.span.start == span.start && candidate.span.end == span.end)
+				return true;
+		return false;
 	}
 
 	function rememberRecoveredTypeParameters(parameters:Null<Array<String>>, span:SourceSpan, ?owner:String):Void {

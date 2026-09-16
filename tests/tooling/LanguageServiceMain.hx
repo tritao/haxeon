@@ -1609,6 +1609,28 @@ class LanguageServiceMain {
 			|| thisValueReferences.length != 2
 			|| thisMethodDefinition == null || thisMethodDefinition.span.start != thisReceiverSource.indexOf("function read"))
 			throw "recovered this-member expressions did not retain the owning class identity";
+		var genericThisService = new LanguageService(),
+			genericThisSource = "class GenericThis<T> { public var value:T; public function read():T return this.value; } function main():Void return;";
+		genericThisService.update("GenericThis.hx", genericThisSource);
+		var genericThisPosition = genericThisSource.indexOf("this.value") + "this.".length,
+			genericThisContext = genericThisService.completionContext("GenericThis.hx", genericThisPosition),
+			genericThisReceiver = genericThisContext == null ? null : genericThisContext.context.receiver;
+		switch genericThisReceiver {
+			case TInstance(NominalKind.Class, "GenericThis", arguments) if (arguments.length == 1):
+			default:
+				throw 'recovered generic this receiver lost its type parameter shape: ${genericThisReceiver == null ? "null" : Std.string(genericThisReceiver)}';
+		}
+		var abstractThisService = new LanguageService(),
+			abstractThisSource = "abstract GenericAbstract<T>(T) { public function read():T return this.; } function main():Void return;";
+		abstractThisService.update("GenericAbstract.hx", abstractThisSource);
+		var abstractThisPosition = abstractThisSource.indexOf("this.") + "this.".length,
+			abstractThisContext = abstractThisService.completionContext("GenericAbstract.hx", abstractThisPosition),
+			abstractThisReceiver = abstractThisContext == null ? null : abstractThisContext.context.receiver;
+		switch abstractThisReceiver {
+			case TAbstract("GenericAbstract", arguments, _) if (arguments.length == 1):
+			default:
+				throw 'recovered abstract this receiver lost its owner kind or type parameter shape: ${abstractThisReceiver == null ? "null" : Std.string(abstractThisReceiver)}';
+		}
 		var nullableMemberService = new LanguageService(),
 			nullableMemberSource = "class Leaf { public var value:Int; } class Root { public var child:Leaf; } function main():Void { var root:Null<Root> = null; root.child.";
 		nullableMemberService.update("NullableMember.hx", nullableMemberSource);
