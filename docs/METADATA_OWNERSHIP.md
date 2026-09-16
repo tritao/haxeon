@@ -103,6 +103,14 @@ the metadata generation in a parallel ownership ledger until native module
 teardown completes. This keeps the host compatibility fallback while making
 Haxeon-owned metadata the active path for generated runtime code.
 
+The metadata-only `HlNativeModule` wrapper follows the same boundary through
+`HlMetadataModuleKernel`. Its Haxe-facing owner handles leases, constants,
+patch policy, and teardown state; `NativeHlMetadataModuleKernel` is the only
+current adapter that forwards module allocation, JIT initialization, native
+calls, publication, and retirement to `HlTypeBridge`. This keeps the direct
+HashLink primitives injectable and prevents metadata policy from spreading
+back into native declarations.
+
 Each Haxe-built external patch generation privately owns one opaque native
 patch-code handle. The non-owning diagnostic snapshots do not copy that handle;
 the live generation releases it only after the native runtime wrapper has
