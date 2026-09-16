@@ -1168,12 +1168,56 @@ class ParserRecoveryMain {
 			throw "a non-callable implicit field discarded the surrounding declaration";
 		switch implicitFieldCallBody[0] {
 			case TExpression(expression, _) if (expression.type == TUnknown):
-				switch expression.expression {
+			switch expression.expression {
 					case TClosureCall(callee, arguments) if (callee.type == TInt && arguments.length == 0):
 					default: throw "a non-callable implicit field did not preserve its call shape";
 				}
 			default:
 				throw "a non-callable implicit field did not remain an expression statement";
+		}
+
+		var fieldAssignmentSource = new SourceFile("TolerantFieldAssignment.hx",
+			"class Foo { public var known:Int; } function main():Void { var foo:Foo = new Foo(); foo.missing = 1; var after:Int = 1; }");
+		var fieldAssignmentProgram = new Parser(new Lexer(fieldAssignmentSource).tokenize()).parseProgramRecovering().program,
+			fieldAssignmentTyped = Typer.typeRecovered(fieldAssignmentProgram),
+			fieldAssignmentBody:Array<TypedStatement> = null;
+		if (fieldAssignmentTyped != null)
+			for (fn in fieldAssignmentTyped.functions)
+				if (fn.name == "main")
+					fieldAssignmentBody = fn.statements;
+		if (fieldAssignmentBody == null || fieldAssignmentBody.length != 3)
+			throw "an invalid field assignment discarded the surrounding declaration";
+		switch fieldAssignmentBody[1] {
+			case TFieldAssign(object, "missing", value, _):
+				switch object.type {
+					case TInstance(NominalKind.Class, "Foo", _):
+						if (value.type != TInt)
+							throw "an invalid field assignment changed its value type";
+					default: throw "an invalid field assignment changed its receiver type";
+				}
+			default: throw 'an invalid field assignment did not preserve its typed receiver and value: ${Std.string(fieldAssignmentBody[1])}';
+		}
+
+		var indexAssignmentSource = new SourceFile("TolerantIndexAssignment.hx",
+			"class Foo {} function main():Void { var foo:Foo = new Foo(); foo[0] = 1; var after:Int = 1; }");
+		var indexAssignmentProgram = new Parser(new Lexer(indexAssignmentSource).tokenize()).parseProgramRecovering().program,
+			indexAssignmentTyped = Typer.typeRecovered(indexAssignmentProgram),
+			indexAssignmentBody:Array<TypedStatement> = null;
+		if (indexAssignmentTyped != null)
+			for (fn in indexAssignmentTyped.functions)
+				if (fn.name == "main")
+					indexAssignmentBody = fn.statements;
+		if (indexAssignmentBody == null || indexAssignmentBody.length != 3)
+			throw "an invalid index assignment discarded the surrounding declaration";
+		switch indexAssignmentBody[1] {
+			case TIndexAssign(array, index, value, _) :
+				switch array.type {
+					case TInstance(NominalKind.Class, "Foo", _):
+						if (index.type != TInt || value.type != TInt)
+							throw "an invalid index assignment changed its typed index or value";
+					default: throw "an invalid index assignment changed its receiver type";
+				}
+			default: throw 'an invalid index assignment did not preserve its typed shape: ${Std.string(indexAssignmentBody[1])}';
 		}
 
 		var postErrorService = new LanguageService(),

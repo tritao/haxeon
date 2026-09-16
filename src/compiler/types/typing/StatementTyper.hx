@@ -279,6 +279,7 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		try {
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
@@ -306,11 +307,21 @@ class StatementTyper {
 				}
 				statement;
 		};
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError) || !session.tolerant)
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			else
+				session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered field assignment", span));
+			return TFieldAssign(object, fieldName, typeExpression(expression, scope, null, false), span);
+		}
 	}
 
 	public function typeIndexAssignment(array:AstExpression, offset:AstExpression, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
 		var typedArray = unwrapNullable(typeExpression(array, scope, null, false)),
 			typedIndex = typeExpression(offset, scope, null, false);
+		try {
 		return switch typedArray.type {
 			case TMap(key, mapValue):
 				if (session.mapName(key, mapValue) == null)
@@ -330,12 +341,22 @@ class StatementTyper {
 					value = coerce(typeExpression(expression, scope, element, false), element, "array element", "E1002");
 				TIndexAssign(typedArray, typedIndex, value, span);
 		};
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError) || !session.tolerant)
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			else
+				session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered index assignment", span));
+			return TIndexAssign(typedArray, typedIndex, typeExpression(expression, scope, null, false), span);
+		}
 	}
 
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		try {
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
@@ -365,6 +386,15 @@ class StatementTyper {
 				}
 				statement;
 		};
+		} catch (error:Dynamic) {
+			if (Std.isOfType(error, compiler.service.CancellationError) || !session.tolerant)
+				throw error;
+			if (Std.isOfType(error, CompileError))
+				session.rememberRecoveryDiagnostic((cast error : CompileError).diagnostic);
+			else
+				session.rememberRecoveryDiagnostic(new Diagnostic("E0002", "Unable to type recovered field assignment", span));
+			return TFieldAssign(object, fieldName, value, span);
+		}
 	}
 
 	static function assignmentFlowType(source:CompilerType, stored:CompilerType):CompilerType
