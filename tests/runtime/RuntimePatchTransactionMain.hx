@@ -7,11 +7,12 @@ import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 class RuntimePatchTransactionMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", "function main():Int { return 40; }");
+		compiler.update("Main.hx", "function main():Int { return 40; } function make():() -> Int { return main; }");
 		var initial = compiler.compile("Main"),
 			mainId = initial.functionIds.get("main"),
+			makeId = initial.functionIds.get("Main.make"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
-		compiler.update("Main.hx", "function main():Int { return 42; }");
+		compiler.update("Main.hx", "function main():Int { return 42; } function make():() -> Int { return main; }");
 		var changed = compiler.compile("Main"),
 			patchByte = changed.patchBytes.get(0),
 			patchSet = new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions),
@@ -49,7 +50,13 @@ class RuntimePatchTransactionMain {
 			committed.commit();
 			throw "committed host patch transaction committed twice";
 		} catch (error:Dynamic) {}
+		var retained = Runtime.retainClosure(loaded, makeId);
 		Runtime.dispose(loaded);
+		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
+			throw "host JIT generation did not enter retiring state while a closure was retained";
+		retained.release();
+		if (Runtime.retryRetirements() != 0)
+			throw "host JIT generation retirement did not drain after releasing its closure";
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
 }
