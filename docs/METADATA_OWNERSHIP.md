@@ -124,17 +124,20 @@ layout, lookup, index, and mark-bit tables instead of rebuilding them in
 function-valued fields to their Haxe-owned function descriptors before the
 native call. Native initialization only rebases module context/global storage
 and performs the remaining JIT work. After the JIT entrypoint table is
-finalized, the Haxe module wrapper explicitly asks the native kernel to build
-executable object-prototype state from the Haxe-owned records. Legacy modules
-retain their existing implicit initialization path. Haxe metadata publication
-therefore never asks HashLink to construct a prototype against an uninitialized
-or Haxe-only function-pointer table.
+finalized, the Haxe module wrapper iterates the published type table and asks
+the native kernel to publish each object or struct prototype from the
+Haxe-owned records. The native operation is deliberately per type; it does
+not own a second module-wide metadata walk. Legacy modules retain their
+existing implicit initialization path. Haxe metadata publication therefore
+never asks HashLink to construct a prototype against an uninitialized or
+Haxe-only function-pointer table.
 
 Executable object-prototype publication is an explicit second kernel operation:
 Haxe-owned module initialization first installs the JIT and dispatch tables,
-then publishes the executable prototype tables. Both Haxe-owned module kernels
-expose this ordering, while the low-level native operation remains responsible
-for the executable representation and its runtime-sensitive setup.
+then iterates and publishes the executable prototype tables one type at a time.
+Both Haxe-owned module kernels expose this per-type operation, while the
+low-level native operation remains responsible for the executable
+representation and its runtime-sensitive setup.
 
 Constant initialization follows the same policy/mechanism split. Haxe validates
 and iterates the arena-owned `hl_constant` descriptors after the module's JIT
