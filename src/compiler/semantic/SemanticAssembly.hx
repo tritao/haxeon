@@ -124,6 +124,31 @@ class SemanticAssembly {
 				aliases = context.importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
+			var explicitImportNames:Map<String, Bool> = [];
+			for (importPath in ast.imports)
+				if (!isWildcardImport(importPath))
+					explicitImportNames.set(compiler.QualifiedName.last(importPath), true);
+			for (alias in ast.importAliases.keys())
+				explicitImportNames.set(alias, true);
+			var ambiguousWildcardTypes:Map<String, Bool> = [];
+			for (importPath in ast.imports)
+				if (isWildcardImport(importPath)) {
+					var packagePrefix = importPath.substring(0, importPath.length - 2) + ".";
+					for (_sourceName => declarationName in sourceTypeAliases) {
+						if (!StringTools.startsWith(declarationName, packagePrefix))
+							continue;
+						var importedName = declarationName.substring(packagePrefix.length);
+						if (importedName.indexOf(".") >= 0 || explicitImportNames.exists(importedName)
+							|| ambiguousWildcardTypes.exists(importedName))
+							continue;
+						if (!aliases.exists(importedName))
+							aliases.set(importedName, declarationName);
+						else if (aliases.get(importedName) != declarationName) {
+							aliases.remove(importedName);
+							ambiguousWildcardTypes.set(importedName, true);
+						}
+					}
+				}
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
@@ -135,9 +160,6 @@ class SemanticAssembly {
 						else
 							constructorTargets.set(caseName, importedType + "." + caseName);
 			}
-			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
-					aliases.set(caseName, target);
 			for (importPath in ast.imports)
 				if (modules.exists(importPath))
 					for (sourceName => declarationName in sourceTypeAliases) {
@@ -149,6 +171,20 @@ class SemanticAssembly {
 								aliases.set(nestedName, declarationName);
 						}
 					}
+			for (importPath in ast.imports)
+				if (isWildcardImport(importPath)) {
+					var packagePrefix = importPath.substring(0, importPath.length - 2) + ".";
+					for (typeName => caseNames in enumCasesByType)
+						if (StringTools.startsWith(typeName, packagePrefix))
+							for (caseName in caseNames)
+								if (constructorTargets.exists(caseName))
+									ambiguousConstructors.set(caseName, true);
+								else
+									constructorTargets.set(caseName, typeName + "." + caseName);
+					}
+			for (caseName => target in constructorTargets)
+				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
+					aliases.set(caseName, target);
 			var visiblePackage = ast.packageName;
 			while (true) {
 				var currentPackage:String;
@@ -597,4 +633,7 @@ class SemanticAssembly {
 			case AstType.NamedType(name), AstType.AppliedType(name, _): name;
 			default: null;
 		};
+
+	static function isWildcardImport(path:String):Bool
+		return path.length > 2 && StringTools.endsWith(path, ".*");
 }

@@ -63,6 +63,59 @@ class ModuleSourceLoader {
 		return null;
 	}
 
+	/**
+	 * Materialize the direct source modules in a package for a wildcard import.
+	 *
+	 * A package is not itself a compiler module, so resolving `pkg.*` cannot use
+	 * the normal single-module lookup. Keep this operation shallow: nested
+	 * packages are separate namespaces and must be requested explicitly.
+	 */
+	public function loadPackage(packageName:String, modules:Map<String, ModuleState>):Array<ModuleState> {
+		var result:Array<ModuleState> = [],
+			seen:Map<String, Bool> = [];
+		for (name => state in modules)
+			if (StringTools.startsWith(name, packageName + ".")) {
+				var suffix = name.substring(packageName.length + 1);
+				if (suffix.indexOf(".") < 0 && !seen.exists(name)) {
+					seen.set(name, true);
+					result.push(state);
+				}
+			}
+		for (root in roots) {
+			var relativePackage:Null<String> = packageName;
+			if (root.packagePrefix != null) {
+				var prefix = root.packagePrefix + ".";
+				if (packageName == root.packagePrefix)
+					relativePackage = "";
+				else if (StringTools.startsWith(packageName, prefix))
+					relativePackage = packageName.substr(prefix.length);
+				else
+					continue;
+			}
+			var directory = root.path;
+			if (relativePackage != null && relativePackage.length > 0)
+				directory += "/" + relativePackage.split(".").join("/");
+			if (!FileSystem.exists(directory) || !FileSystem.isDirectory(directory))
+				continue;
+			var entries = FileSystem.readDirectory(directory);
+			entries.sort(Reflect.compare);
+			for (entry in entries) {
+				if (!StringTools.endsWith(entry, ".hx"))
+					continue;
+				var moduleName = packageName + "." + entry.substring(0, entry.length - 3);
+				if (seen.exists(moduleName))
+					continue;
+				var state = load(moduleName, modules);
+				if (state != null) {
+					seen.set(moduleName, true);
+					result.push(state);
+				}
+			}
+		}
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
 	/** Resolve a module path without allowing case-insensitive filesystem aliases. */
 	static function exactPath(root:String, relative:String):Null<String> {
 		if (caseSensitiveFileSystem) {

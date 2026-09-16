@@ -869,6 +869,28 @@ class TestMain {
 		moduleImportCompiler.update("sample/Types.hx", "package sample; class Types {} class Inner { public function new() {} }");
 		moduleImportCompiler.update("Main.hx", "import sample.Types; function main():Int { new Inner(); return 0; }");
 		moduleImportCompiler.compile("Main");
+		var wildcardImportCompiler = new Compiler();
+		wildcardImportCompiler.update("sample/lib/Types.hx",
+			"package sample.lib; class Foo { public function new() {} public function known():Int return 42; } class Bar {} ");
+		wildcardImportCompiler.update("sample/lib/Kinds.hx", "package sample.lib; enum Choice { Value; }");
+		wildcardImportCompiler.update("sample/app/Main.hx",
+			"package sample.app; import sample.lib.*; function main():Int { var choice:Choice = Value; return switch choice { case Value: new Foo().known(); }; }");
+		wildcardImportCompiler.compile("sample.app.Main");
+		var explicitOverWildcardCompiler = new Compiler();
+		explicitOverWildcardCompiler.update("wild/a/Foo.hx", "package wild.a; class Foo { public function new() {} public function answer():String return \"wildcard\"; }");
+		explicitOverWildcardCompiler.update("wild/b/Foo.hx", "package wild.b; class Foo { public function new() {} public function answer():Int return 43; }");
+		explicitOverWildcardCompiler.update("wild/app/Main.hx",
+			"package wild.app; import wild.a.*; import wild.b.Foo; function main():Int return new Foo().answer();");
+		explicitOverWildcardCompiler.compile("wild.app.Main");
+		var ambiguousWildcardCompiler = new Compiler();
+		ambiguousWildcardCompiler.update("ambiguous/a/Foo.hx", "package ambiguous.a; class Foo { public function new() {} }");
+		ambiguousWildcardCompiler.update("ambiguous/b/Foo.hx", "package ambiguous.b; class Foo { public function new() {} }");
+		ambiguousWildcardCompiler.update("ambiguous/app/Main.hx",
+			"package ambiguous.app; import ambiguous.a.*; import ambiguous.b.*; function main():Int { new Foo(); return 0; }");
+		try {
+			ambiguousWildcardCompiler.compile("ambiguous.app.Main");
+			throw "ambiguous wildcard type unexpectedly compiled";
+		} catch (error:CompileError) {}
 		var methodDependencyCompiler = new Compiler();
 		methodDependencyCompiler.update("sample/Failure.hx", "package sample; class Failure { public function new() {} }");
 		methodDependencyCompiler.update("sample/Service.hx",

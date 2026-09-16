@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.syntax.Lexer;
@@ -67,6 +68,12 @@ class ModuleAnalyzer {
 		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
 		for (dependency in ast.imports)
 			dependencies.set(dependency, true);
+		for (importPath in ast.imports)
+			if (isWildcardImport(importPath)) {
+				dependencies.remove(importPath);
+				for (module in wildcardSourceModules(importPath))
+					dependencies.set(module, true);
+			}
 		for (fn in ast.functions)
 			for (statement in fn.statements)
 				DependencyScanner.scanStatement(statement, dependencies);
@@ -199,6 +206,10 @@ class ModuleAnalyzer {
 	public function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
+			if (isWildcardImport(path)) {
+				addWildcardTypeAliases(aliases, path);
+				continue;
+			}
 			var alias = QualifiedName.last(path);
 			aliases.set(alias, importedDeclarationName(path));
 			aliases.set(path, importedDeclarationName(path));
@@ -269,9 +280,57 @@ class ModuleAnalyzer {
 
 	function hasSourceModuleImport(imports:Array<String>):Bool {
 		for (importPath in imports)
-			if (sourceModuleForDependency(importPath) != null)
+			if (sourceModuleForDependency(importPath) != null
+				|| isWildcardImport(importPath) && wildcardSourceModules(importPath).length > 0)
 				return true;
 		return false;
+	}
+
+	function wildcardSourceModules(importPath:String):Array<String> {
+		if (!isWildcardImport(importPath))
+			return [];
+		var packageName = importPath.substring(0, importPath.length - 2),
+			result:Array<String> = [];
+		for (state in sourceLoader.loadPackage(packageName, modules))
+			result.push(state.name);
+		return result;
+	}
+
+	static function isWildcardImport(path:String):Bool
+		return path.length > 2 && StringTools.endsWith(path, ".*");
+
+	function addWildcardTypeAliases(aliases:Map<String, String>, importPath:String):Void {
+		var packageName = importPath.substring(0, importPath.length - 2);
+		for (moduleName in wildcardSourceModules(importPath)) {
+			var state = modules.get(moduleName),
+				program = state == null ? null : sourceProgram(state);
+			if (program == null || program.packageName != packageName)
+				continue;
+			for (alias in program.aliases)
+				aliases.set(alias.name, ModuleCanonicalizer.qualifiedTypeName(packageName, alias.name));
+			for (decl in program.enums)
+				aliases.set(decl.name, ModuleCanonicalizer.qualifiedTypeName(packageName, decl.name));
+			for (decl in program.enumAbstracts)
+				aliases.set(decl.name, ModuleCanonicalizer.qualifiedTypeName(packageName, decl.name));
+			for (decl in program.abstracts)
+				aliases.set(decl.name, ModuleCanonicalizer.qualifiedTypeName(packageName, decl.name));
+			for (decl in program.interfaces)
+				aliases.set(decl.name, ModuleCanonicalizer.qualifiedTypeName(packageName, decl.name));
+			for (decl in program.classes)
+				aliases.set(decl.name, ModuleCanonicalizer.qualifiedTypeName(packageName, decl.name));
+		}
+	}
+
+	function sourceProgram(state:ModuleState):Null<AstProgram> {
+		if (state.ast != null)
+			return state.parsedAst();
+		try {
+			var conditional = ConditionalCompilation.process(state.source, defines),
+				tokens = new Lexer(state.source, conditional.text).tokenize();
+			return new Parser(tokens).parseProgram();
+		} catch (_:CompileError) {
+			return null;
+		}
 	}
 
 	function importedDeclarationName(path:String):String {
