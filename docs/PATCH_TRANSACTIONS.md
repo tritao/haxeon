@@ -148,6 +148,16 @@ that model directly; it does not call `hl_patch_read` or allocate a second HLP
 model for this path. The legacy byte-oriented entry points retain the native
 HLP parser for ordinary HashLink compatibility.
 
+The runtime loader preserves the same compatibility split for module metadata.
+`hl_runtime_module_load` parses a legacy HLB and initializes it without
+`HL_MODULE_HAXE_METADATA`, so HashLink remains responsible for derived metadata
+and eager C-side constants. `hl_runtime_module_load_code` and
+`hl_runtime_module_load_code_manifest` are the Haxe-owned paths: they retain
+the Haxe-built metadata records, defer constant materialization, and let the
+Haxe wrapper invoke the narrow native constant kernel after JIT initialization.
+This keeps the compatibility facade behaviorally unchanged while making the
+ownership transition explicit at the loader boundary.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication
