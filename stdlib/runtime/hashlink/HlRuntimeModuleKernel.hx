@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlObjectPrototypeKernel;
 import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 
 /**

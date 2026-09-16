@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.hashlink.HlObjectPrototypeKernel;
 
 /**
 	Haxe-owned interface for the native metadata-module boundary.

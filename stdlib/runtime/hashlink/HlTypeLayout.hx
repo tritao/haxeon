@@ -6,6 +6,7 @@ import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 import runtime.hashlink.HlRuntimeObject.HlVirtualValue;
 import runtime.hashlink.HlTypeObject.HlTypeEnum;
 import runtime.hashlink.HlTypeObject.HlTypeVirtual;
+import runtime.hashlink.HlObjectPrototypeKernel;
 
 /**
 	Builds HashLink's derived layout and GC mark metadata in Haxe-owned storage.
