@@ -91,14 +91,15 @@ class RecoveryEngine {
 				typingModules, reusedFunctions, inferredProgram);
 			recoveredModel.partialTypedProgram = partialTypedProgram;
 			for (module in typingModules)
-				recoveredModel.builder.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
-			recoveredModel.builder.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
+				recoveredModel.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
+			var previousModel = state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel
+				: state.lastGood == null ? null : state.lastGood.semanticModel;
+			recoveredModel.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
 				function(name) return hooks.resolveSymbol(state, recovered.program, name, token),
 				function(name, index) return hooks.resolveEnumCase(state, recovered.program, name, index, token),
 				function(name, arguments) return hooks.resolveType(state, recovered.program, name, arguments, token),
 				function(name) return hooks.symbolCandidates(state, name, token, recovered.program),
-				state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel.builder
-					: state.lastGood == null || state.lastGood.semanticModel == null ? null : state.lastGood.semanticModel.builder);
+				previousModel);
 			recoveredModel.freeze();
 			state.publishRecoveredSnapshot(tokens, recovered.program, recoveredModel);
 			hooks.publishDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));

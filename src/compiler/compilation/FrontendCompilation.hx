@@ -124,7 +124,7 @@ class FrontendCompilation {
 				if (state != null) {
 					var model = state.semanticModel;
 					if (model != null)
-						model.builder.indexTypeReferences(context.resolveSemanticType, token);
+						model.indexTypeReferences(context.resolveSemanticType, token);
 				}
 			}
 		}
@@ -164,9 +164,9 @@ class FrontendCompilation {
 				// mutated in place.
 				if (state.semanticModel.isFrozen) {
 					state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
-					state.semanticModel.builder.indexTypeReferences(context.resolveSemanticType, token);
+					state.semanticModel.indexTypeReferences(context.resolveSemanticType, token);
 				}
-				state.semanticModel.builder.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
+				state.semanticModel.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			}
 			var semanticOrigin = fn.genericOrigin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
@@ -408,7 +408,7 @@ class FrontendCompilation {
 					continue;
 				for (field in classDecl.fields)
 					if (field.initializer != null)
-						model.builder.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
+						model.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
 							context.resolveSemanticEnumCase);
 			}
 	}

@@ -3,10 +3,14 @@ package compiler.semantic;
 import compiler.syntax.Ast.AstProgram;
 import compiler.Source.SourceFile;
 import compiler.types.DeclarationIndex;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;
+import compiler.service.CancellationToken;
 import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
+import compiler.semantic.SemanticIndex.SemanticSymbolId;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */
 class SemanticModel {
@@ -16,7 +20,7 @@ class SemanticModel {
 	public final declarations:DeclarationIndex;
 	public var index(default, null):SemanticIndex;
 	/** Mutable semantic construction state, never published as the query view. */
-	public final builder:SemanticIndexBuilder;
+	final builder:SemanticIndexBuilder;
 	var sealed:Bool;
 
 	/** Optional partial typed output owned only by a recovered editor model. */
@@ -46,6 +50,33 @@ class SemanticModel {
 			return;
 		index = builder.freeze();
 		sealed = true;
+	}
+
+	/** Add exact typed-function facts while this model is being constructed. */
+	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?token:CancellationToken, ?deferBindingSort = false):Void
+		builder.indexTypedFunction(fn, resolve, resolveEnumCase, token, deferBindingSort);
+
+	/** Add exact typed field-initializer facts while this model is being constructed. */
+	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void
+		builder.indexTypedInitializer(owner, expression, resolve, resolveEnumCase);
+
+	/** Add exact type-reference facts while this model is being constructed. */
+	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void
+		builder.indexTypeReferences(resolve, token);
+
+	/** Add editor-only module declarations to this model's recovery index. */
+	public function indexRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>, ?token:CancellationToken):Void
+		builder.indexRecoveredModule(program, external, qualifiers, token);
+
+	/** Add editor-only syntax and partial-typing facts to this model. */
+	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram,
+			?resolve:String->Null<SemanticSymbolId>, ?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
+			?resolveType:(String, Array<compiler.types.Type.CompilerType>) -> Null<compiler.types.Type.CompilerType>,
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticModel):Void {
+		builder.indexRecoveredSyntax(program, token, typedProgram, resolve, resolveEnumCase, resolveType, candidates,
+			previous == null ? null : previous.builder);
 	}
 
 	function get_isFrozen():Bool

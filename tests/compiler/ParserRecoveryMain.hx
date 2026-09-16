@@ -459,7 +459,7 @@ class ParserRecoveryMain {
 		var astOnlyLoopTokens = new Lexer(astOnlyLoopSource).tokenize(),
 			astOnlyLoopProgram = new Parser(astOnlyLoopTokens).parseProgramRecovering().program,
 			astOnlyLoopModel = new SemanticModel(astOnlyLoopProgram, astOnlyLoopSource, 1, astOnlyLoopTokens);
-		astOnlyLoopModel.builder.indexRecoveredSyntax(astOnlyLoopProgram);
+		astOnlyLoopModel.indexRecoveredSyntax(astOnlyLoopProgram);
 		astOnlyLoopModel.freeze();
 		var astOnlyLoopPosition = astOnlyLoopSource.text.indexOf("item. }") + "item.".length,
 			astOnlyLoopContext = astOnlyLoopModel.index.completionContext(astOnlyLoopPosition, "item");
@@ -474,7 +474,7 @@ class ParserRecoveryMain {
 		var astOnlyPatternTokens = new Lexer(astOnlyPatternSource).tokenize(),
 			astOnlyPatternProgram = new Parser(astOnlyPatternTokens).parseProgramRecovering().program,
 			astOnlyPatternModel = new SemanticModel(astOnlyPatternProgram, astOnlyPatternSource, 1, astOnlyPatternTokens);
-		astOnlyPatternModel.builder.indexRecoveredSyntax(astOnlyPatternProgram);
+		astOnlyPatternModel.indexRecoveredSyntax(astOnlyPatternProgram);
 		astOnlyPatternModel.freeze();
 		var astOnlyPatternPosition = astOnlyPatternSource.text.indexOf("value. }") + "value.".length,
 			astOnlyPatternContext = astOnlyPatternModel.index.completionContext(astOnlyPatternPosition, "value");
@@ -490,7 +490,7 @@ class ParserRecoveryMain {
 			astOnlySwitchExpressionProgram = new Parser(astOnlySwitchExpressionTokens).parseProgramRecovering().program,
 			astOnlySwitchExpressionModel = new SemanticModel(astOnlySwitchExpressionProgram, astOnlySwitchExpressionSource, 1,
 				astOnlySwitchExpressionTokens);
-		astOnlySwitchExpressionModel.builder.indexRecoveredSyntax(astOnlySwitchExpressionProgram);
+		astOnlySwitchExpressionModel.indexRecoveredSyntax(astOnlySwitchExpressionProgram);
 		astOnlySwitchExpressionModel.freeze();
 		var astOnlySwitchExpressionPosition = astOnlySwitchExpressionSource.text.indexOf("value.;") + "value.".length,
 			astOnlySwitchExpressionContext = astOnlySwitchExpressionModel.index.completionContext(astOnlySwitchExpressionPosition, "value");
@@ -505,7 +505,7 @@ class ParserRecoveryMain {
 		var astOnlyComprehensionTokens = new Lexer(astOnlyComprehensionSource).tokenize(),
 			astOnlyComprehensionProgram = new Parser(astOnlyComprehensionTokens).parseProgramRecovering().program,
 			astOnlyComprehensionModel = new SemanticModel(astOnlyComprehensionProgram, astOnlyComprehensionSource, 1, astOnlyComprehensionTokens);
-		astOnlyComprehensionModel.builder.indexRecoveredSyntax(astOnlyComprehensionProgram);
+		astOnlyComprehensionModel.indexRecoveredSyntax(astOnlyComprehensionProgram);
 		astOnlyComprehensionModel.freeze();
 		var astOnlyComprehensionPosition = astOnlyComprehensionSource.text.indexOf("item.]") + "item.".length,
 			astOnlyComprehensionContext = astOnlyComprehensionModel.index.completionContext(astOnlyComprehensionPosition, "item");
@@ -521,7 +521,7 @@ class ParserRecoveryMain {
 			inferredComprehensionProgram = new Parser(inferredComprehensionTokens).parseProgramRecovering().program,
 			inferredComprehensionModel = new SemanticModel(inferredComprehensionProgram, inferredComprehensionSource, 1,
 				inferredComprehensionTokens);
-		inferredComprehensionModel.builder.indexRecoveredSyntax(inferredComprehensionProgram);
+		inferredComprehensionModel.indexRecoveredSyntax(inferredComprehensionProgram);
 		inferredComprehensionModel.freeze();
 		var inferredComprehensionPosition = inferredComprehensionSource.text.indexOf("result. }") + "result.".length,
 			inferredComprehensionContext = inferredComprehensionModel.index.completionContext(inferredComprehensionPosition, "result");
@@ -536,7 +536,7 @@ class ParserRecoveryMain {
 		var memberComprehensionTokens = new Lexer(memberComprehensionSource).tokenize(),
 			memberComprehensionProgram = new Parser(memberComprehensionTokens).parseProgramRecovering().program,
 			memberComprehensionModel = new SemanticModel(memberComprehensionProgram, memberComprehensionSource, 1, memberComprehensionTokens);
-		memberComprehensionModel.builder.indexRecoveredSyntax(memberComprehensionProgram);
+		memberComprehensionModel.indexRecoveredSyntax(memberComprehensionProgram);
 		memberComprehensionModel.freeze();
 		var memberComprehensionItemPosition = memberComprehensionSource.text.indexOf("item.payload]") + "item.payload".length,
 			memberComprehensionItemContext = memberComprehensionModel.index.completionContext(memberComprehensionItemPosition, "item");
@@ -564,7 +564,7 @@ class ParserRecoveryMain {
 		var nestedComprehensionTokens = new Lexer(nestedComprehensionSource).tokenize(),
 			nestedComprehensionProgram = new Parser(nestedComprehensionTokens).parseProgramRecovering().program,
 			nestedComprehensionModel = new SemanticModel(nestedComprehensionProgram, nestedComprehensionSource, 1, nestedComprehensionTokens);
-		nestedComprehensionModel.builder.indexRecoveredSyntax(nestedComprehensionProgram);
+		nestedComprehensionModel.indexRecoveredSyntax(nestedComprehensionProgram);
 		nestedComprehensionModel.freeze();
 		var nestedComprehensionPosition = nestedComprehensionSource.text.indexOf("result. }") + "result.".length,
 			nestedComprehensionContext = nestedComprehensionModel.index.completionContext(nestedComprehensionPosition, "result");
@@ -580,7 +580,7 @@ class ParserRecoveryMain {
 			astOnlyNestedCollectionProgram = new Parser(astOnlyNestedCollectionTokens).parseProgramRecovering().program,
 			astOnlyNestedCollectionModel = new SemanticModel(astOnlyNestedCollectionProgram, astOnlyNestedCollectionSource, 1,
 				astOnlyNestedCollectionTokens);
-		astOnlyNestedCollectionModel.builder.indexRecoveredSyntax(astOnlyNestedCollectionProgram);
+		astOnlyNestedCollectionModel.indexRecoveredSyntax(astOnlyNestedCollectionProgram);
 		astOnlyNestedCollectionModel.freeze();
 		var astOnlyNestedCollectionPosition = astOnlyNestedCollectionSource.text.indexOf("item. }") + "item.".length,
 			astOnlyNestedCollectionContext = astOnlyNestedCollectionModel.index.completionContext(astOnlyNestedCollectionPosition, "item");
@@ -595,7 +595,7 @@ class ParserRecoveryMain {
 		var astOnlyIteratorTokens = new Lexer(astOnlyIteratorSource).tokenize(),
 			astOnlyIteratorProgram = new Parser(astOnlyIteratorTokens).parseProgramRecovering().program,
 			astOnlyIteratorModel = new SemanticModel(astOnlyIteratorProgram, astOnlyIteratorSource, 1, astOnlyIteratorTokens);
-		astOnlyIteratorModel.builder.indexRecoveredSyntax(astOnlyIteratorProgram);
+		astOnlyIteratorModel.indexRecoveredSyntax(astOnlyIteratorProgram);
 		astOnlyIteratorModel.freeze();
 		var astOnlyIteratorPosition = astOnlyIteratorSource.text.indexOf("item. }") + "item.".length,
 			astOnlyIteratorContext = astOnlyIteratorModel.index.completionContext(astOnlyIteratorPosition, "item");
@@ -1057,7 +1057,7 @@ class ParserRecoveryMain {
 			"function main(text:String):Void { var result = text.indexOf(; var conditional = missing ? 1 : 2; var after:Int = 1; }");
 		var astOnlyProgram = new Parser(new Lexer(astOnlySource).tokenize()).parseProgramRecovering().program,
 			astOnlyModel = new SemanticModel(astOnlyProgram, astOnlySource, 1);
-		astOnlyModel.builder.indexRecoveredSyntax(astOnlyProgram);
+		astOnlyModel.indexRecoveredSyntax(astOnlyProgram);
 		astOnlyModel.freeze();
 		var astOnlyContext = astOnlyModel.index.completionContext(astOnlySource.text.length),
 			astOnlyResultType:Null<CompilerType> = null,

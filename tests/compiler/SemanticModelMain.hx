@@ -31,7 +31,7 @@ class SemanticModelMain {
 			"semantic index query symbols must not expose mutable builder state");
 		var mutationRejected = false;
 		try {
-			model.builder.indexTypeReferences(function(_name) return null);
+			model.indexTypeReferences(function(_name) return null);
 		} catch (_:Dynamic) {
 			mutationRejected = true;
 		}
