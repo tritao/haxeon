@@ -36,6 +36,7 @@
 #include "runtime/memory.c"
 #include "runtime/atomics.c"
 #include "runtime/gc_handles.c"
+#include "runtime/gc_weak_handles.c"
 #include "runtime/synchronization.c"
 #include "runtime/types.c"
 #include "runtime/module_runtime.c"
