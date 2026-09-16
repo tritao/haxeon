@@ -1786,6 +1786,31 @@ class LanguageServiceMain {
 						}
 		if (!foundAnonymousTypeMember || !foundAnonymousTypeFields)
 			throw "anonymous type recovery did not preserve later fields or statements";
+		var callRecoveryService = new LanguageService(),
+			callRecoverySource = "package callapp; import calltypes.CallValue; function take(first:Int, second:Int, third:Int):Void return; function retained():Void { take(1, broken thing, 2); var value:CallValue = new CallValue(); value.";
+		callRecoveryService.update("calltypes/CallValue.hx", "package calltypes; class CallValue { public var member:Int; }");
+		callRecoveryService.update("CallArguments.hx", callRecoverySource);
+		var callRecoveryItems = callRecoveryService.completeResult("CallArguments.hx", callRecoverySource.length).items,
+			foundCallRecoveryMember = false;
+		for (item in callRecoveryItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundCallRecoveryMember = true;
+		var callRecoveryState = callRecoveryService.compiler.modules.get("CallArguments"),
+			foundRecoveredCall = false;
+		if (callRecoveryState.recoveredAst != null)
+			for (functionDeclaration in callRecoveryState.recoveredAst.functions)
+				if (functionDeclaration.name == "retained")
+					for (statement in functionDeclaration.statements)
+						switch statement {
+							case Expression(expression, _) if (switch expression {
+								case Call(name, arguments, _) if (name == "take"): arguments.length == 3;
+								default: false;
+							}):
+								foundRecoveredCall = true;
+							default:
+						}
+		if (!foundCallRecoveryMember || !foundRecoveredCall)
+			throw "call argument recovery did not preserve later arguments or statements";
 		var nativeRecoveryService = new LanguageService(),
 			nativeRecoverySource = "extern function native(value:MissingType):MissingType; function visible():Int return 42;";
 		nativeRecoveryService.update("NativeRecovery.hx", nativeRecoverySource);

@@ -172,7 +172,7 @@ class Parser {
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
 					do
-						arguments.push(parseExpression()) while (match(TokenKind.Comma));
+						arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 				var end = consume(TokenKind.RightParen).span;
 				result.push({name: name, arguments: arguments, span: start.merge(end)});
 			} else
@@ -1852,7 +1852,7 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
 				do
-					arguments.push(parseExpression()) while (match(TokenKind.Comma));
+					arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 			}
 			var end = consume(TokenKind.RightParen).span;
 			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
@@ -1961,7 +1961,7 @@ class Parser {
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {
 					do
-						arguments.push(parseExpression()) while (match(TokenKind.Comma));
+						arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 				}
 				var end = consume(TokenKind.RightParen).span;
 				expression = Call(name, arguments, start.merge(end));
@@ -2358,7 +2358,7 @@ class Parser {
 					var arguments = [];
 					if (!check(TokenKind.RightParen)) {
 						do
-							arguments.push(parseExpression()) while (match(TokenKind.Comma));
+							arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 					}
 					var end = consume(TokenKind.RightParen).span;
 					expression = MethodCall(expression, name, arguments, expressionSpan(expression).merge(end));
