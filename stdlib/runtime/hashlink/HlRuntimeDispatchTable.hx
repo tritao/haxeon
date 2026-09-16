@@ -40,6 +40,18 @@ class HlRuntimeDispatchTable {
 		return cast slots.offset(index).load();
 	}
 
+	/** Resolve one stable function identity without entering native code. */
+	public function slotOf(stableId:Int):Int {
+		for (index in 0...count) {
+			var currentStableId:Int = cast stableIds.offset(index).load();
+			if (currentStableId == stableId) {
+				var currentSlot:Int = cast slots.offset(index).load();
+				return currentSlot;
+			}
+		}
+		return -1;
+	}
+
 	function checkIndex(index:Int):Void
 		if (index < 0 || index >= count)
 			throw 'HashLink runtime dispatch index $index is outside 0...$count';

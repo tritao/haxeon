@@ -1,10 +1,12 @@
 # HashLink patch transaction
 
 `hl_runtime_module_apply_hlp` holds the runtime-module mutex from decoding through
-publication. Calls through the host runtime take the same mutex for stable-ID
-resolution and remain locked until the call returns. Two patches based on the
-same revision therefore serialize; the first may publish and the second observes
-the new revision and fails as stale.
+publication. Legacy host calls take the same mutex for native stable-ID
+resolution and remain locked until the call returns. Haxeon-generated calls
+resolve their stable identity to an immutable dispatch slot in Haxe, then take
+the same native mutex for the slot call. Two patches based on the same revision
+therefore serialize; the first may publish and the second observes the new
+revision and fails as stale.
 
 Before native staging, the host `Runtime.patchSet` boundary decodes the complete
 HLP wire model and rejects malformed sections, unsupported patch opcodes,
@@ -103,22 +105,25 @@ runtime wrapper has retired, so policy owns code lifetime without exposing
 executable addresses.
 
 `HlRuntimeJitBackend` now isolates the corresponding Haxe-built path. `HlRuntimeModule`
-retains module loading, stable calls, and unload policy, while patch publication,
-Haxe-metadata staging, code-handle release, and code-revision queries flow through
-the injectable backend. `NativeHlRuntimeJitBackend` is the current HashLink
-adapter; alternative backends can exercise or replace the executable-code
-mechanism without changing Haxe-owned patch policy or generation ownership.
+retains module loading, Haxe-owned dispatch identity mapping, slot calls, and
+unload policy, while patch publication, Haxe-metadata staging, code-handle
+release, and code-revision queries flow through the injectable backend.
+`NativeHlRuntimeJitBackend` is the current HashLink adapter; alternative backends
+can exercise or replace the executable-code mechanism without changing
+Haxe-owned patch policy or generation ownership.
 
 `HlRuntimeModuleKernel` now isolates the remaining bootstrap-sensitive module
 operations. `HlRuntimeModule` owns metadata leases and module policy while the
-kernel performs only native wrapper creation, stable calls, failure injection,
-and retirement. `NativeHlRuntimeModuleKernel` is the current HashLink adapter;
-the Haxe-facing module state no longer calls those native entry points directly.
+kernel performs only native wrapper creation, dispatch-slot calls, failure
+injection, and retirement. `NativeHlRuntimeModuleKernel` is the current HashLink
+adapter; the Haxe-facing module state no longer calls those native entry points
+directly.
 The wrapper's own recursive mutex now serializes those calls, patch staging,
 code-handle release, and unload, so the lower-level owner remains safe when it
 is used without the compiler-side module registry.
-The Haxeon branch of the public `Runtime` facade now uses this same kernel for
-all stable call shapes, native dispatch rechecks, and module diagnostics; the
+The Haxeon branch of the public `Runtime` facade now resolves all stable IDs and
+call shapes before using this kernel for dispatch-slot calls, native dispatch
+rechecks, and module diagnostics; the
 legacy host branch continues to use its compatibility declarations. Its
 status-preserving dispose and deferred-retirement retry/count operations now
 also flow through that kernel, keeping Haxeon module lifetime on one native

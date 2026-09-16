@@ -87,7 +87,8 @@ the external loader and the legacy host facade use the same native opaque
 `RuntimeModuleHandle` alias while standalone stdlib builds use the native type
 directly. Only C-layout records remain `RawPtr<T>` values. Haxeon owns HLI
 identity validation, initializer policy, stable-ID call-shape validation,
-function-version state, and the external wrapper's revision state. Its HLP
+function-version state, dispatch-slot resolution, and the external wrapper's
+revision state. Its HLP
 operation preflights the section envelope, fixed module-ID, revision header,
 and replacement function identities before handing the bytes to HashLink; the
 native patch kernel still performs complete wire, operand, relocation, symbol,
@@ -99,10 +100,11 @@ pointers without taking ownership of their storage. The public host `Runtime.loa
 on the legacy native-decoder path when compiled by the pinned host Haxe
 toolchain. Haxeon-generated runtime code now takes the same decoded-manifest
 path: it builds and publishes `HlMetadataGeneration`, passes the native code
-record and stable ID/slot tables through `HlRuntimeModuleKernel`, and retains
-the metadata generation in a parallel ownership ledger until native module
-teardown completes. This keeps the host compatibility fallback while making
-Haxeon-owned metadata the active path for generated runtime code.
+record and stable ID/slot tables through `HlRuntimeModuleKernel`, resolves
+stable identities to slots in Haxe before active calls, and retains the metadata
+generation in a parallel ownership ledger until native module teardown
+completes. This keeps the host compatibility fallback while making Haxeon-owned
+metadata and dispatch policy the active path for generated runtime code.
 
 The metadata-only `HlNativeModule` wrapper follows the same boundary through
 `HlMetadataModuleKernel`. Its Haxe-facing owner handles leases, constants,

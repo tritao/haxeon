@@ -46,8 +46,8 @@ class HaxeRuntimeModuleLoader {
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			HlTypeLayout.publishObjectPrototypes(publication.types, publication.typeCount, kernel);
 			metadata.constantDescriptors.initialize(function(index) return kernel.initializeConstant(cast module, index));
-			initializeModule(module, model, identity);
-			return new LoadedModule(module, model, identity, metadata);
+			initializeModule(module, model, identity, dispatch);
+			return new LoadedModule(module, model, identity, metadata, dispatch);
 		} catch (error:Dynamic) {
 			if (module != null)
 				kernel.dispose(cast module);
@@ -56,14 +56,17 @@ class HaxeRuntimeModuleLoader {
 		}
 	}
 
-	function initializeModule(module:HlRuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest):Void {
+	function initializeModule(module:HlRuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest, dispatch:HlRuntimeDispatchTable):Void {
 		if (identity.initializerSlot < 0)
 			return;
 		for (entry in identity.entries)
 			if (entry.functionIndex == identity.initializerSlot) {
 				if (!HlRuntimeCallPolicy.validFunction(model, identity, entry.stableId, 1))
 					throw new RuntimeError(RuntimeStatus.BadFunction, "Haxeon rejected an invalid module initializer");
-				kernel.callVoid(module, entry.stableId);
+				var slot = dispatch.slotOf(entry.stableId);
+				if (slot < 0)
+					throw new RuntimeError(RuntimeStatus.BadFormat, "Haxeon could not resolve the module initializer slot");
+				kernel.callVoidSlot(module, slot);
 				return;
 			}
 		throw new RuntimeError(RuntimeStatus.BadFormat, "Haxeon could not resolve the module initializer");

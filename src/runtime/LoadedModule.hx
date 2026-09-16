@@ -5,6 +5,7 @@ import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import runtime.RuntimeModuleHandle.RuntimeGcHandle;
 #if haxeon
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlRuntimeDispatchTable;
 #end
 import sys.thread.Mutex;
 
@@ -34,6 +35,9 @@ class LoadedModule {
 	#if haxeon
 	/** Haxe-owned native metadata retained for the lifetime of this module. */
 	public final metadata:HlMetadataGeneration;
+
+	/** Immutable Haxe-resolved dispatch slots for the native module. */
+	final dispatch:HlRuntimeDispatchTable;
 	#end
 
 	final mutex = new Mutex();
@@ -41,14 +45,16 @@ class LoadedModule {
 	var closeRequested = false;
 	var borrowers = 0;
 	var deferredDispose:Null<RuntimeModuleHandle->Void>;
-
 	@:allow(runtime.Runtime)
-	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest #if haxeon, metadata:HlMetadataGeneration #end) {
-		#if haxeon
+	#if haxeon
+	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, dispatch:HlRuntimeDispatchTable) {
 		if (metadata == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Haxeon runtime modules require an owned metadata generation");
 		this.metadata = metadata;
-		#end
+		this.dispatch = dispatch;
+	#else
+	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest) {
+	#end
 		this.handle = handle;
 		this.model = model;
 		this.identity = identity;
@@ -60,6 +66,17 @@ class LoadedModule {
 
 	function get_functions():RuntimeFunctionVersionTable
 		return patchState.functions;
+
+	#if haxeon
+	/** Resolve a validated stable identity to its immutable native dispatch slot. */
+	@:allow(runtime.Runtime)
+	function dispatchSlot(stableId:Int):Int {
+		var slot = dispatch.slotOf(stableId);
+		if (slot < 0)
+			throw new RuntimeError(RuntimeStatus.BadFunction, 'Runtime module has no function identity $stableId');
+		return slot;
+	}
+	#end
 
 	/** Create a managed root that is closed automatically when this module retires. */
 	@:allow(runtime.Runtime)

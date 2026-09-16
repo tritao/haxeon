@@ -14,15 +14,15 @@ interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
 	function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool;
-	function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int;
-	function callVoid(module:HlRuntimeModuleHandle, stableId:Int):Void;
-	function callBytes(module:HlRuntimeModuleHandle, stableId:Int):hl.Bytes;
-	function callBytes1(module:HlRuntimeModuleHandle, stableId:Int, argument:hl.Bytes):Void;
-	function callClosure(module:HlRuntimeModuleHandle, stableId:Int):Dynamic;
+	function callI32Slot(module:HlRuntimeModuleHandle, slot:Int):Int;
+	function callVoidSlot(module:HlRuntimeModuleHandle, slot:Int):Void;
+	function callBytesSlot(module:HlRuntimeModuleHandle, slot:Int):hl.Bytes;
+	function callBytes1Slot(module:HlRuntimeModuleHandle, slot:Int, argument:hl.Bytes):Void;
+	function callClosureSlot(module:HlRuntimeModuleHandle, slot:Int):Dynamic;
 	function callClosureI32(module:HlRuntimeModuleHandle, closure:Dynamic):Int;
-	function callObject(module:HlRuntimeModuleHandle, stableId:Int):Dynamic;
-	function callI32Object(module:HlRuntimeModuleHandle, stableId:Int, argument:Dynamic):Int;
-	function validateCall(module:HlRuntimeModuleHandle, stableId:Int, shape:Int):Int;
+	function callObjectSlot(module:HlRuntimeModuleHandle, slot:Int):Dynamic;
+	function callI32ObjectSlot(module:HlRuntimeModuleHandle, slot:Int, argument:Dynamic):Int;
+	function validateCallSlot(module:HlRuntimeModuleHandle, slot:Int, shape:Int):Int;
 	function liveAllocationCount(module:HlRuntimeModuleHandle):Int;
 	function nativeRootCount(module:HlRuntimeModuleHandle):Int;
 	function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void;
@@ -48,32 +48,32 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public inline function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool
 		return HlTypeBridge.native_runtime_module_initialize_constant(module, index);
 
-	public inline function callI32(module:HlRuntimeModuleHandle, stableId:Int):Int
-		return HlTypeBridge.native_runtime_module_call_i32(module, stableId);
+	public inline function callI32Slot(module:HlRuntimeModuleHandle, slot:Int):Int
+		return HlTypeBridge.native_runtime_module_call_i32_slot(module, slot);
 
-	public inline function callVoid(module:HlRuntimeModuleHandle, stableId:Int):Void
-		HlTypeBridge.native_runtime_module_call_void(module, stableId);
+	public inline function callVoidSlot(module:HlRuntimeModuleHandle, slot:Int):Void
+		HlTypeBridge.native_runtime_module_call_void_slot(module, slot);
 
-	public inline function callBytes(module:HlRuntimeModuleHandle, stableId:Int):hl.Bytes
-		return HlTypeBridge.native_runtime_module_call_bytes(module, stableId);
+	public inline function callBytesSlot(module:HlRuntimeModuleHandle, slot:Int):hl.Bytes
+		return HlTypeBridge.native_runtime_module_call_bytes_slot(module, slot);
 
-	public inline function callBytes1(module:HlRuntimeModuleHandle, stableId:Int, argument:hl.Bytes):Void
-		HlTypeBridge.native_runtime_module_call_bytes1(module, stableId, argument);
+	public inline function callBytes1Slot(module:HlRuntimeModuleHandle, slot:Int, argument:hl.Bytes):Void
+		HlTypeBridge.native_runtime_module_call_bytes1_slot(module, slot, argument);
 
-	public inline function callClosure(module:HlRuntimeModuleHandle, stableId:Int):Dynamic
-		return HlTypeBridge.native_runtime_module_call_closure(module, stableId);
+	public inline function callClosureSlot(module:HlRuntimeModuleHandle, slot:Int):Dynamic
+		return HlTypeBridge.native_runtime_module_call_closure_slot(module, slot);
 
 	public inline function callClosureI32(module:HlRuntimeModuleHandle, closure:Dynamic):Int
 		return HlTypeBridge.native_runtime_module_call_closure_i32(module, closure);
 
-	public inline function callObject(module:HlRuntimeModuleHandle, stableId:Int):Dynamic
-		return HlTypeBridge.native_runtime_module_call_object(module, stableId);
+	public inline function callObjectSlot(module:HlRuntimeModuleHandle, slot:Int):Dynamic
+		return HlTypeBridge.native_runtime_module_call_object_slot(module, slot);
 
-	public inline function callI32Object(module:HlRuntimeModuleHandle, stableId:Int, argument:Dynamic):Int
-		return HlTypeBridge.native_runtime_module_call_i32_object(module, stableId, argument);
+	public inline function callI32ObjectSlot(module:HlRuntimeModuleHandle, slot:Int, argument:Dynamic):Int
+		return HlTypeBridge.native_runtime_module_call_i32_object_slot(module, slot, argument);
 
-	public inline function validateCall(module:HlRuntimeModuleHandle, stableId:Int, shape:Int):Int
-		return HlTypeBridge.native_runtime_module_validate_call(module, stableId, shape);
+	public inline function validateCallSlot(module:HlRuntimeModuleHandle, slot:Int, shape:Int):Int
+		return HlTypeBridge.native_runtime_module_validate_call_slot(module, slot, shape);
 
 	public inline function liveAllocationCount(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_live_allocation_count(module);

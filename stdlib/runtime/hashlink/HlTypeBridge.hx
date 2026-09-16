@@ -77,18 +77,36 @@ class HlTypeBridge {
 	public static function native_runtime_module_call_i32(module:hl.Abstract<"realtime_module">, stableId:Int):Int
 		return 0;
 
+	/** Invoke a Haxe-resolved dispatch slot with an i32 result. */
+	public static function native_runtime_module_call_i32_slot(module:hl.Abstract<"realtime_module">, slot:Int):Int
+		return 0;
+
 	/** Invoke a stable zero-argument void function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_void(module:hl.Abstract<"realtime_module">, stableId:Int):Void {}
+
+	/** Invoke a Haxe-resolved dispatch slot with no result. */
+	public static function native_runtime_module_call_void_slot(module:hl.Abstract<"realtime_module">, slot:Int):Void {}
 
 	/** Invoke a stable zero-argument bytes-returning function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_bytes(module:hl.Abstract<"realtime_module">, stableId:Int):hl.Bytes
 		return null;
 
+	/** Invoke a Haxe-resolved dispatch slot returning bytes. */
+	public static function native_runtime_module_call_bytes_slot(module:hl.Abstract<"realtime_module">, slot:Int):hl.Bytes
+		return null;
+
 	/** Invoke a stable bytes-argument function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_bytes1(module:hl.Abstract<"realtime_module">, stableId:Int, argument:hl.Bytes):Void {}
 
+	/** Invoke a Haxe-resolved dispatch slot with a bytes argument. */
+	public static function native_runtime_module_call_bytes1_slot(module:hl.Abstract<"realtime_module">, slot:Int, argument:hl.Bytes):Void {}
+
 	/** Retain the closure returned by a stable function in an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_closure(module:hl.Abstract<"realtime_module">, stableId:Int):Dynamic
+		return null;
+
+	/** Retain the closure returned by a Haxe-resolved dispatch slot. */
+	public static function native_runtime_module_call_closure_slot(module:hl.Abstract<"realtime_module">, slot:Int):Dynamic
 		return null;
 
 	/** Invoke one retained closure through its externally loaded runtime wrapper. */
@@ -99,12 +117,24 @@ class HlTypeBridge {
 	public static function native_runtime_module_call_object(module:hl.Abstract<"realtime_module">, stableId:Int):Dynamic
 		return null;
 
+	/** Retain the object returned by a Haxe-resolved dispatch slot. */
+	public static function native_runtime_module_call_object_slot(module:hl.Abstract<"realtime_module">, slot:Int):Dynamic
+		return null;
+
 	/** Invoke a stable object-argument function through an externally loaded runtime wrapper. */
 	public static function native_runtime_module_call_i32_object(module:hl.Abstract<"realtime_module">, stableId:Int, argument:Dynamic):Int
 		return 0;
 
+	/** Invoke a Haxe-resolved dispatch slot with an object argument. */
+	public static function native_runtime_module_call_i32_object_slot(module:hl.Abstract<"realtime_module">, slot:Int, argument:Dynamic):Int
+		return 0;
+
 	/** Recheck one stable call shape against the live native dispatch table. */
 	public static function native_runtime_module_validate_call(module:hl.Abstract<"realtime_module">, stableId:Int, shape:Int):Int
+		return -1;
+
+	/** Recheck one Haxe-resolved dispatch slot against the live native table. */
+	public static function native_runtime_module_validate_call_slot(module:hl.Abstract<"realtime_module">, slot:Int, shape:Int):Int
 		return -1;
 
 	/** Read the number of live managed allocations attributed to an external wrapper. */

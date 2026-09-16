@@ -17,6 +17,7 @@ class HlRuntimeModule {
 	final kernel:HlRuntimeModuleKernel;
 	final jitBackend:HlRuntimeJitBackend;
 	final moduleMutex:Mutex = Mutex.create();
+	final dispatch:HlRuntimeDispatchTable;
 	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:Null<hl.Abstract<"realtime_module">>;
 
@@ -32,7 +33,8 @@ class HlRuntimeModule {
 		lease = metadata.acquire();
 		module = null;
 		try {
-			var publication = metadata.snapshot(), dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot);
+			var publication = metadata.snapshot();
+			dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot);
 			module = this.kernel.loadCodeManifest(publication.nativeCode, bytes, moduleId, revision, dispatch);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
@@ -63,11 +65,18 @@ class HlRuntimeModule {
 
 	/** Invoke a stable zero-argument i32 function. */
 	public function callI32(stableId:Int):Int
-		return withModule(function(handle) return kernel.callI32(handle, stableId));
+		return withModule(function(handle) return kernel.callI32Slot(handle, slotOf(stableId)));
 
 	/** Invoke a stable zero-argument void function. */
 	public function callVoid(stableId:Int):Void
-		withModule(function(handle) kernel.callVoid(handle, stableId));
+		withModule(function(handle) kernel.callVoidSlot(handle, slotOf(stableId)));
+
+	function slotOf(stableId:Int):Int {
+		var slot = dispatch.slotOf(stableId);
+		if (slot < 0)
+			throw 'HashLink external runtime module has no function identity $stableId';
+		return slot;
+	}
 
 	/** Apply an HLP transaction; policy validation belongs to the owning loader. */
 	public function patch(bytes:Bytes):Int

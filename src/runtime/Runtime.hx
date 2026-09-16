@@ -98,7 +98,7 @@ class Runtime {
 	public static function callInt(module:LoadedModule, stableIndex:Int):Int
 		return invoke(module, stableIndex, 0, function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.callI32(cast handle, stableIndex);
+			return haxeRuntimeModuleKernel.callI32Slot(cast handle, module.dispatchSlot(stableIndex));
 			#else
 			return RuntimeKernel.call_i32(handle, stableIndex);
 			#end
@@ -107,7 +107,7 @@ class Runtime {
 	public static function callVoid(module:LoadedModule, stableIndex:Int):Void
 		invoke(module, stableIndex, 1, function(handle) {
 			#if haxeon
-			haxeRuntimeModuleKernel.callVoid(cast handle, stableIndex);
+			haxeRuntimeModuleKernel.callVoidSlot(cast handle, module.dispatchSlot(stableIndex));
 			#else
 			RuntimeKernel.call_void(handle, stableIndex);
 			#end
@@ -116,7 +116,7 @@ class Runtime {
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
 		var bytes = invoke(module, stableIndex, 2, function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.callBytes(cast handle, stableIndex);
+			return haxeRuntimeModuleKernel.callBytesSlot(cast handle, module.dispatchSlot(stableIndex));
 			#else
 			return RuntimeKernel.call_bytes(handle, stableIndex);
 			#end
@@ -129,7 +129,7 @@ class Runtime {
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		invoke(module, stableIndex, 3, function(handle) {
 			#if haxeon
-			haxeRuntimeModuleKernel.callBytes1(cast handle, stableIndex, cast @:privateAccess argument.bytes);
+			haxeRuntimeModuleKernel.callBytes1Slot(cast handle, module.dispatchSlot(stableIndex), cast @:privateAccess argument.bytes);
 			#else
 			RuntimeKernel.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
 			#end
@@ -138,7 +138,7 @@ class Runtime {
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.callClosure(cast handle, stableIndex);
+			return haxeRuntimeModuleKernel.callClosureSlot(cast handle, module.dispatchSlot(stableIndex));
 			#else
 			return RuntimeKernel.call_closure(handle, stableIndex);
 			#end
@@ -154,7 +154,7 @@ class Runtime {
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
 		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.callObject(cast handle, stableIndex);
+			return haxeRuntimeModuleKernel.callObjectSlot(cast handle, module.dispatchSlot(stableIndex));
 			#else
 			return RuntimeKernel.call_object(handle, stableIndex);
 			#end
@@ -163,7 +163,7 @@ class Runtime {
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
 		return invoke(module, stableIndex, 6, function(handle) {
 			#if haxeon
-			return haxeRuntimeModuleKernel.callI32Object(cast handle, stableIndex, argument.get());
+			return haxeRuntimeModuleKernel.callI32ObjectSlot(cast handle, module.dispatchSlot(stableIndex), argument.get());
 			#else
 			return RuntimeKernel.call_i32_object(handle, stableIndex, argument.get());
 			#end
@@ -421,7 +421,7 @@ class Runtime {
 	static function validateCall(module:LoadedModule, handle:RuntimeModuleHandle, stableIndex:Int, shape:Int):Void {
 		validateCallModel(module, stableIndex, shape);
 		#if haxeon
-		var status:RuntimeStatus = haxeRuntimeModuleKernel.validateCall(cast handle, stableIndex, shape);
+		var status:RuntimeStatus = haxeRuntimeModuleKernel.validateCallSlot(cast handle, module.dispatchSlot(stableIndex), shape);
 		#else
 		var status:RuntimeStatus = RuntimeKernel.validate_call(handle, stableIndex, shape);
 		#end
