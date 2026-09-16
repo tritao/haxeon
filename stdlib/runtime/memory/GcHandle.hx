@@ -8,6 +8,10 @@ abstract GcHandle<T>(hl.Abstract<"haxeon_gc_handle">) {
 	public static inline function create<T>(value:T):GcHandle<T>
 		return cast GcHandleNative.native_gc_handle_create(cast value);
 
+	/** Register value as a root owned by one HashLink runtime module. */
+	public static inline function createOwned<T>(value:T, owner:hl.Abstract<"realtime_module">):GcHandle<T>
+		return cast GcHandleNative.native_gc_handle_create_owned(cast value, owner);
+
 	/** Read the currently rooted value. A closed handle reads as null. */
 	public inline function get():T
 		return cast GcHandleNative.native_gc_handle_get(cast this);
@@ -34,6 +38,9 @@ abstract GcHandle<T>(hl.Abstract<"haxeon_gc_handle">) {
 @:hlNative("haxeon_runtime")
 private class GcHandleNative {
 	public static function native_gc_handle_create(value:Dynamic):hl.Abstract<"haxeon_gc_handle">
+		return null;
+
+	public static function native_gc_handle_create_owned(value:Dynamic, owner:hl.Abstract<"realtime_module">):hl.Abstract<"haxeon_gc_handle">
 		return null;
 
 	public static function native_gc_handle_get(handle:hl.Abstract<"haxeon_gc_handle">):Dynamic

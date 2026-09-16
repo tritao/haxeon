@@ -22,10 +22,12 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code_manifest)( vbyte *code, r
 }
 
 HL_PRIM bool HL_NAME(native_runtime_module_unload)( vbyte *module ) {
+	haxeon_gc_handle_detach_owner(module);
 	return module != NULL && hl_runtime_module_release((hl_runtime_module*)module) == HL_RUNTIME_OK;
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_dispose)( vbyte *module ) {
+	haxeon_gc_handle_detach_owner(module);
 	return hl_runtime_module_release((hl_runtime_module*)module);
 }
 
@@ -105,7 +107,7 @@ HL_PRIM int HL_NAME(native_runtime_module_live_allocation_count)( vbyte *module 
 }
 
 HL_PRIM int HL_NAME(native_runtime_module_native_root_count)( vbyte *module ) {
-	return hl_runtime_module_native_root_count((hl_runtime_module*)module);
+	return hl_runtime_module_native_root_count((hl_runtime_module*)module) + haxeon_gc_handle_owner_count(module);
 }
 
 HL_PRIM void HL_NAME(native_runtime_module_retirement_status)( vbyte *module, vbyte *out ) {
@@ -113,6 +115,8 @@ HL_PRIM void HL_NAME(native_runtime_module_retirement_status)( vbyte *module, vb
 	int fields[4];
 	if( out == NULL ) return;
 	hl_runtime_module_retirement_status_get((hl_runtime_module*)module,&status);
+	status.owned_native_roots += haxeon_gc_handle_owner_count(module);
+	if( status.owned_native_roots > 0 ) status.flags |= HL_MODULE_RETIRE_OWNED_ROOTS;
 	fields[0] = status.live_managed_allocations;
 	fields[1] = status.owned_native_roots;
 	fields[2] = status.registry_readers;
@@ -334,7 +338,7 @@ HL_PRIM int HL_NAME(live_allocation_count)( hl_runtime_module *runtime ) {
 }
 
 HL_PRIM int HL_NAME(native_root_count)( hl_runtime_module *runtime ) {
-	return hl_runtime_module_native_root_count(runtime);
+	return hl_runtime_module_native_root_count(runtime) + haxeon_gc_handle_owner_count(runtime);
 }
 
 HL_PRIM void HL_NAME(retirement_status)( hl_runtime_module *runtime, vbyte *out ) {
@@ -342,6 +346,8 @@ HL_PRIM void HL_NAME(retirement_status)( hl_runtime_module *runtime, vbyte *out 
 	int fields[4];
 	if( out == NULL ) return;
 	hl_runtime_module_retirement_status_get(runtime,&status);
+	status.owned_native_roots += haxeon_gc_handle_owner_count(runtime);
+	if( status.owned_native_roots > 0 ) status.flags |= HL_MODULE_RETIRE_OWNED_ROOTS;
 	fields[0] = status.live_managed_allocations;
 	fields[1] = status.owned_native_roots;
 	fields[2] = status.registry_readers;
@@ -358,6 +364,7 @@ HL_PRIM void HL_NAME(set_patch_failure_stage)( hl_runtime_module *runtime, int s
 }
 
 HL_PRIM int HL_NAME(dispose)( hl_runtime_module *runtime ) {
+	haxeon_gc_handle_detach_owner(runtime);
 	return hl_runtime_module_release(runtime);
 }
 

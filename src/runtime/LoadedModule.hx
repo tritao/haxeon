@@ -2,6 +2,7 @@ package runtime;
 
 import compiler.hl.HlModule;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+import runtime.RuntimeModuleHandle.RuntimeGcHandle;
 #if haxeon
 import runtime.hashlink.HlMetadataGeneration;
 #end
@@ -26,6 +27,9 @@ class LoadedModule {
 
 	/** Haxe-owned JIT allocations retained by this module's patch generations. */
 	final jitGenerations:Array<RuntimeJitGeneration> = [];
+
+	/** Explicit managed roots whose owner is this native runtime module. */
+	final gcHandles:Array<RuntimeGcHandle> = [];
 
 	#if haxeon
 	/** Haxe-owned native metadata retained for the lifetime of this module. */
@@ -56,6 +60,16 @@ class LoadedModule {
 
 	function get_functions():RuntimeFunctionVersionTable
 		return patchState.functions;
+
+	/** Create a managed root that is closed automatically when this module retires. */
+	@:allow(runtime.Runtime)
+	function createGcHandle<T>(value:T):RuntimeGcHandle {
+		return access(function(current) {
+			var result = RuntimeGcHandle.createOwned(value, cast current);
+			gcHandles.push(cast result);
+			return result;
+		});
+	}
 
 	/** Number of successfully published Haxe-owned patch generations. */
 	public inline function committedPatchCount():Int
@@ -225,10 +239,12 @@ class LoadedModule {
 		mutex.acquire();
 		var current = handle;
 		if (current == null) {
+			closeGcHandles();
 			mutex.release();
 			return true;
 		}
 		closeRequested = true;
+		closeGcHandles();
 		if (borrowers > 0) {
 			deferredDispose = dispose;
 			mutex.release();
@@ -250,5 +266,11 @@ class LoadedModule {
 			mutex.release();
 			throw error;
 		}
+	}
+
+	function closeGcHandles():Void {
+		for (handle in gcHandles)
+			handle.close();
+		gcHandles.resize(0);
 	}
 }

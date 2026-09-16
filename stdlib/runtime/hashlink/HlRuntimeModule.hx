@@ -3,6 +3,7 @@ package runtime.hashlink;
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
 import runtime.memory.Mutex;
+import runtime.memory.GcHandle;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
 
@@ -16,6 +17,7 @@ class HlRuntimeModule {
 	final kernel:HlRuntimeModuleKernel;
 	final jitBackend:HlRuntimeJitBackend;
 	final moduleMutex:Mutex = Mutex.create();
+	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:Null<hl.Abstract<"realtime_module">>;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
@@ -43,6 +45,14 @@ class HlRuntimeModule {
 	/** Whether the native runtime wrapper remains initialized. */
 	public function isLoaded():Bool
 		return withLock(function() return module != null);
+
+	/** Create a managed root whose lifetime is bounded by this runtime module. */
+	public function createGcHandle<T>(value:T):GcHandle<T>
+		return withModule(function(handle) {
+			var result = GcHandle.createOwned(value, cast handle);
+			gcHandles.push(cast result);
+			return result;
+		});
 
 	/** Invoke a stable zero-argument i32 function. */
 	public function callI32(stableId:Int):Int
@@ -107,12 +117,19 @@ class HlRuntimeModule {
 			var current = module;
 			if (current == null)
 				return true;
+			closeGcHandles();
 			if (!kernel.unload(cast current))
 				return false;
 			module = null;
 			lease.release();
 			return true;
 		});
+	}
+
+	function closeGcHandles():Void {
+		for (handle in gcHandles)
+			handle.close();
+		gcHandles.resize(0);
 	}
 
 	function withModule<T>(operation:HlRuntimeModuleHandle->T):T {

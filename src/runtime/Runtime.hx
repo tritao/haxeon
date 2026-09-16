@@ -7,6 +7,7 @@ import compiler.hl.HlRuntimeCallPolicy;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 import compiler.hl.patch.HlPatchReader;
+import runtime.RuntimeModuleHandle.RuntimeGcHandle;
 #if haxeon
 import runtime.hashlink.HlRuntimeModuleKernel;
 #end
@@ -235,6 +236,10 @@ class Runtime {
 			return RuntimeKernel.native_root_count(handle);
 			#end
 		});
+
+	/** Create a managed root owned by the loaded runtime module. */
+	public static function createGcHandle<T>(module:LoadedModule, value:T):RuntimeGcHandle
+		return module.createGcHandle(value);
 
 	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
 		return module.access(function(handle) {

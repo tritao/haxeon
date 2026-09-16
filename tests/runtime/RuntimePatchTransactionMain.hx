@@ -8,6 +8,15 @@ import runtime.Runtime;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
+import runtime.RuntimeModuleHandle.RuntimeGcHandle;
+
+class RuntimeGcHandleValue {
+	public final value:Int;
+
+	public function new(value:Int) {
+		this.value = value;
+	}
+}
 
 class RuntimePatchTransactionMain {
 	static function main():Void {
@@ -33,6 +42,14 @@ class RuntimePatchTransactionMain {
 			|| Runtime.patchJitCount(loaded) != 0
 			|| Runtime.debugRegionCount(loaded) != 0)
 			throw "Haxeon module kernel did not expose consistent runtime diagnostics";
+		var moduleRoot:RuntimeGcHandle = Runtime.createGcHandle(loaded, new RuntimeGcHandleValue(7)),
+			rootedStatus = Runtime.retirementStatus(loaded);
+		if (moduleRoot.isClosed()
+			|| cast(moduleRoot.get(), RuntimeGcHandleValue).value != 7
+				|| rootedStatus.ownedNativeRoots != initialRetirement.ownedNativeRoots
+					+ 1
+				|| Runtime.nativeRootCount(loaded) != rootedStatus.ownedNativeRoots)
+			throw "runtime module did not account for its explicitly owned GC handle";
 		if (Runtime.callString(loaded, textId) != "haxeon")
 			throw "Haxeon module kernel did not return a stable string";
 		Runtime.callStringArg(loaded, consumeId, "kernel");
@@ -130,6 +147,8 @@ class RuntimePatchTransactionMain {
 			|| Runtime.callInt(loaded, mainId) != 43)
 			throw "Haxeon kernel patch failure injection changed published state";
 		Runtime.dispose(loaded);
+		if (!moduleRoot.isClosed() || moduleRoot.get() != null)
+			throw "runtime module retirement did not close its owned GC handles";
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";
 		retained.release();

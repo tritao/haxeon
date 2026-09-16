@@ -181,6 +181,7 @@ DEFINE_PRIM(_I32,native_atomic_i32_compare_exchange,_BYTES _I32 _I32 _I32);
 DEFINE_PRIM(_I32,native_atomic_i32_fetch_add,_BYTES _I32 _I32);
 DEFINE_PRIM(_VOID,native_atomic_fence,_I32);
 DEFINE_PRIM(_ABSTRACT(haxeon_gc_handle),native_gc_handle_create,_DYN);
+DEFINE_PRIM(_ABSTRACT(haxeon_gc_handle),native_gc_handle_create_owned,_DYN _ABSTRACT(realtime_module));
 DEFINE_PRIM(_DYN,native_gc_handle_get,_ABSTRACT(haxeon_gc_handle));
 DEFINE_PRIM(_VOID,native_gc_handle_set,_ABSTRACT(haxeon_gc_handle) _DYN);
 DEFINE_PRIM(_BYTES,native_gc_handle_raw,_ABSTRACT(haxeon_gc_handle));

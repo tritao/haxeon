@@ -233,7 +233,10 @@ explicit `MemoryOrder` values (`Relaxed`, `Acquire`, `Release`, `AcqRel`, and
 `SeqCst`). Invalid load/store orderings are rejected at the Haxe boundary;
 compare-exchange derives the permitted failure ordering from its success
 ordering. Mutexes, condition variables, TLS, and explicit GC handles remain
-separate runtime primitives. Metadata publication uses `Mutex` for serialized
+separate runtime primitives. `GcHandle.createOwned` and `Runtime.createGcHandle`
+associate a root with one loaded HashLink module; module teardown closes those
+handles before native metadata or executable storage can be reclaimed. Unowned
+`GcHandle.create` remains process-scoped. Metadata publication uses `Mutex` for serialized
 policy transitions and lease lifetime; native metadata records still contain
 no implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use
