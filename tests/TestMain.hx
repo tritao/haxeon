@@ -910,6 +910,9 @@ class TestMain {
 		moduleFunctionCompiler.update("sample/modulefunctions/app/Main.hx",
 			"package sample.modulefunctions.app; import sample.modulefunctions.Source; function main():Int return answer();");
 		moduleFunctionCompiler.compile("sample.modulefunctions.app.Main");
+		moduleFunctionCompiler.update("sample/modulefunctions/app/Alias.hx",
+			"package sample.modulefunctions.app; import sample.modulefunctions.Source as S; function main():Int return S.answer();");
+		moduleFunctionCompiler.compile("sample.modulefunctions.app.Alias");
 		var explicitOverWildcardCompiler = new Compiler();
 		explicitOverWildcardCompiler.update("wild/a/Foo.hx", "package wild.a; class Foo { public function new() {} public function answer():String return \"wildcard\"; }");
 		explicitOverWildcardCompiler.update("wild/b/Foo.hx", "package wild.b; class Foo { public function new() {} public function answer():Int return 43; }");

@@ -527,6 +527,20 @@ class LanguageServiceMain {
 		if (pureWildcardFunctionDefinition == null || pureWildcardFunctionDefinition.path != "wildfn/pure/Source.hx"
 			|| pureWildcardFunctionReferences.length != 2)
 			throw 'pure wildcard function import did not retain its authoritative identity: definition=${pureWildcardFunctionDefinition == null ? "null" : pureWildcardFunctionDefinition.path}, references=${pureWildcardFunctionReferences.length}';
+		var moduleAliasFunctionSource =
+			"package wildfn.pure.app; import wildfn.pure.Source as S; function main():Int return answer();";
+		pureWildcardFunctionService.update("wildfn/pure/app/Alias.hx", moduleAliasFunctionSource);
+		var moduleAliasUnqualifiedPosition = moduleAliasFunctionSource.lastIndexOf("answer") + 1,
+			moduleAliasUnqualifiedDefinition = pureWildcardFunctionService.definition("wildfn/pure/app/Alias.hx", moduleAliasUnqualifiedPosition);
+		if (moduleAliasUnqualifiedDefinition != null)
+			throw "recovered module alias incorrectly exposed an unqualified function";
+		moduleAliasFunctionSource =
+			"package wildfn.pure.app; import wildfn.pure.Source as S; function main():Int return S.answer(";
+		pureWildcardFunctionService.update("wildfn/pure/app/Alias.hx", moduleAliasFunctionSource);
+		var moduleAliasQualifiedPosition = moduleAliasFunctionSource.lastIndexOf("answer") + 1,
+			moduleAliasQualifiedDefinition = pureWildcardFunctionService.definition("wildfn/pure/app/Alias.hx", moduleAliasQualifiedPosition);
+		if (moduleAliasQualifiedDefinition == null || moduleAliasQualifiedDefinition.path != "wildfn/pure/Source.hx")
+			throw 'recovered module alias did not resolve its qualified function: ${moduleAliasQualifiedDefinition == null ? "null" : moduleAliasQualifiedDefinition.path}';
 		var secondaryModuleService = new LanguageService(),
 			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
 		secondaryModuleService.update("secondary/types/Container.hx",

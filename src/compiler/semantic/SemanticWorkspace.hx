@@ -196,7 +196,8 @@ class SemanticWorkspace {
 		var model = editorModel(from),
 			program = sourceProgram == null && model != null ? model.program : sourceProgram,
 			result:Array<SemanticSymbolId> = [],
-			explicit = false;
+			explicit = false,
+			blockedByModuleAlias = false;
 		if (program == null)
 			return {explicit: false, ids: result};
 		for (importPath in program.imports) {
@@ -204,6 +205,19 @@ class SemanticWorkspace {
 				token.check();
 			if (isWildcardImport(importPath))
 				continue;
+			var importTarget = editorImportTarget(importPath),
+				aliasedModule = false;
+			for (_alias => path in program.importAliases)
+				if (path == importPath && importTarget != null && importTarget.name == importPath)
+					aliasedModule = true;
+			if (aliasedModule) {
+				// A module alias exposes its functions only through the qualifier
+				// (for example `S.answer`). Remember the name so the final global
+				// fallback cannot accidentally make `answer` callable as well.
+				if (importTarget != null && editorTopLevelFunctionIds(importTarget, name, token).length > 0)
+					blockedByModuleAlias = true;
+				continue;
+			}
 			var target = editorImportTarget(importPath);
 			if (target == null)
 				continue;
@@ -232,6 +246,8 @@ class SemanticWorkspace {
 				explicit = true;
 		}
 		if (explicit)
+			return {explicit: true, ids: result};
+		if (blockedByModuleAlias)
 			return {explicit: true, ids: result};
 		for (importPath in program.imports) {
 			if (token != null)
