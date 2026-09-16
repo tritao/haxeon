@@ -676,6 +676,9 @@ class IrGenerator {
 			case TBoolLiteral(value): builder.constBool(value);
 			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
 			case TEnumConstruct(name, index, arguments): builder.makeEnum(name, index, lowerOperands(arguments, builder, localTypes));
+			case TEnumIndex(value): builder.enumIndex(lowerExpression(value, builder, localTypes));
+			case TEnumField(value, constructor,
+				field): builder.enumField(lowerExpression(value, builder, localTypes), constructor, field, lowerType(expression.type));
 			case TNullLiteral: throw 'Uncoerced null literal typed as ${expression.type} at ${expression.span.file.path}:${expression.span.start}';
 			case TVoidLiteral: builder.constVoid();
 			case TUnreachable:

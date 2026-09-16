@@ -68,13 +68,16 @@ class ModuleChangeAnalyzer {
 		var enums:Map<String, String> = [];
 		for (enumDecl in ast.enums) {
 			var enumName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name),
-				signature = enumName + "{" + [
+				signature = enumName + "[" + fieldMetadataFingerprint(state, enumDecl.metadata) + "]{" + [
 					for (caseDecl in enumDecl.cases)
-						caseDecl.name + "(" + [
+						caseDecl.name
+						+ "["
+						+ fieldMetadataFingerprint(state, caseDecl.metadata)
+						+ "]("
+						+ [
 							for (param in caseDecl.params)
 								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
-						].join(",") + ")"
-				].join(";") + "}";
+						].join(",") + ")"].join(";") + "}";
 			enums.set(enumName, signature);
 			if (state.enumFingerprints.get(enumName) != signature)
 				structuralChanged.set('enum:$enumName', true);

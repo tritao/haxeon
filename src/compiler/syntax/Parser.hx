@@ -78,7 +78,7 @@ class Parser {
 						advance();
 						enumAbstracts.push(parseEnumAbstract(start));
 					} else
-						enums.push(parseEnum(start));
+						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
 					interfaces.push(parseInterface());
 				else if (check(TokenKind.Class))
@@ -280,12 +280,13 @@ class Parser {
 		};
 	}
 
-	function parseEnum(start:SourceSpan):AstEnum {
+	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints), cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseToken = consumeName(),
+			var caseMetadata = parseMetadata(),
+				caseToken = consumeName(),
 				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
@@ -307,7 +308,12 @@ class Parser {
 					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}
-			cases.push({name: caseToken.text, params: params, span: caseToken.span.merge(previous().span)});
+			cases.push({
+				name: caseToken.text,
+				metadata: caseMetadata,
+				params: params,
+				span: caseToken.span.merge(previous().span)
+			});
 			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;
@@ -315,6 +321,7 @@ class Parser {
 			name: name,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
+			metadata: metadata,
 			cases: cases,
 			span: start.merge(end)
 		};

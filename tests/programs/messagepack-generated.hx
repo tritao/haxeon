@@ -12,6 +12,14 @@ class WireUser {
 }
 
 @:wire
+enum WireStatus {
+	@:wireId(4)
+	Idle;
+	@:wireId(9)
+	Ready(user:WireUser, values:Array<Null<Int>>, ?note:String);
+}
+
+@:wire
 class WireEnvelope {
 	@:wireId(1)
 	public var user:Null<WireUser>;
@@ -31,6 +39,14 @@ class WireEnvelope {
 	public var optionalCountsByName:Map<String, Null<Int>>;
 	@:wireId(9)
 	public var countsById:Map<Int, Null<Int>>;
+	@:wireId(10)
+	public var status:WireStatus;
+	@:wireId(11)
+	public var optionalStatus:Null<WireStatus>;
+	@:wireId(12)
+	public var statuses:Array<WireStatus>;
+	@:wireId(13)
+	public var statusesByName:Map<String, WireStatus>;
 }
 
 function main():Int {
@@ -69,6 +85,11 @@ function main():Int {
 	envelope.countsById = new Map<Int, Null<Int>>();
 	envelope.countsById.set(-1, null);
 	envelope.countsById.set(2, 20);
+	var status:WireStatus = Ready(user, [1, null]);
+	envelope.status = status;
+	envelope.optionalStatus = null;
+	envelope.statuses = [status, Idle];
+	envelope.statusesByName = ["ready" => status, "idle" => Idle];
 	var envelopeBytes = MessagePack.encode(envelope);
 	var restoredEnvelope:WireEnvelope = MessagePack.decode(envelopeBytes);
 	if (restoredEnvelope.user == null
@@ -91,8 +112,31 @@ function main():Int {
 		|| restoredEnvelope.optionalCountsByName.get("one") != 1
 		|| restoredEnvelope.optionalCountsByName.get("none") != null
 		|| restoredEnvelope.countsById.get(-1) != null
-		|| restoredEnvelope.countsById.get(2) != 20)
+		|| restoredEnvelope.countsById.get(2) != 20
+		|| restoredEnvelope.optionalStatus != null
+		|| restoredEnvelope.statuses.length != 2
+		|| restoredEnvelope.statusesByName.get("idle") == null)
 		return 3;
+	var restoredStatus:WireStatus = MessagePack.decode(MessagePack.encode(status));
+	switch restoredStatus {
+		case Ready(restoredUser, values, note):
+			if (restoredUser.name != "Ada" || values.length != 2 || values[0] != 1 || values[1] != null || note != null)
+				return 10;
+		default:
+			return 11;
+	}
+	var unknownStatus = new MessagePackWriter();
+	unknownStatus.writeMapHeader(1);
+	unknownStatus.writeInt(99);
+	unknownStatus.writeArrayHeader(0);
+	var unknownRejected = false;
+	try {
+		var ignoredStatus:WireStatus = MessagePack.decode(unknownStatus.getBytes());
+	} catch (_:Dynamic) {
+		unknownRejected = true;
+	}
+	if (!unknownRejected)
+		return 12;
 
 	var users:Array<WireUser> = [user];
 	var restoredUsers:Array<WireUser> = MessagePack.decode(MessagePack.encode(users));
@@ -135,5 +179,5 @@ function main():Int {
 	optionalUser = null;
 	var nullBytes = MessagePack.encode(optionalUser);
 	var restoredNull:Null<WireUser> = MessagePack.decode(nullBytes);
-	return restoredNull == null ? 43 : 10;
+	return restoredNull == null ? 43 : 13;
 }

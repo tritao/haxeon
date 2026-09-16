@@ -105,10 +105,12 @@ class ModuleCanonicalizer {
 			name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
 			typeConstraints: canonicalConstraints(enumDecl.typeConstraints, aliases, enumDecl.typeParameters),
+			metadata: enumDecl.metadata,
 			cases: [
 				for (caseDecl in enumDecl.cases)
 					{
 						name: caseDecl.name,
+						metadata: caseDecl.metadata,
 						params: [
 							for (param in caseDecl.params)
 								{

@@ -115,10 +115,12 @@ class ProgramTyper {
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
+					metadata: enumDecl.metadata,
 					cases: [
 						for (caseDecl in enumDecl.cases)
 							{
 								name: caseDecl.name,
+								metadata: caseDecl.metadata,
 								params: [for (param in caseDecl.params) bodyTyper.erasedEnumParameter(enumDecl, param)],
 								span: caseDecl.span
 							}
@@ -185,7 +187,7 @@ class ProgramTyper {
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
-		for (codec in WireCodecGenerator.generate(session, typedClasses))
+		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;

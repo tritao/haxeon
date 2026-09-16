@@ -50,8 +50,10 @@ the value codec does not represent object identity or cycles. `Map<String, T>`
 and `Map<Int, T>` are also supported for the same value profile. String keys
 are encoded and sorted lexicographically; integer keys are encoded and sorted
 numerically. Both produce deterministic output, while missing map fields
-receive an empty map. Maps with other key types and enums remain explicit
-next-step extensions to the generator.
+receive an empty map. `@:wire` enums are encoded as a one-entry map from the
+stable constructor `@:wireId` to an array of constructor arguments. Unknown
+constructor IDs and malformed payloads are rejected. Maps with other key types
+remain explicit next-step extensions to the generator.
 
 ## Example shape
 

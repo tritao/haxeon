@@ -880,6 +880,8 @@ class SemanticIndex {
 				bindEnumCase(resolveEnumCase, name, index, expression.span);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
+			case TEnumIndex(value), TEnumField(value, _, _):
+				indexExpression(fn, value, resolve, resolveEnumCase);
 			case TSwitchExpression(value, cases, fallback):
 				indexExpression(fn, value, resolve, resolveEnumCase);
 				for (item in cases) {
