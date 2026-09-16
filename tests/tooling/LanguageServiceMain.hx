@@ -534,6 +534,28 @@ class LanguageServiceMain {
 			moduleAliasUnqualifiedDefinition = pureWildcardFunctionService.definition("wildfn/pure/app/Alias.hx", moduleAliasUnqualifiedPosition);
 		if (moduleAliasUnqualifiedDefinition != null)
 			throw "recovered module alias incorrectly exposed an unqualified function";
+		var moduleAliasUnqualifiedCompletionSource =
+			"package wildfn.pure.app; import wildfn.pure.Source as S; function main():Int return an";
+		pureWildcardFunctionService.update("wildfn/pure/app/Alias.hx", moduleAliasUnqualifiedCompletionSource);
+		var moduleAliasUnqualifiedCompletion = pureWildcardFunctionService.completeResult("wildfn/pure/app/Alias.hx",
+			moduleAliasUnqualifiedCompletionSource.length),
+			moduleAliasExposedBareFunction = false;
+		for (item in moduleAliasUnqualifiedCompletion.items)
+			if (item.label == "answer")
+				moduleAliasExposedBareFunction = true;
+		if (moduleAliasExposedBareFunction)
+			throw "recovered module alias incorrectly exposed a bare completion";
+		var moduleAliasQualifiedCompletionSource =
+			"package wildfn.pure.app; import wildfn.pure.Source as S; function main():Int return S.an";
+		pureWildcardFunctionService.update("wildfn/pure/app/Alias.hx", moduleAliasQualifiedCompletionSource);
+		var moduleAliasQualifiedCompletion = pureWildcardFunctionService.completeResult("wildfn/pure/app/Alias.hx",
+			moduleAliasQualifiedCompletionSource.length),
+			moduleAliasQualifiedFunction = false;
+		for (item in moduleAliasQualifiedCompletion.items)
+			if (item.label == "answer")
+				moduleAliasQualifiedFunction = true;
+		if (!moduleAliasQualifiedFunction)
+			throw "recovered module alias did not expose a qualified function completion";
 		moduleAliasFunctionSource =
 			"package wildfn.pure.app; import wildfn.pure.Source as S; function main():Int return S.answer(";
 		pureWildcardFunctionService.update("wildfn/pure/app/Alias.hx", moduleAliasFunctionSource);

@@ -1829,15 +1829,24 @@ class LanguageService {
 			for (candidate in candidates) {
 				if (token != null)
 					token.check();
-				if (candidate.container == null && isImportableCompletionKind(candidate.kind))
+				var candidateState = compiler.modules.get(ModulePath.fromFile(candidate.path)),
+					moduleAliasFunction = candidate.kind == "function" && candidate.container == null
+						&& candidateState != null
+						&& compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token);
+				if (candidate.container == null && isImportableCompletionKind(candidate.kind) && !moduleAliasFunction)
 					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
 			}
 			for (candidate in candidates) {
 				if (token != null)
 					token.check();
-				var module = ModulePath.fromFile(candidate.path);
+				var module = ModulePath.fromFile(candidate.path),
+					candidateState = compiler.modules.get(module),
+					moduleAliasFunction = candidate.kind == "function" && candidate.container == null
+						&& candidateState != null
+						&& compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token);
 				if (candidate.container == null
 					&& isImportableCompletionKind(candidate.kind)
+					&& !moduleAliasFunction
 					&& counts.get(candidate.name) == 1
 					&& module != state.name)
 					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
@@ -1935,6 +1944,8 @@ class LanguageService {
 			for (fn in completionAst.functions) {
 				if (token != null)
 					token.check();
+				if (!compiler.semanticWorkspace.editorTopLevelFunctionVisible(state, candidate, fn.name, token))
+					continue;
 				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}', prefix, result, 2,
 					fn.name + "(", identityFor(fn.name));
 			}

@@ -1427,13 +1427,80 @@ class SemanticWorkspace {
 					seen.set(Std.string(symbol.id), true);
 					result.push(symbol);
 				}
-		for (symbol in visibleSymbols(from, token))
+		for (symbol in visibleSymbols(from, token)) {
+			var resolved = editorSymbolById(symbol.id);
+			if (symbol.kind == DeclarationKind.Function && resolved != null
+				&& !editorTopLevelFunctionVisible(from, resolved.state, symbol.name, token))
+				continue;
 			if (!seen.exists(Std.string(symbol.id))) {
 				seen.set(Std.string(symbol.id), true);
 				result.push(symbol);
 			}
+		}
 		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		return result;
+	}
+
+	/**
+	 * Keep dependency-wide completion from leaking functions through a module
+	 * alias. A plain module import and wildcard package import expose a
+	 * top-level function unqualified; an aliased module exposes it only through
+	 * its qualifier, while an explicit function import may use its local alias.
+	 */
+	public function editorTopLevelFunctionImported(from:ModuleState, candidate:ModuleState,
+		functionName:String, ?token:CancellationToken):Bool {
+		var fromModel = editorModel(from),
+			model = editorModel(candidate),
+			fromPackage = fromModel == null || fromModel.program.packageName == null ? null : Std.string(fromModel.program.packageName),
+			candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
+		if (fromModel == null || model == null || functionName.indexOf(".") >= 0)
+			return false;
+		if (candidate == from)
+			return true;
+		if (fromPackage != null && fromPackage == candidatePackage)
+			return true;
+		for (importPath in fromModel.program.imports) {
+			if (token != null)
+				token.check();
+			if (isWildcardImport(importPath)) {
+				var packageName = importPath.substring(0, importPath.length - 2);
+				if (candidatePackage == packageName)
+					return true;
+			} else if (importPath == candidate.name || importPath == candidate.name + "." + functionName) {
+				return true;
+			}
+		}
+		for (_alias => importPath in fromModel.program.importAliases) {
+			if (token != null)
+				token.check();
+			if (importPath == candidate.name || importPath == candidate.name + "." + functionName)
+				return true;
+		}
+		return false;
+	}
+
+	public function editorTopLevelFunctionVisible(from:ModuleState, candidate:ModuleState,
+		functionName:String, ?token:CancellationToken):Bool {
+		var fromModel = editorModel(from),
+			candidateModel = editorModel(candidate);
+		if (fromModel == null || candidateModel == null)
+			return false;
+		if (candidate == from)
+			return true;
+		for (importPath in fromModel.program.imports) {
+			if (token != null)
+				token.check();
+			if (importPath == candidate.name) {
+				for (_alias => path in fromModel.program.importAliases)
+					if (path == importPath)
+						return false;
+				return true;
+			}
+		}
+		var fromPackage = fromModel.program.packageName == null ? null : Std.string(fromModel.program.packageName),
+			candidatePackage = candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
+		return fromPackage != null && fromPackage == candidatePackage
+			|| editorTopLevelFunctionImported(from, candidate, functionName, token);
 	}
 
 	/**
@@ -1499,6 +1566,8 @@ class SemanticWorkspace {
 				continue;
 			for (symbol in model.index.symbols)
 				if (symbol.name.indexOf(".") < 0 && (isTypeKind(symbol.kind) || symbol.kind == DeclarationKind.Function)) {
+					if (symbol.kind == DeclarationKind.Function && editorTopLevelFunctionImported(from, state, symbol.name, token))
+						continue;
 					var matches = byName.get(symbol.name);
 					if (matches == null)
 						byName.set(symbol.name, matches = []);
