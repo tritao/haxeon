@@ -431,11 +431,11 @@ class LanguageService {
 	/**
 	 * Select unchanged recovered bodies from the previous editor snapshot.
 	 *
-	 * This deliberately requires the entire source prefix through a candidate
-	 * declaration to be byte-identical. Reused typed spans therefore still point
-	 * at the same line/column data, while edits after the declaration can avoid
-	 * retyping it. The declaration context check covers changes after the body
-	 * that could alter its meaning (imports, signatures, fields, or inheritance).
+	 * A candidate must retain its source span and exact declaration text so the
+	 * reused typed spans still point at the same source coordinates. Independent
+	 * declarations can therefore be reused after an earlier body edit. The
+	 * declaration context and body-reference checks cover changes that could
+	 * alter its meaning (imports, signatures, fields, inheritance, or callees).
 	 */
 	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram, ?externalChangedBodies:Map<String, Bool>,
 		forceNoReuse:Bool = false):Map<String, TypedFunction> {
