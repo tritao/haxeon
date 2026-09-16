@@ -1879,6 +1879,16 @@ class LanguageServiceMain {
 			};
 		if (objectFieldExpectedName != "ObjectValue")
 			throw 'recovered object field did not retain its expected type: ${objectFieldExpected == null ? "null" : Std.string(objectFieldExpected)}';
+		var inferredObjectService = new LanguageService(),
+			inferredObjectSource = "function main():Void { var point = {value: 1}; point.";
+		inferredObjectService.update("InferredObject.hx", inferredObjectSource);
+		var inferredObjectItems = inferredObjectService.completeResult("InferredObject.hx", inferredObjectSource.length).items,
+			inferredObjectMember = false;
+		for (item in inferredObjectItems)
+			if (item.label == "value" && item.detail == "value:Int")
+				inferredObjectMember = true;
+		if (!inferredObjectMember)
+			throw "recovered object literal did not expose inferred members at an incomplete access";
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);

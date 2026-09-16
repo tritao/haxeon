@@ -1319,6 +1319,13 @@ class SemanticWorkspace {
 				addEditorMember(result, seen, "length", "field", "length:Int");
 				addEditorMember(result, seen, "indexOf", "method", "indexOf(needle):Int");
 				addEditorMember(result, seen, "substring", "method", "substring(start,end):String");
+			case TAnonymous(_, fields):
+				for (field in fields) {
+					if (token != null)
+						token.check();
+					addEditorMember(result, seen, field.name, "field",
+						field.name + ":" + editorCompilerTypeName(field.type));
+				}
 			default:
 		}
 	}

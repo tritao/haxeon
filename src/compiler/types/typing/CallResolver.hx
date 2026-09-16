@@ -533,7 +533,7 @@ class CallResolver {
 	}
 
 	public function typeClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, callableName:Null<String> = null,
-			invalidateAllExpressions:Bool = true):TypedExpression {
+			invalidateAllExpressions:Bool = true, expectedType:Null<CompilerType> = null):TypedExpression {
 		var typedCallee = typeExpression(callee, scope, null, false),
 			functionType = switch typedCallee.type {
 				case TFunction(parameters, result): {arguments: parameters, result: result};
@@ -544,8 +544,9 @@ class CallResolver {
 				fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
 			session.rememberRecoveryDiagnostic(new Diagnostic("E1007",
 				callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span));
+			var recoveredResult = expectedType != null && !isRecoveryType(expectedType) ? expectedType : TUnknown;
 			return new TypedExpression(TClosureCall(typedCallee, recoveredCallArguments(arguments, scope,
-				callableName == null ? "function expression" : callableName)), TUnknown, span);
+				callableName == null ? "function expression" : callableName)), recoveredResult, span);
 		}
 		if (!session.tolerant && arguments.length != functionType.arguments.length)
 			fail("E1008",
@@ -564,7 +565,10 @@ class CallResolver {
 			scope.invalidate(captured);
 		if (invalidateAllExpressions)
 			scope.invalidateAllExpressions();
-		return new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
+		var result = isRecoveryType(functionType.result) && expectedType != null && !isRecoveryType(expectedType)
+			? expectedType
+			: functionType.result;
+		return new TypedExpression(TClosureCall(typedCallee, typedArguments), result, span);
 	}
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,

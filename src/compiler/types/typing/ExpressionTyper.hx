@@ -168,7 +168,7 @@ class ExpressionTyper {
 				if (builtinCall != null)
 					return builtinCall;
 				callResolver.typeNamedCall(name, arguments, span, scope, expectedType);
-			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope);
+			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope, null, true, expectedType);
 			case MethodCall(object, name, arguments, span):
 				var call = dispatchRules.methodCall(object, name, arguments, span, scope, expectedType);
 				scope.invalidateAllExpressions();

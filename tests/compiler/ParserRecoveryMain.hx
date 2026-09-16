@@ -12,6 +12,7 @@ import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 
 class ParserRecoveryMain {
@@ -1163,6 +1164,27 @@ class ParserRecoveryMain {
 				}
 			default:
 				throw "a non-callable closure expression collapsed its outer member expression";
+		}
+
+		var expectedClosureSource = new SourceFile("TolerantExpectedClosureCall.hx",
+			"class Expected {} function main():Expected { var callback = missing; return callback(); var after:Int = 1; }");
+		var expectedClosureProgram = new Parser(new Lexer(expectedClosureSource).tokenize()).parseProgramRecovering().program,
+			expectedClosureTyped = Typer.typeRecovered(expectedClosureProgram),
+			expectedClosureExpression:Null<TypedExpression> = null;
+		if (expectedClosureTyped != null)
+			for (fn in expectedClosureTyped.functions)
+				if (fn.name == "main")
+					for (statement in fn.statements)
+						switch statement {
+							case TReturn(expression, _): expectedClosureExpression = expression;
+							default:
+						}
+		if (expectedClosureExpression == null)
+			throw "an unresolved closure call with an expected result lost its return expression";
+		switch expectedClosureExpression.type {
+			case TInstance(NominalKind.Class, "Expected", _):
+			default:
+				throw 'an unresolved closure call did not preserve its expected result type: ${expectedClosureExpression.type}';
 		}
 
 		var implicitFieldCallSource = new SourceFile("TolerantImplicitFieldCall.hx",

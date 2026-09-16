@@ -1461,6 +1461,55 @@ class SemanticIndexBuilder {
 			default: recoveredExpressionType(expression);
 		};
 
+	function recoveredConstructionType(name:String, ?expected:CompilerType):CompilerType {
+		return switch expected {
+			case TInstance(_, expectedName, _) if (sourceName(expectedName) == sourceName(name)): expected;
+			case TAbstract(expectedName, _, _) if (sourceName(expectedName) == sourceName(name)): expected;
+			default: TInstance(compiler.types.Type.NominalKind.Class, name, []);
+		};
+	}
+
+	function recoveredLambdaType(arguments:Array<compiler.syntax.Ast.AstArgument>, ?expected:CompilerType):CompilerType {
+		var expectedArguments:Array<CompilerType> = [],
+			expectedResult:CompilerType = TUnknown;
+		switch expected {
+			case TFunction(values, result):
+				expectedArguments = values;
+				expectedResult = result;
+			case TNullable(TFunction(values, result)):
+				expectedArguments = values;
+				expectedResult = result;
+			default:
+		}
+		return TFunction([
+			for (index in 0...arguments.length)
+				switch arguments[index].type {
+					case InferredType if (index < expectedArguments.length): expectedArguments[index];
+					default: recoveredType(arguments[index].type);
+				}
+		], expectedResult);
+	}
+
+	function recoveredSwitchExpressionType(cases:Array<compiler.syntax.Ast.AstSwitchExpressionCase>, fallback:Null<AstExpression>,
+			expected:Null<CompilerType>):CompilerType {
+		var result:Null<CompilerType> = expected != null && !isRecoveryType(expected) ? expected : null;
+		for (item in cases) {
+			var candidate = recoveredExpressionType(item.result, expected);
+			if (result == null)
+				result = candidate;
+			else if (expected == null || isRecoveryType(expected))
+				result = recoveredCommonType(result, candidate);
+		}
+		if (fallback != null) {
+			var candidate = recoveredExpressionType(fallback, expected);
+			if (result == null)
+				result = candidate;
+			else if (expected == null || isRecoveryType(expected))
+				result = recoveredCommonType(result, candidate);
+		}
+		return result == null ? TUnknown : result;
+	}
+
 	function recoveredExpressionType(expression:AstExpression, ?expected:CompilerType):CompilerType
 		return switch expression {
 			case ErrorExpression(_): TError;
@@ -1468,6 +1517,8 @@ class SemanticIndexBuilder {
 			case FloatLiteral(_, _): TFloat;
 			case StringLiteral(_, _): TString;
 			case BoolLiteral(_, _): TBool;
+			case NullLiteral(_): TNull;
+			case Unreachable(_): TNever;
 			case Variable(name, span): recoveredExpressionBindingType(Variable(name, span));
 			case Member(object, name, _): recoveredMemberType(object, name);
 			case MethodCall(object, name, arguments, _):
@@ -1503,7 +1554,8 @@ class SemanticIndexBuilder {
 				}
 			case ClosureCall(callee, _, _):
 				var result = functionResultType(recoveredExpressionType(callee));
-				result == null ? TUnknown : result;
+				result == null || isRecoveryType(result) && expected != null && !isRecoveryType(expected) ?
+					expected != null && !isRecoveryType(expected) ? expected : TUnknown : result;
 			case Add(left, right, _): recoveredArithmeticType(left, right, true);
 			case Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _): recoveredArithmeticType(left, right, false);
 			case BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
@@ -1513,35 +1565,48 @@ class SemanticIndexBuilder {
 			case Negate(value, _): recoveredExpressionType(value);
 			case Not(_, _): TBool;
 			case PostfixIncrement(value, _, _): recoveredExpressionType(value);
-			case Conditional(_, whenTrue, whenFalse, _): recoveredCommonType(recoveredExpressionType(whenTrue), recoveredExpressionType(whenFalse));
-			case BlockExpression(_, result, _): recoveredExpressionType(result);
+			case Conditional(_, whenTrue, whenFalse, _):
+				expected != null && !isRecoveryType(expected) ? expected : recoveredCommonType(recoveredExpressionType(whenTrue, expected),
+					recoveredExpressionType(whenFalse, expected));
+			case BlockExpression(_, result, _):
+				var blockResult = recoveredExpressionType(result, expected);
+				isRecoveryType(blockResult) && expected != null && !isRecoveryType(expected) ? expected : blockResult;
 			case ThrowExpression(_, _): TNever;
 			case Cast(value, target, _): target == null ? recoveredExpressionType(value) : recoveredType(target);
 			case Index(array, _, _):
 				var indexed = indexedValueType(recoveredExpressionBindingType(array));
 				indexed == null ? TUnknown : indexed;
 			case Range(_, _, _): TRange;
-			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values));
-			case MapLiteral(entries, _): recoveredMapLiteralType(entries);
+			case ObjectLiteral(fields, _): recoveredObjectLiteralType(fields, expected);
+			case ArrayLiteral(values, _): TArray(recoveredArrayElementType(values, indexedValueType(expected)));
+			case MapLiteral(entries, _): recoveredMapLiteralType(entries, expected);
+			case SwitchExpression(_, cases, fallback, _): recoveredSwitchExpressionType(cases, fallback, expected);
 			case ArrayComprehension(keyName, valueName, iterable, _, value, _):
 				var iterableType = recoveredExpressionType(iterable),
 					bindings:Map<String, CompilerType> = [];
 				bindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
 				if (valueName != null)
 					bindings.set(valueName, recoveredForInValueType(iterableType));
-				TArray(recoveredComprehensionExpressionType(value, bindings));
+				var element = recoveredComprehensionExpressionType(value, bindings),
+					expectedElement = indexedValueType(expected);
+				TArray(expectedElement != null && !isRecoveryType(expectedElement) ? expectedElement : element);
 			case MapComprehension(keyName, valueName, iterable, _, key, value, _):
 				var iterableType = recoveredExpressionType(iterable),
 					bindings:Map<String, CompilerType> = [];
 				bindings.set(keyName, recoveredForInKeyType(iterableType, valueName));
 				if (valueName != null)
 					bindings.set(valueName, recoveredForInValueType(iterableType));
-				TMap(recoveredComprehensionExpressionType(key, bindings), recoveredComprehensionExpressionType(value, bindings));
-			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
+				var keyType = recoveredComprehensionExpressionType(key, bindings),
+					valueType = recoveredComprehensionExpressionType(value, bindings),
+					expectedKey = mapKeyType(expected),
+					expectedValue = mapValueType(expected);
+				TMap(expectedKey != null && !isRecoveryType(expectedKey) ? expectedKey : keyType,
+					expectedValue != null && !isRecoveryType(expectedValue) ? expectedValue : valueType);
+			case New(name, _, _): recoveredConstructionType(name, expected);
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			case NewArray(element, _, _): TArray(recoveredType(element));
 			case NewMap(key, value, _): TMap(recoveredType(key), recoveredType(value));
-			case Lambda(arguments, _, _): TFunction([for (argument in arguments) recoveredType(argument.type)], TUnknown);
+			case Lambda(arguments, _, _): recoveredLambdaType(arguments, expected);
 			case NativeLayoutQuery(_, _, _, _): TInt;
 			default: TUnknown;
 		};
@@ -1638,12 +1703,14 @@ class SemanticIndexBuilder {
 		return TUnknown;
 	}
 
-	function recoveredMapLiteralType(entries:Array<compiler.syntax.Ast.AstMapEntry>):CompilerType {
-		var key:CompilerType = TUnknown,
-			value:CompilerType = TUnknown;
+	function recoveredMapLiteralType(entries:Array<compiler.syntax.Ast.AstMapEntry>, ?expected:CompilerType):CompilerType {
+		var expectedKey = mapKeyType(expected),
+			expectedValue = mapValueType(expected),
+			key:CompilerType = expectedKey == null ? TUnknown : expectedKey,
+			value:CompilerType = expectedValue == null ? TUnknown : expectedValue;
 		for (entry in entries) {
-			var entryKey = recoveredExpressionType(entry.key),
-				entryValue = recoveredExpressionType(entry.value);
+			var entryKey = recoveredExpressionType(entry.key, expectedKey),
+				entryValue = recoveredExpressionType(entry.value, expectedValue);
 			if (isRecoveryType(key) && !isRecoveryType(entryKey))
 				key = entryKey;
 			if (isRecoveryType(value) && !isRecoveryType(entryValue))
@@ -1856,8 +1923,11 @@ class SemanticIndexBuilder {
 	function recoveredMemberType(object:AstExpression, name:String):CompilerType {
 		checkpoint();
 		var receiverType = recoveredExpressionBindingType(object),
+			anonymousType = anonymousMemberType(receiverType, name),
 			owner = memberOwner(receiverType),
 			substitutions = recoveredTypeSubstitutions(receiverType);
+		if (anonymousType != null)
+			return anonymousType;
 		if (owner == null)
 			return TUnknown;
 		var fieldType = recoveredFieldType(owner, name, [], substitutions);
@@ -1953,7 +2023,9 @@ class SemanticIndexBuilder {
 		return separator < 1 ? null : recoveredMethod(name.substring(0, separator), name.substring(separator + 1), []);
 	}
 
-	function recoveredArrayElementType(values:Array<AstExpression>):CompilerType {
+	function recoveredArrayElementType(values:Array<AstExpression>, ?expectedElement:CompilerType):CompilerType {
+		if (expectedElement != null && !isRecoveryType(expectedElement))
+			return expectedElement;
 		var result:Null<CompilerType> = null;
 		for (value in values) {
 			var type = recoveredExpressionType(value);
@@ -1961,6 +2033,22 @@ class SemanticIndexBuilder {
 				result = type;
 		}
 		return result == null ? TUnknown : result;
+	}
+
+	function recoveredObjectLiteralType(fields:Array<compiler.syntax.Ast.AstObjectField>, ?expected:CompilerType):CompilerType {
+		var inferred:Array<compiler.types.Type.AnonymousField> = [];
+		for (field in fields) {
+			var fieldType = expectedFieldType(expected, field.name),
+				actual = recoveredExpressionType(field.value, fieldType);
+			if (fieldType == null || isRecoveryType(fieldType) && !isRecoveryType(actual))
+				fieldType = actual;
+			inferred.push({name: field.name, type: fieldType, optional: false});
+		}
+		inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return switch expected {
+			case TAnonymous(_, _), TNullable(TAnonymous(_, _)): expected;
+			default: TAnonymous(SemanticSignature.anonymousTypeName(inferred), inferred);
+		};
 	}
 
 	function recoveredForInKeyType(type:CompilerType, valueName:Null<String>):CompilerType
@@ -2045,8 +2133,11 @@ class SemanticIndexBuilder {
 
 	function recoveredComprehensionMemberType(object:AstExpression, name:String, bindings:Map<String, CompilerType>):CompilerType {
 		var receiverType = recoveredComprehensionExpressionType(object, bindings),
+			anonymousType = anonymousMemberType(receiverType, name),
 			owner = memberOwner(receiverType),
 			substitutions = recoveredTypeSubstitutions(receiverType);
+		if (anonymousType != null)
+			return anonymousType;
 		if (owner == null)
 			return TUnknown;
 		var fieldType = recoveredFieldType(owner, name, [], substitutions);
@@ -2307,6 +2398,17 @@ class SemanticIndexBuilder {
 						return field.type;
 				null;
 			case TNullable(element): expectedFieldType(element, name);
+			default: null;
+		};
+
+	function anonymousMemberType(type:CompilerType, name:String):Null<CompilerType>
+		return switch type {
+			case TAnonymous(_, fields):
+				for (field in fields)
+					if (field.name == name)
+						return field.type;
+				null;
+			case TNullable(element): anonymousMemberType(element, name);
 			default: null;
 		};
 
