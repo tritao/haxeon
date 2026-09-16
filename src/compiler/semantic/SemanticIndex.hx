@@ -2362,14 +2362,16 @@ class SemanticIndex {
 					indexCompletionLocals(body, span, depth + 1);
 				case TForIn(name, valueName, iterable, body, span):
 					var keyType = switch iterable.type {
-						case TArray(element), TMap(element, _): element;
-						default: TDynamic;
+						case TArray(element), TIterator(element): element;
+						case TRange: TInt;
+						case TMap(element, _): element;
+						default: TUnknown;
 					};
 					addCompletionLocal(name, keyType, span, span, depth + 1);
 					if (valueName != null) {
 						var valueType = switch iterable.type {
 							case TMap(_, value): value;
-							default: TDynamic;
+							default: TUnknown;
 						};
 						addCompletionLocal(valueName, valueType, span, span, depth + 1);
 					}

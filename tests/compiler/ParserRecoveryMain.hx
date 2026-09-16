@@ -952,6 +952,14 @@ class ParserRecoveryMain {
 		if (postErrorNames.indexOf("value") < 0)
 			throw "an expression error erased the known local type needed for member completion";
 
+		var iteratorService = new LanguageService(),
+			iteratorSource = "class Item { public var member:Int; } function main(values:Iterator<Item>):Void { for (item in values) { item. } }",
+			iteratorPosition = iteratorSource.indexOf("item. }") + "item.".length;
+		iteratorService.update("IteratorRecovery.hx", iteratorSource);
+		var iteratorNames = [for (item in iteratorService.complete("IteratorRecovery.hx", iteratorPosition)) item.label];
+		if (iteratorNames.indexOf("member") < 0)
+			throw "recovered iterator loop lost its element type for member completion";
+
 		var lambdaService = new LanguageService(),
 			lambdaSource = "class Foo { public var member:Int; } function main():Void { var callback:(value:Foo)->Void = (value) -> { var local:Foo = value; local. }; }";
 		lambdaService.update("TolerantLambda.hx", lambdaSource);
