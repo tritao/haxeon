@@ -64,6 +64,11 @@ storage through the runtime and invokes the Clang-selected constructor symbol;
 wrappers cannot be closed. Overloaded methods receive stable numeric suffixes
 until a richer Haxe overload policy is added.
 
+The MSVC x64 profile is covered as a cross-target import (`x86_64-pc-windows-msvc`)
+even on non-Windows hosts. It uses Clang's MSVC mangled names and LLP64 layout
+rules; executing the resulting library still requires a Windows build and
+runtime.
+
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:
 its methods are not `noexcept`, and the shared UI library hides its C++ symbols.

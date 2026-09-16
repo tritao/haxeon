@@ -158,6 +158,36 @@ class CxxHeaderImporterMain {
 			&& lifetimeProjection.indexOf("C++ object is closed") >= 0
 			&& lifetimeProjection.indexOf("public function ~Widget") < 0,
 			"C++ lifetime projection should allocate owned objects and hide ABI destructor names");
+		var msvc = CxxHeaderImporter.importHeader("tests/ffi/cxx_lifetime_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++",
+			"cxx_lifetime_msvc", null, null, null, "c++20", null, null, false, true),
+			msvcText = HxiWriter.write(msvc.hxi, "// test"),
+			msvcProjection = CxxProjection.sources(msvc.model, msvc.hxi, null, msvc.plans)[0].source,
+			hasMsvcConstructor = false,
+			hasMsvcDestructor = false;
+		for (plan in msvc.plans)
+			switch plan.dispatch {
+				case CxxConstructor:
+					hasMsvcConstructor = plan.symbol == "??0Widget@cxxlife@@QEAA@H@Z";
+				case CxxDestructor:
+					hasMsvcDestructor = plan.symbol == "??_DWidget@cxxlife@@QEAAXXZ";
+				case _:
+			}
+		expect(msvc.model.target == "x86_64-pc-windows-msvc"
+			&& msvc.model.records[0].size == 4
+			&& hasMsvcConstructor
+			&& hasMsvcDestructor
+			&& msvcText.indexOf('@target("x86_64-pc-windows-msvc")') >= 0
+			&& msvcProjection.indexOf("public static function create(value:Int):Widget") >= 0,
+			"MSVC x64 C++ imports should retain Clang's constructor/destructor symbols and target layout");
+		var msvcCxx = CxxHeaderImporter.importHeader("tests/ffi/cxx_import_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++", "cxx_msvc");
+		var msvcSizePlan = Lambda.find(msvcCxx.plans, plan -> plan.name == "__cxx_nkui__DisplayList__size");
+		expect(msvcSizePlan != null, "MSVC x64 C++ import should retain the const method call plan");
+		if (msvcSizePlan != null)
+			switch msvcSizePlan.result {
+				case IntegerValue(32, Unsigned):
+				case _:
+					throw "MSVC x64 C++ c_ulong should use the LLP64 32-bit result ABI";
+			}
 	}
 
 	static function expect(value:Bool, message:String):Void {
