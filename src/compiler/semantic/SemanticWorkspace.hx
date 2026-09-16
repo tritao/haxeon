@@ -334,6 +334,35 @@ class SemanticWorkspace {
 		return null;
 	}
 
+	/**
+	 * Return the canonical package-qualified name for an authoritative type.
+	 *
+	 * Recovered typing may encounter a type through a local alias or import
+	 * spelling. Keeping the declaration's package identity on the temporary
+	 * CompilerType lets member lookup resolve the same authoritative symbols as
+	 * exact typing, without publishing any recovered declaration globally.
+	 */
+	public function editorTypeName(id:SemanticSymbolId):Null<String> {
+		var resolved = editorSymbolById(id),
+			model = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || model == null || !isTypeKind(resolved.symbol.kind)
+			|| resolved.symbol.kind == DeclarationKind.Alias)
+			return null;
+		for (decl in model.program.classes)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(model, decl.name);
+		for (decl in model.program.interfaces)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(model, decl.name);
+		for (decl in model.program.abstracts)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(model, decl.name);
+		for (decl in model.program.enums)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(model, decl.name);
+		return null;
+	}
+
 	public function indexedSignature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
 		for (state in orderedStates()) {
 			var model = effectiveModel(state),

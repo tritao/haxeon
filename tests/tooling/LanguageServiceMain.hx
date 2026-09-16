@@ -1417,9 +1417,16 @@ class LanguageServiceMain {
 			"package alias.types; typedef Alias = Foo; function main():Void return;");
 		qualifiedAliasService.compile("alias.types.Alias");
 		qualifiedAliasService.update("alias/app/QualifiedAlias.hx", qualifiedAliasSource);
-		var qualifiedAliasNames = [for (item in qualifiedAliasService.complete("alias/app/QualifiedAlias.hx", qualifiedAliasSource.length)) item.label];
-		if (qualifiedAliasNames.indexOf("member") < 0)
+		var qualifiedAliasNames = [for (item in qualifiedAliasService.complete("alias/app/QualifiedAlias.hx", qualifiedAliasSource.length)) item.label],
+			qualifiedAliasCompletion = qualifiedAliasNames.indexOf("member") >= 0;
+		if (!qualifiedAliasCompletion)
 			throw "recovered fully qualified typedef did not expand its underlying receiver type";
+		var qualifiedAliasNavigationSource = "package alias.app; function main():Void { var value:alias.types.Alias; value.member; }";
+		qualifiedAliasService.update("alias/app/QualifiedAlias.hx", qualifiedAliasNavigationSource);
+		var qualifiedAliasMemberPosition = qualifiedAliasNavigationSource.indexOf("value.member") + "value.".length + 1,
+			qualifiedAliasMemberDefinition = qualifiedAliasService.definition("alias/app/QualifiedAlias.hx", qualifiedAliasMemberPosition);
+		if (qualifiedAliasMemberDefinition == null || qualifiedAliasMemberDefinition.path != "alias/types/Foo.hx")
+			throw 'recovered fully qualified typedef did not navigate its underlying member: completion=$qualifiedAliasCompletion, definition=${qualifiedAliasMemberDefinition == null ? "null" : qualifiedAliasMemberDefinition.path}';
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");

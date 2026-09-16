@@ -1092,10 +1092,13 @@ class LanguageService {
 
 	function recoveredTypeForIdentity(id:SemanticSymbolId, name:String, arguments:Array<CompilerType>):CompilerType {
 		var identity = Std.string(id);
-		return if (identity.indexOf(":class:") >= 0) TInstance(NominalKind.Class, name,
-			arguments); else if (identity.indexOf(":interface:") >= 0) TInstance(NominalKind.Interface, name,
-			arguments); else if (identity.indexOf(":enum:") >= 0) TInstance(NominalKind.Enum, name,
-			arguments); else if (identity.indexOf(":abstract:") >= 0) TAbstract(name, arguments, TUnknown); else TUnknown;
+		var canonicalName = compiler.semanticWorkspace.editorTypeName(id);
+		if (canonicalName == null)
+			canonicalName = name;
+		return if (identity.indexOf(":class:") >= 0) TInstance(NominalKind.Class, canonicalName,
+			arguments); else if (identity.indexOf(":interface:") >= 0) TInstance(NominalKind.Interface, canonicalName,
+			arguments); else if (identity.indexOf(":enum:") >= 0) TInstance(NominalKind.Enum, canonicalName,
+			arguments); else if (identity.indexOf(":abstract:") >= 0) TAbstract(canonicalName, arguments, TUnknown); else TUnknown;
 	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
