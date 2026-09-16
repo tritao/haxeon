@@ -1707,6 +1707,10 @@ class SemanticIndexBuilder {
 	}
 
 	function recoveredCommonType(left:CompilerType, right:CompilerType):CompilerType {
+		if (left == TNever)
+			return right;
+		if (right == TNever)
+			return left;
 		if (TypeRelations.equals(left, right))
 			return left;
 		if (isRecoveryType(left))

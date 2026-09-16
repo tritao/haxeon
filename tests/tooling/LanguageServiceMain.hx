@@ -1895,6 +1895,16 @@ class LanguageServiceMain {
 		var inferredObjectCallContext = inferredObjectCallService.completionContext("InferredObjectCall.hx", inferredObjectCallSource.length);
 		if (inferredObjectCallContext == null || inferredObjectCallContext.context.expected != TInt)
 			throw 'recovered anonymous callable member did not retain its argument type: ${inferredObjectCallContext == null ? "null" : Std.string(inferredObjectCallContext.context.expected)}';
+		var emptySwitchService = new LanguageService(),
+			emptySwitchSource = "class SwitchValue { public var member:Int; } function main():Void { var selected = switch (1) { case 1: new SwitchValue(); default: }; selected.";
+		emptySwitchService.update("EmptySwitch.hx", emptySwitchSource);
+		var emptySwitchItems = emptySwitchService.completeResult("EmptySwitch.hx", emptySwitchSource.length).items,
+			emptySwitchMember = false;
+		for (item in emptySwitchItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				emptySwitchMember = true;
+		if (!emptySwitchMember)
+			throw "unreachable switch recovery branch poisoned the known branch type";
 		var recoveredAbstractService = new LanguageService(),
 			recoveredAbstractSource = "abstract Value(Int) from Missing to";
 		recoveredAbstractService.update("RecoveredAbstract.hx", recoveredAbstractSource);
