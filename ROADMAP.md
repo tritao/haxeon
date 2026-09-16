@@ -129,6 +129,13 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   order current-valid, current-recovered, then last-known-good. Edits publish
   a recovered AST, tokens, and editor-only semantic model immediately; the
   recovered model never becomes authoritative workspace state.
+- [~] Semantic index construction now has a dedicated `SemanticIndexBuilder`,
+  shared exhaustive typed-AST traversal, and a detached frozen query index.
+  Remaining work is to move the complex recovery-query algorithms fully out of
+  the builder and remove the remaining construction-field compatibility paths.
+- [~] Recovery construction is isolated in `RecoveryEngine`; workspace name
+  resolution, dependency visibility, and recovered-body reuse remain explicit
+  callbacks so editor snapshots cannot publish speculative declarations.
 - [~] Interactive parser recovery retains incomplete declarations, parameter
 	and type lists, member access, calls, blocks, and control-flow constructs.
 	Recovery diagnostics are merged and deduplicated with compiler diagnostics,
