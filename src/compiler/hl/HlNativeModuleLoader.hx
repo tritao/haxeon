@@ -9,6 +9,7 @@ import compiler.hl.patch.HlPatchReader;
 import runtime.hashlink.HlFunctionVersionTable;
 import runtime.hashlink.HlFunctionVersionTable.HlFunctionVersionEntry;
 import runtime.hashlink.HlMetadataGeneration;
+import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimePatchCode;
 import runtime.hashlink.HlRuntimeModule;
@@ -182,9 +183,17 @@ class HlLoadedRuntimeModule {
 		if (patch.baseRevision != revision)
 			throw 'Haxeon rejected a stale HLP patch (expected revision $revision, got ${patch.baseRevision})';
 		validatePatchPolicy(patch, model);
-		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision);
-		var publication = nativeModule.patchCode(bytes);
+		var nextFunctions = functions.advance(patch.functionStableIds, patch.revision),
+			typeAppend = HlNativeMetadataBuilder.preparePatchTypes(module, metadata, model),
+			publication:HlRuntimePatchPublication;
+		try {
+			publication = nativeModule.patchCodeWithHaxeTypes(bytes, model.types.length);
+		} catch (error:Dynamic) {
+			typeAppend.rollback();
+			throw error;
+		}
 		if (publication.status != 0) {
+			typeAppend.rollback();
 			if (!nativeModule.releaseCode(publication.code))
 				throw "HashLink rejected the Haxe-built runtime patch and leaked its code handle";
 			throw 'HashLink rejected the Haxe-built runtime patch (status ${publication.status})';
@@ -195,8 +204,10 @@ class HlLoadedRuntimeModule {
 		} catch (error:Dynamic) {
 			if (!nativeModule.releaseCode(publication.code))
 				throw "HashLink accepted the Haxe-built runtime patch but leaked its code handle";
+			typeAppend.rollback();
 			throw error;
 		}
+		typeAppend.commit();
 		applyPatchSymbols(model);
 		patchLedger.push(new HlRuntimePatchGeneration(model, patch, nextFunctions, patchCode));
 		functions = nextFunctions;

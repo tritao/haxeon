@@ -65,8 +65,20 @@ class HlRuntimeModule {
 	public function patchCode(bytes:Bytes):HlRuntimePatchPublication {
 		if (!isLoaded() || bytes == null)
 			throw "HashLink external runtime patch requires a loaded module and patch bytes";
+		return patchCodeInternal(bytes, -1);
+	}
+
+	/** Apply a patch while using Haxe-owned compatible appended type records. */
+	public function patchCodeWithHaxeTypes(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
+		if (!isLoaded() || bytes == null || typeCount < 0)
+			throw "HashLink external runtime patch requires a loaded module, patch bytes, and a non-negative type count";
+		return patchCodeInternal(bytes, typeCount);
+	}
+
+	function patchCodeInternal(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
 		var status = haxe.io.Bytes.alloc(4),
-			code = HlTypeBridge.native_runtime_module_patch_code(module, bytes, bytes.length, cast status.getData()),
+			code = typeCount < 0 ? HlTypeBridge.native_runtime_module_patch_code(module, bytes, bytes.length, cast status.getData())
+				: HlTypeBridge.native_runtime_module_patch_code_haxe_types(module, bytes, bytes.length, typeCount, cast status.getData()),
 			result = status.getInt32(0);
 		return new HlRuntimePatchPublication(result, code);
 	}
