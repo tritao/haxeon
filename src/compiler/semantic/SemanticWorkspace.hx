@@ -135,6 +135,12 @@ class SemanticWorkspace {
 	 */
 	public function editorResolveSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		var importedMember = editorImportedMemberSymbolId(from, name, sourceProgram, token);
+		if (importedMember != null)
+			return importedMember;
+		var importedType = editorImportedTypeSymbolId(from, name, sourceProgram, token);
+		if (importedType != null)
+			return importedType;
 		var matches:Array<SemanticSymbolId> = [];
 		for (candidate in editorSymbolCandidates(from, name, token, sourceProgram)) {
 			if (token != null)
@@ -155,6 +161,9 @@ class SemanticWorkspace {
 	/** Resolve a recovered type name without bypassing editor visibility. */
 	public function editorResolveTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		var importedType = editorImportedTypeSymbolId(from, name, sourceProgram, token);
+		if (importedType != null)
+			return importedType;
 		var matches:Array<SemanticSymbolId> = [];
 		for (candidate in editorSymbolCandidates(from, name, token, sourceProgram)) {
 			if (token != null)
@@ -706,10 +715,120 @@ class SemanticWorkspace {
 			var wildcard = StringTools.endsWith(importPath, ".*"),
 				prefix = wildcard ? importPath.substring(0, importPath.length - 2) : importPath;
 			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + ".")
-				|| logicalCandidateName == prefix || StringTools.startsWith(logicalCandidateName, prefix + "."))
+				|| logicalCandidateName == prefix || StringTools.startsWith(logicalCandidateName, prefix + ".")
+				|| editorImportModule(importPath) == candidate.name)
 				return true;
 		}
 		return false;
+	}
+
+	/** Resolve a source-level imported type, including secondary module types. */
+	function editorImportedTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram;
+		if (program == null)
+			return null;
+		var matches:Array<SemanticSymbolId> = [];
+		for (importPath in program.imports)
+			if (editorImportQualifier(program, importPath) == name)
+				addImportedTypeMatches(from, program, importPath, matches, token);
+		for (alias => importPath in program.importAliases)
+			if (alias == name)
+				addImportedTypeMatches(from, program, importPath, matches, token);
+		var unique:Array<SemanticSymbolId> = [];
+		for (id in matches)
+			if (unique.indexOf(id) < 0)
+				unique.push(id);
+		return unique.length == 1 ? unique[0] : null;
+	}
+
+	function addImportedTypeMatches(from:ModuleState, program:AstProgram, importPath:String,
+		result:Array<SemanticSymbolId>, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
+		var target = editorImportTarget(importPath),
+			model = target == null ? null : editorModel(target),
+			typeName = target == null || model == null ? null : editorImportedTypeName(target, model, importPath);
+		if (target == null || model == null || typeName == null)
+			return;
+		var id = resolveTypeSymbolId(typeName);
+		if (id != null && editorSymbolVisible(from, id, program, token))
+			result.push(id);
+	}
+
+	function editorImportedMemberSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var separator = name.indexOf(".");
+		if (separator < 1)
+			return null;
+		var qualifier = name.substring(0, separator),
+			memberName = name.substring(separator + 1),
+			typeId = editorImportedTypeSymbolId(from, qualifier, sourceProgram, token);
+		if (typeId == null)
+			return null;
+		var resolved = editorSymbolById(typeId),
+			canonical = editorTypeName(typeId);
+		if (resolved == null || canonical == null)
+			return null;
+		return switch resolved.symbol.kind {
+			case DeclarationKind.Class: memberSymbolId(TInstance(NominalKind.Class, canonical, []), memberName);
+			case DeclarationKind.Interface: memberSymbolId(TInstance(NominalKind.Interface, canonical, []), memberName);
+			case DeclarationKind.Abstract: memberSymbolId(TAbstract(canonical, [], TUnknown), memberName);
+			default: null;
+		};
+	}
+
+	function editorImportedTypeName(target:ModuleState, model:compiler.semantic.SemanticModel, importPath:String):Null<String> {
+		var moduleName = target.name,
+			nestedName = importPath == moduleName ? moduleSourceName(moduleName) : importPath.substring(moduleName.length + 1);
+		for (decl in model.program.classes)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		for (decl in model.program.interfaces)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		for (decl in model.program.abstracts)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		for (decl in model.program.enums)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		for (decl in model.program.aliases)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		return null;
+	}
+
+	static function canonicalEditorTypeName(model:compiler.semantic.SemanticModel, name:String):String {
+		var packageName = model.program.packageName == null ? "" : Std.string(model.program.packageName);
+		return packageName.length == 0 || StringTools.startsWith(name, packageName + ".") ? name : packageName + "." + name;
+	}
+
+	function editorImportTarget(importPath:String):Null<ModuleState> {
+		var candidate = importPath;
+		while (candidate.length > 0) {
+			var state = modules.get(candidate);
+			if (state != null)
+				return state;
+			var separator = candidate.lastIndexOf(".");
+			if (separator < 0)
+				break;
+			candidate = candidate.substring(0, separator);
+		}
+		return null;
+	}
+
+	function editorImportModule(importPath:String):Null<String> {
+		var target = editorImportTarget(importPath);
+		return target == null ? null : target.name;
+	}
+
+	static function editorImportQualifier(program:AstProgram, importPath:String):String {
+		for (alias => path in program.importAliases)
+			if (path == importPath)
+				return alias;
+		return moduleSourceName(importPath);
 	}
 
 	function editorDeclarationsIn(state:ModuleState, name:String):Array<WorkspaceDeclaration> {

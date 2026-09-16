@@ -480,6 +480,40 @@ class LanguageServiceMain {
 		var wildcardTypingNames = [for (item in wildcardTypingService.complete("wild/Main.hx", wildcardTypingSource.length)) item.label];
 		if (wildcardTypingNames.indexOf("known") < 0)
 			throw "wildcard-imported recovered type did not retain its member completion";
+		var secondaryModuleService = new LanguageService(),
+			secondaryModuleSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.";
+		secondaryModuleService.update("secondary/types/Container.hx",
+			"package secondary.types; class Entry { public var member:Int; } function main():Void return;");
+		secondaryModuleService.compile("secondary.types.Container");
+		secondaryModuleService.update("secondary/app/Main.hx", secondaryModuleSource);
+		var secondaryModuleItems = secondaryModuleService.completeResult("secondary/app/Main.hx", secondaryModuleSource.length).items,
+			foundSecondaryMember = false;
+		for (item in secondaryModuleItems)
+			if (item.label == "member")
+				foundSecondaryMember = true;
+		if (!foundSecondaryMember)
+			throw "recovered secondary module type did not retain its member completion";
+		var secondaryNavigationSource = "package secondary.app; import secondary.types.Container.Entry; function main():Void { var entry:Entry; entry.member; }";
+		secondaryModuleService.update("secondary/app/Main.hx", secondaryNavigationSource);
+		var secondaryMemberPosition = secondaryNavigationSource.indexOf("entry.member") + "entry.".length + 1,
+			secondaryMemberDefinition = secondaryModuleService.definition("secondary/app/Main.hx", secondaryMemberPosition),
+			secondaryTypePosition = secondaryNavigationSource.indexOf(":Entry") + 2,
+			secondaryTypeDefinition = secondaryModuleService.typeDefinition("secondary/app/Main.hx", secondaryTypePosition),
+			secondaryTypeReferences = secondaryModuleService.references("secondary/app/Main.hx", secondaryTypePosition),
+			hasSecondaryTypeReference = false,
+			hasCurrentSecondaryTypeReference = false;
+		for (reference in secondaryTypeReferences)
+			if (reference.path == "secondary/types/Container.hx")
+				hasSecondaryTypeReference = true;
+			else if (reference.path == "secondary/app/Main.hx"
+				&& reference.span.start <= secondaryTypePosition
+				&& secondaryTypePosition <= reference.span.end)
+				hasCurrentSecondaryTypeReference = true;
+		if (secondaryMemberDefinition == null || secondaryMemberDefinition.path != "secondary/types/Container.hx")
+			throw 'recovered secondary module type did not navigate its member: ${secondaryMemberDefinition == null ? "null" : secondaryMemberDefinition.path}';
+		if (secondaryTypeDefinition == null || secondaryTypeDefinition.path != "secondary/types/Container.hx"
+			|| !hasSecondaryTypeReference || !hasCurrentSecondaryTypeReference)
+			throw 'recovered secondary module type did not retain its canonical type identity: definition=${secondaryTypeDefinition == null ? "null" : secondaryTypeDefinition.path}, position=$secondaryTypePosition, references=${secondaryTypeReferences.length}';
 		var transitiveService = new LanguageService();
 		transitiveService.update("editor/base/Base.hx",
 			"package editor.base; class Base { public var inherited:Int; public function inheritedMethod(value:String):String return value; }");
