@@ -2,6 +2,9 @@ package runtime;
 
 import compiler.hl.HlModule;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+#if haxeon
+import runtime.hashlink.HlMetadataGeneration;
+#end
 import sys.thread.Mutex;
 
 /** Exclusive owner of one native runtime module handle. */
@@ -21,6 +24,11 @@ class LoadedModule {
 	/** Haxe-owned snapshots of successfully published patch generations. */
 	final patchLedger:Array<RuntimePatchGeneration> = [];
 
+	#if haxeon
+	/** Haxe-owned native metadata retained for the lifetime of this module. */
+	public final metadata:HlMetadataGeneration;
+	#end
+
 	final mutex = new Mutex();
 	var handle:Null<RuntimeModuleHandle>;
 	var closeRequested = false;
@@ -28,7 +36,12 @@ class LoadedModule {
 	var deferredDispose:Null<RuntimeModuleHandle->Void>;
 
 	@:allow(runtime.Runtime)
-	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest) {
+	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest #if haxeon, metadata:HlMetadataGeneration #end) {
+		#if haxeon
+		if (metadata == null)
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Haxeon runtime modules require an owned metadata generation");
+		this.metadata = metadata;
+		#end
 		this.handle = handle;
 		this.model = model;
 		this.identity = identity;

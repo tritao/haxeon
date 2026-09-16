@@ -32,8 +32,6 @@ class Runtime {
 	static final jitGenerationModules:Array<LoadedModule> = [];
 	static final jitGenerations:Array<Array<RuntimeJitGeneration>> = [];
 	#if haxeon
-	static final metadataModules:Array<LoadedModule> = [];
-	static final metadataGenerations:Array<HlMetadataGeneration> = [];
 	static final haxeRuntimeModuleKernel:HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	#end
 
@@ -93,9 +91,7 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 		}
 		try {
-			var loaded = new LoadedModule(module, model, identityModel);
-			recordMetadata(loaded, metadata);
-			return loaded;
+			return new LoadedModule(module, model, identityModel, metadata);
 		} catch (error:Dynamic) {
 			#if haxeon
 			haxeRuntimeModuleKernel.dispose(cast module);
@@ -406,7 +402,7 @@ class Runtime {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP generation snapshot: ${Std.string(error)}');
 			}
 			#if haxeon
-			var metadata = metadataFor(module), publication = jitBackend.applyPatch(handle, transaction, metadata);
+			var publication = jitBackend.applyPatch(handle, transaction, module.metadata);
 			#else
 			var publication = jitBackend.applyPatch(handle, transaction);
 			#end
@@ -481,25 +477,8 @@ class Runtime {
 	}
 
 	#if haxeon
-	static function metadataFor(module:LoadedModule):HlMetadataGeneration {
-		var index = metadataModules.indexOf(module);
-		if (index < 0)
-			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime module has no Haxe-owned metadata generation");
-		return metadataGenerations[index];
-	}
-
-	static function recordMetadata(module:LoadedModule, metadata:HlMetadataGeneration):Void {
-		metadataModules.push(module);
-		metadataGenerations.push(metadata);
-	}
-
 	static function finishMetadataRetirement(module:LoadedModule):Void {
-		var index = metadataModules.indexOf(module);
-		if (index < 0)
-			return;
-		metadataGenerations[index].dispose();
-		metadataModules.splice(index, 1);
-		metadataGenerations.splice(index, 1);
+		module.metadata.dispose();
 	}
 	#end
 
