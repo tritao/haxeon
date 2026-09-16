@@ -81,8 +81,13 @@ operation preflights the section envelope, fixed module-ID, revision header,
 and replacement function identities before handing the bytes to HashLink; the
 native patch kernel still performs complete wire, operand, relocation, symbol,
 and live-compatibility validation. The public host `Runtime.load` facade remains
-on the legacy native-decoder path until it can be compiled against the
-Haxeon-only native-memory classes.
+on the legacy native-decoder path when compiled by the pinned host Haxe
+toolchain. Haxeon-generated runtime code now takes the same decoded-manifest
+path: it builds and publishes `HlMetadataGeneration`, passes the native code
+record and stable ID/slot tables through `RuntimeKernel.load_code_manifest`, and
+retains the metadata generation in a parallel ownership ledger until native
+module teardown completes. This keeps the host compatibility fallback while
+making Haxeon-owned metadata the active path for generated runtime code.
 
 Haxe-built modules initialize HashLink with `HL_MODULE_HAXE_METADATA`. That
 boundary flag tells the native kernel to retain Haxeon's enum and virtual

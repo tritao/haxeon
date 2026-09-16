@@ -2,10 +2,17 @@ package runtime;
 
 import haxe.io.Bytes;
 import compiler.hl.HlModule;
+#if haxeon
+import compiler.hl.HlNativeMetadataBuilder;
+#end
 import compiler.hl.HlPatchPolicy;
 import compiler.hl.HlRuntimeCallPolicy;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
+#if haxeon
+import runtime.hashlink.HlMetadataGeneration;
+import runtime.memory.RawPtr;
+#end
 import sys.thread.Mutex;
 
 /**
@@ -25,6 +32,10 @@ class Runtime {
 	static final jitGenerationRevisions:Array<Array<Int>> = [];
 	static final jitGenerationStates:Array<Array<Int>> = [];
 	static final jitGenerationHandles:Array<Array<RuntimeJitCodeHandle>> = [];
+	#if haxeon
+	static final metadataModules:Array<LoadedModule> = [];
+	static final metadataGenerations:Array<HlMetadataGeneration> = [];
+	#end
 
 	public static var pendingRetirementCount(get, never):Int;
 
@@ -36,7 +47,11 @@ class Runtime {
 	}
 
 	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
+		#if haxeon
+		var summary = RuntimeKernel.inspect_patch(cast bytes.getData(), bytes.length);
+		#else
 		var summary = RuntimeKernel.inspect_patch(bytes.getData(), bytes.length);
+		#end
 		if (summary < 0)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
 		return {baseRevision: summary >>> 22, revision: (summary >>> 12) & 0x3FF, functionCount: summary & 0xFFF};
@@ -51,10 +66,44 @@ class Runtime {
 			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the HLB module: ${Std.string(error)}');
 		}
 		retryRetirements();
+		#if haxeon
+		var metadata:HlMetadataGeneration;
+		try {
+			metadata = HlNativeMetadataBuilder.buildModule(model);
+		} catch (error:Dynamic) {
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the native metadata: ${Std.string(error)}');
+		}
+		var publication = metadata.snapshot(),
+			count = identityModel.entries.length,
+			stableIdStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count),
+			slotStorage:RawPtr<Int32> = count == 0 ? RawPtr.nullPtr() : metadata.arena.allocInt32Array(count);
+		for (index in 0...count) {
+			var entry = identityModel.entries[index];
+			stableIdStorage.offset(index).store(cast entry.stableId);
+			slotStorage.offset(index).store(cast entry.functionIndex);
+		}
+		var module = RuntimeKernel.load_code_manifest(publication.nativeCode.castTo(), bytes, bytes.length, identityModel.moduleId, identityModel.revision,
+			stableIdStorage, slotStorage, count, identityModel.initializerSlot);
+		if (module == null) {
+			metadata.dispose();
+			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
+		}
+		try {
+			var loaded = new LoadedModule(module, model, identityModel);
+			recordMetadata(loaded, metadata);
+			return loaded;
+		} catch (error:Dynamic) {
+			RuntimeKernel.dispose(module);
+			metadata.dispose();
+			throw error;
+		}
+		#else
+		retryRetirements();
 		var module = RuntimeKernel.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the module bytes");
 		return new LoadedModule(module, model, identityModel);
+		#end
 	}
 
 	static function validateIdentity(identity:HlRuntimeManifest, model:HlModule):HlRuntimeManifest {
@@ -86,7 +135,11 @@ class Runtime {
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		invoke(module, stableIndex, 3, function(handle) {
+			#if haxeon
+			RuntimeKernel.call_bytes1(handle, stableIndex, cast @:privateAccess argument.bytes);
+			#else
 			RuntimeKernel.call_bytes1(handle, stableIndex, @:privateAccess argument.bytes);
+			#end
 		});
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
@@ -151,7 +204,11 @@ class Runtime {
 		return module.access(function(handle) {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
+			#if haxeon
+			RuntimeKernel.retirement_status(handle, cast bytes.getData());
+			#else
 			RuntimeKernel.retirement_status(handle, bytes.getData());
+			#end
 			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12));
 		});
 
@@ -209,9 +266,12 @@ class Runtime {
 				throw new RuntimeError(status,
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
 		});
-		if (disposed)
+		if (disposed) {
 			finishJitRetirement(module);
-		else
+			#if haxeon
+			finishMetadataRetirement(module);
+			#end
+		} else
 			beginJitRetirement(module);
 		return disposed;
 	}
@@ -241,7 +301,7 @@ class Runtime {
 			} catch (error:Dynamic) {
 				throw new RuntimeError(RuntimeStatus.Incompatible, 'Haxeon rejected the HLP patch: ${Std.string(error)}');
 			}
-			var nextFunctions;
+			var nextFunctions:RuntimeFunctionVersionTable;
 			try {
 				nextFunctions = module.functions.advance(envelope.functionStableIds, envelope.revision);
 			} catch (error:RuntimeError) {
@@ -331,6 +391,22 @@ class Runtime {
 		jitGenerationStates[index].push(JitGenerationPublished);
 		jitGenerationHandles[index].push(handle);
 	}
+
+	#if haxeon
+	static function recordMetadata(module:LoadedModule, metadata:HlMetadataGeneration):Void {
+		metadataModules.push(module);
+		metadataGenerations.push(metadata);
+	}
+
+	static function finishMetadataRetirement(module:LoadedModule):Void {
+		var index = metadataModules.indexOf(module);
+		if (index < 0)
+			return;
+		metadataGenerations[index].dispose();
+		metadataModules.splice(index, 1);
+		metadataGenerations.splice(index, 1);
+	}
+	#end
 
 	static function beginJitRetirement(module:LoadedModule):Void {
 		var index = jitGenerationModules.indexOf(module);

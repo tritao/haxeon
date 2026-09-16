@@ -86,6 +86,11 @@ When module teardown has detached an allocation from its owner lists, the
 external handle is what keeps its code and decoded function metadata alive until
 Haxeon finishes retiring the generation.
 
+Haxeon-generated `Runtime.load` also records the base `HlMetadataGeneration`
+beside the `LoadedModule` in a parallel ledger. Native disposal completes before
+that arena is released, so Haxe-owned type, function, pool, and debug pointers
+remain valid for the whole native module lifetime.
+
 `Runtime.stagePatch` exposes the same staged/committed/rolled-back lifecycle for
 the legacy host path, while `Runtime.patchSet` remains the convenience API that
 stages and commits immediately. Host policy validation and native publication

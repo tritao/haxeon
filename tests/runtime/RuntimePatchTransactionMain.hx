@@ -9,8 +9,8 @@ class RuntimePatchTransactionMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", "function main():Int { return 40; } function make():() -> Int { return main; }");
 		var initial = compiler.compile("Main"),
-			mainId = initial.functionIds.get("main"),
-			makeId = initial.functionIds.get("Main.make"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			makeId:Int = cast initial.functionIds.get("Main.make"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
 		compiler.update("Main.hx", "function main():Int { return 42; } function make():() -> Int { return main; }");
 		var changed = compiler.compile("Main"),

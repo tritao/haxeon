@@ -8,6 +8,14 @@ HL_PRIM hl_runtime_module *HL_NAME(load_code)( vbyte *code, vbyte *bytes, int le
 	return hl_runtime_module_load_code((hl_code*)code,bytes,length,identity,identity_length,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
 }
 
+HL_PRIM hl_runtime_module *HL_NAME(load_code_manifest)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *module_id, int revision,
+	vbyte *stable_ids, vbyte *slots, int identity_count, int initializer_slot ) {
+	hl_runtime_module *runtime = NULL;
+	return hl_runtime_module_load_code_manifest((hl_code*)code,bytes == NULL ? NULL : bytes->data,length,
+		module_id == NULL ? NULL : module_id->data,module_id == NULL ? 0 : module_id->length,revision,
+		(const int*)stable_ids,(const int*)slots,identity_count,initializer_slot,&runtime) == HL_RUNTIME_OK ? runtime : NULL;
+}
+
 HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *identity, int identity_length ) {
 	hl_runtime_module *runtime = NULL;
 	return hl_runtime_module_load_code((hl_code*)code,bytes == NULL ? NULL : bytes->data,length,identity == NULL ? NULL : identity->data,identity_length,&runtime) == HL_RUNTIME_OK ? (vbyte*)runtime : NULL;

@@ -1,13 +1,19 @@
 package runtime;
 
 /** Current HashLink-backed implementation of the Haxe JIT backend seam. */
-final class NativeRuntimeJitBackend implements RuntimeJitBackend {
+class NativeRuntimeJitBackend implements RuntimeJitBackend {
 	public function new() {}
 
 	public inline function applyPatch(module:RuntimeModuleHandle, transaction:RuntimePatchTransaction):RuntimeJitPublication {
+		#if haxeon
+		var status = haxe.io.Bytes.alloc(4),
+			code = RuntimeJit.patch_code(module, cast transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length, cast status.getData()),
+			result:RuntimeStatus = status.getInt32(0);
+		#else
 		var status = new hl.Bytes(4),
 			code = RuntimeJit.patch_code(module, transaction.patchSet.bytes.getData(), transaction.patchSet.bytes.length, status),
 			result:RuntimeStatus = status.getI32(0);
+		#end
 		if (result != RuntimeStatus.Ok && code != null)
 			RuntimeJit.release_code(code);
 		return new RuntimeJitPublication(result, code);
