@@ -1239,6 +1239,12 @@ class SemanticIndex {
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
+			case Variable("this", span):
+				var receiver:Null<CompilerType> = null;
+				for (candidate in functionReceivers)
+					if (span.start >= candidate.span.start && span.end <= candidate.span.end)
+						receiver = candidate.type;
+				receiver == null ? TUnknown : receiver;
 			case Variable(name, span):
 				var id = bindRecoveredLocal(name, span);
 				if (id != null && declarationTypes.exists(id)) declarationTypes.get(id); else if (declarations.classes.exists(name))

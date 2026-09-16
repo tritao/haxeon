@@ -1597,6 +1597,18 @@ class LanguageServiceMain {
 			nestedReferences = nestedMemberService.references("NestedNavigation.hx", nestedUse + 1);
 		if (nestedDefinition == null || nestedDefinition.path != "NestedNavigation.hx" || nestedReferences.length != 2)
 			throw 'recovered navigation did not resolve a nested member identity: definition=${nestedDefinition == null ? "null" : nestedDefinition.path}, references=${nestedReferences.length}';
+		var thisReceiverService = new LanguageService(),
+			thisReceiverSource = "class ThisReceiver { public var value:Int; public function read():Int return this.value; public function call():Int return this.read(); } function main():Void return;";
+		thisReceiverService.update("ThisReceiver.hx", thisReceiverSource);
+		var thisValueUse = thisReceiverSource.lastIndexOf("this.value") + "this.".length,
+			thisValueDefinition = thisReceiverService.definition("ThisReceiver.hx", thisValueUse + 1),
+			thisValueReferences = thisReceiverService.references("ThisReceiver.hx", thisValueUse + 1),
+			thisMethodUse = thisReceiverSource.lastIndexOf("this.read") + "this.".length,
+			thisMethodDefinition = thisReceiverService.definition("ThisReceiver.hx", thisMethodUse + 1);
+		if (thisValueDefinition == null || thisValueDefinition.span.start != thisReceiverSource.indexOf("var value")
+			|| thisValueReferences.length != 2
+			|| thisMethodDefinition == null || thisMethodDefinition.span.start != thisReceiverSource.indexOf("function read"))
+			throw "recovered this-member expressions did not retain the owning class identity";
 		var nullableMemberService = new LanguageService(),
 			nullableMemberSource = "class Leaf { public var value:Int; } class Root { public var child:Leaf; } function main():Void { var root:Null<Root> = null; root.child.";
 		nullableMemberService.update("NullableMember.hx", nullableMemberSource);
