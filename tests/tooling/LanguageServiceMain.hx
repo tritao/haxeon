@@ -1348,6 +1348,28 @@ class LanguageServiceMain {
 			|| enumAliasDefinition.path != "alias/types/Kind.hx"
 			|| enumAliasReferences.length < 2)
 			throw "recovered aliased enum case identity was not preserved for navigation";
+		var typedefAliasService = new LanguageService(),
+			typedefAliasSource = "package alias.app; import alias.types.Alias as A; function main():Void { var value:A; value.";
+		typedefAliasService.update("alias/types/Foo.hx", "package alias.types; class Foo { public var member:Int; } function main():Void return;");
+		typedefAliasService.update("alias/types/Alias.hx", "package alias.types; typedef Alias = Foo; function main():Void return;");
+		typedefAliasService.compile("alias.types.Alias");
+		typedefAliasService.update("alias/app/TypedefAlias.hx", typedefAliasSource);
+		var typedefAliasNames = [for (item in typedefAliasService.complete("alias/app/TypedefAlias.hx", typedefAliasSource.length)) item.label];
+		if (typedefAliasNames.indexOf("member") < 0)
+			throw "recovered aliased imported typedef did not preserve its underlying receiver type";
+		var genericTypedefAliasService = new LanguageService(),
+			genericTypedefAliasSource = "package alias.app; import alias.types.Alias as A; function main():Void { var value:A<String>; value.";
+		genericTypedefAliasService.update("alias/types/Box.hx", "package alias.types; class Box<T> { public var member:T; } function main():Void return;");
+		genericTypedefAliasService.update("alias/types/Alias.hx", "package alias.types; import alias.types.Box; typedef Alias<T> = Box<T>; function main():Void return;");
+		genericTypedefAliasService.compile("alias.types.Alias");
+		genericTypedefAliasService.update("alias/app/GenericTypedefAlias.hx", genericTypedefAliasSource);
+		var genericTypedefAliasMembers = genericTypedefAliasService.completeResult("alias/app/GenericTypedefAlias.hx", genericTypedefAliasSource.length).items,
+			genericTypedefAliasMember:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in genericTypedefAliasMembers)
+			if (item.label == "member")
+				genericTypedefAliasMember = item;
+		if (genericTypedefAliasMember == null || genericTypedefAliasMember.detail != "member:String")
+			throw "recovered generic aliased typedef did not preserve type-parameter substitution";
 		var duplicateRecoveryService = new LanguageService();
 		duplicateRecoveryService.update("DuplicateRecovered.hx",
 			"function same():Void return; function same():Void return; function usable():Void return;");

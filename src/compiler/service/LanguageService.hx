@@ -24,6 +24,7 @@ import compiler.semantic.SemanticIndex.UnresolvedSymbol;
 import compiler.semantic.SemanticModel;
 import compiler.Compiler.CompileResult;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.AnonymousField;
 import compiler.types.Type.NominalKind;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.DeclarationIndex;
@@ -923,13 +924,26 @@ class LanguageService {
 	}
 
 	function resolveRecoveredType(state:ModuleState, program:AstProgram, name:String, arguments:Array<CompilerType>,
-		?token:CancellationToken):Null<CompilerType> {
+		?token:CancellationToken, ?aliasTrail:Map<String, Bool>):Null<CompilerType> {
+		var trail:Map<String, Bool> = aliasTrail == null ? [] : aliasTrail,
+			localAlias = recoveredTypeAlias(program, name);
+		if (localAlias != null) {
+			var aliasKey = state.name + ":" + localAlias.name;
+			if (trail.exists(aliasKey))
+				return null;
+			var nextTrail:Map<String, Bool> = [for (key => value in trail) key => value];
+			nextTrail.set(aliasKey, true);
+			return recoveredAliasType(state, program, localAlias, arguments, token, nextTrail);
+		}
 		var qualifiedName = packageQualifiedName(program, name),
 			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, name, program, token);
 		if (direct == null && qualifiedName != name)
 			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, qualifiedName, program, token);
-		if (direct != null)
-			return recoveredTypeForIdentity(direct, name, arguments);
+		if (direct != null) {
+			var resolved = recoveredTypeForIdentity(direct, name, arguments);
+			if (!isRecoveryType(resolved))
+				return resolved;
+		}
 		for (importPath in program.imports) {
 			if (importQualifier(program, importPath) != name)
 				continue;
@@ -937,6 +951,15 @@ class LanguageService {
 				importedAst = imported == null ? null : effectiveAst(imported);
 			if (importedAst == null)
 				continue;
+			for (alias in importedAst.aliases)
+				if (alias.name == sourceName(importPath)) {
+					var aliasKey = imported.name + ":" + alias.name;
+					if (trail.exists(aliasKey))
+						return null;
+					var nextTrail:Map<String, Bool> = [for (key => value in trail) key => value];
+					nextTrail.set(aliasKey, true);
+					return recoveredAliasType(imported, importedAst, alias, arguments, token, nextTrail);
+				}
 			for (decl in importedAst.classes)
 				if (decl.name == sourceName(importPath))
 					return TInstance(NominalKind.Class, decl.name, arguments);
@@ -965,6 +988,81 @@ class LanguageService {
 		return null;
 	}
 
+	static function recoveredTypeAlias(program:AstProgram, name:String):Null<compiler.syntax.Ast.AstTypeAlias> {
+		for (alias in program.aliases)
+			if (alias.name == name || sourceName(name) == alias.name)
+				return alias;
+		return null;
+	}
+
+	function recoveredAliasType(state:ModuleState, program:AstProgram, alias:compiler.syntax.Ast.AstTypeAlias,
+		arguments:Array<CompilerType>, ?token:CancellationToken, ?aliasTrail:Map<String, Bool>):CompilerType {
+		var substitutions:Map<String, CompilerType> = [];
+		for (index in 0...alias.typeParameters.length)
+			substitutions.set(alias.typeParameters[index], index < arguments.length ? arguments[index] : TUnknown);
+		return recoveredAliasAstType(state, program, alias.type, substitutions, token, aliasTrail);
+	}
+
+	function recoveredAliasAstType(state:ModuleState, program:AstProgram, type:AstType,
+		substitutions:Map<String, CompilerType>, ?token:CancellationToken, ?aliasTrail:Map<String, Bool>):CompilerType {
+		if (token != null)
+			token.check();
+		return switch type {
+			case ErrorType(_), InferredType: TUnknown;
+			case IntType: TInt;
+			case BoolType: TBool;
+			case FloatType: TFloat;
+			case StringType: TString;
+			case VoidType: TVoid;
+			case NativeAbstractType(_, tag): TNativeAbstract(tag);
+			case NamedType(name):
+				var substitution = substitutions.get(name);
+				if (substitution != null)
+					substitution;
+				else {
+					var resolved = resolveRecoveredType(state, program, name, [], token, aliasTrail);
+					resolved == null ? TUnknown : resolved;
+				}
+			case AppliedType(name, arguments):
+				var resolvedArguments = [
+					for (argument in arguments)
+						recoveredAliasAstType(state, program, argument, substitutions, token, aliasTrail)
+				];
+				switch name {
+					case "List" if (resolvedArguments.length == 1): TArray(resolvedArguments[0]);
+					case "Iterator" if (resolvedArguments.length == 1): TIterator(resolvedArguments[0]);
+					default:
+						var resolved = resolveRecoveredType(state, program, name, resolvedArguments, token, aliasTrail);
+						resolved == null ? TUnknown : resolved;
+				}
+			case ArrayType(element):
+				TArray(recoveredAliasAstType(state, program, element, substitutions, token, aliasTrail));
+			case MapType(key, value):
+				TMap(recoveredAliasAstType(state, program, key, substitutions, token, aliasTrail),
+					recoveredAliasAstType(state, program, value, substitutions, token, aliasTrail));
+			case NullableType(element):
+				TNullable(recoveredAliasAstType(state, program, element, substitutions, token, aliasTrail));
+			case FunctionType(arguments, result):
+				TFunction([
+					for (argument in arguments)
+						recoveredAliasAstType(state, program, argument, substitutions, token, aliasTrail)
+				], recoveredAliasAstType(state, program, result, substitutions, token, aliasTrail));
+			case AnonymousType(fields):
+				var recoveredFields:Array<AnonymousField> = [
+					for (field in fields)
+						{
+							name: field.name,
+							type: field.optional
+								? TNullable(recoveredAliasAstType(state, program, field.type, substitutions, token, aliasTrail))
+								: recoveredAliasAstType(state, program, field.type, substitutions, token, aliasTrail),
+							optional: field.optional
+						}
+				];
+				recoveredFields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+				TAnonymous(SemanticSignature.anonymousTypeName(recoveredFields), recoveredFields);
+		};
+	}
+
 	static function packageQualifiedName(program:AstProgram, name:String):String {
 		var packageName = program.packageName;
 		return name.indexOf(".") < 0 && packageName != null && packageName.length > 0 ? packageName + "." + name : name;
@@ -974,7 +1072,8 @@ class LanguageService {
 		var identity = Std.string(id);
 		return if (identity.indexOf(":class:") >= 0) TInstance(NominalKind.Class, name,
 			arguments); else if (identity.indexOf(":interface:") >= 0) TInstance(NominalKind.Interface, name,
-			arguments); else if (identity.indexOf(":enum:") >= 0) TInstance(NominalKind.Enum, name, arguments); else TUnknown;
+			arguments); else if (identity.indexOf(":enum:") >= 0) TInstance(NominalKind.Enum, name,
+			arguments); else if (identity.indexOf(":abstract:") >= 0) TAbstract(name, arguments, TUnknown); else TUnknown;
 	}
 
 	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
