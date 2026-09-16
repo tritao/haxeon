@@ -4,7 +4,6 @@ import haxe.io.Bytes;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
 import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
-import runtime.hashlink.HlPatchResolution.HlRuntimePatchResolution;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
@@ -87,12 +86,12 @@ class HlRuntimeModule {
 
 	/** Apply a patch while using Haxe-owned type and function metadata. */
 	public function patchCodeWithHaxeMetadata(input:RawPtr<HlRuntimePatchInput>, typeCount:Int, functions:HlRuntimePatchFunctions,
-		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>, resolution:RawPtr<HlRuntimePatchResolution>):HlRuntimePatchPublication {
-		if (!isLoaded() || input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull() || resolution.isNull())
-			throw "HashLink external runtime patch requires a loaded module, decoded patch input, type count, function metadata, scalar pools, debug metadata, and resolution metadata";
+		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication {
+		if (!isLoaded() || input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull())
+			throw "HashLink external runtime patch requires a loaded module, decoded patch input, type count, function metadata, scalar pools, and debug metadata";
 		var status = haxe.io.Bytes.alloc(4),
 			code = HlTypeBridge.native_runtime_module_patch_code_haxe_metadata(module, input, typeCount, functions.pointer, functions.count,
-				pools, debug, resolution, cast status.getData()),
+				pools, debug, cast status.getData()),
 			result = status.getInt32(0);
 		return new HlRuntimePatchPublication(result, code);
 	}

@@ -142,13 +142,14 @@ appended type records, patched function descriptors, source spans, source
 snapshots, and cumulative integer, float, and string pools in the generation's
 arena. It also constructs an arena-owned resolution plan: every replacement
 function and relocation carries its stable identity and the dispatch slot
-chosen by Haxe policy. Native checks that plan against the decoded HLP and its
-live module identity table, but does not derive the Haxe path's replacement or
-relocation mapping from the wire data. Native borrows the Haxe pool, debug, and
-resolution pointers and swaps them into the live module only during successful
-publication; the legacy native-decoder path retains the old native
-combined-pool, type, function, debug, and relocation staging behavior. Any
-failure frees staged storage; the Haxe path also rolls back its arena, pool
+chosen by Haxe policy. The projection applies those slots directly to the
+instruction operands before publication. Native validates the resolved model
+and does not derive the Haxe path's replacement or relocation mapping from the
+wire data. Native borrows the Haxe pool and debug pointers and swaps them into
+the live module only during successful publication. The legacy native-decoder
+path retains the old native combined-pool, type, function, debug, and
+relocation staging behavior. Any failure frees staged storage; the Haxe path
+also rolls back its arena, pool
 model, and type-table cursors, leaving the published revision, symbol counts,
 dispatch pointers, and owners unchanged.
 

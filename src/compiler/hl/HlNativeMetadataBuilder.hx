@@ -186,9 +186,13 @@ class HlNativeMetadataBuilder {
 	}
 
 	/** Project the decoded HLP model into an arena-owned native patch input. */
-	public static function preparePatchInput(generation:HlMetadataGeneration, patch:HlPatch, debug:RawPtr<HlRuntimePatchDebug>):RawPtr<HlRuntimePatchInput> {
-		if (generation == null || patch == null || debug.isNull())
-			throw "HashLink patch input requires a generation, patch, and debug metadata";
+	public static function preparePatchInput(generation:HlMetadataGeneration, patch:HlPatch, debug:RawPtr<HlRuntimePatchDebug>,
+			resolution:RawPtr<HlRuntimePatchResolution>):RawPtr<HlRuntimePatchInput> {
+		if (generation == null || patch == null || debug.isNull() || resolution.isNull())
+			throw "HashLink patch input requires a generation, patch, debug metadata, and resolution metadata";
+		if (cast(resolution.ref.functionCount, Int) != patch.functions.length
+			|| (patch.functions.length > 0 && resolution.ref.functions.isNull()))
+			throw "HashLink patch input resolution count does not match the patch";
 		if (patch.moduleId == null || patch.moduleId.length != 16)
 			throw "HashLink patch input requires a 16-byte module identity";
 		var moduleId = generation.arena.allocUInt8Array(16);
@@ -228,7 +232,13 @@ class HlNativeMetadataBuilder {
 		var functions = generation.arena.allocPatchFunctionInputArray(patch.functions.length);
 		for (index in 0...patch.functions.length) {
 			var source = patch.functions[index],
-				destination = functions.offset(index);
+				destination = functions.offset(index),
+				resolved = resolution.ref.functions.offset(index);
+			if (cast(resolved.ref.stableId, Int) != source.functionIndex
+				|| cast(resolved.ref.slot, Int) != source.slot || cast(resolved.ref.relocationCount, Int) != source.relocations.length)
+				throw 'HashLink patch input resolution does not match function identity ${source.functionIndex}';
+			if (source.relocations.length > 0 && (resolved.ref.relocationStableIds.isNull() || resolved.ref.relocationSlots.isNull()))
+				throw 'HashLink patch input resolution has no relocation slots for function identity ${source.functionIndex}';
 			var registerStorage:RawPtr<Int32> = source.registers.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.registers.length),
 				instructionStorage:RawPtr<HlRuntimePatchInstruction> = source.instructions.length == 0 ? RawPtr.nullPtr() : generation.arena.allocPatchInstructionArray(source.instructions.length),
 				relocationInstructions:RawPtr<Int32> = source.relocations.length == 0 ? RawPtr.nullPtr() : generation.arena.allocInt32Array(source.relocations.length),
@@ -257,8 +267,19 @@ class HlNativeMetadataBuilder {
 			destination.ref.relocationInstructions = relocationInstructions;
 			destination.ref.relocationStableIds = relocationStableIds;
 			for (relocation in 0...source.relocations.length) {
-				relocationInstructions.offset(relocation).store(cast source.relocations[relocation].instruction);
-				relocationStableIds.offset(relocation).store(cast source.relocations[relocation].stableId);
+				var relocationModel = source.relocations[relocation],
+					resolvedStableId:Int = cast(resolved.ref.relocationStableIds.offset(relocation).load(), Int),
+					resolvedSlot:Int = cast(resolved.ref.relocationSlots.offset(relocation).load(), Int);
+				if (resolvedStableId != relocationModel.stableId)
+					throw 'HashLink patch input relocation identity does not match function identity ${source.functionIndex}';
+				if (relocationModel.instruction < 0 || relocationModel.instruction >= source.instructions.length)
+					throw 'HashLink patch input relocation instruction is out of range for function identity ${source.functionIndex}';
+				var relocationInstruction = instructionStorage.offset(relocationModel.instruction);
+				if (cast(relocationInstruction.ref.operandCount, Int) < 2 || relocationInstruction.ref.operands.isNull())
+					throw 'HashLink patch input relocation instruction has no target operand for function identity ${source.functionIndex}';
+				relocationInstruction.ref.operands.offset(1).store(cast resolvedSlot);
+				relocationInstructions.offset(relocation).store(cast relocationModel.instruction);
+				relocationStableIds.offset(relocation).store(cast relocationModel.stableId);
 			}
 			destination.ref.debugCount = cast source.debug.length;
 			destination.ref.debugSpans = debugSpans;

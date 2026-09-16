@@ -20,7 +20,7 @@ module generation.
 | TLS and deque roots | HashLink process or owning managed handle | GC root registry | Managed values stored by user code | Clearing/finalizing the container removes roots; module-owned values remain visible in the managed allocation census |
 | Patch JIT image | HashLink patch transaction | Haxe `HlRuntimePatchLedger` policy plus `hl_module` patch-code owner and one Haxe-owned external code handle per committed generation | Dispatch slots, escaped closures, active calls, Haxe generation ledger | Haxe tracks superseded generations; handle release remains after module retirement while native owner lists decide executable reclamation |
 | Patched function descriptors, register arrays, opcodes, debug pairs, and source spans | Haxe metadata arena | Loaded Haxe generation and its patch ledger | Native JIT, dispatch slots, debugger | Generation teardown after the native module and retained code handles are released |
-| Patch stable-ID and relocation resolution plans | Haxe metadata arena | Haxe patch transaction/generation | Native wire validator and JIT staging | Arena checkpoint rollback on failure; generation teardown after native publication retires |
+| Patch stable-ID and relocation resolution plans | Haxe metadata arena | Haxe patch transaction/generation and patch-input projection | Haxe patch-input construction | Arena checkpoint rollback on failure; generation teardown after native publication retires |
 | Decoded HLP patch input records | Haxe metadata arena | Haxe patch transaction/generation | Native JIT staging and machine-sensitive validation | Arena checkpoint rollback on failure; generation teardown after native publication retires |
 | Patched scalar pools (integers, floats, strings, lengths, and UTF-16 views) | Haxe metadata arena on the Haxe-built path; HashLink patch transaction on the legacy path | Loaded Haxe generation or `hl_module` | JIT and patched code | Haxe arena release or runtime-module release |
 | Constant storage | HashLink patch transaction | `hl_module` | Patched code and appended type metadata | Runtime-module release |
@@ -116,8 +116,10 @@ state remains a native responsibility.
 
 Haxe-built patch publication follows the same single-model rule. `HlPatchReader`
 decodes each HLP once, and the generation arena owns the `hl_patch_input`
-projection consumed by the native kernel. Its instruction, relocation, debug,
-and source-snapshot fields remain valid through the locked publication call.
+projection consumed by the native kernel. Haxe resolves stable IDs to dispatch
+slots while constructing that projection, so its instruction operands are
+already ready for native validation and JIT staging. Its instruction, relocation,
+debug, and source-snapshot fields remain valid through the locked publication call.
 The native byte parser remains available for the legacy host-facing patch API,
 but the Haxe-owned runtime path no longer reparses its HLP input.
 

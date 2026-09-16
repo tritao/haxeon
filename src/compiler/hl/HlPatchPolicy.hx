@@ -37,6 +37,8 @@ class HlPatchPolicy {
 			for (relocation in fn.relocations)
 				if (relocation.instruction < 0 || relocation.instruction >= fn.instructions.length)
 					throw 'Haxeon rejected an out-of-range relocation instruction ${relocation.instruction} for function identity ${fn.functionIndex}';
+				else if (!isRelocatableInstruction(fn.instructions[relocation.instruction].opcode))
+					throw 'Haxeon rejected a relocation on unsupported opcode ${fn.instructions[relocation.instruction].opcode} for function identity ${fn.functionIndex}';
 		}
 	}
 
@@ -276,6 +278,15 @@ class HlPatchPolicy {
 		requireNonNegative(operands[2], "$kind argument count");
 		if (operands[2] != operands.length - 3)
 			throw 'Haxeon rejected a mismatched $kind argument count';
+	}
+
+	static function isRelocatableInstruction(opcode:Int):Bool {
+		return switch opcode {
+			case HlOpcode.Call0 | HlOpcode.Call1 | HlOpcode.Call2 | HlOpcode.Call3 | HlOpcode.Call4 | HlOpcode.CallN | HlOpcode.StaticClosure | HlOpcode.InstanceClosure:
+				true;
+			default:
+				false;
+		};
 	}
 
 	static function requireBranch(index:Int, offset:Int, instructionCount:Int, kind:String):Void {
