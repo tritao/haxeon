@@ -22,8 +22,8 @@ import sys.FileSystem;
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
 class CxxAbiLowerer {
 	public static function lower(model:CxxModel, target:String, ?library:String, ?interfaceName:String, ?dependencies:Array<String>,
-			trivialValues:Bool = false, lifetimes:Bool = false):HxiInterface {
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes);
+			trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):HxiInterface {
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch);
 		var records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
 			aliases:Map<String, CxxAlias> = [];
@@ -79,7 +79,9 @@ class CxxAbiLowerer {
 		for (record in model.records)
 			for (method in record.methods)
 				if (method.loweredName != null)
-					result.set(method.loweredName, method.isConstructor ? CxxConstructor : method.isDestructor ? CxxDestructor : DirectSymbol);
+					result.set(method.loweredName,
+						method.isConstructor ? CxxConstructor : method.isDestructor ? CxxDestructor : method.virtualAbi == null ? DirectSymbol : CxxVirtual(method.virtualAbi.vtableIndex,
+							method.virtualAbi.thisAdjustment));
 		return result;
 	}
 

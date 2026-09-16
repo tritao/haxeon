@@ -938,34 +938,28 @@ HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_owned_from_slot)( realtime
 	return pointer;
 }
 
-static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic **arguments, int argument_count,
+static vdynamic *haxeon_native_invoke_prepared( unsigned char *argument_codes, int *argument_sizes, int argument_count, int result_code,
+	int result_size, ffi_cif *cif, void *symbol, vdynamic **arguments, int dynamic_argument_count, void *synthetic_this, bool synthetic_first,
 	realtime_bytes **aggregate_output ) {
-	if( library == NULL || symbol == NULL || signature == NULL ) hl_error("Null ordinary C call descriptor");
-	const char *converted = hl_to_utf8((const uchar *)library);
-	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	converted = hl_to_utf8((const uchar *)symbol);
-	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	converted = hl_to_utf8((const uchar *)signature);
-	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	if( library_name == NULL || symbol_name == NULL || signature_text == NULL ) hl_error("Could not convert ordinary C call descriptor");
-	haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
-	free(library_name);
-	free(symbol_name);
-	free(signature_text);
-	if( entry->argument_count != argument_count ) hl_error("Ordinary C argument count does not match its signature");
+	if( argument_count != dynamic_argument_count + (synthetic_first ? 1 : 0) ) hl_error("Native argument count does not match its signature");
 	unsigned char slots[HAXEON_NATIVE_MAX_ARGUMENTS * HAXEON_NATIVE_SLOT_SIZE];
 	void *values[HAXEON_NATIVE_MAX_ARGUMENTS];
 	memset(slots,0,sizeof(slots));
 	for( int index = 0; index < argument_count; index++ ) {
-		vdynamic *value = arguments[index];
+		if( synthetic_first && index == 0 ) {
+			memcpy(slots,&synthetic_this,sizeof(synthetic_this));
+			values[index] = slots;
+			continue;
+		}
+		vdynamic *value = arguments[index - (synthetic_first ? 1 : 0)];
 		if( value == NULL || value->t == NULL ) {
-			if( entry->argument_codes[index] == HAXEON_NATIVE_POINTER || entry->argument_codes[index] == HAXEON_NATIVE_UTF8_NULLABLE ) {
+			if( argument_codes[index] == HAXEON_NATIVE_POINTER || argument_codes[index] == HAXEON_NATIVE_UTF8_NULLABLE ) {
 				values[index] = slots + index * HAXEON_NATIVE_SLOT_SIZE;
 				continue;
 			}
 			hl_error("Null ordinary C scalar argument");
 		}
-		switch( entry->argument_codes[index] ) {
+		switch( argument_codes[index] ) {
 		case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
 		case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i,sizeof(int)); break;
 		case HAXEON_NATIVE_I64: case HAXEON_NATIVE_U64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.i64,sizeof(int64_t)); break;
@@ -1008,7 +1002,7 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 			if( value->t->kind != HABSTRACT || strcmp(hl_to_utf8(value->t->abs_name),"realtime_bytes") != 0 )
 				hl_error("Ordinary C aggregate argument requires a struct value");
 			realtime_bytes *bytes = (realtime_bytes *)value->v.ptr;
-			if( bytes == NULL || bytes->length != entry->argument_sizes[index] )
+			if( bytes == NULL || bytes->length != argument_sizes[index] )
 				hl_error("Ordinary C aggregate argument has the wrong size");
 			values[index] = bytes->data;
 			continue;
@@ -1025,21 +1019,21 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 		values[index] = slots + index * HAXEON_NATIVE_SLOT_SIZE;
 	}
 	unsigned char output[HAXEON_NATIVE_SLOT_SIZE] = {0};
-	if( entry->result_code == HAXEON_NATIVE_AGGREGATE ) {
+	if( result_code == HAXEON_NATIVE_AGGREGATE ) {
 		if( aggregate_output == NULL ) hl_error("Aggregate ordinary C result requires a typed destination");
-		realtime_bytes *bytes = realtime_bytes_make(entry->result_size);
-		ffi_call(&entry->function->cif,FFI_FN(entry->function->symbol),bytes->data,values);
+		realtime_bytes *bytes = realtime_bytes_make(result_size);
+		ffi_call(cif,FFI_FN(symbol),bytes->data,values);
 		*aggregate_output = bytes;
 		return NULL;
 	}
-	ffi_call(&entry->function->cif,FFI_FN(entry->function->symbol),entry->result_code == HAXEON_NATIVE_VOID ? NULL : output,values);
-	if( entry->result_code == HAXEON_NATIVE_VOID ) return NULL;
+	ffi_call(cif,FFI_FN(symbol),result_code == HAXEON_NATIVE_VOID ? NULL : output,values);
+	if( result_code == HAXEON_NATIVE_VOID ) return NULL;
 	vdynamic *result;
-	switch( entry->result_code ) {
+	switch( result_code ) {
 	case HAXEON_NATIVE_I8: case HAXEON_NATIVE_U8: case HAXEON_NATIVE_I16: case HAXEON_NATIVE_U16:
 	case HAXEON_NATIVE_I32: case HAXEON_NATIVE_U32:
 		result = hl_alloc_dynamic(&hlt_i32);
-		switch( entry->result_code ) {
+		switch( result_code ) {
 		case HAXEON_NATIVE_I8: { int8_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
 		case HAXEON_NATIVE_U8: { uint8_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
 		case HAXEON_NATIVE_I16: { int16_t value; memcpy(&value,output,sizeof(value)); result->v.i = value; break; }
@@ -1059,9 +1053,87 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 	}
 }
 
+static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic **arguments, int argument_count,
+	realtime_bytes **aggregate_output ) {
+	if( library == NULL || symbol == NULL || signature == NULL ) hl_error("Null ordinary C call descriptor");
+	const char *converted = hl_to_utf8((const uchar *)library);
+	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)symbol);
+	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	converted = hl_to_utf8((const uchar *)signature);
+	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( library_name == NULL || symbol_name == NULL || signature_text == NULL ) hl_error("Could not convert ordinary C call descriptor");
+	haxeon_native_cached_call *entry = haxeon_native_cached_resolve(library_name,symbol_name,signature_text);
+	free(library_name);
+	free(symbol_name);
+	free(signature_text);
+	return haxeon_native_invoke_prepared(entry->argument_codes,entry->argument_sizes,entry->argument_count,entry->result_code,entry->result_size,
+		&entry->function->cif,entry->function->symbol,arguments,argument_count,NULL,false,aggregate_output);
+}
+
 static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vdynamic **arguments, int argument_count ) {
 	return haxeon_native_invoke_aggregate(library,symbol,signature,arguments,argument_count,NULL);
 }
+
+static vdynamic *haxeon_native_virtual_invoke( vbyte *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment,
+	vdynamic **arguments, int argument_count ) {
+	if( signature == NULL || object == NULL || object->value == NULL ) hl_error("C++ virtual call requires an open native object");
+	if( vtable_index < 0 || vtable_index > 255 ) hl_error("C++ virtual call has an invalid vtable index");
+	const char *converted = hl_to_utf8((const uchar *)signature);
+	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( signature_text == NULL ) hl_error("Could not convert C++ virtual call signature");
+	unsigned char argument_codes[HAXEON_NATIVE_MAX_ARGUMENTS];
+	ffi_type *argument_types[HAXEON_NATIVE_MAX_ARGUMENTS];
+	int argument_sizes[HAXEON_NATIVE_MAX_ARGUMENTS], argument_aligns[HAXEON_NATIVE_MAX_ARGUMENTS], parsed_count, result_code, result_size, result_align;
+	ffi_type *result_type;
+	ffi_abi call_abi;
+	if( !haxeon_native_parse_signature(signature_text,argument_codes,argument_types,argument_sizes,argument_aligns,&parsed_count,&result_code,&result_type,
+		&result_size,&result_align,&call_abi) ) {
+		free(signature_text);
+		hl_error("Invalid C++ virtual call signature");
+	}
+	free(signature_text);
+	if( parsed_count != argument_count + 1 || argument_count > HAXEON_NATIVE_MAX_ARGUMENTS - 1 )
+		hl_error("C++ virtual call argument count does not match its signature");
+	if( argument_codes[0] != HAXEON_NATIVE_POINTER ) hl_error("C++ virtual call signature must begin with a native object pointer");
+	ffi_cif cif;
+	if( result_code == HAXEON_NATIVE_AGGREGATE ) hl_error("C++ virtual aggregate results are unsupported");
+	if( ffi_prep_cif(&cif,call_abi,(unsigned int)parsed_count,result_type,argument_types) != FFI_OK )
+		hl_error("Could not prepare C++ virtual call signature");
+	void **vtable = *(void ***)object->value;
+	if( vtable == NULL || vtable[vtable_index] == NULL ) hl_error("C++ object has no callable vtable entry");
+	void *adjusted_this = (void *)((char *)object->value + this_adjustment);
+	return haxeon_native_invoke_prepared(argument_codes,argument_sizes,parsed_count,result_code,result_size,&cif,vtable[vtable_index],arguments,argument_count,
+		adjusted_this,true,NULL);
+}
+
+#define HAXEON_NATIVE_VIRTUAL_PARAMS(...) __VA_ARGS__
+#define HAXEON_NATIVE_VIRTUAL(n, params, count, ...) \
+	HL_PRIM vdynamic *HL_NAME(native_virtual_invoke_##n)( vbyte *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment HAXEON_NATIVE_VIRTUAL_PARAMS params ) { \
+		vdynamic *arguments[] = {__VA_ARGS__}; \
+		return haxeon_native_virtual_invoke(signature,object,vtable_index,this_adjustment,arguments,count); \
+	}
+
+HAXEON_NATIVE_VIRTUAL(0,(),0,NULL)
+HAXEON_NATIVE_VIRTUAL(1,(, vdynamic *a0),1,a0)
+HAXEON_NATIVE_VIRTUAL(2,(, vdynamic *a0, vdynamic *a1),2,a0,a1)
+HAXEON_NATIVE_VIRTUAL(3,(, vdynamic *a0, vdynamic *a1, vdynamic *a2),3,a0,a1,a2)
+HAXEON_NATIVE_VIRTUAL(4,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3),4,a0,a1,a2,a3)
+HAXEON_NATIVE_VIRTUAL(5,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4),5,a0,a1,a2,a3,a4)
+HAXEON_NATIVE_VIRTUAL(6,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5),6,a0,a1,a2,a3,a4,a5)
+HAXEON_NATIVE_VIRTUAL(7,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6),7,a0,a1,a2,a3,a4,a5,a6)
+HAXEON_NATIVE_VIRTUAL(8,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7),8,a0,a1,a2,a3,a4,a5,a6,a7)
+HAXEON_NATIVE_VIRTUAL(9,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8),9,a0,a1,a2,a3,a4,a5,a6,a7,a8)
+HAXEON_NATIVE_VIRTUAL(10,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9),10,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9)
+HAXEON_NATIVE_VIRTUAL(11,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10),11,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)
+HAXEON_NATIVE_VIRTUAL(12,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11),12,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11)
+HAXEON_NATIVE_VIRTUAL(13,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12),13,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12)
+HAXEON_NATIVE_VIRTUAL(14,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13),14,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13)
+HAXEON_NATIVE_VIRTUAL(15,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14),15,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14)
+HAXEON_NATIVE_VIRTUAL(16,(, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15),16,a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15)
+
+#undef HAXEON_NATIVE_VIRTUAL
+#undef HAXEON_NATIVE_VIRTUAL_PARAMS
 
 static haxeon_native_pointer *haxeon_native_pointer_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership,
 	vbyte *release, bool nullable, vdynamic **arguments, int argument_count ) {

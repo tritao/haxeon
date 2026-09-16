@@ -4,6 +4,7 @@ import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.ffi.ClangAstTools;
 import compiler.ffi.ClangRecordLayouts.RecordLayout;
+import compiler.ffi.ClangVtableLayouts.VtableLayout;
 import compiler.ffi.CxxModel.CxxAlias;
 import compiler.ffi.CxxModel.CxxBase;
 import compiler.ffi.CxxModel.CxxEnum;
@@ -31,7 +32,7 @@ typedef CxxImportResult = {
 class CxxHeaderImporter {
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
 			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, standard:String = "c++20", ?defines:Array<String>,
-			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false):CxxImportResult {
+			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):CxxImportResult {
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,
@@ -50,11 +51,11 @@ class CxxHeaderImporter {
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
 				excluded.push(ClangAstTools.pathKey(FileSystem.fullPath(excludedHeader)));
-		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts);
+		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts);
 		builder.visit(frontend.ast, [], null, sourcePath);
 		var model = builder.finish(target);
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes);
-		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes);
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch);
+		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch);
 		return {
 			model: model,
 			hxi: hxi,
@@ -68,6 +69,7 @@ private class CxxAstBuilder {
 	final roots:Array<String>;
 	final excluded:Array<String>;
 	final layouts:Map<String, RecordLayout>;
+	final vtableLayouts:Map<String, VtableLayout>;
 	final records:Array<CxxRecord> = [];
 	final enums:Array<CxxEnum> = [];
 	final aliases:Array<CxxAlias> = [];
@@ -77,11 +79,13 @@ private class CxxAstBuilder {
 	final aliasNames:Map<String, Bool> = [];
 	final functionSymbols:Map<String, Bool> = [];
 
-	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>, layouts:Map<String, RecordLayout>) {
+	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>, layouts:Map<String, RecordLayout>,
+			vtableLayouts:Map<String, VtableLayout>) {
 		this.sourcePath = sourcePath;
 		this.roots = roots;
 		this.excluded = excluded;
 		this.layouts = layouts;
+		this.vtableLayouts = vtableLayouts;
 	}
 
 	public function visit(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String):Void {
@@ -201,9 +205,19 @@ private class CxxAstBuilder {
 				hasVirtual = hasVirtual || method.isVirtual;
 			}
 		}
+		var vtable = vtableLayouts.get(qualified);
+		if (vtable != null)
+			for (method in methods)
+				if (method.isVirtual)
+					for (entry in vtable.entries)
+						if (entry.owner == method.owner && entry.method == method.name) {
+							method.virtualAbi = {vtableIndex: entry.index, thisAdjustment: entry.thisAdjustment};
+							break;
+						}
 		return new CxxRecord(name, qualified, tagUsed == null ? "class" : tagUsed, ClangAstTools.field(node, "completeDefinition") == true,
-			layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, ClangAstTools.field(definitionData, "isStandardLayout") == true,
-			ClangAstTools.field(definitionData, "isTriviallyCopyable") == true, hasVirtual, bases, fields, methods, ClangAstTools.sourceSpan(node, sourcePath));
+			ClangAstTools.field(definitionData, "isAbstract") == true, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align,
+			ClangAstTools.field(definitionData, "isStandardLayout") == true, ClangAstTools.field(definitionData, "isTriviallyCopyable") == true, hasVirtual,
+			bases, fields, methods, ClangAstTools.sourceSpan(node, sourcePath));
 	}
 
 	function makeMethod(node:Dynamic, owner:String, access:String, namespaces:Array<String>):CxxMethod {

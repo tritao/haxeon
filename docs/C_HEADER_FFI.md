@@ -20,8 +20,13 @@ The current direct profile imports namespaces, aliases, enum classes, opaque
 records, free functions, static methods, and public non-virtual `noexcept`
 methods. A member method is lowered to an HXI function with a synthetic
 `__this` pointer, while the `@symbol` value is exactly Clang's mangled name.
-References are represented as non-null pointer ABI values. Virtual methods,
-inheritance, rvalue references, throwing calls, and non-trivial class values
+References are represented as non-null pointer ABI values. Virtual methods and
+inheritance require the separate opt-in `--cxx-virtual` profile; that profile
+currently supports only Clang's Itanium ABI on 64-bit Linux/macOS and a single
+non-virtual base. The generated Haxe method reads the object's vtable and calls
+the selected function pointer, preserving dynamic dispatch. MSVC virtual
+dispatch is diagnosed until its ABI metadata path is implemented. Rvalue
+references, throwing calls, and non-trivial class values
 produce `CXX` diagnostics instead of an unsafe binding. Trivial record values
 are opt-in through `--cxx-trivial-values`. Constructors and destructors are
 also opt-in through `--cxx-lifetimes` and must be public, `noexcept`, and

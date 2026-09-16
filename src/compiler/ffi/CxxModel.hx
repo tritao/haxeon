@@ -35,6 +35,11 @@ typedef CxxBase = {
 	final span:SourceSpan;
 }
 
+typedef CxxVirtualMethodAbi = {
+	final vtableIndex:Int;
+	final thisAdjustment:Int;
+}
+
 typedef CxxEnumValue = {
 	final name:String;
 	final value:String;
@@ -78,6 +83,7 @@ class CxxMethod {
 	public final result:CxxType;
 	public final span:SourceSpan;
 	public var loweredName:Null<String>;
+	public var virtualAbi:Null<CxxVirtualMethodAbi>;
 
 	public function new(owner:String, name:String, qualifiedName:String, symbol:String, access:String, isStatic:Bool, isConst:Bool, isNoexcept:Bool,
 			isVirtual:Bool, parameters:Array<CxxParameter>, result:CxxType, span:SourceSpan, isConstructor:Bool = false, isDestructor:Bool = false) {
@@ -95,6 +101,7 @@ class CxxMethod {
 		this.parameters = parameters;
 		this.result = result;
 		this.span = span;
+		this.virtualAbi = null;
 	}
 }
 
@@ -103,6 +110,7 @@ class CxxRecord {
 	public final qualifiedName:String;
 	public final tagUsed:String;
 	public final completeDefinition:Bool;
+	public final isAbstract:Bool;
 	public final size:Int;
 	public final align:Int;
 	public final isStandardLayout:Bool;
@@ -113,12 +121,14 @@ class CxxRecord {
 	public final methods:Array<CxxMethod>;
 	public final span:SourceSpan;
 
-	public function new(name:String, qualifiedName:String, tagUsed:String, completeDefinition:Bool, size:Int, align:Int, isStandardLayout:Bool,
-			isTriviallyCopyable:Bool, hasVirtualMembers:Bool, bases:Array<CxxBase>, fields:Array<CxxField>, methods:Array<CxxMethod>, span:SourceSpan) {
+	public function new(name:String, qualifiedName:String, tagUsed:String, completeDefinition:Bool, isAbstract:Bool, size:Int, align:Int,
+			isStandardLayout:Bool, isTriviallyCopyable:Bool, hasVirtualMembers:Bool, bases:Array<CxxBase>, fields:Array<CxxField>, methods:Array<CxxMethod>,
+			span:SourceSpan) {
 		this.name = name;
 		this.qualifiedName = qualifiedName;
 		this.tagUsed = tagUsed;
 		this.completeDefinition = completeDefinition;
+		this.isAbstract = isAbstract;
 		this.size = size;
 		this.align = align;
 		this.isStandardLayout = isStandardLayout;

@@ -42,6 +42,16 @@ class CxxProjection {
 			availablePlans = nativePlans == null ? abi.functions() : nativePlans;
 		for (plan in availablePlans)
 			plans.set(plan.name, plan);
+		var virtualArities:Map<Int, Bool> = [];
+		for (method in record.methods) {
+			var plan = method.loweredName == null ? null : plans.get(method.loweredName);
+			if (plan != null)
+				switch plan.dispatch {
+					case CxxVirtual(_, _):
+						virtualArities.set(method.parameters.length, true);
+					case _:
+				}
+		}
 		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
 			output = new StringBuf();
 		output.add('// Generated C++ object projection for ${record.qualifiedName}. Do not edit.\n');
@@ -50,6 +60,16 @@ class CxxProjection {
 		output.add('\tpublic static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer"> return null;\n');
 		output.add('\tpublic static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool return false;\n');
 		output.add('}\n\n');
+		if ([for (arity in virtualArities.keys()) arity].length > 0) {
+			output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class __CxxVirtual {\n');
+			var arities = [for (arity in virtualArities.keys()) arity];
+			arities.sort(Reflect.compare);
+			for (arity in arities) {
+				var arguments = [for (index in 0...arity) 'arg$index:Dynamic'];
+				output.add('\tpublic static function native_virtual_invoke_$arity(signature:String, object:hl.Abstract<"native_pointer">, vtableIndex:Int, thisAdjustment:Int${arguments.length == 0 ? "" : ", " + arguments.join(", ")}):Dynamic return null;\n');
+			}
+			output.add('}\n\n');
+		}
 		output.add('class $typeName {\n');
 		output.add('\tfinal __native:$nativeType;\n\n');
 		output.add('\tfinal __owned:Bool;\n');
@@ -106,10 +126,23 @@ class CxxProjection {
 				callArguments = (method.isStatic ? [] : ["nativeHandle()"]).concat(calls),
 				staticModifier = method.isStatic ? " static" : "";
 			output.add('\tpublic$staticModifier function $methodName(${arguments.join(", ")}):${result.haxeType} {\n');
-			if (result.haxeType == "Void")
-				output.add('\t\t${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
-			else
-				output.add('\t\treturn ${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+			var virtual:Null<{index:Int, adjustment:Int}> = switch plan.dispatch {
+				case CxxVirtual(index, adjustment): {index: index, adjustment: adjustment};
+				case _: null;
+			};
+			if (virtual == null) {
+				if (result.haxeType == "Void")
+					output.add('\t\t${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+				else
+					output.add('\t\treturn ${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+			} else {
+				var signature = HxiHaxeEmitter.nativeSignature(hxi, plan),
+					virtualCall = '__CxxVirtual.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
+				if (result.haxeType == "Void")
+					output.add('\t\t$virtualCall;\n');
+				else
+					output.add('\t\treturn cast $virtualCall;\n');
+			}
 			output.add('\t}\n');
 		}
 
@@ -223,4 +256,7 @@ class CxxProjection {
 			case _: true;
 		};
 	}
+
+	static function escape(value:String):String
+		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');
 }

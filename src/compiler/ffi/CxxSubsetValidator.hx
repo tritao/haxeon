@@ -19,7 +19,7 @@ typedef CxxDiagnostic = {
 class CxxSubsetValidator {
 	public static inline final PROFILE = "CXX_ABI_V1";
 
-	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false):Array<CxxDiagnostic> {
+	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):Array<CxxDiagnostic> {
 		var diagnostics:Array<CxxDiagnostic> = [],
 			records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
@@ -32,10 +32,11 @@ class CxxSubsetValidator {
 		for (alias in model.aliases)
 			aliases.set(alias.qualifiedName, alias);
 		for (record in model.records) {
-			if (record.bases.length > 0)
+			if (record.bases.length > 0
+				&& (!virtualDispatch || record.bases.length > 1 || Lambda.exists(record.bases, base -> base.isVirtual)))
 				diagnostics.push({code: "CXX005", message: 'inheritance for ${record.qualifiedName} is unsupported by CXX_ABI_V1', span: record.span});
 			for (method in record.methods)
-				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes);
+				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes, virtualDispatch);
 		}
 		for (functionModel in model.functions) {
 			if (functionModel.symbol.length == 0)
@@ -73,8 +74,8 @@ class CxxSubsetValidator {
 			});
 	}
 
-	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false):Void {
-		var diagnostics = validate(model, trivialValues, lifetimes);
+	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):Void {
+		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch);
 		if (diagnostics.length == 0)
 			return;
 		var lines = [
@@ -87,7 +88,7 @@ class CxxSubsetValidator {
 	}
 
 	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool):Void {
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool):Void {
 		if ((method.isConstructor || method.isDestructor) && !lifetimes)
 			diagnostics.push({
 				code: "CXX008",
@@ -124,8 +125,26 @@ class CxxSubsetValidator {
 			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
 		if (!method.isNoexcept)
 			diagnostics.push({code: "CXX003", message: '${method.qualifiedName} may throw; direct C++ calls require noexcept', span: method.span});
-		if (method.isVirtual)
-			diagnostics.push({code: "CXX004", message: 'virtual member ${method.qualifiedName} requires virtual dispatch', span: method.span});
+		if (method.isVirtual) {
+			if (!virtualDispatch)
+				diagnostics.push({
+					code: "CXX004",
+					message: 'virtual member ${method.qualifiedName} requires virtual dispatch; pass --cxx-virtual to enable Itanium single-inheritance dispatch',
+					span: method.span
+				});
+			else if (!method.isConstructor && !method.isDestructor && method.virtualAbi == null)
+				diagnostics.push({
+					code: "CXX015",
+					message: 'virtual member ${method.qualifiedName} has no Clang vtable index for the selected Itanium target',
+					span: method.span
+				});
+			else if (method.isConstructor || method.isDestructor)
+				diagnostics.push({
+					code: "CXX015",
+					message: 'virtual constructors and destructors are not supported by Itanium vtable dispatch',
+					span: method.span
+				});
+		}
 		if (method.access != "public")
 			diagnostics.push({code: "CXX010", message: 'member ${method.qualifiedName} is ${method.access} and cannot be projected', span: method.span});
 		if (StringTools.startsWith(method.name, "operator"))

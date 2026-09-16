@@ -22,6 +22,7 @@ import compiler.ffi.HaxeProjectionModel.ProjectedEnum;
 import compiler.ffi.HaxeProjectionModel.ProjectedCheckedFunction;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
+import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiHaxeEmitter {
@@ -1639,6 +1640,18 @@ class HxiHaxeEmitter {
 			return mapped;
 		var stripped = stripPrefix(value, profile.functionPrefix);
 		return profile.functionCase == "camel" ? camelCase(stripped) : value;
+	}
+
+	/** Returns the runtime signature descriptor used by dynamic native calls. */
+	public static function nativeSignature(model:HxiInterface, functionAbi:HxiFunctionAbi):String {
+		var declarations:Map<String, HxiDeclaration> = [];
+		for (declaration in model.declarations)
+			declarations.set(declarationName(declaration), declaration);
+		var abi = HxiAbi.forInterface(model), aggregateDescriptors:Map<String, String> = [], arguments = [
+			for (argument in functionAbi.arguments)
+				abiDescriptor(argument, declarations, abi, aggregateDescriptors)
+		], result = abiDescriptor(functionAbi.result, declarations, abi, aggregateDescriptors);
+		return callSignature(arguments.join(",") + ">" + result, functionAbi.callConvention);
 	}
 
 	public static function projectedConstantName(value:String, profile:Null<HxiProjectionProfile>):String {

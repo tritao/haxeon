@@ -188,6 +188,41 @@ class CxxHeaderImporterMain {
 				case _:
 					throw "MSVC x64 C++ c_ulong should use the LLP64 32-bit result ABI";
 			}
+		var virtualDisabled = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_virtual_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+		} catch (error:Dynamic)
+			virtualDisabled = Std.string(error);
+		expect(virtualDisabled.indexOf("CXX004") >= 0, "virtual C++ methods should remain opt-in");
+		var virtual = CxxHeaderImporter.importHeader("tests/ffi/cxx_virtual_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_virtual", null,
+			null, null, "c++20", null, null, false, false, true),
+			virtualRenderer = Lambda.find(virtual.model.records, record -> record.qualifiedName == "cxxvirt::Renderer"),
+			virtualDraw:CxxMethod = virtualRenderer == null ? null : Lambda.find(virtualRenderer.methods, method -> method.name == "draw"),
+			virtualPlan = virtualDraw == null
+				|| virtualDraw.loweredName == null ? null : Lambda.find(virtual.plans, plan -> plan.name == virtualDraw.loweredName),
+			virtualProjection = virtualRenderer == null ? "" : Lambda.find(CxxProjection.sources(virtual.model, virtual.hxi, null, virtual.plans),
+				source -> source.file == "Renderer.hx")
+				.source;
+		expect(virtualRenderer != null
+			&& virtualDraw != null
+			&& virtualDraw.virtualAbi != null
+			&& virtualDraw.virtualAbi.vtableIndex == 0,
+			"Clang Itanium vtable metadata should retain the address-point-relative virtual index");
+		if (virtualPlan != null)
+			switch virtualPlan.dispatch {
+				case CxxVirtual(0, 0):
+				case _:
+					throw "C++ virtual methods should lower to an indirect vtable call plan";
+			}
+		expect(virtualProjection.indexOf("native_virtual_invoke_1") >= 0 && virtualProjection.indexOf("vtableIndex:Int") >= 0,
+			"C++ virtual projections should call the runtime vtable dispatch primitive");
+		var msvcVirtualDiagnostics = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_virtual_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++", null, null, null, null,
+				"c++20", null, null, false, false, true);
+		} catch (error:Dynamic)
+			msvcVirtualDiagnostics = Std.string(error);
+		expect(msvcVirtualDiagnostics.indexOf("CXX015") >= 0, "MSVC virtual dispatch should remain rejected until its ABI profile is implemented");
 	}
 
 	static function expect(value:Bool, message:String):Void {
