@@ -53,6 +53,8 @@ class HlNativeMetadataMain {
 			+
 			'var loadedModule = HlNativeModuleLoader.load(HlWriter.encode(loadCode)), loadedValue = loadedModule.callI32(0), loadedModuleUnloaded = loadedModule.unload(); '
 			+
+			'var complexCode = new HlCode(); complexCode.strings = ["NativeObject", "value", "run", "NativeEnum"]; complexCode.types = [Simple(HlType.I32), Simple(HlType.Void), Function([0], 1), Object(0, -1, 0, [{name: 1, type: 0}], [{name: 2, functionIndex: 0, prototype: 0}], []), Virtual([{name: 1, type: 0}]), Enum(3, 0, [{name: 1, params: [0]}])]; complexCode.functions = [new compiler.hl.HlFunction(2, 0, [0], [Return(0)])]; complexCode.entryPoint = 0; var complexLoaded = HlNativeModuleLoader.load(HlWriter.encode(complexCode)), complexInitialized = complexLoaded.nativeModule.isLoaded(), complexUnloaded = complexLoaded.unload(); '
+			+
 			'var externalIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["main" => 0], ["main" => 101]), externalLoaded = HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), externalIdentity), '
 			+ 'externalValue = externalLoaded.callI32(101); '
 			+
@@ -123,7 +125,7 @@ class HlNativeMetadataMain {
 			+ '&& generation.validateNativeCode() == 12 '
 			+ '&& kernelInitialized && kernelObjectInitialized && kernelEnumInitialized && kernelVirtualInitialized && kernelUnloaded '
 			+
-			'&& generatedValue == 8 && generatedUnloaded && registryFirstLoaded && registrySecondLoaded && runtimeRegistry.generation == 2 && registryBlocked && registryReclaimed && registryValue == 8 && registryDisposed && loadedValue == 8 && loadedModuleUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
+			'&& generatedValue == 8 && generatedUnloaded && registryFirstLoaded && registrySecondLoaded && runtimeRegistry.generation == 2 && registryBlocked && registryReclaimed && registryValue == 8 && registryDisposed && loadedValue == 8 && loadedModuleUnloaded && complexInitialized && complexUnloaded && externalValue == 8 && externalPatchedValue == 42 && externalTransactionCommitted && externalStaleRejected && externalRolledBack && externalLoaded.revision == 2 && externalPatchRejected && externalIdentityRejected && externalCallRejected && externalUnloaded && initializerRejected && patchRejected && patchFirst && patchSecond && patchValue == 42 && patchValueAgain == 43 && patchesUnloaded '
 			+ '&& hotValue == 8 && hotLoaded && bytecodeVersions.length() == 1 && bytecodeVersions.at(101).slot == 0 '
 			+ '&& publication.constantCount == 1 && publication.constants.ref.global == 0 && publication.constants.ref.nfields == 2 '
 			+ '&& publication.constants.ref.fields.load() == 0 && publication.constants.ref.fields.offset(1).load() == 1 '
