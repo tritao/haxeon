@@ -39,6 +39,8 @@ class HlNativeDescriptorTable {
 			throw 'HashLink native descriptor table exhausted its $capacity slots';
 		if (spec.findex < 0)
 			throw "HashLink native descriptor function index must be non-negative";
+		if (spec.type.isNull() || !arena.ownsType(spec.type))
+			throw "HashLink native descriptor type must belong to its arena";
 		var descriptor = entries.offset(count++);
 		descriptor.ref.library = spec.library;
 		descriptor.ref.name = spec.name;

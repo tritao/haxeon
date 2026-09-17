@@ -569,6 +569,35 @@ function main():Int {
 		new HlFunctionTable(foreignGeneration.arena, [RawPtr.nullPtr()], [foreignType])
 	catch (error:Dynamic)
 		foreignFunctionTableRejected = Std.string(error).indexOf("must belong to its arena") >= 0;
+	var foreignFunctionDescriptorRejected = false;
+	try
+		foreignGeneration.functionDescriptors.add({
+			findex: 0,
+			nregs: 0,
+			nops: 0,
+			reference: 0,
+			nassigns: 0,
+			type: foreignType,
+			regs: RawPtr.nullPtr(),
+			ops: RawPtr.nullPtr(),
+			debug: RawPtr.nullPtr(),
+			assigns: RawPtr.nullPtr(),
+			object: RawPtr.nullPtr(),
+			fieldName: RawPtr.nullPtr(),
+			fieldReference: RawPtr.nullPtr()
+		})
+	catch (error:Dynamic)
+		foreignFunctionDescriptorRejected = Std.string(error).indexOf("must belong to its arena") >= 0;
+	var foreignNativeDescriptorRejected = false;
+	try
+		foreignGeneration.nativeDescriptors.add({
+			library: RawPtr.nullPtr(),
+			name: RawPtr.nullPtr(),
+			type: foreignType,
+			findex: 0
+		})
+	catch (error:Dynamic)
+		foreignNativeDescriptorRejected = Std.string(error).indexOf("must belong to its arena") >= 0;
 	var foreignTypeTable = new HlTypeTable(foreignGeneration.arena, 2);
 	foreignTypeTable.add(foreignOwnedType);
 	var duplicateTypeRejected = false;
@@ -603,5 +632,6 @@ function main():Int {
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && malformedRegisterRejected && dispatchCorrect && initializerRejected && slotRejected
 		&& malformedObjectRejected && invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignBuilderRejected
-		&& foreignFunctionTableRejected && duplicateTypeRejected && foreignTypeTableRejected && setDuplicateTypeRejected && foreignTypeRejected ? 42 : 1;
+		&& foreignFunctionTableRejected && foreignFunctionDescriptorRejected && foreignNativeDescriptorRejected && duplicateTypeRejected
+		&& foreignTypeTableRejected && setDuplicateTypeRejected && foreignTypeRejected ? 42 : 1;
 }

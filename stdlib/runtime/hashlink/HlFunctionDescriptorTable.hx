@@ -48,6 +48,8 @@ class HlFunctionDescriptorTable {
 			throw 'HashLink function descriptor table exhausted its $capacity slots';
 		if (!spec.fieldName.isNull() && !spec.fieldReference.isNull())
 			throw "HashLink function descriptor field cannot contain both a name and a reference";
+		if (spec.type.isNull() || !arena.ownsType(spec.type))
+			throw "HashLink function descriptor type must belong to its arena";
 		var descriptor = entries.offset(count++);
 		descriptor.ref.findex = cast spec.findex;
 		descriptor.ref.nregs = cast spec.nregs;
