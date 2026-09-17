@@ -3001,10 +3001,15 @@ class LanguageServiceMain {
 			if (item.label == "Ready")
 				foundEnumAbstractValue = true;
 		var enumAbstractHoverSource = "enum abstract Flags(Int) { var Ready = 1; } function main():Void { Flags.Ready; }",
-			enumAbstractHoverPosition = enumAbstractHoverSource.lastIndexOf("Ready") + "Ready".length;
+			enumAbstractHoverPosition = enumAbstractHoverSource.lastIndexOf("Ready") + 1;
 		enumAbstractMemberService.update("EnumAbstractMembers.hx", enumAbstractHoverSource);
+		var enumAbstractValueDefinition = enumAbstractMemberService.definition("EnumAbstractMembers.hx", enumAbstractHoverPosition),
+			enumAbstractValueReferences = enumAbstractMemberService.references("EnumAbstractMembers.hx", enumAbstractHoverPosition);
 		if (!foundEnumAbstractValue
-			|| enumAbstractMemberService.hover("EnumAbstractMembers.hx", enumAbstractHoverPosition) != "Ready:Int")
+			|| enumAbstractMemberService.hover("EnumAbstractMembers.hx", enumAbstractHoverPosition) != "Ready:Int"
+			|| enumAbstractValueDefinition == null
+			|| enumAbstractValueDefinition.path != "EnumAbstractMembers.hx"
+			|| enumAbstractValueReferences.length < 2)
 			throw "recovered enum-abstract member completion or hover failed";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");

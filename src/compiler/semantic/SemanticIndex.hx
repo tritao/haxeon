@@ -1403,7 +1403,18 @@ class SemanticIndexBuilder {
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object, null, activeFunctionKey);
-				if (bindRecoveredMember(object, name, span) == null && name.length > 0 && !isKnownRecoveredMember(object, name))
+				var member = bindRecoveredMember(object, name, span);
+				// Enum-abstract values and other static members may intentionally
+				// have no nominal receiver type in recovery (for example Flags is
+				// represented by its Int underlying type). Give the canonical
+				// qualified name one chance to bind before treating the member as
+				// unresolved. This preserves identity without inventing one.
+				if (member == null && name.length > 0) {
+					var qualified = recoveredExpressionName(expression);
+					if (qualified != null)
+						member = bindNamed(resolveRecoveredSymbol, qualified, span);
+				}
+				if (member == null && name.length > 0 && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
 				var objectName = recoveredExpressionName(object),
 					objectType = recoveredExpressionBindingType(object);
