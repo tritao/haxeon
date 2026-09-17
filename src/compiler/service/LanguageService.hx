@@ -800,10 +800,10 @@ class LanguageService {
 		if (program.packageName != null && program.packageName == candidateProgram.packageName)
 			return true;
 		for (importPath in program.imports)
-			if (modulePathMatches(candidate.name, importPath))
+			if (modulePathMatches(candidate.name, importPath, candidateProgram))
 				return true;
 		for (_ => importPath in program.importAliases)
-			if (modulePathMatches(candidate.name, importPath))
+			if (modulePathMatches(candidate.name, importPath, candidateProgram))
 				return true;
 		return false;
 	}
@@ -818,21 +818,32 @@ class LanguageService {
 		if (candidateProgram.packageName != null)
 			add(candidateProgram.packageName);
 		for (importPath in program.imports)
-			if (modulePathMatches(candidate.name, importPath))
+			if (modulePathMatches(candidate.name, importPath, candidateProgram))
 				add(importQualifier(program, importPath));
 		for (alias => importPath in program.importAliases)
-			if (modulePathMatches(candidate.name, importPath))
+			if (modulePathMatches(candidate.name, importPath, candidateProgram))
 				add(alias);
 		return result;
 	}
 
-	static function modulePathMatches(moduleName:String, importPath:String):Bool {
+	static function modulePathMatches(moduleName:String, importPath:String, ?candidateProgram:AstProgram):Bool {
 		if (moduleName == importPath)
 			return true;
 		var wildcard = importPath.length > 2 && StringTools.endsWith(importPath, ".*");
-		if (wildcard)
-			return StringTools.startsWith(moduleName, importPath.substr(0, importPath.length - 2) + ".");
-		return StringTools.startsWith(importPath, moduleName + ".") || StringTools.startsWith(moduleName, importPath + ".");
+		if (wildcard) {
+			var packageName = importPath.substr(0, importPath.length - 2);
+			return candidateProgram != null && candidateProgram.packageName != null
+				&& Std.string(candidateProgram.packageName) == packageName
+				|| StringTools.startsWith(moduleName, packageName + ".");
+		}
+		var logicalModule = candidateProgram == null || candidateProgram.packageName == null
+			? null
+			: Std.string(candidateProgram.packageName) + "." + sourceName(moduleName);
+		return StringTools.startsWith(importPath, moduleName + ".")
+			|| StringTools.startsWith(moduleName, importPath + ".")
+			|| logicalModule != null && (importPath == logicalModule
+				|| StringTools.startsWith(importPath, logicalModule + ".")
+				|| StringTools.startsWith(logicalModule, importPath + "."));
 	}
 
 	function publishRecoveryDiagnostics(state:ModuleState, diagnostics:Array<Diagnostic>):Void {

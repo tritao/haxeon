@@ -656,11 +656,20 @@ class LanguageServiceMain {
 			throw 'module aliases did not resolve a recovered hierarchy parent: ${moduleAliasHierarchySupertypes.length}';
 		var absoluteImportService = new LanguageService(),
 			absoluteImportSource = "package absolute.app; import absolute.types.Types; function main():Void { var value:Types; }";
-		absoluteImportService.update("/workspace/absolute/types/Types.hx", "package absolute.types; class Types {} function main():Void return;");
-		absoluteImportService.update("/workspace/absolute/app/Main.hx", absoluteImportSource);
+		absoluteImportService.update("/workspace/absolute/types/Types.hx", "package absolute.types; class Types { public var member:Int; } function main():Void return;");
+		absoluteImportService.update("/workspace/absolute/app/Main.hx", absoluteImportSource + " function use(value:Types):Void { value. } function unfinished(");
 		var absoluteImportLinks = absoluteImportService.documentLinks("/workspace/absolute/app/Main.hx");
 		if (absoluteImportLinks.length != 1 || absoluteImportLinks[0].targetPath != "/workspace/absolute/types/Types.hx")
 			throw 'workspace-prefixed package import did not resolve its module link: ${absoluteImportLinks.length}';
+		var absoluteImportCompletionSource = absoluteImportService.compiler.modules.get("workspace.absolute.app.Main").source.text,
+			absoluteImportCompletionPosition = absoluteImportCompletionSource.indexOf("value.") + "value.".length,
+			absoluteImportCompletion = absoluteImportService.complete("/workspace/absolute/app/Main.hx", absoluteImportCompletionPosition),
+			foundAbsoluteImportMember = false;
+		for (item in absoluteImportCompletion)
+			if (item.label == "member")
+				foundAbsoluteImportMember = true;
+		if (!foundAbsoluteImportMember)
+			throw "workspace-prefixed package import did not populate recovered typing modules";
 		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
 		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
 		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,
