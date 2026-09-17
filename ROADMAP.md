@@ -96,6 +96,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	top-level functions, and explicit-import
 	precedence; conflicting wildcard or explicit imports remain unresolved instead
 	of using last-write-wins; deeper namespace and broader alias semantics remain.
+	Editor recovery also treats modules without a `package` declaration as one
+	shared default package for same-package type and function visibility.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
   snapshot without mutating the live source, including through the JSON-lines
   protocol; cooperative request cancellation now unwinds compiler phase
