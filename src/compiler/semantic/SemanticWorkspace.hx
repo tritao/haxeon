@@ -190,22 +190,7 @@ class SemanticWorkspace {
 			matches:Array<SemanticSymbolId> = [];
 		if (program == null)
 			return null;
-		var collect = function(importPath:String):Void {
-			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != name)
-				return;
-			var target = editorImportTarget(importPath),
-				targetModel = target == null ? null : editorModel(target);
-			if (target == null || targetModel == null)
-				return;
-			var logicalModule = editorLogicalModuleName(target, targetModel),
-				nestedName = importPath == target.name ? "" : importPath == logicalModule ? "" : StringTools.startsWith(importPath, logicalModule + ".")
-					? importPath.substring(logicalModule.length + 1)
-					: StringTools.startsWith(importPath, target.name + ".") ? importPath.substring(target.name.length + 1) : "";
-			if (nestedName.length == 0)
-				return;
-			var separator = nestedName.lastIndexOf("."),
-				enumName = separator < 0 ? moduleSourceName(target.name) : nestedName.substring(0, separator),
-				caseName = separator < 0 ? nestedName : nestedName.substring(separator + 1);
+		var addCase = function(target:ModuleState, targetModel:SemanticModel, enumName:String, caseName:String):Void {
 			for (decl in targetModel.program.enums)
 				if (decl.name == enumName)
 					for (enumCase in decl.cases)
@@ -223,10 +208,85 @@ class SemanticWorkspace {
 								addUniqueIdentity(matches, id);
 						}
 		};
+		var collect = function(importPath:String):Void {
+			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != name)
+				return;
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
+			if (target == null || targetModel == null)
+				return;
+			var logicalModule = editorLogicalModuleName(target, targetModel),
+				nestedName = importPath == target.name ? "" : importPath == logicalModule ? "" : StringTools.startsWith(importPath, logicalModule + ".")
+					? importPath.substring(logicalModule.length + 1)
+					: StringTools.startsWith(importPath, target.name + ".") ? importPath.substring(target.name.length + 1) : "";
+			if (nestedName.length == 0) {
+				var primaryName = moduleSourceName(target.name);
+				for (decl in targetModel.program.enums)
+					if (decl.name == primaryName)
+						addCase(target, targetModel, decl.name, name);
+				for (decl in targetModel.program.enumAbstracts)
+					if (decl.name == primaryName)
+						addCase(target, targetModel, decl.name, name);
+				return;
+			}
+			var separator = nestedName.lastIndexOf("."),
+				enumName = separator < 0 ? moduleSourceName(target.name) : nestedName.substring(0, separator),
+				caseName = separator < 0 ? nestedName : nestedName.substring(separator + 1);
+			addCase(target, targetModel, enumName, caseName);
+		};
+		var collectImportedType = function(importPath:String):Void {
+			if (isWildcardImport(importPath) || editorImportIsAliasedModule(program, importPath))
+				return;
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
+			if (target == null || targetModel == null)
+				return;
+			var logicalModule = editorLogicalModuleName(target, targetModel),
+				nestedName = importPath == target.name || importPath == logicalModule ? "" : StringTools.startsWith(importPath, logicalModule + ".")
+					? importPath.substring(logicalModule.length + 1)
+					: StringTools.startsWith(importPath, target.name + ".") ? importPath.substring(target.name.length + 1) : "";
+			if (nestedName.length == 0) {
+				var primaryName = moduleSourceName(target.name);
+				for (decl in targetModel.program.enums)
+					if (decl.name == primaryName)
+						addCase(target, targetModel, decl.name, name);
+				for (decl in targetModel.program.enumAbstracts)
+					if (decl.name == primaryName)
+						addCase(target, targetModel, decl.name, name);
+				return;
+			}
+			for (decl in targetModel.program.enums)
+				if (decl.name == nestedName)
+					addCase(target, targetModel, decl.name, name);
+			for (decl in targetModel.program.enumAbstracts)
+				if (decl.name == nestedName)
+					addCase(target, targetModel, decl.name, name);
+		};
 		for (importPath in program.imports) {
 			if (token != null)
 				token.check();
 			collect(importPath);
+			collectImportedType(importPath);
+		}
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (!isWildcardImport(importPath))
+				continue;
+			var packageName = importPath.substring(0, importPath.length - 2);
+			for (state in orderedStates()) {
+				if (token != null)
+					token.check();
+				var candidateModel = editorModel(state),
+					candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null
+						: Std.string(candidateModel.program.packageName);
+				if (candidateModel == null || candidatePackage != packageName)
+					continue;
+				for (decl in candidateModel.program.enums)
+					addCase(state, candidateModel, decl.name, name);
+				for (decl in candidateModel.program.enumAbstracts)
+					addCase(state, candidateModel, decl.name, name);
+			}
 		}
 		return uniqueIdentity(matches);
 	}

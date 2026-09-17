@@ -323,6 +323,93 @@ class ParserRecoveryMain {
 			|| enumAbstractImportRecoveredReferences.length < 2)
 			throw 'recovered explicit enum-abstract value import lost its owner identity: definition=${enumAbstractImportRecoveredDefinition == null ? "null" : enumAbstractImportRecoveredDefinition.path}, references=${enumAbstractImportRecoveredReferences.length}';
 
+		var enumTypeImportConsumer = "package visibility.enumapp; import visibility.enumlib.Result; function main():Void { Value(1); }";
+		enumImportService.update("visibility/enumapp/TypeImport.hx", enumTypeImportConsumer);
+		enumImportService.analyze("visibility.enumapp.TypeImport");
+		var enumTypeImportPosition = enumTypeImportConsumer.lastIndexOf("Value(1)") + 1,
+			enumTypeImportDefinition = enumImportService.definition("visibility/enumapp/TypeImport.hx", enumTypeImportPosition),
+			enumTypeImportReferences = enumImportService.references("visibility/enumapp/TypeImport.hx", enumTypeImportPosition);
+		if (enumTypeImportDefinition == null || enumTypeImportDefinition.stale
+			|| enumTypeImportDefinition.path != "visibility/enumlib/Result.hx"
+			|| enumTypeImportReferences.length < 2)
+			throw 'enum-type import did not expose its unqualified constructor: definition=${enumTypeImportDefinition == null ? "null" : enumTypeImportDefinition.path}, references=${enumTypeImportReferences.length}';
+		var enumTypeImportRecovered = StringTools.replace(enumTypeImportConsumer, "Value(1)", "Value(");
+		enumImportService.update("visibility/enumapp/TypeImport.hx", enumTypeImportRecovered);
+		var enumTypeImportRecoveredPosition = enumTypeImportRecovered.lastIndexOf("Value(") + 1,
+			enumTypeImportRecoveredDefinition = enumImportService.definition("visibility/enumapp/TypeImport.hx", enumTypeImportRecoveredPosition),
+			enumTypeImportRecoveredReferences = enumImportService.references("visibility/enumapp/TypeImport.hx", enumTypeImportRecoveredPosition);
+		if (enumTypeImportRecoveredDefinition == null || enumTypeImportRecoveredDefinition.stale
+			|| enumTypeImportRecoveredDefinition.path != "visibility/enumlib/Result.hx"
+			|| enumTypeImportRecoveredReferences.length < 2)
+			throw 'recovered enum-type import lost its unqualified constructor: definition=${enumTypeImportRecoveredDefinition == null ? "null" : enumTypeImportRecoveredDefinition.path}, references=${enumTypeImportRecoveredReferences.length}';
+
+		var enumAbstractTypeImportConsumer = "package visibility.flagapp; import visibility.flags.Flags; function main():Void { Ready; }";
+		enumAbstractImportService.update("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportConsumer);
+		enumAbstractImportService.analyze("visibility.flagapp.TypeImport");
+		var enumAbstractTypeImportPosition = enumAbstractTypeImportConsumer.lastIndexOf("Ready") + 1,
+			enumAbstractTypeImportDefinition = enumAbstractImportService.definition("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportPosition),
+			enumAbstractTypeImportReferences = enumAbstractImportService.references("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportPosition);
+		if (enumAbstractTypeImportDefinition == null || enumAbstractTypeImportDefinition.stale
+			|| enumAbstractTypeImportDefinition.path != "visibility/flags/Flags.hx"
+			|| enumAbstractTypeImportReferences.length < 2)
+			throw 'enum-abstract type import did not expose its unqualified value: definition=${enumAbstractTypeImportDefinition == null ? "null" : enumAbstractTypeImportDefinition.path}, references=${enumAbstractTypeImportReferences.length}';
+		var enumAbstractTypeImportRecovered = StringTools.replace(enumAbstractTypeImportConsumer, "Ready;", "Ready");
+		enumAbstractImportService.update("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportRecovered);
+		var enumAbstractTypeImportRecoveredPosition = enumAbstractTypeImportRecovered.lastIndexOf("Ready") + 1,
+			enumAbstractTypeImportRecoveredDefinition = enumAbstractImportService.definition("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportRecoveredPosition),
+			enumAbstractTypeImportRecoveredReferences = enumAbstractImportService.references("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportRecoveredPosition);
+		if (enumAbstractTypeImportRecoveredDefinition == null || enumAbstractTypeImportRecoveredDefinition.stale
+			|| enumAbstractTypeImportRecoveredDefinition.path != "visibility/flags/Flags.hx"
+			|| enumAbstractTypeImportRecoveredReferences.length < 2)
+			throw 'recovered enum-abstract type import lost its unqualified value: definition=${enumAbstractTypeImportRecoveredDefinition == null ? "null" : enumAbstractTypeImportRecoveredDefinition.path}, references=${enumAbstractTypeImportRecoveredReferences.length}';
+
+		var wildcardEnumImportService = new LanguageService(),
+			wildcardEnumImportTarget = "package visibility.wildenum; enum Result { Value(value:Int); } function main():Void return;",
+			wildcardEnumImportConsumer = "package visibility.wildenum.app; import visibility.wildenum.*; function main():Void { Value(1); }";
+		wildcardEnumImportService.update("visibility/wildenum/Result.hx", wildcardEnumImportTarget);
+		wildcardEnumImportService.analyze("visibility.wildenum.Result");
+		wildcardEnumImportService.update("visibility/wildenum/app/Main.hx", wildcardEnumImportConsumer);
+		wildcardEnumImportService.analyze("visibility.wildenum.app.Main");
+		var wildcardEnumImportPosition = wildcardEnumImportConsumer.lastIndexOf("Value(1)") + 1,
+			wildcardEnumImportDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/Main.hx", wildcardEnumImportPosition),
+			wildcardEnumImportReferences = wildcardEnumImportService.references("visibility/wildenum/app/Main.hx", wildcardEnumImportPosition);
+		if (wildcardEnumImportDefinition == null || wildcardEnumImportDefinition.stale
+			|| wildcardEnumImportDefinition.path != "visibility/wildenum/Result.hx"
+			|| wildcardEnumImportReferences.length < 2)
+			throw 'wildcard enum-constructor import did not retain identity: definition=${wildcardEnumImportDefinition == null ? "null" : wildcardEnumImportDefinition.path}, references=${wildcardEnumImportReferences.length}';
+		var wildcardEnumImportRecovered = StringTools.replace(wildcardEnumImportConsumer, "Value(1)", "Value(");
+		wildcardEnumImportService.update("visibility/wildenum/app/Main.hx", wildcardEnumImportRecovered);
+		var wildcardEnumImportRecoveredPosition = wildcardEnumImportRecovered.lastIndexOf("Value(") + 1,
+			wildcardEnumImportRecoveredDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition),
+			wildcardEnumImportRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition);
+		if (wildcardEnumImportRecoveredDefinition == null || wildcardEnumImportRecoveredDefinition.stale
+			|| wildcardEnumImportRecoveredDefinition.path != "visibility/wildenum/Result.hx"
+			|| wildcardEnumImportRecoveredReferences.length < 2)
+			throw 'recovered wildcard enum-constructor import lost identity: definition=${wildcardEnumImportRecoveredDefinition == null ? "null" : wildcardEnumImportRecoveredDefinition.path}, references=${wildcardEnumImportRecoveredReferences.length}';
+
+		wildcardEnumImportService.update("visibility/wildenum/Flags.hx",
+			"package visibility.wildenum; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;");
+		wildcardEnumImportService.analyze("visibility.wildenum.Flags");
+		var wildcardEnumAbstractConsumer = "package visibility.wildenum.app; import visibility.wildenum.*; function main():Void { Ready; }";
+		wildcardEnumImportService.update("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractConsumer);
+		wildcardEnumImportService.analyze("visibility.wildenum.app.FlagsUse");
+		var wildcardEnumAbstractPosition = wildcardEnumAbstractConsumer.lastIndexOf("Ready") + 1,
+			wildcardEnumAbstractDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractPosition),
+			wildcardEnumAbstractReferences = wildcardEnumImportService.references("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractPosition);
+		if (wildcardEnumAbstractDefinition == null || wildcardEnumAbstractDefinition.stale
+			|| wildcardEnumAbstractDefinition.path != "visibility/wildenum/Flags.hx"
+			|| wildcardEnumAbstractReferences.length < 2)
+			throw 'wildcard enum-abstract value import did not retain identity: definition=${wildcardEnumAbstractDefinition == null ? "null" : wildcardEnumAbstractDefinition.path}, references=${wildcardEnumAbstractReferences.length}';
+		var wildcardEnumAbstractRecovered = StringTools.replace(wildcardEnumAbstractConsumer, "Ready;", "Ready");
+		wildcardEnumImportService.update("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecovered);
+		var wildcardEnumAbstractRecoveredPosition = wildcardEnumAbstractRecovered.lastIndexOf("Ready") + 1,
+			wildcardEnumAbstractRecoveredDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition),
+			wildcardEnumAbstractRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition);
+		if (wildcardEnumAbstractRecoveredDefinition == null || wildcardEnumAbstractRecoveredDefinition.stale
+			|| wildcardEnumAbstractRecoveredDefinition.path != "visibility/wildenum/Flags.hx"
+			|| wildcardEnumAbstractRecoveredReferences.length < 2)
+			throw 'recovered wildcard enum-abstract value import lost identity: definition=${wildcardEnumAbstractRecoveredDefinition == null ? "null" : wildcardEnumAbstractRecoveredDefinition.path}, references=${wildcardEnumAbstractRecoveredReferences.length}';
+
 		var ambiguousEnumImportService = new LanguageService();
 		ambiguousEnumImportService.update("visibility/enumone/Result.hx",
 			"package visibility.enumone; enum Result { Value(value:Int); } function main():Void return;");
