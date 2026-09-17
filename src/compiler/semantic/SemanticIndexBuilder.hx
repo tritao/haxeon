@@ -1378,6 +1378,8 @@ class SemanticIndexBuilder {
 				if (name == "super") {
 					indexRecoveredSuperCall(arguments, span, activeFunctionKey, expected);
 				} else {
+				if (name == "Std.isOfType" && arguments.length > 1)
+					indexRecoveredTypeOperand(arguments[1]);
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
@@ -1540,6 +1542,23 @@ class SemanticIndexBuilder {
 				if (fallback != null)
 					indexRecoveredExpression(fallback, expected, activeFunctionKey);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
+		}
+	}
+
+	/** Index expression-shaped operands which are semantically type names. */
+	function indexRecoveredTypeOperand(expression:AstExpression):Void {
+		switch expression {
+			case Variable(name, span):
+				var id = recoveryResolveTypeSymbol == null ? null : recoveryResolveTypeSymbol(name);
+				if (id == null)
+					id = recoveredDeclaredSymbol(name);
+				if (id != null) {
+					var token = referenceToken(tokens, span, sourceName(name));
+					bind(id, token == null ? span : token.span);
+				} else
+					recordUnresolved(name, span);
+			default:
+				indexRecoveredExpression(expression, null, currentRecoveredFunctionKey);
 		}
 	}
 

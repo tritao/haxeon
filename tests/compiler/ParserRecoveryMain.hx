@@ -1259,18 +1259,22 @@ class ParserRecoveryMain {
 			throw 'exact inherited member navigation did not resolve its source identity: definition=${exactInheritanceDefinition == null ? "null" : exactInheritanceDefinition.span.start + "/" + exactInheritanceDefinition.span.end}, references=${exactInheritanceReferences.length}';
 
 		var recoveredTypeReferenceService = new LanguageService(),
-			recoveredTypeReferenceSource = "class Foo {} class Box<T> {} function main():Void { var value:Box<Foo>; var casted = cast(value, Foo); var values = new Array<Foo>(1); broken";
+			recoveredTypeReferenceSource = "class Foo {} class Box<T> {} function main():Void { var value:Box<Foo>; var casted = cast(value, Foo); var check = Std.isOfType(value, Foo); var values = new Array<Foo>(1); broken";
 		recoveredTypeReferenceService.update("RecoveredTypeReferences.hx", recoveredTypeReferenceSource);
 		var fooDeclaration = recoveredTypeReferenceSource.indexOf("Foo"),
 			castTarget = recoveredTypeReferenceSource.indexOf("cast(value, Foo)") + "cast(value, ".length,
 			arrayArgument = recoveredTypeReferenceSource.indexOf("new Array<Foo>") + "new Array<".length,
+			isOfTypeTarget = recoveredTypeReferenceSource.indexOf("Std.isOfType(value, Foo)") + "Std.isOfType(value, ".length,
 			castDefinition = recoveredTypeReferenceService.definition("RecoveredTypeReferences.hx", castTarget + 1),
-			arrayDefinition = recoveredTypeReferenceService.definition("RecoveredTypeReferences.hx", arrayArgument + 1);
+			arrayDefinition = recoveredTypeReferenceService.definition("RecoveredTypeReferences.hx", arrayArgument + 1),
+			isOfTypeDefinition = recoveredTypeReferenceService.typeDefinition("RecoveredTypeReferences.hx", isOfTypeTarget + 1);
 		if (castDefinition == null || castDefinition.stale
 			|| castDefinition.span.start > fooDeclaration || castDefinition.span.end < fooDeclaration
 			|| arrayDefinition == null || arrayDefinition.stale
-			|| arrayDefinition.span.start > fooDeclaration || arrayDefinition.span.end < fooDeclaration)
-			throw 'recovered type syntax lost Foo identity: cast=${castDefinition == null ? "null" : castDefinition.span.start + ":" + castDefinition.stale}, array=${arrayDefinition == null ? "null" : arrayDefinition.span.start + ":" + arrayDefinition.stale}';
+			|| arrayDefinition.span.start > fooDeclaration || arrayDefinition.span.end < fooDeclaration
+			|| isOfTypeDefinition == null || isOfTypeDefinition.stale
+			|| isOfTypeDefinition.span.start > fooDeclaration || isOfTypeDefinition.span.end < fooDeclaration)
+			throw 'recovered type syntax lost Foo identity: cast=${castDefinition == null ? "null" : castDefinition.span.start + ":" + castDefinition.stale}, array=${arrayDefinition == null ? "null" : arrayDefinition.span.start + ":" + arrayDefinition.stale}, isOfType=${isOfTypeDefinition == null ? "null" : isOfTypeDefinition.span.start + ":" + isOfTypeDefinition.stale}';
 
 		var importService = new LanguageService();
 		importService.update("lib/Widget.hx", "class Widget {} function main():Void return;");
