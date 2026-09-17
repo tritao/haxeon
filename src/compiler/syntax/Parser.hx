@@ -34,6 +34,11 @@ typedef RecoveredParse = {
 	final diagnostics:Array<compiler.Diagnostic>;
 }
 
+typedef ParsedType = {
+	final ast:AstType;
+	final payload:compiler.syntax.SyntaxTree.SyntaxTypePayload;
+}
+
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
@@ -44,6 +49,7 @@ class Parser {
 	var currentCst:Null<SyntaxTree>;
 	var cstBuilder:Null<SyntaxTreeBuilder>;
 	var cstMissingTokens:Array<SyntaxToken> = [];
+	var parserPayloads:Map<Int, SyntaxNodePayload> = [];
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -120,7 +126,7 @@ class Parser {
 					var alias = parseTypeAlias(visibility == null ? previous().span : visibility.span,
 						visibility != null && visibility.kind == TokenKind.Private);
 					aliases.push(alias);
-					recordCstNode(SyntaxKind.TypeAliasDeclaration, alias.span, typeAliasHeader(alias));
+					recordCstNode(SyntaxKind.TypeAliasDeclaration, alias.span, parserPayloads.get(alias.span.start));
 				}
 				else if (match(TokenKind.Enum)) {
 					var start = previous().span;
@@ -139,15 +145,18 @@ class Parser {
 					interfaces.push(interfaceDeclaration);
 					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span, interfaceHeader(interfaceDeclaration));
 					for (method in interfaceDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span,
+							parserPayloads.get(method.span.start) == null ? functionHeader(method) : parserPayloads.get(method.span.start));
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
 					classes.push(classDeclaration);
 					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span, classHeader(classDeclaration));
 					for (field in classDeclaration.fields)
-						recordCstNode(SyntaxKind.FieldDeclaration, field.span, fieldHeader(field));
+						recordCstNode(SyntaxKind.FieldDeclaration, field.span,
+							parserPayloads.get(field.span.start) == null ? fieldHeader(field) : parserPayloads.get(field.span.start));
 					for (method in classDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span,
+							parserPayloads.get(method.span.start) == null ? functionHeader(method) : parserPayloads.get(method.span.start));
 				}
 				else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
@@ -157,11 +166,13 @@ class Parser {
 					abstracts.push(abstractDeclaration);
 					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span, abstractHeader(abstractDeclaration));
 					for (method in abstractDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span,
+							parserPayloads.get(method.span.start) == null ? functionHeader(method) : parserPayloads.get(method.span.start));
 				} else {
 					var functionDeclaration = parseFunction(false, externDeclaration, metadata);
 					functions.push(functionDeclaration);
-					recordCstNode(SyntaxKind.FunctionDeclaration, functionDeclaration.span, functionHeader(functionDeclaration));
+					recordCstNode(SyntaxKind.FunctionDeclaration, functionDeclaration.span,
+						parserPayloads.get(functionDeclaration.span.start) == null ? functionHeader(functionDeclaration) : parserPayloads.get(functionDeclaration.span.start));
 				}
 			} catch (error:CompileError) {
 				if (!recovering)
@@ -414,7 +425,7 @@ class Parser {
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.Assign);
-		var type = parseType(), end = previous().span;
+		var parsedType = parseTypeResult(), type = parsedType.ast, end = previous().span;
 		switch type {
 			case AnonymousType(_):
 				if (match(TokenKind.Semicolon))
@@ -422,7 +433,7 @@ class Parser {
 			default:
 				end = consume(TokenKind.Semicolon).span;
 		}
-		return {
+		var alias:AstTypeAlias = {
 			name: name,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
@@ -430,6 +441,8 @@ class Parser {
 			isPrivate: isPrivate,
 			span: start.merge(end)
 		};
+		parserPayloads.set(alias.span.start, SyntaxNodePayload.TypeAliasHeader(name, isPrivate, typeParameters, parsedType.payload));
+		return alias;
 	}
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
@@ -530,7 +543,7 @@ class Parser {
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
-		var arguments = [];
+		var arguments = [], parameterPayloads:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload> = [], payloadComplete = true;
 		var parameterStart:Null<SourceSpan> = null;
 		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
 			recordExpected("left parenthesis");
@@ -544,7 +557,9 @@ class Parser {
 				}
 				var optional = match(TokenKind.Question),
 					argumentToken = consumeDeclarationToken("parameter");
-				var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
+				var parsedArgumentType = match(TokenKind.Colon) ? parseTypeResult() : parsedType(InferredType,
+					compiler.syntax.SyntaxTree.SyntaxTypePayload.InferredType),
+					argumentType = parsedArgumentType.ast,
 					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 				arguments.push({
 					name: argumentToken.text,
@@ -553,6 +568,11 @@ class Parser {
 					optional: optional || defaultValue != null,
 					defaultValue: defaultValue
 				});
+				var defaultPayload = defaultValue == null ? null : simpleExpressionPayload(defaultValue);
+				if (defaultValue != null && defaultPayload == null)
+					payloadComplete = false;
+				parameterPayloads.push({name: argumentToken.text, type: parsedArgumentType.payload,
+					optional: optional || defaultValue != null, defaultValue: defaultPayload});
 				if (!match(TokenKind.Comma))
 					break;
 			}
@@ -560,7 +580,13 @@ class Parser {
 			if (parameterStart != null)
 				recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 		}
-		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
+		var parsedResult = if (match(TokenKind.Colon))
+			parseTypeResult();
+		else if (allowMissingReturn && name == "new")
+			parsedType(VoidType, compiler.syntax.SyntaxTree.SyntaxTypePayload.VoidType);
+		else
+			parsedType(InferredType, compiler.syntax.SyntaxTree.SyntaxTypePayload.InferredType);
+		var result = parsedResult.ast;
 		var statements = [], end:SourceSpan;
 		if (isExtern) {
 			end = consume(TokenKind.Semicolon).span;
@@ -591,7 +617,7 @@ class Parser {
 			appendStatements(statements, parseStatements());
 			end = statementSpan(statements[statements.length - 1]);
 		}
-		return {
+		var functionDeclaration:AstFunction = {
 			name: name,
 			isStatic: isStatic,
 			isExtern: isExtern,
@@ -603,6 +629,14 @@ class Parser {
 			statements: statements,
 			span: start.merge(end)
 		};
+		if (payloadComplete)
+			{
+				var payload = SyntaxNodePayload.FunctionHeaderRich(name, isStatic, isExtern,
+					typeParameters, parameterPayloads, parsedResult.payload);
+				parserPayloads.set(start.start, payload);
+				parserPayloads.set(functionDeclaration.span.start, payload);
+			}
+		return functionDeclaration;
 	}
 
 	function parseSwitchCaseBody():Array<AstStatement> {
@@ -733,8 +767,12 @@ class Parser {
 	}
 
 	function parseDelimitedType(endKind:TokenKind):AstType {
+		return parseDelimitedTypeResult(endKind).ast;
+	}
+
+	function parseDelimitedTypeResult(endKind:TokenKind):ParsedType {
 		try {
-			var type = parseType();
+			var type = parseTypeResult();
 			if (recovering && !check(TokenKind.Comma) && !check(endKind)) {
 				recordExpected('comma or $endKind');
 				synchronizeTypeArgument();
@@ -746,7 +784,7 @@ class Parser {
 				throw error;
 			recordRecoveryDiagnostic(error.diagnostic);
 			synchronizeTypeArgument();
-			return ErrorType(error.diagnostic.span);
+			return {ast: ErrorType(error.diagnostic.span), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType};
 		}
 	}
 
@@ -919,14 +957,16 @@ class Parser {
 						writeAccess = parseFieldAccess();
 						consume(TokenKind.RightParen);
 					}
-					var fieldType = match(TokenKind.Colon) ? parseType() : null,
-						initializer = match(TokenKind.Assign) ? parseExpression() : null;
+					var parsedFieldType:Null<ParsedType> = match(TokenKind.Colon) ? parseTypeResult() : null,
+						fieldType = parsedFieldType == null ? null : parsedFieldType.ast,
+						initializer = match(TokenKind.Assign) ? parseExpression() : null,
+						initializerPayload = initializer == null ? null : simpleExpressionPayload(initializer);
 					if (fieldType == null) {
 						if (initializer == null)
 							fail(current(), 'Field "$fieldName" requires a type or initializer');
 					}
 					var end = consume(TokenKind.Semicolon).span;
-					fields.push({
+					var field:AstField = {
 						name: fieldName,
 						metadata: memberMetadata,
 						type: fieldType,
@@ -937,7 +977,12 @@ class Parser {
 						isInline: isInline,
 						isFinal: isFinal,
 						span: fieldStart.merge(end)
-					});
+					};
+					fields.push(field);
+					if (initializer == null || initializerPayload != null)
+						parserPayloads.set(field.span.start, SyntaxNodePayload.FieldHeaderRich(fieldName,
+							parsedFieldType == null ? null : parsedFieldType.payload, initializerPayload, isStatic, isInline, isFinal,
+							fieldAccessName(readAccess), fieldAccessName(writeAccess)));
 				}
 			} catch (error:CompileError) {
 				if (!recovering)
@@ -1100,7 +1145,7 @@ class Parser {
 					var lowered = simpleTypePayload(field.type);
 					if (lowered == null)
 						return null;
-					loweredFields.push({name: field.name, type: lowered, optional: field.optional});
+					loweredFields.push({name: field.name, type: lowered, optional: field.optional, span: field.span});
 				}
 				compiler.syntax.SyntaxTree.SyntaxTypePayload.AnonymousType(loweredFields);
 		};
@@ -3071,9 +3116,12 @@ class Parser {
 		return expression;
 	}
 
-	function parseType():AstType {
+	function parseType():AstType
+		return parseTypeResult().ast;
+
+	function parseTypeResult():ParsedType {
 		if (match(TokenKind.LeftParen)) {
-			var arguments = [];
+			var arguments:Array<AstType> = [], argumentPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
 			if (!check(TokenKind.RightParen)) {
 				do {
 					var optional = match(TokenKind.Question);
@@ -3081,20 +3129,34 @@ class Parser {
 						advance();
 						advance();
 					}
-					var argument = parseDelimitedType(TokenKind.RightParen);
-					arguments.push(optional ? NullableType(argument) : argument);
+					var argument = parseDelimitedTypeResult(TokenKind.RightParen);
+					arguments.push(optional ? NullableType(argument.ast) : argument.ast);
+					argumentPayloads.push(optional ? compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(argument.payload) : argument.payload);
 				} while (match(TokenKind.Comma));
 			}
 			consume(TokenKind.RightParen);
 			consume(TokenKind.Arrow);
-			return chainedFunctionType(arguments, parseType());
+			var result = parseTypeResult();
+			return {
+				ast: chainedFunctionType(arguments, result.ast),
+				payload: chainedFunctionTypePayload(argumentPayloads, result.payload)
+			};
 		}
-		var atomic = parseAtomicType();
-		if (match(TokenKind.Arrow))
-			return chainedFunctionType(switch atomic {
+		var atomic = parseAtomicTypeResult();
+		if (match(TokenKind.Arrow)) {
+			var result = parseTypeResult(), arguments = switch atomic.ast {
 				case VoidType: [];
-				default: [atomic];
-			}, parseType());
+				default: [atomic.ast];
+			};
+			var argumentPayloads = switch atomic.ast {
+				case VoidType: [];
+				default: [atomic.payload];
+			};
+			return {
+				ast: chainedFunctionType(arguments, result.ast),
+				payload: chainedFunctionTypePayload(argumentPayloads, result.payload)
+			};
+		}
 		return atomic;
 	}
 
@@ -3104,15 +3166,26 @@ class Parser {
 			default: FunctionType(arguments, result);
 		};
 
-	function parseAtomicType():AstType {
+	static function chainedFunctionTypePayload(arguments:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload>,
+			result:compiler.syntax.SyntaxTree.SyntaxTypePayload):compiler.syntax.SyntaxTree.SyntaxTypePayload
+		return switch result {
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(nextArguments, finalResult):
+				compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(arguments.concat(nextArguments), finalResult);
+			default: compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(arguments, result);
+		};
+
+	function parseAtomicType():AstType
+		return parseAtomicTypeResult().ast;
+
+	function parseAtomicTypeResult():ParsedType {
 		if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()))) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected type", span));
-			return ErrorType(span);
+			return {ast: ErrorType(span), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType};
 		}
 		if (match(TokenKind.LeftBrace)) {
 			var anonymousTypeStart = previous().span;
-			var fields = [];
+			var fields:Array<compiler.syntax.Ast.AstAnonymousField> = [], fieldPayloads:Array<compiler.syntax.SyntaxTree.SyntaxAnonymousFieldPayload> = [];
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 				var fieldName = "<missing>", fieldStart = current().span;
 				try {
@@ -3131,13 +3204,15 @@ class Parser {
 					fieldName = name.text;
 					fieldStart = name.span;
 					consume(TokenKind.Colon);
-					var type = parseType();
+					var parsedType = parseTypeResult(), type = parsedType.ast;
 					fields.push({
 						name: name.text,
 						type: type,
 						optional: optional,
 						span: name.span.merge(previous().span)
 					});
+					fieldPayloads.push({name: name.text, type: parsedType.payload, optional: optional,
+						span: name.span.merge(previous().span)});
 				}
 				catch (error:CompileError) {
 					if (!recovering)
@@ -3149,65 +3224,73 @@ class Parser {
 						optional: false,
 						span: fieldStart.merge(error.diagnostic.span)
 					});
-						synchronizeObjectField();
+					fieldPayloads.push({name: fieldName, type: compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType, optional: false,
+						span: fieldStart.merge(error.diagnostic.span)});
+					synchronizeObjectField();
 				}
 				if (!match(TokenKind.Comma))
 					match(TokenKind.Semicolon);
 			}
 			var anonymousTypeEnd = consume(TokenKind.RightBrace).span;
 			recordCstNode(SyntaxKind.AnonymousType, anonymousTypeStart.merge(anonymousTypeEnd));
-			return AnonymousType(fields);
+			return {ast: AnonymousType(fields), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.AnonymousType(fieldPayloads)};
 		}
 		if (match(TokenKind.TypeInt))
-			return IntType;
+			return {ast: IntType, payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.IntType};
 		if (match(TokenKind.TypeBool))
-			return BoolType;
+			return {ast: BoolType, payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.BoolType};
 		if (match(TokenKind.TypeFloat))
-			return FloatType;
+			return {ast: FloatType, payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.FloatType};
 		if (match(TokenKind.TypeString))
-			return StringType;
+			return {ast: StringType, payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.StringType};
 		if (match(TokenKind.Void))
-			return VoidType;
+			return {ast: VoidType, payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.VoidType};
 		if (check(TokenKind.Identifier))
 			if (current().text == "Array") {
 				advance();
-				if (isRecoveryBoundary())
-					return ArrayType(missingType("type arguments"));
+				if (isRecoveryBoundary()) {
+					var missing = missingType("type arguments");
+					return {ast: ArrayType(missing), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.ArrayType(compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType)};
+				}
 				var arrayTypeStart = consume(TokenKind.Less).span;
-					var element = parseDelimitedType(TokenKind.Greater);
+					var element = parseDelimitedTypeResult(TokenKind.Greater);
 				var arrayTypeEnd = consume(TokenKind.Greater).span;
 				recordCstNode(SyntaxKind.TypeArgumentList, arrayTypeStart.merge(arrayTypeEnd));
-				return ArrayType(element);
+				return {ast: ArrayType(element.ast), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.ArrayType(element.payload)};
 			} else if (current().text == "Map") {
 				advance();
 				if (isRecoveryBoundary()) {
 					var missingSpan = current().span;
 					var missing = missingType("type arguments");
-					return MapType(missing, ErrorType(missingSpan));
+					return {ast: MapType(missing, ErrorType(missingSpan)), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.MapType(
+						compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType, compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType)};
 				}
 				var mapTypeStart = consume(TokenKind.Less).span;
-					var key = parseDelimitedType(TokenKind.Greater);
+					var key = parseDelimitedTypeResult(TokenKind.Greater);
 					var value = if (match(TokenKind.Comma))
-						parseDelimitedType(TokenKind.Greater);
+						parseDelimitedTypeResult(TokenKind.Greater);
 				else if (isRecoveryBoundary() || check(TokenKind.Greater)) {
 					recordExpected("comma");
-					missingType("map value");
+					var missing = missingType("map value");
+					parsedType(missing, compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType);
 				} else {
 					consume(TokenKind.Comma);
-					parseType();
+					parseTypeResult();
 				};
 				var mapTypeEnd = consume(TokenKind.Greater).span;
 				recordCstNode(SyntaxKind.TypeArgumentList, mapTypeStart.merge(mapTypeEnd));
-				return MapType(key, value);
+				return {ast: MapType(key.ast, value.ast), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.MapType(key.payload, value.payload)};
 			} else if (current().text == "Null") {
 				advance();
-				if (isRecoveryBoundary())
-					return NullableType(missingType("type arguments"));
+				if (isRecoveryBoundary()) {
+					var missing = missingType("type arguments");
+					return {ast: NullableType(missing), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType)};
+				}
 				var nullableTypeStart = consume(TokenKind.Less).span;
-					var element = parseDelimitedType(TokenKind.Greater);
+					var element = parseDelimitedTypeResult(TokenKind.Greater);
 				var nullableTypeEnd = consume(TokenKind.Greater).span;
 				recordCstNode(SyntaxKind.TypeArgumentList, nullableTypeStart.merge(nullableTypeEnd));
-				return NullableType(element);
+				return {ast: NullableType(element.ast), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(element.payload)};
 			}
 		var name = parseQualifiedName();
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.StringLiteral) {
@@ -3216,23 +3299,31 @@ class Parser {
 				value = decodeString(tag.text);
 			var nativeTypeEnd = consume(TokenKind.Greater).span;
 			recordCstNode(SyntaxKind.TypeArgumentList, nativeTypeStart.merge(nativeTypeEnd));
-			return NativeAbstractType(name, value);
+			return {ast: NativeAbstractType(name, value), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.NativeAbstractType(name, value)};
 		}
 		if (match(TokenKind.Less)) {
 			var appliedTypeStart = previous().span;
-			var arguments = [];
+			var arguments:Array<AstType> = [], argumentPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
 			if (!check(TokenKind.Greater) && !recoveringAtEnd()) {
-				arguments.push(parseDelimitedType(TokenKind.Greater));
+				var first = parseDelimitedTypeResult(TokenKind.Greater);
+				arguments.push(first.ast);
+				argumentPayloads.push(first.payload);
 				while (match(TokenKind.Comma))
-					if (!check(TokenKind.Greater) && !recoveringAtEnd())
-						arguments.push(parseDelimitedType(TokenKind.Greater));
+					if (!check(TokenKind.Greater) && !recoveringAtEnd()) {
+						var next = parseDelimitedTypeResult(TokenKind.Greater);
+						arguments.push(next.ast);
+						argumentPayloads.push(next.payload);
+					}
 			}
 			var appliedTypeEnd = consume(TokenKind.Greater).span;
 			recordCstNode(SyntaxKind.TypeArgumentList, appliedTypeStart.merge(appliedTypeEnd));
-			return AppliedType(name, arguments);
+			return {ast: AppliedType(name, arguments), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.AppliedType(name, argumentPayloads)};
 		}
-		return NamedType(name);
+		return {ast: NamedType(name), payload: compiler.syntax.SyntaxTree.SyntaxTypePayload.NamedType(name)};
 	}
+
+	static function parsedType(ast:AstType, payload:compiler.syntax.SyntaxTree.SyntaxTypePayload):ParsedType
+		return {ast: ast, payload: payload};
 
 	function failType(message:String):AstType {
 		fail(current(), message);

@@ -120,6 +120,7 @@ typedef SyntaxAnonymousFieldPayload = {
 	final name:String;
 	final type:SyntaxTypePayload;
 	final optional:Bool;
+	final span:SourceSpan;
 }
 
 typedef SyntaxArgumentPayload = {

@@ -638,43 +638,57 @@ class AstLowerer {
 	}
 
 	static function lowerType(direct:AstType, payload:compiler.syntax.SyntaxTree.SyntaxTypePayload):Null<AstType>
-		return switch [direct, payload] {
-			case [IntType, compiler.syntax.SyntaxTree.SyntaxTypePayload.IntType]: IntType;
-			case [BoolType, compiler.syntax.SyntaxTree.SyntaxTypePayload.BoolType]: BoolType;
-			case [FloatType, compiler.syntax.SyntaxTree.SyntaxTypePayload.FloatType]: FloatType;
-			case [StringType, compiler.syntax.SyntaxTree.SyntaxTypePayload.StringType]: StringType;
-			case [VoidType, compiler.syntax.SyntaxTree.SyntaxTypePayload.VoidType]: VoidType;
-			case [InferredType, compiler.syntax.SyntaxTree.SyntaxTypePayload.InferredType]: InferredType;
-			case [ErrorType(span), SyntaxTypePayload.ErrorType]: ErrorType(span);
-			case [NativeAbstractType(_, _), SyntaxTypePayload.NativeAbstractType(declaration, tag)]: NativeAbstractType(declaration, tag);
-			case [NamedType(_), compiler.syntax.SyntaxTree.SyntaxTypePayload.NamedType(name)]: NamedType(name);
-			case [AppliedType(_, arguments), compiler.syntax.SyntaxTree.SyntaxTypePayload.AppliedType(name, payloadArguments)]:
-				var lowered = lowerTypeList(arguments, payloadArguments);
-				lowered == null ? null : AppliedType(name, lowered);
-			case [ArrayType(element), compiler.syntax.SyntaxTree.SyntaxTypePayload.ArrayType(payloadElement)]:
-				var lowered = lowerType(element, payloadElement);
-				lowered == null ? null : ArrayType(lowered);
-			case [MapType(key, value), compiler.syntax.SyntaxTree.SyntaxTypePayload.MapType(payloadKey, payloadValue)]:
-				var loweredKey = lowerType(key, payloadKey), loweredValue = lowerType(value, payloadValue);
-				loweredKey == null || loweredValue == null ? null : MapType(loweredKey, loweredValue);
-			case [NullableType(element), compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(payloadElement)]:
-				var lowered = lowerType(element, payloadElement);
-				lowered == null ? null : NullableType(lowered);
-			case [FunctionType(arguments, result), compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(payloadArguments, payloadResult)]:
-				var loweredArguments = lowerTypeList(arguments, payloadArguments), loweredResult = lowerType(result, payloadResult);
-				loweredArguments == null || loweredResult == null ? null : FunctionType(loweredArguments, loweredResult);
-			case [AnonymousType(fields), compiler.syntax.SyntaxTree.SyntaxTypePayload.AnonymousType(payloadFields)]:
-				if (fields.length != payloadFields.length)
-					return null;
-				var loweredFields:Array<compiler.syntax.Ast.AstAnonymousField> = [];
-				for (index in 0...fields.length) {
-					var field = fields[index], payloadField = payloadFields[index], lowered = lowerType(field.type, payloadField.type);
-					if (lowered == null || field.name != payloadField.name || field.optional != payloadField.optional)
+		return switch payload {
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.IntType: IntType;
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.BoolType: BoolType;
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.FloatType: FloatType;
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.StringType: StringType;
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.VoidType: VoidType;
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.InferredType: InferredType;
+			case SyntaxTypePayload.ErrorType:
+				switch direct {
+					case ErrorType(span): ErrorType(span);
+					default: null;
+				};
+			case SyntaxTypePayload.NativeAbstractType(declaration, tag): NativeAbstractType(declaration, tag);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.NamedType(name): NamedType(name);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.AppliedType(name, payloadArguments):
+				var lowered:Array<AstType> = [];
+				for (argument in payloadArguments) {
+					var loweredArgument = lowerType(null, argument);
+					if (loweredArgument == null)
 						return null;
-					loweredFields.push({name: field.name, type: lowered, optional: field.optional, span: field.span});
+					lowered.push(loweredArgument);
+				}
+				AppliedType(name, lowered);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.ArrayType(payloadElement):
+				var lowered = lowerType(null, payloadElement);
+				lowered == null ? null : ArrayType(lowered);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.MapType(payloadKey, payloadValue):
+				var loweredKey = lowerType(null, payloadKey), loweredValue = lowerType(null, payloadValue);
+				loweredKey == null || loweredValue == null ? null : MapType(loweredKey, loweredValue);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(payloadElement):
+				var lowered = lowerType(null, payloadElement);
+				lowered == null ? null : NullableType(lowered);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(payloadArguments, payloadResult):
+				var loweredArguments:Array<AstType> = [];
+				for (argument in payloadArguments) {
+					var loweredArgument = lowerType(null, argument);
+					if (loweredArgument == null)
+						return null;
+					loweredArguments.push(loweredArgument);
+				}
+				var loweredResult = lowerType(null, payloadResult);
+				loweredResult == null ? null : FunctionType(loweredArguments, loweredResult);
+			case compiler.syntax.SyntaxTree.SyntaxTypePayload.AnonymousType(payloadFields):
+				var loweredFields:Array<compiler.syntax.Ast.AstAnonymousField> = [];
+				for (payloadField in payloadFields) {
+					var lowered = lowerType(null, payloadField.type);
+					if (lowered == null)
+						return null;
+					loweredFields.push({name: payloadField.name, type: lowered, optional: payloadField.optional, span: payloadField.span});
 				}
 				AnonymousType(loweredFields);
-			default: null;
 		};
 
 	static function lowerTypeList(direct:Array<AstType>, payload:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload>):Null<Array<AstType>> {
