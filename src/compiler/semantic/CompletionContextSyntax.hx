@@ -118,15 +118,21 @@ class CompletionContextSyntax {
 	}
 
 	public static function isObjectFieldContext(tokens:Array<Token>, position:Int, ?cancellation:CancellationToken):Bool {
-		var previous:Null<Token> = null;
-		for (token in tokens) {
+		var previous:Null<Token> = null, previousIndex = -1;
+		for (index in 0...tokens.length) {
 			if (cancellation != null)
 				cancellation.check();
+			var token = tokens[index];
 			if (token.kind == TokenKind.Eof || token.span.end > position)
 				break;
 			previous = token;
+			previousIndex = index;
 		}
-		if (previous == null || previous.kind != TokenKind.Colon)
+		if (previous == null)
+			return false;
+		if (previous.kind == TokenKind.LeftBrace)
+			return isObjectLiteralStart(tokens, previousIndex, cancellation);
+		if (previous.kind != TokenKind.Colon)
 			return false;
 		var depth = 0;
 		var index = tokens.length - 1;
@@ -148,6 +154,24 @@ class CompletionContextSyntax {
 				default:
 			}
 			index--;
+		}
+		return false;
+	}
+
+	/** Distinguish an object-literal opening brace from a statement/block brace. */
+	static function isObjectLiteralStart(tokens:Array<Token>, index:Int, ?cancellation:CancellationToken):Bool {
+		var cursor = index - 1;
+		while (cursor >= 0) {
+			if (cancellation != null)
+				cancellation.check();
+			switch tokens[cursor].kind {
+				case TokenKind.Return, TokenKind.Assign, TokenKind.LeftParen, TokenKind.Comma, TokenKind.Colon:
+					return true;
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.RightParen:
+					return false;
+				default:
+			}
+			cursor--;
 		}
 		return false;
 	}

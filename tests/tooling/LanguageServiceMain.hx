@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedExpressionKind;
+import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
 
 class LanguageServiceMain {
 	static function main():Void {
@@ -2871,6 +2872,17 @@ class LanguageServiceMain {
 			};
 		if (objectFieldExpectedName != "ObjectValue")
 			throw 'recovered object field did not retain its expected type: ${objectFieldExpected == null ? "null" : Std.string(objectFieldExpected)}';
+		var objectNameSource = "function make():{value:Int, other:String} return {";
+		objectFieldService.update("ObjectFieldNames.hx", objectNameSource);
+		var objectNameContext = objectFieldService.completionContext("ObjectFieldNames.hx", objectNameSource.length),
+			objectNameCompletion = objectFieldService.completeResult("ObjectFieldNames.hx", objectNameSource.length),
+			foundExpectedObjectField = false;
+		for (item in objectNameCompletion.items)
+			if (item.label == "value" && item.detail == "value:Int")
+				foundExpectedObjectField = true;
+		if (objectNameContext == null || objectNameContext.context.kind != SemanticCompletionContextKind.ObjectField
+			|| !foundExpectedObjectField || !objectNameCompletion.isIncomplete)
+			throw 'completion did not expose the expected anonymous object field during recovery: context=${objectNameContext == null ? "null" : Std.string(objectNameContext.context.kind)}, expected=${objectNameContext == null || objectNameContext.context.expected == null ? "null" : Std.string(objectNameContext.context.expected)}, items=${[for (item in objectNameCompletion.items) item.label].join(",")}';
 		var inferredObjectService = new LanguageService(),
 			inferredObjectSource = "function main():Void { var point = {value: 1}; point.";
 		inferredObjectService.update("InferredObject.hx", inferredObjectSource);

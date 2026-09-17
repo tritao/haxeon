@@ -1825,6 +1825,10 @@ class LanguageService {
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
+		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.ObjectField
+			&& semanticContext.expected != null)
+			for (field in expectedObjectFields(semanticContext.expected, token))
+				addMember(field.name, "field", field.name + ":" + compilerTypeName(field.type), prefix, result, 0);
 		if (qualifier == null && model != null)
 			addRecoveredUnresolvedCompletion(state, model, position, prefix, result, token);
 		if (model != null)
@@ -2972,6 +2976,17 @@ class LanguageService {
 			case TDynamic: true;
 			case TNullable(element): completionTypeCompatible(actual, element);
 			default: false;
+		};
+	}
+
+	static function expectedObjectFields(type:CompilerType, ?token:CancellationToken):Array<AnonymousField> {
+		return switch type {
+			case TAnonymous(_, fields):
+				if (token != null)
+					token.check();
+				fields.copy();
+			case TNullable(element): expectedObjectFields(element, token);
+			default: [];
 		};
 	}
 
