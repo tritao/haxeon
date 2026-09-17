@@ -116,7 +116,7 @@ class FrontendCompilation {
 		if (indexSemantics) {
 			for (module in reindexedModules.keys()) {
 				var state = context.writableState(module, rollbackModules);
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens, state.name);
 			}
 			context.invalidateSemanticResolutionCache();
 			for (module in reindexedModules.keys()) {
@@ -163,7 +163,7 @@ class FrontendCompilation {
 				// newly selected/generated function; published builders are never
 				// mutated in place.
 				if (state.semanticModel.isFrozen) {
-					state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+					state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens, state.name);
 					state.semanticModel.indexTypeReferences(context.resolveSemanticType, token);
 				}
 				state.semanticModel.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);

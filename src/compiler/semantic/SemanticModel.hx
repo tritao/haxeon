@@ -32,12 +32,13 @@ class SemanticModel {
 
 	public var isFrozen(get, never):Bool;
 
-	public function new(program:AstProgram, source:SourceFile, revision:Int, ?tokens:Array<Token>) {
+	public function new(program:AstProgram, source:SourceFile, revision:Int, ?tokens:Array<Token>, ?moduleName:String) {
 		this.source = source;
 		this.revision = revision;
 		this.program = program;
 		this.declarations = DeclarationIndex.forModule(program, source);
-		this.builder = new SemanticIndexBuilder(source.path, revision, declarations, tokens == null ? new Lexer(source).tokenize() : tokens);
+		this.builder = new SemanticIndexBuilder(moduleName == null ? source.path : moduleName, revision, declarations,
+			tokens == null ? new Lexer(source).tokenize() : tokens);
 		this.builder.indexTypeParameterDeclarations(program);
 		this.index = builder.view();
 		this.partialTypedProgram = null;

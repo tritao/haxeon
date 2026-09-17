@@ -103,7 +103,7 @@ class RecoveryEngine {
 		try {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering(),
 				inferredProgram = SignatureInference.inferProgram(recovered.program, checkpoint),
-				recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens),
+				recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens, state.name),
 			typingDiagnostics:Array<Diagnostic> = [],
 				typingModules = hooks.typingModules(state, recovered.program, token),
 				reusedFunctions = hooks.reuseFunctions(state, recovered.program, externalChangedBodies, forceNoReuse);

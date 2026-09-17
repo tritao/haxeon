@@ -3438,8 +3438,8 @@ class LanguageServiceMain {
 			packageRoot = root + "/lazy";
 		sys.FileSystem.createDirectory(root);
 		sys.FileSystem.createDirectory(packageRoot);
-		sys.io.File.saveContent(packageRoot + "/Helper.hx",
-			"package lazy; class Helper { public function new() {} public function answer():Int return 1; }");
+		var helperSource = "package lazy; class Helper { public function new() {} public function answer():Int return 1; }";
+		sys.io.File.saveContent(packageRoot + "/Helper.hx", helperSource);
 		sys.io.File.saveContent(packageRoot + "/Other.hx", "package lazy; class Other { public var value:Int; }");
 		var service = new LanguageService();
 		service.compiler.addSourceRoot(root);
@@ -3465,6 +3465,19 @@ class LanguageServiceMain {
 		definition = service.definition("app/Main.hx", memberPosition + 1);
 		if (definition == null || definition.path != packageRoot + "/Helper.hx")
 			throw 'definition did not use the analyzed source-root module: ${definition == null ? "null" : definition.path}';
+		var targetPosition = helperSource.indexOf("answer") + 1,
+			targetDefinition = service.definition(packageRoot + "/Helper.hx", targetPosition),
+			references = service.references(packageRoot + "/Helper.hx", targetPosition),
+			hasDeclaration = false,
+			hasConsumerUse = false;
+		for (reference in references) {
+			if (reference.path == packageRoot + "/Helper.hx")
+				hasDeclaration = true;
+			if (reference.path == "app/Main.hx")
+				hasConsumerUse = true;
+		}
+		if (!hasDeclaration || !hasConsumerUse)
+			throw 'global references did not cross the analyzed lazy source-root identity: definition=${targetDefinition == null ? "null" : targetDefinition.path}, id=${service.compiler.modules.get("lazy.Helper").semanticModel.index.symbolIdAt(targetPosition)}, refs=${[for (reference in references) reference.path].join(",")}';
 		if (sys.FileSystem.exists(packageRoot + "/Helper.hx"))
 			sys.FileSystem.deleteFile(packageRoot + "/Helper.hx");
 		if (sys.FileSystem.exists(packageRoot + "/Other.hx"))

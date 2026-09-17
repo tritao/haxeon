@@ -3514,7 +3514,19 @@ class LanguageService {
 	}
 
 	function stateFor(path:String):Null<ModuleState>
-		return compiler.modules.get(ModulePath.fromFile(path));
+	{
+		var direct = compiler.modules.get(ModulePath.fromFile(path));
+		if (direct != null)
+			return direct;
+		// Source-root modules retain their logical compiler name while their
+		// locations remain absolute disk paths. Resolve the editor path against
+		// the source identity as a fallback so navigation and diagnostics use the
+		// same state that lazy recovery materialized.
+		for (state in compiler.modules)
+			if (state.source.path == path)
+				return state;
+		return null;
+	}
 
 	static function editorSnapshot(state:ModuleState):Null<EditorSnapshot> {
 		return EditorSnapshotTools.select(state);

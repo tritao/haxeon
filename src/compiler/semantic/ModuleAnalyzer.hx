@@ -44,7 +44,7 @@ class ModuleAnalyzer {
 			structuralChanged:Map<String, Bool>):Void {
 		if (state.ast != null) {
 			if (buildSemanticModels && state.semanticModel == null)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens, state.name);
 			return;
 		}
 		// A recovered editor snapshot may have populated diagnostics while the
@@ -58,7 +58,7 @@ class ModuleAnalyzer {
 			state.ast = new Parser(state.tokens).parseProgram();
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens, state.name);
 			state.parseVersion++;
 		} catch (error:CompileError) {
 			error.diagnostic.origin = error.diagnostic.code == "E0001" ? DiagnosticOrigin.Lexical : DiagnosticOrigin.ParserRecovery;
