@@ -79,6 +79,12 @@ then emits a typedef alias instead of a second record declaration. This lets
 an imported `struct hl_type`, for example, use the same `RawPtr<HlType>` and
 field layout as the runtime-owned `HlType` declaration.
 
+The HashLink type-metadata ring checks this handoff into the runtime through
+`runtime.hashlink.HashLinkTypeBindings`. Its `NativeHl*` aliases are the names
+used by generated HXI bindings, while the aliases target the canonical
+`HlType` family consumed by `HlTypeArena`. The alias surface is deliberately
+not a second record declaration.
+
 NativeKit-style C handles are annotated with `hxi:handle` and must have a
 fixed unsigned 32-bit representation. The importer emits them as nominal raw
 HXI declarations rather than ordinary structs:

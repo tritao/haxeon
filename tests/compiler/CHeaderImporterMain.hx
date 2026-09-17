@@ -197,22 +197,22 @@ class CHeaderImporterMain {
 			"HXI structures should project into source-declared native records with RawPtr fields");
 		var nativeTypeNames:Map<String, String> = [];
 		for (binding in [
-			{native: "hl_alloc", haxe: "runtime.hashlink.HlAllocation"},
-			{native: "hl_field_lookup", haxe: "runtime.hashlink.HlFieldLookup"},
-			{native: "vvirtual", haxe: "runtime.hashlink.HlVirtualValue"},
-			{native: "hl_module_context", haxe: "runtime.hashlink.HlModuleContext"},
-			{native: "hl_obj_field", haxe: "runtime.hashlink.HlObjectField"},
-			{native: "hl_obj_proto", haxe: "runtime.hashlink.HlObjectProto"},
-			{native: "hl_runtime_binding", haxe: "runtime.hashlink.HlRuntimeBinding"},
-			{native: "hl_runtime_obj", haxe: "runtime.hashlink.HlRuntimeObject"},
-			{native: "hl_type", haxe: "runtime.hashlink.HlType"},
-			{native: "hl_type_enum", haxe: "runtime.hashlink.HlTypeEnum"},
-			{native: "hl_type_fun", haxe: "runtime.hashlink.HlTypeFunction"},
-			{native: "hl_type_fun_closure", haxe: "runtime.hashlink.HlTypeClosure"},
-			{native: "hl_type_fun_closure_type", haxe: "runtime.hashlink.HlTypeClosureType"},
-			{native: "hl_type_obj", haxe: "runtime.hashlink.HlTypeObject"},
-			{native: "hl_type_virtual", haxe: "runtime.hashlink.HlTypeVirtual"},
-			{native: "hl_enum_construct", haxe: "runtime.hashlink.HlEnumConstruct"}
+			{native: "hl_alloc", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlAllocation"},
+			{native: "hl_field_lookup", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlFieldLookup"},
+			{native: "vvirtual", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeVvirtual"},
+			{native: "hl_module_context", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlModuleContext"},
+			{native: "hl_obj_field", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlObjectField"},
+			{native: "hl_obj_proto", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlObjectProto"},
+			{native: "hl_runtime_binding", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlRuntimeBinding"},
+			{native: "hl_runtime_obj", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlRuntimeObj"},
+			{native: "hl_type", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlType"},
+			{native: "hl_type_enum", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeEnum"},
+			{native: "hl_type_fun", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeFun"},
+			{native: "hl_type_fun_closure", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeFunClosure"},
+			{native: "hl_type_fun_closure_type", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeFunClosureType"},
+			{native: "hl_type_obj", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeObj"},
+			{native: "hl_type_virtual", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlTypeVirtual"},
+			{native: "hl_enum_construct", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlEnumConstruct"}
 		])
 			nativeTypeNames.set(binding.native, binding.haxe);
 		var nativeFieldNames = hashlinkNativeFieldNames();
@@ -226,7 +226,7 @@ class CHeaderImporterMain {
 			'function main():Int { var arena = new runtime.memory.Arena(); var pointer:RawPtr<NativeHlType> = arena.alloc(); pointer.ref.kind = 3; return pointer.ref.kind == 3 ? 42 : 1; }');
 		boundRecordCompiler.compile("runtime.hashlink.bound.HashLinkNativeBindings");
 		verifyHashlinkBindingLayouts(boundRecordCompiler.lastTypedProgram.functions, parsedHashlink, nativeTypeNames, nativeFieldNames);
-		expect(boundRecordSource.indexOf("typedef NativeHlType = runtime.hashlink.HlType;") >= 0
+		expect(boundRecordSource.indexOf("typedef NativeHlType = runtime.hashlink.HashLinkTypeBindings.NativeHlType;") >= 0
 			&& boundRecordSource.indexOf("class NativeHlType {") < 0,
 			"HXI records should bind to the canonical Haxe native record without duplicating it");
 		var callbackRecord = HxiParser.parse("callback-record.hxi",

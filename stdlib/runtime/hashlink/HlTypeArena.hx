@@ -4,6 +4,7 @@ import runtime.memory.Arena;
 import runtime.memory.Arena.ArenaCheckpoint;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlType;
+import runtime.hashlink.HashLinkTypeBindings.NativeHlType;
 import runtime.hashlink.HlTypeData;
 import runtime.hashlink.HlTypeFunction;
 import runtime.hashlink.HlTypeObject.HlTypeEnum;
@@ -32,7 +33,7 @@ import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction;
 class HlTypeArena {
 	final storage:Arena;
 	final typeStorage:Arena;
-	final typeEntries:RawPtr<HlType>;
+	final typeEntries:RawPtr<NativeHlType>;
 	final typeCapacity:Int;
 	final kernel:HlMetadataModuleKernel;
 	final moduleContexts:Array<RawPtr<HlModuleContext>> = [];
@@ -48,14 +49,14 @@ class HlTypeArena {
 		typeEntries = typeStorage.alloc(typeCapacity);
 	}
 
-	public function allocType():RawPtr<HlType> {
+	public function allocType():RawPtr<NativeHlType> {
 		if (typeCount >= typeCapacity)
 			throw 'HashLink type arena exhausted its $typeCapacity type-record slots';
 		return typeEntries.offset(typeCount++);
 	}
 
 	/** Base of the stable contiguous type-record slab. */
-	public inline function typePointer():RawPtr<HlType>
+	public inline function typePointer():RawPtr<NativeHlType>
 		return typeEntries;
 
 	/** Reserved number of contiguous type-record slots. */

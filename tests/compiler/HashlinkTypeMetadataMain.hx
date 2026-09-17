@@ -26,6 +26,7 @@ class HashlinkTypeMetadataMain {
 			+
 			'import runtime.hashlink.HlRuntimeObject; import runtime.hashlink.HlRuntimeObject.HlFieldLookup; import runtime.hashlink.HlRuntimeObject.HlRuntimeBinding; '
 			+ 'import runtime.hashlink.HlRuntimeObject.HlVirtualValue; '
+			+ 'import runtime.hashlink.HashLinkTypeBindings.NativeHlType; '
 			+
 			'import runtime.hashlink.HlFunction; import runtime.hashlink.HlFunction.HlFunctionField; import runtime.hashlink.HlNative; import runtime.hashlink.HlConstant; '
 			+ 'import runtime.hashlink.HlDebugSection; import runtime.hashlink.HlNativeCode; '
@@ -35,6 +36,7 @@ class HashlinkTypeMetadataMain {
 			'import runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction; import runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput; import runtime.hashlink.HlPatchInput.HlRuntimePatchInput; '
 			+ 'import runtime.hashlink.HlPatchPools.HlPatchPools; '
 			+ 'function typeSize():Int return sizeof<HlType>(); '
+			+ 'function boundTypeSize():Int return sizeof<NativeHlType>(); '
 			+ 'function typeDataSize():Int return sizeof<HlTypeData>(); '
 			+ 'function typeDataOffset():Int return offsetof<HlType>("data"); '
 			+ 'function functionSize():Int return sizeof<HlTypeFunction>(); '
@@ -263,6 +265,7 @@ class HashlinkTypeMetadataMain {
 			}
 		}
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeSize") == 40, "hl_type must match the 64-bit C header size");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.boundTypeSize") == 40, "the runtime HXI binding alias must preserve hl_type layout");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeDataSize") == 8, "hl_type's anonymous union must be pointer-sized");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.typeDataOffset") == 8, "hl_type's union must follow the kind field with ABI alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.functionSize") == 80, "hl_type_fun must preserve nested aggregate padding");
