@@ -1224,6 +1224,20 @@ class LanguageServiceMain {
 			"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(");
 		if (implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute").length != 0)
 			throw "rename crossed into a recovered override family";
+		var fieldFamilyService = new LanguageService(),
+			fieldFamilyBase = "package fields; class Base { public var value:Int; }",
+			fieldFamilyChild = "package fields; import fields.Base; class Child extends Base { public var value:Int; }",
+			fieldFamilyUse = "package fields; import fields.Child; function main():Void { var child:Child = new Child(); child.value; }";
+		fieldFamilyService.update("fields/Base.hx", fieldFamilyBase);
+		fieldFamilyService.update("fields/Child.hx", fieldFamilyChild);
+		fieldFamilyService.update("fields/Main.hx", fieldFamilyUse);
+		fieldFamilyService.compile("fields.Main");
+		var fieldFamilyReferences = fieldFamilyService.references("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1),
+			fieldFamilyImplementations = fieldFamilyService.implementations("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1);
+		if (fieldFamilyReferences.length != 3
+			|| fieldFamilyImplementations.length != 1
+			|| fieldFamilyImplementations[0].path != "fields/Child.hx")
+			throw 'field member-family navigation failed: references=${fieldFamilyReferences.length}, implementations=${fieldFamilyImplementations.length}, child=${fieldFamilyImplementations.length == 0 ? "" : fieldFamilyImplementations[0].path}';
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",

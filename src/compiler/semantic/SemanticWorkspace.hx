@@ -1962,6 +1962,12 @@ class SemanticWorkspace {
 			if (model == null)
 				continue;
 			for (decl in model.program.classes)
+				for (field in decl.fields)
+					if (sameSpan(field.span, resolved.symbol.declaration)) {
+						owner = qualifiedType(model, decl.name);
+						member = field.name;
+					}
+			for (decl in model.program.classes)
 				for (methodDeclaration in decl.methods)
 					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
 						owner = qualifiedType(model, decl.name);
@@ -1991,6 +1997,9 @@ class SemanticWorkspace {
 						|| editorInheritsFrom(state, owner, candidateOwner, [], token);
 				if (!related)
 					continue;
+				for (field in decl.fields)
+					if (field.name == member)
+						addImplementation(result, seen, state, 'class:${decl.name}:field:$member', field.span);
 				for (methodDeclaration in decl.methods)
 					if (methodDeclaration.name == member)
 						addImplementation(result, seen, state, 'class:${decl.name}:method:$member', methodDeclaration.span);
@@ -2028,26 +2037,35 @@ class SemanticWorkspace {
 			var model = editor ? editorModel(state) : effectiveModel(state);
 			if (model == null)
 				continue;
-			for (decl in model.program.classes)
+			for (decl in model.program.classes) {
 				if (sameSpan(decl.span, resolved.symbol.declaration)) {
 					owner = qualifiedType(model, decl.name);
 					targetIsType = true;
-				} else
+				} else {
+					for (field in decl.fields)
+						if (sameSpan(field.span, resolved.symbol.declaration)) {
+							owner = qualifiedType(model, decl.name);
+							member = field.name;
+						}
 					for (method in decl.methods)
 						if (sameSpan(method.span, resolved.symbol.declaration)) {
 							owner = qualifiedType(model, decl.name);
 							member = method.name;
 						}
-			for (decl in model.program.interfaces)
+				}
+			}
+			for (decl in model.program.interfaces) {
 				if (sameSpan(decl.span, resolved.symbol.declaration)) {
 					owner = qualifiedType(model, decl.name);
 					targetIsType = true;
-				} else
+				} else {
 					for (method in decl.methods)
 						if (sameSpan(method.span, resolved.symbol.declaration)) {
 							owner = qualifiedType(model, decl.name);
 							member = method.name;
 						}
+				}
+			}
 		}
 		if (owner == null)
 			return [];
@@ -2064,12 +2082,16 @@ class SemanticWorkspace {
 				var derived = editor ? editorInheritsFrom(state, identity, owner, [], token) : inheritsFrom(identity, owner, []);
 				if (identity == owner || !derived)
 					continue;
-				if (targetIsType)
+				if (targetIsType) {
 					addImplementation(result, seen, state, 'class:${decl.name}', decl.span);
-				else
+				} else {
+					for (field in decl.fields)
+						if (field.name == member)
+							addImplementation(result, seen, state, 'class:${decl.name}:field:$member', field.span);
 					for (method in decl.methods)
 						if (method.name == member)
 							addImplementation(result, seen, state, 'class:${decl.name}:method:$member', method.span);
+				}
 			}
 		}
 		result.sort(function(left, right) {
