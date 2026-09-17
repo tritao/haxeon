@@ -632,6 +632,28 @@ class LanguageServiceMain {
 			|| moduleAliasSecondaryMemberDefinition == null || moduleAliasSecondaryMemberDefinition.path != "modulealias/types/Container.hx"
 			|| moduleAliasSecondaryStaticDefinition == null || moduleAliasSecondaryStaticDefinition.path != "modulealias/types/Container.hx")
 			throw 'module aliases did not resolve secondary types and members: type=${moduleAliasSecondaryTypeDefinition == null ? "null" : moduleAliasSecondaryTypeDefinition.path}, member=${moduleAliasSecondaryMemberDefinition == null ? "null" : moduleAliasSecondaryMemberDefinition.path}, static=${moduleAliasSecondaryStaticDefinition == null ? "null" : moduleAliasSecondaryStaticDefinition.path}';
+		var moduleAliasHierarchyService = new LanguageService(),
+			moduleAliasHierarchyTarget = "package modulealias.hierarchy; class Root { public function run():Int return 1; } function main():Void return;",
+			moduleAliasHierarchyChild = "package modulealias.child; import modulealias.hierarchy.Container as C; class Child extends C.Root { public function run():Int return 2; } function main():Void { var child:Child = new Child(); child.run(); } function unfinished(";
+		moduleAliasHierarchyService.update("modulealias/hierarchy/Container.hx", moduleAliasHierarchyTarget);
+		moduleAliasHierarchyService.compile("modulealias.hierarchy.Container");
+		moduleAliasHierarchyService.update("modulealias/child/Child.hx", moduleAliasHierarchyChild);
+		var moduleAliasHierarchyRootPosition = moduleAliasHierarchyTarget.indexOf("Root") + 1,
+			moduleAliasHierarchyImplementations = moduleAliasHierarchyService.implementations("modulealias/hierarchy/Container.hx", moduleAliasHierarchyRootPosition),
+			moduleAliasHierarchyChildItem = moduleAliasHierarchyService.prepareTypeHierarchy("modulealias/child/Child.hx",
+				moduleAliasHierarchyChild.indexOf("Child") + 2),
+			moduleAliasHierarchyTypePosition = moduleAliasHierarchyChild.indexOf("C.Root") + "C.".length + 1,
+			moduleAliasHierarchyTypeDefinition = moduleAliasHierarchyService.typeDefinition("modulealias/child/Child.hx", moduleAliasHierarchyTypePosition);
+		if (moduleAliasHierarchyImplementations.length != 1
+			|| moduleAliasHierarchyImplementations[0].path != "modulealias/child/Child.hx"
+			|| moduleAliasHierarchyChildItem == null
+			|| moduleAliasHierarchyTypeDefinition == null
+			|| moduleAliasHierarchyTypeDefinition.path != "modulealias/hierarchy/Container.hx")
+			throw 'module aliases did not preserve hierarchy identities: implementations=${moduleAliasHierarchyImplementations.length}, child=${moduleAliasHierarchyChildItem == null ? "null" : moduleAliasHierarchyChildItem.name}, type=${moduleAliasHierarchyTypeDefinition == null ? "null" : moduleAliasHierarchyTypeDefinition.path}';
+		var moduleAliasHierarchySupertypes = moduleAliasHierarchyService.typeSupertypes(moduleAliasHierarchyChildItem.identity,
+			moduleAliasHierarchyChildItem.revision);
+		if (moduleAliasHierarchySupertypes.length != 1 || moduleAliasHierarchySupertypes[0].name != "Root")
+			throw 'module aliases did not resolve a recovered hierarchy parent: ${moduleAliasHierarchySupertypes.length}';
 		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
 		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
 		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,
