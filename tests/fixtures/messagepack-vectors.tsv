@@ -19,5 +19,6 @@ string-euro	a3e282ac
 binary-deadbeef	c404deadbeef
 array-mixed	9301fea178
 map-ordered	82a16101a162c3
+string-key-utf8	83a365cc8101a2c3a902a4f09f988003
 nested	9281a1610192c2c3
 ext-fixext1	d42a01

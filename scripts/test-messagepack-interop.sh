@@ -81,6 +81,7 @@ expected = {
     "binary-deadbeef": b"\xde\xad\xbe\xef",
     "array-mixed": [1, -2, "x"],
     "map-ordered": {"a": 1, "b": True},
+    "string-key-utf8": {"é": 1, "é": 2, "😀": 3},
     "nested": [{"a": 1}, [False, True]],
     "ext-fixext1": msgpack.ExtType(42, b"\x01"),
 }

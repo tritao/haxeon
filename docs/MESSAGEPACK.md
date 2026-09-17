@@ -40,9 +40,9 @@ record with `@:wire` to have those calls lowered to type-specific functions:
 ```haxe
 @:wire
 class User {
-	@:wireId(1)
+	@:id(1)
 	public var id:Int;
-	@:wireId(2)
+	@:id(2)
 	public var name:String;
 }
 
@@ -54,34 +54,49 @@ The initial compiler profile supports non-generic, non-inheriting records with
 directly stored `Int`, `Int64`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
 nullable versions of those types, arrays of supported values, and nested
 `@:wire` records. Every instance field requires one positive, unique
-`@:wireId(n)` annotation. Fields are encoded as an integer-keyed map sorted by
-ID and decoded by ID; this makes field renames and declaration reordering
-wire-compatible. Unknown fields are skipped, missing primitive fields receive
-their zero value, missing nullable fields receive `null`, and missing array
-fields receive an empty array. Recursive record schemas are rejected because
-the value codec does not represent object identity or cycles. `Map<String, T>`
-and `Map<Int, T>` are also supported for the same value profile. String keys
-are encoded and sorted lexicographically; integer keys are encoded and sorted
-numerically. `Map<Enum, T>` is supported when every enum constructor is
-nullary and the enum is marked `@:wire`; enum keys are encoded as their stable
-constructor `@:wireId` integers and sorted by that ID. All three map forms
-produce deterministic output, while missing map fields receive an empty map.
+`@:id(n)` annotation. IDs are permanent schema identities: once an ID has been
+used for a field or enum constructor, it must never be reused for a different
+semantic member. Deleting a member reserves its old ID forever.
+
+Fields are encoded as an integer-keyed map sorted by ID and decoded by ID; this
+makes field renames and declaration reordering wire-compatible. Unknown fields
+are skipped. Missing integers, floats, and booleans receive `0`, `0.0`, and
+`false`; missing strings receive their existing empty-string default, nullable
+values receive `null`, and missing arrays and maps receive empty collections.
+Missing non-null records and enums are errors unless the field has a supported
+initializer. Supported field initializers are literals, `null`, enum
+constructors, and simple array/map literals; the generated decoder evaluates
+these defaults directly and never invokes a record constructor. Unsupported
+initializer expressions are rejected by the compiler. Recursive record schemas
+are rejected because the value codec does not represent object identity or
+cycles.
+
+`Map<String, T>` and `Map<Int, T>` are also supported for the same value
+profile. String keys are encoded as UTF-8 and ordered by lexicographic
+comparison of those UTF-8 bytes; integer keys are encoded and sorted
+numerically. `Map<Enum, T>` is supported when every enum constructor is nullary
+and the enum is marked `@:wire`; enum keys are encoded as their stable
+constructor `@:id` integers and sorted by that ID. All three map forms produce
+deterministic output, while missing map fields receive an empty map.
 `@:wire` enums are encoded as a one-entry map from the stable constructor
-`@:wireId` to an array of constructor arguments. Unknown constructor IDs and
-malformed payloads are rejected. Payload-bearing enums remain unsupported as
-map keys because their values are not unique by constructor index.
+`@:id` to an array of constructor arguments. Unknown constructor IDs and
+malformed payloads are rejected. Adding an enum constructor is therefore not
+forward-compatible with older readers if the new value can reach them.
+Payload-bearing enums remain unsupported as map keys because their values are
+not unique by constructor index.
 
 ## Compatibility rules
 
 Generated records and maps have deterministic output: record fields are sorted
-by positive `@:wireId`, string map keys lexicographically, integer keys
-numerically, and nullary enum keys by their stable constructor ID. The writer
-also selects the shortest legal integer, string, array, and map marker for each
-value. These rules are covered by exact byte-vector tests and are intended to
-remain stable across HashLink and Wasm backends.
+by positive `@:id`, string map keys by UTF-8 byte lexicographic order, integer
+keys numerically, and nullary enum keys by their stable constructor ID. The
+writer also selects the shortest legal integer, string, array, and map marker
+for each value. These rules are covered by exact byte-vector tests and are
+intended to remain stable across HashLink and Wasm backends.
 
 Decoding is permissive about field order and unknown record fields. Missing
-fields receive the documented defaults. If a map or record contains a duplicate
+fields receive the documented defaults, or fail when a required record/enum
+field has no explicit default. If a map or record contains a duplicate
 key/field ID, the last occurrence wins. A top-level generated decode and
 `decodeWith` must consume exactly one value; trailing bytes are rejected. The
 low-level reader remains stream-oriented, so callers using it directly may

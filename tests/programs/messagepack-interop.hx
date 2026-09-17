@@ -99,6 +99,17 @@ class MessagePackInterop {
 					writer.writeInt(1);
 					writer.writeString("b");
 					writer.writeBool(true);
+				case "string-key-utf8":
+					if (reader.readMapHeader() != 3 || reader.readString() != "é" || reader.readInt() != 1 || reader.readString() != "é"
+						|| reader.readInt() != 2 || reader.readString() != "😀" || reader.readInt() != 3)
+						fail(vector.name, "decoded UTF-8 map ordering differs");
+					writer.writeMapHeader(3);
+					writer.writeString("é");
+					writer.writeInt(1);
+					writer.writeString("é");
+					writer.writeInt(2);
+					writer.writeString("😀");
+					writer.writeInt(3);
 				case "nested":
 					if (reader.readArrayHeader() != 2 || reader.readMapHeader() != 1 || reader.readString() != "a" || reader.readInt() != 1
 						|| reader.readArrayHeader() != 2 || reader.readBool() || !reader.readBool())

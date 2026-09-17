@@ -3,9 +3,9 @@ import haxe.wire.MessagePackWriter;
 
 @:wire
 enum WasmWireKind {
-	@:wireId(7)
+	@:id(7)
 	Left;
-	@:wireId(3)
+	@:id(3)
 	Right;
 }
 

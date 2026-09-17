@@ -66,7 +66,7 @@ class MessagePackWriter {
 	public function writeInt64(value:haxe.Int64):Void {
 		var minimum = haxe.Int64.ofInt(-2147483648),
 			maximum = haxe.Int64.ofInt(2147483647),
-			uint32Maximum = haxe.Int64.parseString("4294967295");
+			uint32Maximum = haxe.Int64.make(0, -1);
 		if (haxe.Int64.compare(value, minimum) >= 0 && haxe.Int64.compare(value, maximum) <= 0) {
 			writeInt(haxe.Int64.toInt(value));
 			return;
@@ -95,6 +95,22 @@ class MessagePackWriter {
 		var bytes = Bytes.ofString(value);
 		writeLength(bytes.length, 31, 0xa0, 0xd9, 0xda, 0xdb);
 		writeBytes(bytes);
+	}
+
+	/** Compares string map keys by their encoded UTF-8 bytes. */
+	public static function compareUtf8(left:String, right:String):Int {
+		var leftBytes = Bytes.ofString(left),
+			rightBytes = Bytes.ofString(right),
+			count = leftBytes.length < rightBytes.length ? leftBytes.length : rightBytes.length;
+		for (index in 0...count) {
+			var leftByte = leftBytes.get(index),
+				rightByte = rightBytes.get(index);
+			if (leftByte < rightByte)
+				return -1;
+			if (leftByte > rightByte)
+				return 1;
+		}
+		return leftBytes.length < rightBytes.length ? -1 : (leftBytes.length > rightBytes.length ? 1 : 0);
 	}
 
 	public function writeBinary(value:Bytes):Void {

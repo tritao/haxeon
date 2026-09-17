@@ -8,13 +8,13 @@ import haxe.wire.MessagePackWriter;
 
 @:wire
 class WireNumbers {
-	@:wireId(1)
+	@:id(1)
 	public var small:Int64;
-	@:wireId(2)
+	@:id(2)
 	public var large:Int64;
-	@:wireId(3)
+	@:id(3)
 	public var values:Array<Int64>;
-	@:wireId(4)
+	@:id(4)
 	public var byName:Map<String, Int64>;
 }
 

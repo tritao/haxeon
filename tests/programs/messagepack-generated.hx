@@ -1,60 +1,85 @@
 import haxe.wire.MessagePack;
+import haxe.wire.MessagePackReader;
 import haxe.wire.MessagePackWriter;
 
 @:wire
 class WireUser {
-	@:wireId(1)
+	@:id(1)
 	public var id:Int;
-	@:wireId(3)
+	@:id(3)
 	public var active:Bool;
-	@:wireId(2)
+	@:id(2)
 	public var name:String;
 }
 
 @:wire
 enum WireStatus {
-	@:wireId(4)
+	@:id(4)
 	Idle;
-	@:wireId(9)
+	@:id(9)
 	Ready(user:WireUser, values:Array<Null<Int>>, ?note:String);
 }
 
 @:wire
 enum WireKind {
-	@:wireId(8)
+	@:id(8)
 	Low;
-	@:wireId(2)
+	@:id(2)
 	High;
 }
 
 @:wire
 class WireEnvelope {
-	@:wireId(1)
+	@:id(1)
 	public var user:Null<WireUser>;
-	@:wireId(2)
+	@:id(2)
 	public var note:Null<String>;
-	@:wireId(3)
+	@:id(3)
 	public var count:Null<Int>;
-	@:wireId(4)
+	@:id(4)
 	public var tags:Array<String>;
-	@:wireId(5)
+	@:id(5)
 	public var users:Array<WireUser>;
-	@:wireId(6)
+	@:id(6)
 	public var optionalCounts:Array<Null<Int>>;
-	@:wireId(7)
+	@:id(7)
 	public var usersByName:Map<String, WireUser>;
-	@:wireId(8)
+	@:id(8)
 	public var optionalCountsByName:Map<String, Null<Int>>;
-	@:wireId(9)
+	@:id(9)
 	public var countsById:Map<Int, Null<Int>>;
-	@:wireId(10)
+	@:id(10)
 	public var status:WireStatus;
-	@:wireId(11)
+	@:id(11)
 	public var optionalStatus:Null<WireStatus>;
-	@:wireId(12)
+	@:id(12)
 	public var statuses:Array<WireStatus>;
-	@:wireId(13)
+	@:id(13)
 	public var statusesByName:Map<String, WireStatus>;
+}
+
+@:wire
+class WireDefaults {
+	@:id(1)
+	public var retries:Int = 3;
+	@:id(2)
+	public var mode:WireKind = Low;
+	@:id(3)
+	public var labels:Array<String> = [];
+	@:id(4)
+	public var scores:Map<String, Int> = [];
+}
+
+@:wire
+class WireRequiredRecord {
+	@:id(1)
+	public var child:WireUser;
+}
+
+@:wire
+class WireRequiredEnum {
+	@:id(1)
+	public var mode:WireKind;
 }
 
 function main():Int {
@@ -230,6 +255,42 @@ function main():Int {
 	if (!unknownKindRejected)
 		return 23;
 
+	var partialDefaults = new MessagePackWriter();
+	partialDefaults.writeMapHeader(1);
+	partialDefaults.writeInt(1);
+	partialDefaults.writeInt(9);
+	var restoredDefaults:WireDefaults = MessagePack.decode(partialDefaults.getBytes());
+	if (restoredDefaults.retries != 9
+		|| restoredDefaults.mode != Low
+		|| restoredDefaults.labels.length != 0
+		|| restoredDefaults.scores.keys().hasNext())
+		return 24;
+	var missingRecordRejected = false;
+	try {
+		var ignoredRecord:WireRequiredRecord = MessagePack.decode(raw([0x80]));
+	} catch (_:Dynamic) {
+		missingRecordRejected = true;
+	}
+	if (!missingRecordRejected)
+		return 25;
+	var missingEnumRejected = false;
+	try {
+		var ignoredEnum:WireRequiredEnum = MessagePack.decode(raw([0x80]));
+	} catch (_:Dynamic) {
+		missingEnumRejected = true;
+	}
+	if (!missingEnumRejected)
+		return 26;
+
+	var unicodeKeys:Map<String, Int> = [];
+	unicodeKeys.set("😀", 3);
+	unicodeKeys.set("é", 2);
+	unicodeKeys.set("é", 1);
+	var unicodeReader = new MessagePackReader(MessagePack.encode(unicodeKeys));
+	if (unicodeReader.readMapHeader() != 3 || unicodeReader.readString() != "é" || unicodeReader.readInt() != 1 || unicodeReader.readString() != "é"
+		|| unicodeReader.readInt() != 2 || unicodeReader.readString() != "😀" || unicodeReader.readInt() != 3 || !unicodeReader.atEnd())
+		return 27;
+
 	var optionalUser:Null<WireUser> = user;
 	var optionalBytes = MessagePack.encode(optionalUser);
 	var restoredOptional:Null<WireUser> = MessagePack.decode(optionalBytes);
@@ -239,4 +300,11 @@ function main():Int {
 	var nullBytes = MessagePack.encode(optionalUser);
 	var restoredNull:Null<WireUser> = MessagePack.decode(nullBytes);
 	return restoredNull == null ? 43 : 13;
+}
+
+function raw(values:Array<Int>):haxe.io.Bytes {
+	var bytes = haxe.io.Bytes.alloc(values.length);
+	for (index in 0...values.length)
+		bytes.set(index, values[index]);
+	return bytes;
 }
