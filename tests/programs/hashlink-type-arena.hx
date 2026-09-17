@@ -546,6 +546,24 @@ function main():Int {
 		new HlFunctionTable(foreignGeneration.arena, [RawPtr.nullPtr()], [foreignType])
 	catch (error:Dynamic)
 		foreignFunctionTableRejected = Std.string(error).indexOf("must belong to its arena") >= 0;
+	var foreignTypeTable = new HlTypeTable(foreignGeneration.arena, 2);
+	foreignTypeTable.add(foreignOwnedType);
+	var duplicateTypeRejected = false;
+	try
+		foreignTypeTable.add(foreignOwnedType)
+	catch (error:Dynamic)
+		duplicateTypeRejected = Std.string(error).indexOf("duplicate type pointers") >= 0;
+	var foreignTypeTableRejected = false;
+	try
+		foreignTypeTable.add(foreignType)
+	catch (error:Dynamic)
+		foreignTypeTableRejected = Std.string(error).indexOf("outside its arena") >= 0;
+	foreignTypeTable.add(foreignObject);
+	var setDuplicateTypeRejected = false;
+	try
+		foreignTypeTable.set(0, foreignObject)
+	catch (error:Dynamic)
+		setDuplicateTypeRejected = Std.string(error).indexOf("duplicate type pointers") >= 0;
 	foreignObject.ref.data.ref.obj.ref.fields.offset(0).ref.type = foreignType;
 	var foreignTypeRejected = false;
 	try
@@ -562,5 +580,5 @@ function main():Int {
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
 		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignBuilderRejected && foreignFunctionTableRejected
-		&& foreignTypeRejected ? 42 : 1;
+		&& duplicateTypeRejected && foreignTypeTableRejected && setDuplicateTypeRejected && foreignTypeRejected ? 42 : 1;
 }

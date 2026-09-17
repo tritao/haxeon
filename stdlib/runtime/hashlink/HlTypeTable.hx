@@ -11,8 +11,8 @@ class HlTypeTable {
 	var count:Int = 0;
 
 	public function new(arena:HlTypeArena, ?initialCapacity:Int = 8) {
-		if (initialCapacity <= 0)
-			throw "HashLink type table capacity must be positive";
+		if (arena == null || initialCapacity <= 0)
+			throw "HashLink type table requires an arena and positive capacity";
 		this.arena = arena;
 		this.initialCapacity = initialCapacity;
 		entries = RawPtr.nullPtr();
@@ -49,6 +49,10 @@ class HlTypeTable {
 	public function add(type:RawPtr<HlType>):Int {
 		if (type.isNull())
 			throw "HashLink type table cannot contain a null type";
+		if (!arena.ownsType(type))
+			throw "HashLink type table cannot contain a type outside its arena";
+		if (indexOf(type) >= 0)
+			throw "HashLink type table cannot contain duplicate type pointers";
 		ensureCapacity(count + 1);
 		var index = count++;
 		entries.offset(index).store(type);
@@ -58,6 +62,11 @@ class HlTypeTable {
 	/** Replace one table slot without moving any metadata record. */
 	public function set(index:Int, type:RawPtr<HlType>):Void {
 		checkIndex(index);
+		if (type.isNull() || !arena.ownsType(type))
+			throw "HashLink type table cannot contain a type outside its arena";
+		for (other in 0...count)
+			if (other != index && entries.offset(other).load() == type)
+				throw "HashLink type table cannot contain duplicate type pointers";
 		entries.offset(index).store(type);
 	}
 
