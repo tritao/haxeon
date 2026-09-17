@@ -273,8 +273,8 @@ class LanguageService {
 		recoveryEngine = new RecoveryEngine({
 			editorDefines: function() return editorDefines,
 			typingModules: function(state, program, token) return recoveryTypingModules(state, program, token),
-			reuseFunctions: function(state, program, changedBodies, forceNoReuse)
-				return recoveredTypedFunctionReuse(state, program, changedBodies, forceNoReuse),
+			reuseFunctions: function(state, program, token, changedBodies, forceNoReuse)
+				return recoveredTypedFunctionReuse(state, program, token, changedBodies, forceNoReuse),
 			resolveSymbol: function(state, program, name, token) return resolveRecoveredSymbol(state, program, name, token),
 			resolveTypeSymbol: function(state, program, name, token) return resolveRecoveredTypeSymbol(state, program, name, token),
 			resolveEnumCase: function(state, program, name, index, token) return resolveRecoveredEnumCase(state, program, name, index, token),
@@ -404,8 +404,10 @@ class LanguageService {
 	 * body-reference checks cover changes that could alter its meaning (imports,
 	 * signatures, fields, inheritance, or callees).
 	 */
-	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram, ?externalChangedBodies:Map<String, Bool>,
-		forceNoReuse:Bool = false):Map<String, TypedFunction> {
+	function recoveredTypedFunctionReuse(state:ModuleState, current:AstProgram, ?token:CancellationToken,
+		?externalChangedBodies:Map<String, Bool>, forceNoReuse:Bool = false):Map<String, TypedFunction> {
+		if (token != null)
+			token.check();
 		var previous = state.previousEditorSemanticModel;
 		if (forceNoReuse || previous == null || previous.partialTypedProgram == null)
 			return [];
@@ -416,25 +418,40 @@ class LanguageService {
 			previousTyped:Map<String, TypedFunction> = [],
 			previousSource:Null<SourceFile> = null;
 		for (fn in previous.program.functions) {
+			if (token != null)
+				token.check();
 			previousAst.set(fn.name, fn);
 			if (previousSource == null)
 				previousSource = fn.span.file;
 		}
-		for (owner in previous.program.classes)
+		for (owner in previous.program.classes) {
+			if (token != null)
+				token.check();
 			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				previousAst.set(owner.name + "." + fn.name, fn);
 				if (previousSource == null)
 					previousSource = fn.span.file;
 			}
-		for (owner in previous.program.abstracts)
+		}
+		for (owner in previous.program.abstracts) {
+			if (token != null)
+				token.check();
 			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				previousAst.set(owner.name + "." + fn.name, fn);
 				if (previousSource == null)
 					previousSource = fn.span.file;
 			}
-		for (fn in previous.partialTypedProgram.functions)
+		}
+		for (fn in previous.partialTypedProgram.functions) {
+			if (token != null)
+				token.check();
 			if (!StringTools.startsWith(fn.name, "$lambda:"))
 				previousTyped.set(fn.name, fn);
+		}
 
 		var currentSource:Null<SourceFile> = null;
 		for (fn in current.functions) {
@@ -458,19 +475,36 @@ class LanguageService {
 		var currentAst:Map<String, AstFunction> = [],
 			changedBodies:Map<String, Bool> = [],
 			result:Map<String, TypedFunction> = [];
-		for (fn in current.functions)
+		for (fn in current.functions) {
+			if (token != null)
+				token.check();
 			currentAst.set(fn.name, fn);
-		for (owner in current.classes)
-			for (fn in owner.methods)
+		}
+		for (owner in current.classes) {
+			if (token != null)
+				token.check();
+			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				currentAst.set(owner.name + "." + fn.name, fn);
-		for (owner in current.abstracts)
-			for (fn in owner.methods)
+			}
+		}
+		for (owner in current.abstracts) {
+			if (token != null)
+				token.check();
+			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				currentAst.set(owner.name + "." + fn.name, fn);
+			}
+		}
 
 		// A body can remain byte-identical while its callee changes. In that case
 		// reusing its typed tree is unsound: result types, no-return information,
 		// overload selection, and resolved identities may all have changed.
 		for (name in currentAst.keys()) {
+			if (token != null)
+				token.check();
 			var fn = currentAst.get(name), oldAst = previousAst.get(name);
 			if (oldAst == null || !sameRecoveredFunctionSource(oldAst, fn))
 				changedBodies.set(name, true);
@@ -480,26 +514,43 @@ class LanguageService {
 				changedBodies.set(name, true);
 
 		var consider = function(name:String, fn:AstFunction):Void {
+			if (token != null)
+				token.check();
 			if (fn.isExtern == true || (fn.typeParameters != null && fn.typeParameters.length > 0))
 				return;
 			var oldAst = previousAst.get(name), typed = previousTyped.get(name);
 			if (oldAst == null || typed == null || !sameRecoveredFunctionSource(oldAst, fn)
 				|| !TypedAstTools.canRebase(typed))
 				return;
-		if (recoveredBodyReferencesChanged(fn, changedBodies))
-			return;
+			if (recoveredBodyReferencesChanged(fn, changedBodies, token))
+				return;
 			if (oldAst.span.start != fn.span.start)
 				typed = TypedAstTools.rebaseFunction(typed, fn.span.file, fn.span.start - oldAst.span.start);
 			result.set(name, typed);
 		};
-		for (fn in current.functions)
+		for (fn in current.functions) {
+			if (token != null)
+				token.check();
 			consider(fn.name, fn);
-		for (owner in current.classes)
-			for (fn in owner.methods)
+		}
+		for (owner in current.classes) {
+			if (token != null)
+				token.check();
+			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				consider(owner.name + "." + fn.name, fn);
-		for (owner in current.abstracts)
-			for (fn in owner.methods)
+			}
+		}
+		for (owner in current.abstracts) {
+			if (token != null)
+				token.check();
+			for (fn in owner.methods) {
+				if (token != null)
+					token.check();
 				consider(owner.name + "." + fn.name, fn);
+			}
+		}
 		return result;
 	}
 
@@ -509,62 +560,74 @@ class LanguageService {
 	 * on canonical/suffix names: a false positive costs reuse, while a false
 	 * negative can publish stale semantic information.
 	 */
-	static function recoveredBodyReferencesChanged(fn:AstFunction, changedBodies:Map<String, Bool>):Bool {
+	static function recoveredBodyReferencesChanged(fn:AstFunction, changedBodies:Map<String, Bool>, ?token:CancellationToken):Bool {
 		if (mapSize(changedBodies) == 0)
 			return false;
 		var references:Map<String, Bool> = [];
 		for (statement in fn.statements) {
+			if (token != null)
+				token.check();
 			// DependencyScanner is the exhaustive source-AST dependency path. In
 			// particular, it visits declaration-bearing AstType operands that are
 			// leaves of AstChildren.expressions (casts, generic arguments, typed
 			// lambdas, array/map types, and native layout queries).
 			DependencyScanner.scanStatement(statement, references);
-			scanRecoveredStatementReferences(statement, references);
+			scanRecoveredStatementReferences(statement, references, token);
 		}
-		for (reference in references.keys())
-			for (changed in changedBodies.keys())
+		for (reference in references.keys()) {
+			if (token != null)
+				token.check();
+			for (changed in changedBodies.keys()) {
+				if (token != null)
+					token.check();
 				if (SemanticDependencyCollector.sameDependencyTarget(reference, changed))
 					return true;
+			}
+		}
 		return false;
 	}
 
-	static function scanRecoveredStatementReferences(statement:AstStatement, references:Map<String, Bool>):Void {
+	static function scanRecoveredStatementReferences(statement:AstStatement, references:Map<String, Bool>, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
 		for (expression in AstChildren.statementExpressions(statement))
-			scanRecoveredExpressionReferences(expression, references);
+			scanRecoveredExpressionReferences(expression, references, token);
 		switch (statement) {
 			case Try(tryBranch, catches, _):
 				for (nested in tryBranch)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 				for (clause in catches)
 					for (nested in clause.statements)
-						scanRecoveredStatementReferences(nested, references);
+						scanRecoveredStatementReferences(nested, references, token);
 			case If(_, thenBranch, elseBranch, _):
 				for (nested in thenBranch)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 				for (nested in elseBranch)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case While(_, body, _):
 				for (nested in body)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case DoWhile(body, _, _):
 				for (nested in body)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case ForIn(_, _, _, body, _):
 				for (nested in body)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case Switch(_, cases, defaultBranch, _, _):
 				for (switchCase in cases)
 					for (nested in switchCase.statements)
-						scanRecoveredStatementReferences(nested, references);
+						scanRecoveredStatementReferences(nested, references, token);
 				for (nested in defaultBranch)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _),
 				VarDeclaration(_, _, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _),
 				Return(_, _), Throw(_, _), Expression(_, _): {}
 		}
 	}
 
-	static function scanRecoveredExpressionReferences(expression:AstExpression, references:Map<String, Bool>):Void {
+	static function scanRecoveredExpressionReferences(expression:AstExpression, references:Map<String, Bool>, ?token:CancellationToken):Void {
+		if (token != null)
+			token.check();
 		switch (expression) {
 			case Variable(name, _):
 				references.set(name, true);
@@ -576,10 +639,10 @@ class LanguageService {
 				references.set(typeName + ".new", true);
 			case BlockExpression(statements, _, _):
 				for (nested in statements)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case Lambda(_, statements, _):
 				for (nested in statements)
-					scanRecoveredStatementReferences(nested, references);
+					scanRecoveredStatementReferences(nested, references, token);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
 				ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _): {}
 			case Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
@@ -590,7 +653,7 @@ class LanguageService {
 				MapComprehension(_, _, _, _, _, _), Range(_, _, _), Index(_, _, _): {}
 		}
 		for (child in AstChildren.expressions(expression))
-			scanRecoveredExpressionReferences(child, references);
+			scanRecoveredExpressionReferences(child, references, token);
 	}
 
 	static function mapSize<T>(map:Map<String, T>):Int {

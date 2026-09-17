@@ -23,7 +23,7 @@ import compiler.types.Type.CompilerType;
 typedef RecoveryEngineHooks = {
 	final editorDefines:Void->Map<String, String>;
 	final typingModules:ModuleState->AstProgram->Null<CancellationToken>->Array<RecoveryTypingModule>;
-	final reuseFunctions:ModuleState->AstProgram->Null<Map<String, Bool>>->Bool->Map<String, TypedFunction>;
+	final reuseFunctions:ModuleState->AstProgram->Null<CancellationToken>->Null<Map<String, Bool>>->Bool->Map<String, TypedFunction>;
 	final resolveSymbol:ModuleState->AstProgram->String->Null<CancellationToken>->Null<SemanticSymbolId>;
 	final resolveTypeSymbol:ModuleState->AstProgram->String->Null<CancellationToken>->Null<SemanticSymbolId>;
 	final resolveEnumCase:ModuleState->AstProgram->String->Int->Null<CancellationToken>->Null<SemanticSymbolId>;
@@ -106,7 +106,7 @@ class RecoveryEngine {
 				recoveredModel = new SemanticModel(recovered.program, state.source, state.revision, tokens, state.name),
 			typingDiagnostics:Array<Diagnostic> = [],
 				typingModules = hooks.typingModules(state, recovered.program, token),
-				reusedFunctions = hooks.reuseFunctions(state, recovered.program, externalChangedBodies, forceNoReuse);
+				reusedFunctions = hooks.reuseFunctions(state, recovered.program, token, externalChangedBodies, forceNoReuse);
 			if (!isCurrent())
 				return {published: false, reusedFunctions: 0};
 

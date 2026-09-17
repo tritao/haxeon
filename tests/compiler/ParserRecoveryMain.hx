@@ -2663,6 +2663,33 @@ class ParserRecoveryMain {
 			|| compileState.currentRecovered != compileSnapshot
 			|| compileService.diagnostics("CancelledCompile.hx").length != compileDiagnostics.length)
 			throw "cancelled compilation published over the current recovered editor snapshot";
+
+		var reuseCancellationState = new ModuleState("CancelledReuse", new SourceFile("CancelledReuse.hx", "function main():Void return;")),
+			reuseCancellationToken = new CancellationToken(),
+			reuseCancellationEngine = new RecoveryEngine({
+				editorDefines: function() return [],
+				typingModules: function(_, _, _) return [],
+				reuseFunctions: function(_, _, token, _, _) {
+					if (token != null) {
+						token.cancel();
+						token.check();
+					}
+					return [];
+				},
+				resolveSymbol: function(_, _, _, _) return null,
+				resolveTypeSymbol: function(_, _, _, _) return null,
+				resolveEnumCase: function(_, _, _, _, _) return null,
+				resolveType: function(_, _, _, _, _) return null,
+				symbolCandidates: function(_, _, _, _) return [],
+				publishDiagnostics: function(_, _) {}
+			}),
+			reuseCancelled = false;
+		try
+			reuseCancellationEngine.recover(reuseCancellationState, reuseCancellationToken)
+		catch (error:CancellationError)
+			reuseCancelled = true;
+		if (!reuseCancelled)
+			throw "recovered body reuse did not honor cancellation propagated by RecoveryEngine";
 	}
 
 	static function assertSupersededRecovery():Void {
@@ -2674,7 +2701,7 @@ class ParserRecoveryMain {
 					state.update(new SourceFile("SupersededRecovery.hx", "function main():Void { var replacement:"));
 					return [];
 				},
-				reuseFunctions: function(_, _, _, _) return [],
+				reuseFunctions: function(_, _, _, _, _) return [],
 				resolveSymbol: function(_, _, _, _) return null,
 				resolveTypeSymbol: function(_, _, _, _) return null,
 				resolveEnumCase: function(_, _, _, _, _) return null,
