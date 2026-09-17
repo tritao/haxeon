@@ -1907,6 +1907,40 @@ class ParserRecoveryMain {
 			case TInstance(NominalKind.Class, "Expected", _):
 			default: throw 'recovered generic result call lost its expected argument type: ${expectedResultType == null ? "null" : Std.string(expectedResultType)}';
 		}
+		var constraintSource = new SourceFile("TolerantGenericConstraint.hx",
+			"class Bound { public var member:Int; } class Other { public var other:Int; } function bounded<T:Bound>(value:T):T return value; function main():Void { var invalid = bounded(new Other()); var after:Bound = new Bound(); after. }");
+		var constraintProgram = new Parser(new Lexer(constraintSource).tokenize()).parseProgramRecovering().program,
+			constraintDiagnostics:Array<compiler.Diagnostic> = [],
+			constraintTyped = Typer.typeRecovered(constraintProgram, null, null, constraintDiagnostics),
+			constraintMain = constraintTyped == null ? null : [for (fn in constraintTyped.functions) if (fn.name == "main") fn][0];
+		if (constraintTyped == null || constraintMain == null || constraintMain.statements.length != 3) {
+			var constraintShape = constraintTyped == null ? "null" : constraintMain == null ? "no main" : Std.string(constraintMain.statements.length);
+			throw 'invalid generic constraint discarded the rest of the recovered body: $constraintShape';
+		}
+		var foundConstraintDiagnostic = false;
+		for (diagnostic in constraintDiagnostics)
+			if (diagnostic.code == "E1003" && diagnostic.message.indexOf("constraint") >= 0)
+				foundConstraintDiagnostic = true;
+		if (!foundConstraintDiagnostic)
+			throw "invalid generic constraint did not retain an actionable recovery diagnostic";
+		switch constraintMain.statements[0] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TInstance(NominalKind.Class, "Other", _):
+					default: throw 'invalid generic constraint poisoned the call result: ${value.type}';
+				}
+			default: throw "invalid generic constraint did not retain its call declaration";
+		}
+		var constraintService = new LanguageService(),
+			constraintEditorSource = constraintSource.text;
+		constraintService.update("TolerantGenericConstraint.hx", constraintEditorSource);
+		var constraintCompletion = constraintService.complete("TolerantGenericConstraint.hx", constraintEditorSource.length),
+			foundConstraintMember = false;
+		for (item in constraintCompletion)
+			if (item.label == "member")
+				foundConstraintMember = true;
+		if (!foundConstraintMember)
+			throw "invalid generic constraint discarded the later known receiver from editor recovery";
 
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");

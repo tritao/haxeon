@@ -73,8 +73,13 @@ class GenericInstantiation {
 			for (constraint in constraints) {
 				var actual = requiredMapValue(substitutions, constraint.parameter),
 					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-				if (!session.relations.isAssignable(actual, expected))
-					fail("E1003", 'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
+				if (!session.relations.isAssignable(actual, expected)) {
+					var message = 'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"';
+					if (session.tolerant)
+						session.rememberRecoveryDiagnostic(new Diagnostic("E1003", message, span));
+					else
+						fail("E1003", message, span);
+				}
 			}
 		var semanticExpected = [for (argument in fn.arguments) argumentType(argument, substitutions)];
 		for (index in arguments.length...fn.arguments.length) {
