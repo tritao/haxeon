@@ -18,7 +18,8 @@ enum AnalysisSnapshotKind {
  */
 class AnalysisSnapshot {
 	public final source:SourceFile;
-	public final tokens:Array<Token>;
+	final tokenData:Array<Token>;
+	public var tokens(get, never):Array<Token>;
 	public final ast:AstProgram;
 	public final semanticModel:Null<SemanticModel>;
 	public final revision:Int;
@@ -37,7 +38,7 @@ class AnalysisSnapshot {
 				throw "Semantic snapshot cannot publish an unfrozen semantic model";
 		}
 		this.source = source;
-		this.tokens = tokens.copy();
+		this.tokenData = tokens.copy();
 		this.ast = ast;
 		this.semanticModel = semanticModel;
 		this.revision = revision;
@@ -57,4 +58,8 @@ class AnalysisSnapshot {
 
 	public inline function isCurrent(currentRevision:Int):Bool
 		return revision == currentRevision && !stale;
+
+	/** Return a detached token view so published snapshots cannot be mutated. */
+	function get_tokens():Array<Token>
+		return tokenData.copy();
 }

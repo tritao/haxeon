@@ -15,6 +15,12 @@ class SemanticModelMain {
 		var frozenIndex = model.index;
 		model.freeze();
 		expect(model.index == frozenIndex, "freezing a semantic model twice should preserve its query view");
+		var snapshot = AnalysisSnapshot.exact(source, tokens, program, model, 7),
+			snapshotTokens = snapshot.tokens,
+			snapshotTokenCount = snapshotTokens.length;
+		snapshotTokens.pop();
+		expect(snapshot.tokens.length == snapshotTokenCount,
+			"analysis snapshot token access must not expose mutable publication state");
 
 		expect(model.revision == 7, "semantic model should retain its source revision");
 		expect(model.program == program, "semantic model should retain its parsed program");
