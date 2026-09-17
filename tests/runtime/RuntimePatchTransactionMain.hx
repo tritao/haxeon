@@ -14,6 +14,7 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 import runtime.RuntimeModuleHandle.RuntimeGcHandle;
+import runtime.memory.Gc;
 #if haxeon
 import runtime.hashlink.HlTypeBridge;
 #end
@@ -175,6 +176,57 @@ class RuntimePatchTransactionMain {
 			|| disposeStatus != RuntimeStatus.Ok)
 			throw "Haxe-owned decode guard did not reject native HLP decoding";
 		Sys.println("PASS: Haxe-owned runtime rejects native HLB/HLP decoding");
+	}
+
+	static function testGoldenSelfHostingLifecycle():Void {
+		var compiler = new Compiler();
+		compiler.update("GoldenMain.hx",
+			"class Box { public var value:Int; public function new(value:Int) { this.value = value; } } function main():Int return 10; function makeObject():Box return new Box(7); function readObject(box:Box):Int return box.value;");
+		var initial = compiler.compile("GoldenMain"),
+			mainId:Int = cast initial.functionIds.get("main"),
+			makeObjectId:Int = cast initial.functionIds.get("GoldenMain.makeObject"),
+			readObjectId:Int = cast initial.functionIds.get("GoldenMain.readObject"),
+			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
+			oldObject = Runtime.retainObject(loaded, makeObjectId);
+		if (Runtime.debugHlbSize(loaded) != 0
+			|| Runtime.callInt(loaded, mainId) != 10
+			|| Runtime.callIntObject(loaded, readObjectId, oldObject) != 7)
+			throw "golden self-hosting load did not execute through Haxe-owned metadata";
+		Gc.collect();
+		if (Runtime.callIntObject(loaded, readObjectId, oldObject) != 7)
+			throw "golden self-hosting object did not survive its first collection";
+
+		compiler.update("GoldenMain.hx",
+			"class Box { public var value:Int; public function new(value:Int) { this.value = value; } } function main():Int return 20; function makeObject():Box return new Box(7); function readObject(box:Box):Int return box.value;");
+		var changed = compiler.compile("GoldenMain");
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Gc.collect();
+		if (Runtime.callInt(loaded, mainId) != 20
+			|| Runtime.callIntObject(loaded, readObjectId, oldObject) != 7
+			|| loaded.retiredPatchCount() != 0)
+			throw "golden self-hosting first patch did not preserve the old object generation";
+
+		compiler.update("GoldenMain.hx",
+			"class Box { public var value:Int; public function new(value:Int) { this.value = value; } } function main():Int return 30; function makeObject():Box return new Box(7); function readObject(box:Box):Int return box.value;");
+		var latest = compiler.compile("GoldenMain");
+		Runtime.patchSet(loaded, new PatchSet(changed.revision, latest.revision, latest.patchBytes, latest.changedFunctions));
+		Gc.collect();
+		if (Runtime.callInt(loaded, mainId) != 30
+			|| Runtime.callIntObject(loaded, readObjectId, oldObject) != 7
+			|| loaded.retiredPatchCount() != 1)
+			throw "golden self-hosting second patch did not retire the superseded generation";
+
+		if (Runtime.retirementStatus(loaded).haxeBorrowers != 1)
+			throw "golden self-hosting object was not retained across the patch sequence";
+		Runtime.dispose(loaded);
+		if (Runtime.retryRetirements() != 1)
+			throw "golden self-hosting shutdown did not defer retirement for the retained object";
+		oldObject.release();
+		if (Runtime.retryRetirements() != 0 || Runtime.pendingRetirementCount != 0)
+			throw "golden self-hosting shutdown did not reclaim the retired generation";
+		Gc.collect();
+		Runtime.drainRetirements();
+		Sys.println("PASS: golden Haxe-owned load, patch, GC, and retirement lifecycle");
 	}
 
 	static function testFailedInitializerCleanup():Void {
@@ -361,6 +413,7 @@ class RuntimePatchTransactionMain {
 		testFailedInitializerCleanup();
 		testPublicObjectConstant();
 		testNativeDecodeGuard();
+		testGoldenSelfHostingLifecycle();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}
