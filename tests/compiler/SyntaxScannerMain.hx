@@ -10,7 +10,7 @@ import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 
-/** Regression gates for the shared lossless scanner and compiler adapter. */
+/** Regression gates for the shared lossless scanner, CST, and AST adapter. */
 class SyntaxScannerMain {
 	static function main():Void {
 		var source = "function main():String {\r\n"
@@ -73,6 +73,8 @@ class SyntaxScannerMain {
 			throw "CST mode did not preserve source spans or syntax tokens";
 		if (programShape(cstProgram) != programShape(astOnlyProgram))
 			throw "CST parser mode changed the semantic AST shape";
+		if (haxe.Serializer.run(cstProgram) != haxe.Serializer.run(astOnlyProgram))
+			throw "CST parser mode changed the complete semantic AST";
 		var grammarKinds:Map<SyntaxKind, Bool> = [];
 		for (node in cst.grammarNodes())
 			grammarKinds.set(node.kind, true);
@@ -236,6 +238,14 @@ class SyntaxScannerMain {
 			malformedKinds.set(node.kind, true);
 		if (!malformedKinds.exists(SyntaxKind.Error) || !malformedKinds.exists(SyntaxKind.Missing))
 			throw "CST recovery did not retain explicit error/missing structure";
+		assertCstAstParity("SyntaxScanner.hx", source, false);
+		assertCstAstParity("Expressions.hx", expressionSource.text, false);
+		assertCstAstParity("Declarations.hx", declarationSource.text, false);
+		assertCstAstParity("GenericClass.hx", genericClassSource.text, false);
+		assertCstAstParity("MalformedSyntax.hx", malformed.text, true);
+		assertCstAstParity("MalformedTail.hx",
+			"class Broken { public function before():Int return 1; public function unfinished(a:Int { return 2; } public function after():Int return 3; }",
+			true);
 
 		var directiveSource = new SourceFile("Directives.hx", "#if debug\nfunction main():Void return;\n#end\n"),
 			directiveTokens = new SyntaxScanner(directiveSource).scan(),
@@ -246,7 +256,34 @@ class SyntaxScannerMain {
 		if (directives != 2)
 			throw "lossless scanner did not retain directives";
 
-		Sys.println("PASS: shared lossless scanner preserves source and compiler parity");
+		Sys.println("PASS: shared lossless scanner, CST, and AST parity");
+	}
+
+	static function assertCstAstParity(path:String, source:String, recovering:Bool):Void {
+		var file = new SourceFile(path, source),
+			directParser = new Parser(new Lexer(file).tokenize()),
+			cstParser = new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file)),
+			directProgram:AstProgram,
+			cstProgram:AstProgram,
+			directDiagnostics:Array<compiler.Diagnostic> = [],
+			cstDiagnostics:Array<compiler.Diagnostic> = [];
+		if (recovering) {
+			var direct = directParser.parseProgramRecovering(), cst = cstParser.parseProgramRecovering();
+			directProgram = direct.program;
+			cstProgram = cst.program;
+			directDiagnostics = direct.diagnostics;
+			cstDiagnostics = cst.diagnostics;
+		} else {
+			directProgram = directParser.parseProgram();
+			cstProgram = cstParser.parseProgram();
+		}
+		var tree = cstParser.cst;
+		if (tree == null || tree.roundTrip() != source)
+			throw 'CST parity tree did not round-trip $path';
+		if (haxe.Serializer.run(cstProgram) != haxe.Serializer.run(directProgram))
+			throw 'CST lowering changed the complete AST for $path';
+		if (haxe.Serializer.run(cstDiagnostics) != haxe.Serializer.run(directDiagnostics))
+			throw 'CST lowering changed recovery diagnostics for $path';
 	}
 
 	static function programShape(program:AstProgram):String {
