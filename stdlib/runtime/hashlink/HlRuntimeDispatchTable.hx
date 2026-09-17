@@ -4,8 +4,12 @@ import runtime.memory.RawPtr;
 
 /** Haxe-owned stable-ID to native dispatch-slot projection for one module. */
 class HlRuntimeDispatchTable {
-	public final stableIds:RawPtr<Int32>;
-	public final slots:RawPtr<Int32>;
+	/** Native identity storage is immutable outside the kernel forwarding class. */
+	@:allow(runtime.hashlink.NativeHlRuntimeModuleKernel)
+	final stableIds:RawPtr<Int32>;
+	/** Native slot storage is immutable outside the kernel forwarding class. */
+	@:allow(runtime.hashlink.NativeHlRuntimeModuleKernel)
+	final slots:RawPtr<Int32>;
 	public final count:Int;
 	public final initializerSlot:Int;
 	final slotByStableId:Map<Int, Int>;
