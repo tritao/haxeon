@@ -32,7 +32,7 @@ typedef CxxImportResult = {
 class CxxHeaderImporter {
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
 			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, standard:String = "c++20", ?defines:Array<String>,
-			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):CxxImportResult {
+			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false):CxxImportResult {
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,
@@ -54,8 +54,8 @@ class CxxHeaderImporter {
 		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts);
 		builder.visit(frontend.ast, [], null, sourcePath);
 		var model = builder.finish(target);
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch);
-		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch);
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch, cxxThunks);
 		return {
 			model: model,
 			hxi: hxi,

@@ -2,6 +2,7 @@ import compiler.ffi.CxxHeaderImporter;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxSubsetValidator;
+import compiler.ffi.CxxThunkGenerator;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -223,6 +224,29 @@ class CxxHeaderImporterMain {
 		} catch (error:Dynamic)
 			msvcVirtualDiagnostics = Std.string(error);
 		expect(msvcVirtualDiagnostics.indexOf("CXX015") >= 0, "MSVC virtual dispatch should remain rejected until its ABI profile is implemented");
+		var thunked = CxxHeaderImporter.importHeader("tests/ffi/cxx_thunk_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_thunk",
+			"CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
+			thunkSource = CxxThunkGenerator.source(thunked.model),
+			thunkFunction = Lambda.find(thunked.model.functions, functionModel -> functionModel.name == "add"),
+			thunkMethod = Lambda.find(thunked.model.records[0].methods, method -> method.name == "fail"),
+			thunkAddPlan = thunkFunction == null
+				|| thunkFunction.loweredName == null ? null : Lambda.find(thunked.plans, plan -> plan.name == thunkFunction.loweredName),
+			thunkFailPlan = thunkMethod == null
+				|| thunkMethod.loweredName == null ? null : Lambda.find(thunked.plans, plan -> plan.name == thunkMethod.loweredName);
+		expect(thunkFunction != null
+			&& thunkFunction.thunkSymbol != null
+			&& thunkMethod != null
+			&& thunkMethod.thunkSymbol != null
+			&& thunkSource.indexOf("catch (const std::exception &error)") >= 0
+			&& thunkSource.indexOf(thunkFunction.thunkSymbol) >= 0
+			&& thunkSource.indexOf(thunkMethod.thunkSymbol) >= 0,
+			"opted-in C++ thunks should emit stable C-ABI exception boundaries");
+		if (thunkAddPlan != null)
+			expect(thunkAddPlan.symbol == thunkFunction.thunkSymbol && thunkAddPlan.dispatch == DirectSymbol,
+				"throwing free functions should lower to their generated thunk symbol");
+		if (thunkFailPlan != null)
+			expect(thunkFailPlan.symbol == thunkMethod.thunkSymbol && thunkFailPlan.dispatch == DirectSymbol,
+				"throwing methods should use a direct call to their generated thunk");
 	}
 
 	static function expect(value:Bool, message:String):Void {

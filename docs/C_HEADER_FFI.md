@@ -32,6 +32,31 @@ are opt-in through `--cxx-trivial-values`. Constructors and destructors are
 also opt-in through `--cxx-lifetimes` and must be public, `noexcept`, and
 defined on a complete record with an explicit destructor.
 
+Throwing scalar and pointer functions or methods can be bound through a
+generated C++ catch thunk:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --target=x86_64-linux-gnu \
+  --library=/path/to/library-with-thunks.so \
+  --cxx-thunks=generated/library-thunks.cpp \
+  --haxe-output-dir=generated/library-cxx \
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
+```
+
+Compile the generated `.cpp` into the library named by `--library`. Each
+thunk is an `extern "C"` function with the same ABI-shaped arguments and
+result as its HXI declaration. It catches `std::exception` and unknown
+exceptions, stores a bounded thread-local diagnostic, and returns the
+zero/null fallback for the declared result. Generated Haxe projections read
+that diagnostic immediately after the call and throw a Haxe exception. This
+mode currently excludes throwing constructors/destructors, references as
+results, and non-trivial/STL conversions; those remain explicit future adapter
+work. Without `--cxx-thunks`, throwing declarations continue to report
+`CXX003`.
+
 With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
 class module per imported record. The generated class stores the raw opaque
 pointer, exposes `fromNative()` and `nativeHandle()`, and projects supported

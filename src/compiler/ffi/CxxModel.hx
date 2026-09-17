@@ -55,6 +55,7 @@ class CxxFunction {
 	public final isNoexcept:Bool;
 	public final span:SourceSpan;
 	public var loweredName:Null<String>;
+	public var thunkSymbol:Null<String>;
 
 	public function new(name:String, qualifiedName:String, symbol:String, parameters:Array<CxxParameter>, result:CxxType, isNoexcept:Bool, span:SourceSpan) {
 		this.name = name;
@@ -64,6 +65,7 @@ class CxxFunction {
 		this.result = result;
 		this.isNoexcept = isNoexcept;
 		this.span = span;
+		this.thunkSymbol = null;
 	}
 }
 
@@ -84,6 +86,7 @@ class CxxMethod {
 	public final span:SourceSpan;
 	public var loweredName:Null<String>;
 	public var virtualAbi:Null<CxxVirtualMethodAbi>;
+	public var thunkSymbol:Null<String>;
 
 	public function new(owner:String, name:String, qualifiedName:String, symbol:String, access:String, isStatic:Bool, isConst:Bool, isNoexcept:Bool,
 			isVirtual:Bool, parameters:Array<CxxParameter>, result:CxxType, span:SourceSpan, isConstructor:Bool = false, isDestructor:Bool = false) {
@@ -102,6 +105,7 @@ class CxxMethod {
 		this.result = result;
 		this.span = span;
 		this.virtualAbi = null;
+		this.thunkSymbol = null;
 	}
 }
 

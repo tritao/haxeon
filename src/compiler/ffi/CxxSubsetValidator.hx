@@ -19,7 +19,8 @@ typedef CxxDiagnostic = {
 class CxxSubsetValidator {
 	public static inline final PROFILE = "CXX_ABI_V1";
 
-	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):Array<CxxDiagnostic> {
+	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
+			cxxThunks:Bool = false):Array<CxxDiagnostic> {
 		var diagnostics:Array<CxxDiagnostic> = [],
 			records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
@@ -36,7 +37,7 @@ class CxxSubsetValidator {
 				&& (!virtualDispatch || record.bases.length > 1 || Lambda.exists(record.bases, base -> base.isVirtual)))
 				diagnostics.push({code: "CXX005", message: 'inheritance for ${record.qualifiedName} is unsupported by CXX_ABI_V1', span: record.span});
 			for (method in record.methods)
-				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes, virtualDispatch);
+				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes, virtualDispatch, cxxThunks);
 		}
 		for (functionModel in model.functions) {
 			if (functionModel.symbol.length == 0)
@@ -45,7 +46,7 @@ class CxxSubsetValidator {
 					message: 'Clang did not provide a mangled symbol for ${functionModel.qualifiedName}',
 					span: functionModel.span
 				});
-			if (!functionModel.isNoexcept)
+			if (!functionModel.isNoexcept && !cxxThunks)
 				diagnostics.push({
 					code: "CXX003",
 					message: '${functionModel.qualifiedName} may throw; direct C++ calls require noexcept',
@@ -74,8 +75,9 @@ class CxxSubsetValidator {
 			});
 	}
 
-	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):Void {
-		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch);
+	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
+			cxxThunks:Bool = false):Void {
+		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
 		if (diagnostics.length == 0)
 			return;
 		var lines = [
@@ -88,7 +90,7 @@ class CxxSubsetValidator {
 	}
 
 	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool):Void {
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool, cxxThunks:Bool):Void {
 		if ((method.isConstructor || method.isDestructor) && !lifetimes)
 			diagnostics.push({
 				code: "CXX008",
@@ -123,8 +125,14 @@ class CxxSubsetValidator {
 		}
 		if (method.symbol.length == 0)
 			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
-		if (!method.isNoexcept)
+		if (!method.isNoexcept && !cxxThunks)
 			diagnostics.push({code: "CXX003", message: '${method.qualifiedName} may throw; direct C++ calls require noexcept', span: method.span});
+		else if (!method.isNoexcept && (method.isConstructor || method.isDestructor))
+			diagnostics.push({
+				code: "CXX016",
+				message: 'generated C++ thunks do not support throwing constructors or destructors (${method.qualifiedName})',
+				span: method.span
+			});
 		if (method.isVirtual) {
 			if (!virtualDispatch)
 				diagnostics.push({

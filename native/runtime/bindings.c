@@ -29,6 +29,7 @@ HAXEON_NATIVE_VIRTUAL_BINDING(15,_DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _D
 HAXEON_NATIVE_VIRTUAL_BINDING(16,_DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN)
 #undef HAXEON_NATIVE_VIRTUAL_BINDING
 DEFINE_PRIM(_I32,native_last_error,_BYTES _I32);
+DEFINE_PRIM(_BYTES,native_cxx_last_error,_BYTES);
 DEFINE_PRIM(_ABSTRACT(native_callback),native_callback_create,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes) _DYN);
 DEFINE_PRIM(_BOOL,native_callback_close,_ABSTRACT(native_callback));
 DEFINE_PRIM(_I32,native_callback_error_kind,_ABSTRACT(native_callback));

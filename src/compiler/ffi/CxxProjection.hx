@@ -1,6 +1,7 @@
 package compiler.ffi;
 
 import compiler.ffi.CxxModel.CxxMethod;
+import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxRecord;
 import compiler.ffi.HxiAbi.HxiAbi;
@@ -31,6 +32,12 @@ class CxxProjection {
 				source: emit(model, hxi, record, typeName, profile, nativePlans)
 			});
 		}
+		if (Lambda.exists(model.functions, functionModel -> functionModel.thunkSymbol != null))
+			result.push({
+				file: hxi.name + "Functions.hx",
+				typeName: hxi.name + "Functions",
+				source: emitFunctions(model, hxi, profile, nativePlans)
+			});
 		result.sort((left, right) -> Reflect.compare(left.file, right.file));
 		return result;
 	}
@@ -53,6 +60,8 @@ class CxxProjection {
 				}
 		}
 		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
+			hasThunks = Lambda.exists(record.methods, method -> method.thunkSymbol != null),
+			helperName = "__CxxThunk_" + typeName,
 			output = new StringBuf();
 		output.add('// Generated C++ object projection for ${record.qualifiedName}. Do not edit.\n');
 		output.add('import ${hxi.name};\n');
@@ -60,6 +69,8 @@ class CxxProjection {
 		output.add('\tpublic static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer"> return null;\n');
 		output.add('\tpublic static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool return false;\n');
 		output.add('}\n\n');
+		if (hasThunks)
+			emitThunkErrorHelper(output, helperName);
 		if ([for (arity in virtualArities.keys()) arity].length > 0) {
 			output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class __CxxVirtual {\n');
 			var arities = [for (arity in virtualArities.keys()) arity];
@@ -131,10 +142,17 @@ class CxxProjection {
 				case _: null;
 			};
 			if (virtual == null) {
-				if (result.haxeType == "Void")
+				if (result.haxeType == "Void") {
 					output.add('\t\t${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
-				else
+					if (method.thunkSymbol != null)
+						output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+				} else if (method.thunkSymbol == null)
 					output.add('\t\treturn ${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+				else {
+					output.add('\t\tvar __result = ${hxi.name}.$publicFunction(${callArguments.join(", ")});\n');
+					output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+					output.add('\t\treturn __result;\n');
+				}
 			} else {
 				var signature = HxiHaxeEmitter.nativeSignature(hxi, plan),
 					virtualCall = '__CxxVirtual.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
@@ -204,6 +222,80 @@ class CxxProjection {
 		return output.toString();
 	}
 
+	static function emitFunctions(model:CxxModel, hxi:HxiInterface, profile:Null<HxiProjectionProfile>, nativePlans:Null<Array<HxiFunctionAbi>>):String {
+		var abi = HxiAbi.forInterface(hxi),
+			plans:Map<String, HxiFunctionAbi> = [],
+			availablePlans = nativePlans == null ? abi.functions() : nativePlans,
+			output = new StringBuf();
+		for (plan in availablePlans)
+			plans.set(plan.name, plan);
+		output.add('// Generated C++ free-function projection for ${hxi.name}. Do not edit.\n');
+		output.add('import ${hxi.name};\n');
+		var helperName = "__CxxThunk_" + hxi.name + "Functions";
+		emitThunkErrorHelper(output, helperName);
+		output.add('class ${hxi.name}Functions {\n');
+		var functions = model.functions.copy();
+		functions.sort((left, right) -> {
+			var result = Reflect.compare(left.name, right.name);
+			return result == 0 ? Reflect.compare(left.symbol, right.symbol) : result;
+		});
+		var counts:Map<String, Int> = [], indices:Map<String, Int> = [];
+		for (functionModel in functions)
+			if (functionModel.thunkSymbol != null)
+				counts.set(functionModel.name, (counts.get(functionModel.name) == null ? 0 : counts.get(functionModel.name)) + 1);
+		for (functionModel in functions) {
+			if (functionModel.thunkSymbol == null)
+				continue;
+			var plan = functionModel.loweredName == null ? null : plans.get(functionModel.loweredName);
+			if (plan == null)
+				throw 'CXX201 missing lowered call plan for ${functionModel.qualifiedName}';
+			var index = indices.get(functionModel.name);
+			if (index == null)
+				index = 0;
+			indices.set(functionModel.name, index + 1);
+			var functionName = counts.get(functionModel.name) == 1 ? functionModel.name : functionModel.name + "_" + index;
+			validateFunctionName(functionName, functionModel);
+			var arguments:Array<String> = [], calls:Array<String> = [];
+			for (parameterIndex in 0...functionModel.parameters.length) {
+				var projected = HxiHaxeEmitter.project(plan.arguments[parameterIndex], false, profile);
+				if (projected == null)
+					throw 'CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} parameter ${parameterIndex + 1}';
+				var argumentName = identifier(functionModel.parameters[parameterIndex].name) ? functionModel.parameters[parameterIndex].name : 'arg$parameterIndex';
+				arguments.push('$argumentName:${projected.haxeType}');
+				calls.push(argumentName);
+			}
+			var result = HxiHaxeEmitter.project(plan.result, true, profile);
+			if (result == null)
+				throw 'CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} result';
+			var nativeName = HxiHaxeEmitter.projectedFunctionName(functionModel.loweredName, profile);
+			output.add('\tpublic static function $functionName(${arguments.join(", ")}):${result.haxeType} {\n');
+			if (result.haxeType == "Void") {
+				output.add('\t\t${hxi.name}.$nativeName(${calls.join(", ")});\n');
+				output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+			} else {
+				output.add('\t\tvar __result = ${hxi.name}.$nativeName(${calls.join(", ")});\n');
+				output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+				output.add('\t\treturn __result;\n');
+			}
+			output.add('\t}\n');
+		}
+		output.add('}\n');
+		return output.toString();
+	}
+
+	static function emitThunkErrorHelper(output:StringBuf, helperName:String):Void {
+		var nativeHelperName = helperName + "Native";
+		output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class $nativeHelperName {\n');
+		output.add('\tpublic static function native_cxx_last_error(library:String):Null<String> return null;\n');
+		output.add('}\n\n');
+		output.add('@:noCompletion\nprivate class $helperName {\n');
+		output.add('\tpublic static function throwIfFailed(library:String):Void {\n');
+		output.add('\t\tvar error = $nativeHelperName.native_cxx_last_error(library);\n');
+		output.add('\t\tif (error != null && error.length > 0) throw "C++ exception: " + error;\n');
+		output.add('\t}\n');
+		output.add('}\n\n');
+	}
+
 	static function projectedClassNames(model:CxxModel):Map<String, String> {
 		var counts:Map<String, Int> = [];
 		for (record in model.records)
@@ -235,6 +327,10 @@ class CxxProjection {
 	static function validateMethodName(name:String, method:CxxMethod):Void
 		if (!identifier(name) || name == "fromNative" || name == "nativeHandle" || name == "isClosed" || name == "close")
 			throw 'CXX202 invalid projected method name "$name" for ${method.qualifiedName}';
+
+	static function validateFunctionName(name:String, functionModel:CxxFunction):Void
+		if (!identifier(name))
+			throw 'CXX202 invalid projected function name "$name" for ${functionModel.qualifiedName}';
 
 	static function identifier(value:String):Bool {
 		if (value == null || value.length == 0)

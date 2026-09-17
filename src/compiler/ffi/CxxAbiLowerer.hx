@@ -22,8 +22,10 @@ import sys.FileSystem;
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
 class CxxAbiLowerer {
 	public static function lower(model:CxxModel, target:String, ?library:String, ?interfaceName:String, ?dependencies:Array<String>,
-			trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false):HxiInterface {
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch);
+			trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false):HxiInterface {
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+		if (cxxThunks)
+			CxxThunkGenerator.prepare(model);
 		var records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
 			aliases:Map<String, CxxAlias> = [];
@@ -80,7 +82,7 @@ class CxxAbiLowerer {
 			for (method in record.methods)
 				if (method.loweredName != null)
 					result.set(method.loweredName,
-						method.isConstructor ? CxxConstructor : method.isDestructor ? CxxDestructor : method.virtualAbi == null ? DirectSymbol : CxxVirtual(method.virtualAbi.vtableIndex,
+						method.isConstructor ? CxxConstructor : method.isDestructor ? CxxDestructor : method.thunkSymbol != null ? DirectSymbol : method.virtualAbi == null ? DirectSymbol : CxxVirtual(method.virtualAbi.vtableIndex,
 							method.virtualAbi.thisAdjustment));
 		return result;
 	}
@@ -121,7 +123,8 @@ class CxxAbiLowerer {
 	static function lowerFunction(functionModel:CxxFunction, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>):HxiDeclaration {
 		return Function(name, parameters(functionModel.parameters, records, enums, aliases), lowerType(functionModel.result, records, enums, aliases, true),
-			functionModel.symbol, false, "cdecl", resultPolicy(functionModel.result), functionModel.span);
+			functionModel.thunkSymbol == null ? functionModel.symbol : functionModel.thunkSymbol, false, "cdecl", resultPolicy(functionModel.result),
+			functionModel.span);
 	}
 
 	static function lowerMethod(method:CxxMethod, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
@@ -140,8 +143,8 @@ class CxxAbiLowerer {
 				span: method.span
 			});
 		}
-		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true), method.symbol, false, "cdecl", resultPolicy(method.result),
-			method.span);
+		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true),
+			method.thunkSymbol == null ? method.symbol : method.thunkSymbol, false, "cdecl", resultPolicy(method.result), method.span);
 	}
 
 	static function parameters(parameters:Array<CxxModel.CxxParameter>, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,

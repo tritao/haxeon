@@ -1374,3 +1374,48 @@ HL_PRIM int HL_NAME(native_last_error)( vbyte *output, int capacity ) {
 	if( length > 0 ) memcpy(output,haxeon_native_error,(size_t)length);
 	return length;
 }
+
+HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
+	if( library == NULL ) hl_error("C++ thunk error lookup requires a library");
+	const char *converted = hl_to_utf8((const uchar *)library);
+	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
+	if( library_name == NULL ) hl_error("Invalid C++ thunk library name");
+	char *path = haxeon_native_library_path(library_name);
+	free(library_name);
+	if( path == NULL ) hl_error("Could not resolve C++ thunk library name");
+	void *handle = NULL;
+#ifdef _WIN32
+	int wide_length = MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,NULL,0);
+	if( wide_length > 0 ) {
+		wchar_t *wide = (wchar_t *)malloc((size_t)wide_length * sizeof(wchar_t));
+		if( wide != NULL ) {
+			MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,wide_length);
+			handle = (void *)LoadLibraryW(wide);
+			free(wide);
+		}
+	}
+#else
+	dlerror();
+	handle = dlopen(path,RTLD_NOW | RTLD_LOCAL);
+#endif
+	free(path);
+	if( handle == NULL ) hl_error("Could not open C++ thunk library");
+	typedef const char *(*haxeon_cxx_last_error_function)( void );
+	haxeon_cxx_last_error_function get_error;
+#ifdef _WIN32
+	get_error = (haxeon_cxx_last_error_function)GetProcAddress((HMODULE)handle,"haxeon_cxx_thunk_last_error");
+#else
+	dlerror();
+	get_error = (haxeon_cxx_last_error_function)dlsym(handle,"haxeon_cxx_thunk_last_error");
+#endif
+	if( get_error == NULL ) {
+		haxeon_native_unload(handle);
+		hl_error("Could not resolve haxeon_cxx_thunk_last_error");
+	}
+	const char *message = get_error();
+	vbyte *result = NULL;
+	if( message != NULL && message[0] != 0 )
+		result = haxeon_native_utf8_size(message) < 0 ? realtime_string_from_utf8("C++ thunk returned an invalid diagnostic") : realtime_string_from_utf8(message);
+	haxeon_native_unload(handle);
+	return result;
+}
