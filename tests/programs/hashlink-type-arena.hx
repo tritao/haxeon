@@ -273,6 +273,7 @@ function main():Int {
 			RawPtr.nullPtr()),
 		generationObjectData = generationObject.ref.data.ref.obj;
 	generation.addType(generationVoid);
+	generation.addType(generationInt);
 	generation.addType(generationFunction);
 	generation.addType(generationObject);
 	var generationDescriptor = generation.addFunctionDescriptor({
@@ -297,12 +298,12 @@ function main():Int {
 		findex: 1
 	});
 	var publication = generation.publish();
-	var generationCorrect = publication.typeCount == 3
+	var generationCorrect = publication.typeCount == 4
 		&& publication.typeCapacity == 4
 		&& publication.contiguousTypes == generation.contiguousTypePointer()
 		&& publication.contiguousTypeCount == 4
 		&& publication.contiguousTypeCapacity == 65536
-		&& !publication.usesContiguousTypes
+		&& publication.usesContiguousTypes
 		&& publication.functionDescriptors == generationDescriptor
 		&& publication.functionDescriptorCount == 1
 		&& publication.functionDescriptorCapacity == 8
@@ -317,10 +318,12 @@ function main():Int {
 		&& publication.functions.offset(0).load() == RawPtr.nullPtr()
 		&& publication.functionTypes.offset(0).load() == generationFunction
 		&& publication.types.offset(0).load() == generationVoid
-		&& publication.types.offset(1).load() == generationFunction
-		&& publication.types.offset(2).load() == generationObject
+		&& publication.types.offset(1).load() == generationInt
+		&& publication.types.offset(2).load() == generationFunction
+		&& publication.types.offset(3).load() == generationObject
 		&& !generationObjectData.ref.runtime.isNull()
-		&& generation.type(1) == generationFunction;
+		&& generation.type(1) == generationInt
+		&& generation.type(2) == generationFunction;
 	var generationSealed = false;
 	try
 		generation.addType(generationInt)
@@ -504,6 +507,17 @@ function main():Int {
 	catch (error:Dynamic)
 		invalidGlobalRejected = Std.string(error).indexOf("not present in the generation type table") >= 0;
 	invalidGlobalGeneration.dispose();
+	var incompleteTypeGeneration = new HlMetadataGeneration(128, 1),
+		incompleteType = incompleteTypeGeneration.builder.primitive(HlTypeKind.Int32Type),
+		unlistedType = incompleteTypeGeneration.builder.primitive(HlTypeKind.Float32Type);
+	incompleteTypeGeneration.defineModule([RawPtr.nullPtr()], [incompleteType]);
+	incompleteTypeGeneration.addType(incompleteType);
+	var incompleteTypeRejected = false;
+	try
+		incompleteTypeGeneration.publish()
+	catch (error:Dynamic)
+		incompleteTypeRejected = Std.string(error).indexOf("every arena type record") >= 0;
+	incompleteTypeGeneration.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
@@ -511,5 +525,5 @@ function main():Int {
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
-		&& invalidPrototypeRejected && invalidGlobalRejected ? 42 : 1;
+		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected ? 42 : 1;
 }

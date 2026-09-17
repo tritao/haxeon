@@ -482,6 +482,8 @@ class HlMetadataGeneration {
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena, functionCount);
 		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
 		var usesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
+		if (!usesContiguousTypes || arena.typeCountOf() != typeTable.length())
+			throw "HashLink metadata type table must contain every arena type record in allocation order";
 		HlTypeLayout.bindFunctionReferences(functionDescriptors.pointer(), functionDescriptors.length());
 		HlTypeLayout.bindEntrypointDescriptor(functionDescriptors.pointer(), functionDescriptors.length(), modulePools.entryPoint, builder);
 		ensureFunctionIdentities();
