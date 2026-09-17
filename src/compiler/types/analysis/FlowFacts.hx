@@ -2,6 +2,13 @@ package compiler.types.analysis;
 
 import compiler.types.Type.CompilerType;
 
+typedef FlowFactsCheckpoint = {
+	final refinedTypes:Map<String, CompilerType>;
+	final invalidated:Map<String, Bool>;
+	final invalidatedPrefixes:Array<String>;
+	final invalidatedNamespaces:Array<String>;
+}
+
 /** Branch-local facts keyed by resolved binding identity. */
 class FlowFacts {
 	final parent:Null<FlowFacts>;
@@ -105,4 +112,43 @@ class FlowFacts {
 
 	public function invalidateAllExpressions():Void
 		invalidateNamespace("$expression:");
+
+	/** Capture branch-local facts before a tolerant statement is attempted. */
+	public function checkpoint():FlowFactsCheckpoint
+		return {
+			refinedTypes: copyTypes(refinedTypes),
+			invalidated: copyFlags(invalidated),
+			invalidatedPrefixes: invalidatedPrefixes.copy(),
+			invalidatedNamespaces: invalidatedNamespaces.copy()
+		};
+
+	/** Restore only this scope's facts; parent facts are checkpointed by Scope. */
+	public function rollback(checkpoint:FlowFactsCheckpoint):Void {
+		refinedTypes.clear();
+		for (name => type in checkpoint.refinedTypes)
+			refinedTypes.set(name, type);
+		invalidated.clear();
+		for (name => value in checkpoint.invalidated)
+			invalidated.set(name, value);
+		invalidatedPrefixes.resize(0);
+		for (prefix in checkpoint.invalidatedPrefixes)
+			invalidatedPrefixes.push(prefix);
+		invalidatedNamespaces.resize(0);
+		for (prefix in checkpoint.invalidatedNamespaces)
+			invalidatedNamespaces.push(prefix);
+	}
+
+	static function copyTypes(source:Map<String, CompilerType>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (name => type in source)
+			result.set(name, type);
+		return result;
+	}
+
+	static function copyFlags(source:Map<String, Bool>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (name => value in source)
+			result.set(name, value);
+		return result;
+	}
 }

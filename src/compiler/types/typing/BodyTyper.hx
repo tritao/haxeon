@@ -441,9 +441,15 @@ class BodyTyper {
 	function typeStatementsRecovering(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
 		for (statement in statements) {
+			var checkpoint = scope.checkpoint();
 			try {
 				output = output.concat(typeStatementsStrict([statement], scope, result));
 			} catch (error:Dynamic) {
+				// Strict typing may have defined a local, refined a flow fact, or
+				// consumed a binding id before a later child failed. Recovery must
+				// retry from the pre-statement lexical state, otherwise the failed
+				// subtree can poison all following statements.
+				scope.rollback(checkpoint);
 				if (Std.isOfType(error, CancellationError))
 					throw error;
 				if (Std.isOfType(error, CompileError)) {
@@ -454,17 +460,19 @@ class BodyTyper {
 				var recovered:Null<TypedStatement> = null;
 				try {
 					recovered = recoverDeclaration(statement, scope);
-				} catch (recoveryError:Dynamic) {
-					if (Std.isOfType(recoveryError, CancellationError))
-						throw recoveryError;
-					rememberRecoveryError(recoveryError, statementSpan(statement));
-				}
+					} catch (recoveryError:Dynamic) {
+						if (Std.isOfType(recoveryError, CancellationError))
+							throw recoveryError;
+						scope.rollback(checkpoint);
+						rememberRecoveryError(recoveryError, statementSpan(statement));
+					}
 				if (recovered == null)
 					try {
 						recovered = recoverCompoundStatement(statement, scope, result);
 					} catch (recoveryError:Dynamic) {
 						if (Std.isOfType(recoveryError, CancellationError))
 							throw recoveryError;
+						scope.rollback(checkpoint);
 						rememberRecoveryError(recoveryError, statementSpan(statement));
 					}
 				if (recovered != null)

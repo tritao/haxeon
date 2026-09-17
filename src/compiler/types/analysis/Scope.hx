@@ -6,6 +6,19 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.analysis.FlowFacts.FlowFactsCheckpoint;
+
+private typedef ScopeCheckpoint = {
+	final scope:Scope;
+	final values:Map<String, ScopeValue>;
+	final assigned:Map<String, Bool>;
+	final captures:Map<String, Bool>;
+	final cellCaptures:Map<String, Bool>;
+	final cellClasses:Map<String, String>;
+	final nextLocalId:Int;
+	final facts:FlowFactsCheckpoint;
+	final parent:Null<ScopeCheckpoint>;
+}
 
 /** Resolved local binding identity and its declared semantic type. */
 private typedef ScopeValue = {
@@ -185,6 +198,45 @@ class Scope {
 			facts.invalidate(local.id);
 	}
 
+	/** Capture this scope chain before a tolerant statement mutates it. */
+	public function checkpoint():ScopeCheckpoint
+		return {
+			scope: this,
+			values: copyValues(values),
+			assigned: copyFlags(assigned),
+			captures: copyFlags(captures),
+			cellCaptures: copyFlags(cellCaptures),
+			cellClasses: copyStrings(cellClasses),
+			nextLocalId: nextLocalId,
+			facts: facts.checkpoint(),
+			parent: parent == null ? null : parent.checkpoint()
+		};
+
+	/** Restore the exact lexical/flow state captured by checkpoint(). */
+	public function rollback(checkpoint:ScopeCheckpoint):Void {
+		if (checkpoint.scope != this)
+			throw "Scope checkpoint belongs to a different scope";
+		values.clear();
+		for (name => value in checkpoint.values)
+			values.set(name, value);
+		assigned.clear();
+		for (name => value in checkpoint.assigned)
+			assigned.set(name, value);
+		captures.clear();
+		for (name => value in checkpoint.captures)
+			captures.set(name, value);
+		cellCaptures.clear();
+		for (name => value in checkpoint.cellCaptures)
+			cellCaptures.set(name, value);
+		cellClasses.clear();
+		for (name => value in checkpoint.cellClasses)
+			cellClasses.set(name, value);
+		nextLocalId = checkpoint.nextLocalId;
+		facts.rollback(checkpoint.facts);
+		if (parent != null && checkpoint.parent != null)
+			parent.rollback(checkpoint.parent);
+	}
+
 	public function isCapture(name:String):Bool
 		return captures.exists(name) || (parent != null && parent.isCapture(name));
 
@@ -279,5 +331,31 @@ class Scope {
 	function allocateLocalId():Int {
 		var outer = parent;
 		return outer == null ? nextLocalId++ : outer.allocateLocalId();
+	}
+
+	static function copyValues(source:Map<String, ScopeValue>):Map<String, ScopeValue> {
+		var result:Map<String, ScopeValue> = [];
+		for (name => value in source)
+			result.set(name, {
+				source: value.source,
+				declared: value.declared,
+				id: value.id,
+				receiver: value.receiver
+			});
+		return result;
+	}
+
+	static function copyFlags(source:Map<String, Bool>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (name => value in source)
+			result.set(name, value);
+		return result;
+	}
+
+	static function copyStrings(source:Map<String, String>):Map<String, String> {
+		var result:Map<String, String> = [];
+		for (name => value in source)
+			result.set(name, value);
+		return result;
 	}
 }
