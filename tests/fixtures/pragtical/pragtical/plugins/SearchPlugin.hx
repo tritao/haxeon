@@ -15,7 +15,9 @@ class SearchPlugin implements Plugin {
 	}
 
 	public function activate():Void {
-		editor.open(new Document("notes.txt", state.cursor));
+		editor.clearDiagnostics();
+		editor.open(new Document("notes.txt", state.cursor, "notes: find the current selection"));
+		editor.report("search service ready");
 		editor.register("find", () -> {
 			return this.find();
 		});
@@ -23,9 +25,15 @@ class SearchPlugin implements Plugin {
 
 	public function deactivate():Void {
 		editor.unregister("find");
+		editor.close("notes.txt");
 	}
 
 	public function find():Int {
+		var matches = editor.search.find("notes");
+		if (matches == 0) {
+			editor.report("search service found no matching document");
+			return state.cursor;
+		}
 		state.cursor = state.cursor + 1;
 		return state.cursor;
 	}

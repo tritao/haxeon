@@ -35,6 +35,14 @@ class Host {
 		return editor.documents.length;
 	}
 
+	public static function searchDocumentCount():Int {
+		return editor.search.count();
+	}
+
+	public static function diagnosticCount():Int {
+		return editor.diagnostics.length;
+	}
+
 	public static function callbackCount():Int {
 		return editor.commands.length;
 	}
@@ -66,6 +74,14 @@ function cursor():Int {
 
 function documentCount():Int {
 	return Host.documentCount();
+}
+
+function searchDocumentCount():Int {
+	return Host.searchDocumentCount();
+}
+
+function diagnosticCount():Int {
+	return Host.diagnosticCount();
 }
 
 function callbackCount():Int {

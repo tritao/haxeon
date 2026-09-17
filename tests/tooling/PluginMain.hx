@@ -16,6 +16,7 @@ class PluginMain {
 		compiler.enablePublicationTracking();
 		loadFixture(compiler, "pragtical/api/Plugin.hx");
 		loadFixture(compiler, "pragtical/api/Document.hx");
+		loadFixture(compiler, "pragtical/services/SearchService.hx");
 		var editorSource = loadFixture(compiler, "pragtical/api/Editor.hx");
 		loadFixture(compiler, "pragtical/plugins/PluginState.hx");
 		var pluginSource = loadFixture(compiler, "pragtical/plugins/SearchPlugin.hx");
@@ -23,7 +24,7 @@ class PluginMain {
 
 		var first = compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(first.module));
-		if (first.metrics.modules != 6 || first.requiresReload || first.patchBytes != null)
+		if (first.metrics.modules != 7 || first.requiresReload || first.patchBytes != null)
 			throw "Initial plugin workload did not compile as a stable module";
 		var disposedModules = 0,
 			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
@@ -35,7 +36,9 @@ class PluginMain {
 		domain.activateWithModule(firstPlugin, live);
 		compiler.acknowledgePublication(first.revision);
 		if (call(live, first.functionIds, "Main.documentCount") != 1
+			|| call(live, first.functionIds, "Main.searchDocumentCount") != 1
 			|| call(live, first.functionIds, "Main.callbackCount") != 1
+			|| call(live, first.functionIds, "Main.diagnosticCount") != 1
 			|| call(live, first.functionIds, "Main.runCommand") != 5)
 			throw "Initial plugin did not open a document and execute its command callback";
 
@@ -77,6 +80,7 @@ class PluginMain {
 		}
 		loadFixture(resumed, "pragtical/api/Plugin.hx");
 		loadFixture(resumed, "pragtical/api/Document.hx");
+		loadFixture(resumed, "pragtical/services/SearchService.hx");
 		resumed.update("pragtical/api/Editor.hx", editorSource);
 		loadFixture(resumed, "pragtical/plugins/PluginState.hx");
 		resumed.update("pragtical/plugins/SearchPlugin.hx", patchedSource);
@@ -132,7 +136,9 @@ class PluginMain {
 			|| replacementPlugin.restoredState != "cursor:7"
 			|| call(replacement, structural.functionIds, "Main.cursor") != 7
 			|| call(replacement, structural.functionIds, "Main.documentCount") != 1
+			|| call(replacement, structural.functionIds, "Main.searchDocumentCount") != 1
 			|| call(replacement, structural.functionIds, "Main.callbackCount") != 1
+			|| call(replacement, structural.functionIds, "Main.diagnosticCount") != 1
 			|| disposedModules != 3)
 			throw "Structural reload did not restore observable editor/plugin state";
 

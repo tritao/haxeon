@@ -182,4 +182,9 @@ The next bounded milestones are:
    still pending**;
 4. add latency budgets; **cooperative protocol cancellation is now wired**, but
    measured budgets and parallel workers remain;
-5. start the first Pragtical utility migration only after those gates are green.
+5. start the first Pragtical utility migration only after those gates are green;
+   the initial slice is now the multi-module `SearchService` used by the
+   representative plugin. It owns document indexing and query state while the
+   host facade owns diagnostics and command lifecycle. The runtime test covers
+   body patching, failed reloads, structural reload/state restoration, and
+   callback retirement across that service boundary.
