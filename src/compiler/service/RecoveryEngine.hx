@@ -54,30 +54,51 @@ class RecoveryEngine {
 
 	public function recover(state:ModuleState, ?token:CancellationToken, ?externalChangedBodies:Map<String, Bool>,
 		forceNoReuse:Bool = false):RecoveryEngineResult {
+		var source = state.source,
+			revision = state.revision;
+		function isCurrent():Bool
+			return state.source == source && state.revision == revision;
+
+		function publish(diagnostics:Array<Diagnostic>):Void {
+			if (!isCurrent())
+				return;
+			state.recoveryDiagnostics = diagnostics.copy();
+			hooks.publishDiagnostics(state, diagnostics);
+		}
+
 		if (token != null)
 			token.check();
+		if (!isCurrent())
+			return {published: false, reusedFunctions: 0};
 		state.recoveryDiagnostics = [];
 
 		var conditional:ConditionalSource;
 		try
 			conditional = ConditionalCompilation.process(state.source, hooks.editorDefines())
 		catch (error:CompileError) {
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			state.conditionalDefines = [];
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
-			hooks.publishDiagnostics(state, [error.diagnostic]);
+			publish([error.diagnostic]);
 			return {published: false, reusedFunctions: 0};
 		}
-		state.conditionalDefines = conditional.defines;
+		if (!isCurrent())
+			return {published: false, reusedFunctions: 0};
 
 		var checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
 			tokens:Array<Token>;
 		try
 			tokens = new Lexer(state.source, conditional.text, checkpoint).tokenize()
 		catch (error:CompileError) {
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			error.diagnostic.origin = DiagnosticOrigin.Lexical;
-			hooks.publishDiagnostics(state, [error.diagnostic]);
+			publish([error.diagnostic]);
 			return {published: false, reusedFunctions: 0};
 		}
+		if (!isCurrent())
+			return {published: false, reusedFunctions: 0};
 
 		try {
 			var recovered = new Parser(tokens, checkpoint).parseProgramRecovering(),
@@ -86,10 +107,14 @@ class RecoveryEngine {
 			typingDiagnostics:Array<Diagnostic> = [],
 				typingModules = hooks.typingModules(state, recovered.program, token),
 				reusedFunctions = hooks.reuseFunctions(state, recovered.program, externalChangedBodies, forceNoReuse);
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 
 			recoveredModel.recoveredSignatureProgram = inferredProgram;
 			var partialTypedProgram = Typer.typeRecovered(recovered.program, null, checkpoint, typingDiagnostics,
 				typingModules, reusedFunctions, inferredProgram);
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			recoveredModel.partialTypedProgram = partialTypedProgram;
 			for (module in typingModules)
 				recoveredModel.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
@@ -102,20 +127,29 @@ class RecoveryEngine {
 				function(name) return hooks.symbolCandidates(state, name, token, recovered.program),
 				previousModel,
 				function(name) return hooks.resolveTypeSymbol(state, recovered.program, name, token));
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			recoveredModel.freeze();
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
+			state.conditionalDefines = conditional.defines;
 			state.publishRecoveredSnapshot(tokens, recovered.program, recoveredModel);
-			hooks.publishDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));
+			publish(recovered.diagnostics.concat(typingDiagnostics));
 			return {published: true, reusedFunctions: partialTypedProgram == null ? 0 : mapSize(reusedFunctions)};
 		} catch (error:CompileError) {
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			error.diagnostic.origin = DiagnosticOrigin.ParserRecovery;
 			// Keep the last-good semantic snapshot when recovery itself fails.
-			hooks.publishDiagnostics(state, [error.diagnostic]);
+			publish([error.diagnostic]);
 			return {published: false, reusedFunctions: 0};
 		} catch (error:Dynamic) {
 			if (Std.isOfType(error, CancellationError))
 				throw error;
+			if (!isCurrent())
+				return {published: false, reusedFunctions: 0};
 			// Unexpected recovery failures must not escape an editor update.
-			hooks.publishDiagnostics(state, [
+			publish([
 				new Diagnostic("E0002", "Unable to recover editor syntax", state.source.span(0, 0), DiagnosticSeverity.Error, null,
 					DiagnosticOrigin.ParserRecovery)
 			]);

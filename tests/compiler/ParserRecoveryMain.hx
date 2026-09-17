@@ -1,6 +1,8 @@
 import compiler.service.LanguageService;
 import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
+import compiler.service.RecoveryEngine;
+import compiler.modules.ModuleState;
 import compiler.semantic.SemanticModel;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticOrigin;
@@ -96,6 +98,7 @@ class ParserRecoveryMain {
 		assertTolerantTypedSnapshot();
 		assertTolerantDeclarationSnapshot();
 		assertRecoveryCancellation();
+		assertSupersededRecovery();
 		assertDiagnosticOrigins();
 		assertTruncationRecovery();
 		assertTolerantTruncationTyping();
@@ -2106,6 +2109,28 @@ class ParserRecoveryMain {
 			|| compileState.currentRecovered != compileSnapshot
 			|| compileService.diagnostics("CancelledCompile.hx").length != compileDiagnostics.length)
 			throw "cancelled compilation published over the current recovered editor snapshot";
+	}
+
+	static function assertSupersededRecovery():Void {
+		var state = new ModuleState("SupersededRecovery", new SourceFile("SupersededRecovery.hx", "function main():Void return;")),
+			publishedDiagnostics = 0,
+			engine = new RecoveryEngine({
+				editorDefines: function() return [],
+				typingModules: function(state, _, _) {
+					state.update(new SourceFile("SupersededRecovery.hx", "function main():Void { var replacement:"));
+					return [];
+				},
+				reuseFunctions: function(_, _, _, _) return [],
+				resolveSymbol: function(_, _, _, _) return null,
+				resolveTypeSymbol: function(_, _, _, _) return null,
+				resolveEnumCase: function(_, _, _, _, _) return null,
+				resolveType: function(_, _, _, _, _) return null,
+				symbolCandidates: function(_, _, _, _) return [],
+				publishDiagnostics: function(_, diagnostics) publishedDiagnostics += diagnostics.length
+			});
+		var result = engine.recover(state);
+		if (result.published || publishedDiagnostics != 0 || state.currentRecovered != null)
+			throw "superseded recovery published stale syntax or diagnostics";
 	}
 
 	static function assertDiagnosticOrigins():Void {
