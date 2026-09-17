@@ -1238,6 +1238,16 @@ class LanguageServiceMain {
 			|| fieldFamilyImplementations.length != 1
 			|| fieldFamilyImplementations[0].path != "fields/Child.hx")
 			throw 'field member-family navigation failed: references=${fieldFamilyReferences.length}, implementations=${fieldFamilyImplementations.length}, child=${fieldFamilyImplementations.length == 0 ? "" : fieldFamilyImplementations[0].path}';
+		fieldFamilyService.update("fields/Child.hx",
+			"package fields; import fields.Base; class Child extends Base { public var value:Int; function unfinished(");
+		var recoveredFieldFamilyReferences = fieldFamilyService.references("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1),
+			recoveredFieldFamilyImplementations = fieldFamilyService.implementations("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1);
+		if (recoveredFieldFamilyReferences.length != 3
+			|| recoveredFieldFamilyImplementations.length != 1
+			|| recoveredFieldFamilyImplementations[0].path != "fields/Child.hx"
+			|| recoveredFieldFamilyImplementations[0].stale
+			|| fieldFamilyService.rename("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1, "renamed").length != 0)
+			throw 'recovered field member-family policy failed: references=${recoveredFieldFamilyReferences.length}, implementations=${recoveredFieldFamilyImplementations.length}, stale=${recoveredFieldFamilyImplementations.length == 0 ? "missing" : Std.string(recoveredFieldFamilyImplementations[0].stale)}';
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",
