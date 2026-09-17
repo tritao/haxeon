@@ -4,6 +4,7 @@ import compiler.Diagnostic;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.hl.incremental.HlModuleAssembler;
+import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
 
 /** Owns snapshot, rollback, and publication boundaries for one compilation. */
@@ -40,6 +41,8 @@ class CompilationTransaction {
 			compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
 			for (name => state in candidate.modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());

@@ -4,6 +4,7 @@ import compiler.Diagnostic;
 import compiler.Compiler;
 import compiler.Compiler.AnalysisResult;
 import compiler.modules.ModuleState;
+import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
 
 /** Runs compiler analysis transactionally without assembling or publishing a runtime artifact. */
@@ -21,6 +22,7 @@ class AnalysisTransaction {
 	public function run():AnalysisResult {
 		var snapshot = compiler.snapshot(),
 			candidate = compiler.createCandidate(snapshot, null),
+			context = new CompilationContext(candidate),
 			startedAt = Sys.time() * 1000.0;
 		var diagnosticWork = [entryModule],
 			diagnosticSeen:Map<String, Bool> = [],
@@ -30,13 +32,12 @@ class AnalysisTransaction {
 			if (diagnosticSeen.exists(name) || !candidate.modules.exists(name))
 				continue;
 			diagnosticSeen.set(name, true);
-			var state:ModuleState = candidate.modules.get(name);
+			var state = context.writableState(name, snapshot.modules);
 			state.diagnostics = [];
 			for (dependency in state.dependencies)
 				diagnosticWork.push(dependency);
 		}
 		try {
-			var context = new CompilationContext(candidate);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
 			context.setLastTypedProgram(frontend.typedProgram);
 			for (name in frontend.moduleNames) {
@@ -61,6 +62,8 @@ class AnalysisTransaction {
 				elapsedMs: Sys.time() * 1000.0 - startedAt
 			};
 		} catch (error:Dynamic) {
+			if (Std.isOfType(error, CancellationError))
+				throw error;
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
 			for (name => state in candidate.modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());

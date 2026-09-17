@@ -2068,6 +2068,44 @@ class ParserRecoveryMain {
 			cancelled = true;
 		if (!cancelled)
 			throw "parser recovery did not honor its cancellation checkpoint";
+
+		var service = new LanguageService();
+		service.update("CancelledAnalysis.hx", "function main():Void { var value:");
+		var state = service.compiler.modules.get("CancelledAnalysis"),
+			beforeSnapshot = state == null ? null : state.currentRecovered,
+			beforeDiagnostics = service.diagnostics("CancelledAnalysis.hx");
+		if (state == null || beforeSnapshot == null || beforeDiagnostics.length == 0)
+			throw "cancelled-analysis fixture did not publish its recovered snapshot";
+		var analysisToken = new CancellationToken();
+		analysisToken.cancel();
+		cancelled = false;
+		try
+			service.analyze("CancelledAnalysis", analysisToken)
+		catch (error:CancellationError)
+			cancelled = true;
+		var afterDiagnostics = service.diagnostics("CancelledAnalysis.hx");
+		if (!cancelled
+			|| state.currentRecovered != beforeSnapshot
+			|| afterDiagnostics.length != beforeDiagnostics.length)
+			throw "cancelled analysis published over the current recovered editor snapshot";
+
+		var compileService = new LanguageService();
+		compileService.update("CancelledCompile.hx", "function main():Int { var value:");
+		var compileState = compileService.compiler.modules.get("CancelledCompile"),
+			compileSnapshot = compileState == null ? null : compileState.currentRecovered,
+			compileDiagnostics = compileService.diagnostics("CancelledCompile.hx"),
+			compileToken = new CancellationToken();
+		compileToken.cancel();
+		cancelled = false;
+		try
+			compileService.compile("CancelledCompile", compileToken)
+		catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled
+			|| compileState == null
+			|| compileState.currentRecovered != compileSnapshot
+			|| compileService.diagnostics("CancelledCompile.hx").length != compileDiagnostics.length)
+			throw "cancelled compilation published over the current recovered editor snapshot";
 	}
 
 	static function assertDiagnosticOrigins():Void {
