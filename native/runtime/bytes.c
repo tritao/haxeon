@@ -336,8 +336,8 @@ HL_PRIM int HL_NAME(__bytes_input_read_i32)( realtime_bytes_input *input ) {
 	if( input->position < 0 || input->position > input->length - 4 ) hl_error("Byte input is truncated");
 	vbyte *data = input->data + input->position;
 	input->position += 4;
-	if( input->big_endian ) return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+	if( input->big_endian ) return (int)(((unsigned int)data[0] << 24) | ((unsigned int)data[1] << 16) | ((unsigned int)data[2] << 8) | data[3]);
+	return (int)(data[0] | ((unsigned int)data[1] << 8) | ((unsigned int)data[2] << 16) | ((unsigned int)data[3] << 24));
 }
 HL_PRIM double HL_NAME(__bytes_input_read_f64)( realtime_bytes_input *input ) {
 	union { double value; vbyte bytes[8]; } decoded;

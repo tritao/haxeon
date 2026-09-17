@@ -222,6 +222,7 @@ class RuntimePatchTransactionMain {
 		if (Runtime.retryRetirements() != 1)
 			throw "golden self-hosting shutdown did not defer retirement for the retained object";
 		oldObject.release();
+		Gc.collect();
 		if (Runtime.retryRetirements() != 0 || Runtime.pendingRetirementCount != 0)
 			throw "golden self-hosting shutdown did not reclaim the retired generation";
 		Gc.collect();
@@ -395,6 +396,7 @@ class RuntimePatchTransactionMain {
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";
 		retained.release();
+		Gc.collect();
 		if (Runtime.pendingRetirementCount != 0)
 			throw "deferred module retirement did not finalize when its last retained value was released";
 		if (Runtime.retryRetirements() != 0)
