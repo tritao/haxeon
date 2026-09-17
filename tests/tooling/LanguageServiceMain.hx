@@ -3044,7 +3044,7 @@ class LanguageServiceMain {
 		var recoveredTypeSyntaxService = new LanguageService(),
 			recoveredTypeSyntaxTarget = "package typeaudit; class Leaf {} function main():Void return;",
 			recoveredTypeSyntaxBox = "package typeaudit; class Box<T> { public var value:T; } function main():Void return;",
-			recoveredTypeSyntaxSource = "package typeaudit.use; import typeaudit.Box; import typeaudit.Leaf; function main():Void { var boxed:Box<Leaf>; var record:{value:Leaf}; var casted = cast(boxed, Leaf); var checked = Std.isOfType(boxed, Leaf); var values = new Array<Leaf>(1); broken.unresolved().thing; var later:Leaf; }";
+			recoveredTypeSyntaxSource = "package typeaudit.use; import typeaudit.Box; import typeaudit.Leaf; function main():Void { var boxed:Box<Leaf>; var record:{value:Leaf}; var casted = cast(boxed, Leaf); var checked = Std.isOfType(boxed, Leaf); var values = new Array<Leaf>(1); var mapped = new Map<Leaf,Leaf>(); var layout = sizeof<Leaf>(); broken.unresolved().thing; var later:Leaf; }";
 		recoveredTypeSyntaxService.update("typeaudit/Leaf.hx", recoveredTypeSyntaxTarget);
 		recoveredTypeSyntaxService.update("typeaudit/Box.hx", recoveredTypeSyntaxBox);
 		recoveredTypeSyntaxService.compile("typeaudit.Leaf");
@@ -3055,12 +3055,16 @@ class LanguageServiceMain {
 			castTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("cast(boxed, Leaf)") + "cast(boxed, ".length + 1,
 			isOfTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("Std.isOfType(boxed, Leaf)") + "Std.isOfType(boxed, ".length + 1,
 			arrayTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("new Array<Leaf>") + "new Array<".length + 1,
+			mapTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("new Map<Leaf,Leaf>") + "new Map<".length + 1,
+			nativeLayoutTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("sizeof<Leaf>") + "sizeof<".length + 1,
 			laterTypeSyntaxPosition = recoveredTypeSyntaxSource.lastIndexOf(":Leaf") + 2,
 			genericTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", genericTypeSyntaxPosition),
 			anonymousTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", anonymousTypeSyntaxPosition),
 			castTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", castTypeSyntaxPosition),
 			isOfTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", isOfTypeSyntaxPosition),
 			arrayTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", arrayTypeSyntaxPosition),
+			mapTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", mapTypeSyntaxPosition),
+			nativeLayoutTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", nativeLayoutTypeSyntaxPosition),
 			laterTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", laterTypeSyntaxPosition),
 			genericTypeSyntaxReferences = recoveredTypeSyntaxService.references("typeaudit/use/Main.hx", genericTypeSyntaxPosition);
 		if (genericTypeSyntaxDefinition == null || genericTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
@@ -3068,9 +3072,11 @@ class LanguageServiceMain {
 			|| castTypeSyntaxDefinition == null || castTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
 			|| isOfTypeSyntaxDefinition == null || isOfTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
 			|| arrayTypeSyntaxDefinition == null || arrayTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
+			|| mapTypeSyntaxDefinition == null || mapTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
+			|| nativeLayoutTypeSyntaxDefinition == null || nativeLayoutTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
 			|| laterTypeSyntaxDefinition == null || laterTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
-			|| genericTypeSyntaxReferences.length < 6)
-			throw 'recovered type-bearing syntax lost authoritative identity: generic=${genericTypeSyntaxDefinition == null ? "null" : genericTypeSyntaxDefinition.path}, anonymous=${anonymousTypeSyntaxDefinition == null ? "null" : anonymousTypeSyntaxDefinition.path}, cast=${castTypeSyntaxDefinition == null ? "null" : castTypeSyntaxDefinition.path}, isOfType=${isOfTypeSyntaxDefinition == null ? "null" : isOfTypeSyntaxDefinition.path}, array=${arrayTypeSyntaxDefinition == null ? "null" : arrayTypeSyntaxDefinition.path}, later=${laterTypeSyntaxDefinition == null ? "null" : laterTypeSyntaxDefinition.path}, references=${genericTypeSyntaxReferences.length}';
+			|| genericTypeSyntaxReferences.length < 8)
+			throw 'recovered type-bearing syntax lost authoritative identity: generic=${genericTypeSyntaxDefinition == null ? "null" : genericTypeSyntaxDefinition.path}, anonymous=${anonymousTypeSyntaxDefinition == null ? "null" : anonymousTypeSyntaxDefinition.path}, cast=${castTypeSyntaxDefinition == null ? "null" : castTypeSyntaxDefinition.path}, isOfType=${isOfTypeSyntaxDefinition == null ? "null" : isOfTypeSyntaxDefinition.path}, array=${arrayTypeSyntaxDefinition == null ? "null" : arrayTypeSyntaxDefinition.path}, map=${mapTypeSyntaxDefinition == null ? "null" : mapTypeSyntaxDefinition.path}, native=${nativeLayoutTypeSyntaxDefinition == null ? "null" : nativeLayoutTypeSyntaxDefinition.path}, later=${laterTypeSyntaxDefinition == null ? "null" : laterTypeSyntaxDefinition.path}, references=${genericTypeSyntaxReferences.length}';
 		var inferredObjectService = new LanguageService(),
 			inferredObjectSource = "function main():Void { var point = {value: 1}; point.";
 		inferredObjectService.update("InferredObject.hx", inferredObjectSource);

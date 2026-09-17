@@ -188,7 +188,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   only for authoritative targets, and ambiguous recovered inheritance names are
   rejected. Package-qualified identities, aliases, wildcard packages, lazy
   secondary modules, inherited generic members, constructors, enum values,
-  super, recovered super members, and source-level type operands are covered.
+  super, recovered super members, and source-level type operands (including
+  casts, generic arrays/maps, `Std.isOfType`, and native layout queries) are
+  covered.
   Full type-aware navigation and global reference precision remain.
   Member-family navigation now includes class fields while keeping static
   shadows owner-local instead of treating them as inherited implementations,
