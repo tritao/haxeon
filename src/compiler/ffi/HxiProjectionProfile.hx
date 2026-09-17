@@ -23,6 +23,7 @@ class HxiProjectionProfile {
 	public final fieldCase:String;
 	public final constantPrefix:Null<String>;
 	public final constantCase:String;
+	public final callbackErrorType:Null<String>;
 	public final enumValuePrefixes:Array<String>;
 	public final typeNames:Map<String, String>;
 	public final enumNames:Map<String, String>;
@@ -36,7 +37,7 @@ class HxiProjectionProfile {
 			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
 			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
 			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve",
-			?resultPolicies:Map<String, HxiResultErrorProjection>) {
+			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>) {
 		this.interfaceName = interfaceName;
 		this.typePrefix = typePrefix;
 		this.functionPrefix = functionPrefix;
@@ -44,6 +45,7 @@ class HxiProjectionProfile {
 		this.fieldCase = validateCase(fieldCase);
 		this.constantPrefix = constantPrefix;
 		this.constantCase = validateCase(constantCase);
+		this.callbackErrorType = callbackErrorType;
 		this.enumValuePrefixes = enumValuePrefixes == null ? [] : enumValuePrefixes;
 		this.typeNames = typeNames == null ? [] : typeNames;
 		this.enumNames = enumNames == null ? [] : enumNames;
@@ -76,6 +78,7 @@ class HxiProjectionProfile {
 			fieldCase = optionalCase(value, "fieldCase", path),
 			constantPrefix = optionalString(value, "constantPrefix", path),
 			constantCase = optionalCase(value, "constantCase", path),
+			callbackErrorType = optionalString(value, "callbackErrorType", path),
 			enumValuePrefixes = stringArray(value, "enumValuePrefixes", path),
 			typeNames = stringMap(value, "typeNames", path),
 			enumNames = stringMap(value, "enumNames", path),
@@ -85,7 +88,8 @@ class HxiProjectionProfile {
 			constantNames = stringMap(value, "constantNames", path),
 			resultPolicies = resultPolicyMap(value, "resultPolicies", path);
 		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
-			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies);
+			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies,
+			callbackErrorType);
 	}
 
 	static function resultPolicyMap(value:Dynamic, field:String, path:String):Map<String, HxiResultErrorProjection> {

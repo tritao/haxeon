@@ -24,9 +24,11 @@ class ActionResult {
 class ExecutionResult {
 	public final actions:Array<ActionResult>;
 	public final exitCode:Int;
+	public final elapsedMs:Float;
 
-	public function new(actions:Array<ActionResult>) {
+	public function new(actions:Array<ActionResult>, elapsedMs:Float = 0) {
 		this.actions = actions.copy();
+		this.elapsedMs = elapsedMs;
 		var failure:Null<Int> = null;
 		for (result in actions)
 			if (!result.succeeded() && !result.blocked) {

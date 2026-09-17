@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-exec "$root_dir/.tools/haxe/haxe" -cp "$root_dir/src" --run FfiAuditMain "$@"
+haxe_bin=${NATIVEKIT_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
+exec "$haxe_bin" -cp "$root_dir/src" --run FfiAuditMain "$@"

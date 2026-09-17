@@ -65,8 +65,9 @@ class CHeaderImporter {
 			ProcessOutputCapture.defaultDiagnosticLimit);
 		if (astProcess.exitCode != 0)
 			throw 'Clang could not import $header:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
-		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]),
-			ProcessOutputCapture.defaultDiagnosticLimit);
+		// Record layouts are semantic ABI data, not diagnostics. Keep the complete dump so
+		// large platform headers cannot truncate the records needed by the importer.
+		var layoutProcess = ProcessOutputCapture.capture(clang, base.concat(["-Xclang", "-fdump-record-layouts-complete", "-fsyntax-only", header]), null);
 		if (layoutProcess.exitCode != 0)
 			throw 'Clang could not calculate layouts for $header:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
 		var astText = astProcess.stdout,
@@ -77,7 +78,7 @@ class CHeaderImporter {
 		var excluded = [];
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
-				excluded.push(FileSystem.fullPath(excludedHeader));
+				excluded.push(pathKey(FileSystem.fullPath(excludedHeader)));
 		for (include in includes)
 			roots.push(FileSystem.fullPath(include));
 		var only:Null<Map<String, Bool>> = null;
@@ -191,7 +192,7 @@ class CHeaderImporter {
 		if (userDeclaration
 			&& selected
 			&& (only != null || isUserDeclaration(node, roots, currentFile))
-			&& excluded.indexOf(currentFile) < 0)
+			&& excluded.indexOf(pathKey(currentFile)) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
 		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
@@ -1029,18 +1030,31 @@ class CHeaderImporter {
 	static function parseLayouts(text:String):Map<String, CLayout> {
 		var result:Map<String, CLayout> = [],
 			current:String = null,
-			offsets:Map<String, Int> = [];
-		for (line in text.split("\n")) {
-			var record = ~/^\s*0 \| struct ([A-Za-z_][A-Za-z0-9_]*)$/;
+			offsets:Map<String, Int> = [],
+			size:Null<Int> = null,
+			align:Null<Int> = null;
+		for (rawLine in text.split("\n")) {
+			// Clang emits CRLF on Windows.  Keep the layout grammar independent
+			// of the host line ending so the record marker and size trailer are
+			// still parsed before they reach the HXI model.
+			var line = StringTools.endsWith(rawLine, "\r") ? rawLine.substring(0, rawLine.length - 1) : rawLine;
+			// A top-level record marker has exactly one space after the separator.
+			// Field lines are indented further; otherwise a by-value nested record
+			// field would replace the layout currently being collected.
+			var record = ~/^\s*0 \| (?:struct|class|union) ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (record.match(line)) {
 				current = record.matched(1);
 				offsets = [];
+				size = null;
+				align = null;
 				continue;
 			}
 			var anonymous = ~/^\s*0 \| (struct|union) .*:([0-9]+):([0-9]+)\)\s*$/;
 			if (anonymous.match(line)) {
 				current = anonymousLayoutKey(anonymous.matched(1), Std.parseInt(anonymous.matched(2)), Std.parseInt(anonymous.matched(3)));
 				offsets = [];
+				size = null;
+				align = null;
 				continue;
 			}
 			if (current == null)
@@ -1048,9 +1062,20 @@ class CHeaderImporter {
 			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (fieldLine.match(line) && !offsets.exists(fieldLine.matched(2)))
 				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
-			var end = ~/\[sizeof=([0-9]+), align=([0-9]+)\]/;
-			if (end.match(line)) {
-				result.set(current, {size: Std.parseInt(end.matched(1)), align: Std.parseInt(end.matched(2)), offsets: offsets});
+			var sizeValue = ~/sizeof=([0-9]+)/;
+			if (sizeValue.match(line))
+				size = Std.parseInt(sizeValue.matched(1));
+			var alignValue = ~/align=([0-9]+)/;
+			if (alignValue.match(line))
+				align = Std.parseInt(alignValue.matched(1));
+			var sizeLabel = ~/\bSize:\s*([0-9]+)/;
+			if (sizeLabel.match(line))
+				size = Std.parseInt(sizeLabel.matched(1));
+			var alignLabel = ~/\bAlignment:\s*([0-9]+)/;
+			if (alignLabel.match(line))
+				align = Std.parseInt(alignLabel.matched(1));
+			if (size != null && align != null) {
+				result.set(current, {size: size, align: align, offsets: offsets});
 				current = null;
 			}
 		}
@@ -1183,11 +1208,15 @@ class CHeaderImporter {
 		var location:Dynamic = field(node, "loc");
 		if (location == null)
 			return false;
+		currentFile = pathKey(currentFile);
 		for (root in roots)
-			if (currentFile == root || StringTools.startsWith(currentFile, root + "/"))
+			if (currentFile == pathKey(root) || StringTools.startsWith(currentFile, pathKey(root) + "/"))
 				return true;
 		return false;
 	}
+
+	static function pathKey(path:String):String
+		return StringTools.replace(path, "\\", "/");
 
 	static function declarationLocation(node:Dynamic):String {
 		var location:Dynamic = field(node, "loc"),

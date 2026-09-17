@@ -216,19 +216,25 @@ class CaptureAnalysis {
 	}
 
 	static function collectExceptionExpression(expression:AstExpression, visible:Map<String, Bool>, result:Map<String, Bool>):Void {
-		switch expression {
-			case BlockExpression(statements, value, _):
-				collectExceptionCellCandidates(statements, visible, result);
-				var inner:Map<String, Bool> = [for (name in visible.keys()) name => true];
-				for (statement in statements)
-					switch statement {
-						case VarDeclaration(name, _, _, _), UninitializedDeclaration(name, _, _): inner.set(name, true);
-						default:
-					}
-				collectExceptionExpression(value, inner, result);
-			default:
-				for (child in compiler.syntax.AstChildren.expressions(expression))
-					collectExceptionExpression(child, visible, result);
+		var pending = [{expression: expression, visible: visible}];
+		while (pending.length > 0) {
+			var current = pending.pop();
+			if (current == null)
+				continue;
+			switch current.expression {
+				case BlockExpression(statements, value, _):
+					collectExceptionCellCandidates(statements, current.visible, result);
+					var inner:Map<String, Bool> = [for (name in current.visible.keys()) name => true];
+					for (statement in statements)
+						switch statement {
+							case VarDeclaration(name, _, _, _), UninitializedDeclaration(name, _, _): inner.set(name, true);
+							default:
+						}
+					pending.push({expression: value, visible: inner});
+				default:
+					for (child in compiler.syntax.AstChildren.expressions(current.expression))
+						pending.push({expression: child, visible: current.visible});
+			}
 		}
 	}
 
@@ -265,9 +271,13 @@ class CaptureAnalysis {
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
 				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
 				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _), And(left, right, _), Or(left, right, _):
+				NotEqual(left, right, _):
 				collectMutableCaptureExpression(left, outerDeclared, result);
 				collectMutableCaptureExpression(right, outerDeclared, result);
+			case And(left, right, _):
+				collectMutableLogical(left, right, true, outerDeclared, result);
+			case Or(left, right, _):
+				collectMutableLogical(left, right, false, outerDeclared, result);
 			case Negate(value, _), Not(value, _):
 				collectMutableCaptureExpression(value, outerDeclared, result);
 			case New(_, arguments, _), NewGeneric(_, _, arguments, _):
@@ -328,7 +338,7 @@ class CaptureAnalysis {
 				collectMutableCaptureExpression(start, outerDeclared, result);
 				collectMutableCaptureExpression(rangeEnd, outerDeclared, result);
 			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
-				ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
+				EmptyExpression(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
 		}
 
 	public static function collectExpressionVariables(expression:AstExpression, names:Map<String, Bool>, writesOnly:Bool = false):Void
@@ -361,9 +371,10 @@ class CaptureAnalysis {
 				collectExpressionVariables(value, names, writesOnly);
 			case Not(value, _):
 				collectExpressionVariables(value, names, writesOnly);
-			case And(left, right, _), Or(left, right, _):
-				collectExpressionVariables(left, names, writesOnly);
-				collectExpressionVariables(right, names, writesOnly);
+			case And(left, right, _):
+				collectLogicalVariables(left, right, true, names, writesOnly);
+			case Or(left, right, _):
+				collectLogicalVariables(left, right, false, names, writesOnly);
 			case Conditional(predicate, whenTrue, whenFalse, _):
 				for (item in [predicate, whenTrue, whenFalse])
 					collectExpressionVariables(item, names, writesOnly);
@@ -434,9 +445,43 @@ class CaptureAnalysis {
 				return;
 			case StringLiteral(_, _):
 				return;
-			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _):
+			case BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_), ErrorExpression(_), NativeLayoutQuery(_, _, _, _):
 				return;
 		}
+
+	static function collectLogicalVariables(left:AstExpression, right:AstExpression, and:Bool, names:Map<String, Bool>, writesOnly:Bool):Void {
+		var pending:Array<AstExpression> = [right, left];
+		while (pending.length > 0) {
+			var current:AstExpression = cast pending.pop();
+			switch current {
+				case And(nestedLeft, nestedRight, _) if (and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				case Or(nestedLeft, nestedRight, _) if (!and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				default:
+					collectExpressionVariables(current, names, writesOnly);
+			}
+		}
+	}
+
+	static function collectMutableLogical(left:AstExpression, right:AstExpression, and:Bool, outerDeclared:Map<String, Bool>, result:Map<String, Bool>):Void {
+		var pending:Array<AstExpression> = [right, left];
+		while (pending.length > 0) {
+			var current:AstExpression = cast pending.pop();
+			switch current {
+				case And(nestedLeft, nestedRight, _) if (and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				case Or(nestedLeft, nestedRight, _) if (!and):
+					pending.push(nestedRight);
+					pending.push(nestedLeft);
+				default:
+					collectMutableCaptureExpression(current, outerDeclared, result);
+			}
+		}
+	}
 
 	static function pathRoot(name:String):String {
 		var separator = name.indexOf(".");

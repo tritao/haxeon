@@ -16,7 +16,9 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
+import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
+import haxe.Int64;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
@@ -77,7 +79,7 @@ class Parser {
 						advance();
 						enumAbstracts.push(parseEnumAbstract(start));
 					} else
-						enums.push(parseEnum(start));
+						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
 					interfaces.push(parseInterface());
 				else if (check(TokenKind.Class))
@@ -279,12 +281,13 @@ class Parser {
 		};
 	}
 
-	function parseEnum(start:SourceSpan):AstEnum {
+	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints), cases = [];
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseToken = consumeName(),
+			var caseMetadata = parseMetadata(),
+				caseToken = consumeName(),
 				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
@@ -306,7 +309,12 @@ class Parser {
 					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}
-			cases.push({name: caseToken.text, params: params, span: caseToken.span.merge(previous().span)});
+			cases.push({
+				name: caseToken.text,
+				metadata: caseMetadata,
+				params: params,
+				span: caseToken.span.merge(previous().span)
+			});
 			consume(TokenKind.Semicolon);
 		}
 		var end = consume(TokenKind.RightBrace).span;
@@ -314,6 +322,7 @@ class Parser {
 			name: name,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
+			metadata: metadata,
 			cases: cases,
 			span: start.merge(end)
 		};
@@ -683,7 +692,9 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var methods = [];
 		while (!check(TokenKind.RightBrace)) {
-			match(TokenKind.Public);
+			var methodMetadata = parseMetadata();
+			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))
+				advance();
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
@@ -710,7 +721,7 @@ class Parser {
 				name: methodName,
 				isStatic: false,
 				isExtern: false,
-				metadata: [],
+				metadata: methodMetadata,
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,
 				arguments: arguments,
@@ -876,7 +887,7 @@ class Parser {
 					bindings = stabilized.bindings;
 				}
 				var operationSpan = expressionSpan(target).merge(expressionSpan(value)),
-					assigned = switch assignmentKind {
+					assigned:AstExpression = switch assignmentKind {
 						case 0: value;
 						case 1: Add(target, value, operationSpan);
 						case 2: Sub(target, value, operationSpan);
@@ -967,17 +978,13 @@ class Parser {
 	}
 
 	function parseAnonymousFunctionBody():Array<AstStatement> {
-		if (!check(TokenKind.LeftBrace) && match(TokenKind.Return)) {
-			var start = previous().span, value = parseExpression();
-			match(TokenKind.Semicolon);
-			return [Return(value, start.merge(expressionSpan(value)))];
-		}
-		if (!check(TokenKind.LeftBrace)) {
-			var value = parseExpression();
-			match(TokenKind.Semicolon);
-			return [Expression(value, expressionSpan(value))];
-		}
-		return parseStatementOrBlock();
+		if (check(TokenKind.LeftBrace))
+			return parseStatementOrBlock();
+		var start = current().span;
+		match(TokenKind.Return);
+		var value = parseExpression();
+		match(TokenKind.Semicolon);
+		return [Return(value, start.merge(expressionSpan(value)))];
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
@@ -1030,18 +1037,11 @@ class Parser {
 			target.push(statement);
 
 	function parseExpression():AstExpression {
-		var expression = parseOr();
-		if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot) {
-			advance();
-			advance();
-			advance();
-			var end = parseOr();
-			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
-		}
+		var expression = parseNullCoalesce();
 		if (match(TokenKind.Question)) {
-			var whenTrue = parseExpression();
+			var whenTrue = parseExpressionBranch();
 			consume(TokenKind.Colon);
-			var whenFalse = parseExpression();
+			var whenFalse = parseExpressionBranch();
 			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
 		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
@@ -1052,6 +1052,26 @@ class Parser {
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
 				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
 			};
+		}
+		return expression;
+	}
+
+	function parseNullCoalesce():AstExpression {
+		var expression = parseOr();
+		if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot) {
+			advance();
+			advance();
+			advance();
+			var end = parseOr();
+			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
+		}
+		if (match(TokenKind.NullCoalesce)) {
+			var fallback = parseNullCoalesce(),
+				span = expressionSpan(expression).merge(expressionSpan(fallback)),
+				localName = '$' + 'null-coalesce:${span.start}',
+				local = Variable(localName, expressionSpan(expression));
+			return BlockExpression([VarDeclaration(localName, null, expression, expressionSpan(expression))],
+				Conditional(Equal(local, NullLiteral(expressionSpan(local)), expressionSpan(local)), fallback, local, span), span);
 		}
 		return expression;
 	}
@@ -1250,7 +1270,12 @@ class Parser {
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
 		}
 		if (match(TokenKind.Minus)) {
-			var start = previous().span, value = parsePrimary();
+			var start = previous().span;
+			if (match(TokenKind.Integer)) {
+				var token = previous(), value = parseIntegerToken(token, true);
+				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
+			}
+			var value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Not)) {
@@ -1261,8 +1286,10 @@ class Parser {
 			var start = previous().span, value = parsePrimary();
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
-		if (match(TokenKind.Integer))
-			return parsePostfix(IntegerLiteral(Std.parseInt(previous().text), previous().span));
+		if (match(TokenKind.Integer)) {
+			var token = previous();
+			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
+		}
 		if (match(TokenKind.Float))
 			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
 		if (match(TokenKind.StringLiteral))
@@ -1571,12 +1598,23 @@ class Parser {
 	}
 
 	function parseExpressionBranch():AstExpression {
-		if (!match(TokenKind.LeftBrace))
+		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
+		advance();
 		var start = previous().span, statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
+				continue;
+			}
+			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+				var result = parseExpressionBranch();
+				match(TokenKind.Semicolon);
+				if (check(TokenKind.RightBrace)) {
+					var end = consume(TokenKind.RightBrace).span;
+					return BlockExpression(statements, result, start.merge(end));
+				}
+				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
 			var saved = position, candidate = tryParseExpression();
@@ -1587,14 +1625,11 @@ class Parser {
 			position = saved;
 			appendStatements(statements, parseStatements());
 		}
-		if (statements.length > 0)
-			switch statements[statements.length - 1] {
-				case Expression(result, _):
-					statements.pop();
-					var end = consume(TokenKind.RightBrace).span;
-					return BlockExpression(statements, result, start.merge(end));
-				default:
-			}
+		var trailing = trailingBlockResult(statements);
+		if (trailing != null) {
+			var end = consume(TokenKind.RightBrace).span;
+			return BlockExpression(trailing.statements, trailing.result, start.merge(end));
+		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));
@@ -1603,6 +1638,32 @@ class Parser {
 		fail(current(), "Expression block requires a result expression");
 		return null;
 	}
+
+	static function trailingBlockResult(statements:Array<AstStatement>):Null<{statements:Array<AstStatement>, result:AstExpression}> {
+		if (statements.length == 0)
+			return null;
+		var last = statements[statements.length - 1],
+			prefix = statements.slice(0, statements.length - 1);
+		return switch last {
+			case AstStatement.Expression(result, _): {statements: prefix, result: result};
+			case AstStatement.If(predicate, whenTrue, whenFalse, span):
+				if (whenFalse.length == 0)
+					return null;
+				var trueResult = trailingBlockResult(whenTrue),
+					falseResult = trailingBlockResult(whenFalse);
+				if (trueResult == null || falseResult == null)
+					return null;
+				{
+					statements: prefix,
+					result: Conditional(predicate, blockResultExpression(trueResult), blockResultExpression(falseResult), span)
+				};
+			case _: null;
+		};
+	}
+
+	static function blockResultExpression(block:{statements:Array<AstStatement>, result:AstExpression}):AstExpression
+		return block.statements.length == 0 ? block.result : BlockExpression(block.statements, block.result,
+			statementSpan(block.statements[0]).merge(expressionSpan(block.result)));
 
 	function parseSwitchExpression(start:SourceSpan):AstExpression {
 		var subject:AstExpression;
@@ -1648,6 +1709,20 @@ class Parser {
 				var values = expandPatternAlternatives(left);
 				appendExpressions(values, expandPatternAlternatives(right));
 				values;
+			case ArrayLiteral(elements, span):
+				var combinations:Array<Array<AstExpression>> = [[]];
+				for (element in elements) {
+					var expanded = expandPatternAlternatives(element),
+						next:Array<Array<AstExpression>> = [];
+					for (combination in combinations)
+						for (alternative in expanded) {
+							var copy = combination.copy();
+							copy.push(alternative);
+							next.push(copy);
+						}
+					combinations = next;
+				}
+				[for (combination in combinations) ArrayLiteral(combination, span)];
 			case Call(name, arguments, span):
 				expandCallPattern(name, arguments, span);
 			case _: [pattern];
@@ -1706,23 +1781,26 @@ class Parser {
 	}
 
 	function parseSwitchExpressionBranch():AstExpression {
+		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseExpressionBranch();
 		var statements = [], start = current().span;
 		while (true) {
-			if (atSwitchBranchEnd() && statements.length > 0) {
-				var last = statements[statements.length - 1];
-				switch last {
-					case Expression(result, _):
-						statements.pop();
-						return BlockExpression(statements, result, start.merge(expressionSpan(result)));
-					default:
-						if (statementTerminates(last)) {
-							var end = statementSpan(last);
-							return BlockExpression(statements, Unreachable(end), start.merge(end));
-						}
-				}
+			if (atSwitchBranchEnd() && statements.length == 0)
+				return EmptyExpression(start.merge(current().span));
+			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
+				var end = statementSpan(statements[statements.length - 1]);
+				return BlockExpression(statements, Unreachable(end), start.merge(end));
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
+				continue;
+			}
+			if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)) {
+				var result = parseExpressionBranch();
+				match(TokenKind.Semicolon);
+				if (atSwitchBranchEnd())
+					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
 			var saved = position, result = tryParseExpression();
@@ -1862,6 +1940,9 @@ class Parser {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
 				var optional = false;
+				for (metadata in parseMetadata())
+					if (metadata.name == "optional")
+						optional = true;
 				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var) || check(TokenKind.At))
 					if (match(TokenKind.Question)) {
 						if (optional)
@@ -2088,11 +2169,53 @@ class Parser {
 	function fail(token:Token, message:String):Void
 		throw new CompileError(new Diagnostic("E0002", message, token.span));
 
+	function parseIntegerToken(token:Token, negative:Bool = false):Int {
+		var hexadecimal = isHexIntegerToken(token),
+			limit = hexadecimal ? Int64.parseString(negative ? "2147483648" : "4294967295") : Int64.parseString(negative ? "2147483648" : "2147483647"),
+			magnitude = parseIntegerMagnitude(token);
+		if (Int64.compare(magnitude, limit) > 0)
+			fail(token,
+				'Integer literal "${negative ? "-" : ""}${token.text}" is outside the ${hexadecimal && !negative ? "unsigned" : "signed"} 32-bit range');
+		var signed = negative ? Int64.sub(Int64.ofInt(0), magnitude) : magnitude;
+		if (hexadecimal && !negative && Int64.compare(signed, Int64.parseString("2147483647")) > 0)
+			signed = Int64.sub(signed, Int64.parseString("4294967296"));
+		return Int64.toInt(signed);
+	}
+
+	static function isHexIntegerToken(token:Token):Bool
+		return StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X");
+
+	function parseIntegerMagnitude(token:Token):Int64 {
+		if (isHexIntegerToken(token)) {
+			var value = Int64.ofInt(0);
+			for (index in 2...token.text.length) {
+				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
+					fail(token, 'Integer literal "${token.text}" is outside the supported range');
+				var code = token.text.charCodeAt(index),
+					digit = code >= "0".code
+						&& code <= "9".code ? code - "0".code : code >= "A".code
+							&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+				value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
+			}
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
+		}
+		try {
+			var value = Int64.parseString(token.text);
+			if (Int64.compare(value, Int64.ofInt(0)) < 0)
+				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			return value;
+		} catch (_:Dynamic) {
+			throw new CompileError(new Diagnostic("E0002", 'Integer literal "${token.text}" is outside the supported range', token.span));
+		}
+	}
+
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
-				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
-				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
+				EmptyExpression(span), ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span),
+				Div(_, _, span), Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),

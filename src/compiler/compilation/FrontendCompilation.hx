@@ -94,6 +94,7 @@ class FrontendCompilation {
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget());
 			typedNew = typedResult.program;
+			IrGenerator.bindEnumConstructors(typedNew.enums);
 			typerMetrics = typedResult.metrics;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics);

@@ -10,8 +10,31 @@ import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;
 import sys.io.File;
 
+@:access(compiler.ffi.CHeaderImporter)
 class CHeaderImporterMain {
 	static function main():Void {
+		var windowsLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\r\n"
+			+ "         0 | struct sample_options\r\n"
+			+ "         0 |   uint32_t struct_size\r\n"
+			+ "         8 |   const char * title\r\n"
+			+ "        16 |   uint64_t reserved[2]\r\n"
+			+ "           | [sizeof=32, dsize=32, align=8, nvsize=32, nvalign=8]\r\n")
+			.get("sample_options");
+		expect(windowsLayout != null && windowsLayout.size == 32 && windowsLayout.align == 8 && windowsLayout.offsets.get("title") == 8,
+			"record layout parser should accept Clang's Windows CRLF output");
+		var labeledLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\n" + "         0 | class sample_class\n"
+			+ "         0 |   uint32_t value\n" + "           | Size:32\n" + "           | Alignment:8\n")
+			.get("sample_class");
+		expect(labeledLayout != null && labeledLayout.size == 32 && labeledLayout.align == 8 && labeledLayout.offsets.get("value") == 0,
+			"record layout parser should accept labeled Clang size and alignment trailers");
+		var nestedLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\n" + "         0 | struct sample_parent\n"
+			+ "         0 |   struct sample_child child\n" + "         8 |   uint32_t value\n" + "           | [sizeof=16, align=8]\n");
+		expect(nestedLayout.get("sample_parent") != null
+			&& nestedLayout.get("sample_parent").size == 16
+			&& nestedLayout.get("sample_child") == null,
+			"record layout parser should not treat indented nested records as top-level layouts");
+		expect(CHeaderImporter.isUserDeclaration({loc: {}}, ["D:/project/include"], "D:\\project\\include\\fixture.h"),
+			"C header declaration filtering should normalize Windows path separators");
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);

@@ -115,10 +115,12 @@ class ProgramTyper {
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
+					metadata: enumDecl.metadata,
 					cases: [
 						for (caseDecl in enumDecl.cases)
 							{
 								name: caseDecl.name,
+								metadata: caseDecl.metadata,
 								params: [for (param in caseDecl.params) bodyTyper.erasedEnumParameter(enumDecl, param)],
 								span: caseDecl.span
 							}
@@ -192,6 +194,8 @@ class ProgramTyper {
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
+		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
+			typedFunctions.push(codec);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		semantic.lifecycle.advanceAll(BodyTyped);
@@ -260,9 +264,7 @@ class ProgramTyper {
 		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
-			erasedSubstitutions:Map<String, CompilerType> = [];
-		for (parameter in classDecl.typeParameters)
-			erasedSubstitutions.set(parameter, TDynamic);
+			erasedSubstitutions = session.representation.erasedNominalSubstitutions(classDecl.name);
 		for (field in classDecl.fields) {
 			var nativeArrayLength:Null<Int> = try NativeLayout.fixedArrayLength(field.metadata) catch (error:Dynamic) {
 				BodyTyper.fail("E1022", Std.string(error), field.span);
@@ -282,7 +284,7 @@ class ProgramTyper {
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-			var type = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
@@ -315,6 +317,7 @@ class ProgramTyper {
 			fieldNames.set(field.name, true);
 			fields.push({
 				name: field.name,
+				metadata: field.metadata,
 				type: type,
 				nativeArrayLength: nativeArrayLength,
 				nativeOffset: nativeOffset,
@@ -417,15 +420,12 @@ class ProgramTyper {
 		}
 		return [
 			for (classDecl in classes) {
-				var nativeLayouts:Array<TypedNativeLayout> = [];
-				if (classDecl.isNativeValue) for (target in targets) {
-					var targetLayouts:Map<String, TypedNativeLayout> = cast layoutsByTarget.get(target);
-					nativeLayouts.push(cast targetLayouts.get(classDecl.name));
-				}
-				if (classDecl.isNativeValue) {
-					var selectedLayouts:Map<String, TypedNativeLayout> = cast layoutsByTarget.get(session.nativeAbiTarget);
-					session.nativeLayoutsByName.set(classDecl.name, cast selectedLayouts.get(classDecl.name));
-				}
+				var nativeLayouts:Array<TypedNativeLayout> = classDecl.isNativeValue ? [
+					for (target in targets)
+						requiredNativeLayout(layoutsByTarget, target, classDecl.name)
+				] : [];
+				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name,
+					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
 				{
 					name: classDecl.name,
 					isValue: classDecl.isValue,
@@ -442,6 +442,16 @@ class ProgramTyper {
 				}
 			}
 		];
+	}
+
+	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String, name:String):TypedNativeLayout {
+		var layouts = layoutsByTarget.get(target);
+		if (layouts == null)
+			throw 'Missing native layout target "$target"';
+		var layout = layouts.get(name);
+		if (layout == null)
+			throw 'Missing native layout for "$name" on target "$target"';
+		return layout;
 	}
 
 	function computeNativeLayout(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
@@ -491,17 +501,16 @@ class ProgramTyper {
 				if (arguments.length != 0)
 					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
 				var nested = computeNativeLayout(name, target, classes, layouts, visiting),
-					nestedClass:TypedClass = cast classes.get(name);
+					nestedClass = classes.get(name);
+				if (nestedClass == null)
+					throw 'Missing native value record "$name"';
 				result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 			case _:
 		}
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
-		var substitutions:Map<String, CompilerType> = [];
-		for (parameter in declaration.typeParameters)
-			substitutions.set(parameter, TDynamic);
-		return session.declarations.resolve(type, span, substitutions);
+		return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
 	}
 
 	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
@@ -621,7 +630,7 @@ class ProgramTyper {
 		if (!session.interfaceDecls.exists(interfaceName))
 			return;
 		var interfaceDecl = session.interfaceDecls.get(interfaceName),
-			interfaceSubstitutions = bodyTyper.nominalSubstitutions(interfaceInstance);
+			interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceInstance);
 		for (baseType in interfaceDecl.bases) {
 			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = BodyTyper.inheritanceName(baseType);

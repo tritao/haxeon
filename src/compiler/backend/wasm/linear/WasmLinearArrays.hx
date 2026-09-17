@@ -11,6 +11,34 @@ import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmBackend;
 
 class WasmLinearArrays {
+	static function arrayLoad(elementType:WasmValueType, offset:Int):WasmInstruction
+		return switch elementType {
+			case F64: F64Load(offset);
+			case I64: I64Load(offset);
+			default: I32Load(offset);
+		};
+
+	static function arrayStore(elementType:WasmValueType, offset:Int):WasmInstruction
+		return switch elementType {
+			case F64: F64Store(offset);
+			case I64: I64Store(offset);
+			default: I32Store(offset);
+		};
+
+	static function arrayEqual(elementType:WasmValueType):WasmInstruction
+		return switch elementType {
+			case F64: F64Eq;
+			case I64: I64Eq;
+			default: I32Eq;
+		};
+
+	static function arrayZero(elementType:WasmValueType):WasmInstruction
+		return switch elementType {
+			case F64: F64Const(0.0);
+			case I64: I64Const(0);
+			default: I32Const(0);
+		};
+
 	public static function registerNativeAllocators(context:WasmLinearContext):Void {
 		for (native in context.program.natives) {
 			var stride = arrayStrideForNative(native.name);
@@ -132,8 +160,7 @@ class WasmLinearArrays {
 	}
 
 	public static function addArrayIndexOf(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
-		var stringEqualFunction:Int = stringEqual == null ? -1 : cast stringEqual,
-			compare:WasmInstruction = elementType == F64 ? F64Eq : I32Eq;
+		var compare = stringEqual == null ? arrayEqual(elementType) : null;
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
 			searched = builder.parameter("searched", 1),
@@ -156,9 +183,9 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
+					builder.emit(arrayLoad(elementType, 0));
 					builder.localGet(searched);
-					builder.emit(stringEqualFunction < 0 ? compare : Call(stringEqualFunction));
+					builder.emit(stringEqual == null ? compare : Call(stringEqual));
 					builder.if_(function(builder) {
 						builder.localGet(index);
 						builder.localSet(foundIndex);
@@ -431,7 +458,7 @@ class WasmLinearArrays {
 		builder.emit(I32Mul);
 		builder.i32Add();
 		builder.localGet(value);
-		builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+		builder.emit(arrayStore(elementType, 0));
 		builder.localGet(array);
 		builder.localGet(length);
 		builder.i32Const(1);
@@ -466,7 +493,7 @@ class WasmLinearArrays {
 			builder.i32Const(stride);
 			builder.emit(I32Mul);
 			builder.i32Add();
-			builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
+			builder.emit(arrayLoad(elementType, 0));
 			builder.localSet(value);
 			builder.localGet(array);
 			builder.localGet(index);
@@ -558,8 +585,8 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
-					builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+					builder.emit(arrayLoad(elementType, 0));
+					builder.emit(arrayStore(elementType, 0));
 					builder.emit(Br(1));
 				}, function(builder) builder.emit(Br(2)));
 			});
@@ -567,7 +594,7 @@ class WasmLinearArrays {
 		builder.localGet(array);
 		builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 		builder.localGet(value);
-		builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+		builder.emit(arrayStore(elementType, 0));
 		builder.localGet(array);
 		builder.localGet(length);
 		builder.i32Const(1);
@@ -679,8 +706,8 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
-					builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+					builder.emit(arrayLoad(elementType, 0));
+					builder.emit(arrayStore(elementType, 0));
 					builder.emit(Br(1));
 				}, function(builder) builder.emit(Br(2)));
 			});
@@ -692,7 +719,7 @@ class WasmLinearArrays {
 		builder.emit(I32Mul);
 		builder.i32Add();
 		builder.localGet(value);
-		builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+		builder.emit(arrayStore(elementType, 0));
 		builder.localGet(array);
 		builder.localGet(length);
 		builder.i32Const(1);
@@ -716,7 +743,7 @@ class WasmLinearArrays {
 		builder.ifElse(function(builder) {
 			builder.localGet(array);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
-			builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
+			builder.emit(arrayLoad(elementType, 0));
 			builder.localSet(value);
 			builder.i32Const(1);
 			builder.localSet(index);
@@ -740,8 +767,8 @@ class WasmLinearArrays {
 						builder.i32Const(stride);
 						builder.emit(I32Mul);
 						builder.i32Add();
-						builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
-						builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+						builder.emit(arrayLoad(elementType, 0));
+						builder.emit(arrayStore(elementType, 0));
 						builder.localGet(index);
 						builder.i32Const(1);
 						builder.i32Add();
@@ -797,8 +824,8 @@ class WasmLinearArrays {
 							builder.i32Const(stride);
 							builder.emit(I32Mul);
 							builder.i32Add();
-							builder.emit(elementType == F64 ? F64Const(0.0) : I32Const(0));
-							builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+							builder.emit(arrayZero(elementType));
+							builder.emit(arrayStore(elementType, 0));
 							builder.localGet(cursor);
 							builder.i32Const(1);
 							builder.i32Add();
@@ -854,13 +881,8 @@ class WasmLinearArrays {
 	}
 
 	public static function addArrayRemove(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
-		var stringEqualFunction:Int = stringEqual == null ? -1 : cast stringEqual,
-			compare:WasmInstruction = elementType == F64 ? F64Eq : I32Eq,
-			builder = new WasmFunctionBuilder(name,
-				{
-					parameters: [I32, elementType],
-					results: [I32]
-				}),
+		var compare = stringEqual == null ? arrayEqual(elementType) : null,
+			builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
 			searched = builder.parameter("searched", 1),
 			length = builder.local("length", I32),
@@ -885,9 +907,9 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
+					builder.emit(arrayLoad(elementType, 0));
 					builder.localGet(searched);
-					builder.emit(stringEqualFunction < 0 ? compare : Call(stringEqualFunction));
+					builder.emit(stringEqual == null ? compare : Call(stringEqual));
 					builder.if_(function(builder) {
 						builder.localGet(index);
 						builder.localSet(foundIndex);
@@ -929,8 +951,8 @@ class WasmLinearArrays {
 						builder.i32Const(stride);
 						builder.emit(I32Mul);
 						builder.i32Add();
-						builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
-						builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+						builder.emit(arrayLoad(elementType, 0));
+						builder.emit(arrayStore(elementType, 0));
 						builder.localGet(index);
 						builder.i32Const(1);
 						builder.i32Add();
@@ -983,7 +1005,7 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
+					builder.emit(arrayLoad(elementType, 0));
 					builder.localSet(temporary);
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
@@ -997,8 +1019,8 @@ class WasmLinearArrays {
 					builder.i32Const(stride);
 					builder.emit(I32Mul);
 					builder.i32Add();
-					builder.emit(elementType == F64 ? F64Load(0) : I32Load(0));
-					builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+					builder.emit(arrayLoad(elementType, 0));
+					builder.emit(arrayStore(elementType, 0));
 					builder.localGet(array);
 					builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 					builder.localGet(right);
@@ -1006,7 +1028,7 @@ class WasmLinearArrays {
 					builder.emit(I32Mul);
 					builder.i32Add();
 					builder.localGet(temporary);
-					builder.emit(elementType == F64 ? F64Store(0) : I32Store(0));
+					builder.emit(arrayStore(elementType, 0));
 					builder.localGet(left);
 					builder.i32Const(1);
 					builder.i32Add();
@@ -1183,7 +1205,10 @@ class WasmLinearArrays {
 			Call(allocator),
 			LocalSet(3)
 		];
-		if (name == "__array_alloc_i32" || name == "__array_alloc_bool" || name == "__array_alloc_f64")
+		if (name == "__array_alloc_i32"
+			|| name == "__array_alloc_i64"
+			|| name == "__array_alloc_bool"
+			|| name == "__array_alloc_f64")
 			body = body.concat([
 				LocalGet(3),
 				I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
@@ -1214,7 +1239,7 @@ class WasmLinearArrays {
 
 	public static function arrayStrideForNative(name:String):Null<Int>
 		return switch name {
-			case "__array_alloc_f64": 8;
+			case "__array_alloc_f64", "__array_alloc_i64": 8;
 			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_ref", "__array_alloc_bytes": 4;
 			default: null;
 		};

@@ -6,8 +6,8 @@ import compiler.syntax.Ast;
 class AstChildren {
 	public static function expressions(expression:AstExpression):Array<AstExpression>
 		return switch expression {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_),
-				Variable(_, _), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _), Lambda(_, _, _): [];
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
+				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _), Lambda(_, _, _): [];
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _): [value];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),

@@ -85,6 +85,15 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-messagepack-enum-map.wasm --entry=wasm-messagepack-enum-map \
+	--root=tests/programs tests/programs/wasm-messagepack-enum-map.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
+	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
+	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -126,6 +135,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-strings.wasm --entry=wasm-gc-strings \
 	--root=tests/programs tests/programs/wasm-gc-strings.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
+	--root=tests/programs tests/programs/wasm-string-split.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
@@ -182,6 +194,9 @@ const cases = [
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
+	["out/wasm-cli-messagepack-enum-map.wasm", 42],
+	["out/wasm-cli-messagepack-wire.wasm", 42],
+	["out/wasm-gc-cli-messagepack-wire.wasm", 42],
 	["out/wasm-cli-cnative-import.wasm", 42],
 	["out/wasm-cli-wasm32-bytes-view.wasm", 42],
 	["out/wasm-cli-hxi-retained.wasm", 42],
@@ -208,6 +223,7 @@ const cases = [
 	["out/wasm-cli-gc-exceptions.wasm", 42],
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
+	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
@@ -400,6 +416,16 @@ const cases = [
           const view = new DataView(retainedMemory().buffer);
           return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
         },
+        retained_check_label: pointer => {
+          const buffer = retainedMemory().buffer;
+          const view = new DataView(buffer);
+          const bytes = new Uint8Array(buffer);
+          const address = view.getUint32(pointer, true);
+          let end = address;
+          while (bytes[end] !== 0)
+            end++;
+          return new TextDecoder().decode(bytes.subarray(address, end)) === "retained-42" ? 42 : 0;
+        },
         retained_check_options: pointer => validOptions(pointer) ? 42 : 0,
         retained_check_paths: (paths, count) => {
           const buffer = retainedMemory().buffer;
@@ -431,11 +457,12 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      const messagePackWire = relative.endsWith("wasm-gc-cli-messagepack-wire.wasm");
       const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
         || relative.endsWith("wasm-gc-cli-ryu-source.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !staticDataRuntime && hasMemory)
+          || (!ffiBytes && !shortStruct && !messagePackWire && !staticDataRuntime && hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)

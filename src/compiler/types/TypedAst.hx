@@ -9,11 +9,21 @@ class TypedExpression {
 	public final expression:TypedExpressionKind;
 	public final type:CompilerType;
 	public final span:SourceSpan;
+	public final stableFlowValue:Bool;
 
-	public function new(expression, type, span) {
+	/** Map whose keys are represented by this array, when the value originated from Map.keys(). */
+	public final mapKeySource:Null<TypedExpression>;
+
+	/** Declared storage type for a captured value whose flow type may be narrowed. */
+	public final storageType:Null<CompilerType>;
+
+	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType) {
 		this.expression = expression;
 		this.type = type;
 		this.span = span;
+		this.stableFlowValue = stableFlowValue;
+		this.mapKeySource = mapKeySource;
+		this.storageType = storageType;
 	}
 }
 
@@ -26,8 +36,11 @@ enum TypedExpressionKind {
 	TBoolLiteral(value:Bool);
 	TEnumLiteral(name:String, index:Int);
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
+	TEnumIndex(value:TypedExpression);
+	TEnumField(value:TypedExpression, constructor:Int, field:Int);
 	TNullLiteral;
 	TUnreachable;
+	TVoidLiteral;
 	TNullableWrap(value:TypedExpression);
 	TIntToFloat(value:TypedExpression);
 	TIntToInt64(value:TypedExpression);
@@ -116,6 +129,8 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+	final arrayPattern:Null<TypedSwitchArrayPattern>;
+	final span:SourceSpan;
 
 	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
 	final isCatchAll:Bool;
@@ -160,6 +175,7 @@ enum TypedStatement {
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
 	final subjectBinding:Null<String>;
+	final arrayPattern:Null<TypedSwitchArrayPattern>;
 
 	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
 	final isCatchAll:Bool;
@@ -173,6 +189,20 @@ typedef TypedSwitchCase = {
 	final span:SourceSpan;
 }
 
+/** Fixed-length array pattern used by a switch arm, including nested enum patterns. */
+typedef TypedSwitchArrayPattern = {final elements:Array<TypedSwitchArrayElement>;}
+
+/** One typed element constraint or binding in a fixed-length array pattern. */
+typedef TypedSwitchArrayElement = {
+	final type:CompilerType;
+	final value:Null<TypedExpression>;
+	final subjectBinding:Null<String>;
+	final isCatchAll:Bool;
+	final constructorIndex:Int;
+	final bindings:Array<TypedSwitchBinding>;
+	final predicates:Array<TypedSwitchPredicate>;
+}
+
 /** Local binding introduced for one enum-constructor payload position. */
 typedef TypedSwitchBinding = {
 	final name:String;
@@ -181,7 +211,14 @@ typedef TypedSwitchBinding = {
 	final fieldStorageType:CompilerType;
 	final index:Int;
 	final arrayIndex:Int;
+	final ?nestedPath:Array<TypedSwitchFieldAccess>;
 }
+
+/** One enum payload field traversed while matching a nested constructor pattern. */
+typedef TypedSwitchFieldAccess = {final constructorIndex:Int; final fieldIndex:Int; final storageType:CompilerType;}
+
+/** One anonymous-object field traversed while matching an enum payload pattern. */
+typedef TypedSwitchObjectFieldAccess = {final name:String; final storageType:CompilerType;}
 
 /** Constant or structural constraint applied to one enum payload position. */
 typedef TypedSwitchPredicate = {
@@ -192,16 +229,38 @@ typedef TypedSwitchPredicate = {
 	final fieldStorageType:CompilerType;
 	final index:Int;
 	final arrayIndex:Int;
+	final ?nestedPath:Array<TypedSwitchFieldAccess>;
+	final ?objectPath:Array<TypedSwitchObjectFieldAccess>;
+	final ?nestedConstructorIndex:Int;
+}
+
+/** Minimal typed information needed to prove constructor coverage across switch arms. */
+typedef TypedSwitchCoverageCase = {
+	final constructorIndex:Int;
+	final subjectBinding:Null<String>;
+	final isCatchAll:Bool;
+	final guard:Null<TypedExpression>;
+	final predicates:Array<TypedSwitchPredicate>;
 }
 
 /** Resolved catch arm ready for IR exception lowering. */
 typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
 
 /** Resolved enum-constructor signature. */
-typedef TypedEnumCase = {final name:String; final params:Array<CompilerType>; final span:SourceSpan;}
+typedef TypedEnumCase = {
+	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
+	final params:Array<CompilerType>;
+	final span:SourceSpan;
+}
 
 /** Type-checked enum declaration. */
-typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final span:SourceSpan;}
+typedef TypedEnum = {
+	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
+	final cases:Array<TypedEnumCase>;
+	final span:SourceSpan;
+}
 
 /**
  * Fully typed function or method body.
@@ -227,6 +286,7 @@ typedef TypedFunction = {
 /** Class field after annotation inference and initializer type checking. */
 typedef TypedField = {
 	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
 	final type:CompilerType;
 
 	/** Number of inline native array elements, or null for a scalar field. */
@@ -318,6 +378,7 @@ typedef TypedCapture = {
 	final field:String;
 	final bindingId:String;
 	final type:CompilerType;
+	final storageType:CompilerType;
 	final source:TypedCaptureSource;
 }
 

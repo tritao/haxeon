@@ -567,6 +567,10 @@ class WasmEncoder {
 					output.writeByte(0xa7);
 				case I32TruncF64S:
 					output.writeByte(0xaa);
+				case I32ReinterpretF32:
+					output.writeByte(0xbc);
+				case F32ReinterpretI32:
+					output.writeByte(0xbe);
 				case I64ReinterpretF64:
 					output.writeByte(0xbd);
 				case F64ReinterpretI64:

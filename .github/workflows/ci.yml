@@ -7,13 +7,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs gdb autoconf automake libtool libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Set up Node.js runtime
@@ -51,10 +51,9 @@ jobs:
 
   linux-arm64:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 90
     env:
-      # The pinned Linux Haxe release is x86-64 and runs through QEMU here;
-      # keep compiler fan-out below the emulated runner's CPU capacity.
+      # Keep compiler fan-out bounded on the shared ARM runner.
       TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +62,7 @@ jobs:
       - name: Verify ARM64 runner
         run: test "$(uname -m)" = aarch64
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs gdb qemu-user libc6-amd64-cross autoconf automake libtool libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
@@ -77,7 +76,7 @@ jobs:
 
   windows:
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -106,13 +105,16 @@ jobs:
 
   macos:
     runs-on: macos-15-intel
-    timeout-minutes: 30
+    timeout-minutes: 60
+    env:
+      # Keep compiler fan-out bounded on the shared Intel runner.
+      TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: brew install cmake ninja node autoconf automake libtool
+        run: brew install cmake ninja node ripgrep autoconf automake libtool
       - name: Bootstrap pinned tools and native runtime
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates
@@ -124,7 +126,10 @@ jobs:
 
   macos-arm64:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
+    env:
+      # Keep compiler fan-out bounded on the shared Apple Silicon runner.
+      TEST_JOBS: 4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -132,7 +137,7 @@ jobs:
       - name: Verify Apple Silicon runner
         run: test "$(uname -m)" = arm64
       - name: Install build dependencies
-        run: brew install cmake ninja node autoconf automake libtool
+        run: brew install cmake ninja node ripgrep autoconf automake libtool
       - name: Bootstrap pinned tools and native runtime
         run: ./scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates

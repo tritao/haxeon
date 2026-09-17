@@ -54,6 +54,21 @@ function allocationBurst(count:Int):Int {
 	return 42;
 }
 
+function returnRootPassthrough(value:GcRootProbe):GcRootProbe {
+	// The returned reference is live at the allocation safepoint even though
+	// the terminator is its only use in this function.
+	var transient = new GcRootProbe();
+	transient.value = 1;
+	return value;
+}
+
+function returnRootExercise():Int {
+	var value = new GcRootProbe();
+	value.value = 42;
+	var returned = returnRootPassthrough(value);
+	return returned.value;
+}
+
 function growBeyondInitialMemory():Int {
 	var values = new Array<Int>(20000);
 	return values.length;

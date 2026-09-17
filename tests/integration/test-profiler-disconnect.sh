@@ -9,7 +9,12 @@ target="$root/out/profiler-disconnect-target.hl"
 temp_dir=$(mktemp -d /tmp/haxeon-profiler-disconnect-XXXXXX)
 runtime_pid=
 client_pid=
+client_timeout_pid=
 cleanup() {
+	if [[ -n "$client_timeout_pid" ]]; then
+		kill "$client_timeout_pid" 2>/dev/null || true
+		wait "$client_timeout_pid" 2>/dev/null || true
+	fi
 	if [[ -n "$client_pid" ]]; then
 		kill "$client_pid" 2>/dev/null || true
 		wait "$client_pid" 2>/dev/null || true
@@ -23,18 +28,30 @@ cleanup() {
 trap cleanup EXIT
 
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
-export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+	export DYLD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+else
+	export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 "$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-disconnect-target.hxml"
 
-timeout 15 "$client" --connect-timeout 5 --rate 100 --interval 10000 --output "$temp_dir/capture.hlpc" "$port" \
+"$client" --connect-timeout 5 --rate 100 --interval 10000 --output "$temp_dir/capture.hlpc" "$port" \
 	>"$temp_dir/client.log" 2>&1 &
 client_pid=$!
+(
+	sleep 15
+	kill "$client_pid" 2>/dev/null || true
+) &
+client_timeout_pid=$!
 sleep 0.2
 "$runtime" --diagnostics "$port" --diagnostics-wait "$target" >"$temp_dir/runtime.log" 2>&1 &
 runtime_pid=$!
 
 wait "$runtime_pid"
 runtime_pid=
+kill "$client_timeout_pid" 2>/dev/null || true
+wait "$client_timeout_pid" 2>/dev/null || true
+client_timeout_pid=
 wait "$client_pid"
 client_pid=
 rg -q '^started$' "$temp_dir/runtime.log"

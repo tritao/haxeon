@@ -19,6 +19,9 @@ class ResolvedPackageGraph {
 	public function get(name:String):Null<ResolvedPackage>
 		return byName.get(name);
 
+	public function getById(id:PackageId):Null<ResolvedPackage>
+		return id == null ? null : byName.get(id.name);
+
 	public function names():Array<String>
 		return [for (resolvedPackage in packages) resolvedPackage.name];
 }

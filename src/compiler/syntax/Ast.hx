@@ -102,10 +102,22 @@ typedef AstTypeAlias = {
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
 
 /** Parsed enum constructor and its ordered payload parameters. */
-typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
+typedef AstEnumCase = {
+	final name:String;
+	final metadata:Array<AstMetadata>;
+	final params:Array<AstEnumParameter>;
+	final span:SourceSpan;
+}
 
 /** Parsed algebraic enum declaration. */
-typedef AstEnum = {final name:String; final typeParameters:Array<String>; final ?typeConstraints:Array<AstTypeConstraint>; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstEnum = {
+	final name:String;
+	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
+	final metadata:Array<AstMetadata>;
+	final cases:Array<AstEnumCase>;
+	final span:SourceSpan;
+}
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
@@ -145,6 +157,7 @@ enum AstExpression {
 	BoolLiteral(value:Bool, span:SourceSpan);
 	NullLiteral(span:SourceSpan);
 	Unreachable(span:SourceSpan);
+	EmptyExpression(span:SourceSpan);
 
 	/** Recovery-only placeholder for an incomplete or malformed expression. */
 	ErrorExpression(span:SourceSpan);

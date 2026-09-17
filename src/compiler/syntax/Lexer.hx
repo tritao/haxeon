@@ -131,6 +131,17 @@ class Lexer {
 					while (position < source.length && isDigit(source.get(position)))
 						position++;
 				}
+				if (position < source.length && (source.get(position) == "e".code || source.get(position) == "E".code)) {
+					kind = TokenKind.Float;
+					position++;
+					if (position < source.length && (source.get(position) == "+".code || source.get(position) == "-".code))
+						position++;
+					var exponentStart = position;
+					while (position < source.length && isDigit(source.get(position)))
+						position++;
+					if (position == exponentStart)
+						throw new CompileError(new Diagnostic("E0001", "Exponent requires at least one digit", file.span(start, position)));
+				}
 				tokens.push(new Token(kind, text(start, position), file.span(start, position)));
 				continue;
 			}
@@ -195,7 +206,11 @@ class Lexer {
 					} else TokenKind.Caret;
 				case "[": TokenKind.LeftBracket;
 				case "]": TokenKind.RightBracket;
-				case "?": TokenKind.Question;
+				case "?":
+					if (position < source.length && source.get(position) == "?".code) {
+						position++;
+						TokenKind.NullCoalesce;
+					} else TokenKind.Question;
 				case "@": TokenKind.At;
 				case "$": TokenKind.Dollar;
 				case "+":

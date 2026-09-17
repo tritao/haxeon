@@ -187,32 +187,34 @@ class IrInterpreter {
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
 		return switch name {
 			case "__exit": null;
-			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
+			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
-			case "__array_copy_i32", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref":
+			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity);
-			case "__array_concat_i32", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref":
+			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref":
 				var left = interpArray(arguments[0]),
 					right = interpArray(arguments[1]);
 				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8);
-			case "__array_push_i32", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
+			case "__array_push_i32", "__array_push_i64", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
 				var pushed = interpArray(arguments[0]);
 				pushed.values.push(arguments[1]);
 				pushed.capacity = pushed.values.length + 8;
 				pushed.values.length;
-			case "__array_pop_i32", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes", "__array_pop_ref":
+			case "__array_pop_i32", "__array_pop_i64", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes", "__array_pop_ref":
 				var popped = interpArray(arguments[0]);
 				popped.values.length == 0 ? null : popped.values.pop();
 			case "__string_length": Std.string(arguments[0]).length;
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
 			case "__string_equal": Std.string(arguments[0]) == Std.string(arguments[1]);
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
+			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
+			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
 			case "__std_int_f64": Std.int(arguments[0]);
 			case "__std_int_dynamic": Std.int(arguments[0]);
 			case "__math_ceil": Std.int(Math.ceil(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
-			case "__dynamic_equal": arguments[0] == arguments[1];
+			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
 			case "__reflect_is_object":
 				arguments[0] != null
 				&& !Std.isOfType(arguments[0], Bool)
@@ -222,6 +224,24 @@ class IrInterpreter {
 				&& !Reflect.isFunction(arguments[0]);
 			default: throw 'IR interpreter cannot execute native "$name"';
 		};
+	}
+
+	function dynamicEqual(left:Dynamic, right:Dynamic):Bool {
+		if (left == right)
+			return true;
+		if (Std.isOfType(left, InterpEnum) && Std.isOfType(right, InterpEnum)) {
+			var leftEnum:InterpEnum = cast left,
+				rightEnum:InterpEnum = cast right;
+			if (leftEnum.type != rightEnum.type
+				|| leftEnum.constructor != rightEnum.constructor
+				|| leftEnum.fields.length != rightEnum.fields.length)
+				return false;
+			for (index in 0...leftEnum.fields.length)
+				if (!dynamicEqual(leftEnum.fields[index], rightEnum.fields[index]))
+					return false;
+			return true;
+		}
+		return false;
 	}
 
 	function newObject(typeName:String):InterpObject {

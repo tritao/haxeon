@@ -23,6 +23,7 @@ import compiler.ir.SourceProvenance.Located;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
+		IrGenerator.bindEnumConstructors(typed.enums);
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
 			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed), null, cNativesFrom(typed));
 	}
@@ -189,7 +190,7 @@ class IrProgramAssembler {
 							type: IrGenerator.lowerType(switch capture.source {
 								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass):
 									TInstance(NominalKind.Class, cellClass, []);
-								default: capture.type;
+								default: capture.storageType;
 							})
 						}
 				],
@@ -267,7 +268,7 @@ class IrProgramAssembler {
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
-								|| name == "__string_substring")
+								|| name == "__string_substring" || name == "__string_to_lower_case" || name == "__string_to_upper_case")
 								needsStringRuntime = true;
 							if (StringTools.startsWith(name, "__map_")) {
 								var operationStart = lastSeparatorCode(name, 95);
@@ -322,6 +323,13 @@ class IrProgramAssembler {
 				result: Array(I32)
 			});
 			program.natives.push({
+				name: "__array_alloc_i64",
+				library: "haxeon_runtime",
+				symbol: "__array_alloc_i64",
+				arguments: [I32],
+				result: Array(I64)
+			});
+			program.natives.push({
 				name: "__array_alloc_f64",
 				library: "haxeon_runtime",
 				symbol: "__array_alloc_f64",
@@ -351,6 +359,7 @@ class IrProgramAssembler {
 			});
 			var arrayKinds:Array<{name:String, type:IrType}> = [
 				{name: "i32", type: I32},
+				{name: "i64", type: I64},
 				{name: "f64", type: F64},
 				{name: "bytes", type: Bytes},
 				{name: "bool", type: Bool},
@@ -549,6 +558,22 @@ class IrProgramAssembler {
 				result: I32
 			});
 		}
+		if (needsStringRuntime && !hasNative(natives, "__string_to_lower_case"))
+			program.natives.push({
+				name: "__string_to_lower_case",
+				library: "haxeon_runtime",
+				symbol: "__string_to_lower_case",
+				arguments: [Bytes],
+				result: Bytes
+			});
+		if (needsStringRuntime && !hasNative(natives, "__string_to_upper_case"))
+			program.natives.push({
+				name: "__string_to_upper_case",
+				library: "haxeon_runtime",
+				symbol: "__string_to_upper_case",
+				arguments: [Bytes],
+				result: Bytes
+			});
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_length",
@@ -625,5 +650,14 @@ class IrProgramAssembler {
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
 		return program;
+	}
+
+	static function hasNative(natives:Null<Array<IrNative>>, name:String):Bool {
+		if (natives == null)
+			return false;
+		for (native in natives)
+			if (native.name == name)
+				return true;
+		return false;
 	}
 }

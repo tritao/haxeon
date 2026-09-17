@@ -332,6 +332,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 		}
 		if( strcmp(name,"realtime_bytes") == 0 && callback->pointer_sizes[index] > 0 ) {
 			realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+			memset(wrapped,0,sizeof(*wrapped));
 			wrapped->finalize = haxeon_native_scoped_bytes_finalize;
 			wrapped->data = (vbyte *)pointer;
 			wrapped->length = callback->pointer_sizes[index];
@@ -348,6 +349,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 			return NULL;
 		}
 		realtime_bytes *wrapped = (realtime_bytes *)hl_gc_alloc_finalizer(sizeof(realtime_bytes));
+		memset(wrapped,0,sizeof(*wrapped));
 		wrapped->finalize = haxeon_native_scoped_bytes_finalize;
 		wrapped->data = (vbyte *)value;
 		wrapped->length = callback->argument_sizes[index];
@@ -970,6 +972,7 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 		case HAXEON_NATIVE_F32: { float converted = (float)value->v.d; memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(float)); break; }
 		case HAXEON_NATIVE_F64: memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&value->v.d,sizeof(double)); break;
 		case HAXEON_NATIVE_POINTER: {
+			/* HashLink's ToDyn keeps the abstract type when boxing a typed null. */
 			void *pointer;
 			if( value->t->kind != HABSTRACT )
 				pointer = value->v.bytes;
@@ -977,14 +980,24 @@ static vdynamic *haxeon_native_invoke_aggregate( vbyte *library, vbyte *symbol, 
 				const char *abstract_name = hl_to_utf8(value->t->abs_name);
 				if( strcmp(abstract_name,"native_pointer") == 0 ) {
 					haxeon_native_pointer *native_pointer = (haxeon_native_pointer *)value->v.ptr;
-					if( native_pointer == NULL || native_pointer->value == NULL ) hl_error("Closed native pointer argument");
-					pointer = native_pointer->value;
+					if( native_pointer == NULL )
+						pointer = NULL;
+					else {
+						if( native_pointer->value == NULL ) hl_error("Closed native pointer argument");
+						pointer = native_pointer->value;
+					}
 				} else if( strcmp(abstract_name,"native_callback") == 0 ) {
 					haxeon_native_callback *callback = (haxeon_native_callback *)value->v.ptr;
-					if( callback == NULL || callback->code == NULL ) hl_error("Closed native callback argument");
-					pointer = callback->code;
-				} else if( strcmp(abstract_name,"realtime_bytes") == 0 )
-					pointer = ((realtime_bytes *)value->v.ptr)->data;
+					if( callback == NULL )
+						pointer = NULL;
+					else {
+						if( callback->code == NULL ) hl_error("Closed native callback argument");
+						pointer = callback->code;
+					}
+				} else if( strcmp(abstract_name,"realtime_bytes") == 0 ) {
+					realtime_bytes *bytes = (realtime_bytes *)value->v.ptr;
+					pointer = bytes == NULL ? NULL : bytes->data;
+				}
 				else
 					hl_error("Unsupported abstract ordinary C pointer argument");
 			}

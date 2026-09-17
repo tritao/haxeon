@@ -24,6 +24,7 @@ class NativeToolchain {
 				arguments = ["-c", source, "-o", output];
 				if (environment.target.os != TargetOs.Windows)
 					arguments.push("-fPIC");
+				arguments = environment.toolchain.compileFlags.concat(arguments);
 				for (directory in includeDirs)
 					arguments.push("-I" + directory);
 		}
@@ -31,15 +32,20 @@ class NativeToolchain {
 	}
 
 	public function archiveCommand():String
-		return environment.target.os == TargetOs.Windows ? "lib" : environment.toolchain.archiver;
+		return environment.toolchain.archiver;
 
 	public function archiveArguments(output:String, objects:Array<String>):Array<String>
 		return environment.target.os == TargetOs.Windows ? ["/nologo", "/OUT:" + output].concat(objects) : ["rcs", output].concat(objects);
 
-	public function sharedArguments(output:String, objects:Array<String>):Array<String>
-		return switch environment.target.os {
+	public function sharedCommand():String
+		return environment.toolchain.linker;
+
+	public function sharedArguments(output:String, objects:Array<String>):Array<String> {
+		var arguments = switch environment.target.os {
 			case TargetOs.Windows: ["/nologo", "/LD", "/Fe:" + output].concat(objects);
 			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects);
 			case _: ["-shared", "-o", output].concat(objects);
 		};
+		return environment.toolchain.linkFlags.concat(arguments);
+	}
 }

@@ -26,14 +26,26 @@ class ExecutionPlan {
 	public function toDebugString():String {
 		var output = new StringBuf(), index = 1;
 		for (action in actions) {
-			output.add('[$index] ${action.description}\n');
+			output.add('[$index] ${action.id}\n');
+			output.add('    description: ${action.description}\n');
+			output.add('    kind: ${kindName(action)}\n');
 			if (action.dependencies.length > 0)
 				for (dependency in action.dependencies)
 					output.add('    after $dependency\n');
+			if (action.inputs.length > 0)
+				output.add('    inputs: ${action.inputs.join(", ")}\n');
+			if (action.outputs.length > 0)
+				output.add('    outputs: ${action.outputs.join(", ")}\n');
 			index++;
 		}
 		return output.toString();
 	}
+
+	static function kindName(action:ExecutionAction):String
+		return switch action.action {
+			case Process(_, _, _, _): "process";
+			case Compiler(_, _): "compiler (outer cache disabled)";
+		};
 
 	function topologicalOrder(supplied:Array<ExecutionAction>):Array<ExecutionAction> {
 		var pending = new Map<String, ExecutionAction>(),

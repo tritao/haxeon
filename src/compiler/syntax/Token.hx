@@ -89,6 +89,7 @@ enum TokenKind {
 	LeftBracket;
 	RightBracket;
 	Question;
+	NullCoalesce;
 	At;
 	Dollar;
 	Eof;

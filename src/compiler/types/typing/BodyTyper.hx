@@ -13,7 +13,6 @@ import compiler.types.Type.AnonymousField;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
-import compiler.semantic.GenericSpecializationPolicy;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.ControlFlow;
@@ -29,9 +28,14 @@ import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
+import compiler.types.TypedAst.TypedSwitchFieldAccess;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedNativeFieldLayout;
+import compiler.types.TypedAst.TypedSwitchCoverageCase;
+import compiler.types.TypedAst.TypedSwitchArrayPattern;
+import compiler.types.TypedAst.TypedSwitchArrayElement;
+import compiler.types.TypedAst.TypedSwitchObjectFieldAccess;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -39,6 +43,7 @@ import compiler.types.typing.ExpressionTyper.ExpressionSwitchRules;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
+@:allow(compiler.types.typing.WireCodecGenerator)
 class BodyTyper {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;
@@ -80,7 +85,10 @@ class BodyTyper {
 			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
 			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
 			enumPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeEnumPattern(value, expected, scope),
+			arrayPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeSwitchArrayPattern(value, expected, scope),
+			arrayPatternKey: function(pattern:TypedSwitchArrayPattern) return this.switchArrayPatternKey(pattern),
 			caseKey: function(value:TypedExpression, predicates:Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
+			enumCaseCovered: function(type:CompilerType, index:Int, cases:Array<TypedSwitchCoverageCase>) return this.enumCaseCovered(type, index, cases),
 			enumLiteral: function(value:TypedExpression) return enumLiteral(value),
 			isEnum: function(type:CompilerType) return isEnum(type),
 			isNullableEnum: function(type:CompilerType) return isNullableEnum(type),
@@ -133,9 +141,9 @@ class BodyTyper {
 				findFieldType: function(type, name) return this.findFieldType(type, name),
 				instancePropertyAccessor: function(type, name, read) return this.instancePropertyAccessor(type, name, read),
 				fieldType: function(type, name, span) return this.fieldType(type, name, span),
-				fieldRepresentationType: function(type, name, span) return this.fieldRepresentationType(type, name, span),
+				fieldRepresentationType: function(type, name, span) return session.representation.resolveField(type, name, span).physical,
 				nativeField: function(object, name, span) return this.nativeField(object, name, span),
-				abiBoundaryCast: function(value, target) return this.abiBoundaryCast(value, target),
+				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
 				arrayElementType: function(type, span) return this.arrayElementType(type, span),
 				boundCell: function(name, scope) return this.boundCell(name, scope)
 			});
@@ -221,18 +229,18 @@ class BodyTyper {
 	}
 
 	static function enumName(type:Null<CompilerType>):Null<String> {
-		if (type == null)
-			return null;
-		return switch type {
+		return switch enumInstance(type) {
 			case TInstance(Enum, name, _): name;
-			case TNullable(element):
-				switch element {
-					case TInstance(Enum, name, _): name;
-					default: null;
-				}
-			default: null;
+			case _: null;
 		};
 	}
+
+	static function enumInstance(type:Null<CompilerType>):Null<CompilerType>
+		return switch type {
+			case TInstance(Enum, _, _): type;
+			case TNullable(element), TAbstract(_, _, element): enumInstance(element);
+			case _: null;
+		};
 
 	static function expectedFunctionType(type:Null<CompilerType>):Null<{arguments:Array<CompilerType>, result:CompilerType}> {
 		if (type == null)
@@ -302,18 +310,14 @@ class BodyTyper {
 		if (abstractReceiver != null) {
 			scope.defineReceiver(abstractReceiver, fn.span);
 		} else if (owner != null && !isStatic) {
-			var receiverArguments:Array<CompilerType> = [];
-			if (session.classDecls.exists(owner))
-				for (parameter in session.classDecls.get(owner).typeParameters)
-					receiverArguments.push(context.typeSubstitutions.exists(parameter) ? context.typeSubstitutions.get(parameter) : TDynamic);
-			scope.defineReceiver(TInstance(NominalKind.Class, owner, receiverArguments), fn.span);
+			scope.defineReceiver(session.representation.receiverType(owner, context.typeSubstitutions), fn.span);
 		}
 		context.receiver = scope.resolve("this");
-		var arguments = [];
+		var arguments:Array<{name:String, type:CompilerType}> = [];
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
 		for (argument in fn.arguments) {
-			var type = argumentType(argument);
+			var type = argumentType(argument, substitutions);
 			scope.define(argument.name, type, argument.span);
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
@@ -368,7 +372,7 @@ class BodyTyper {
 	}
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
-		var output = [];
+		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveEnum(type, cases))) {
@@ -445,6 +449,8 @@ class BodyTyper {
 	}
 
 	function expectedInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
+		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
+			return null;
 		switch initializer {
 			case NullLiteral(_):
 				var assigned = assignedLocalType(name, statements, start);
@@ -554,7 +560,7 @@ class BodyTyper {
 						if (index < info.params.length)
 							switch arguments[index] {
 								case Variable(binding, _) if (binding != "_"):
-									bindings.set(binding, enumStorageParameterType(info.typeParameters, info.params[index]));
+									bindings.set(binding, session.representation.enumStorageType(info.typeParameters, info.params[index]));
 								default:
 							}
 			default:
@@ -746,7 +752,7 @@ class BodyTyper {
 						if (index >= info.params.length)
 							break;
 						var parameter = info.params[index],
-							parameterType = enumStorageParameterType(info.typeParameters, parameter);
+							parameterType = session.representation.enumStorageType(info.typeParameters, parameter);
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
 				else {
@@ -784,6 +790,61 @@ class BodyTyper {
 		return true;
 	}
 
+	function typeSwitchArrayPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<TypedSwitchArrayPattern> {
+		return switch value {
+			case ArrayLiteral(values, _):
+				var elementType = switch expected {
+					case TArray(element): element;
+					default: return null;
+				};
+				var elements:Array<TypedSwitchArrayElement> = [];
+				for (pattern in values) {
+					var isCatchAll = isSwitchCatchAll(pattern),
+						subjectBinding = isCatchAll ? null : switchSubjectBinding(pattern, elementType, scope),
+						enumPattern = subjectBinding == null && !isCatchAll ? typeEnumPattern(pattern, elementType, scope) : null,
+						typedValue:Null<TypedExpression> = null,
+						constructorIndex = -1,
+						bindings:Array<TypedSwitchBinding> = [],
+						predicates:Array<TypedSwitchPredicate> = [];
+					if (enumPattern != null) {
+						typedValue = enumPattern.value;
+						constructorIndex = enumPattern.index;
+						bindings = enumPattern.bindings;
+						predicates = enumPattern.predicates;
+					} else if (subjectBinding == null && !isCatchAll) {
+						typedValue = coerce(typeExpression(pattern, scope, elementType), elementType, "array switch pattern", "E1019");
+						var literal = enumLiteral(typedValue);
+						if (literal != null)
+							constructorIndex = literal.index;
+					}
+					elements.push({
+						type: elementType,
+						value: typedValue,
+						subjectBinding: subjectBinding,
+						isCatchAll: isCatchAll,
+						constructorIndex: constructorIndex,
+						bindings: bindings,
+						predicates: predicates
+					});
+				}
+				{elements: elements};
+			default: null;
+		};
+	}
+
+	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String> {
+		var keys:Array<String> = [];
+		for (element in pattern.elements) {
+			if (element.isCatchAll || element.subjectBinding != null || element.value == null)
+				return null;
+			var key = switchCaseKey(element.value, element.predicates);
+			if (key == null)
+				return null;
+			keys.push(key);
+		}
+		return 'array:${keys.join(",")}';
+	}
+
 	function typeEnumPattern(value:AstExpression, expected:CompilerType, scope:Scope):Null<{
 		value:TypedExpression,
 		enumName:String,
@@ -794,27 +855,15 @@ class BodyTyper {
 		return switch value {
 			case Call(name, arguments, span):
 				var info = enumCaseInfo(name);
-				if (info == null && name.indexOf(".") < 0)
-					switch expected {
-						case TInstance(Enum, enumName, _): info = enumCaseInfo(enumName + "." + name);
-						case TNullable(inner):
-							switch inner {
-								case TInstance(Enum, enumName, _): info = enumCaseInfo(enumName + "." + name);
-								default:
-							}
-						default:
-					}
+				if (info == null) {
+					var expectedEnum = enumName(expected);
+					var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
+					if (expectedEnum != null)
+						info = enumCaseInfo(expectedEnum + "." + constructorName);
+				}
 				if (info == null)
 					return null;
-				var instanceType = switch expected {
-					case TInstance(Enum, _, _): expected;
-					case TNullable(inner):
-						switch inner {
-							case TInstance(Enum, _, _): inner;
-							default: TInstance(NominalKind.Enum, info.enumName, []);
-						}
-					default: TInstance(NominalKind.Enum, info.enumName, []);
-				};
+				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
 				var instanceName = switch instanceType {
 					case TInstance(Enum, value, _): value;
 					default: "";
@@ -830,11 +879,13 @@ class BodyTyper {
 					var parameter = info.params[index],
 						parameterType = enumParameterType(info.typeParameters, parameter, instanceType),
 						abstractName = enumAbstractPatternName(parameter.type),
-						storageType = enumStorageParameterType(info.typeParameters, parameter);
+						storageType = session.representation.enumStorageType(info.typeParameters, parameter);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							var constantName = enumAbstractPatternConstant(abstractName, binding);
-							if (binding == "_") {} else if (constantName != null || binding.indexOf(".") >= 0) {
+							if (binding == "_") {} else if (constantName != null
+								|| binding.indexOf(".") >= 0
+								|| enumLiteralPattern(parameterType, binding)) {
 								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
 							} else {
 								scope.define(binding, parameterType, bindingSpan);
@@ -847,6 +898,100 @@ class BodyTyper {
 									index: index,
 									arrayIndex: -1
 								});
+							}
+						case Call(_, _, _):
+							var nested = typeEnumPattern(arguments[index], parameterType, scope);
+							if (nested == null) {
+								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, null));
+							} else {
+								predicates.push({
+									value: null,
+									arrayLength: -1,
+									type: parameterType,
+									storageType: storageType,
+									fieldStorageType: storageType,
+									index: index,
+									arrayIndex: -1,
+									nestedPath: [],
+									nestedConstructorIndex: nested.index
+								});
+								for (predicate in nested.predicates) {
+									var nestedPath:Array<TypedSwitchFieldAccess> = [
+										{
+											constructorIndex: nested.index,
+											fieldIndex: predicate.index,
+											storageType: predicate.fieldStorageType
+										}
+									];
+									if (predicate.nestedPath != null)
+										nestedPath = nestedPath.concat(predicate.nestedPath);
+									predicates.push({
+										value: predicate.value,
+										arrayLength: predicate.arrayLength,
+										type: predicate.type,
+										storageType: predicate.storageType,
+										fieldStorageType: storageType,
+										index: index,
+										arrayIndex: predicate.arrayIndex,
+										nestedPath: nestedPath,
+										objectPath: predicate.objectPath,
+										nestedConstructorIndex: predicate.nestedConstructorIndex
+									});
+								}
+								for (binding in nested.bindings) {
+									var nestedPath:Array<TypedSwitchFieldAccess> = [
+										{
+											constructorIndex: nested.index,
+											fieldIndex: binding.index,
+											storageType: binding.fieldStorageType
+										}
+									];
+									if (binding.nestedPath != null)
+										nestedPath = nestedPath.concat(binding.nestedPath);
+									bindings.push({
+										name: binding.name,
+										type: binding.type,
+										storageType: binding.storageType,
+										fieldStorageType: storageType,
+										index: index,
+										arrayIndex: binding.arrayIndex,
+										nestedPath: nestedPath
+									});
+								}
+							}
+						case ObjectLiteral(fields, patternSpan):
+							switch parameterType {
+								case TAnonymous(_, expectedFields):
+									for (field in fields) {
+										var expectedField = ExpressionTyper.anonymousField(expectedFields, field.name);
+										if (expectedField == null)
+											fail("E1019", 'Unknown anonymous field "${field.name}" in enum pattern', field.span);
+										switch field.value {
+											case Variable("_", _):
+											default:
+												var typed = coerce(typeExpression(field.value, new Scope(), expectedField.type), expectedField.type,
+													"enum object payload pattern", "E1019");
+												if (constantPatternKey(typed) == null)
+													fail("E1019", "Enum object payload patterns must be constants or '_'", patternSpan);
+												predicates.push({
+													value: typed,
+													arrayLength: -1,
+													type: expectedField.type,
+													storageType: expectedField.type,
+													fieldStorageType: storageType,
+													index: index,
+													arrayIndex: -1,
+													objectPath: [
+														{
+															name: field.name,
+															storageType: expectedField.type
+														}
+													]
+												});
+										}
+									}
+								default:
+									fail("E1019", "Anonymous object payload patterns require an anonymous value", patternSpan);
 							}
 						case ArrayLiteral(values, patternSpan):
 							switch parameterType {
@@ -988,6 +1133,16 @@ class BodyTyper {
 		return null;
 	}
 
+	function enumLiteralPattern(type:CompilerType, name:String):Bool {
+		var expectedEnumName = enumName(type);
+		if (expectedEnumName == null || !session.enumDecls.exists(expectedEnumName))
+			return false;
+		for (enumCase in requiredMapValue(session.enumDecls, expectedEnumName).cases)
+			if (enumCase.name == name && enumCase.params.length == 0)
+				return true;
+		return false;
+	}
+
 	function enumPatternKey(name:String, index:Int, predicates:Array<TypedSwitchPredicate>):String {
 		if (predicates.length == 0)
 			return 'enum:$name:$index';
@@ -999,12 +1154,21 @@ class BodyTyper {
 	}
 
 	function switchPredicateKey(predicate:TypedSwitchPredicate):String {
+		var path = [
+			for (access in predicate.nestedPath ?? [])
+				'${access.constructorIndex}.${access.fieldIndex}'
+		].join("/");
+		var objectPath = [for (access in predicate.objectPath ?? []) access.name].join("/");
+		if (predicate.nestedConstructorIndex != null)
+			return 'enum:${path}:${objectPath}:${predicate.nestedConstructorIndex}';
 		if (predicate.arrayLength >= 0)
-			return 'array-length:${predicate.arrayLength}';
+			return path.length == 0
+				&& objectPath.length == 0 ? 'array-length:${predicate.arrayLength}' : 'path:${path}:${objectPath}:array-length:${predicate.arrayLength}';
 		var value = predicate.value;
 		if (value == null)
 			throw "Equality payload predicate has no value";
-		return Std.string(constantPatternKey(value));
+		return path.length == 0
+			&& objectPath.length == 0 ? Std.string(constantPatternKey(value)) : 'path:${path}:${objectPath}:${Std.string(constantPatternKey(value))}';
 	}
 
 	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>
@@ -1013,7 +1177,7 @@ class BodyTyper {
 			case TStringLiteral(v): 'string:$v';
 			case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
 			case TNullLiteral: "null";
-			case TNullableWrap(inner): switchCaseKey(inner, predicates);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): switchCaseKey(inner, predicates);
 			default: null;
 		};
 
@@ -1048,11 +1212,14 @@ class BodyTyper {
 				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
 					scope) != null ? TCellLocal(scope.requireId(name),
 						requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
-				type, span);
+				type, span, false, scope.mapKeySource(name), scope.isCapture(name) ? scope.resolveDeclared(name) : null);
 		} else {
 			var enumLiteral = expectedEnumLiteral(name, expectedType, span);
 			if (enumLiteral != null)
 				return enumLiteral;
+			var inferredEnumLiteral = uniqueEnumLiteral(name, span);
+			if (inferredEnumLiteral != null)
+				return inferredEnumLiteral;
 			var localMethod = lexicalMethod(name);
 			if (localMethod != null && !localMethod.isStatic)
 				return typeMember(Variable("this", span), name, span, scope);
@@ -1210,6 +1377,17 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
+		if (expectedType == TVoid && typedResult.type != TVoid && typedResult.type != TNever) {
+			typedStatements.push(TExpression(typedResult, typedResult.span));
+			typedResult = new TypedExpression(TVoidLiteral, TVoid, typedResult.span);
+		}
+		// The final expression of a block is an expression branch, not a return
+		// statement, so it does not pass through StatementTyper's return coercion.
+		// TNull is also used as the provisional result while a switch expression is
+		// still inferring its common branch type; defer coercion in that case so a
+		// later non-null branch can widen the result to Null<T>.
+		if (expectedType != null && expectedType != TNull && expectedType != TVoid && typedResult.type != TNever)
+			typedResult = coerce(typedResult, expectedType, "block expression", "E1003");
 		if (typedResult.type != TNever) {
 			scope.mergeAssignmentsFrom([blockScope]);
 			scope.mergeRefinementsFrom([blockScope]);
@@ -1240,7 +1418,8 @@ class BodyTyper {
 		if (path == null)
 			return member;
 		var refined = scope.resolveExpression(path);
-		return refined == null || sameType(member.type, refined) ? member : new TypedExpression(TCast(member), refined, member.span);
+		return refined == null
+			|| sameType(member.type, refined) ? member : new TypedExpression(TCast(member), refined, member.span, member.stableFlowValue);
 	}
 
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,
@@ -1329,8 +1508,11 @@ class BodyTyper {
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
 			var method = requiredMapValue(session.signatures, getter);
-			return new TypedExpression(TMethodCall(typedObject, getter, []),
-				session.declarations.resolve(method.result, method.span, nominalSubstitutions(typedObject.type)), span);
+			var methodInfo = session.methodInfo.get(getter),
+				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
+				methodResult = session.representation.resolveMethodResult(typedObject.type, owner, method),
+				call = new TypedExpression(TMethodCall(typedObject, getter, []), methodResult.physical, span);
+			return session.representation.boundaryCast(call, methodResult.semantic);
 		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
@@ -1343,16 +1525,46 @@ class BodyTyper {
 					method = requiredMapValue(session.signatures, methodKey);
 				if (isGeneric(method))
 					fail("E1007", "Generic instance method values are not supported yet", span);
-				var substitutions = nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
+				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
 					result = session.declarations.resolve(method.result, method.span, substitutions);
 				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
 			}
 		}
-		var semanticType = fieldType(typedObject.type, name, span),
-			physicalType = fieldRepresentationType(typedObject.type, name, span);
-		return abiBoundaryCast(new TypedExpression(TField(typedObject, name), physicalType, span), semanticType);
+		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
+			stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
+		return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name), fieldRepresentation.physical, span, stableFlowValue),
+			fieldRepresentation.semantic);
 	}
+
+	static function isStableFlowReceiver(value:TypedExpression):Bool
+		return switch value.expression {
+			case TLocal(_), TCaptured(_): true;
+			case TCast(inner), TAbiCast(inner): isStableFlowReceiver(inner);
+			case TField(_, _) if (value.stableFlowValue): true;
+			default: false;
+		};
+
+	function isFinalInstanceField(type:CompilerType, name:String):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, className, _):
+				var declaration = session.classDecls.get(className);
+				if (declaration == null) false; else {
+					var found = false;
+					for (field in declaration.fields)
+						if (field.name == name && !field.isStatic) {
+							found = true;
+							if (field.isFinal)
+								return true;
+						}
+					if (found || declaration.base == null)
+						false;
+					else
+						isFinalInstanceField(session.declarations.resolve(declaration.base, declaration.span,
+							session.representation.nominalSubstitutions(type)), name);
+				}
+			default: false;
+		};
 
 	static function unwrapNullable(value:TypedExpression):TypedExpression
 		return switch value.type {
@@ -1372,25 +1584,12 @@ class BodyTyper {
 							accessor = className + "." + (read ? "get_" : "set_") + name;
 					}
 				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base,
-					declaration.span, nominalSubstitutions(type)), name, read); else null;
+					declaration.span, session.representation.nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
 
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
-		return switch type {
-			case TInstance(NominalKind.Class, className, _) if (session.classDecls.exists(className)):
-				var declaration = requiredMapValue(session.classDecls, className),
-					substitutions:Map<String, CompilerType> = [];
-				for (parameter in declaration.typeParameters)
-					substitutions.set(parameter, TDynamic);
-				var result:Null<CompilerType> = null;
-				for (field in declaration.fields)
-					if (field.name == name && !field.isStatic)
-						result = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span, substitutions);
-				if (result != null) result; else if (declaration.base != null) fieldRepresentationType(session.declarations.resolve(declaration.base,
-					declaration.span, substitutions), name, span); else fieldType(type, name, span);
-			default: fieldType(type, name, span);
-		};
+		return session.representation.resolveField(type, name, span).physical;
 
 	function nativeField(object:TypedExpression, name:String, span:SourceSpan):Null<{
 		pointer:TypedExpression,
@@ -1420,7 +1619,7 @@ class BodyTyper {
 		for (candidate in declaration.fields)
 			if (candidate.name == name && !candidate.isStatic) {
 				fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(recordName, candidate), candidate.span,
-					nominalSubstitutions(object.type));
+					session.representation.nominalSubstitutions(object.type));
 				arrayLength = NativeLayout.fixedArrayLength(candidate.metadata);
 			}
 		var fieldLayout:Null<TypedNativeFieldLayout> = null;
@@ -1480,12 +1679,6 @@ class BodyTyper {
 
 	static function isRawPointerAbstract(declaration:String):Bool
 		return NativeLayout.isNativePointerDeclaration(declaration);
-
-	function isGenericNominal(type:CompilerType):Bool
-		return switch type {
-			case TInstance(Class, _, arguments), TInstance(Interface, _, arguments): arguments.length > 0;
-			default: false;
-		};
 
 	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
 		var result = findStaticFieldNullable(className, name);
@@ -1571,10 +1764,6 @@ class BodyTyper {
 		], span);
 	}
 
-	function nominalSubstitutions(type:CompilerType):Map<String, CompilerType> {
-		return session.declarations.inheritance.substitutions(type);
-	}
-
 	function projectNominal(type:CompilerType, target:String):CompilerType {
 		var projected = session.declarations.inheritance.project(type, target);
 		return projected == null ? type : projected;
@@ -1629,40 +1818,11 @@ class BodyTyper {
 	}
 
 	function enumParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
-		var substitutions:Map<String, CompilerType> = [];
-		for (index in 0...typeParameters.length) {
-			var argument:CompilerType = TDynamic;
-			var resolvedInstance = instance;
-			if (resolvedInstance != null)
-				switch resolvedInstance {
-					case TInstance(Enum, _, arguments) if (index < arguments.length):
-						argument = arguments[index];
-					default:
-				}
-			substitutions.set(typeParameters[index], argument);
-		}
-		var resolved = session.declarations.resolve(parameter.type, parameter.span, substitutions);
-		return parameter.optional ? TNullable(resolved) : resolved;
-	}
-
-	function enumStorageParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType {
-		// A HashLink enum has one physical constructor layout for every source
-		// specialization. Erase all payloads of a generic enum so two uses cannot
-		// publish incompatible field representations for that shared layout.
-		if (typeParameters.length > 0)
-			return TDynamic;
-		var substitutions:Map<String, CompilerType> = [];
-		for (name in typeParameters)
-			substitutions.set(name, TDynamic);
-		var type = session.declarations.resolve(parameter.type, parameter.span, substitutions);
-		return parameter.optional ? TNullable(type) : type;
+		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
 
 	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
-		return enumStorageParameterType(declaration.typeParameters, parameter);
-
-	function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
-		return sameType(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span);
+		return session.representation.erasedEnumParameter(declaration, parameter);
 
 	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
@@ -1672,32 +1832,8 @@ class BodyTyper {
 		return minimum;
 	}
 
-	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType {
-		var platformField = PlatformAbi.field(type, name);
-		if (platformField != null)
-			return platformField.type;
-		switch type {
-			case TAnonymous(_, fields):
-				for (field in fields)
-					if (field.name == name)
-						return field.type;
-				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
-			case TInstance(Class, className, arguments):
-				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
-					for (field in classDecl.fields)
-						if (field.name == name && !field.isStatic)
-							return session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
-								nominalSubstitutions(type));
-					var base = classDecl.base;
-					if (base != null)
-						return fieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name, span);
-				}
-				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
-			default:
-				throw new CompileError(new Diagnostic("E1005", 'Field "$name" requires an object', span));
-		}
-	}
+	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType
+		return session.representation.resolveField(type, name, span).semantic;
 
 	function expectedEnumLiteral(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
 		var expectedEnumName = enumName(expectedType);
@@ -1709,20 +1845,32 @@ class BodyTyper {
 			var enumCase = declaration.cases[index];
 			if (enumCase.name == caseName && enumCase.params.length == 0) {
 				var literalType:CompilerType = TInstance(NominalKind.Enum, declaration.name, []);
-				switch expectedType {
+				switch enumInstance(expectedType) {
 					case TInstance(Enum, _, arguments):
 						literalType = TInstance(NominalKind.Enum, declaration.name, arguments);
-					case TNullable(element):
-						switch element {
-							case TInstance(Enum, _, arguments): literalType = TInstance(NominalKind.Enum, declaration.name, arguments);
-							default:
-						}
-					default:
+					case _:
 				}
 				return new TypedExpression(TEnumLiteral(declaration.name, index), literalType, span);
 			}
 		}
 		return null;
+	}
+
+	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {
+		var enumName:Null<String> = null, index = -1;
+		for (candidateName => declaration in session.enumDecls)
+			for (candidateIndex in 0...declaration.cases.length) {
+				var enumCase = declaration.cases[candidateIndex];
+				if (enumCase.name != name || enumCase.params.length != 0)
+					continue;
+				if (enumName != null)
+					fail("E1005", 'Ambiguous enum value "$name"', span);
+				enumName = candidateName;
+				index = candidateIndex;
+			}
+		if (enumName == null)
+			return null;
+		return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
 	}
 
 	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -1757,37 +1905,93 @@ class BodyTyper {
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
-								nominalSubstitutions(type));
+								session.representation.nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
-						found = findFieldType(session.declarations.resolve(base, classDecl.span, nominalSubstitutions(type)), name);
+						found = findFieldType(session.declarations.resolve(base, classDecl.span, session.representation.nominalSubstitutions(type)), name);
 				}
 				found;
 			default: null;
 		};
 
-	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
-		var enumName = switch type {
-			case TInstance(Enum, name, _): name;
-			default: return false;
-		};
-		if (!session.enumDecls.exists(enumName))
+	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool {
+		if (!isEnum(type))
 			return false;
-		var enumDecl = requiredMapValue(session.enumDecls, enumName);
-		var seen:Map<Int, Bool> = [];
 		for (switchCase in cases)
-			if (switchCase.isCatchAll || switchCase.subjectBinding != null)
+			if (switchCase.guard == null
+				&& (switchCase.isCatchAll
+					|| switchCase.subjectBinding != null
+					|| switchCase.constructorIndex == constructorIndex
+					&& switchCase.predicates.length == 0))
 				return true;
-			else if (switchCase.constructorIndex >= 0)
-				seen.set(switchCase.constructorIndex, true);
+		var groups:Map<String, {enumName:String, constructors:Map<Int, Bool>}> = [];
+		for (switchCase in cases) {
+			if (switchCase.constructorIndex != constructorIndex || switchCase.guard != null || switchCase.predicates.length != 1)
+				continue;
+			var predicate = switchCase.predicates[0],
+				innerIndex = predicate.nestedConstructorIndex;
+			if (predicate.arrayLength >= 0 || predicate.arrayIndex >= 0)
+				continue;
+			if (innerIndex == null) {
+				var value = predicate.value;
+				if (value == null)
+					continue;
+				var literal = enumLiteral(value);
+				if (literal == null)
+					continue;
+				innerIndex = literal.index;
+			}
+			var innerName = enumName(predicate.type);
+			if (innerName == null || !session.enumDecls.exists(innerName))
+				continue;
+			var nestedPath = [
+				for (access in predicate.nestedPath ?? [])
+					'${access.constructorIndex}.${access.fieldIndex}'
+			].join("/"), key = '${predicate.index}:$nestedPath:$innerName', group = groups.get(key);
+			if (group == null) {
+				group = {enumName: innerName, constructors: []};
+				groups.set(key, group);
+			}
+			group.constructors.set(innerIndex, true);
+		}
+		for (group in groups)
+			if (session.enumDecls.exists(group.enumName)) {
+				var declaration = requiredMapValue(session.enumDecls, group.enumName),
+					complete = declaration.cases.length > 0;
+				for (index in 0...declaration.cases.length)
+					if (!group.constructors.exists(index))
+						complete = false;
+				if (complete)
+					return true;
+			}
+		return false;
+	}
+
+	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+		if (isNullableEnum(type))
+			return false;
+		var enumName = enumName(type);
+		if (enumName == null || !session.enumDecls.exists(enumName))
+			return false;
+		var enumDecl = requiredMapValue(session.enumDecls, enumName),
+			coverageCases:Array<TypedSwitchCoverageCase> = [
+				for (switchCase in cases)
+					{
+						constructorIndex: switchCase.constructorIndex,
+						subjectBinding: switchCase.subjectBinding,
+						isCatchAll: switchCase.isCatchAll,
+						guard: switchCase.guard,
+						predicates: switchCase.predicates
+					}
+			];
 		for (index in 0...enumDecl.cases.length)
-			if (!seen.exists(index))
+			if (!enumCaseCovered(type, index, coverageCases))
 				return false;
 		return true;
 	}
 
 	function lowerType(type:AstType):CompilerType
-		return session.declarations.resolve(type, null, context.typeSubstitutions);
+		return session.representation.semanticType(type, null, context.typeSubstitutions);
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];
@@ -1844,7 +2048,7 @@ class BodyTyper {
 	static function isEnum(type:CompilerType):Bool
 		return switch type {
 			case TInstance(Enum, _, _): true;
-			case TNullable(inner): isEnum(inner);
+			case TNullable(inner), TAbstract(_, _, inner): isEnum(inner);
 			default: false;
 		};
 

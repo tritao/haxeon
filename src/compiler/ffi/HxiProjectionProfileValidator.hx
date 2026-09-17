@@ -3,6 +3,7 @@ package compiler.ffi;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjectionProfile;
+import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 
 /** Validates the Haxe presentation profile independently from native ABI semantics. */
 class HxiProjectionProfileValidator {
@@ -67,11 +68,18 @@ class HxiProjectionProfileValidator {
 			if (!local.exists(enumName) || HxiHaxeEmitter.isOmitted(omitted, enumName))
 				HxiHaxeEmitter.profileError(path, '$entry refers to an enum projected by a dependency; rename its values in that interface profile');
 			var valueNames:Map<String, Bool> = [for (value in values) value.name => true];
-			var projectedValueNames:Map<String, String> = cast profile.enumValueNames.get(enumName);
-			for (valueName in HxiHaxeEmitter.sortedKeys(projectedValueNames)) {
-				if (!valueNames.exists(valueName))
-					HxiHaxeEmitter.profileError(path, '$entry.$valueName references an unknown enum value');
-				HxiHaxeEmitter.validateEnumValueIdentifier(path, '$entry.$valueName', projectedValueNames.get(valueName));
+			var configuredValues = profile.enumValueNames.get(enumName);
+			if (configuredValues == null)
+				HxiHaxeEmitter.profileError(path, '$entry must provide a value-name map');
+			else {
+				for (valueName in HxiHaxeEmitter.sortedKeys(configuredValues)) {
+					if (!valueNames.exists(valueName))
+						HxiHaxeEmitter.profileError(path, '$entry.$valueName references an unknown enum value');
+					var projectedValue = configuredValues.get(valueName);
+					if (projectedValue == null)
+						HxiHaxeEmitter.profileError(path, '$entry.$valueName must provide a projected identifier');
+					HxiHaxeEmitter.validateEnumValueIdentifier(path, '$entry.$valueName', projectedValue);
+				}
 			}
 		}
 		for (name in HxiHaxeEmitter.sortedKeys(profile.functionNames)) {
@@ -118,8 +126,8 @@ class HxiProjectionProfileValidator {
 		for (name in HxiHaxeEmitter.sortedKeys(profile.resultPolicies)) {
 			var entry = 'resultPolicies.$name',
 				declaration = local.get(name),
-				policy:compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection = cast profile.resultPolicies.get(name),
-				values:Array<compiler.ffi.HxiModel.HxiEnumValue> = switch declaration {
+				policy = requiredResultPolicy(profile.resultPolicies, name, path),
+				values = switch declaration {
 					case Enumeration(_, _, _, values, _): values;
 					case null:
 						HxiHaxeEmitter.profileError(path, '$entry references an unknown result enum in this interface');
@@ -193,7 +201,10 @@ class HxiProjectionProfileValidator {
 					case _:
 				}
 		if (hasCallbacks)
-			HxiHaxeEmitter.addProjectedName(path, "module", "HxiCallbackError", "generated callback error type", moduleNames);
+			HxiHaxeEmitter.addProjectedName(path,
+				"module", profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
+				"generated callback error type",
+				moduleNames);
 		if (hasOpaqueTypes) {
 			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", moduleNames);
 			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", moduleNames);
@@ -256,5 +267,12 @@ class HxiProjectionProfileValidator {
 				case _:
 			}
 		}
+	}
+
+	static function requiredResultPolicy(values:Map<String, HxiResultErrorProjection>, name:String, path:String):HxiResultErrorProjection {
+		var policy = values.get(name);
+		if (policy == null)
+			throw 'Invalid Haxe projection profile "$path": resultPolicies.$name must provide a policy';
+		return policy;
 	}
 }

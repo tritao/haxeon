@@ -265,7 +265,15 @@ is available on Unix-like systems and Windows:
 ./scripts/haxeon build --target android
 ./scripts/haxeon run --target android
 ./scripts/haxeon devices
+./scripts/haxeon fmt src/Main.hx
+./scripts/haxeon fmt --check src/Main.hx
+cat src/Main.hx | ./scripts/haxeon fmt --stdin --line-width 100
 ```
+
+`haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
+default, while `--check` reports files that would change. Use `--stdin` for
+editor or pipeline integration, `--line-width` to set the column limit, and
+`--tab-size` with `--use-tabs` to control indentation.
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:
@@ -310,8 +318,7 @@ running program after `--`:
 
 Host builds resolve local path dependencies declared by package name. A
 dependency can provide Haxe sources and optional C sources; C sources are
-compiled into a static archive and a HashLink native library as part of the
-same build:
+compiled into the HashLink native library requested by the build:
 
 ```json
 {
@@ -342,10 +349,93 @@ The `foo` package can list native inputs in its own manifest:
 ```
 
 `haxeon build --plan` prints the deterministic artifact and action plans.
+Add `--explain` to show why each artifact is present, and `--timings` to print
+resolution, planning/lowering, and execution wall-clock measurements.
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native actions are skipped on later builds.
-This local-package/native-provider path currently targets the host platform.
+The current executor is selected through a replaceable backend boundary; set
+`HAXEON_EXECUTOR=native` explicitly to select it. Alternate schedulers can be
+evaluated against the same lowered `ExecutionPlan` without changing package or
+build semantics.
+The normal host build requests the shared HashLink library; static archives are
+available to other build consumers without being produced unnecessarily. Target
+and toolchain selection is centralized: examples include
+`windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-aarch64`, `android-aarch64`,
+and `wasm32`.
+
+Git dependencies can be added and installed reproducibly:
+
+```sh
+./scripts/haxeon add --git https://github.com/example/foo.git --rev main foo
+./scripts/haxeon install
+./scripts/haxeon install --locked
+./scripts/haxeon update
+./scripts/haxeon tree
+./scripts/haxeon why foo
+./scripts/haxeon publish --registry local --version 1.0.0
+./scripts/haxeon package check
+```
+
+`install` records the requested source and resolved Git commit in
+`haxeon.lock`; `install --locked` rejects manifest changes and checks out the
+exact recorded revision.
+
+Registry sources use the same lockfile path. A registry index records immutable
+release checksums, SemVer versions, yanked status, compatibility metadata, and
+native provider metadata. For local development, `publish` writes an immutable
+release and index below `~/.haxeon/cache/sources/registry`; projects then use
+`{"registry":"local","version":"^1.0"}` and resolve through the normal
+package graph.
+
+Repositories can declare workspace members. A workspace member with the same
+package name overrides an external dependency source while retaining the same
+package identity:
+
+```json
+"workspace": ["packages/core", "packages/editor"]
+```
+
+Native packages may instead delegate an existing CMake project as one coarse
+provider:
+
+```json
+"native": {
+  "cmake": { "source": "native", "target": "foo" }
+}
+```
+
+Native providers advertise their supported targets with `native.targets`; the
+default source and CMake providers support `host` and `android`. If a package
+has no provider for a requested target, planning stops with the package and
+missing-provider chain—for example, `foo cannot be built for wasm32`—before
+compilation or linking begins.
+
+Packages can also gate resolution with compatibility metadata:
+
+```json
+"compatibility": {
+  "haxeon": ">=0.3",
+  "targets": ["host", "android"],
+  "runtimeAbi": "2"
+}
+```
+
+These requirements are checked while resolving the package graph, before any
+compiler or native action is planned.
+
+Haxelib is an adapter, not Haxeon's package model. A pure-Haxe Haxelib release
+can be placed in the dedicated `~/.haxeon/cache/sources/haxelib/<name>/<version>`
+cache (or supplied as an archive under its downloads cache); its `haxelib.json`
+is translated to a normal Haxeon manifest. Haxeon does not read global
+`haxelib dev` state or execute `extraParams`, macros, or HXML compiler settings;
+unsupported settings fail with an explicit import diagnostic.
+
+Android builds resolve the same package graph, compile `native.sources` with the
+Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
+under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
+rebuilt and repackaged when its C sources change; Haxe-only edits continue to
+use the Android HLB asset path.
 
 The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected

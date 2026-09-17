@@ -6,12 +6,12 @@ mkdir -p "$repo_dir/out"
 
 "$repo_dir/scripts/build-native.sh"
 fixture_path=$(bash "$repo_dir/tests/integration/build-native-call-fixture.sh")
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
+HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
 	"$repo_dir/out/hxi-call-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
 	set +e
-	"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl
+	HAXEON_HXI_TRACE=1 "$repo_dir/.tools/hashlink/hl" hxi-call-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then

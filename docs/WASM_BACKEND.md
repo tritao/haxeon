@@ -88,14 +88,15 @@ The current FFI boundary can add memory when needed: scalar C-native values use
 typed Wasm imports, while HXI scalar `@out`/`@inout` slots and declared byte
 slices are copied through guest scratch memory. Returned native byte pointers
 also require guest memory. Other aggregate and raw-memory ABI forms remain
-unsupported. Wasm-GC compilation rejects the Wasm32 memory import, base,
-contract, and statistics options.
+unsupported. A GC module that needs this bridge may import host-owned memory
+with `--wasm-import-memory --wasm-memory-contract=<path>`; the contract is
+embedded in the same custom section used by Wasm32. Allocator statistics remain
+Wasm32-only.
 
-Wasm32 accepts `--wasm-import-memory --wasm-memory-contract=<path>` for a
-host-owned memory. The JSON contract is validated at compile time and copied
-into the `haxeon.memory.contract` custom section. Hosts should compare that
-section with their own contract before calling the guest. This option applies
-only to `wasm32`.
+Wasm32 uses the same `--wasm-import-memory --wasm-memory-contract=<path>`
+interface for host-owned memory. The JSON contract is validated at compile
+time and copied into the `haxeon.memory.contract` custom section. Hosts should
+compare that section with their own contract before calling the guest.
 
 Both targets emit `haxeon.patch` and `haxeon.patch.slots` custom sections with
 stable function identities, semantic signatures, and table slots.
@@ -110,6 +111,14 @@ linear pointers for Wasm32 and GC references for Wasm GC. Exception-bearing
 functions currently use the explicit CFG dispatcher so handler state and
 rethrow behavior remain correct. Ordinary reducible scalar CFGs use structured
 lowering, with the dispatcher retained as a correctness fallback.
+
+The backend normally rewrites structured catches to the standardized
+`try_table` encoding. Some browsers that support Wasm GC still gate that
+encoding (and its `exnref` references) behind an experimental runtime flag.
+Set `HAXEON_WASM_LEGACY_EXCEPTIONS=1` to retain the legacy `try`/`catch`
+encoding for those runtimes; the NativeKit GC web showcase selects this
+compatibility mode by default. Leave the variable unset (or set it to `0`) to
+exercise the standardized encoding.
 
 ## Building and testing
 

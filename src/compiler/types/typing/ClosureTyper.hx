@@ -122,10 +122,12 @@ class ClosureTyper {
 						cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture, captureType);
 					}
 					var bindingId = scope.requireId(name),
+						declaredCaptureType = scope.resolveDeclared(name),
 						captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
 							scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
 							CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
-					lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId);
+					lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
+						declaredCaptureType == null ? captureType : declaredCaptureType);
 					if (cellClass != null)
 						captureCells.set(name, cellClass);
 					captureTypes.set(name, captureType);
@@ -133,6 +135,7 @@ class ClosureTyper {
 						field: name,
 						bindingId: bindingId,
 						type: captureType,
+						storageType: declaredCaptureType == null ? captureType : declaredCaptureType,
 						source: captureSource
 					});
 				}
@@ -145,7 +148,7 @@ class ClosureTyper {
 		}
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
-				capture.bindingId);
+				capture.bindingId, capture.storageType);
 		var lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;

@@ -49,6 +49,11 @@ class MathTest extends Test {
 		Assert.notEquals(1, 2);
 	}
 
+	public function testMathAbsolute():Void {
+		Assert.equals(3.5, Math.abs(-3.5));
+		Assert.equals(3.5, Math.abs(3.5));
+	}
+
 	public function testNulls():Void {
 		var missing:Null<String> = null;
 		var present:Null<String> = "value";
@@ -201,9 +206,9 @@ function main():Int {
 		return 3;
 	if (!observer.started
 		|| !observer.completed
-		|| observer.progressCount != 10
-		|| observer.lastTotal != 10
-		|| runner.length != 10)
+		|| observer.progressCount != 11
+		|| observer.lastTotal != 11
+		|| runner.length != 11)
 		return 4;
 	if (!filtered.includedRan || filtered.excludedRan)
 		return 5;

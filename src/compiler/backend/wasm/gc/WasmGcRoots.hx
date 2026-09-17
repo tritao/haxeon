@@ -2,6 +2,8 @@ package compiler.backend.wasm.gc;
 
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrTerminator;
+import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrOperands;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
@@ -51,9 +53,13 @@ class WasmGcRoots {
 			for (position in 0...graph.order.length) {
 				var id = graph.order[graph.order.length - 1 - position],
 					out = emptyBitSet(wordCount);
-				for (successor in graph.successors.get(id))
+				for (successor in graph.successors.get(id)) {
 					unionBitsInto(out, liveIn.get(successor));
+					addPhiEdgeReferences(out, graph.block(successor), id, referenceIndices);
+				}
 				var current = out.copy(), block = graph.block(id);
+				if (block.terminator != null)
+					addTerminatorReferences(current, block.terminator.value, referenceIndices);
 				for (index in 0...block.instructions.length) {
 					var instruction = block.instructions[block.instructions.length - 1 - index].value,
 						output = IrOperands.output(instruction);
@@ -73,6 +79,8 @@ class WasmGcRoots {
 		var result:Array<WasmSafepoint> = [];
 		for (id in graph.order) {
 			var block = graph.block(id), current = liveOut.get(id).copy();
+			if (block.terminator != null)
+				addTerminatorReferences(current, block.terminator.value, referenceIndices);
 			for (index in 0...block.instructions.length) {
 				var instruction = block.instructions[block.instructions.length - 1 - index].value;
 				var output = IrOperands.output(instruction);
@@ -134,6 +142,27 @@ class WasmGcRoots {
 			seen.set(value.id, true);
 			ids.push(value.id);
 		}
+	}
+
+	static function addTerminatorReferences(set:Array<Int>, terminator:IrTerminator, indices:Map<Int, Int>):Void {
+		var value:IrValue = switch terminator {
+			case Return(value), Throw(value), Rethrow(value): value;
+			case Jump(_): null;
+			case Branch(condition, _, _): condition;
+		};
+		if (value != null && WasmTarget.isReference(value.type))
+			setBit(set, requiredIndex(indices, value.id));
+	}
+
+	static function addPhiEdgeReferences(set:Array<Int>, block:IrBlock, predecessor:Int, indices:Map<Int, Int>):Void {
+		for (located in block.instructions)
+			switch located.value {
+				case IrInstruction.Phi(_, inputs):
+					for (input in inputs)
+						if (input.block == predecessor && WasmTarget.isReference(input.value.type))
+							setBit(set, requiredIndex(indices, input.value.id));
+				default:
+			}
 	}
 
 	static function emptyBitSet(wordCount:Int):Array<Int>

@@ -37,7 +37,9 @@ class ConversionResolver {
 			case ReferenceCast:
 				functionAdapter(value, expected, value.span);
 			case AbstractCast:
-				new TypedExpression(TAbiCast(value), expected, value.span);
+				var conversion = abstractFromFunction(value.type, expected);
+				conversion == null ? session.representation.boundaryCast(value,
+					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
 			case ToDynamic:
 				new TypedExpression(TToDynamic(value), expected, value.span);
 			case ToInterface(name):
@@ -49,6 +51,32 @@ class ConversionResolver {
 			case Incompatible:
 				fail(code, 'Type mismatch for $context', value.span);
 				value;
+		};
+	}
+
+	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<String> {
+		return switch expected {
+			case TAbstract(name, arguments, _):
+				var declaration = session.declarations.abstracts.get(name);
+				if (declaration == null)
+					return null;
+				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
+				for (method in declaration.methods) {
+					if (!method.isStatic || method.arguments.length != 1)
+						continue;
+					var metadata = method.metadata;
+					if (metadata == null)
+						continue;
+					var isFrom = false;
+					for (entry in metadata)
+						if (entry.name == "from")
+							isFrom = true;
+					if (isFrom
+						&& TypeRelations.equals(actual, session.declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+						return name + "." + method.name;
+				}
+				null;
+			default: null;
 		};
 	}
 
@@ -79,9 +107,10 @@ class ConversionResolver {
 					field: captureName,
 					bindingId: captureName,
 					type: value.type,
+					storageType: value.type,
 					source: CaptureExpression(value)
 				}
-			], callable = new TypedExpression(TCaptured(captureName), value.type, span), callArguments = [
+			], callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type), callArguments = [
 				for (index in 0...arguments.length)
 					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type, span), sourceArguments[index], span)
 			], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span), statements:Array<TypedStatement> = [];

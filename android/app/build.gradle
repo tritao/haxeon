@@ -9,6 +9,7 @@ def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 def haxeExecutable = new File(haxeonRoot, '.tools/haxe/haxe' + (isWindows ? '.exe' : ''))
 def appAssets = file('src/main/assets')
 def appAsset = new File(appAssets, 'app.hl')
+def haxeonNativeRoot = providers.gradleProperty('haxeonNativeRoot').orNull
 
 android {
     namespace 'org.haxeon.android'
@@ -41,6 +42,14 @@ android {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
             version '3.30.5'
+        }
+    }
+
+    if (haxeonNativeRoot != null) {
+        sourceSets {
+            main {
+                jniLibs.srcDirs = [new File(haxeonNativeRoot)]
+            }
         }
     }
 }

@@ -3,10 +3,22 @@ package tools;
 import haxe.Json;
 import haxe.io.Path;
 import build.HaxeonProjectBuild;
+import build.HaxeonNativePackageBuild;
+import build.Target;
+import build.NativeTargetSupport;
 import build.execution.ProcessRunner;
-import project.ProjectDiscovery;
+import project.PackageLockfile;
+import project.PackageResolver;
+import project.PackageSourceTools;
+import project.ProjectSourceAcquirer;
+import project.ResolvedPackage;
+import project.ResolvedProject;
+import project.SourceCache;
+import project.RegistryPublisher;
 import sys.FileSystem;
 import sys.io.File;
+import compiler.formatter.Formatter;
+import compiler.formatter.FormatConfig.FormatConfigTools;
 
 private typedef ProjectConfig = {
 	final entry:String;
@@ -27,7 +39,36 @@ private typedef BuildOptions = {
 	final defines:Array<String>;
 	final runtimeArguments:Array<String>;
 	final plan:Bool;
+	final explain:Bool;
+	final timings:Bool;
 	final jobs:Int;
+}
+
+private typedef FormatOptions = {
+	final check:Bool;
+	final stdin:Bool;
+	final lineWidth:Int;
+	final indentWidth:Int;
+	final useTabs:Bool;
+	final paths:Array<String>;
+}
+
+private typedef PackageOptions = {
+	final projectPath:String;
+	final locked:Bool;
+}
+
+private typedef AddOptions = {
+	final projectPath:String;
+	final name:Null<String>;
+	final git:String;
+	final rev:String;
+}
+
+private typedef PublishOptions = {
+	final projectPath:String;
+	final registry:String;
+	final version:String;
 }
 
 private typedef CommandCapture = {
@@ -50,9 +91,17 @@ class HaxeonCli {
 		try {
 			var status = switch command {
 				case "init": init(arguments);
+				case "add": add(arguments);
+				case "install": install(arguments);
+				case "update": update(arguments);
+				case "tree": tree(arguments);
+				case "why": why(arguments);
+				case "publish": publish(arguments);
+				case "package": packageCommand(arguments);
 				case "doctor": doctor(arguments);
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
+				case "fmt": fmt(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
 				case "help", "--help", "-h": usage();
@@ -89,8 +138,11 @@ class HaxeonCli {
 		}
 		if (entry.length == 0)
 			throw 'Option "--entry" requires a value';
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw 'Unsupported init target "$target"';
+		try {
+			Target.parse(target);
+		} catch (error:Dynamic) {
+			throw 'Unsupported init target "$target": ${Std.string(error)}';
+		}
 
 		var projectDirectory = Sys.getCwd(),
 			configPath = Path.join([projectDirectory, CONFIG_FILE]);
@@ -117,11 +169,213 @@ class HaxeonCli {
 			defines: [],
 			outputDir: "build",
 		};
-		Reflect.setField(config, "package", {name: Path.withoutDirectory(FileSystem.fullPath(projectDirectory))});
+		var normalizedProjectDirectory = Path.normalize(FileSystem.fullPath(projectDirectory)),
+			packageName = Path.withoutDirectory(normalizedProjectDirectory);
+		if (packageName.length == 0)
+			throw 'Could not derive a package name from project directory $normalizedProjectDirectory';
+		Reflect.setField(config, "package", {name: packageName});
 		if (target == "android")
 			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
 		File.saveContent(configPath, Json.stringify(config, null, "\t") + "\n");
 		Sys.println('Created $CONFIG_FILE and $sourcePath');
+		return 0;
+	}
+
+	static function fmt(arguments:Array<String>):Int {
+		var check = false, stdin = false, lineWidth = 120, indentWidth = 2, useTabs = false, paths:Array<String> = [], index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--check")
+				check = true;
+			else if (argument == "--stdin")
+				stdin = true;
+			else if (argument == "--use-tabs")
+				useTabs = true;
+			else if (argument == "--spaces" || argument == "--insert-spaces")
+				useTabs = false;
+			else if (argument == "--line-width" || argument == "--tab-size") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a positive integer';
+				var value = Std.parseInt(arguments[index++]);
+				if (value == null || value < 1)
+					throw 'Option "$argument" requires a positive integer';
+				if (argument == "--line-width")
+					lineWidth = value;
+				else
+					indentWidth = value;
+			} else if (StringTools.startsWith(argument, "--line-width=")) {
+				lineWidth = parsePositiveFormatOption(argument.substr("--line-width=".length), "--line-width");
+			} else if (StringTools.startsWith(argument, "--tab-size=")) {
+				indentWidth = parsePositiveFormatOption(argument.substr("--tab-size=".length), "--tab-size");
+			} else if (StringTools.startsWith(argument, "-"))
+				throw 'Unknown fmt option "$argument"';
+			else
+				paths.push(argument);
+		}
+		if (stdin && paths.length > 0)
+			throw 'haxeon fmt --stdin cannot be combined with file paths';
+		if (!stdin && paths.length == 0)
+			throw 'haxeon fmt requires a file path or --stdin';
+		var options:FormatOptions = {
+			check: check,
+			stdin: stdin,
+			lineWidth: lineWidth,
+			indentWidth: indentWidth,
+			useTabs: useTabs,
+			paths: paths
+		};
+		var config = FormatConfigTools.defaults(options.indentWidth, !options.useTabs);
+		config.lineWidth = options.lineWidth;
+		if (options.stdin) {
+			var source = Sys.stdin().readAll().toString(),
+				formatted = Formatter.format(source, config);
+			if (formatted == null)
+				throw "cannot format malformed source from stdin";
+			if (options.check)
+				return formatted == source ? 0 : 1;
+			Sys.print(formatted);
+			return 0;
+		}
+		var status = 0;
+		for (path in options.paths) {
+			if (!FileSystem.exists(path))
+				throw 'Source file not found: $path';
+			var source = File.getContent(path),
+				formatted = Formatter.format(source, config);
+			if (formatted == null)
+				throw 'Cannot format malformed source: $path';
+			if (formatted == source)
+				continue;
+			if (options.check) {
+				Sys.println('Would reformat $path');
+				status = 1;
+			} else
+				File.saveContent(path, formatted);
+		}
+		return status;
+	}
+
+	static function parsePositiveFormatOption(value:String, option:String):Int {
+		var parsed = Std.parseInt(value);
+		if (parsed == null || parsed < 1)
+			throw 'Option "$option" requires a positive integer';
+		return parsed;
+	}
+
+	static function add(arguments:Array<String>):Int {
+		var options = parseAddOptions(arguments),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd());
+		if (!FileSystem.exists(manifestPath))
+			throw 'Project file not found: $manifestPath';
+		var name = options.name == null ? inferPackageName(options.git) : options.name;
+		if (name == null || name.length == 0)
+			throw 'Git dependencies require a package name (pass it as the final argument or with --name)';
+		var raw:Dynamic;
+		try {
+			raw = Json.parse(File.getContent(manifestPath));
+		} catch (error:Dynamic) {
+			throw 'Could not parse $manifestPath: ${Std.string(error)}';
+		}
+		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
+			throw '$manifestPath must contain a JSON object';
+		var dependencies:Dynamic = Reflect.field(raw, "dependencies");
+		if (dependencies == null) {
+			dependencies = {};
+			Reflect.setField(raw, "dependencies", dependencies);
+		}
+		if (!Reflect.isObject(dependencies) || Std.isOfType(dependencies, Array))
+			throw '$manifestPath "dependencies" must be an object';
+		if (Reflect.hasField(dependencies, name))
+			throw 'Dependency "$name" is already declared in $manifestPath';
+		Reflect.setField(dependencies, name, {git: options.git, rev: options.rev});
+		File.saveContent(manifestPath, Json.stringify(raw, null, "\t") + "\n");
+		Sys.println('Added Git dependency ${name}@${options.rev}');
+		return 0;
+	}
+
+	static function install(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, true, "install"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			lockPath = lockfilePath(manifestPath),
+			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
+		if (options.locked && lockfile == null)
+			throw 'haxeon.lock is required for "haxeon install --locked"';
+		var project = resolveProject(manifestPath, lockfile, options.locked);
+		if (!options.locked)
+			project.lockfile.save(lockPath);
+		Sys.println('${options.locked ? "Validated" : "Installed"} ${project.packages.packages.length} packages');
+		return 0;
+	}
+
+	static function update(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, false, "update"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = resolveProject(manifestPath, null, false);
+		project.lockfile.save(lockfilePath(manifestPath));
+		Sys.println('Updated ${project.packages.packages.length} packages');
+		return 0;
+	}
+
+	static function publish(arguments:Array<String>):Int {
+		var options = parsePublishOptions(arguments),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			checksum = RegistryPublisher.publish(manifestPath, options.registry, options.version, SourceCache.registryRoot());
+		Sys.println('Published ${options.version} from $manifestPath to ${options.registry} (checksum $checksum)');
+		return 0;
+	}
+
+	static function packageCommand(arguments:Array<String>):Int {
+		if (arguments.length == 0 || arguments[0] != "check")
+			throw 'Usage: haxeon package check [--project PATH]';
+		var options = parsePackageOptions(arguments.slice(1), false, "package check"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = discoverProject(manifestPath),
+			target = Target.parse(project.manifest.target);
+		NativeTargetSupport.validate(project, target);
+		Sys.println('Package graph for ${project.rootPackage.name} [${target.toString()}]');
+		for (resolvedPackage in project.packages.packages) {
+			var native = resolvedPackage.manifest.native == null ? "none" : resolvedPackage.manifest.native.cmake != null ? "cmake" : "sources";
+			Sys.println('  ${resolvedPackage.name} ${PackageSourceTools.describe(resolvedPackage.source)} native:$native');
+		}
+		if (FileSystem.exists(lockfilePath(manifestPath)))
+			Sys.println("  lockfile: validated");
+		else
+			Sys.println("  lockfile: not present");
+		return 0;
+	}
+
+	static function tree(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, false, "tree"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			project = discoverProject(manifestPath);
+		printTree(project.rootPackage, project, "", new Map());
+		return 0;
+	}
+
+	static function why(arguments:Array<String>):Int {
+		var projectPath = CONFIG_FILE, packageName:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "--project" requires a value';
+				projectPath = arguments[index++];
+			} else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else if (StringTools.startsWith(argument, "--"))
+				throw 'Unknown why option "$argument"';
+			else if (packageName == null)
+				packageName = argument;
+			else
+				throw 'Unexpected why argument "$argument"';
+		}
+		if (packageName == null || packageName.length == 0)
+			throw 'Usage: haxeon why <package> [--project PATH]';
+		var project = discoverProject(resolvePath(projectPath, Sys.getCwd())),
+			path = packagePath(project.rootPackage, packageName, project, new Map());
+		if (path == null)
+			throw 'Package "$packageName" is not reachable from ${project.rootPackage.name}';
+		Sys.println(path.join(" -> "));
 		return 0;
 	}
 
@@ -187,24 +441,33 @@ class HaxeonCli {
 		var projectDirectory = Path.directory(projectConfigPath);
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
-		var project = ProjectDiscovery.discover(projectConfigPath),
-			target = options.target == null ? project.manifest.target : options.target;
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw 'Unsupported CLI target "$target". Supported targets are "host", "wasm32", and "android".';
-		if (launch && target == "wasm32")
+		var requestedTarget:Null<Target> = options.target == null ? null : Target.parse(options.target),
+			resolveStarted = Date.now().getTime(),
+			project = discoverProject(projectConfigPath, requestedTarget),
+			resolutionMs = Date.now().getTime() - resolveStarted,
+			target = options.target == null ? project.manifest.target : options.target,
+			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
+		if (launch && targetInfo.isWasm())
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
 		if (options.plan && launch)
 			throw 'Option "--plan" is only valid with "haxeon build"';
+		if (options.explain && launch)
+			throw 'Option "--explain" is only valid with "haxeon build"';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
-		if (target != "android" && options.device != null)
+		if (!targetInfo.isAndroid() && options.device != null)
 			throw 'Option "--device" requires "--target android"';
+		if ((options.plan || options.explain || options.timings)
+			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
+			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
 
 		var home = haxeonHome();
-		if (target == "host" && project.manifest.target == "host") {
+		NativeTargetSupport.validate(project, targetInfo);
+		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
-			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan);
+			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
+				resolutionMs);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -221,12 +484,16 @@ class HaxeonCli {
 		if (options.plan)
 			throw 'Plan output is currently available for host builds only';
 		for (resolvedPackage in project.packages.packages)
-			if (resolvedPackage.nativeSources.length > 0)
-				throw 'Native C package "${resolvedPackage.name}" requires target "host"; target "$target" is not supported yet';
+			if (resolvedPackage.nativeSources.length > 0 && !targetInfo.isAndroid())
+				throw 'Native C package "${resolvedPackage.name}" requires target "host" or an Android NDK provider; target "$target" is not supported yet';
 		var config = loadConfig(projectConfigPath);
-		if (target == "android") {
+		if (targetInfo.isAndroid()) {
+			configureAndroidEnvironment(home);
+			var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
+			if (nativeStatus != 0)
+				return nativeStatus;
 			var androidOutput = options.output == null ? defaultOutput(config, projectDirectory, "android") : resolvePath(options.output, projectDirectory);
-			var status = buildAndroid(home, projectConfigPath, config, androidOutput);
+			var status = buildAndroid(home, projectConfigPath, config, androidOutput, HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
 			if (status != 0 || !launch)
 				return status;
 			return installAndLaunchAndroid(home, androidOutput, config.androidApplicationId, options.device);
@@ -280,7 +547,7 @@ class HaxeonCli {
 		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
 	}
 
-	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String):Int {
+	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String, nativeRoot:String):Int {
 		configureAndroidEnvironment(home);
 		var sdk = Path.join([home, ".tools", "android-sdk"]),
 			ndk = Path.join([sdk, "ndk", "30.0.16248370"]);
@@ -299,6 +566,7 @@ class HaxeonCli {
 			androidDirectory,
 			"assembleDebug",
 			"-PhaxeonProject=" + projectConfigPath,
+			"-PhaxeonNativeRoot=" + nativeRoot,
 			"-PhaxeonApplicationId=" + config.androidApplicationId,
 			"-PhaxeonAppLabel=" + config.androidAppLabel
 		];
@@ -412,7 +680,7 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, jobs = 4;
+			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -422,6 +690,10 @@ class HaxeonCli {
 			}
 			if (argument == "--plan")
 				plan = true;
+			else if (argument == "--explain")
+				explain = true;
+			else if (argument == "--timings")
+				timings = true;
 			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
@@ -473,8 +745,167 @@ class HaxeonCli {
 			defines: defines,
 			runtimeArguments: runtimeArguments,
 			plan: plan,
+			explain: explain,
+			timings: timings,
 			jobs: jobs
 		};
+	}
+
+	static function parsePackageOptions(arguments:Array<String>, allowLocked:Bool, command:String):PackageOptions {
+		var projectPath = CONFIG_FILE, locked = false, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--locked") {
+				if (!allowLocked)
+					throw 'Unknown $command option "--locked"';
+				locked = true;
+			} else if (argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "--project" requires a value';
+				projectPath = arguments[index++];
+			} else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else
+				throw 'Unknown $command option "$argument"';
+		}
+		return {projectPath: projectPath, locked: locked};
+	}
+
+	static function parseAddOptions(arguments:Array<String>):AddOptions {
+		var projectPath = CONFIG_FILE, name:Null<String> = null, git:Null<String> = null, rev:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--git" || argument == "--rev" || argument == "--name" || argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				switch argument {
+					case "--git":
+						git = value;
+					case "--rev":
+						rev = value;
+					case "--name":
+						name = value;
+					case "--project":
+						projectPath = value;
+					case _:
+				}
+			} else if (StringTools.startsWith(argument, "--git="))
+				git = argument.substr("--git=".length);
+			else if (StringTools.startsWith(argument, "--rev="))
+				rev = argument.substr("--rev=".length);
+			else if (StringTools.startsWith(argument, "--name="))
+				name = argument.substr("--name=".length);
+			else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else if (StringTools.startsWith(argument, "--"))
+				throw 'Unknown add option "$argument"';
+			else if (name == null)
+				name = argument;
+			else
+				throw 'Unexpected add argument "$argument"';
+		}
+		if (git == null || git.length == 0)
+			throw 'Option "--git" requires a non-empty URL';
+		if (rev == null || rev.length == 0)
+			throw 'Option "--rev" requires a non-empty ref';
+		return {
+			projectPath: projectPath,
+			name: name,
+			git: git,
+			rev: rev
+		};
+	}
+
+	static function parsePublishOptions(arguments:Array<String>):PublishOptions {
+		var projectPath = CONFIG_FILE, registry:Null<String> = null, version:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--registry" || argument == "--version" || argument == "--project") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				switch argument {
+					case "--registry":
+						registry = value;
+					case "--version":
+						version = value;
+					case "--project":
+						projectPath = value;
+					case _:
+				}
+			} else if (StringTools.startsWith(argument, "--registry="))
+				registry = argument.substr("--registry=".length);
+			else if (StringTools.startsWith(argument, "--version="))
+				version = argument.substr("--version=".length);
+			else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else
+				throw 'Unknown publish option "$argument"';
+		}
+		if (registry == null || registry.length == 0)
+			throw 'Option "--registry" requires a non-empty registry name';
+		if (version == null || version.length == 0)
+			throw 'Option "--version" requires an exact package version';
+		return {projectPath: projectPath, registry: registry, version: version};
+	}
+
+	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject {
+		var lockPath = lockfilePath(manifestPath),
+			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
+		return resolveProject(manifestPath, lockfile, lockfile != null, target);
+	}
+
+	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool, ?target:Target):ResolvedProject {
+		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile, locked, target);
+	}
+
+	static function lockfilePath(manifestPath:String):String
+		return Path.join([Path.directory(manifestPath), "haxeon.lock"]);
+
+	static function inferPackageName(url:String):String {
+		var value = url;
+		while (StringTools.endsWith(value, "/"))
+			value = value.substr(0, value.length - 1);
+		var slash = value.lastIndexOf("/");
+		value = slash < 0 ? value : value.substr(slash + 1);
+		return StringTools.endsWith(value, ".git") ? value.substr(0, value.length - 4) : value;
+	}
+
+	static function printTree(packageValue:ResolvedPackage, project:ResolvedProject, prefix:String, active:Map<String, Bool>):Void {
+		Sys.println('$prefix${packageValue.name} [${projectPackageSource(packageValue)}]');
+		if (active.exists(packageValue.name))
+			return;
+		active.set(packageValue.name, true);
+		for (dependency in packageValue.dependencies) {
+			var child = project.packages.get(dependency);
+			if (child != null)
+				printTree(child, project, prefix + "  ", active);
+		}
+		active.remove(packageValue.name);
+	}
+
+	static function projectPackageSource(packageValue:ResolvedPackage):String
+		return PackageSourceTools.describe(packageValue.source);
+
+	static function packagePath(current:ResolvedPackage, target:String, project:ResolvedProject, active:Map<String, Bool>):Null<Array<String>> {
+		if (current.name == target)
+			return [current.name];
+		if (active.exists(current.name))
+			return null;
+		active.set(current.name, true);
+		for (dependency in current.dependencies) {
+			var child = project.packages.get(dependency);
+			if (child != null) {
+				var path = packagePath(child, target, project, active);
+				if (path != null) {
+					active.remove(current.name);
+					return [current.name].concat(path);
+				}
+			}
+		}
+		active.remove(current.name);
+		return null;
 	}
 
 	static function loadConfig(path:String):ProjectConfig {
@@ -510,8 +941,11 @@ class HaxeonCli {
 			throw '$path must list at least one source in "sources"';
 		if (sourceRoots.length == 0)
 			throw '$path must list at least one path in "sourceRoots"';
-		if (target != "host" && target != "wasm32" && target != "android")
-			throw '$path target must be "host", "wasm32", or "android"';
+		try {
+			Target.parse(target);
+		} catch (error:Dynamic) {
+			throw '$path has an invalid target "$target": ${Std.string(error)}';
+		}
 		return {
 			entry: entry,
 			sources: sources,
@@ -621,11 +1055,22 @@ class HaxeonCli {
 	static function usage(status:Int = 0):Int {
 		Sys.println("Usage: haxeon <command> [options]");
 		Sys.println("  init [--entry Main] [--target host|wasm32|android]");
+		Sys.println("  add --git URL --rev REF [NAME]  Add a Git package dependency");
+		Sys.println("  install [--locked]              Resolve dependencies and write haxeon.lock");
+		Sys.println("  update                          Re-resolve refs and rewrite haxeon.lock");
+		Sys.println("  publish --registry NAME --version VERSION  Publish an immutable local release");
+		Sys.println("  package check [--project PATH]     Validate the resolved package graph");
+		Sys.println("  tree                            Show the resolved package graph");
+		Sys.println("  why PACKAGE                     Explain a dependency path");
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");
+		Sys.println("  fmt [options] PATH...          Format Haxe source files");
+		Sys.println("       [--check] [--stdin]      Check files or format stdin");
+		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
-		Sys.println("       [--plan] [--jobs COUNT]   Inspect the host build plan or set worker count");
+		Sys.println("       [--plan] [--explain] [--timings] [--jobs COUNT]");
+		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");

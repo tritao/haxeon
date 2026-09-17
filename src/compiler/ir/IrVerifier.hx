@@ -356,14 +356,14 @@ class IrVerifier {
 				if (signature == null || signature.arguments.length != args.length + 1)
 					throw 'Unknown or mismatched IR method "$methodName"';
 				if (!compatibleType(object.type, signature.arguments[0], objects, interfaces))
-					throw 'Wrong IR method receiver type';
+					throw 'Wrong IR method receiver type for "$methodName": got ${object.type}, expected ${signature.arguments[0]}';
 				for (i in 0...args.length) {
 					require(values, args[i]);
 					if (!compatibleType(args[i].type, signature.arguments[i + 1], objects, interfaces))
-						throw 'Wrong IR method argument type';
+						throw 'Wrong IR method argument type for "$methodName" at argument ${i + 1}: got ${args[i].type}, expected ${signature.arguments[i + 1]}';
 				}
 				if (!sameType(out.type, signature.result))
-					throw 'Wrong IR method result type';
+					throw 'Wrong IR method result type for "$methodName": got ${out.type}, expected ${signature.result}';
 			case NewObject(out, typeName):
 				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';

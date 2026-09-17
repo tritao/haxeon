@@ -699,8 +699,12 @@ class WasmFunctionLower {
 						}
 					case Virtual(interfaceName):
 						var targets = virtualTargets(context.program, interfaceName, methodName, functions);
-						if (targets.length == 0)
-							throw 'Wasm interface method "$interfaceName.$methodName" has no implementations';
+						if (targets.length == 0) {
+							// The closed-world program contains no concrete implementation for
+							// this interface method. Preserve the language's invalid-dispatch
+							// trap without requiring an otherwise-unused implementation class.
+							body.push(Unreachable);
+						}
 						var calls = context.representation.calls,
 							represented = calls == null ? UseDefault : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
 								output.type == Void ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);

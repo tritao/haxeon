@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.tools.CompilerRequest.PackageSourceRoot;
+import sys.io.File;
 
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
@@ -31,7 +32,15 @@ class CompilerArguments {
 				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
-			else if (StringTools.startsWith(argument, "--package-root="))
+			else if (StringTools.startsWith(argument, "--sources-file=")) {
+				var manifest = File.getContent(value(argument, "--sources-file="));
+				for (path in manifest.split("\n")) {
+					if (StringTools.endsWith(path, "\r"))
+						path = path.substr(0, path.length - 1);
+					if (path.length > 0)
+						paths.push(path);
+				}
+			} else if (StringTools.startsWith(argument, "--package-root="))
 				packageRoots.push(packageRoot(value(argument, "--package-root=")));
 			else if (StringTools.startsWith(argument, "--ffi-header="))
 				ffiHeader = value(argument, "--ffi-header=");
@@ -70,12 +79,14 @@ class CompilerArguments {
 			throw "Haxeon compiler requires an explicit source manifest";
 		if (target != "hl" && target != "wasm32" && target != "wasm64" && target != "wasmgc" && target != "wasm-gc")
 			throw 'Unsupported compiler target "$target"';
-		if ((importMemory || memoryBase != 0 || wasmMemoryStats || wasmGcStress) && target != "wasm32")
-			throw "Wasm-specific options require --target=wasm32";
+		if ((importMemory || memoryBase != 0) && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
+		if ((wasmMemoryStats || wasmGcStress) && target != "wasm32")
+			throw "Wasm allocator options require --target=wasm32";
 		if (exports.length != 0 && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
 			throw "Function exports require a Wasm32 or Wasm GC target";
-		if (memoryContract != null && target != "wasm32")
-			throw "--wasm-memory-contract requires --target=wasm32";
+		if (memoryContract != null && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+			throw "--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc";
 		if (memoryContract != null && !importMemory)
 			throw "--wasm-memory-contract requires --wasm-import-memory";
 		if (memoryContract != null && memoryBase != 0)

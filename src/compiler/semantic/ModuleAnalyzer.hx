@@ -149,6 +149,7 @@ class ModuleAnalyzer {
 		state.interfaceFingerprints = changes.interfaceFingerprints;
 		state.aliasFingerprints = changes.aliasFingerprints;
 		state.enumFingerprints = changes.enumFingerprints;
+		state.wireFieldFingerprints = changes.wireFieldFingerprints;
 		state.staticInitializerFingerprints = changes.staticInitializerFingerprints;
 		state.instanceInitializerFingerprints = changes.instanceInitializerFingerprints;
 		state.dirty = false;

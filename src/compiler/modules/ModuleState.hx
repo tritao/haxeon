@@ -55,6 +55,7 @@ class ModuleState {
 	public var interfaceFingerprints:Map<String, String> = [];
 	public var aliasFingerprints:Map<String, String> = [];
 	public var enumFingerprints:Map<String, String> = [];
+	public var wireFieldFingerprints:Map<String, String> = [];
 	public var abstractFingerprints:Map<String, String> = [];
 	public var ownerConstraintFingerprints:Map<String, String> = [];
 	public var staticInitializerFingerprints:Map<String, String> = [];
@@ -125,6 +126,7 @@ class ModuleState {
 		result.interfaceFingerprints = copyMap(interfaceFingerprints);
 		result.aliasFingerprints = copyMap(aliasFingerprints);
 		result.enumFingerprints = copyMap(enumFingerprints);
+		result.wireFieldFingerprints = copyMap(wireFieldFingerprints);
 		result.abstractFingerprints = copyMap(abstractFingerprints);
 		result.ownerConstraintFingerprints = copyMap(ownerConstraintFingerprints);
 		result.staticInitializerFingerprints = copyMap(staticInitializerFingerprints);

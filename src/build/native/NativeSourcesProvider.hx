@@ -2,24 +2,24 @@ package build.native;
 
 import build.Artifact;
 import build.Artifact.ArtifactKind;
-import build.BuildEnvironment;
-import build.TargetLayout;
+import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import haxe.io.Path;
 import project.ResolvedPackage;
 
-/** Lowers C sources to object files, a static archive, and a HashLink HDLL. */
+/** Lowers C sources to object files and only the native library artifacts in the plan. */
 class NativeSourcesProvider {
-	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, environment:BuildEnvironment, layout:TargetLayout,
-			compilerHome:String):{
+	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, context:LoweringContext):{
 		actions:Array<ExecutionAction>,
 		artifactActions:Map<String, Array<ActionId>>
 	} {
 		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources, resolvedPackage.includeDirs),
+			environment = context.environment,
+			layout = context.layout,
 			toolchain = new NativeToolchain(environment),
-			hashlinkIncludes = Path.join([compilerHome, "vendor", "hashlink", "src"]),
+			hashlinkIncludes = Path.join([context.compilerHome, "vendor", "hashlink", "src"]),
 			includeDirs = library.includeDirs.concat([hashlinkIncludes]),
 			actions:Array<ExecutionAction> = [],
 			artifactActions:Map<String, Array<ActionId>> = [],
@@ -29,9 +29,10 @@ class NativeSourcesProvider {
 				var sourceRelative = artifact.details.get("source"),
 					source = Path.join([resolvedPackage.root, sourceRelative]),
 					output = layout.objectPath(library.packageName, sourceRelative),
-					id = new ActionId('native-compile:${artifact.id.key()}');
+					id = new ActionId('native-compile:${artifact.id.key()}'),
+					inputs = [source].concat(NativeDependencyScanner.dependencies(source, includeDirs));
 				objectPaths.set(artifact.id.key(), output);
-				actions.push(new ExecutionAction(id, [], [source].concat(includeDirs), [output], 'Compile C $source -> $output',
+				actions.push(new ExecutionAction(id, [], inputs, [output], 'Compile C $source -> $output',
 					Process(toolchain.compileCommand(), toolchain.compileArguments(source, output, includeDirs), resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [id]);
 			}
@@ -47,7 +48,7 @@ class NativeSourcesProvider {
 					output = isStatic ? layout.nativeStaticLibraryPath(library.packageName,
 						library.packageName) : layout.haxeonNativeLibraryPath(library.packageName),
 					id = new ActionId('${isStatic ? "native-archive" : "native-link"}:${artifact.id.key()}'),
-					command = isStatic ? toolchain.archiveCommand() : toolchain.compileCommand(),
+					command = isStatic ? toolchain.archiveCommand() : toolchain.sharedCommand(),
 					arguments = isStatic ? toolchain.archiveArguments(output, objects) : toolchain.sharedArguments(output, objects);
 				actions.push(new ExecutionAction(id, dependencies, objects, [output],
 					'${isStatic ? "Archive" : "Link shared library"} ${library.packageName} -> $output',
