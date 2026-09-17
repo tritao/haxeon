@@ -277,6 +277,36 @@ class WasmModuleSupport {
 		return reachable;
 	}
 
+	/**
+	 * Computes Wasm reachability including calls introduced while lowering
+	 * runtime natives. Those calls are not present in the source IR, so they
+	 * cannot be discovered by reachableFunctions alone. Keep this dependency
+	 * expansion centralized so the linear and GC backends cannot drift apart.
+	 */
+	public static function reachableFunctionsWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
+		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy(),
+			reachable = reachableFunctions(program, entry, roots);
+		while (true) {
+			var added = false, usedNatives = reachableNatives(program, reachable);
+			for (nativeName in usedNatives.keys())
+				for (dependency in generatedRuntimeDependencies(nativeName))
+					if (roots.indexOf(dependency) < 0) {
+						roots.push(dependency);
+						added = true;
+					}
+			if (!added)
+				return reachable;
+			reachable = reachableFunctions(program, entry, roots);
+		}
+	}
+
+	/** Functions referenced by compiler-generated implementations of natives. */
+	static function generatedRuntimeDependencies(nativeName:String):Array<String>
+		return switch nativeName {
+			case "__std_string": ["runtime.Ryu.format"];
+			default: [];
+		};
+
 	static function enqueueFunction(name:Null<String>, byName:Map<String, IrFunction>, pending:Array<String>):Void
 		if (name != null && byName.exists(name))
 			pending.push(name);

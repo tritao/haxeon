@@ -110,9 +110,7 @@ class WasmLinearModuleBuilder {
 		var roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		if (WasmModuleSupport.hasFunction(program, "runtime.Ryu.format"))
-			roots.push("runtime.Ryu.format");
-		reachable = WasmModuleSupport.reachableFunctions(program, preferredEntry, roots);
+		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
 		layout = new WasmLayout(program);

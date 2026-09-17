@@ -8,6 +8,7 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmRuntimeAbi;
+import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.WasmStructurer;
 import compiler.backend.wasm.WasmPatch;
@@ -51,6 +52,29 @@ class WasmBackendMain {
 		var runtimeOps = WasmRuntimeAbi.operations(Frontend.compile("function main():Int { var value = 40; return value + 2; }"));
 		if (runtimeOps.length != 0)
 			throw "Scalar Wasm IR should not require runtime operations";
+		var generatedNativeBuilder = new IrBuilder(),
+			generatedNativeArgument = generatedNativeBuilder.constInt(1);
+		generatedNativeBuilder.call("__std_string", [generatedNativeArgument], Bytes);
+		generatedNativeBuilder.returnValue(generatedNativeBuilder.constInt(0));
+		var generatedNativeProgram = Frontend.compile("function main():Int return 42;");
+		generatedNativeProgram.functions = [
+			new IrFunction("main", [], I32, generatedNativeBuilder.blocks),
+			new IrFunction("runtime.Ryu.format", [], Bytes, [])
+		];
+		generatedNativeProgram.natives.push({
+			name: "__std_string",
+			library: "haxeon_runtime",
+			symbol: "__std_string",
+			arguments: [Dyn],
+			result: Bytes
+		});
+		var generatedNativeReachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(generatedNativeProgram, "main");
+		if (!generatedNativeReachable.exists("runtime.Ryu.format"))
+			throw "Wasm reachability must retain runtime helpers called by generated native wrappers";
+		var unusedRuntimeProgram = Frontend.compile("function main():Int return 42;");
+		unusedRuntimeProgram.functions.push(new IrFunction("runtime.Ryu.format", [], Bytes, []));
+		if (WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(unusedRuntimeProgram, "main").exists("runtime.Ryu.format"))
+			throw "Wasm reachability must not root unused generated runtime helpers";
 		if (WasmGcRoots.analyze(Frontend.compile("function main():Int return 42;").functions[0]).length != 0)
 			throw "Scalar functions should not have managed GC roots";
 		var boxingProgram = Frontend.compile("class Marker { public function new() {} } function main():Int { var marker = new Marker(); var boxed:Dynamic = 1; return boxed == 1 && marker != null ? 42 : 0; }");

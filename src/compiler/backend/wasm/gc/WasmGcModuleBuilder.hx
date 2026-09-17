@@ -53,9 +53,7 @@ class WasmGcModuleBuilder {
 			roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		if (WasmModuleSupport.hasFunction(program, "runtime.Ryu.format"))
-			roots.push("runtime.Ryu.format");
-		var reachable = WasmModuleSupport.reachableFunctions(program, preferredEntry, roots);
+		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
 		validateGcSubset(program, reachable, preferredEntry);
 		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable),
