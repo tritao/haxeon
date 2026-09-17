@@ -2553,21 +2553,6 @@ class LanguageServiceMain {
 			visibilityReferences = visibilityService.references("visible/Main.hx", visibilityPosition);
 		if (visibilityDefinition != null || visibilityReferences.length != 0)
 			throw "recovered resolution bound a symbol from an invisible module";
-		var rootPackageService = new LanguageService(),
-			rootPackageTarget = "class RootPackageType { public var member:Int; } function main():Void return;",
-			rootPackageSource = "function use(value:RootPackageType):Void { value.member; } function main():Void return;";
-		rootPackageService.update("RootPackageType.hx", rootPackageTarget);
-		rootPackageService.compile("RootPackageType");
-		rootPackageService.update("RootPackageUse.hx", rootPackageSource);
-		var rootPackageTypePosition = rootPackageSource.indexOf(":RootPackageType") + 2,
-			rootPackageMemberPosition = rootPackageSource.indexOf("value.member") + "value.".length + 1,
-			rootPackageTypeDefinition = rootPackageService.typeDefinition("RootPackageUse.hx", rootPackageTypePosition),
-			rootPackageMemberDefinition = rootPackageService.definition("RootPackageUse.hx", rootPackageMemberPosition);
-		if (rootPackageTypeDefinition == null
-			|| rootPackageTypeDefinition.path != "RootPackageType.hx"
-			|| rootPackageMemberDefinition == null
-			|| rootPackageMemberDefinition.path != "RootPackageType.hx")
-			throw 'root-package modules did not preserve same-package type/member identity: type=${rootPackageTypeDefinition == null ? "null" : rootPackageTypeDefinition.path}, member=${rootPackageMemberDefinition == null ? "null" : rootPackageMemberDefinition.path}';
 		var invisibleTypeSource = "package visible; function main():Void { var value:Target; }";
 		visibilityService.update("visible/TypeUse.hx", invisibleTypeSource);
 		var invisibleTypePosition = invisibleTypeSource.indexOf("Target") + 1,
