@@ -74,9 +74,10 @@ class SemanticModel {
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram,
 			?resolve:String->Null<SemanticSymbolId>, ?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
 			?resolveType:(String, Array<compiler.types.Type.CompilerType>) -> Null<compiler.types.Type.CompilerType>,
-			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticModel):Void {
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticModel,
+			?resolveTypeSymbol:String->Null<SemanticSymbolId>):Void {
 		builder.indexRecoveredSyntax(program, token, typedProgram, resolve, resolveEnumCase, resolveType, candidates,
-			previous == null ? null : previous.builder);
+			previous == null ? null : previous.builder, resolveTypeSymbol);
 	}
 
 	function get_isFrozen():Bool

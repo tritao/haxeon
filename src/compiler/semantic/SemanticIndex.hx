@@ -150,6 +150,7 @@ class SemanticIndexBuilder {
 	/** Function key used to keep recovered lambda locals distinct and stable. */
 	var currentRecoveredFunctionKey:String = "";
 	var recoveryResolve:Null<String->Null<SemanticSymbolId>>;
+	var recoveryResolveTypeSymbol:Null<String->Null<SemanticSymbolId>>;
 	var recoveryCandidates:Null<String->Array<SemanticSymbolId>>;
 	var recoveryResolveEnumCase:Null<(String, Int) -> Null<SemanticSymbolId>>;
 	var recoveryResolveType:Null<(String, Array<CompilerType>) -> Null<CompilerType>>;
@@ -570,10 +571,12 @@ class SemanticIndexBuilder {
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
 			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
-			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndexBuilder):Void {
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndexBuilder,
+			?resolveTypeSymbol:String->Null<SemanticSymbolId>):Void {
 		ensureMutable();
 		cancellation = token;
 		recoveryResolve = resolve;
+		recoveryResolveTypeSymbol = resolveTypeSymbol;
 		recoveryCandidates = candidates;
 		recoveryResolveEnumCase = resolveEnumCase;
 		recoveryResolveType = resolveType;
@@ -658,13 +661,17 @@ class SemanticIndexBuilder {
 		// Bind type annotations from the current recovered source as well as
 		// expression uses. Resolved names retain authoritative identities when
 		// available, while declarations from this module remain editor-local.
-		indexTypeReferences(function(name:String):Null<SemanticSymbolId> return resolvedRecoveredSymbol(name), token);
+		indexTypeReferences(function(name:String):Null<SemanticSymbolId> {
+			var local = resolvedRecoveredSymbol(name);
+			return local != null ? local : recoveryResolveTypeSymbol == null ? null : recoveryResolveTypeSymbol(name);
+		}, token);
 		indexRecoveredTokenQualifiers();
 		cancellation = token;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
 		recoveryResolve = null;
+		recoveryResolveTypeSymbol = null;
 		recoveryCandidates = null;
 		recoveryResolveEnumCase = null;
 		recoveryResolveType = null;
@@ -2806,9 +2813,28 @@ class SemanticIndexBuilder {
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
 		ensureMutable();
 		var started = Sys.time();
+		var started = Sys.time();
 		if (token != null)
 			token.check();
 		cancellation = token;
+		// A recovered module can contain many repeated type-path tokens (for
+		// example one qualifier per import). Resolution is stable for this pass,
+		// so cache both hits and misses without weakening cancellation checkpoints.
+		var resolvedNames:Map<String, SemanticSymbolId> = [],
+			unresolvedNames:Map<String, Bool> = [];
+		var resolveCached = function(name:String):Null<SemanticSymbolId> {
+			var cached = resolvedNames.get(name);
+			if (cached != null)
+				return cached;
+			if (unresolvedNames.exists(name))
+				return null;
+			var resolved = resolve(name);
+			if (resolved == null)
+				unresolvedNames.set(name, true);
+			else
+				resolvedNames.set(name, resolved);
+			return resolved;
+		};
 		for (index in 0...tokens.length) {
 			checkpoint();
 			var token = tokens[index];
@@ -2816,9 +2842,9 @@ class SemanticIndexBuilder {
 				continue;
 			var name = qualifiedTokenName(index), id = typeParameterAt(token.span.start, token.text);
 			if (id == null)
-				id = resolve(name);
+				id = resolveCached(name);
 			if (id == null)
-				id = resolve(token.text);
+				id = resolveCached(token.text);
 			if (id != null)
 				bind(id, token.span);
 			else

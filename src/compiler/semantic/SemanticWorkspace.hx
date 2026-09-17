@@ -46,8 +46,12 @@ class SemanticWorkspace {
 	final modules:Map<String, ModuleState>;
 	final symbolResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
 	final typeResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
+	/** Current editor-model type identities, including recovered modules. */
+	final editorTypeResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
+	final editorQualifiedTypeResolutionIndex:Map<String, Null<SemanticSymbolId>> = [];
 	final enumCaseResolutionCache:Map<String, Null<SemanticSymbolId>> = [];
 	var resolutionIndexesValid = false;
+	var editorTypeResolutionIndexValid = false;
 
 	public function new(modules:Map<String, ModuleState>)
 		this.modules = modules;
@@ -482,8 +486,11 @@ class SemanticWorkspace {
 
 	public function invalidateResolutionCache():Void {
 		resolutionIndexesValid = false;
+		editorTypeResolutionIndexValid = false;
 		symbolResolutionIndex.clear();
 		typeResolutionIndex.clear();
+		editorTypeResolutionIndex.clear();
+		editorQualifiedTypeResolutionIndex.clear();
 		enumCaseResolutionCache.clear();
 	}
 
@@ -1134,25 +1141,39 @@ class SemanticWorkspace {
 
 	/** Resolve a canonical type name from the current editor-visible models. */
 	function editorTypeIdentityByName(name:String, ?token:CancellationToken, includeShort:Bool = true):Null<SemanticSymbolId> {
-		var matches:Array<SemanticSymbolId> = [];
+		ensureEditorTypeResolutionIndex(token);
+		if (!includeShort)
+			return editorQualifiedTypeResolutionIndex.get(name);
+		var resolved = editorTypeResolutionIndex.get(name);
+		return editorTypeResolutionIndex.exists(name) ? resolved : null;
+	}
+
+	function ensureEditorTypeResolutionIndex(?token:CancellationToken):Void {
+		if (editorTypeResolutionIndexValid)
+			return;
+		editorTypeResolutionIndex.clear();
+		editorQualifiedTypeResolutionIndex.clear();
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
 			var model = editorModel(state);
 			if (model == null)
 				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
 			for (symbol in model.index.symbols) {
 				if (token != null)
 					token.check();
 				if (!isTypeKind(symbol.kind))
 					continue;
-				var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".",
-					canonical = packagePrefix + symbol.name;
-				if (canonical == name || includeShort && symbol.name == name)
-					addUniqueIdentity(matches, symbol.id);
+				addResolutionCandidate(editorTypeResolutionIndex, symbol.name, symbol.id);
+				if (packagePrefix.length > 0) {
+					addResolutionCandidate(editorTypeResolutionIndex, packagePrefix + symbol.name, symbol.id);
+					addResolutionCandidate(editorQualifiedTypeResolutionIndex, packagePrefix + symbol.name, symbol.id);
+				} else
+					addResolutionCandidate(editorQualifiedTypeResolutionIndex, symbol.name, symbol.id);
 			}
 		}
-		return matches.length == 1 ? matches[0] : null;
+		editorTypeResolutionIndexValid = true;
 	}
 
 	function editorImportedTypeName(target:ModuleState, model:compiler.semantic.SemanticModel, importPath:String):Null<String> {

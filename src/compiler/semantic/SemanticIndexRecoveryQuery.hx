@@ -63,19 +63,32 @@ class SemanticIndexRecoveryQuery {
 			addReceiverType(receiverTypes, seenReceiverTypes, base);
 		var names:Array<String> = [for (name in recoveredFunctions.keys()) name];
 		names.sort(Reflect.compare);
+		var memberNames:Array<String> = [];
+		for (name in names) {
+			var separator = name.lastIndexOf(".");
+			if (separator > 0) {
+				var member = name.substr(separator + 1);
+				if (memberNames.indexOf(member) < 0)
+					memberNames.push(member);
+			}
+		}
+		memberNames.sort(Reflect.compare);
+		var methodPresence:Map<String, Bool> = [];
 		for (receiverType in receiverTypes) {
 			var owner = receiverOwner(receiverType);
+			if (owner == null)
+				continue;
+			for (member in memberNames)
+				if (hasRecoveredMethod(builder, owner, member, [], methodPresence))
+					materializeSignature(builder, owner + "." + member, receiverType);
 			for (name in names) {
 				var separator = name.lastIndexOf(".");
 				if (separator < 1)
 					continue;
-				materializeSignature(builder, name, receiverType);
-				// Inherited methods are stored under their declaration owner (for
-				// example Base.get), while editor queries use the receiver owner
-				// (Child.get). Materialize that view with Child's substitutions so
-				// generic base signatures retain the concrete receiver arguments.
-				if (owner != null)
-					materializeSignature(builder, owner + "." + name.substr(separator + 1), receiverType);
+				var declarationOwner = name.substring(0, separator),
+					member = name.substr(separator + 1);
+				if (declarationOwner != owner && hasRecoveredMethod(builder, declarationOwner, member, [], methodPresence))
+					materializeSignature(builder, name, receiverType);
 			}
 		}
 	}
@@ -165,6 +178,71 @@ class SemanticIndexRecoveryQuery {
 		if (signature != null)
 			receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
 	}
+
+	static function hasRecoveredMethod(builder:SemanticIndexBuilder, owner:String, member:String, visiting:Array<String>, memo:Map<String, Bool>):Bool {
+		if (visiting.indexOf(owner) >= 0)
+			return false;
+		var key = owner + "\u0000" + member,
+			cached = memo.get(key);
+		if (cached != null)
+			return cached;
+		var nextVisiting = visiting.concat([owner]),
+			classDecl = builder.recoveredClassDeclaration(owner);
+		if (classDecl != null) {
+			for (method in classDecl.methods)
+				if (method.name == member) {
+					memo.set(key, true);
+					return true;
+				}
+			if (classDecl.base != null) {
+				var resolvedBase = builder.recoveredClassBases.get(owner),
+					base = resolvedBase == null ? null : receiverOwner(resolvedBase);
+				if (base == null)
+					base = astTypeOwner(classDecl.base);
+				if (base != null && hasRecoveredMethod(builder, base, member, nextVisiting, memo)) {
+					memo.set(key, true);
+					return true;
+				}
+			}
+			for (interfaceType in classDecl.interfaces) {
+				var interfaceOwner = astTypeOwner(interfaceType);
+				if (interfaceOwner != null && hasRecoveredMethod(builder, interfaceOwner, member, nextVisiting, memo)) {
+					memo.set(key, true);
+					return true;
+				}
+			}
+		}
+		var interfaceDecl = builder.recoveredInterfaceDeclaration(owner);
+		if (interfaceDecl != null) {
+			for (method in interfaceDecl.methods)
+				if (method.name == member) {
+					memo.set(key, true);
+					return true;
+				}
+			for (baseType in interfaceDecl.bases) {
+				var base = astTypeOwner(baseType);
+				if (base != null && hasRecoveredMethod(builder, base, member, nextVisiting, memo)) {
+					memo.set(key, true);
+					return true;
+				}
+			}
+		}
+		var abstractDecl = builder.recoveredAbstractDeclaration(owner);
+		if (abstractDecl != null)
+			for (method in abstractDecl.methods)
+				if (method.name == member) {
+					memo.set(key, true);
+					return true;
+				}
+		memo.set(key, false);
+		return false;
+	}
+
+	static function astTypeOwner(type:AstType):Null<String>
+		return switch type {
+			case NamedType(name), AppliedType(name, _): name;
+			default: null;
+		};
 
 	static function signatureKey(name:String, receiverType:CompilerType):String
 		return name + "\u0000" + Std.string(receiverType);

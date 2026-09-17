@@ -25,6 +25,7 @@ typedef RecoveryEngineHooks = {
 	final typingModules:ModuleState->AstProgram->Null<CancellationToken>->Array<RecoveryTypingModule>;
 	final reuseFunctions:ModuleState->AstProgram->Null<Map<String, Bool>>->Bool->Map<String, TypedFunction>;
 	final resolveSymbol:ModuleState->AstProgram->String->Null<CancellationToken>->Null<SemanticSymbolId>;
+	final resolveTypeSymbol:ModuleState->AstProgram->String->Null<CancellationToken>->Null<SemanticSymbolId>;
 	final resolveEnumCase:ModuleState->AstProgram->String->Int->Null<CancellationToken>->Null<SemanticSymbolId>;
 	final resolveType:ModuleState->AstProgram->String->Array<CompilerType>->Null<CancellationToken>->Null<CompilerType>;
 	final symbolCandidates:ModuleState->String->Null<CancellationToken>->AstProgram->Array<SemanticSymbolId>;
@@ -99,7 +100,8 @@ class RecoveryEngine {
 				function(name, index) return hooks.resolveEnumCase(state, recovered.program, name, index, token),
 				function(name, arguments) return hooks.resolveType(state, recovered.program, name, arguments, token),
 				function(name) return hooks.symbolCandidates(state, name, token, recovered.program),
-				previousModel);
+				previousModel,
+				function(name) return hooks.resolveTypeSymbol(state, recovered.program, name, token));
 			recoveredModel.freeze();
 			state.publishRecoveredSnapshot(tokens, recovered.program, recoveredModel);
 			hooks.publishDiagnostics(state, recovered.diagnostics.concat(typingDiagnostics));

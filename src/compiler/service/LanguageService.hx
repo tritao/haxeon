@@ -275,6 +275,7 @@ class LanguageService {
 			reuseFunctions: function(state, program, changedBodies, forceNoReuse)
 				return recoveredTypedFunctionReuse(state, program, changedBodies, forceNoReuse),
 			resolveSymbol: function(state, program, name, token) return resolveRecoveredSymbol(state, program, name, token),
+			resolveTypeSymbol: function(state, program, name, token) return resolveRecoveredTypeSymbol(state, program, name, token),
 			resolveEnumCase: function(state, program, name, index, token) return resolveRecoveredEnumCase(state, program, name, index, token),
 			resolveType: function(state, program, name, arguments, token) return resolveRecoveredType(state, program, name, arguments, token),
 			symbolCandidates: function(state, name, token, program)
@@ -869,6 +870,15 @@ class LanguageService {
 		if (direct != null)
 			return direct;
 		return null;
+	}
+
+	function resolveRecoveredTypeSymbol(state:ModuleState, program:AstProgram, name:String,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var qualifiedName = packageQualifiedName(program, name),
+			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, name, program, token);
+		if (direct == null && qualifiedName != name)
+			direct = compiler.semanticWorkspace.editorResolveTypeSymbolId(state, qualifiedName, program, token);
+		return direct;
 	}
 
 	function resolveRecoveredEnumCase(state:ModuleState, program:AstProgram, name:String, index:Int,
