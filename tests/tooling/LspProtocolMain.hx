@@ -771,6 +771,46 @@ class LspProtocolMain {
 			|| resolvedHelper.result.additionalTextEdits.length != 1
 			|| resolvedHelper.result.additionalTextEdits[0].newText != "import workspace.tools.Helper;\n")
 			throw "completion resolve omitted documentation or the deterministic import edit";
+		var absoluteImportService = new LanguageService(),
+			absoluteImportProtocol = new LspProtocol(absoluteImportService),
+			absoluteTypePath = "/workspace/absolute/types/Types.hx",
+			absoluteUseUri = "file:///workspace/absolute/app/Use.hx",
+			absoluteUseSource = "package absolute.app;\nfunction main():Void { Typ";
+		absoluteImportService.update(absoluteTypePath, "package absolute.types; class Types {} function main():Void return;");
+		request(absoluteImportProtocol, '{"jsonrpc":"2.0","id":80,"method":"initialize","params":{}}');
+		absoluteImportProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: absoluteUseUri,
+					languageId: "haxe",
+					version: 1,
+					text: absoluteUseSource
+				}
+			}
+		}));
+		var absoluteImportCompletion = request(absoluteImportProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 81,
+			method: "textDocument/completion",
+			params: {textDocument: {uri: absoluteUseUri}, position: {line: 1, character: absoluteUseSource.split("\n")[1].length}}
+		})), absoluteTypesItem:Dynamic = null;
+		for (item in cast(absoluteImportCompletion.result.items, Array<Dynamic>))
+			if (item.label == "Types")
+				absoluteTypesItem = item;
+		if (absoluteTypesItem == null || absoluteTypesItem.data == null
+			|| absoluteTypesItem.data.importPath != "absolute.types.Types")
+			throw "LSP completion did not preserve the source-level package import path";
+		var resolvedAbsoluteTypes = request(absoluteImportProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 82,
+			method: "completionItem/resolve",
+			params: absoluteTypesItem
+		}));
+		if (resolvedAbsoluteTypes.result.additionalTextEdits.length != 1
+			|| resolvedAbsoluteTypes.result.additionalTextEdits[0].newText != "\nimport absolute.types.Types;")
+			throw "LSP completion resolve did not generate the source-level package import edit";
 		var importedSource = "import workspace.tools.Helper;\nfunction main():Int return 0; // Hel";
 		importProtocol.handle(documentChangeMessage(importUri, 2, importedSource));
 		var importedCompletion = request(importProtocol, Json.stringify({
