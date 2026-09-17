@@ -75,7 +75,7 @@ class Runtime {
 		}
 		retryRetirements();
 		#if haxeon
-		return haxeRuntimeModuleLoader.load(bytes, model, identityModel);
+		return haxeRuntimeModuleLoader.load(model, identityModel);
 		#else
 		retryRetirements();
 		var module = RuntimeKernel.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
@@ -182,6 +182,12 @@ class Runtime {
 
 	public static function debugRegionCount(module:LoadedModule):Int
 		return module.access(jitBackend.debugRegionCount);
+
+	#if haxeon
+	/** Test/diagnostic hook: return the optional raw HLB payload retained by the kernel. */
+	@:noCompletion public static function debugHlbSize(module:LoadedModule):Int
+		return module.access(function(handle) return haxeRuntimeModuleKernel.debugHlbSize(cast handle));
+	#end
 
 	public static function retiredCodeAllocationCount(module:LoadedModule):Int
 		return module.access(jitBackend.retiredCodeAllocationCount);

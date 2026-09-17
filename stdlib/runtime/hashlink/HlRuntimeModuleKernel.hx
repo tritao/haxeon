@@ -26,6 +26,7 @@ interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 	function validateCallSlot(module:HlRuntimeModuleHandle, slot:Int, shape:Int):Int;
 	function liveAllocationCount(module:HlRuntimeModuleHandle):Int;
 	function nativeRootCount(module:HlRuntimeModuleHandle):Int;
+	function debugHlbSize(module:HlRuntimeModuleHandle):Int;
 	function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void;
 	function dispose(module:HlRuntimeModuleHandle):Int;
 	function setPatchFailureStage(module:HlRuntimeModuleHandle, stage:Int):Void;
@@ -81,6 +82,9 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 
 	public inline function nativeRootCount(module:HlRuntimeModuleHandle):Int
 		return HlTypeBridge.native_runtime_module_native_root_count(module);
+
+	public inline function debugHlbSize(module:HlRuntimeModuleHandle):Int
+		return HlTypeBridge.native_runtime_module_debug_hlb_size(module);
 
 	public inline function retirementStatus(module:HlRuntimeModuleHandle, out:hl.Bytes):Void
 		HlTypeBridge.native_runtime_module_retirement_status(module, out);

@@ -149,6 +149,10 @@ class HlTypeBridge {
 	public static function native_runtime_module_native_root_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
+	/** Read the optional raw HLB payload size retained for legacy debugger MAP support. */
+	public static function native_runtime_module_debug_hlb_size(module:hl.Abstract<"realtime_module">):Int
+		return -1;
+
 	/** Write the four-field retirement snapshot of an external runtime wrapper. */
 	public static function native_runtime_module_retirement_status(module:hl.Abstract<"realtime_module">, out:hl.Bytes):Void {}
 

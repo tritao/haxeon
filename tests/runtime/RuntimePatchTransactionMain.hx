@@ -171,6 +171,10 @@ class RuntimePatchTransactionMain {
 			makeObjectId:Int = cast initial.functionIds.get("Main.makeObject"),
 			readObjectId:Int = cast initial.functionIds.get("Main.readObject"),
 			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		#if haxeon
+		if (Runtime.debugHlbSize(loaded) != 0)
+			throw "Haxe-owned runtime load retained an HLB payload for execution";
+		#end
 		var initialRetirement = Runtime.retirementStatus(loaded),
 			initialTypeCount = Runtime.metadataTypeCount(loaded);
 		if (Runtime.liveRevision(loaded) != initial.revision

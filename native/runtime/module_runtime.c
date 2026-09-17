@@ -38,6 +38,10 @@ HL_PRIM bool HL_NAME(native_runtime_module_unload)( vbyte *module ) {
 	return released;
 }
 
+HL_PRIM int HL_NAME(native_runtime_module_debug_hlb_size)( vbyte *module ) {
+	return module == NULL ? -1 : hl_runtime_module_debug_hlb_size((hl_runtime_module*)module);
+}
+
 HL_PRIM int HL_NAME(native_runtime_module_dispose)( vbyte *module ) {
 	void *owner = module;
 	int status = hl_runtime_module_release((hl_runtime_module*)module);

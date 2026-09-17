@@ -27,8 +27,16 @@ class HaxeRuntimeModuleLoader {
 		this.kernel = kernel;
 	}
 
-	public function load(bytes:Bytes, model:HlModule, identity:HlRuntimeManifest):LoadedModule {
-		if (bytes == null || model == null || identity == null)
+	/** Load the normal Haxe-owned path without retaining the source HLB bytes. */
+	public function load(model:HlModule, identity:HlRuntimeManifest):LoadedModule
+		return loadInternal(model, identity, null);
+
+	/** Explicit debugger-only variant that retains an original HLB payload for MAP. */
+	public function loadWithDebugPayload(debugBytes:Bytes, model:HlModule, identity:HlRuntimeManifest):LoadedModule
+		return loadInternal(model, identity, debugBytes);
+
+	function loadInternal(model:HlModule, identity:HlRuntimeManifest, debugBytes:Null<Bytes>):LoadedModule {
+		if (model == null || identity == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Haxeon runtime module loading requires decoded module state");
 		identity = HlRuntimeCallPolicy.validateManifest(identity, model);
 		var metadata:HlMetadataGeneration;
@@ -43,9 +51,9 @@ class HaxeRuntimeModuleLoader {
 			var publication = metadata.snapshot(),
 				dispatch = new HlRuntimeDispatchTable(metadata.arena, [for (entry in identity.entries) entry.stableId],
 					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot, metadata.functionCount());
-			// Retain the raw HLB only for the legacy debugger MAP payload. Runtime
-			// execution itself consumes the Haxe-owned model and native code record.
-			module = kernel.loadCodeManifest(publication.nativeCode, identity.moduleId, identity.revision, dispatch, bytes);
+			// The normal path passes null here. A raw HLB is accepted only by the
+			// explicit debugger variant and is never consulted for execution.
+			module = kernel.loadCodeManifest(publication.nativeCode, identity.moduleId, identity.revision, dispatch, debugBytes);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			// Register the native handle with the Haxe lifecycle owner before any
