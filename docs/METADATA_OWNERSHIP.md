@@ -254,6 +254,11 @@ alongside HashLink's managed-allocation and registry-reader counts. This makes
 the known Haxe ownership visible to shutdown diagnostics; it does not authorize
 patch-code unmapping while HashLink may still hold an untracked closure pointer.
 
+When the last retained value releases a module whose native teardown was deferred,
+the loaded-module owner completes Haxe generation and metadata disposal and removes
+the module from the retirement backlog in the same lifecycle transition; the retry
+queue remains for native borrowers that are still untracked or otherwise blocked.
+
 When a module exception crosses the native call boundary, the bridge discards
 the generation-owned exception object and captured JIT return addresses before
 raising the host-facing `RuntimeError`. Caught module failures therefore do not

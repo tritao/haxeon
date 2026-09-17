@@ -317,7 +317,7 @@ class Runtime {
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
-		});
+		}, function() completeDeferredRetirement(module));
 		if (disposed) {
 			finishJitRetirement(module);
 			#if haxeon
@@ -326,6 +326,24 @@ class Runtime {
 		} else
 			beginJitRetirement(module);
 		return disposed;
+	}
+
+	/** Finish Haxe-owned retirement when the last retained value releases a deferred module. */
+	static function completeDeferredRetirement(module:LoadedModule):Void {
+		finishJitRetirement(module);
+		#if haxeon
+		finishMetadataRetirement(module);
+		#end
+		retirementMutex.acquire();
+		try {
+			var index = retirementBacklog.indexOf(module);
+			if (index >= 0)
+				retirementBacklog.splice(index, 1);
+			retirementMutex.release();
+		} catch (error:Dynamic) {
+			retirementMutex.release();
+			throw error;
+		}
 	}
 
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {

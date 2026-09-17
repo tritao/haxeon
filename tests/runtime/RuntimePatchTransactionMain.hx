@@ -303,6 +303,8 @@ class RuntimePatchTransactionMain {
 		if (Runtime.jitGenerationState(loaded, 0) != Runtime.JitGenerationRetiring)
 			throw "host JIT generation did not enter retiring state while a closure was retained";
 		retained.release();
+		if (Runtime.pendingRetirementCount != 0)
+			throw "deferred module retirement did not finalize when its last retained value was released";
 		if (Runtime.retryRetirements() != 0)
 			throw "host JIT generation retirement did not drain after releasing its closure";
 		if (!moduleRoot.isClosed() || moduleRoot.get() != null)

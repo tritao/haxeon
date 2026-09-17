@@ -45,6 +45,7 @@ class LoadedModule {
 	var closeRequested = false;
 	var borrowers = 0;
 	var deferredDispose:Null<RuntimeModuleHandle->Void>;
+	var deferredComplete:Null<Void->Void>;
 	@:allow(runtime.Runtime, runtime.HaxeRuntimeModuleLoader)
 	#if haxeon
 	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, dispatch:HlRuntimeDispatchTable) {
@@ -247,6 +248,7 @@ class LoadedModule {
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime module borrow count is invalid");
 		}
 		borrowers--;
+		var complete:Null<Void->Void> = null;
 		if (borrowers == 0 && closeRequested) {
 			var current = handle, dispose = deferredDispose;
 			if (current != null && dispose != null) {
@@ -254,6 +256,8 @@ class LoadedModule {
 					dispose(current);
 					handle = null;
 					deferredDispose = null;
+					complete = deferredComplete;
+					deferredComplete = null;
 					closeGcHandles();
 				} catch (error:RuntimeError) {
 					if (error.status == RuntimeStatus.RetirementBlocked) {
@@ -269,10 +273,12 @@ class LoadedModule {
 			}
 		}
 		mutex.release();
+		if (complete != null)
+			complete();
 	}
 
 	@:allow(runtime.Runtime)
-	function close(dispose:RuntimeModuleHandle->Void):Bool {
+	function close(dispose:RuntimeModuleHandle->Void, ?complete:Void->Void):Bool {
 		mutex.acquire();
 		var current = handle;
 		if (current == null) {
@@ -283,6 +289,7 @@ class LoadedModule {
 		closeRequested = true;
 		if (borrowers > 0) {
 			deferredDispose = dispose;
+			deferredComplete = complete;
 			mutex.release();
 			return false;
 		}
