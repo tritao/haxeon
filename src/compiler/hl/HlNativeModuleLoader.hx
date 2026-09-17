@@ -413,7 +413,7 @@ class HlNativeModuleLoader {
 			loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
 			var functions = functionVersions(module, identityModel, metadata);
-			nativeModule = new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision,
+			nativeModule = new HlRuntimeModule(metadata, identityModel.moduleId, identityModel.revision,
 				[for (entry in identityModel.entries) entry.stableId], [for (entry in identityModel.entries) entry.functionIndex],
 				identityModel.initializerSlot, null, kernel);
 			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata, nativeModule, functions);

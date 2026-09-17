@@ -43,7 +43,9 @@ class HaxeRuntimeModuleLoader {
 			var publication = metadata.snapshot(),
 				dispatch = new HlRuntimeDispatchTable(metadata.arena, [for (entry in identity.entries) entry.stableId],
 					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot, metadata.functionCount());
-			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
+			// Retain the raw HLB only for the legacy debugger MAP payload. Runtime
+			// execution itself consumes the Haxe-owned model and native code record.
+			module = kernel.loadCodeManifest(publication.nativeCode, identity.moduleId, identity.revision, dispatch, bytes);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			// Register the native handle with the Haxe lifecycle owner before any

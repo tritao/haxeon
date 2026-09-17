@@ -197,6 +197,10 @@ The Haxe-owned runtime loader publishes this arena-backed slab directly as the
 native module's contiguous `hl_code.types` array. The legacy host facade keeps
 its native-decoder fallback, but Haxeon-generated runtime code no longer needs
 a second type-record representation.
+Haxe-owned execution loads no longer require the original HLB bytes at the
+native boundary. The kernel accepts an optional raw HLB payload solely for the
+legacy debugger `MAP` protocol; the runtime facade supplies it while the
+compiler-side metadata loader omits it.
 `HlMetadataCompatibility` owns the first hot-reload policy ring: the existing
 type prefix and module function-table size must remain stable, while only
 primitive, abstract, and function descriptors may be appended in place. Object,

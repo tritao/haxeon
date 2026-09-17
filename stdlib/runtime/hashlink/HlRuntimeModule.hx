@@ -23,12 +23,12 @@ class HlRuntimeModule {
 	var module:Null<hl.Abstract<"realtime_module">>;
 	var constantsInitialized:Bool = false;
 
-	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
-		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel) {
-		if (metadata == null || bytes == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
+	public function new(metadata:HlMetadataGeneration, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
+		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel, ?debugBytes:Bytes) {
+		if (metadata == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
 			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1
 			|| kernel == null && defaultKernel == null || jitBackend == null && defaultJitBackend == null)
-			throw "HashLink runtime module requires metadata, HLB bytes, and a decoded HLI manifest";
+			throw "HashLink runtime module requires metadata and a decoded HLI manifest";
 		this.metadata = metadata;
 		this.kernel = kernel == null ? defaultKernel : kernel;
 		this.jitBackend = jitBackend == null ? defaultJitBackend : jitBackend;
@@ -37,7 +37,7 @@ class HlRuntimeModule {
 		try {
 			var publication = metadata.snapshot();
 			dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot, metadata.functionCount());
-			module = this.kernel.loadCodeManifest(publication.nativeCode, bytes, moduleId, revision, dispatch);
+			module = this.kernel.loadCodeManifest(publication.nativeCode, moduleId, revision, dispatch, debugBytes);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
 			HlTypeLayout.publishObjectPrototypes(publication.types, publication.typeCount, this.kernel);

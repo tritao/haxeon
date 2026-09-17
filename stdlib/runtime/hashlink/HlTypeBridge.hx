@@ -60,7 +60,7 @@ class HlTypeBridge {
 	public static function native_runtime_module_load_bytes(bytes:haxe.io.Bytes, identity:haxe.io.Bytes):hl.Abstract<"realtime_module">
 		return null;
 
-	/** Load a runtime wrapper from a Haxe-owned code record and decoded identity tables. */
+	/** Load a runtime wrapper from Haxe-owned code and decoded identity tables. The HLB payload is debugger-only and optional. */
 	public static function native_runtime_module_load_code_manifest(code:RawPtr<NativeModuleHlCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
 		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):hl.Abstract<"realtime_module">
 		return null;

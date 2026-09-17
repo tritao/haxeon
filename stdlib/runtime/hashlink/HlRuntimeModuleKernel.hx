@@ -12,8 +12,8 @@ import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 	retirement; module policy and executable-code policy stay in Haxe.
 */
 interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
-	function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
-		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
+	/** Load Haxe-owned execution metadata with an optional debugger payload. */
+	function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, moduleId:Bytes, revision:Int, dispatch:HlRuntimeDispatchTable, ?debugBytes:Bytes):HlRuntimeModuleHandle;
 	function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool;
 	function callI32Slot(module:HlRuntimeModuleHandle, slot:Int):Int;
 	function callVoidSlot(module:HlRuntimeModuleHandle, slot:Int):Void;
@@ -36,10 +36,12 @@ interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public function new() {}
 
-	public inline function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
-		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle
-		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, dispatch.stableIds, dispatch.slots,
+	public inline function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, moduleId:Bytes, revision:Int, dispatch:HlRuntimeDispatchTable,
+		?debugBytes:Bytes):HlRuntimeModuleHandle {
+		var debugLength = debugBytes == null ? 0 : debugBytes.length;
+		return HlTypeBridge.native_runtime_module_load_code_manifest(code, debugBytes, debugLength, moduleId, revision, dispatch.stableIds, dispatch.slots,
 			dispatch.count, dispatch.initializerSlot);
+	}
 
 	public inline function publishObjectPrototype(type:RawPtr<HlType>):Void
 		HlTypeBridge.native_metadata_publish_object_prototype(type);
