@@ -439,6 +439,8 @@ class HlMetadataGeneration {
 			var type = globalTypes.offset(index).load();
 			if (type.isNull())
 				throw 'HashLink global metadata contains an invalid type at index $index';
+			if (typeTable.indexOf(type) < 0)
+				throw 'HashLink global metadata type at index $index is not present in the generation type table';
 			var kind:Int = cast type.ref.kind, minimumKind:Int = cast(HlTypeKind.VoidType, Int), maximumKind:Int = cast(HlTypeKind.Guid, Int);
 			if (kind < minimumKind || kind > maximumKind)
 				throw 'HashLink global metadata contains an invalid type at index $index';

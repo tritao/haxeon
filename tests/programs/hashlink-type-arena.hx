@@ -494,6 +494,16 @@ function main():Int {
 	catch (error:Dynamic)
 		invalidPrototypeRejected = Std.string(error).indexOf("object prototype function index") >= 0;
 	invalidPrototypeGeneration.dispose();
+	var invalidGlobalGeneration = new HlMetadataGeneration(128, 1),
+		invalidGlobalType = invalidGlobalGeneration.builder.primitive(HlTypeKind.Int32Type);
+	invalidGlobalGeneration.defineModule([RawPtr.nullPtr()], [invalidGlobalType]);
+	invalidGlobalGeneration.defineGlobalTypes([invalidGlobalType]);
+	var invalidGlobalRejected = false;
+	try
+		invalidGlobalGeneration.publish()
+	catch (error:Dynamic)
+		invalidGlobalRejected = Std.string(error).indexOf("not present in the generation type table") >= 0;
+	invalidGlobalGeneration.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
@@ -501,5 +511,5 @@ function main():Int {
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
-		&& invalidPrototypeRejected ? 42 : 1;
+		&& invalidPrototypeRejected && invalidGlobalRejected ? 42 : 1;
 }
