@@ -102,8 +102,9 @@ class InteractiveEditMain {
 		assertRecoveryEquivalence();
 		assertCompoundRecoveryEquivalence();
 		assertRecoveryMatrix();
+		assertIdentityResolutionClosure();
 
-		Sys.println('PASS: ${tails.length + 11} interactive edits retained recovery queries');
+		Sys.println('PASS: ${tails.length + 12} interactive edits retained recovery queries');
 	}
 
 	static function assertRecoveryMatrix():Void {
@@ -220,6 +221,70 @@ class InteractiveEditMain {
 		if (position < 0)
 			throw 'recovery matrix could not locate marker "$marker"';
 		return position + offset;
+	}
+
+	static function assertIdentityResolutionClosure():Void {
+		var service = new LanguageService(),
+			targetPath = "identity/types/Box.hx",
+			consumerPath = "identity/app/Main.hx",
+			target = "package identity.types; class Box { public var member:Int; } function main():Void return;",
+			consumer = "package identity.app; import identity.types.Box as Alias; function main():Void { var box:Alias = new Alias(); box.member; }";
+		service.update(targetPath, target);
+		service.compile("identity.types.Box");
+		service.update(consumerPath, consumer);
+		service.compile("identity.app.Main");
+
+		var targetMemberPosition = target.indexOf("member") + 1,
+			consumerTypePosition = consumer.indexOf(":Alias") + 2,
+			consumerMemberPosition = consumer.lastIndexOf("member") + 1,
+			exactTargetDefinition = service.definition(targetPath, targetMemberPosition),
+			exactTypeDefinition = service.typeDefinition(consumerPath, consumerTypePosition),
+			exactMemberDefinition = service.definition(consumerPath, consumerMemberPosition),
+			exactMemberId = service.compiler.modules.get("identity.app.Main").semanticModel.index.symbolIdAt(consumerMemberPosition);
+		if (exactTargetDefinition == null || exactTypeDefinition == null || exactMemberDefinition == null
+			|| exactTargetDefinition.path != targetPath
+			|| exactTypeDefinition.path != targetPath
+			|| exactMemberDefinition.path != targetPath
+			|| exactMemberId == null)
+			throw 'identity closure fixture did not establish exact imported aliases: target=${exactTargetDefinition == null ? "null" : exactTargetDefinition.path}, type=${exactTypeDefinition == null ? "null" : exactTypeDefinition.path}, member=${exactMemberDefinition == null ? "null" : exactMemberDefinition.path}, memberId=${exactMemberId == null ? "null" : Std.string(exactMemberId)}';
+
+		var brokenTarget = "package identity.types; class Box { public var member:Int; function unfinished(",
+			brokenConsumer = "package identity.app; import identity.types.Box as Alias; function main():Void { var box:Alias = new Alias(); broken.unresolved().thing; box.member; function unfinished(";
+		service.update(targetPath, brokenTarget);
+		service.update(consumerPath, brokenConsumer);
+
+		var recoveredConsumerState = service.compiler.modules.get("identity.app.Main"),
+			recoveredModel = recoveredConsumerState == null ? null : recoveredConsumerState.recoveredSemanticModel,
+			recoveredTypePosition = brokenConsumer.indexOf(":Alias") + 2,
+			recoveredMemberPosition = brokenConsumer.lastIndexOf("member") + 1,
+			recoveredMemberId = recoveredModel == null ? null : recoveredModel.index.symbolIdAt(recoveredMemberPosition),
+			recoveredTypeDefinition = service.typeDefinition(consumerPath, recoveredTypePosition),
+			recoveredMemberDefinition = service.definition(consumerPath, recoveredMemberPosition),
+			recoveredReferences = service.references(consumerPath, recoveredMemberPosition);
+		if (recoveredConsumerState == null || recoveredModel == null
+			|| recoveredMemberId == null
+			|| Std.string(recoveredMemberId) != Std.string(exactMemberId)
+			|| recoveredTypeDefinition == null || recoveredTypeDefinition.stale || recoveredTypeDefinition.path != targetPath
+			|| recoveredMemberDefinition == null || recoveredMemberDefinition.stale || recoveredMemberDefinition.path != targetPath)
+			throw 'recovered imported identity was not authoritative: type=${recoveredTypeDefinition == null ? "null" : recoveredTypeDefinition.path}, member=${recoveredMemberDefinition == null ? "null" : recoveredMemberDefinition.path}, references=${recoveredReferences.length}';
+
+		var currentConsumerReference = false;
+		for (reference in recoveredReferences)
+			if (reference.path == consumerPath && !reference.stale)
+				currentConsumerReference = true;
+		if (!currentConsumerReference)
+			throw "recovered imported identity did not retain a current consumer reference";
+
+		service.update(targetPath, target);
+		service.update(consumerPath, consumer);
+		service.compile("identity.app.Main");
+		var repairedState = service.compiler.modules.get("identity.app.Main"),
+			repairedModel = repairedState == null ? null : repairedState.semanticModel,
+			repairedMemberId = repairedModel == null ? null : repairedModel.index.symbolIdAt(consumerMemberPosition);
+		if (repairedState == null || repairedModel == null
+			|| repairedMemberId == null
+			|| Std.string(repairedMemberId) != Std.string(exactMemberId))
+			throw "repair did not restore imported type and member identities";
 	}
 
 	static function assertCompoundRecoveryEquivalence():Void {
