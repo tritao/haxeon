@@ -85,6 +85,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-messagepack-enum-map.wasm --entry=wasm-messagepack-enum-map \
+	--root=tests/programs tests/programs/wasm-messagepack-enum-map.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -182,6 +185,7 @@ const cases = [
 	["out/wasm-cli-map-key-value-for-in.wasm", 42],
 	["out/wasm-cli-map-object.wasm", 42],
 	["out/wasm-cli-map-anonymous-enum.wasm", 42],
+	["out/wasm-cli-messagepack-enum-map.wasm", 42],
 	["out/wasm-cli-cnative-import.wasm", 42],
 	["out/wasm-cli-wasm32-bytes-view.wasm", 42],
 	["out/wasm-cli-hxi-retained.wasm", 42],

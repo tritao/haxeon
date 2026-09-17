@@ -164,6 +164,12 @@ class WasmLayout {
 
 	public static inline final STRING_LENGTH_OFFSET = 8;
 	public static inline final STRING_DATA_OFFSET = 16;
+	public static inline final BYTES_STREAM_LENGTH_OFFSET = 8;
+	public static inline final BYTES_STREAM_POSITION_OFFSET = 12;
+	public static inline final BYTES_STREAM_CAPACITY_OFFSET = 12;
+	public static inline final BYTES_STREAM_DATA_OFFSET = 16;
+	public static inline final BYTES_STREAM_ENDIAN_OFFSET = 20;
+	public static inline final BYTES_STREAM_SIZE = 24;
 	public static inline final BYTES_VIEW_MARKER_OFFSET = 4;
 	public static inline final BYTES_VIEW_OWNER_OFFSET = 16;
 	public static inline final BYTES_VIEW_DATA_OFFSET = 20;

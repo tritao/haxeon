@@ -58,8 +58,10 @@ class WasmLinearRuntime {
 			strings = context.strings,
 			bytesDataPointer = addBytesDataPointer(module);
 		functions.set("__haxeon_bytes_data_pointer", bytesDataPointer);
+		var outputReserve = addBytesOutputReserve(module, allocator, bytesDataPointer);
+		functions.set("__haxeon_bytes_output_reserve", outputReserve);
 		for (native in program.natives) {
-			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer);
+			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve);
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {
@@ -74,6 +76,8 @@ class WasmLinearRuntime {
 									[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
+						case "__string_char_at":
+							functions.set(native.name, addStringCharAt(module, native.name, allocator));
 						case "__string_concat":
 							functions.set(native.name, addStringConcat(module, native.name, allocator));
 						case "__string_equal":
@@ -183,10 +187,11 @@ class WasmLinearRuntime {
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
-	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int):Null<Int> {
+	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
+			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
-			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
-				"__bytes_output_write", "__bytes_output_write_range", "__sys_print", "__sys_args", "__date_now", "__date_get_time":
+			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil", "__sys_print",
+				"__sys_args", "__date_now", "__date_get_time":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
@@ -216,6 +221,25 @@ class WasmLinearRuntime {
 			case "__bytes_to_string": addBytesToString(module, native.name, allocator, bytesDataPointer);
 			case "__bytes_get_string": addBytesSlice(module, native.name, allocator, bytesDataPointer);
 			case "__string_from_bytes": addBytesPrefix(module, native.name, allocator, bytesDataPointer);
+			case "__bytes_input_new": addBytesInputNew(module, native.name, allocator, bytesDataPointer);
+			case "__bytes_input_position": addBytesStreamFieldLoad(module, native.name, WasmLayout.BYTES_STREAM_POSITION_OFFSET);
+			case "__bytes_input_big_endian": addBytesStreamFieldLoad(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
+			case "__bytes_input_set_big_endian": addBytesStreamFieldStore(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
+			case "__bytes_input_read_byte": addBytesInputReadByte(module, native.name, bytesDataPointer);
+			case "__bytes_input_read_i32": addBytesInputReadI32(module, native.name, bytesDataPointer);
+			case "__bytes_input_read_f64": addBytesInputReadF64(module, native.name, bytesDataPointer);
+			case "__bytes_input_read_string": addBytesInputReadString(module, native.name, allocator, bytesDataPointer);
+			case "__bytes_input_read": addBytesInputRead(module, native.name, allocator, bytesDataPointer);
+			case "__bytes_output_new": addBytesOutputNew(module, native.name, allocator);
+			case "__bytes_output_big_endian": addBytesStreamFieldLoad(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
+			case "__bytes_output_set_big_endian": addBytesStreamFieldStore(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
+			case "__bytes_output_write_byte": addBytesOutputWriteByte(module, native.name, outputReserve);
+			case "__bytes_output_write_i32": addBytesOutputWriteI32(module, native.name, outputReserve);
+			case "__bytes_output_write_f64": addBytesOutputWriteF64(module, native.name, outputReserve);
+			case "__bytes_output_write_string": addBytesOutputWriteString(module, native.name, outputReserve, bytesDataPointer);
+			case "__bytes_output_write": addBytesOutputWrite(module, native.name, outputReserve, bytesDataPointer);
+			case "__bytes_output_write_range": addBytesOutputWriteRange(module, native.name, outputReserve, bytesDataPointer);
+			case "__bytes_output_get_bytes": addBytesOutputGetBytes(module, native.name, allocator, bytesDataPointer);
 			case "structCopy": addStructCopy(module, native.name, bytesDataPointer);
 			case "structCopyPointer": addStructCopyPointer(module, native.name, allocator, bytesDataPointer);
 			case "structSetBorrowedBytes": addStructSetBorrowedBytes(module, native.name, bytesDataPointer);
@@ -491,6 +515,607 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(bytesDataPointer));
 		builder.return_();
 		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesInputNew(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			bytes = builder.parameter("bytes", 0),
+			result = builder.local("result", I32),
+			length = builder.local("length", I32),
+			snapshot = builder.local("snapshot", I32);
+		builder.localGet(bytes);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.i32Const(WasmLayout.BYTES_STREAM_SIZE);
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(snapshot);
+		builder.localGet(snapshot);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(snapshot);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(snapshot);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(snapshot);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_bytes_input")));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(0);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
+		builder.localGet(result);
+		builder.localGet(snapshot);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_DATA_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(1);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesStreamFieldLoad(module:WasmModule, name:String, offset:Int):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), I32Load(offset), Return]));
+
+	static function addBytesStreamFieldStore(module:WasmModule, name:String, offset:Int):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: []}, [],
+			[LocalGet(0), LocalGet(1), I32Store(offset), Return]));
+
+	static function addBytesInputReadByte(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			input = builder.parameter("input", 0),
+			position = builder.local("position", I32),
+			bytes = builder.local("bytes", I32),
+			result = builder.local("result", I32);
+		inputReadCheckConstant(builder, input, 1);
+		loadInputState(builder, input, position, bytes);
+		emitInputByte(builder, bytes, position, 0, bytesDataPointer, result);
+		inputAdvanceConstant(builder, input, position, 1);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesInputReadI32(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			input = builder.parameter("input", 0),
+			position = builder.local("position", I32),
+			bytes = builder.local("bytes", I32),
+			endian = builder.local("endian", I32),
+			result = builder.local("result", I32),
+			byteLocals = [for (_ in 0...4) builder.local("byte_" + _, I32)];
+		inputReadCheckConstant(builder, input, 4);
+		loadInputState(builder, input, position, bytes);
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		for (index in 0...4)
+			emitInputByte(builder, bytes, position, index, bytesDataPointer, byteLocals[index]);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			emitCombineI32(builder, byteLocals, [24, 16, 8, 0]);
+			builder.localSet(result);
+		}, function(builder) {
+			emitCombineI32(builder, byteLocals, [0, 8, 16, 24]);
+			builder.localSet(result);
+		});
+		inputAdvanceConstant(builder, input, position, 4);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesInputReadF64(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [F64]}),
+			input = builder.parameter("input", 0),
+			position = builder.local("position", I32),
+			bytes = builder.local("bytes", I32),
+			endian = builder.local("endian", I32),
+			result = builder.local("result", F64),
+			bits = builder.local("bits", I64),
+			byteLocals = [for (_ in 0...8) builder.local("byte_" + _, I32)];
+		inputReadCheckConstant(builder, input, 8);
+		loadInputState(builder, input, position, bytes);
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		for (index in 0...8)
+			emitInputByte(builder, bytes, position, index, bytesDataPointer, byteLocals[index]);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			emitCombineI64(builder, byteLocals, [56, 48, 40, 32, 24, 16, 8, 0]);
+			builder.localSet(bits);
+		}, function(builder) {
+			emitCombineI64(builder, byteLocals, [0, 8, 16, 24, 32, 40, 48, 56]);
+			builder.localSet(bits);
+		});
+		builder.localGet(bits);
+		builder.emit(F64ReinterpretI64);
+		builder.localSet(result);
+		inputAdvanceConstant(builder, input, position, 8);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesInputReadString(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int
+		return addBytesInputReadBuffer(module, name, allocator, bytesDataPointer);
+
+	static function addBytesInputRead(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int
+		return addBytesInputReadBuffer(module, name, allocator, bytesDataPointer);
+
+	static function addBytesInputReadBuffer(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			input = builder.parameter("input", 0),
+			length = builder.parameter("length", 1),
+			position = builder.local("position", I32),
+			bytes = builder.local("bytes", I32),
+			result = builder.local("result", I32);
+		inputReadCheckLocal(builder, input, length);
+		loadInputState(builder, input, position, bytes);
+		builder.localGet(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(position);
+		builder.i32Add();
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		inputAdvanceLocal(builder, input, position, length);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputNew(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [], results: [I32]}),
+			result = builder.local("result", I32);
+		builder.i32Const(WasmLayout.BYTES_STREAM_SIZE);
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_bytes_output")));
+		builder.emit(I32Store(0));
+		for (field in [
+			WasmLayout.BYTES_STREAM_LENGTH_OFFSET,
+			WasmLayout.BYTES_STREAM_CAPACITY_OFFSET,
+			WasmLayout.BYTES_STREAM_DATA_OFFSET
+		]) {
+			builder.localGet(result);
+			builder.i32Const(0);
+			builder.emit(I32Store(field));
+		}
+		builder.localGet(result);
+		builder.i32Const(1);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputWriteByte(module:WasmModule, name:String, outputReserve:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
+			output = builder.parameter("output", 0),
+			value = builder.parameter("value", 1),
+			data = builder.local("data", I32);
+		reserveOutputConstant(builder, output, 1, outputReserve, data);
+		emitOutputByte(builder, data, output, value, 0, 0);
+		outputAdvanceConstant(builder, output, 1);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputWriteI32(module:WasmModule, name:String, outputReserve:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
+			output = builder.parameter("output", 0),
+			value = builder.parameter("value", 1),
+			data = builder.local("data", I32),
+			endian = builder.local("endian", I32);
+		reserveOutputConstant(builder, output, 4, outputReserve, data);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			for (index in 0...4)
+				emitOutputByte(builder, data, output, value, (3 - index) * 8, index);
+		}, function(builder) {
+			for (index in 0...4)
+				emitOutputByte(builder, data, output, value, index * 8, index);
+		});
+		outputAdvanceConstant(builder, output, 4);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputWriteF64(module:WasmModule, name:String, outputReserve:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, F64], results: []}),
+			output = builder.parameter("output", 0),
+			value = builder.parameter("value", 1),
+			data = builder.local("data", I32),
+			bits = builder.local("bits", I64),
+			endian = builder.local("endian", I32);
+		reserveOutputConstant(builder, output, 8, outputReserve, data);
+		builder.localGet(value);
+		builder.emit(I64ReinterpretF64);
+		builder.localSet(bits);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			for (index in 0...8)
+				emitOutputByteI64(builder, data, output, bits, (7 - index) * 8, index);
+		}, function(builder) {
+			for (index in 0...8)
+				emitOutputByteI64(builder, data, output, bits, index * 8, index);
+		});
+		outputAdvanceConstant(builder, output, 8);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputWriteString(module:WasmModule, name:String, outputReserve:Int, bytesDataPointer:Int):Int
+		return addBytesOutputWriteBuffer(module, name, outputReserve, bytesDataPointer);
+
+	static function addBytesOutputWrite(module:WasmModule, name:String, outputReserve:Int, bytesDataPointer:Int):Int
+		return addBytesOutputWriteBuffer(module, name, outputReserve, bytesDataPointer);
+
+	static function addBytesOutputWriteBuffer(module:WasmModule, name:String, outputReserve:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
+			output = builder.parameter("output", 0),
+			bytes = builder.parameter("bytes", 1),
+			length = builder.local("length", I32),
+			data = builder.local("data", I32),
+			source = builder.local("source", I32);
+		builder.localGet(bytes);
+		builder.i32Eqz();
+		builder.if_(function(builder) builder.return_());
+		builder.localGet(bytes);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		reserveOutputLocal(builder, output, length, outputReserve, data);
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localSet(source);
+		builder.localGet(data);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.i32Add();
+		builder.localGet(source);
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		outputAdvanceLocal(builder, output, length);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputWriteRange(module:WasmModule, name:String, outputReserve:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32, I32], results: [I32]}),
+			output = builder.parameter("output", 0),
+			bytes = builder.parameter("bytes", 1),
+			offset = builder.parameter("offset", 2),
+			length = builder.parameter("length", 3),
+			data = builder.local("data", I32),
+			source = builder.local("source", I32);
+		bytesRangeCheck(builder, bytes, offset, length);
+		reserveOutputLocal(builder, output, length, outputReserve, data);
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localSet(source);
+		builder.localGet(data);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.i32Add();
+		builder.localGet(source);
+		builder.localGet(offset);
+		builder.i32Add();
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		outputAdvanceLocal(builder, output, length);
+		builder.localGet(length);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputGetBytes(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			output = builder.parameter("output", 0),
+			length = builder.local("length", I32),
+			data = builder.local("data", I32),
+			result = builder.local("result", I32);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.localGet(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_DATA_OFFSET));
+		builder.localSet(data);
+		builder.localGet(result);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(data);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesOutputReserve(module:WasmModule, allocator:Int, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder("__haxeon_bytes_output_reserve", {parameters: [I32, I32], results: [I32]}),
+			output = builder.parameter("output", 0),
+			extra = builder.parameter("extra", 1),
+			length = builder.local("length", I32),
+			capacity = builder.local("capacity", I32),
+			data = builder.local("data", I32),
+			required = builder.local("required", I32),
+			newCapacity = builder.local("newCapacity", I32),
+			newData = builder.local("newData", I32);
+		loadStreamField(builder, output, WasmLayout.BYTES_STREAM_LENGTH_OFFSET, length);
+		loadStreamField(builder, output, WasmLayout.BYTES_STREAM_CAPACITY_OFFSET, capacity);
+		loadStreamField(builder, output, WasmLayout.BYTES_STREAM_DATA_OFFSET, data);
+		builder.localGet(length);
+		builder.localGet(extra);
+		builder.emit(I32Add);
+		builder.localSet(required);
+		builder.localGet(required);
+		builder.localGet(capacity);
+		builder.emit(I32LeS);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.localGet(capacity);
+			builder.i32Const(2);
+			builder.emit(I32Mul);
+			builder.localSet(newCapacity);
+			builder.localGet(newCapacity);
+			builder.localGet(required);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(required);
+				builder.localSet(newCapacity);
+			});
+			builder.localGet(newCapacity);
+			builder.i32Const(8);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.i32Const(8);
+				builder.localSet(newCapacity);
+			});
+			builder.localGet(newCapacity);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(newData);
+			builder.localGet(newData);
+			builder.i32Const(WasmModuleSupport.typeId(Bytes));
+			builder.emit(I32Store(0));
+			builder.localGet(newData);
+			builder.localGet(length);
+			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localGet(newData);
+			builder.localGet(newCapacity);
+			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+			builder.localGet(newData);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(data);
+			builder.call(builder.functionRef(bytesDataPointer));
+			builder.localGet(length);
+			builder.emit(MemoryCopy);
+			builder.localGet(output);
+			builder.localGet(newData);
+			builder.emit(I32Store(WasmLayout.BYTES_STREAM_DATA_OFFSET));
+			builder.localGet(output);
+			builder.localGet(newCapacity);
+			builder.emit(I32Store(WasmLayout.BYTES_STREAM_CAPACITY_OFFSET));
+		});
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_DATA_OFFSET));
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function loadStreamField(builder:WasmFunctionBuilder, stream:WasmLocalRef, offset:Int, destination:WasmLocalRef):Void {
+		builder.localGet(stream);
+		builder.emit(I32Load(offset));
+		builder.localSet(destination);
+	}
+
+	static function inputReadCheckConstant(builder:WasmFunctionBuilder, input:WasmLocalRef, length:Int):Void {
+		builder.i32Const(length);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.i32Const(length);
+		builder.emit(I32Sub);
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
+		builder.emit(I32LtS);
+		builder.if_(function(builder) builder.emit(Unreachable));
+	}
+
+	static function inputReadCheckLocal(builder:WasmFunctionBuilder, input:WasmLocalRef, length:WasmLocalRef):Void {
+		builder.localGet(length);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.localGet(length);
+		builder.emit(I32Sub);
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
+		builder.emit(I32LtS);
+		builder.if_(function(builder) builder.emit(Unreachable));
+	}
+
+	static function loadInputState(builder:WasmFunctionBuilder, input:WasmLocalRef, position:WasmLocalRef, bytes:WasmLocalRef):Void {
+		loadStreamField(builder, input, WasmLayout.BYTES_STREAM_POSITION_OFFSET, position);
+		loadStreamField(builder, input, WasmLayout.BYTES_STREAM_DATA_OFFSET, bytes);
+	}
+
+	static function emitInputByte(builder:WasmFunctionBuilder, bytes:WasmLocalRef, position:WasmLocalRef, offset:Int, bytesDataPointer:Int,
+			destination:WasmLocalRef):Void {
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(position);
+		builder.i32Const(offset);
+		builder.emit(I32Add);
+		builder.emit(I32Add);
+		builder.emit(I32Load8U(0));
+		builder.localSet(destination);
+	}
+
+	static function inputAdvanceConstant(builder:WasmFunctionBuilder, input:WasmLocalRef, position:WasmLocalRef, amount:Int):Void {
+		builder.localGet(input);
+		builder.localGet(position);
+		builder.i32Const(amount);
+		builder.emit(I32Add);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
+	}
+
+	static function inputAdvanceLocal(builder:WasmFunctionBuilder, input:WasmLocalRef, position:WasmLocalRef, amount:WasmLocalRef):Void {
+		builder.localGet(input);
+		builder.localGet(position);
+		builder.localGet(amount);
+		builder.emit(I32Add);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
+	}
+
+	static function emitCombineI32(builder:WasmFunctionBuilder, bytes:Array<WasmLocalRef>, shifts:Array<Int>):Void {
+		for (index in 0...bytes.length) {
+			builder.localGet(bytes[index]);
+			builder.i32Const(shifts[index]);
+			builder.emit(I32Shl);
+			if (index > 0)
+				builder.emit(I32Or);
+		}
+	}
+
+	static function emitCombineI64(builder:WasmFunctionBuilder, bytes:Array<WasmLocalRef>, shifts:Array<Int>):Void {
+		for (index in 0...bytes.length) {
+			builder.localGet(bytes[index]);
+			builder.emit(I64ExtendI32U);
+			builder.emit(I64Const(shifts[index]));
+			builder.emit(I64Shl);
+			if (index > 0)
+				builder.emit(I64Or);
+		}
+	}
+
+	static function reserveOutputConstant(builder:WasmFunctionBuilder, output:WasmLocalRef, amount:Int, outputReserve:Int, data:WasmLocalRef):Void {
+		builder.localGet(output);
+		builder.i32Const(amount);
+		builder.call(builder.functionRef(outputReserve));
+		builder.localSet(data);
+	}
+
+	static function reserveOutputLocal(builder:WasmFunctionBuilder, output:WasmLocalRef, amount:WasmLocalRef, outputReserve:Int, data:WasmLocalRef):Void {
+		builder.localGet(output);
+		builder.localGet(amount);
+		builder.call(builder.functionRef(outputReserve));
+		builder.localSet(data);
+	}
+
+	static function emitOutputByte(builder:WasmFunctionBuilder, data:WasmLocalRef, output:WasmLocalRef, value:WasmLocalRef, shift:Int, offset:Int):Void {
+		builder.localGet(data);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.emit(I32Add);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.emit(I32Add);
+		builder.i32Const(offset);
+		builder.emit(I32Add);
+		builder.localGet(value);
+		builder.i32Const(shift);
+		builder.emit(I32ShrU);
+		builder.emit(I32Store8(0));
+	}
+
+	static function emitOutputByteI64(builder:WasmFunctionBuilder, data:WasmLocalRef, output:WasmLocalRef, value:WasmLocalRef, shift:Int, offset:Int):Void {
+		builder.localGet(data);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.emit(I32Add);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.emit(I32Add);
+		builder.i32Const(offset);
+		builder.emit(I32Add);
+		builder.localGet(value);
+		builder.emit(I64Const(shift));
+		builder.emit(I64ShrU);
+		builder.emit(I32WrapI64);
+		builder.emit(I32Store8(0));
+	}
+
+	static function outputAdvanceConstant(builder:WasmFunctionBuilder, output:WasmLocalRef, amount:Int):Void {
+		builder.localGet(output);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.i32Const(amount);
+		builder.emit(I32Add);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+	}
+
+	static function outputAdvanceLocal(builder:WasmFunctionBuilder, output:WasmLocalRef, amount:WasmLocalRef):Void {
+		builder.localGet(output);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
+		builder.localGet(amount);
+		builder.emit(I32Add);
+		builder.emit(I32Store(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
 	}
 
 	static function addBytesToString(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
@@ -1696,6 +2321,72 @@ class WasmLinearRuntime {
 			I32Load8U(0),
 			Return
 		]));
+	}
+
+	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			index = builder.parameter("index", 1),
+			length = builder.local("length", I32),
+			result = builder.local("result", I32);
+		builder.localGet(value);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.localGet(index);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) {
+			addEmptyString(builder, allocator, result);
+		}, function(builder) {
+			builder.localGet(index);
+			builder.localGet(length);
+			builder.emit(I32LtS);
+			builder.i32Eqz();
+			builder.ifElse(function(builder) {
+				addEmptyString(builder, allocator, result);
+			}, function(builder) {
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET + 1);
+				builder.call(builder.functionRef(allocator));
+				builder.localSet(result);
+				builder.localGet(result);
+				builder.i32Const(WasmModuleSupport.typeId(Bytes));
+				builder.emit(I32Store(0));
+				builder.localGet(result);
+				builder.i32Const(1);
+				builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+				builder.localGet(result);
+				builder.i32Const(1);
+				builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+				builder.localGet(result);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(value);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.emit(I32Store8(0));
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addEmptyString(builder:WasmFunctionBuilder, allocator:Int, result:Int):Void {
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.i32Const(0);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(0);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
 	}
 
 	static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {

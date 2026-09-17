@@ -396,6 +396,12 @@ class WasmLinearGc {
 			builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
 			builder.call(builder.functionRef(mark));
 		});
+		for (streamType in ["realtime_bytes_input", "realtime_bytes_output"])
+			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract(streamType)), function(builder) {
+				builder.localGet(value);
+				builder.emit(I32Load(WasmLayout.BYTES_STREAM_DATA_OFFSET));
+				builder.call(builder.functionRef(mark));
+			});
 		appendGcTraceCase(builder, value, WasmLayout.CLOSURE_TYPE_ID, function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET));
