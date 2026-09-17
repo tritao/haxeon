@@ -3431,7 +3431,61 @@ class LanguageServiceMain {
 		if (contextRecoveryService.recoveredTypedFunctionReuses != contextReuseCount)
 			throw "recovered typing reused a body after its declaration context changed";
 		assertLazySourceRootRecovery();
+		assertDeepNamespaceResolution();
 		Sys.println("PASS: compiler-backed language service snapshot works");
+	}
+
+	static function assertDeepNamespaceResolution():Void {
+		var service = new LanguageService(),
+			target = "package deep.one.two; class Container { public var containerMember:Int; } class Entry { public var member:Int; } function main():Void return;";
+		service.update("deep/one/two/Container.hx", target);
+		service.compile("deep.one.two.Container");
+
+		var qualifiedSource = "package deep.app; function use(value:deep.one.two.Container.Entry):Void { value.member; } function unfinished(";
+		service.update("deep/app/Qualified.hx", qualifiedSource);
+		var qualifiedPosition = qualifiedSource.indexOf("value.member") + "value.".length,
+			qualifiedItems = service.complete("deep/app/Qualified.hx", qualifiedPosition),
+			qualifiedMember = false;
+		for (item in qualifiedItems)
+			if (item.label == "member")
+				qualifiedMember = true;
+		var qualifiedTypePosition = qualifiedSource.lastIndexOf("Entry") + 2,
+			qualifiedTypeDefinition = service.typeDefinition("deep/app/Qualified.hx", qualifiedTypePosition),
+			qualifiedMemberDefinition = service.definition("deep/app/Qualified.hx", qualifiedPosition + 1);
+		if (!qualifiedMember
+			|| qualifiedTypeDefinition == null || qualifiedTypeDefinition.path != "deep/one/two/Container.hx"
+			|| qualifiedMemberDefinition == null || qualifiedMemberDefinition.path != "deep/one/two/Container.hx")
+			throw 'fully qualified secondary type resolution failed: completion=$qualifiedMember, type=${qualifiedTypeDefinition == null ? "null" : qualifiedTypeDefinition.path}, member=${qualifiedMemberDefinition == null ? "null" : qualifiedMemberDefinition.path}';
+
+		var wildcardSource = "package deep.app; import deep.one.two.*; function use(value:Entry):Void { value.member; } function unfinished(";
+		service.update("deep/app/Wildcard.hx", wildcardSource);
+		var wildcardPosition = wildcardSource.indexOf("value.member") + "value.".length,
+			wildcardItems = service.complete("deep/app/Wildcard.hx", wildcardPosition),
+			wildcardMember = false;
+		for (item in wildcardItems)
+			if (item.label == "member")
+				wildcardMember = true;
+		if (!wildcardMember)
+			throw "deeper wildcard package resolution did not retain secondary type members";
+
+		var ambiguous = new LanguageService();
+		ambiguous.update("amb/one/Thing.hx", "package amb.one; class Thing { public var one:Int; }");
+		ambiguous.update("amb/two/Thing.hx", "package amb.two; class Thing { public var two:Int; }");
+		var ambiguousSource = "package amb.app; import amb.one.*; import amb.two.*; function use(value:Thing):Void { value. } function unfinished(";
+		ambiguous.update("amb/app/Main.hx", ambiguousSource);
+		var ambiguousTypePosition = ambiguousSource.indexOf(":Thing") + 2,
+			ambiguousTypeDefinition = ambiguous.typeDefinition("amb/app/Main.hx", ambiguousTypePosition),
+			ambiguousCompletion = ambiguous.complete("amb/app/Main.hx", ambiguousSource.indexOf("value.") + "value.".length),
+			foundAmbiguousOne = false,
+			foundAmbiguousTwo = false;
+		for (item in ambiguousCompletion) {
+			if (item.label == "one")
+				foundAmbiguousOne = true;
+			if (item.label == "two")
+				foundAmbiguousTwo = true;
+		}
+		if (ambiguousTypeDefinition != null || foundAmbiguousOne || foundAmbiguousTwo)
+			throw 'ambiguous wildcard type resolution guessed a declaration: type=${ambiguousTypeDefinition == null ? "null" : ambiguousTypeDefinition.path}, one=$foundAmbiguousOne, two=$foundAmbiguousTwo';
 	}
 
 	static function assertLazySourceRootRecovery():Void {
