@@ -1718,7 +1718,7 @@ class SemanticWorkspace {
 	 */
 	public function editorStaticMembersForContext(from:ModuleState, ownerName:String,
 		program:AstProgram, ?token:CancellationToken):Array<EditorMember> {
-		var identity = editorResolveTypeSymbolId(from, ownerName, program, token),
+		var identity = editorNominalTypeIdentity(from, NamedType(ownerName), program, [], token),
 			result:Array<EditorMember> = [],
 			seen:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [];

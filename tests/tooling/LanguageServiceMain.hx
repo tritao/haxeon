@@ -1602,6 +1602,19 @@ class LanguageServiceMain {
 				genericTypedefAliasMember = item;
 		if (genericTypedefAliasMember == null || genericTypedefAliasMember.detail != "member:String")
 			throw "recovered generic aliased typedef did not preserve type-parameter substitution";
+		var staticTypedefAliasService = new LanguageService(),
+			staticTypedefAliasSource = "package alias.app; import alias.types.Alias as A; function main():Void { A.";
+		staticTypedefAliasService.update("alias/types/Foo.hx", "package alias.types; class Foo { public static function create():Int return 1; } function main():Void return;");
+		staticTypedefAliasService.update("alias/types/Alias.hx", "package alias.types; typedef Alias = Foo; function main():Void return;");
+		staticTypedefAliasService.compile("alias.types.Alias");
+		staticTypedefAliasService.update("alias/app/StaticTypedefAlias.hx", staticTypedefAliasSource);
+		var staticTypedefAliasItems = staticTypedefAliasService.complete("alias/app/StaticTypedefAlias.hx", staticTypedefAliasSource.length),
+			foundStaticTypedefAliasMember = false;
+		for (item in staticTypedefAliasItems)
+			if (item.label == "create")
+				foundStaticTypedefAliasMember = true;
+		if (!foundStaticTypedefAliasMember)
+			throw "recovered typedef aliases did not expose underlying static members";
 		var genericTypedefAliasNavigationSource = "package alias.app; import alias.types.Alias as A; function main():Void { var value:A<String>; value.member; }";
 		genericTypedefAliasService.update("alias/app/GenericTypedefAlias.hx", genericTypedefAliasNavigationSource);
 		var genericTypedefAliasMemberPosition = genericTypedefAliasNavigationSource.indexOf("value.member") + "value.".length + 1,
