@@ -3210,6 +3210,27 @@ class LanguageServiceMain {
 			restoredId = transitionService.compiler.modules.get("Transition").semanticModel.index.symbolIdAt(validReceiverPosition);
 		if (restored.isIncomplete || restoredId == null || Std.string(restoredId) != Std.string(validId))
 			throw "valid editor snapshot did not replace recovery with the original semantic identity";
+		var equivalenceService = new LanguageService(),
+			equivalenceValidSource = "class Stable { public var value:Int; } function before():Stable { return new Stable(); } function after():Int { var stable:Stable = new Stable(); return stable.value; } function main():Void return;";
+		equivalenceService.update("Equivalence.hx", equivalenceValidSource);
+		equivalenceService.analyze("Equivalence");
+		var equivalenceUse = equivalenceValidSource.lastIndexOf("stable.value") + "stable.".length,
+			equivalenceFieldId = equivalenceService.compiler.modules.get("Equivalence").semanticModel.index.symbolIdAt(equivalenceUse),
+			equivalenceDefinition = equivalenceService.definition("Equivalence.hx", equivalenceUse),
+			equivalenceReferences = equivalenceService.references("Equivalence.hx", equivalenceUse);
+		if (equivalenceFieldId == null || equivalenceDefinition == null || equivalenceReferences.length < 2)
+			throw "baseline recovery-equivalence identity was not indexed";
+		var equivalenceBrokenSource = "class Stable { public var value:Int; } function before():Stable { return new Stable(); } function broken():Int { var broken: = ; return 0; } function after():Int { var stable:Stable = new Stable(); return stable.value; } function main():Void return;";
+		equivalenceService.update("Equivalence.hx", equivalenceBrokenSource);
+		var equivalenceBrokenUse = equivalenceBrokenSource.lastIndexOf("stable.value") + "stable.".length,
+			equivalenceRecoveredModel = equivalenceService.compiler.modules.get("Equivalence").recoveredSemanticModel,
+			equivalenceRecoveredId = equivalenceRecoveredModel == null ? null : equivalenceRecoveredModel.index.symbolIdAt(equivalenceBrokenUse),
+			equivalenceBrokenDefinition = equivalenceService.definition("Equivalence.hx", equivalenceBrokenUse),
+			equivalenceBrokenReferences = equivalenceService.references("Equivalence.hx", equivalenceBrokenUse);
+		if (equivalenceRecoveredId == null || Std.string(equivalenceRecoveredId) != Std.string(equivalenceFieldId)
+			|| equivalenceBrokenDefinition == null || equivalenceBrokenDefinition.span.start != equivalenceDefinition.span.start
+			|| equivalenceBrokenReferences.length != equivalenceReferences.length)
+			throw 'unrelated recovery error changed an unaffected identity: baseline=${Std.string(equivalenceFieldId)}, recovered=${Std.string(equivalenceRecoveredId)}, definition=${equivalenceBrokenDefinition == null ? "null" : Std.string(equivalenceBrokenDefinition.span.start)}, references=${equivalenceBrokenReferences.length}';
 		var stableIdentityService = new LanguageService(),
 			stableIdentitySource = "class StableType { public var member:Int; } function main():Void { var first:Int = 1; var target:StableType = new StableType(); target.member; }";
 		stableIdentityService.update("StableIdentity.hx", stableIdentitySource);
