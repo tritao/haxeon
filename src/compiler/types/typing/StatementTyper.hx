@@ -482,7 +482,13 @@ class StatementTyper {
 		var context = session.currentContext;
 		context.loopEarlyExits[context.loopDepth] = true;
 		context.loopDepth++;
-		var typedBody = typeStatements(body, new Scope(scope), result);
+		var typedBody:Array<TypedStatement>;
+		try {
+			typedBody = typeStatements(body, new Scope(scope), result);
+		} catch (error:Dynamic) {
+			context.loopDepth--;
+			throw error;
+		}
 		context.loopDepth--;
 		return TWhile(typedCondition, typedBody, span);
 	}
@@ -491,7 +497,13 @@ class StatementTyper {
 		var bodyScope = new Scope(scope), context = session.currentContext;
 		context.loopEarlyExits[context.loopDepth] = false;
 		context.loopDepth++;
-		var typedBody = typeStatements(body, bodyScope, result);
+		var typedBody:Array<TypedStatement>;
+		try {
+			typedBody = typeStatements(body, bodyScope, result);
+		} catch (error:Dynamic) {
+			context.loopDepth--;
+			throw error;
+		}
 		context.loopDepth--;
 		var typedCondition = typeExpression(predicate, bodyScope, null, false);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
@@ -549,7 +561,13 @@ class StatementTyper {
 		var context = session.currentContext;
 		context.loopEarlyExits[context.loopDepth] = true;
 		context.loopDepth++;
-		var typedBody = typeStatements(body, loopScope, result);
+		var typedBody:Array<TypedStatement>;
+		try {
+			typedBody = typeStatements(body, loopScope, result);
+		} catch (error:Dynamic) {
+			context.loopDepth--;
+			throw error;
+		}
 		context.loopDepth--;
 		var valueId:Null<String> = valueName == null ? null : loopScope.requireId(valueName);
 		return TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable, typedBody, span);
