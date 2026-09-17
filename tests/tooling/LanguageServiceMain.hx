@@ -1269,6 +1269,18 @@ class LanguageServiceMain {
 			staticMethodReferences = staticMemberService.references("staticfamily/Base.hx", staticMemberBase.indexOf("make") + 1);
 		if (staticFieldReferences.length != 3 || staticMethodReferences.length != 2)
 			throw 'static member references crossed a derived shadow: field=${staticFieldReferences.length}, method=${staticMethodReferences.length}';
+		var kindFamilyService = new LanguageService(),
+			kindFamilyBase = "package kindfamily; class Base { public function execute():Int return 1; public var value:Int; }",
+			kindFamilyChild = "package kindfamily; import kindfamily.Base; class Child extends Base { public var execute:Int; public function value():Int return 2; function unfinished(",
+			kindFamilyMain = "package kindapp; import kindfamily.Base; function main():Int return new Base().execute() + new Base().value;";
+		kindFamilyService.update("kindfamily/Base.hx", kindFamilyBase);
+		kindFamilyService.update("kindfamily/Child.hx", kindFamilyChild);
+		kindFamilyService.update("kindapp/Main.hx", kindFamilyMain);
+		kindFamilyService.compile("kindapp.Main");
+		var kindMethodImplementations = kindFamilyService.implementations("kindfamily/Base.hx", kindFamilyBase.indexOf("execute") + 1),
+			kindFieldImplementations = kindFamilyService.implementations("kindfamily/Base.hx", kindFamilyBase.indexOf("value") + 1);
+		if (kindMethodImplementations.length != 0 || kindFieldImplementations.length != 0)
+			throw 'member-kind navigation crossed a field/method shadow: method=${kindMethodImplementations.length}, field=${kindFieldImplementations.length}';
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",
