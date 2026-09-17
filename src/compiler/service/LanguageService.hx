@@ -2302,16 +2302,20 @@ class LanguageService {
 			qualifier = memberQualifier(snapshot.source, tokens[callee].span.end),
 			calleeName = tokens[callee].text,
 			recoveredName = qualifier == null ? calleeName : qualifier + "." + calleeName,
-			context = qualifier == null ? null : model.index.completionContext(position, qualifier, token);
+			context = qualifier == null ? null : model.index.completionContext(position, qualifier, token),
+			calleeType = model.index.typeAt(tokens[callee].span.start + 1, token),
+			recoveredReceiver = context == null ? calleeType : context.receiver;
 		if (snapshot.recovered)
-			signature = model.index.recoveredSignature(recoveredName, context == null ? null : context.receiver);
+			signature = model.index.recoveredSignature(recoveredName, recoveredReceiver);
 		if (signature == null && snapshot.recovered && id != null)
-			signature = model.index.callableSignature(model.index.typeAt(tokens[callee].span.start + 1, token), calleeName);
+			signature = model.index.callableSignature(calleeType, calleeName);
 		if (signature == null && qualifier != null) {
 			var owner = context == null ? null : typeDeclaration(context.receiver);
 			if (owner != null)
 				signature = model.index.recoveredSignature(owner + "." + calleeName, context.receiver);
 		}
+		if (signature == null && snapshot.recovered && id != null)
+			signature = compiler.semanticWorkspace.editorConstructorSignature(state, id, calleeType, token);
 		// Recovery may bind a current-source call directly to an authoritative
 		// external enum constructor or other callable declaration whose compact
 		// recovery index has no local signature entry. Preserve that identity-bound

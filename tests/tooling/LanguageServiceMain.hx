@@ -1852,6 +1852,14 @@ class LanguageServiceMain {
 				hasRecoveredConstructorReference = true;
 		if (!hasRecoveredConstructorReference)
 			throw 'recovered constructor references omitted a valid generic-body use: ${constructorReferences.length}';
+		var unfinishedConstructorConsumer = StringTools.replace(constructorConsumerSource, "new Constructed<Int>(1);", "new Constructed<Int>(");
+		constructorRecoveryService.update("refs/ConstructorConsumer.hx", unfinishedConstructorConsumer);
+		var unfinishedConstructorPosition = unfinishedConstructorConsumer.indexOf("Constructed<Int>") + 1,
+			unfinishedConstructorDefinition = constructorRecoveryService.definition("refs/ConstructorConsumer.hx", unfinishedConstructorPosition),
+			unfinishedConstructorSignature = constructorRecoveryService.signatureHelp("refs/ConstructorConsumer.hx", unfinishedConstructorConsumer.indexOf("new Constructed<Int>(") + "new Constructed<Int>(".length);
+		if (unfinishedConstructorDefinition == null || unfinishedConstructorDefinition.path != "refs/Constructed.hx"
+			|| unfinishedConstructorSignature == null || unfinishedConstructorSignature.label != "Constructed(value:Int)")
+			throw 'recovered generic constructor navigation or signature help failed: definition=${unfinishedConstructorDefinition == null ? "null" : unfinishedConstructorDefinition.path}, signature=${unfinishedConstructorSignature == null ? "null" : unfinishedConstructorSignature.label}';
 		var localRecoveredNavigationService = new LanguageService(),
 			localRecoveredNavigationSource = "class LocalType { public var value:Int; } function main():Void { var broken = ; var item:LocalType; item.value; }";
 		localRecoveredNavigationService.update("LocalRecovered.hx", localRecoveredNavigationSource);

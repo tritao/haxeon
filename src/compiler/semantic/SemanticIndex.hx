@@ -994,10 +994,16 @@ class SemanticIndexBuilder {
 			for (argument in fn.arguments)
 				argument.name + ":" + (substitutions == null ? displayAstType(argument.type) : displayType(recoveredType(argument.type, substitutions)))
 		];
+		var constructor = fn.name == "new",
+			separator = name.lastIndexOf("."),
+			displayName = constructor
+				? separator < 1 ? sourceName(name) : sourceName(name.substring(0, separator))
+				: sourceName(name),
+			displayResult = substitutions == null ? displayAstType(fn.result) : displayType(recoveredType(fn.result, substitutions));
 		return {
-			label: sourceName(name) + "(" + parameters.join(",") + "):" + (substitutions == null ? displayAstType(fn.result) : displayType(recoveredType(fn.result, substitutions))),
+			label: displayName + "(" + parameters.join(",") + ")" + (constructor ? "" : ":" + displayResult),
 			parameters: parameters,
-			result: substitutions == null ? displayAstType(fn.result) : displayType(recoveredType(fn.result, substitutions))
+			result: constructor ? "" : displayResult
 		};
 	}
 

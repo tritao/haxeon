@@ -755,6 +755,83 @@ class SemanticWorkspace {
 		return null;
 	}
 
+	/**
+	 * Render a constructor against the instantiated type at a recovered call
+	 * site. The authoritative declaration owns the signature, while the
+	 * current source type supplies substitutions such as Constructed<Int>.
+	 */
+	public function editorConstructorSignature(state:ModuleState, id:SemanticSymbolId,
+		type:Null<CompilerType>, ?token:CancellationToken):Null<SemanticSignatureInfo> {
+		var resolved = editorSymbol(state, id),
+			model = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || model == null)
+			return null;
+		var arguments:Array<CompilerType> = switch type {
+			case TNullable(element): constructorTypeArguments(element);
+			case TInstance(_, _, values), TAbstract(_, values, _): values;
+			default: [];
+		};
+		for (decl in model.program.classes) {
+			var constructor:Null<compiler.syntax.Ast.AstFunction> = null;
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				for (method in decl.methods)
+					if (method.name == "new") {
+						constructor = method;
+						break;
+					}
+			else
+				for (method in decl.methods)
+					if (method.name == "new" && sameSpan(method.span, resolved.symbol.declaration)) {
+						constructor = method;
+						break;
+					}
+			if (constructor != null)
+				return constructorSignature(decl.name, decl.typeParameters, constructor, arguments, token);
+		}
+		for (decl in model.program.abstracts) {
+			var constructor:Null<compiler.syntax.Ast.AstFunction> = null;
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				for (method in decl.methods)
+					if (method.name == "new") {
+						constructor = method;
+						break;
+					}
+			else
+				for (method in decl.methods)
+					if (method.name == "new" && sameSpan(method.span, resolved.symbol.declaration)) {
+						constructor = method;
+						break;
+					}
+			if (constructor != null)
+				return constructorSignature(decl.name, decl.typeParameters, constructor, arguments, token);
+		}
+		return null;
+	}
+
+	static function constructorTypeArguments(type:CompilerType):Array<CompilerType>
+		return switch type {
+			case TNullable(element): constructorTypeArguments(element);
+			case TInstance(_, _, values), TAbstract(_, values, _): values;
+			default: [];
+		};
+
+	static function constructorSignature(owner:String, typeParameters:Array<String>,
+		constructor:compiler.syntax.Ast.AstFunction, arguments:Array<CompilerType>,
+		?token:CancellationToken):SemanticSignatureInfo {
+		var substitutions = editorTypeSubstitutions(typeParameters, arguments),
+			parameters:Array<String> = [];
+		for (argument in constructor.arguments) {
+			if (token != null)
+				token.check();
+			parameters.push(argument.name + ":" + editorAstTypeName(argument.type, substitutions));
+		}
+		return {
+			label: owner + "(" + parameters.join(",") + ")",
+			parameters: parameters,
+			result: owner
+		};
+	}
+
 	/** Read a hierarchy signature from current editor models without publishing them. */
 	public function editorSignatureById(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
 		for (state in orderedStates()) {

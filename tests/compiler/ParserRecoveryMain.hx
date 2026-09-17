@@ -460,6 +460,27 @@ class ParserRecoveryMain {
 			|| secondaryEnumImportRecoveredDefinition.path != "visibility/secondary/Container.hx"
 			|| secondaryEnumImportRecoveredReferences.length < 2)
 			throw 'recovered secondary-module enum constructor import did not retain identity: definition=${secondaryEnumImportRecoveredDefinition == null ? "null" : secondaryEnumImportRecoveredDefinition.path}, references=${secondaryEnumImportRecoveredReferences.length}';
+		var secondaryEnumTypeImportConsumer = "package visibility.secondary.app; import visibility.secondary.Container.Result; function main():Void { Value(1); }";
+		secondaryEnumImportService.update("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportConsumer);
+		secondaryEnumImportService.analyze("visibility.secondary.app.TypeImport");
+		var secondaryEnumTypeImportPosition = secondaryEnumTypeImportConsumer.lastIndexOf("Value(1)") + 1,
+			secondaryEnumTypeImportDefinition = secondaryEnumImportService.definition("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportPosition),
+			secondaryEnumTypeImportReferences = secondaryEnumImportService.references("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportPosition);
+		if (secondaryEnumTypeImportDefinition == null || secondaryEnumTypeImportDefinition.stale
+			|| secondaryEnumTypeImportDefinition.path != "visibility/secondary/Container.hx"
+			|| secondaryEnumTypeImportReferences.length < 2)
+			throw 'secondary-module enum type import did not retain its unqualified constructor: definition=${secondaryEnumTypeImportDefinition == null ? "null" : secondaryEnumTypeImportDefinition.path}, references=${secondaryEnumTypeImportReferences.length}';
+		var secondaryEnumTypeImportRecovered = StringTools.replace(secondaryEnumTypeImportConsumer, "Value(1)", "Value("),
+			secondaryEnumTypeImportRecoveredPosition = secondaryEnumTypeImportRecovered.lastIndexOf("Value(") + 1;
+		secondaryEnumImportService.update("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportRecovered);
+		var secondaryEnumTypeImportRecoveredDefinition = secondaryEnumImportService.definition("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportRecoveredPosition),
+			secondaryEnumTypeImportRecoveredReferences = secondaryEnumImportService.references("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportRecoveredPosition),
+			secondaryEnumTypeImportSignature = secondaryEnumImportService.signatureHelp("visibility/secondary/app/TypeImport.hx", secondaryEnumTypeImportRecovered.length);
+		if (secondaryEnumTypeImportRecoveredDefinition == null || secondaryEnumTypeImportRecoveredDefinition.stale
+			|| secondaryEnumTypeImportRecoveredDefinition.path != "visibility/secondary/Container.hx"
+			|| secondaryEnumTypeImportRecoveredReferences.length < 2
+			|| secondaryEnumTypeImportSignature == null || secondaryEnumTypeImportSignature.parameters.length != 1)
+			throw 'recovered secondary-module enum type import lost constructor identity or signature: definition=${secondaryEnumTypeImportRecoveredDefinition == null ? "null" : secondaryEnumTypeImportRecoveredDefinition.path}, references=${secondaryEnumTypeImportRecoveredReferences.length}, signature=${secondaryEnumTypeImportSignature == null ? "null" : secondaryEnumTypeImportSignature.label}';
 	}
 
 	static function assertIncompleteDeclarations():Void {
