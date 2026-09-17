@@ -3062,6 +3062,29 @@ class LanguageServiceMain {
 			|| importedEnumAbstractReferences.length < 2
 			|| !foundImportedExpectedEnumAbstractValue)
 			throw 'recovered imported enum-abstract value lost its authoritative identity: definition=${importedEnumAbstractDefinition == null ? "null" : importedEnumAbstractDefinition.path}, references=${importedEnumAbstractReferences.length}';
+		var enumAbstractInitializerService = new LanguageService(),
+			enumAbstractInitializerSource = "enum abstract Other(Int) { var Value = 1; } enum abstract Flags(Int) { var Ready = Other.Value; } function main():Void { Flags.Ready; }";
+		enumAbstractInitializerService.update("EnumAbstractInitializer.hx", enumAbstractInitializerSource);
+		enumAbstractInitializerService.compile("EnumAbstractInitializer");
+		var enumAbstractInitializerPosition = enumAbstractInitializerSource.indexOf("Other.Value") + "Other.".length + 1,
+			enumAbstractInitializerDefinition = enumAbstractInitializerService.definition("EnumAbstractInitializer.hx", enumAbstractInitializerPosition),
+			enumAbstractInitializerReferences = enumAbstractInitializerService.references("EnumAbstractInitializer.hx", enumAbstractInitializerPosition);
+		if (enumAbstractInitializerDefinition == null
+			|| enumAbstractInitializerDefinition.path != "EnumAbstractInitializer.hx"
+			|| enumAbstractInitializerReferences.length < 1)
+			throw 'exact enum-abstract initializer did not retain value identity: definition=${enumAbstractInitializerDefinition == null ? "null" : enumAbstractInitializerDefinition.path}, references=${enumAbstractInitializerReferences.length}';
+		var recoveredEnumAbstractInitializerService = new LanguageService(),
+			recoveredEnumAbstractInitializerSource = enumAbstractInitializerSource + " function unfinished(";
+		recoveredEnumAbstractInitializerService.update("RecoveredEnumAbstractInitializer.hx", recoveredEnumAbstractInitializerSource);
+		var recoveredEnumAbstractInitializerPosition = recoveredEnumAbstractInitializerSource.indexOf("Other.Value") + "Other.".length + 1,
+			recoveredEnumAbstractInitializerDefinition = recoveredEnumAbstractInitializerService.definition("RecoveredEnumAbstractInitializer.hx",
+				recoveredEnumAbstractInitializerPosition),
+			recoveredEnumAbstractInitializerReferences = recoveredEnumAbstractInitializerService.references("RecoveredEnumAbstractInitializer.hx",
+				recoveredEnumAbstractInitializerPosition);
+		if (recoveredEnumAbstractInitializerDefinition == null
+			|| recoveredEnumAbstractInitializerDefinition.path != "RecoveredEnumAbstractInitializer.hx"
+			|| recoveredEnumAbstractInitializerReferences.length < 2)
+			throw 'recovered enum-abstract initializer did not retain value identity: definition=${recoveredEnumAbstractInitializerDefinition == null ? "null" : recoveredEnumAbstractInitializerDefinition.path}, references=${recoveredEnumAbstractInitializerReferences.length}';
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

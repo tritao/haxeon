@@ -398,7 +398,7 @@ class FrontendCompilation {
 	}
 
 	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>):Void {
-		for (classDecl in typed.classes)
+		for (classDecl in typed.classes) {
 			for (module in reindexedModules.keys()) {
 				if (!context.modules.exists(module))
 					continue;
@@ -411,6 +411,21 @@ class FrontendCompilation {
 						model.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
 							context.resolveSemanticEnumCase);
 			}
+		}
+		for (initializer in typed.initializers) {
+			var separator = initializer.owner.lastIndexOf("."),
+				owner = separator < 1 ? initializer.owner : initializer.owner.substring(0, separator);
+			for (module in reindexedModules.keys()) {
+				if (!context.modules.exists(module))
+					continue;
+				var state = context.modules.get(module),
+					model = state.semanticModel;
+				if (model == null || !modelOwnsType(model.program, owner))
+					continue;
+				model.indexSourceInitializer(initializer.owner, initializer.source, context.resolveSemanticSymbol,
+					context.resolveSemanticEnumCase);
+			}
+		}
 	}
 
 	/** Replace provisional edges with dependencies proven by typed resolution. */
@@ -487,6 +502,9 @@ class FrontendCompilation {
 		var prefix = program.packageName == null || program.packageName.length == 0 ? "" : program.packageName + ".";
 		for (classDecl in program.classes)
 			if (prefix + classDecl.name == name)
+				return true;
+		for (abstractDecl in program.enumAbstracts)
+			if (prefix + abstractDecl.name == name)
 				return true;
 		return false;
 	}

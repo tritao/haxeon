@@ -23,6 +23,7 @@ import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedInitializer;
 import compiler.types.analysis.Scope;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
@@ -44,14 +45,17 @@ class ProgramTyper {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
-		var program = semantic.program;
+		var program = semantic.program,
+			typedInitializers:Array<TypedInitializer> = [];
 		for (decl in program.enumAbstracts) {
 			var emptySubstitutions:Map<String, CompilerType> = [];
 			var underlying = bodyTyper.resolveType(decl.underlying, emptySubstitutions);
 			for (value in decl.values) {
-				try
-					bodyTyper.coerce(bodyTyper.typeExpression(value.value, new Scope(), underlying), underlying,
-						'enum abstract value "${decl.name}.${value.name}"', "E1002")
+				try {
+					var typedValue = bodyTyper.coerce(bodyTyper.typeExpression(value.value, new Scope(), underlying), underlying,
+						'enum abstract value "${decl.name}.${value.name}"', "E1002");
+					typedInitializers.push({owner: decl.name + "." + value.name, source: value.value, expression: typedValue});
+				}
 				catch (error:Dynamic) {
 					if (!session.tolerant)
 						throw error;
@@ -251,7 +255,8 @@ class ProgramTyper {
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
-		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives);
+		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives,
+			typedInitializers);
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		semantic.lifecycle.advanceAll(Finalized);
 		var finalizationDoneAt = Sys.time() * 1000.0;

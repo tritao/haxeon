@@ -649,6 +649,12 @@ class SemanticIndexBuilder {
 		}
 		indexRecoveredFieldInitializers(program);
 		if (typedProgram != null)
+			for (initializer in typedProgram.initializers) {
+				checkpoint();
+				indexSourceInitializer(initializer.owner, initializer.source, resolveRecoveredSymbol, resolveRecoveredEnumCase);
+				cancellation = token;
+			}
+		if (typedProgram != null)
 			for (fn in typedProgram.functions) {
 				checkpoint();
 				// Generated lambda bodies were already indexed from the recovered AST
@@ -2914,6 +2920,35 @@ class SemanticIndexBuilder {
 		currentCaller = null;
 		currentCallerName = null;
 		currentDependencyKind = SemanticDependencyKind.Body;
+	}
+
+	/**
+	 * Index source-level initializer references which typed lowering can erase,
+	 * such as a constant enum-abstract value lowered to a literal. This uses the
+	 * same source traversal as recovery, but never publishes recovery state.
+	 */
+	public function indexSourceInitializer(owner:String, expression:AstExpression, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		ensureMutable();
+		var previousResolve = recoveryResolve,
+			previousResolveEnumCase = recoveryResolveEnumCase,
+			previousCaller = currentCaller,
+			previousCallerName = currentCallerName,
+			previousDependencyKind = currentDependencyKind,
+			previousFunctionKey = currentRecoveredFunctionKey;
+		recoveryResolve = resolve;
+		recoveryResolveEnumCase = resolveEnumCase;
+		currentCaller = resolve(owner);
+		currentCallerName = owner;
+		currentDependencyKind = SemanticDependencyKind.Initializer;
+		currentRecoveredFunctionKey = owner;
+		indexRecoveredExpression(expression, null, owner);
+		recoveryResolve = previousResolve;
+		recoveryResolveEnumCase = previousResolveEnumCase;
+		currentCaller = previousCaller;
+		currentCallerName = previousCallerName;
+		currentDependencyKind = previousDependencyKind;
+		currentRecoveredFunctionKey = previousFunctionKey;
 	}
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {

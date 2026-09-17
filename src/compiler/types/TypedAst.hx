@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.Source.SourceSpan;
 import compiler.Source.SourceFile;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstExpression;
 
 /** Expression paired with its resolved semantic type and original source span. */
 class TypedExpression {
@@ -264,6 +265,9 @@ typedef TypedEnum = {
 	final span:SourceSpan;
 }
 
+/** Type-checked enum-abstract initializer retained for semantic indexing. */
+typedef TypedInitializer = {final owner:String; final source:AstExpression; final expression:TypedExpression;}
+
 /**
  * Fully typed function or method body.
  *
@@ -389,6 +393,7 @@ typedef TypedProgram = {
 	final interfaces:Array<TypedInterface>;
 	final classes:Array<TypedClass>;
 	final functions:Array<TypedFunction>;
+	final initializers:Array<TypedInitializer>;
 	final closurePlan:TypedClosurePlan;
 	final anonymousTypes:Array<TypedAnonymous>;
 	final natives:Array<TypedNative>;

@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstExpression;
 import compiler.Source.SourceFile;
 import compiler.types.DeclarationIndex;
 import compiler.types.TypedAst.TypedExpression;
@@ -65,6 +66,11 @@ class SemanticModel {
 	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void
 		constructionBuilder().indexTypedInitializer(owner, expression, resolve, resolveEnumCase);
+
+	/** Add source-level initializer references that typed constant folding may erase. */
+	public function indexSourceInitializer(owner:String, expression:AstExpression, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void
+		constructionBuilder().indexSourceInitializer(owner, expression, resolve, resolveEnumCase);
 
 	/** Add exact type-reference facts while this model is being constructed. */
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void
