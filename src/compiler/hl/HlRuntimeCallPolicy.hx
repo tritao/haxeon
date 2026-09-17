@@ -5,6 +5,30 @@ import compiler.hl.persistence.HlRuntimeIdentity.HlRuntimeManifest;
 
 /** Pure call-shape policy shared by host and Haxe-built runtime loaders. */
 class HlRuntimeCallPolicy {
+	/** Validate one decoded HLI manifest against its Haxe-owned module model. */
+	public static function validateManifest(identity:HlRuntimeManifest, model:HlModule):HlRuntimeManifest {
+		if (identity == null || model == null)
+			throw "HashLink runtime identity validation requires a manifest and module";
+		if (identity.moduleId == null || identity.moduleId.length != 16 || identity.revision < 0 || identity.initializerSlot < -1 || identity.entries == null)
+			throw "Invalid HLI runtime identity metadata";
+		var stableIds:Map<Int, Bool> = [],
+			slots:Map<Int, Bool> = [],
+			initializerEntry = identity.initializerSlot < 0;
+		for (entry in identity.entries) {
+			if (entry == null || entry.stableId < 0 || entry.functionIndex < 0 || stableIds.exists(entry.stableId) || slots.exists(entry.functionIndex))
+				throw "Invalid HLI function identity";
+			if (model.functionAt(entry.functionIndex) == null)
+				throw 'HLI identity references missing dispatch slot ${entry.functionIndex}';
+			stableIds.set(entry.stableId, true);
+			slots.set(entry.functionIndex, true);
+			if (entry.functionIndex == identity.initializerSlot)
+				initializerEntry = true;
+		}
+		if (!initializerEntry)
+			throw "HLI initializer references a slot absent from the identity table";
+		return identity;
+	}
+
 	public static function validShape(shape:Int):Bool
 		return shape >= 0 && shape <= 6;
 

@@ -30,6 +30,7 @@ class HaxeRuntimeModuleLoader {
 	public function load(bytes:Bytes, model:HlModule, identity:HlRuntimeManifest):LoadedModule {
 		if (bytes == null || model == null || identity == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Haxeon runtime module loading requires decoded module state");
+		identity = HlRuntimeCallPolicy.validateManifest(identity, model);
 		var metadata:HlMetadataGeneration;
 		try {
 			metadata = HlNativeMetadataBuilder.buildModule(model);

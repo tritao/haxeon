@@ -363,7 +363,7 @@ class HlNativeModuleLoader {
 	/** Build Haxe-owned metadata, then hand its complete code record to HashLink. */
 	public static function loadRuntime(bytes:Bytes, identity:Bytes):HlLoadedRuntimeModule {
 		var module = HlModule.decode(bytes),
-			identityModel = validateIdentity(HlRuntimeIdentity.decode(identity), module),
+			identityModel = HlRuntimeCallPolicy.validateManifest(HlRuntimeIdentity.decode(identity), module),
 			metadata = HlNativeMetadataBuilder.buildModule(module);
 		var loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
@@ -381,18 +381,6 @@ class HlNativeModuleLoader {
 				throw "HashLink external runtime module could not be unloaded after initialization failure";
 			throw error;
 		}
-	}
-
-	static function validateIdentity(identity:HlRuntimeManifest, model:HlModule):HlRuntimeManifest {
-		var initializerEntry = identity.initializerSlot < 0;
-		for (entry in identity.entries)
-			if (model.functionAt(entry.functionIndex) == null)
-				throw 'HLI identity references missing dispatch slot ${entry.functionIndex}';
-			else if (entry.functionIndex == identity.initializerSlot)
-				initializerEntry = true;
-		if (!initializerEntry)
-			throw 'HLI initializer references a slot absent from the identity table';
-		return identity;
 	}
 
 	static function functionVersions(module:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration):HlFunctionVersionTable {
