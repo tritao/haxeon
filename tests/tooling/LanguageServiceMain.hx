@@ -926,6 +926,14 @@ class LanguageServiceMain {
 			|| aliasedInheritanceMethodImplementations.length != 1
 			|| aliasedInheritanceMethodImplementations[0].path != "aliased/child/Child.hx")
 			throw 'implementation navigation did not resolve an imported typedef parent: type=${aliasedInheritanceImplementations.length}, method=${aliasedInheritanceMethodImplementations.length}';
+		var aliasedInheritanceExactChild = "package aliased.child; import aliased.base.Parent; class Child extends Parent { public function run():Int return 2; } function main():Void { new Child().run(); }";
+		aliasedInheritanceService.update("aliased/child/Child.hx", aliasedInheritanceExactChild);
+		aliasedInheritanceService.compile("aliased.child.Child");
+		var exactAliasedInheritanceImplementations = aliasedInheritanceService.implementations("aliased/base/Base.hx",
+			aliasedInheritanceBase.indexOf("Base") + 1);
+		if (exactAliasedInheritanceImplementations.length != 1
+			|| exactAliasedInheritanceImplementations[0].path != "aliased/child/Child.hx")
+			throw 'exact implementation navigation did not resolve an imported typedef parent: ${exactAliasedInheritanceImplementations.length}';
 		var recoveredImplementationService = new LanguageService(),
 			recoveredContractSource = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
 			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(";

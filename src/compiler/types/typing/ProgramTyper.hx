@@ -433,7 +433,7 @@ class ProgramTyper {
 			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
 		var interfaceNames:Array<String> = [];
 		for (interfaceType in classDecl.interfaces) {
-			var interfaceName = inheritanceName(interfaceType);
+			var interfaceName = resolvedInheritanceName(interfaceType, classDecl.span, classSemanticSubstitutions);
 			if (interfaceName == null)
 				continue;
 			interfaceNames.push(interfaceName);
@@ -497,7 +497,7 @@ class ProgramTyper {
 			});
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
-			baseName = inheritanceName(parsedBase);
+			baseName = resolvedInheritanceName(parsedBase, classDecl.span, classSemanticSubstitutions);
 		return {
 			name: classDecl.name,
 			isValue: isValue,
@@ -527,6 +527,19 @@ class ProgramTyper {
 			case NamedType(name), AppliedType(name, _): name;
 			default:
 				if (session.tolerant) null; else BodyTyper.inheritanceName(type);
+		};
+	}
+
+	/** Resolve aliases in backend-facing inheritance names while retaining raw recovery names. */
+	function resolvedInheritanceName(type:AstType, span:SourceSpan,
+		substitutions:Map<String, CompilerType>):Null<String> {
+		var parsed = inheritanceName(type);
+		if (parsed == null)
+			return null;
+		var resolved = session.declarations.resolve(type, span, substitutions);
+		return switch resolved {
+			case TInstance(_, name, _): name;
+			default: parsed;
 		};
 	}
 
