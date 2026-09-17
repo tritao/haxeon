@@ -1006,9 +1006,13 @@ class LanguageServiceMain {
 		var packagePrecedenceNavigationSource = "package prefer.app; import prefer.external.*; function use():Void { var thing:Thing = new Thing(); thing.local; } function unfinished(";
 		packagePrecedenceService.update("prefer/app/Navigation.hx", packagePrecedenceNavigationSource);
 		var packagePrecedenceMemberPosition = packagePrecedenceNavigationSource.lastIndexOf("local") + 1,
-			packagePrecedenceMemberDefinition = packagePrecedenceService.definition("prefer/app/Navigation.hx", packagePrecedenceMemberPosition);
+			packagePrecedenceMemberDefinition = packagePrecedenceService.definition("prefer/app/Navigation.hx", packagePrecedenceMemberPosition),
+			packagePrecedenceTypePosition = packagePrecedenceNavigationSource.indexOf(":Thing") + 2,
+			packagePrecedenceTypeDefinition = packagePrecedenceService.typeDefinition("prefer/app/Navigation.hx", packagePrecedenceTypePosition);
 		if (packagePrecedenceMemberDefinition == null
-			|| packagePrecedenceMemberDefinition.path != "prefer/app/Thing.hx")
+			|| packagePrecedenceMemberDefinition.path != "prefer/app/Thing.hx"
+			|| packagePrecedenceTypeDefinition == null
+			|| packagePrecedenceTypeDefinition.path != "prefer/app/Thing.hx")
 			throw 'same-package member navigation did not retain the selected receiver: ${packagePrecedenceMemberDefinition == null ? "null" : packagePrecedenceMemberDefinition.path}';
 		var functionPackagePrecedenceService = new LanguageService(),
 			functionPackagePrecedenceExternal = "package prefer.fn.external; function answer():Int return 1;",
