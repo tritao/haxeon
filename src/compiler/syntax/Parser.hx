@@ -1007,8 +1007,68 @@ class Parser {
 			case BoolLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Bool(value);
 			case NullLiteral(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue;
 			case Variable(name, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(name);
+			case Add(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add, left, right);
+			case Sub(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub, left, right);
+			case Mul(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul, left, right);
+			case Div(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Div, left, right);
+			case Mod(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mod, left, right);
+			case BitAnd(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitAnd, left, right);
+			case BitXor(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor, left, right);
+			case BitOr(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitOr, left, right);
+			case ShiftLeft(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftLeft, left, right);
+			case ShiftRight(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftRight, left, right);
+			case UnsignedShiftRight(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.UnsignedShiftRight, left, right);
+			case Less(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Less, left, right);
+			case LessEqual(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.LessEqual, left, right);
+			case Greater(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Greater, left, right);
+			case GreaterEqual(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.GreaterEqual, left, right);
+			case Equal(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal, left, right);
+			case NotEqual(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.NotEqual, left, right);
+			case And(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.And, left, right);
+			case Or(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Or, left, right);
+			case Negate(value, _): unaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Negate, value);
+			case Not(value, _): unaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Not, value);
 			default: null;
 		};
+
+	static function binaryExpressionPayload(operation:compiler.syntax.SyntaxTree.SyntaxBinaryOperator, left:AstExpression,
+			right:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> {
+		var leftPayload = simpleExpressionPayload(left), rightPayload = simpleExpressionPayload(right);
+		return leftPayload == null || rightPayload == null ? null
+			: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload);
+	}
+
+	static function unaryExpressionPayload(operation:compiler.syntax.SyntaxTree.SyntaxUnaryOperator, value:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> {
+		var valuePayload = simpleExpressionPayload(value);
+		return valuePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Unary(operation, valuePayload);
+	}
+
+	static function simpleStatementPayload(statement:AstStatement):Null<compiler.syntax.SyntaxTree.SyntaxStatementPayload>
+		return switch statement {
+			case Break(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Break;
+			case Continue(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Continue;
+			case ReturnVoid(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.ReturnVoid;
+			case Return(expression, _):
+				var value = simpleExpressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Return(value);
+			case AstStatement.If(condition, thenBranch, elseBranch, _):
+				var conditionPayload = simpleExpressionPayload(condition), thenPayload = simpleStatementPayloads(thenBranch),
+					elsePayload = simpleStatementPayloads(elseBranch);
+				conditionPayload == null || thenPayload == null || elsePayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.IfBranch(conditionPayload, thenPayload, elsePayload);
+			default: null;
+		};
+
+	static function simpleStatementPayloads(statements:Array<AstStatement>):Null<Array<compiler.syntax.SyntaxTree.SyntaxStatementPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxStatementPayload> = [];
+		for (statement in statements) {
+			var payload = simpleStatementPayload(statement);
+			if (payload == null)
+				return null;
+			result.push(payload);
+		}
+		return result;
+	}
 
 	inline function isMacroModifier():Bool
 		return check(TokenKind.Identifier) && current().text == "macro";
@@ -1528,7 +1588,10 @@ class Parser {
 			var hasElse = match(TokenKind.Else),
 				elseBranch = hasElse ? parseStatementOrBlock() : [];
 			var end = statementEnd(hasElse ? elseBranch : thenBranch);
-			return If(condition, thenBranch, elseBranch, start.merge(end));
+			var statement = AstStatement.If(condition, thenBranch, elseBranch, start.merge(end)), payload = simpleStatementPayload(statement);
+			if (payload != null)
+				recordCstNode(SyntaxKind.IfStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
+			return statement;
 		}
 		if (match(TokenKind.While)) {
 			var start = previous().span;

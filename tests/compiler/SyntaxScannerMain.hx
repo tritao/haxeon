@@ -1,5 +1,7 @@
 import compiler.Source.SourceFile;
+import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -108,7 +110,8 @@ class SyntaxScannerMain {
 			throw "CST lowerer did not preserve generic class inheritance";
 
 		var declarationSource = new SourceFile("Declarations.hx",
-			"class Holder { public var value:Int; public function empty():Int {} public function read():Int return value; }\n"
+			"class Holder { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
+			+ "public function choose(flag:Bool):Int if (flag) return value + 1; else return value; }\n"
 			+ "interface Reader { function read(value:Int):String; }\n"),
 			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
 		var declarationProgram = declarationParser.parseProgram();
@@ -116,15 +119,28 @@ class SyntaxScannerMain {
 			throw "CST declaration parser did not retain a tree";
 		var holder = declarationProgram.classes[0], reader = declarationProgram.interfaces[0];
 		if (holder.fields.length != 1 || holder.fields[0].name != "value" || holder.fields[0].initializer != null
-			|| holder.methods.length != 2 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
+			|| holder.methods.length != 3 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
 			|| holder.methods[1].statements.length != 1
+			|| holder.methods[2].name != "choose" || holder.methods[2].statements.length != 1
 			|| reader.methods.length != 1 || reader.methods[0].arguments.length != 1 || reader.methods[0].arguments[0].name != "value")
 			throw "CST lowerer did not preserve field and function signatures";
 		switch holder.methods[1].statements[0] {
-			case Return(Variable(name, _), _):
-				if (name != "value")
-					throw "CST lowerer changed a simple return expression";
-			default: throw "CST lowerer did not lower a simple return statement";
+			case Return(Add(Variable(name, _), IntegerLiteral(value, _), _), _):
+				if (name != "value" || value != 1)
+					throw "CST lowerer changed a compound return expression";
+			default: throw "CST lowerer did not lower a compound return statement";
+		}
+		switch holder.methods[2].statements[0] {
+			case AstStatement.If(condition, thenBranch, elseBranch, _):
+				switch condition {
+					case Variable(name, _):
+						if (name != "flag")
+							throw "CST lowerer changed an if condition";
+					default: throw "CST lowerer did not lower an if condition";
+				}
+				if (thenBranch.length != 1 || elseBranch.length != 1)
+					throw "CST lowerer changed if branches";
+			default: throw "CST lowerer did not lower an if statement";
 		}
 		switch holder.fields[0].type {
 			case IntType:

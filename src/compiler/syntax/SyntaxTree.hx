@@ -41,6 +41,7 @@ enum SyntaxKind {
 	ReturnStatement;
 	BreakStatement;
 	ContinueStatement;
+	IfStatement;
 	Error;
 	Missing;
 }
@@ -51,6 +52,33 @@ typedef SyntaxFunctionParameter = {
 	final optional:Bool;
 }
 
+enum SyntaxBinaryOperator {
+	Add;
+	Sub;
+	Mul;
+	Div;
+	Mod;
+	BitAnd;
+	BitXor;
+	BitOr;
+	ShiftLeft;
+	ShiftRight;
+	UnsignedShiftRight;
+	Less;
+	LessEqual;
+	Greater;
+	GreaterEqual;
+	Equal;
+	NotEqual;
+	And;
+	Or;
+}
+
+enum SyntaxUnaryOperator {
+	Negate;
+	Not;
+}
+
 enum SyntaxExpressionPayload {
 	Integer(value:Int);
 	Float(value:Float);
@@ -58,6 +86,8 @@ enum SyntaxExpressionPayload {
 	Bool(value:Bool);
 	NullValue;
 	Variable(name:String);
+	Binary(operation:SyntaxBinaryOperator, left:SyntaxExpressionPayload, right:SyntaxExpressionPayload);
+	Unary(operation:SyntaxUnaryOperator, value:SyntaxExpressionPayload);
 }
 
 enum SyntaxStatementPayload {
@@ -65,6 +95,7 @@ enum SyntaxStatementPayload {
 	Continue;
 	ReturnVoid;
 	Return(value:SyntaxExpressionPayload);
+	IfBranch(condition:SyntaxExpressionPayload, thenBranch:Array<SyntaxStatementPayload>, elseBranch:Array<SyntaxStatementPayload>);
 }
 
 /** Source-only payload attached to grammar nodes that can already lower independently. */

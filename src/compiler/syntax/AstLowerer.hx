@@ -314,8 +314,27 @@ class AstLowerer {
 			case [Return(expression, span), SyntaxStatementPayload.Return(value)]:
 				var loweredExpression = lowerExpression(expression, value);
 				loweredExpression == null ? null : Return(loweredExpression, span);
+			case [AstStatement.If(condition, thenBranch, elseBranch, span), SyntaxStatementPayload.IfBranch(conditionPayload, thenPayload, elsePayload)]:
+				var loweredCondition = lowerExpression(condition, conditionPayload),
+					loweredThen = lowerStatementList(thenBranch, thenPayload),
+					loweredElse = lowerStatementList(elseBranch, elsePayload);
+			loweredCondition == null || loweredThen == null || loweredElse == null ? null
+					: AstStatement.If(loweredCondition, loweredThen, loweredElse, span);
 			default: null;
 		};
+
+	static function lowerStatementList(direct:Array<AstStatement>, payloads:Array<SyntaxStatementPayload>):Null<Array<AstStatement>> {
+		if (direct.length != payloads.length)
+			return null;
+		var result:Array<AstStatement> = [];
+		for (index in 0...direct.length) {
+			var lowered = lowerStatement(direct[index], payloads[index]);
+			if (lowered == null)
+				return null;
+			result.push(lowered);
+		}
+		return result;
+	}
 
 	static function lowerExpression(expression:AstExpression, payload:SyntaxExpressionPayload):Null<AstExpression>
 		return switch [expression, payload] {
@@ -325,8 +344,92 @@ class AstLowerer {
 			case [BoolLiteral(_, span), SyntaxExpressionPayload.Bool(value)]: BoolLiteral(value, span);
 			case [NullLiteral(span), SyntaxExpressionPayload.NullValue]: NullLiteral(span);
 			case [Variable(_, span), SyntaxExpressionPayload.Variable(name)]: Variable(name, span);
+			case [Add(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add, left, right, span, operation, leftPayload, rightPayload);
+			case [Sub(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub, left, right, span, operation, leftPayload, rightPayload);
+			case [Mul(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul, left, right, span, operation, leftPayload, rightPayload);
+			case [Div(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Div, left, right, span, operation, leftPayload, rightPayload);
+			case [Mod(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mod, left, right, span, operation, leftPayload, rightPayload);
+			case [BitAnd(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitAnd, left, right, span, operation, leftPayload, rightPayload);
+			case [BitXor(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor, left, right, span, operation, leftPayload, rightPayload);
+			case [BitOr(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitOr, left, right, span, operation, leftPayload, rightPayload);
+			case [ShiftLeft(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftLeft, left, right, span, operation, leftPayload, rightPayload);
+			case [ShiftRight(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftRight, left, right, span, operation, leftPayload, rightPayload);
+			case [UnsignedShiftRight(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.UnsignedShiftRight, left, right, span, operation, leftPayload, rightPayload);
+			case [Less(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Less, left, right, span, operation, leftPayload, rightPayload);
+			case [LessEqual(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.LessEqual, left, right, span, operation, leftPayload, rightPayload);
+			case [Greater(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Greater, left, right, span, operation, leftPayload, rightPayload);
+			case [GreaterEqual(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.GreaterEqual, left, right, span, operation, leftPayload, rightPayload);
+			case [Equal(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal, left, right, span, operation, leftPayload, rightPayload);
+			case [NotEqual(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.NotEqual, left, right, span, operation, leftPayload, rightPayload);
+			case [And(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.And, left, right, span, operation, leftPayload, rightPayload);
+			case [Or(left, right, span), SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload)]:
+				lowerBinary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Or, left, right, span, operation, leftPayload, rightPayload);
+			case [Negate(value, span), SyntaxExpressionPayload.Unary(operation, valuePayload)]:
+				lowerUnary(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Negate, value, span, operation, valuePayload);
+			case [Not(value, span), SyntaxExpressionPayload.Unary(operation, valuePayload)]:
+				lowerUnary(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Not, value, span, operation, valuePayload);
 			default: null;
 		};
+
+	static function lowerBinary(expected:compiler.syntax.SyntaxTree.SyntaxBinaryOperator, left:AstExpression, right:AstExpression,
+			span:SourceSpan, operation:compiler.syntax.SyntaxTree.SyntaxBinaryOperator, leftPayload:SyntaxExpressionPayload,
+			rightPayload:SyntaxExpressionPayload):Null<AstExpression> {
+		if (operation != expected)
+			return null;
+		var loweredLeft = lowerExpression(left, leftPayload), loweredRight = lowerExpression(right, rightPayload);
+		if (loweredLeft == null || loweredRight == null)
+			return null;
+		return switch expected {
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add: Add(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub: Sub(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul: Mul(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Div: Div(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mod: Mod(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitAnd: BitAnd(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor: BitXor(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitOr: BitOr(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftLeft: ShiftLeft(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftRight: ShiftRight(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.UnsignedShiftRight: UnsignedShiftRight(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Less: Less(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.LessEqual: LessEqual(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Greater: Greater(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.GreaterEqual: GreaterEqual(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal: Equal(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.NotEqual: NotEqual(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.And: And(loweredLeft, loweredRight, span);
+			case compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Or: Or(loweredLeft, loweredRight, span);
+		};
+	}
+
+	static function lowerUnary(expected:compiler.syntax.SyntaxTree.SyntaxUnaryOperator, value:AstExpression, span:SourceSpan,
+			operation:compiler.syntax.SyntaxTree.SyntaxUnaryOperator, valuePayload:SyntaxExpressionPayload):Null<AstExpression> {
+		if (operation != expected)
+			return null;
+		var loweredValue = lowerExpression(value, valuePayload);
+		return loweredValue == null ? null : switch expected {
+			case compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Negate: Negate(loweredValue, span);
+			case compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Not: Not(loweredValue, span);
+		};
+	}
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
