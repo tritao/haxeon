@@ -2,7 +2,9 @@ import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;
+#if haxeon
 import runtime.memory.Gc;
+#end
 
 class RuntimePatchStressMain {
 	#if haxeon
