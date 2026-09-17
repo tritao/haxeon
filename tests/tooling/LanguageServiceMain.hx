@@ -3011,6 +3011,19 @@ class LanguageServiceMain {
 			|| enumAbstractValueDefinition.path != "EnumAbstractMembers.hx"
 			|| enumAbstractValueReferences.length < 2)
 			throw "recovered enum-abstract member completion or hover failed";
+		var importedEnumAbstractService = new LanguageService(),
+			importedEnumAbstractTarget = "package flags; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;",
+			importedEnumAbstractSource = "package flags.use; import flags.Flags; function main():Void { Flags.Ready; broken.unresolved().thing; }";
+		importedEnumAbstractService.update("flags/Flags.hx", importedEnumAbstractTarget);
+		importedEnumAbstractService.compile("flags.Flags");
+		importedEnumAbstractService.update("flags/use/Main.hx", importedEnumAbstractSource);
+		var importedEnumAbstractPosition = importedEnumAbstractSource.indexOf("Ready") + 1,
+			importedEnumAbstractDefinition = importedEnumAbstractService.definition("flags/use/Main.hx", importedEnumAbstractPosition),
+			importedEnumAbstractReferences = importedEnumAbstractService.references("flags/use/Main.hx", importedEnumAbstractPosition);
+		if (importedEnumAbstractDefinition == null
+			|| importedEnumAbstractDefinition.path != "flags/Flags.hx"
+			|| importedEnumAbstractReferences.length < 2)
+			throw 'recovered imported enum-abstract value lost its authoritative identity: definition=${importedEnumAbstractDefinition == null ? "null" : importedEnumAbstractDefinition.path}, references=${importedEnumAbstractReferences.length}';
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");

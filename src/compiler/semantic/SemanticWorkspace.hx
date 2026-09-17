@@ -2476,6 +2476,11 @@ class SemanticWorkspace {
 					for (method in decl.methods)
 						if (method.name == name)
 							return {state: state, key: 'abstract:${decl.name}:method:$name', span: method.span};
+			for (decl in model.program.enumAbstracts)
+				if (ownsType(state, model, decl.name, abstractName))
+					for (value in decl.values)
+						if (value.name == name)
+							return {state: state, key: 'enum-abstract:${decl.name}:value:$name', span: value.span};
 		}
 		return null;
 	}
