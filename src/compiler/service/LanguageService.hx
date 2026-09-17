@@ -645,6 +645,7 @@ class LanguageService {
 		if (changedProgram != null)
 			changedBodies = changedRecoveredFunctionBodies(changed.previousEditorSemanticModel, changedProgram);
 		var changedSymbols = recoverySemanticIds(effectiveSemanticModel(changed), changedBodies, contextChanged);
+		var changedNames = contextChanged ? recoveryExportedNames(changedProgram) : recoveryFunctionNames(changedBodies);
 		var pending:Array<ModuleState> = [changed],
 			refreshed:Map<String, Bool> = [changed.name => true],
 			pendingIndex = 0;
@@ -658,7 +659,7 @@ class LanguageService {
 					continue;
 				var candidateProgram = effectiveAst(candidate);
 				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram)
-					|| !recoveryModuleAffected(candidateProgram, candidate, dependency, dependencyProgram, changedSymbols, contextChanged))
+					|| !recoveryModuleAffected(candidateProgram, candidate, dependency, dependencyProgram, changedSymbols, changedNames, contextChanged))
 					continue;
 				if (!forceNoReuse)
 					addRecoveredBodyDependents(candidateProgram, changedBodies);
@@ -668,6 +669,8 @@ class LanguageService {
 				// changed inherited/control-flow semantics to the next graph level.
 				for (id in recoverySemanticIds(effectiveSemanticModel(candidate), null, true).keys())
 					changedSymbols.set(id, true);
+				for (name in recoveryExportedNames(dependencyProgram).keys())
+					changedNames.set(name, true);
 				refreshed.set(candidate.name, true);
 				pending.push(candidate);
 			}
@@ -870,6 +873,13 @@ class LanguageService {
 		return result;
 	}
 
+	static function recoveryFunctionNames(changedBodies:Map<String, Bool>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (name in changedBodies.keys())
+			result.set(sourceName(name), true);
+		return result;
+	}
+
 	static function recoveryProgramUsesNames(program:AstProgram, names:Map<String, Bool>):Bool {
 		var spans:Array<SourceSpan> = [];
 		for (alias in program.aliases)
@@ -908,7 +918,7 @@ class LanguageService {
 	}
 
 	static function recoveryModuleAffected(program:AstProgram, candidate:ModuleState, dependency:ModuleState,
-		dependencyProgram:AstProgram, changedSymbols:Map<String, Bool>, contextChanged:Bool):Bool {
+		dependencyProgram:AstProgram, changedSymbols:Map<String, Bool>, changedNames:Map<String, Bool>, contextChanged:Bool):Bool {
 		if (contextChanged) {
 			for (importPath in program.imports)
 				if (modulePathMatches(dependency.name, importPath, dependencyProgram))
@@ -921,8 +931,7 @@ class LanguageService {
 		if (model != null) {
 			if (model.index.dependsOnAny(changedSymbols))
 				return true;
-			var names = recoveryExportedNames(dependencyProgram);
-			if (model.index.hasUnresolvedName(names))
+			if (model.index.hasUnresolvedName(changedNames))
 				return true;
 		}
 		return contextChanged
