@@ -1171,6 +1171,18 @@ class ParserRecoveryMain {
 				genericInterfaceGet = item.detail;
 		if (genericInterfaceGet != "get():Int")
 			throw 'generic interface member type was not substituted: $genericInterfaceGet';
+		var exactGenericInterfaceService = new LanguageService(),
+			exactGenericInterfaceSource = "interface Contract<T> { function get():T; } class Impl<U> implements Contract<U> { public function get():U return cast null; } function main():Int return 0;";
+		exactGenericInterfaceService.update("ExactGenericInterface.hx", exactGenericInterfaceSource);
+		try
+			exactGenericInterfaceService.analyze("ExactGenericInterface")
+		catch (_:CompileError) {}
+		var exactGenericInterfacePosition = exactGenericInterfaceSource.indexOf("Contract") + 2,
+			exactGenericInterfaceImplementations = exactGenericInterfaceService.implementations("ExactGenericInterface.hx", exactGenericInterfacePosition);
+		if (exactGenericInterfaceImplementations.length != 1
+			|| exactGenericInterfaceImplementations[0].span.start > exactGenericInterfaceSource.indexOf("class Impl")
+			|| exactGenericInterfaceImplementations[0].span.end < exactGenericInterfaceSource.indexOf("class Impl") + "class Impl".length)
+			throw 'exact generic interface implementation lookup lost its relationship: ${exactGenericInterfaceImplementations.length}';
 		var abstractMemberService = new LanguageService(),
 			abstractMemberSource = "abstract Box<T>(T) { public function get():T return this; } function main():Void { var box:Box<Int>; box.";
 		abstractMemberService.update("AbstractMember.hx", abstractMemberSource);
