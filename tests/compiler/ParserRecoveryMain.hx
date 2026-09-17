@@ -223,6 +223,29 @@ class ParserRecoveryMain {
 		if (recoveredHover != "Result.Value(value:Int)"
 			|| recoveredSignature == null || recoveredSignature.label != "Result.Value(value:Int)")
 			throw 'recovered generic enum metadata was not substituted: hover=$recoveredHover, signature=${recoveredSignature == null ? "null" : recoveredSignature.label}';
+		var importedConsumer = "package generic.app; import generic.enums.Result; function main():Void { var result:Result<Int> = Value(1); }";
+		service.update("generic/app/Imported.hx", importedConsumer);
+		service.analyze("generic.app.Imported");
+		var importedPosition = importedConsumer.indexOf("Value(1)") + 1,
+			importedDefinition = service.definition("generic/app/Imported.hx", importedPosition),
+			importedSignature = service.signatureHelp("generic/app/Imported.hx", importedConsumer.lastIndexOf("Value(") + "Value(".length),
+			importedHover = service.hover("generic/app/Imported.hx", importedPosition);
+		if (importedDefinition == null || importedDefinition.stale
+			|| importedDefinition.path != "generic/enums/Result.hx"
+			|| importedHover != "Result.Value(value:Int)"
+			|| importedSignature == null || importedSignature.label != "Result.Value(value:Int)")
+			throw 'exact imported generic enum metadata was not substituted: definition=${importedDefinition == null ? "null" : importedDefinition.path}, hover=$importedHover, signature=${importedSignature == null ? "null" : importedSignature.label}';
+		var recoveredImportedConsumer = StringTools.replace(importedConsumer, "Value(1)", "Value(");
+		service.update("generic/app/Imported.hx", recoveredImportedConsumer);
+		var recoveredImportedPosition = recoveredImportedConsumer.lastIndexOf("Value(") + 1,
+			recoveredImportedDefinition = service.definition("generic/app/Imported.hx", recoveredImportedPosition),
+			recoveredImportedSignature = service.signatureHelp("generic/app/Imported.hx", recoveredImportedConsumer.length),
+			recoveredImportedHover = service.hover("generic/app/Imported.hx", recoveredImportedPosition);
+		if (recoveredImportedDefinition == null || recoveredImportedDefinition.stale
+			|| recoveredImportedDefinition.path != "generic/enums/Result.hx"
+			|| recoveredImportedHover != "Result.Value(value:Int)"
+			|| recoveredImportedSignature == null || recoveredImportedSignature.label != "Result.Value(value:Int)")
+			throw 'recovered imported generic enum metadata was not substituted: definition=${recoveredImportedDefinition == null ? "null" : recoveredImportedDefinition.path}, hover=$recoveredImportedHover, signature=${recoveredImportedSignature == null ? "null" : recoveredImportedSignature.label}';
 	}
 
 	static function assertPackageVisibilityClosure():Void {
