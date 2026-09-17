@@ -1898,6 +1898,41 @@ class SemanticWorkspace {
 		return result;
 	}
 
+	/** Enumerate enum cases from the current editor-visible snapshots. */
+	public function editorEnumCases(from:ModuleState, type:CompilerType, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Array<IndexedSemanticSymbol> {
+		var enumName = switch type {
+			case TNullable(element): return editorEnumCases(from, element, sourceProgram, token);
+			case TInstance(NominalKind.Enum, name, _): Std.string(name);
+			default: return [];
+		};
+		var result:Array<IndexedSemanticSymbol> = [], seen:Map<String, Bool> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+			for (symbol in model.index.symbols) {
+				if (token != null)
+					token.check();
+				if (symbol.kind != DeclarationKind.EnumCase)
+					continue;
+				var separator = symbol.name.lastIndexOf("."),
+					owner = separator < 0 ? "" : symbol.name.substring(0, separator),
+					matches = owner == enumName || packagePrefix + owner == enumName;
+				if (!matches || (state != from && !editorSymbolVisible(from, symbol.id, sourceProgram, token))
+					|| seen.exists(Std.string(symbol.id)))
+					continue;
+				seen.set(Std.string(symbol.id), true);
+				result.push(symbol);
+			}
+		}
+		result.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		return result;
+	}
+
 	/**
 	 * Enumerate members from the editor-visible type snapshots. This deliberately
 	 * consumes current recovered declarations when available, while keeping all

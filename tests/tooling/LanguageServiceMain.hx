@@ -2883,6 +2883,18 @@ class LanguageServiceMain {
 		if (objectNameContext == null || objectNameContext.context.kind != SemanticCompletionContextKind.ObjectField
 			|| !foundExpectedObjectField || !objectNameCompletion.isIncomplete)
 			throw 'completion did not expose the expected anonymous object field during recovery: context=${objectNameContext == null ? "null" : Std.string(objectNameContext.context.kind)}, expected=${objectNameContext == null || objectNameContext.context.expected == null ? "null" : Std.string(objectNameContext.context.expected)}, items=${[for (item in objectNameCompletion.items) item.label].join(",")}';
+		var recoveredPatternService = new LanguageService(),
+			recoveredPatternSource = "enum Choice { One; Two(value:Int); } function choose(value:Choice):Choice { switch (value) { case ";
+		recoveredPatternService.update("RecoveredPattern.hx", recoveredPatternSource);
+		var recoveredPatternContext = recoveredPatternService.completionContext("RecoveredPattern.hx", recoveredPatternSource.length),
+			recoveredPatternCompletion = recoveredPatternService.completeResult("RecoveredPattern.hx", recoveredPatternSource.length),
+			foundRecoveredPatternCase = false;
+		for (item in recoveredPatternCompletion.items)
+			if (item.label == "One" && item.kind == "enumCase")
+				foundRecoveredPatternCase = true;
+		if (recoveredPatternContext == null || recoveredPatternContext.context.kind != SemanticCompletionContextKind.Pattern
+			|| !foundRecoveredPatternCase || !recoveredPatternCompletion.isIncomplete)
+			throw 'recovered enum pattern completion did not use current enum cases: context=${recoveredPatternContext == null ? "null" : Std.string(recoveredPatternContext.context.kind)}, items=${[for (item in recoveredPatternCompletion.items) item.label].join(",")}';
 		var inferredObjectService = new LanguageService(),
 			inferredObjectSource = "function main():Void { var point = {value: 1}; point.";
 		inferredObjectService.update("InferredObject.hx", inferredObjectSource);

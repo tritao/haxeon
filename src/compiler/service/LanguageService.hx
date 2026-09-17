@@ -1817,7 +1817,7 @@ class LanguageService {
 					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
 			}
 		if (semanticContext != null && semanticContext.expected != null)
-			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected, token)) {
+			for (symbol in compiler.semanticWorkspace.editorEnumCases(state, semanticContext.expected, ast, token)) {
 				if (token != null)
 					token.check();
 				var label = sourceName(symbol.name),
