@@ -644,7 +644,7 @@ class LanguageService {
 				&& (changed.previousEditorSemanticModel == null || forceNoReuse);
 		if (changedProgram != null)
 			changedBodies = changedRecoveredFunctionBodies(changed.previousEditorSemanticModel, changedProgram);
-		var changedSymbols = recoverySemanticIds(effectiveSemanticModel(changed));
+		var changedSymbols = recoverySemanticIds(effectiveSemanticModel(changed), changedBodies, contextChanged);
 		var pending:Array<ModuleState> = [changed],
 			refreshed:Map<String, Bool> = [changed.name => true],
 			pendingIndex = 0;
@@ -664,7 +664,9 @@ class LanguageService {
 					addRecoveredBodyDependents(candidateProgram, changedBodies);
 				clearRecoveredSnapshot(candidate);
 				recoverSyntax(candidate, null, changedBodies, forceNoReuse);
-				for (id in recoverySemanticIds(effectiveSemanticModel(candidate)).keys())
+				// Once a dependent has been rebuilt, its exported identities may carry
+				// changed inherited/control-flow semantics to the next graph level.
+				for (id in recoverySemanticIds(effectiveSemanticModel(candidate), null, true).keys())
 					changedSymbols.set(id, true);
 				refreshed.set(candidate.name, true);
 				pending.push(candidate);
@@ -924,10 +926,12 @@ class LanguageService {
 			&& recoveryModuleUsedByProgram(program, dependencyProgram);
 	}
 
-	static function recoverySemanticIds(model:Null<SemanticModel>):Map<String, Bool> {
+	static function recoverySemanticIds(model:Null<SemanticModel>, ?changedBodies:Map<String, Bool>, contextChanged:Bool = true):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
-		if (model != null)
-			for (id in model.index.symbols.keys())
+		if (model == null)
+			return result;
+		for (id => symbol in model.index.symbols)
+			if (contextChanged || changedBodies == null || changedBodies.exists(symbol.name))
 				result.set(id, true);
 		return result;
 	}
