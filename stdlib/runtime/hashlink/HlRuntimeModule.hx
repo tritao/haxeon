@@ -20,6 +20,7 @@ class HlRuntimeModule {
 	final dispatch:HlRuntimeDispatchTable;
 	final gcHandles:Array<GcHandle<Dynamic>> = [];
 	var module:Null<hl.Abstract<"realtime_module">>;
+	var constantsInitialized:Bool = false;
 
 	public function new(metadata:HlMetadataGeneration, bytes:Bytes, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
 		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel) {
@@ -39,8 +40,6 @@ class HlRuntimeModule {
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
 			HlTypeLayout.publishObjectPrototypes(publication.types, publication.typeCount, this.kernel);
-			metadata.constantDescriptors.initialize(function(index)
-				return this.kernel.initializeConstant(cast module, index));
 		} catch (error:Dynamic) {
 			if (module != null) {
 				this.kernel.dispose(cast module);
@@ -49,6 +48,20 @@ class HlRuntimeModule {
 			lease.release();
 			throw error;
 		}
+	}
+
+	/** Materialize constants after the outer Haxe lifecycle owner is registered. */
+	@:allow(compiler.hl.HlLoadedRuntimeModule)
+	function initializeConstants():Void {
+		withLock(function() {
+			if (module == null)
+				throw "HashLink external runtime module is no longer loaded";
+			if (constantsInitialized)
+				throw "HashLink external runtime module constants were already initialized";
+			metadata.constantDescriptors.initialize(function(index)
+				return kernel.initializeConstant(cast module, index));
+			constantsInitialized = true;
+		});
 	}
 
 	/** Whether the native runtime wrapper remains initialized. */

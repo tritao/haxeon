@@ -273,6 +273,7 @@ class HlLoadedRuntimeModule {
 	/** Execute the manifest initializer through the Haxe-owned runtime policy. */
 	@:allow(compiler.hl.HlNativeModuleLoader)
 	function initialize():Void {
+		nativeModule.initializeConstants();
 		if (identity.initializerSlot < 0)
 			return;
 		for (entry in identity.entries)
@@ -365,19 +366,23 @@ class HlNativeModuleLoader {
 		var module = HlModule.decode(bytes),
 			identityModel = HlRuntimeCallPolicy.validateManifest(HlRuntimeIdentity.decode(identity), module),
 			metadata = HlNativeMetadataBuilder.buildModule(module);
-		var loaded:Null<HlLoadedRuntimeModule> = null;
+		var nativeModule:Null<HlRuntimeModule> = null,
+			loaded:Null<HlLoadedRuntimeModule> = null;
 		try {
 			var functions = functionVersions(module, identityModel, metadata);
-			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata,
-				new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision, [for (entry in identityModel.entries) entry.stableId],
-					[for (entry in identityModel.entries) entry.functionIndex], identityModel.initializerSlot),
-				functions);
+			nativeModule = new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision,
+				[for (entry in identityModel.entries) entry.stableId], [for (entry in identityModel.entries) entry.functionIndex],
+				identityModel.initializerSlot);
+			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata, nativeModule, functions);
 			loaded.initialize();
 			return loaded;
 		} catch (error:Dynamic) {
-			if (loaded == null)
-				metadata.dispose();
-			else if (!loaded.unload())
+			if (loaded == null) {
+				if (nativeModule == null)
+					metadata.dispose();
+				else if (!nativeModule.unload())
+					throw "HashLink external runtime module could not be unloaded after initialization failure";
+			} else if (!loaded.unload())
 				throw "HashLink external runtime module could not be unloaded after initialization failure";
 			throw error;
 		}
