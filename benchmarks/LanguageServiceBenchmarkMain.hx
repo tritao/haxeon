@@ -72,10 +72,14 @@ class LanguageServiceBenchmarkMain {
 			runIteration();
 		for (_ in 0...warmup)
 			runPragticalProjectScenario();
-		var before = processMemory(),
-			samples = [for (_ in 0...iterations) runIteration()],
-			projectSamples = [for (_ in 0...projectIterations) runPragticalProjectScenario()],
-			after = processMemory(),
+		collectGarbage();
+		var benchmarkService = new LanguageService(),
+			benchmarkWorkspaceService = new LanguageService(),
+			before = processMemory(),
+			samples = [for (_ in 0...iterations) runIteration(benchmarkService, benchmarkWorkspaceService)],
+			projectSamples = [for (_ in 0...projectIterations) runPragticalProjectScenario()];
+		collectGarbage();
+		var after = processMemory(),
 			scaleSamples = [for (_ in 0...scaleIterations) runScaledWorkspaceScenario(scaleModules)],
 			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits);
 		var report = {
@@ -184,8 +188,10 @@ class LanguageServiceBenchmarkMain {
 			throw 'Editor benchmark $name budget exceeded: ${format(value)} ms > ${format(limit)} ms';
 	}
 
-	static function runIteration():Sample {
-		var service = new LanguageService(), updateMs = 0.0, completionMs = 0.0, signatureMs = 0.0, hoverMs = 0.0, definitionMs = 0.0, analysisMs = 0.0,
+	static function runIteration(?sharedService:LanguageService, ?sharedWorkspaceService:LanguageService):Sample {
+		var service = sharedService == null ? new LanguageService() : sharedService,
+			recoveredSnapshotsBefore = service.recoveredSnapshotBuilds,
+			updateMs = 0.0, completionMs = 0.0, signatureMs = 0.0, hoverMs = 0.0, definitionMs = 0.0, analysisMs = 0.0,
 			started = Sys.time();
 		for (tail in tails) {
 			var source = prefix + tail, editStarted = Sys.time();
@@ -214,7 +220,7 @@ class LanguageServiceBenchmarkMain {
 			service.analyze("EditorBenchmark")
 		catch (_:Dynamic) {}
 		analysisMs = (Sys.time() - queryStarted) * 1000.0;
-		var workspace = runWorkspaceScenario();
+		var workspace = runWorkspaceScenario(sharedWorkspaceService);
 		return {
 			updateMs: updateMs,
 			completionMs: completionMs,
@@ -222,7 +228,7 @@ class LanguageServiceBenchmarkMain {
 			hoverMs: hoverMs,
 			definitionMs: definitionMs,
 			analysisMs: analysisMs,
-			recoveredSnapshots: service.recoveredSnapshotBuilds,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredSnapshotsBefore,
 			workspaceUpdateMs: workspace.workspaceUpdateMs,
 			workspaceCompletionMs: workspace.workspaceCompletionMs,
 			malformedUpdateMs: workspace.malformedUpdateMs,
@@ -231,14 +237,15 @@ class LanguageServiceBenchmarkMain {
 		};
 	}
 
-	static function runWorkspaceScenario():{
+	static function runWorkspaceScenario(?sharedService:LanguageService):{
 		workspaceUpdateMs:Float,
 		workspaceCompletionMs:Float,
 		malformedUpdateMs:Float,
 		malformedCompletionMs:Float
 	} {
-		var service = new LanguageService();
-		service.update("bench/Foo.hx", "package bench; class Foo { public var knownFoo:Int; }");
+		var service = sharedService == null ? new LanguageService() : sharedService;
+		if (!service.compiler.modules.exists("bench.Foo"))
+			service.update("bench/Foo.hx", "package bench; class Foo { public var knownFoo:Int; }");
 		var source = "package bench; function main():Int { var foo:Foo = new Foo(); return foo. }",
 			started = Sys.time();
 		service.update("bench/Main.hx", source);
@@ -331,15 +338,23 @@ class LanguageServiceBenchmarkMain {
 	}
 
 	static function runLongLivedScenario(moduleCount:Int, edits:Int):Float {
-		var service = prepareScaledWorkspace(moduleCount),
-			before = processMemory();
+		var service = prepareScaledWorkspace(moduleCount);
+		collectGarbage();
+		var before = processMemory();
 		for (edit in 0...edits) {
 			var source = scaledSource(moduleCount, edit);
 			service.update("scale/Main.hx", source);
 			service.completeResult("scale/Main.hx", source.length);
 		}
+		collectGarbage();
 		var after = processMemory();
 		return before < 0 || after < 0 ? -1 : after - before;
+	}
+
+	static function collectGarbage():Void {
+		#if hl
+		hl.Gc.major();
+		#end
 	}
 
 	static function prepareScaledWorkspace(moduleCount:Int):LanguageService {
