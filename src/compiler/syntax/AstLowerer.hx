@@ -35,10 +35,22 @@ import compiler.syntax.SyntaxTree.SyntaxTree;
 	class that needs to change to construct AstProgram from CST nodes directly.
 */
 class AstLowerer {
-	public static function lower(tree:SyntaxTree, direct:AstProgram):AstProgram {
-		validateSpans(tree);
-		validateDeclarations(tree, direct);
-		return lowerHeader(tree, direct);
+	static var requireComplete = false;
+
+	public static function lower(tree:SyntaxTree, direct:AstProgram, strict:Bool = false):AstProgram {
+		var previous = requireComplete;
+		requireComplete = strict;
+		var result:AstProgram;
+		try {
+			validateSpans(tree);
+			validateDeclarations(tree, direct);
+			result = lowerHeader(tree, direct);
+		} catch (error:Dynamic) {
+			requireComplete = previous;
+			throw error;
+		}
+		requireComplete = previous;
+		return result;
 	}
 
 	/**
@@ -116,7 +128,7 @@ class AstLowerer {
 					}
 				default: null;
 			};
-			result.push(lowered == null ? alias : lowered);
+			result.push(keepOrFallback(lowered, alias, 'type alias ${alias.name}'));
 		}
 		return result;
 	}
@@ -134,7 +146,7 @@ class AstLowerer {
 					valid ? {name: name, typeParameters: typeParameters, typeConstraints: [], cases: cases, span: enumeration.span} : null;
 				default: null;
 			};
-			result.push(lowered == null ? enumeration : lowered);
+			result.push(keepOrFallback(lowered, enumeration, 'enum ${enumeration.name}'));
 		}
 		return result;
 	}
@@ -169,7 +181,7 @@ class AstLowerer {
 						: {name: name, underlying: underlying, fromTypes: fromTypes, toTypes: toTypes, values: values, span: declaration.span};
 				default: null;
 			};
-			result.push(lowered == null ? declaration : lowered);
+			result.push(keepOrFallback(lowered, declaration, 'enum abstract ${declaration.name}'));
 		}
 		return result;
 	}
@@ -202,7 +214,7 @@ class AstLowerer {
 					valid ? {name: name, isExtern: isExtern, metadata: declaration.metadata, typeParameters: typeParameters, typeConstraints: [], underlying: underlying, fromTypes: fromTypes, toTypes: toTypes, methods: methods, span: declaration.span} : null;
 				default: null;
 			};
-			result.push(lowered == null ? declaration : lowered);
+			result.push(keepOrFallback(lowered, declaration, 'abstract ${declaration.name}'));
 		}
 		return result;
 	}
@@ -244,7 +256,7 @@ class AstLowerer {
 		var result:Array<AstFunction> = [];
 		for (functionDeclaration in direct) {
 			var lowered = lowerFunction(functionDeclaration, nodePayloads.get(functionDeclaration.span.start), nodePayloads);
-			result.push(lowered == null ? functionDeclaration : lowered);
+			result.push(keepOrFallback(lowered, functionDeclaration, 'function ${functionDeclaration.name}'));
 		}
 		return result;
 	}
@@ -381,7 +393,7 @@ class AstLowerer {
 					lowerRichField(field, name, typePayload, initializerPayload, isStatic, isInline, isFinal, readAccess, writeAccess);
 				default: null;
 			};
-			result.push(lowered == null ? field : lowered);
+			result.push(keepOrFallback(lowered, field, 'field ${field.name}'));
 		}
 		return result;
 	}
@@ -1010,5 +1022,11 @@ class AstLowerer {
 				actual++;
 		if (actual < expected)
 			throw 'CST/AST lowering mismatch for $label: expected at least $expected, got $actual';
+	}
+
+	static function keepOrFallback<T>(lowered:Null<T>, direct:T, label:String):T {
+		if (lowered == null && requireComplete)
+			throw 'CST lowering could not independently reconstruct $label';
+		return lowered == null ? direct : lowered;
 	}
 }

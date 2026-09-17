@@ -187,7 +187,7 @@ class Parser {
 		if (currentCst != null && cstBuilder != null)
 			currentCst = currentCst.withGrammarRoots(cstBuilder.finish());
 		if (currentCst != null)
-			program = AstLowerer.lower(currentCst, program);
+			program = AstLowerer.lower(currentCst, program, !recovering);
 		return program;
 	}
 
