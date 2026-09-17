@@ -8,20 +8,20 @@ package runtime.hashlink;
 	aliases keep generated HXI bindings and source-declared metadata on one
 	RawPtr and layout model without adding a parallel descriptor representation.
 */
-typedef NativeModuleHlAlloc = HlAllocation;
-typedef NativeModuleHlCode = HlNativeCode;
-typedef NativeModuleHlConstant = HlConstant;
-typedef NativeModuleHlDebugSection = HlDebugSection;
-typedef NativeModuleHlFunction = HlFunction;
-typedef NativeModuleHlFunctionField = HlFunctionField;
-typedef NativeModuleHlNative = HlNative;
-typedef NativeModuleHlOpcode = HlOpcode;
-typedef NativeModuleHlPatchDebug = HlRuntimePatchDebug;
-typedef NativeModuleHlPatchFunction = HlRuntimePatchFunctionInput;
-typedef NativeModuleHlPatchInput = HlRuntimePatchInput;
-typedef NativeModuleHlPatchInstruction = HlRuntimePatchInstruction;
-typedef NativeModuleHlPatchPools = HlPatchPools;
-typedef NativeModuleHlSourceSnapshot = HlSourceSnapshot;
-typedef NativeModuleHlSourceSpan = HlSourceSpan;
-typedef NativeModuleHlType = HashLinkTypeBindings.NativeHlType;
-typedef NativeModuleHlTypeObj = HashLinkTypeBindings.NativeHlTypeObj;
+typedef NativeModuleHlAlloc = runtime.hashlink.HlModuleContext.HlAllocation;
+typedef NativeModuleHlCode = runtime.hashlink.HlNativeCode;
+typedef NativeModuleHlConstant = runtime.hashlink.HlConstant;
+typedef NativeModuleHlDebugSection = runtime.hashlink.HlDebugSection;
+typedef NativeModuleHlFunction = runtime.hashlink.HlFunction;
+typedef NativeModuleHlFunctionField = runtime.hashlink.HlFunction.HlFunctionField;
+typedef NativeModuleHlNative = runtime.hashlink.HlNative;
+typedef NativeModuleHlOpcode = runtime.hashlink.HlOpcode;
+typedef NativeModuleHlPatchDebug = runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
+typedef NativeModuleHlPatchFunction = runtime.hashlink.HlPatchInput.HlRuntimePatchFunctionInput;
+typedef NativeModuleHlPatchInput = runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
+typedef NativeModuleHlPatchInstruction = runtime.hashlink.HlPatchInput.HlRuntimePatchInstruction;
+typedef NativeModuleHlPatchPools = runtime.hashlink.HlPatchPools;
+typedef NativeModuleHlSourceSnapshot = runtime.hashlink.HlPatchDebug.HlSourceSnapshot;
+typedef NativeModuleHlSourceSpan = runtime.hashlink.HlPatchDebug.HlSourceSpan;
+typedef NativeModuleHlType = runtime.hashlink.HashLinkTypeBindings.NativeHlType;
+typedef NativeModuleHlTypeObj = runtime.hashlink.HashLinkTypeBindings.NativeHlTypeObj;
