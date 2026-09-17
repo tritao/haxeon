@@ -19,6 +19,8 @@ class HlFunctionTable {
 		for (index in 0...count) {
 			if (functionTypes[index].isNull())
 				throw 'HashLink function table type at slot $index cannot be null';
+			if (!arena.ownsType(functionTypes[index]))
+				throw 'HashLink function table type at slot $index must belong to its arena';
 			functions.offset(index).store(functionPointers[index]);
 			types.offset(index).store(functionTypes[index]);
 		}
@@ -54,6 +56,8 @@ class HlFunctionTable {
 	/** Replace a signature slot without moving the table. */
 	public function setType(index:Int, type:RawPtr<HlType>):Void {
 		checkIndex(index);
+		if (type.isNull() || !arena.ownsType(type))
+			throw 'HashLink function table type at slot $index must belong to its arena';
 		types.offset(index).store(type);
 	}
 

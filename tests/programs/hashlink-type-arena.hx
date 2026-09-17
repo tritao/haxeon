@@ -520,20 +520,33 @@ function main():Int {
 	catch (error:Dynamic)
 		incompleteTypeRejected = Std.string(error).indexOf("every arena type record") >= 0;
 	incompleteTypeGeneration.dispose();
-	var foreignArena = new HlTypeArena(128, 1),
-		foreignType = new HlTypeBuilder(foreignArena).primitive(HlTypeKind.Int32Type),
+	var foreignArena = new HlTypeArena(128, 2),
+		foreignBuilder = new HlTypeBuilder(foreignArena),
+		foreignType = foreignBuilder.primitive(HlTypeKind.Int32Type),
+		foreignSkeleton = foreignBuilder.functionTypeSkeleton(),
 		foreignGeneration = new HlMetadataGeneration(128, 1),
 		foreignOwnedType = foreignGeneration.builder.primitive(HlTypeKind.VoidType),
 		foreignModule = foreignGeneration.defineModule([RawPtr.nullPtr()], [foreignOwnedType]),
 		foreignObject = foreignGeneration.builder.objectType(foreignGeneration.builder.utf16Name("ForeignFieldObject"), RawPtr.nullPtr(), [
 			{
 				name: RawPtr.nullPtr(),
-				type: foreignType,
+				type: foreignOwnedType,
 				hashedName: 0
 			}
 		], [], [], RawPtr.nullPtr(), foreignModule, RawPtr.nullPtr());
 	foreignGeneration.addType(foreignOwnedType);
 	foreignGeneration.addType(foreignObject);
+	var foreignBuilderRejected = false;
+	try
+		foreignGeneration.builder.defineFunctionType(foreignSkeleton, [foreignOwnedType], foreignOwnedType)
+	catch (error:Dynamic)
+		foreignBuilderRejected = Std.string(error).indexOf("must belong to this type arena") >= 0;
+	var foreignFunctionTableRejected = false;
+	try
+		new HlFunctionTable(foreignGeneration.arena, [RawPtr.nullPtr()], [foreignType])
+	catch (error:Dynamic)
+		foreignFunctionTableRejected = Std.string(error).indexOf("must belong to its arena") >= 0;
+	foreignObject.ref.data.ref.obj.ref.fields.offset(0).ref.type = foreignType;
 	var foreignTypeRejected = false;
 	try
 		foreignGeneration.publish()
@@ -548,5 +561,6 @@ function main():Int {
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
-		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignTypeRejected ? 42 : 1;
+		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignBuilderRejected && foreignFunctionTableRejected
+		&& foreignTypeRejected ? 42 : 1;
 }

@@ -113,11 +113,16 @@ class HlTypeBuilder {
 	/** Complete a function type skeleton after all recursive signature types are available. */
 	public function defineFunctionType(type:RawPtr<HlType>, arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):Void {
 		requireWritable();
-		var kind:HlTypeKind = cast type.ref.kind;
-		if (kind != HlTypeKind.Function && kind != HlTypeKind.Method)
-			throw "HashLink function definition requires a function type skeleton";
+		requireSkeleton(type, HlTypeKind.Function, "function", HlTypeKind.Method);
+		if (arguments == null || returnType.isNull())
+			throw "HashLink function definition requires argument and return types";
+		for (index in 0...arguments.length)
+			requireOwnedType(arguments[index], 'HashLink function argument $index');
+		requireOwnedType(returnType, "HashLink function return type");
 		var nargs = arguments.length, functionData = type.ref.data.ref.fun,
 			nativeArguments:RawPtr<RawPtr<HlType>>;
+		if (functionData.isNull())
+			throw "HashLink function definition requires a valid function type skeleton";
 		if (nargs == 0)
 			nativeArguments = RawPtr.nullPtr();
 		else {
@@ -179,10 +184,16 @@ class HlTypeBuilder {
 			prototypes:Array<HlObjectProtoSpec>, bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>,
 			module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):Void {
 		requireWritable();
-		var kind:HlTypeKind = cast type.ref.kind;
-		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
-			throw "HashLink object definition requires an object type skeleton";
+		requireSkeleton(type, HlTypeKind.Object, "object", HlTypeKind.Struct);
+		if (fields == null || prototypes == null || bindings == null)
+			throw "HashLink object definition requires field, prototype, and binding arrays";
+		if (!superType.isNull())
+			requireOwnedType(superType, "HashLink object super type");
+		for (index in 0...fields.length)
+			requireOwnedType(fields[index].type, 'HashLink object field $index');
 		var objectData = type.ref.data.ref.obj;
+		if (objectData.isNull())
+			throw "HashLink object definition requires a valid object type skeleton";
 		objectData.ref.nfields = cast fields.length;
 		objectData.ref.nproto = cast prototypes.length;
 		objectData.ref.nbindings = cast bindings.length;
@@ -239,10 +250,21 @@ class HlTypeBuilder {
 	public function defineEnumType(type:RawPtr<HlType>, name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>,
 			globalValue:RawPtr<RawPtr<UInt8>>):Void {
 		requireWritable();
-		var kind:HlTypeKind = cast type.ref.kind;
-		if (kind != HlTypeKind.Enum)
-			throw "HashLink enum definition requires an enum type skeleton";
+		requireSkeleton(type, HlTypeKind.Enum, "enum");
+		if (constructs == null)
+			throw "HashLink enum definition requires constructor specifications";
+		for (index in 0...constructs.length) {
+			var construct = constructs[index];
+			if (construct == null || construct.parameters == null || construct.offsets == null)
+				throw 'HashLink enum constructor $index is incomplete';
+			if (construct.parameters.length != construct.offsets.length)
+				throw 'HashLink enum constructor $index requires one offset per parameter';
+			for (parameterIndex in 0...construct.parameters.length)
+				requireOwnedType(construct.parameters[parameterIndex], 'HashLink enum constructor $index parameter $parameterIndex');
+		}
 		var enumData = type.ref.data.ref.enumType;
+		if (enumData.isNull())
+			throw "HashLink enum definition requires a valid enum type skeleton";
 		enumData.ref.name = name;
 		enumData.ref.nconstructs = cast constructs.length;
 		enumData.ref.globalValue = globalValue;
@@ -272,10 +294,16 @@ class HlTypeBuilder {
 	public function defineVirtualType(type:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>,
 			lookup:RawPtr<HlFieldLookup>):Void {
 		requireWritable();
-		var kind:HlTypeKind = cast type.ref.kind;
-		if (kind != HlTypeKind.Virtual)
-			throw "HashLink virtual definition requires a virtual type skeleton";
+		requireSkeleton(type, HlTypeKind.Virtual, "virtual");
+		if (fields == null || indexes == null)
+			throw "HashLink virtual definition requires field and index arrays";
+		if (indexes.length != 0 && fields.length != indexes.length)
+			throw "HashLink virtual definition requires one index per field";
+		for (index in 0...fields.length)
+			requireOwnedType(fields[index].type, 'HashLink virtual field $index');
 		var virtualData = type.ref.data.ref.virtualType;
+		if (virtualData.isNull())
+			throw "HashLink virtual definition requires a valid virtual type skeleton";
 		virtualData.ref.fields = objectFields(fields);
 		virtualData.ref.nfields = cast fields.length;
 		virtualData.ref.dataSize = cast dataSize;
@@ -369,6 +397,20 @@ class HlTypeBuilder {
 		type.ref.markBits = RawPtr.nullPtr();
 		type.ref.gcOwner = RawPtr.nullPtr();
 		return type;
+	}
+
+	function requireOwnedType(type:RawPtr<HlType>, label:String):Void {
+		if (type.isNull())
+			throw '$label cannot be null';
+		if (!arena.ownsType(type))
+			throw '$label must belong to this type arena';
+	}
+
+	function requireSkeleton(type:RawPtr<HlType>, expected:HlTypeKind, label:String, ?alternate:Null<HlTypeKind>):Void {
+		requireOwnedType(type, 'HashLink $label type skeleton');
+		var actual:Int = cast type.ref.kind;
+		if (actual != cast(expected, Int) && (alternate == null || actual != cast(alternate, Int)))
+			throw 'HashLink $label definition requires a matching type skeleton';
 	}
 
 	@:allow(runtime.hashlink.HlMetadataGeneration)
