@@ -283,6 +283,9 @@ class LanguageServiceMain {
 			|| recoveredSuperMemberDefinition.span.start != recoveredSuperMemberSource.indexOf("var value")
 			|| recoveredSuperMemberReferences.length < 2)
 			throw 'recovered super-member navigation lost the base field identity: definition=${recoveredSuperMemberDefinition == null ? "null" : Std.string(recoveredSuperMemberDefinition.span.start)}, references=${recoveredSuperMemberReferences.length}';
+		for (unresolved in recoveredSuperMemberService.unresolvedSymbols("RecoveredSuperMember.hx"))
+			if (unresolved.name == "this" || unresolved.name == "super")
+				throw 'recovered receiver keyword was incorrectly reported as unresolved: ${unresolved.name}';
 		var switchTraversalService = new LanguageService(),
 			switchTraversalSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function main():Int return 0;";
 		switchTraversalService.update("SwitchTraversal.hx", switchTraversalSource);

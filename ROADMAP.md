@@ -173,7 +173,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
   scopes and local types around unrelated failures, records expected argument
   types, retains nominal receivers with unknown generic arguments, and exposes
-  unresolved names and compiler-owned completion contexts. Generic constraint
+  unresolved names and compiler-owned completion contexts. `this` and `super`
+  remain typed language receivers during recovered member traversal instead of
+  becoming bogus unresolved names. Generic constraint
   failures, conflicting inference, and generic instance-method values now
   retain callable/result shapes in recovery. Full error-tolerant type
   resolution remains.

@@ -1336,6 +1336,12 @@ class SemanticIndexBuilder {
 				if (expected != null)
 					completionTypes.push({span: span, type: expected});
 			case Variable(name, span):
+				if (name == "this" || name == "super") {
+					// These are language receivers, not lexical names. Their type is
+					// recovered from the enclosing method so member traversal can bind
+					// the actual field or method without publishing a bogus unresolved
+					// symbol for the receiver keyword itself.
+				} else {
 				var separator = name.indexOf(".");
 				if (separator < 0) {
 					var local = bindRecoveredLocal(name, span);
@@ -1353,6 +1359,7 @@ class SemanticIndexBuilder {
 					if (bindRecoveredMember(Variable(receiver, span), member, span) == null)
 						bindNamed(resolveRecoveredSymbol, name, span);
 					addRecoveredQualifier(name, span, recoveredExpressionBindingType(recoveredQualifiedExpression(name, span)));
+				}
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object, null, activeFunctionKey);
