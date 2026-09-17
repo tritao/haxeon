@@ -2943,7 +2943,6 @@ class SemanticIndexBuilder {
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
 		ensureMutable();
 		var started = Sys.time();
-		var started = Sys.time();
 		if (token != null)
 			token.check();
 		cancellation = token;
