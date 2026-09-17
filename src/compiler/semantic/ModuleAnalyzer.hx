@@ -181,17 +181,10 @@ class ModuleAnalyzer {
 			for (method in interfaceDecl.methods)
 				addFunctionTypeDependencies(method, state, dependencies);
 		for (classDecl in ast.classes) {
-			var base = classDecl.base;
-			if (base != null) {
-				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(base), ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			}
-			for (interfaceType in classDecl.interfaces) {
-				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(interfaceType), ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			}
+			if (classDecl.base != null)
+				addModuleTypeDependency(classDecl.base, state, dependencies);
+			for (interfaceType in classDecl.interfaces)
+				addModuleTypeDependency(interfaceType, state, dependencies);
 			for (field in classDecl.fields)
 				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
 			for (method in classDecl.methods)
@@ -230,10 +223,13 @@ class ModuleAnalyzer {
 	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
 		switch type {
 			case NamedType(name):
-				var ast = state.parsedAst(),
-					owner = sourceModuleForType(name, ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
+				addNamedTypeDependency(name, state, dependencies);
+			case AppliedType(name, arguments):
+				addNamedTypeDependency(name, state, dependencies);
+				for (argument in arguments)
+					addModuleTypeDependency(argument, state, dependencies);
+			case NativeAbstractType(declaration, _):
+				addNamedTypeDependency(declaration, state, dependencies);
 			case ArrayType(element), NullableType(element):
 				addModuleTypeDependency(element, state, dependencies);
 			case MapType(key, value):
@@ -248,6 +244,15 @@ class ModuleAnalyzer {
 					addModuleTypeDependency(field.type, state, dependencies);
 			default:
 		}
+
+	function addNamedTypeDependency(name:String, state:ModuleState, dependencies:Map<String, Bool>):Void {
+		var ast = state.parsedAst(),
+			owner = sourceModuleForType(name, ast.packageName);
+		if (owner != null && owner != state.name)
+			dependencies.set(owner, true);
+		else if (owner == null && (PlatformAbi.isType(name) || isPlatformDependency(name)))
+			return;
+	}
 
 	function sourceModuleForType(typeName:String, packageName:Null<String>):Null<String> {
 		var qualified = typeName.indexOf(".") < 0 && packageName != null ? packageName + "." + typeName : typeName,
@@ -371,7 +376,8 @@ class ModuleAnalyzer {
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
 		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
-			|| root == "Std" || root == "StringTools" || root == "Type";
+			|| root == "Std" || root == "StringTools" || root == "Type" || root == "Any" || root == "Bool" || root == "Dynamic"
+			|| root == "Float" || root == "Int" || root == "Iterator" || root == "List" || root == "Map" || root == "Null" || root == "Void";
 	}
 
 	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void

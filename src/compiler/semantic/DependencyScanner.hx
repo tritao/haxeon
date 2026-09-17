@@ -3,21 +3,29 @@ package compiler.semantic;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstChildren;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {
 	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
 		switch s {
 			case ErrorStatement(_):
-			case UninitializedDeclaration(_, _, _):
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
+			case UninitializedDeclaration(_, type, _):
+				scanType(type, dependencies);
+			case VarDeclaration(_, type, e, _):
+				if (type != null)
+					scanType(type, dependencies);
+				scanExpression(e, dependencies);
+			case Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
 			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
 					scanStatement(x, dependencies);
-				for (catchClause in catches)
+				for (catchClause in catches) {
+					scanType(catchClause.type, dependencies);
 					for (x in catchClause.statements)
 						scanStatement(x, dependencies);
+				}
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -89,8 +97,10 @@ class DependencyScanner {
 				scanExpression(value, dependencies);
 			case ThrowExpression(value, _):
 				scanExpression(value, dependencies);
-			case Cast(value, _, _):
+			case Cast(value, target, _):
 				scanExpression(value, dependencies);
+				if (target != null)
+					scanType(target, dependencies);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
 				for (switchCase in cases) {
@@ -149,15 +159,32 @@ class DependencyScanner {
 				scanExpression(callee, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
-			case New(typeName, args, _), NewGeneric(typeName, _, args, _):
+			case New(typeName, args, _):
 				dependencies.set(typeName, true);
 				for (a in args)
 					scanExpression(a, dependencies);
-			case NewArray(_, length, _):
+			case NewGeneric(typeName, typeArguments, args, _):
+				dependencies.set(typeName, true);
+				for (type in typeArguments)
+					scanType(type, dependencies);
+				for (a in args)
+					scanExpression(a, dependencies);
+			case NewArray(element, length, _):
+				scanType(element, dependencies);
 				scanExpression(length, dependencies);
 			case NativeLayoutQuery(_, type, _, _):
 				scanType(type, dependencies);
-			case NewMap(_, _, _):
+			case NewMap(key, value, _):
+				scanType(key, dependencies);
+				scanType(value, dependencies);
+			case Lambda(arguments, statements, _):
+				for (argument in arguments) {
+					scanType(argument.type, dependencies);
+					if (argument.defaultValue != null)
+						scanExpression(argument.defaultValue, dependencies);
+				}
+				for (statement in statements)
+					scanStatement(statement, dependencies);
 			default:
 		}
 
@@ -165,24 +192,18 @@ class DependencyScanner {
 		addQualifiedOwner(name, dependencies);
 	}
 
-	static function scanType(type:AstType, dependencies:Map<String, Bool>):Void
-		switch type {
-			case NamedType(name) | AppliedType(name, _):
-				dependencies.set(name, true);
-			case ArrayType(element) | NullableType(element):
-				scanType(element, dependencies);
-			case MapType(key, value):
-				scanType(key, dependencies);
-				scanType(value, dependencies);
-			case FunctionType(arguments, result):
-				for (argument in arguments)
-					scanType(argument, dependencies);
-				scanType(result, dependencies);
-			case AnonymousType(fields):
-				for (field in fields)
-					scanType(field.type, dependencies);
-			case _:
-		}
+	static function scanType(type:AstType, dependencies:Map<String, Bool>):Void {
+		// AstChildren owns exhaustive type recursion. This callback classifies
+		// every type node, including declaration-bearing generic arguments.
+		AstChildren.walkType(type, function(child:AstType):Void {
+			switch child {
+				case NamedType(name), AppliedType(name, _), NativeAbstractType(name, _):
+					dependencies.set(name, true);
+				case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_),
+					ArrayType(_), MapType(_, _), NullableType(_), FunctionType(_, _), AnonymousType(_):
+				}
+		});
+	}
 
 	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
 		var length = name.length, segmentStart = 0, hasSeparator = false;

@@ -4,6 +4,8 @@ import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
+import compiler.semantic.DependencyScanner;
+import compiler.Compiler;
 
 class SemanticDependencyCollectorMain {
 	static function main():Void {
@@ -23,6 +25,21 @@ class SemanticDependencyCollectorMain {
 		entry.ast = new Parser(new Lexer(entryFile).tokenize()).parseProgram();
 		var entryDependencies = SemanticDependencyCollector.collectSemanticDependencies(entry, "Main", []);
 		expect(count(entryDependencies.get("main"), Body, "Main.helper") == 1, "entry-point ownership should remain canonical");
+
+		var scannerSource = 'function main():Void { var value:Imported; var values = new Array<Imported>(0); var map = new Map<Imported, Imported>(); var casted = (value:Imported); sizeof<Imported>(); var lambda = (item:Imported) -> item; }',
+			scannerFile = new SourceFile("deps/Main.hx", scannerSource),
+			scannerProgram = new Parser(new Lexer(scannerFile).tokenize()).parseProgram(),
+			scanned:Map<String, Bool> = [];
+		for (statement in scannerProgram.functions[0].statements)
+			DependencyScanner.scanStatement(statement, scanned);
+		expect(scanned.exists("Imported"), "dependency scanning should retain local and nested type references");
+
+		var moduleCompiler = new Compiler();
+		moduleCompiler.update("deps/Imported.hx", "package deps; class Imported<T> {} function main():Void return;");
+		moduleCompiler.update("deps/Consumer.hx", "package deps; function main():Void { var value:Imported<Int>; }");
+		moduleCompiler.compile("deps.Consumer");
+		expect(moduleCompiler.modules.get("deps.Consumer").dependencies.indexOf("deps.Imported") >= 0,
+			"module analysis should retain same-package dependencies from local generic annotations");
 
 		Sys.println("PASS: semantic dependency collection");
 	}
