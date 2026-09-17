@@ -342,6 +342,9 @@ class ParserRecoveryMain {
 			|| enumTypeImportRecoveredDefinition.path != "visibility/enumlib/Result.hx"
 			|| enumTypeImportRecoveredReferences.length < 2)
 			throw 'recovered enum-type import lost its unqualified constructor: definition=${enumTypeImportRecoveredDefinition == null ? "null" : enumTypeImportRecoveredDefinition.path}, references=${enumTypeImportRecoveredReferences.length}';
+		var enumTypeImportSignature = enumImportService.signatureHelp("visibility/enumapp/TypeImport.hx", enumTypeImportRecovered.length);
+		if (enumTypeImportSignature == null || enumTypeImportSignature.parameters.length != 1)
+			throw 'recovered enum-type import lost constructor signature help: ${enumTypeImportSignature == null ? "null" : enumTypeImportSignature.label}';
 
 		var enumAbstractTypeImportConsumer = "package visibility.flagapp; import visibility.flags.Flags; function main():Void { Ready; }";
 		enumAbstractImportService.update("visibility/flagapp/TypeImport.hx", enumAbstractTypeImportConsumer);

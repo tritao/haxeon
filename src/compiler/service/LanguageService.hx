@@ -2309,6 +2309,13 @@ class LanguageService {
 			if (owner != null)
 				signature = model.index.recoveredSignature(owner + "." + calleeName, context.receiver);
 		}
+		// Recovery may bind a current-source call directly to an authoritative
+		// external enum constructor or other callable declaration whose compact
+		// recovery index has no local signature entry. Preserve that identity-bound
+		// signature only after receiver-aware recovery/inference has had a chance
+		// to retain substituted generic types.
+		if (signature == null && snapshot.recovered && id != null)
+			signature = compiler.semanticWorkspace.editorSignature(state, id);
 		if (signature == null)
 			return null;
 		var active = activeCallParameter(tokens, open, position, token);
