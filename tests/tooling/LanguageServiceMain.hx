@@ -3490,6 +3490,16 @@ class LanguageServiceMain {
 		}
 		if (!hasRenameDeclaration || !hasRenameUse)
 			throw 'rename did not use the authoritative lazy source-root identity: ${[for (edit in renameEdits) edit.path].join(",")}';
+		service.update("app/Main.hx", source + " function unfinished(");
+		var recoveredReferences = service.references(packageRoot + "/Helper.hx", targetPosition),
+			hasRecoveredConsumerUse = false;
+		for (reference in recoveredReferences)
+			if (reference.path == "app/Main.hx")
+				hasRecoveredConsumerUse = true;
+		if (!hasRecoveredConsumerUse)
+			throw "references did not include a malformed current consumer of an authoritative lazy symbol";
+		if (service.rename(packageRoot + "/Helper.hx", targetPosition, "renamed").length != 0)
+			throw "rename crossed into a recovered consumer instead of rejecting non-exact edits";
 		var helperState = service.compiler.modules.get("lazy.Helper"),
 			oldRevision = helperState.revision;
 		service.update(packageRoot + "/Helper.hx", "package lazy; class Helper { public function new() {} public function answer():Int return 2; }");
