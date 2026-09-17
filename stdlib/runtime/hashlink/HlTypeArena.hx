@@ -69,6 +69,16 @@ class HlTypeArena {
 	public inline function typeCountOf():Int
 		return typeCount;
 
+	/** Whether a type pointer belongs to one of this arena's acquired records. */
+	public function ownsType(type:RawPtr<HlType>):Bool {
+		if (type.isNull())
+			return false;
+		for (index in 0...typeCount)
+			if (type == typeEntries.offset(index))
+				return true;
+		return false;
+	}
+
 	/** Capture every arena cursor used by one append-only metadata transaction. */
 	public function checkpoint():HlTypeArenaCheckpoint
 		return new HlTypeArenaCheckpoint(this, storage.checkpoint(), typeStorage.checkpoint(), typeCount, moduleContexts.length);

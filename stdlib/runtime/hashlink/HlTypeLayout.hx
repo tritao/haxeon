@@ -203,17 +203,19 @@ class HlTypeLayout {
 	}
 
 	/** Validate every reachable record before layout code dereferences its native storage. */
-	public static function validate(types:RawPtr<RawPtr<HlType>>, count:Int, ?functionCount:Int = -1):Void {
+	public static function validate(types:RawPtr<RawPtr<HlType>>, count:Int, ?functionCount:Int = -1, ?owner:HlTypeArena):Void {
 		if (count < 0 || functionCount < -1 || (count > 0 && types.isNull()))
 			throw "HashLink type metadata validation requires a type table";
 		var visited:Array<RawPtr<HlType>> = [];
 		for (index in 0...count)
-			validateType(types.offset(index).load(), visited, functionCount);
+			validateType(types.offset(index).load(), visited, functionCount, owner);
 	}
 
-	static function validateType(type:RawPtr<HlType>, visited:Array<RawPtr<HlType>>, functionCount:Int):Void {
+	static function validateType(type:RawPtr<HlType>, visited:Array<RawPtr<HlType>>, functionCount:Int, owner:HlTypeArena):Void {
 		if (type.isNull())
 			throw "HashLink type metadata contains a null reachable type";
+		if (owner != null && !owner.ownsType(type))
+			throw "HashLink type metadata contains a type outside its generation arena";
 		if (contains(visited, type))
 			return;
 		visited.push(type);
@@ -222,10 +224,10 @@ class HlTypeLayout {
 			throw 'HashLink type metadata contains an invalid kind $kind';
 		switch cast(kind, HlTypeKind) {
 			case HlTypeKind.Reference | HlTypeKind.Nullable:
-				validateType(type.ref.data.ref.typeParam, visited, functionCount);
+				validateType(type.ref.data.ref.typeParam, visited, functionCount, owner);
 			case HlTypeKind.Packed:
 				var parameter = type.ref.data.ref.typeParam;
-				validateType(parameter, visited, functionCount);
+				validateType(parameter, visited, functionCount, owner);
 				var parameterKind:Int = cast parameter.ref.kind;
 				if (parameterKind != cast(HlTypeKind.Object, Int) && parameterKind != cast(HlTypeKind.Struct, Int))
 					throw "HashLink packed type parameters must be object or struct types";
@@ -237,10 +239,10 @@ class HlTypeLayout {
 				if (argumentCount < 0 || (argumentCount > 0 && functionData.ref.args.isNull()) || functionData.ref.ret.isNull())
 					throw "HashLink function type has incomplete signature metadata";
 				for (index in 0...argumentCount)
-					validateType(functionData.ref.args.offset(index).load(), visited, functionCount);
-				validateType(functionData.ref.ret, visited, functionCount);
+					validateType(functionData.ref.args.offset(index).load(), visited, functionCount, owner);
+				validateType(functionData.ref.ret, visited, functionCount, owner);
 				if (!functionData.ref.parent.isNull())
-					validateType(functionData.ref.parent, visited, functionCount);
+					validateType(functionData.ref.parent, visited, functionCount, owner);
 			case HlTypeKind.Object | HlTypeKind.Struct:
 				var object = type.ref.data.ref.obj;
 				if (object.isNull())
@@ -254,7 +256,7 @@ class HlTypeLayout {
 					throw "HashLink object type has incomplete object metadata";
 				for (index in 0...fieldCount) {
 					var field = object.ref.fields.offset(index);
-					validateType(field.ref.type, visited, functionCount);
+					validateType(field.ref.type, visited, functionCount, owner);
 				}
 				if (prototypeCount > 0 && object.ref.module.isNull())
 					throw "HashLink object prototypes require a module context";
@@ -268,7 +270,7 @@ class HlTypeLayout {
 					var superKind:Int = cast object.ref.superType.ref.kind;
 					if (superKind != cast(HlTypeKind.Object, Int) && superKind != cast(HlTypeKind.Struct, Int))
 						throw "HashLink object type has a non-object super type";
-					validateType(object.ref.superType, visited, functionCount);
+					validateType(object.ref.superType, visited, functionCount, owner);
 				}
 			case HlTypeKind.Enum:
 				var enumData = type.ref.data.ref.enumType;
@@ -282,7 +284,7 @@ class HlTypeLayout {
 					if (parameterCount < 0 || (parameterCount > 0 && (constructor.ref.params.isNull() || constructor.ref.offsets.isNull())))
 						throw "HashLink enum constructor has incomplete parameter metadata";
 					for (parameter in 0...parameterCount)
-						validateType(constructor.ref.params.offset(parameter).load(), visited, functionCount);
+						validateType(constructor.ref.params.offset(parameter).load(), visited, functionCount, owner);
 				}
 			case HlTypeKind.Virtual:
 				var virtualData = type.ref.data.ref.virtualType;
@@ -292,7 +294,7 @@ class HlTypeLayout {
 				if (fieldCount < 0 || (fieldCount > 0 && virtualData.ref.fields.isNull()))
 					throw "HashLink virtual type has incomplete field metadata";
 				for (index in 0...fieldCount)
-					validateType(virtualData.ref.fields.offset(index).ref.type, visited, functionCount);
+					validateType(virtualData.ref.fields.offset(index).ref.type, visited, functionCount, owner);
 			case _:
 		}
 	}

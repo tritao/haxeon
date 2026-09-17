@@ -498,8 +498,10 @@ function main():Int {
 		invalidPrototypeRejected = Std.string(error).indexOf("object prototype function index") >= 0;
 	invalidPrototypeGeneration.dispose();
 	var invalidGlobalGeneration = new HlMetadataGeneration(128, 1),
-		invalidGlobalType = invalidGlobalGeneration.builder.primitive(HlTypeKind.Int32Type);
-	invalidGlobalGeneration.defineModule([RawPtr.nullPtr()], [invalidGlobalType]);
+		invalidGlobalFunctionType = invalidGlobalGeneration.builder.primitive(HlTypeKind.Int32Type),
+		invalidGlobalType = invalidGlobalGeneration.builder.primitive(HlTypeKind.Float32Type);
+	invalidGlobalGeneration.defineModule([RawPtr.nullPtr()], [invalidGlobalFunctionType]);
+	invalidGlobalGeneration.addType(invalidGlobalFunctionType);
 	invalidGlobalGeneration.defineGlobalTypes([invalidGlobalType]);
 	var invalidGlobalRejected = false;
 	try
@@ -518,6 +520,27 @@ function main():Int {
 	catch (error:Dynamic)
 		incompleteTypeRejected = Std.string(error).indexOf("every arena type record") >= 0;
 	incompleteTypeGeneration.dispose();
+	var foreignArena = new HlTypeArena(128, 1),
+		foreignType = new HlTypeBuilder(foreignArena).primitive(HlTypeKind.Int32Type),
+		foreignGeneration = new HlMetadataGeneration(128, 1),
+		foreignOwnedType = foreignGeneration.builder.primitive(HlTypeKind.VoidType),
+		foreignModule = foreignGeneration.defineModule([RawPtr.nullPtr()], [foreignOwnedType]),
+		foreignObject = foreignGeneration.builder.objectType(foreignGeneration.builder.utf16Name("ForeignFieldObject"), RawPtr.nullPtr(), [
+			{
+				name: RawPtr.nullPtr(),
+				type: foreignType,
+				hashedName: 0
+			}
+		], [], [], RawPtr.nullPtr(), foreignModule, RawPtr.nullPtr());
+	foreignGeneration.addType(foreignOwnedType);
+	foreignGeneration.addType(foreignObject);
+	var foreignTypeRejected = false;
+	try
+		foreignGeneration.publish()
+	catch (error:Dynamic)
+		foreignTypeRejected = Std.string(error).indexOf("outside its generation arena") >= 0;
+	foreignGeneration.dispose();
+	foreignArena.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
@@ -525,5 +548,5 @@ function main():Int {
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
 		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
-		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected ? 42 : 1;
+		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignTypeRejected ? 42 : 1;
 }
