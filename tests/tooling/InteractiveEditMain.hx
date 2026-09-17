@@ -1,5 +1,6 @@
 import compiler.Source.SourceSpan;
 import compiler.service.LanguageService;
+import compiler.service.LanguageService.TextEdit;
 
 typedef RecoveryProbe = {
 	final validMarker:String;
@@ -104,8 +105,9 @@ class InteractiveEditMain {
 		assertRecoveryMatrix();
 		assertIdentityResolutionClosure();
 		assertNavigationClosure();
+		assertRenameClosure();
 
-		Sys.println('PASS: ${tails.length + 13} interactive edits retained recovery queries');
+		Sys.println('PASS: ${tails.length + 14} interactive edits retained recovery queries');
 	}
 
 	static function assertRecoveryMatrix():Void {
@@ -363,6 +365,63 @@ class InteractiveEditMain {
 		}
 		if (!retainedConsumerUse || !retainedSuperUse)
 			throw 'malformed neighboring module disrupted authoritative navigation: references=${afterNeighborReferences.length}';
+	}
+
+	static function assertRenameClosure():Void {
+		var service = new LanguageService(),
+			targetPath = "rename/types/Box.hx",
+			consumerPath = "rename/app/Main.hx",
+			target = "package rename.types; class Box<T> { public var value:T; public function get(argument:T):T return argument; } enum Result { Ok; Err; } function main():Void return;",
+			consumer = "package rename.app; import rename.types.Box; import rename.types.Box.Result; function main():Void { var box:Box<Int> = new Box<Int>(); box.value; box.get(1); var result:Result = Result.Ok; }";
+		service.update(targetPath, target);
+		service.compile("rename.types.Box");
+		service.update(consumerPath, consumer);
+		service.compile("rename.app.Main");
+
+		var typeEdits = service.rename(targetPath, target.indexOf("class Box") + "class ".length + 1, "Container"),
+			memberEdits = service.rename(targetPath, target.indexOf("value") + 1, "result"),
+			genericEdits = service.rename(targetPath, target.indexOf("<T>") + 1, "Value"),
+			localEdits = service.rename(consumerPath, consumer.indexOf("var box") + "var ".length + 1, "item"),
+			enumEdits = service.rename(targetPath, target.indexOf("Ok") + 1, "Success"),
+			enumCollision = service.rename(targetPath, target.indexOf("Ok") + 1, "Err");
+		assertRenameEdits(typeEdits, "Container", 2, targetPath, consumerPath, "cross-module type");
+		assertRenameEdits(memberEdits, "result", 2, targetPath, consumerPath, "cross-module member");
+		assertRenameEdits(genericEdits, "Value", 3, targetPath, targetPath, "generic parameter");
+		assertRenameEdits(localEdits, "item", 3, consumerPath, consumerPath, "local variable");
+		assertRenameEdits(enumEdits, "Success", 2, targetPath, consumerPath, "enum case");
+		if (enumCollision.length != 0)
+			throw "rename allowed an enum-case collision";
+
+		var malformedConsumer = "package rename.app; import rename.types.Box; import rename.types.Box.Result; function main():Void { var box:Box<Int> = new Box<Int>(); broken.unresolved().thing; box.value; function unfinished(";
+		service.update(consumerPath, malformedConsumer);
+		var malformedValuePosition = malformedConsumer.lastIndexOf("value") + 1,
+			malformedRename = service.rename(targetPath, target.indexOf("value") + 1, "result"),
+			malformedPrepare = service.prepareRename(consumerPath, malformedValuePosition);
+		if (malformedRename.length != 0 || malformedPrepare != null)
+			throw "rename crossed into a malformed consumer snapshot";
+
+		service.update(consumerPath, consumer);
+		service.compile("rename.app.Main");
+		var repairedMemberEdits = service.rename(targetPath, target.indexOf("value") + 1, "result");
+		assertRenameEdits(repairedMemberEdits, "result", 2, targetPath, consumerPath, "repaired cross-module member");
+	}
+
+	static function assertRenameEdits(edits:Array<TextEdit>, replacement:String, minimum:Int,
+		firstPath:String, secondPath:String, label:String):Void {
+		if (edits.length < minimum)
+			throw 'rename closure produced too few edits for $label: ${edits.length}';
+		var foundFirst = false,
+			foundSecond = false;
+		for (edit in edits) {
+			if (edit.replacement != replacement || edit.stale)
+				throw 'rename closure produced an unsafe edit for $label';
+			if (edit.path == firstPath)
+				foundFirst = true;
+			if (edit.path == secondPath)
+				foundSecond = true;
+		}
+		if (!foundFirst || !foundSecond)
+			throw 'rename closure omitted an affected file for $label: first=$foundFirst, second=$foundSecond';
 	}
 
 	static function assertCompoundRecoveryEquivalence():Void {
