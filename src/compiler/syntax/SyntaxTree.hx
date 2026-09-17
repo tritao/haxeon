@@ -42,6 +42,8 @@ enum SyntaxKind {
 	BreakStatement;
 	ContinueStatement;
 	IfStatement;
+	WhileStatement;
+	DoWhileStatement;
 	Error;
 	Missing;
 }
@@ -96,6 +98,8 @@ enum SyntaxStatementPayload {
 	ReturnVoid;
 	Return(value:SyntaxExpressionPayload);
 	IfBranch(condition:SyntaxExpressionPayload, thenBranch:Array<SyntaxStatementPayload>, elseBranch:Array<SyntaxStatementPayload>);
+	WhileLoop(condition:SyntaxExpressionPayload, body:Array<SyntaxStatementPayload>);
+	DoWhileLoop(body:Array<SyntaxStatementPayload>, condition:SyntaxExpressionPayload);
 }
 
 /** Source-only payload attached to grammar nodes that can already lower independently. */

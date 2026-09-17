@@ -320,6 +320,12 @@ class AstLowerer {
 					loweredElse = lowerStatementList(elseBranch, elsePayload);
 			loweredCondition == null || loweredThen == null || loweredElse == null ? null
 					: AstStatement.If(loweredCondition, loweredThen, loweredElse, span);
+			case [AstStatement.While(condition, body, span), SyntaxStatementPayload.WhileLoop(conditionPayload, bodyPayload)]:
+				var loweredCondition = lowerExpression(condition, conditionPayload), loweredBody = lowerStatementList(body, bodyPayload);
+				loweredCondition == null || loweredBody == null ? null : AstStatement.While(loweredCondition, loweredBody, span);
+			case [AstStatement.DoWhile(body, condition, span), SyntaxStatementPayload.DoWhileLoop(bodyPayload, conditionPayload)]:
+				var loweredBody = lowerStatementList(body, bodyPayload), loweredCondition = lowerExpression(condition, conditionPayload);
+				loweredBody == null || loweredCondition == null ? null : AstStatement.DoWhile(loweredBody, loweredCondition, span);
 			default: null;
 		};
 

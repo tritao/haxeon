@@ -1056,6 +1056,14 @@ class Parser {
 					elsePayload = simpleStatementPayloads(elseBranch);
 				conditionPayload == null || thenPayload == null || elsePayload == null ? null
 					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.IfBranch(conditionPayload, thenPayload, elsePayload);
+			case AstStatement.While(condition, body, _):
+				var conditionPayload = simpleExpressionPayload(condition), bodyPayload = simpleStatementPayloads(body);
+				conditionPayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.WhileLoop(conditionPayload, bodyPayload);
+			case AstStatement.DoWhile(body, condition, _):
+				var conditionPayload = simpleExpressionPayload(condition), bodyPayload = simpleStatementPayloads(body);
+				conditionPayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.DoWhileLoop(bodyPayload, conditionPayload);
 			default: null;
 		};
 
@@ -1600,7 +1608,10 @@ class Parser {
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock();
 			var end = statementEnd(body);
-			return While(condition, body, start.merge(end));
+			var statement = AstStatement.While(condition, body, start.merge(end)), payload = simpleStatementPayload(statement);
+			if (payload != null)
+				recordCstNode(SyntaxKind.WhileStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
+			return statement;
 		}
 		if (match(TokenKind.Do)) {
 			var start = previous().span, body = parseDoWhileBody();
@@ -1609,7 +1620,10 @@ class Parser {
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
 			var end = consume(TokenKind.Semicolon).span;
-			return DoWhile(body, condition, start.merge(end));
+			var statement = AstStatement.DoWhile(body, condition, start.merge(end)), payload = simpleStatementPayload(statement);
+			if (payload != null)
+				recordCstNode(SyntaxKind.DoWhileStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
+			return statement;
 		}
 		if (match(TokenKind.For)) {
 			var start = previous().span;
