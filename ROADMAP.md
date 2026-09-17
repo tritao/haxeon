@@ -138,10 +138,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   detached from the construction workspace. Token-only completion-context
   classification now lives in a separate semantic query helper; published
   completion facts, nested receiver types, direct recovered function
-  signatures, and callable signatures are copied into the recovery query
-  boundary, and call edges are finalized before publication. Remaining work
-  is to move receiver-aware recovered-signature and other richer recovery-query
-  algorithms fully out of the builder.
+  signatures, callable signatures, and receiver-aware/inherited signature
+  variants are materialized into the recovery query boundary, and call edges
+  are finalized before publication. Remaining work is richer error-tolerant
+  recovery resolution and broader immutable semantic-query state, not
+  request-time access to the construction builder.
 - [~] Recovery construction is isolated in `RecoveryEngine`; workspace name
   resolution, dependency visibility, and recovered-body reuse remain explicit
   callbacks so editor snapshots cannot publish speculative declarations.

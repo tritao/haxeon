@@ -40,10 +40,7 @@ class SemanticIndexQueryState {
 	final declarationTypes:Map<SemanticSymbolId, CompilerType>;
 	final unresolved:Array<UnresolvedSymbol>;
 	final typeParameterIds:Map<String, SemanticSymbolId>;
-	/**
-		Read-only recovery facts and compatibility providers for algorithms still
-		being extracted from the construction builder.
-	*/
+	/** Read-only recovery facts assembled from the frozen builder at publication. */
 	final recoveryQuery:SemanticIndexRecoveryQuery;
 
 	private function new(builder:SemanticIndexBuilder) {

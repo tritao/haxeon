@@ -12,13 +12,11 @@ import compiler.semantic.SemanticCompletionQuery.SemanticCompletionFacts;
 /**
 	Read-only recovery queries over a frozen semantic traversal result.
 
-	Completion and callable-signature queries consume copied facts. The
-	receiver-aware recovered-signature resolver still shares implementation with
-	the frozen builder until that algorithm is extracted as its own query state.
+	Completion and signature queries consume copied facts. Receiver-aware
+	recovered signatures are materialized while the frozen builder is still
+	available, so published queries never retain a construction-time resolver.
 */
 class SemanticIndexRecoveryQuery {
-	/** Remaining recovered-signature algorithms are extracted next. */
-	final builder:SemanticIndexBuilder;
 	final completionFacts:SemanticCompletionFacts;
 	final recoveredFunctions:Map<String, AstFunction>;
 	final receiverSignatures:Map<String, SemanticSignatureInfo>;
@@ -26,7 +24,6 @@ class SemanticIndexRecoveryQuery {
 	public function new(builder:SemanticIndexBuilder) {
 		if (!builder.isFrozen)
 			throw "Recovery query requires a frozen semantic index builder";
-		this.builder = builder;
 		recoveredFunctions = [];
 		for (name => fn in builder.recoveredFunctions)
 			recoveredFunctions.set(name, fn);
@@ -66,13 +63,19 @@ class SemanticIndexRecoveryQuery {
 			addReceiverType(receiverTypes, seenReceiverTypes, base);
 		var names:Array<String> = [for (name in recoveredFunctions.keys()) name];
 		names.sort(Reflect.compare);
-		for (name in names) {
-			if (name.lastIndexOf(".") < 1)
-				continue;
-			for (receiverType in receiverTypes) {
-				var signature = builder.recoveredSignature(name, receiverType);
-				if (signature != null)
-					receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
+		for (receiverType in receiverTypes) {
+			var owner = receiverOwner(receiverType);
+			for (name in names) {
+				var separator = name.lastIndexOf(".");
+				if (separator < 1)
+					continue;
+				materializeSignature(builder, name, receiverType);
+				// Inherited methods are stored under their declaration owner (for
+				// example Base.get), while editor queries use the receiver owner
+				// (Child.get). Materialize that view with Child's substitutions so
+				// generic base signatures retain the concrete receiver arguments.
+				if (owner != null)
+					materializeSignature(builder, owner + "." + name.substr(separator + 1), receiverType);
 			}
 		}
 	}
@@ -81,10 +84,8 @@ class SemanticIndexRecoveryQuery {
 		return SemanticCompletionQuery.build(completionFacts, position, qualifier, token);
 
 	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo> {
-		// Direct function and constructor signatures do not require the mutable
-		// recovery resolver. Keep these queries entirely on copied declarations;
-		// inherited/generic receiver signatures use the compatibility resolver
-		// until that richer algorithm gets its own immutable state.
+		// Direct function and constructor signatures do not require receiver
+		// materialization and can be rendered directly from copied declarations.
 		if (receiverType == null) {
 			var fn = recoveredFunctions.get(name);
 			if (fn == null)
@@ -106,7 +107,10 @@ class SemanticIndexRecoveryQuery {
 			if (cached != null)
 				return copySignature(cached);
 		}
-		return builder.recoveredSignature(name, receiverType);
+		// The published recovery query is intentionally conservative for a
+		// receiver type which was not present in the editor facts used to build
+		// this snapshot. A later edit will publish a new materialized query.
+		return null;
 	}
 
 	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
@@ -147,6 +151,19 @@ class SemanticIndexRecoveryQuery {
 			seen.set(key, true);
 			result.push(type);
 		}
+	}
+
+	static function receiverOwner(type:CompilerType):Null<String>
+		return switch type {
+			case TNullable(element): receiverOwner(element);
+			case TInstance(_, name, _), TAbstract(name, _, _): name;
+			default: null;
+		};
+
+	function materializeSignature(builder:SemanticIndexBuilder, name:String, receiverType:CompilerType):Void {
+		var signature = builder.recoveredSignature(name, receiverType);
+		if (signature != null)
+			receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
 	}
 
 	static function signatureKey(name:String, receiverType:CompilerType):String
