@@ -282,21 +282,23 @@ class ParserRecoveryMain {
 		enumImportService.analyze("visibility.enumapp.Main");
 		var enumImportPosition = enumImportConsumer.lastIndexOf("Value(1)") + 1,
 			enumImportDefinition = enumImportService.definition("visibility/enumapp/Main.hx", enumImportPosition),
-			enumImportReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportPosition);
+			enumImportReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportPosition),
+			enumImportHover = enumImportService.hover("visibility/enumapp/Main.hx", enumImportPosition);
 		if (enumImportDefinition == null || enumImportDefinition.stale
 			|| enumImportDefinition.path != "visibility/enumlib/Result.hx"
-			|| enumImportReferences.length < 2)
-			throw 'explicit enum-constructor import did not preserve its owner identity: definition=${enumImportDefinition == null ? "null" : enumImportDefinition.path}, references=${enumImportReferences.length}';
+			|| enumImportReferences.length < 2 || enumImportHover != "Result.Value(value:Int)")
+			throw 'explicit enum-constructor import did not preserve its owner identity or hover: definition=${enumImportDefinition == null ? "null" : enumImportDefinition.path}, references=${enumImportReferences.length}, hover=${enumImportHover == null ? "null" : enumImportHover}';
 
 		var enumImportRecovered = StringTools.replace(enumImportConsumer, "Value(1)", "Value(");
 		enumImportService.update("visibility/enumapp/Main.hx", enumImportRecovered);
 		var enumImportRecoveredPosition = enumImportRecovered.lastIndexOf("Value(") + 1,
 			enumImportRecoveredDefinition = enumImportService.definition("visibility/enumapp/Main.hx", enumImportRecoveredPosition),
-			enumImportRecoveredReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportRecoveredPosition);
+			enumImportRecoveredReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportRecoveredPosition),
+			enumImportRecoveredHover = enumImportService.hover("visibility/enumapp/Main.hx", enumImportRecoveredPosition);
 		if (enumImportRecoveredDefinition == null || enumImportRecoveredDefinition.stale
 			|| enumImportRecoveredDefinition.path != "visibility/enumlib/Result.hx"
-			|| enumImportRecoveredReferences.length < 2)
-			throw 'recovered explicit enum-constructor import lost its owner identity: definition=${enumImportRecoveredDefinition == null ? "null" : enumImportRecoveredDefinition.path}, references=${enumImportRecoveredReferences.length}';
+			|| enumImportRecoveredReferences.length < 2 || enumImportRecoveredHover != "Result.Value(value:Int)")
+			throw 'recovered explicit enum-constructor import lost its owner identity or hover: definition=${enumImportRecoveredDefinition == null ? "null" : enumImportRecoveredDefinition.path}, references=${enumImportRecoveredReferences.length}, hover=${enumImportRecoveredHover == null ? "null" : enumImportRecoveredHover}';
 
 		var enumAbstractImportService = new LanguageService(),
 			enumAbstractImportTarget = "package visibility.flags; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;",
@@ -307,21 +309,23 @@ class ParserRecoveryMain {
 		enumAbstractImportService.analyze("visibility.flagapp.Main");
 		var enumAbstractImportPosition = enumAbstractImportConsumer.lastIndexOf("Ready") + 1,
 			enumAbstractImportDefinition = enumAbstractImportService.definition("visibility/flagapp/Main.hx", enumAbstractImportPosition),
-			enumAbstractImportReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportPosition);
+			enumAbstractImportReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportPosition),
+			enumAbstractImportHover = enumAbstractImportService.hover("visibility/flagapp/Main.hx", enumAbstractImportPosition);
 		if (enumAbstractImportDefinition == null || enumAbstractImportDefinition.stale
 			|| enumAbstractImportDefinition.path != "visibility/flags/Flags.hx"
-			|| enumAbstractImportReferences.length < 2)
-			throw 'explicit enum-abstract value import did not preserve its owner identity: definition=${enumAbstractImportDefinition == null ? "null" : enumAbstractImportDefinition.path}, references=${enumAbstractImportReferences.length}';
+			|| enumAbstractImportReferences.length < 2 || enumAbstractImportHover != "Ready:Int")
+			throw 'explicit enum-abstract value import did not preserve its owner identity or hover: definition=${enumAbstractImportDefinition == null ? "null" : enumAbstractImportDefinition.path}, references=${enumAbstractImportReferences.length}, hover=${enumAbstractImportHover == null ? "null" : enumAbstractImportHover}';
 
 		var enumAbstractImportRecovered = StringTools.replace(enumAbstractImportConsumer, "Ready;", "Ready");
 		enumAbstractImportService.update("visibility/flagapp/Main.hx", enumAbstractImportRecovered);
 		var enumAbstractImportRecoveredPosition = enumAbstractImportRecovered.lastIndexOf("Ready") + 1,
 			enumAbstractImportRecoveredDefinition = enumAbstractImportService.definition("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition),
-			enumAbstractImportRecoveredReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition);
+			enumAbstractImportRecoveredReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition),
+			enumAbstractImportRecoveredHover = enumAbstractImportService.hover("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition);
 		if (enumAbstractImportRecoveredDefinition == null || enumAbstractImportRecoveredDefinition.stale
 			|| enumAbstractImportRecoveredDefinition.path != "visibility/flags/Flags.hx"
-			|| enumAbstractImportRecoveredReferences.length < 2)
-			throw 'recovered explicit enum-abstract value import lost its owner identity: definition=${enumAbstractImportRecoveredDefinition == null ? "null" : enumAbstractImportRecoveredDefinition.path}, references=${enumAbstractImportRecoveredReferences.length}';
+			|| enumAbstractImportRecoveredReferences.length < 2 || enumAbstractImportRecoveredHover != "Ready:Int")
+			throw 'recovered explicit enum-abstract value import lost its owner identity or hover: definition=${enumAbstractImportRecoveredDefinition == null ? "null" : enumAbstractImportRecoveredDefinition.path}, references=${enumAbstractImportRecoveredReferences.length}, hover=${enumAbstractImportRecoveredHover == null ? "null" : enumAbstractImportRecoveredHover}';
 
 		var enumTypeImportConsumer = "package visibility.enumapp; import visibility.enumlib.Result; function main():Void { Value(1); }";
 		enumImportService.update("visibility/enumapp/TypeImport.hx", enumTypeImportConsumer);
@@ -384,11 +388,12 @@ class ParserRecoveryMain {
 		wildcardEnumImportService.update("visibility/wildenum/app/Main.hx", wildcardEnumImportRecovered);
 		var wildcardEnumImportRecoveredPosition = wildcardEnumImportRecovered.lastIndexOf("Value(") + 1,
 			wildcardEnumImportRecoveredDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition),
-			wildcardEnumImportRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition);
+			wildcardEnumImportRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition),
+			wildcardEnumImportRecoveredHover = wildcardEnumImportService.hover("visibility/wildenum/app/Main.hx", wildcardEnumImportRecoveredPosition);
 		if (wildcardEnumImportRecoveredDefinition == null || wildcardEnumImportRecoveredDefinition.stale
 			|| wildcardEnumImportRecoveredDefinition.path != "visibility/wildenum/Result.hx"
-			|| wildcardEnumImportRecoveredReferences.length < 2)
-			throw 'recovered wildcard enum-constructor import lost identity: definition=${wildcardEnumImportRecoveredDefinition == null ? "null" : wildcardEnumImportRecoveredDefinition.path}, references=${wildcardEnumImportRecoveredReferences.length}';
+			|| wildcardEnumImportRecoveredReferences.length < 2 || wildcardEnumImportRecoveredHover != "Result.Value(value:Int)")
+			throw 'recovered wildcard enum-constructor import lost identity or hover: definition=${wildcardEnumImportRecoveredDefinition == null ? "null" : wildcardEnumImportRecoveredDefinition.path}, references=${wildcardEnumImportRecoveredReferences.length}, hover=${wildcardEnumImportRecoveredHover == null ? "null" : wildcardEnumImportRecoveredHover}';
 
 		wildcardEnumImportService.update("visibility/wildenum/Flags.hx",
 			"package visibility.wildenum; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;");
@@ -407,11 +412,12 @@ class ParserRecoveryMain {
 		wildcardEnumImportService.update("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecovered);
 		var wildcardEnumAbstractRecoveredPosition = wildcardEnumAbstractRecovered.lastIndexOf("Ready") + 1,
 			wildcardEnumAbstractRecoveredDefinition = wildcardEnumImportService.definition("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition),
-			wildcardEnumAbstractRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition);
+			wildcardEnumAbstractRecoveredReferences = wildcardEnumImportService.references("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition),
+			wildcardEnumAbstractRecoveredHover = wildcardEnumImportService.hover("visibility/wildenum/app/FlagsUse.hx", wildcardEnumAbstractRecoveredPosition);
 		if (wildcardEnumAbstractRecoveredDefinition == null || wildcardEnumAbstractRecoveredDefinition.stale
 			|| wildcardEnumAbstractRecoveredDefinition.path != "visibility/wildenum/Flags.hx"
-			|| wildcardEnumAbstractRecoveredReferences.length < 2)
-			throw 'recovered wildcard enum-abstract value import lost identity: definition=${wildcardEnumAbstractRecoveredDefinition == null ? "null" : wildcardEnumAbstractRecoveredDefinition.path}, references=${wildcardEnumAbstractRecoveredReferences.length}';
+			|| wildcardEnumAbstractRecoveredReferences.length < 2 || wildcardEnumAbstractRecoveredHover != "Ready:Int")
+			throw 'recovered wildcard enum-abstract value import lost identity or hover: definition=${wildcardEnumAbstractRecoveredDefinition == null ? "null" : wildcardEnumAbstractRecoveredDefinition.path}, references=${wildcardEnumAbstractRecoveredReferences.length}, hover=${wildcardEnumAbstractRecoveredHover == null ? "null" : wildcardEnumAbstractRecoveredHover}';
 
 		var ambiguousEnumImportService = new LanguageService();
 		ambiguousEnumImportService.update("visibility/enumone/Result.hx",

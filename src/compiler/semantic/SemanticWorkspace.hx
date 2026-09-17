@@ -718,6 +718,43 @@ class SemanticWorkspace {
 		return indexedSignature(id);
 	}
 
+	/**
+	 * Return an authoritative display detail for source declarations which do
+	 * not have callable signatures. In particular, enum constructors and enum
+	 * abstract values are indexed as symbols but the latter are fields rather
+	 * than functions, so editorSignature() intentionally has no entry for them.
+	 */
+	public function editorSymbolDetail(state:ModuleState, id:SemanticSymbolId,
+		?token:CancellationToken):Null<String> {
+		var resolved = editorSymbol(state, id),
+			model = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || model == null)
+			return null;
+		for (enumDecl in model.program.enums) {
+			if (token != null)
+				token.check();
+			for (enumCase in enumDecl.cases) {
+				if (token != null)
+					token.check();
+				if (!sameSpan(enumCase.span, resolved.symbol.declaration))
+					continue;
+				return '${enumDecl.name}.${enumCase.name}(${[for (parameter in enumCase.params)
+					(parameter.optional ? "?" : "") + editorAstTypeName(parameter.type, [])].join(",")})';
+			}
+		}
+		for (enumDecl in model.program.enumAbstracts) {
+			if (token != null)
+				token.check();
+			for (value in enumDecl.values) {
+				if (token != null)
+					token.check();
+				if (sameSpan(value.span, resolved.symbol.declaration))
+					return value.name + ":" + editorAstTypeName(enumDecl.underlying, []);
+			}
+		}
+		return null;
+	}
+
 	/** Read a hierarchy signature from current editor models without publishing them. */
 	public function editorSignatureById(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
 		for (state in orderedStates()) {

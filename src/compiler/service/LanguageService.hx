@@ -2209,6 +2209,9 @@ class LanguageService {
 		}
 		if (indexedSignature != null)
 			return indexedSignature.label;
+		var indexedDetail = indexedId == null ? null : compiler.semanticWorkspace.editorSymbolDetail(state, indexedId, token);
+		if (indexedDetail != null)
+			return indexedDetail;
 		if (indexedId != null && model != null) {
 			var indexedType = model.index.typeAt(position, token);
 			if (indexed != null && indexedType != null)
