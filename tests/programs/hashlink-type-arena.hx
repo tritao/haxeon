@@ -11,6 +11,7 @@ import runtime.hashlink.HlFunctionTable;
 import runtime.hashlink.HlFunctionDescriptorTable;
 import runtime.hashlink.HlFunction;
 import runtime.hashlink.HlNativeDescriptorTable;
+import runtime.hashlink.HlRuntimeDispatchTable;
 import runtime.memory.RawPtr;
 
 function main():Int {
@@ -342,10 +343,24 @@ function main():Int {
 		invalidGeneration.publish()
 	catch (error:Dynamic)
 		invalidDescriptorRejected = true;
+	var dispatch = new HlRuntimeDispatchTable(arena, [17, 18], [0, 2], 2, 3),
+		dispatchCorrect = dispatch.count == 2 && dispatch.slotOf(17) == 0 && dispatch.slotOf(18) == 2 && dispatch.slotOf(99) == -1
+			&& dispatch.stableIdAt(1) == 18 && dispatch.slotAt(1) == 2;
+	var initializerRejected = false;
+	try
+		new HlRuntimeDispatchTable(arena, [17], [0], 1, 3)
+	catch (error:Dynamic)
+		initializerRejected = true;
+	var slotRejected = false;
+	try
+		new HlRuntimeDispatchTable(arena, [17], [3], -1, 3)
+	catch (error:Dynamic)
+		slotRejected = true;
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
-		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected ? 42 : 1;
+		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected && dispatchCorrect
+		&& initializerRejected && slotRejected ? 42 : 1;
 }

@@ -10,8 +10,9 @@ class HlRuntimeDispatchTable {
 	public final initializerSlot:Int;
 	final slotByStableId:Map<Int, Int>;
 
-	public function new(arena:HlTypeArena, stableIdValues:Array<Int>, slotValues:Array<Int>, initializerSlot:Int) {
-		if (arena == null || stableIdValues == null || slotValues == null || stableIdValues.length != slotValues.length || initializerSlot < -1)
+	public function new(arena:HlTypeArena, stableIdValues:Array<Int>, slotValues:Array<Int>, initializerSlot:Int, ?functionCount:Int = -1) {
+		if (arena == null || stableIdValues == null || slotValues == null || stableIdValues.length != slotValues.length || initializerSlot < -1
+			|| functionCount < -1)
 			throw "HashLink runtime dispatch metadata requires matching stable-ID and slot arrays";
 		count = stableIdValues.length;
 		this.initializerSlot = initializerSlot;
@@ -23,7 +24,7 @@ class HlRuntimeDispatchTable {
 		for (index in 0...count) {
 			var stableId = stableIdValues[index],
 				slot = slotValues[index];
-			if (stableId < 0 || slot < 0 || seenStableIds.exists(stableId) || seenSlots.exists(slot))
+			if (stableId < 0 || slot < 0 || functionCount >= 0 && slot >= functionCount || seenStableIds.exists(stableId) || seenSlots.exists(slot))
 				throw "HashLink runtime dispatch identities must be unique and non-negative";
 			seenStableIds.set(stableId, true);
 			seenSlots.set(slot, true);
@@ -31,6 +32,10 @@ class HlRuntimeDispatchTable {
 			stableIds.offset(index).store(cast stableId);
 			slots.offset(index).store(cast slot);
 		}
+		if (initializerSlot >= 0 && !seenSlots.exists(initializerSlot))
+			throw "HashLink runtime dispatch initializer must reference an identity slot";
+		if (functionCount >= 0 && initializerSlot >= functionCount)
+			throw "HashLink runtime dispatch initializer is outside the function table";
 	}
 
 	public inline function stableIdAt(index:Int):Int {

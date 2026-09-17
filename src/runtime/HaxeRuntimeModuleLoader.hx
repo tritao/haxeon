@@ -42,7 +42,7 @@ class HaxeRuntimeModuleLoader {
 		try {
 			var publication = metadata.snapshot(),
 				dispatch = new HlRuntimeDispatchTable(metadata.arena, [for (entry in identity.entries) entry.stableId],
-					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot);
+					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot, metadata.functionCount());
 			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");

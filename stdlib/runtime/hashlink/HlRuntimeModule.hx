@@ -35,7 +35,7 @@ class HlRuntimeModule {
 		module = null;
 		try {
 			var publication = metadata.snapshot();
-			dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot);
+			dispatch = new HlRuntimeDispatchTable(metadata.arena, stableIds, slots, initializerSlot, metadata.functionCount());
 			module = this.kernel.loadCodeManifest(publication.nativeCode, bytes, moduleId, revision, dispatch);
 			if (module == null)
 				throw "HashLink external runtime module initialization failed";
