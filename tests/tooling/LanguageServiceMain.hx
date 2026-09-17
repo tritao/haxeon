@@ -1623,6 +1623,20 @@ class LanguageServiceMain {
 				foundStaticTypedefAliasMember = true;
 		if (!foundStaticTypedefAliasMember)
 			throw "recovered typedef aliases did not expose underlying static members";
+		var transformedAliasInheritanceService = new LanguageService(),
+			transformedAliasInheritanceSource = "package alias.app; import alias.types.Alias as A; class Child extends A<String> {} function main():Void { var child:Child = new Child(); child.";
+		transformedAliasInheritanceService.update("alias/types/Box.hx", "package alias.types; class Box<T> { public var member:T; } function main():Void return;");
+		transformedAliasInheritanceService.update("alias/types/Alias.hx", "package alias.types; import alias.types.Box; typedef Alias<T> = Box<Array<T>>; function main():Void return;");
+		transformedAliasInheritanceService.compile("alias.types.Alias");
+		transformedAliasInheritanceService.update("alias/app/TransformedAliasInheritance.hx", transformedAliasInheritanceSource);
+		var transformedAliasInheritanceItems = transformedAliasInheritanceService.completeResult("alias/app/TransformedAliasInheritance.hx",
+			transformedAliasInheritanceSource.length).items,
+			transformedAliasInheritanceMember:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in transformedAliasInheritanceItems)
+			if (item.label == "member")
+				transformedAliasInheritanceMember = item;
+		if (transformedAliasInheritanceMember == null || transformedAliasInheritanceMember.detail != "member:Array<String>")
+			throw 'recovered transformed typedef inheritance lost type substitution: ${transformedAliasInheritanceMember == null ? "null" : transformedAliasInheritanceMember.detail}';
 		var genericTypedefAliasNavigationSource = "package alias.app; import alias.types.Alias as A; function main():Void { var value:A<String>; value.member; }";
 		genericTypedefAliasService.update("alias/app/GenericTypedefAlias.hx", genericTypedefAliasNavigationSource);
 		var genericTypedefAliasMemberPosition = genericTypedefAliasNavigationSource.indexOf("value.member") + "value.".length + 1,

@@ -875,8 +875,14 @@ class SemanticWorkspace {
 		};
 		if (name == null)
 			return null;
-		var candidates = editorSymbolCandidates(from, name, token, program);
-		if (candidates.length > 1)
+		var candidates = editorSymbolCandidates(from, name, token, program),
+			typeCandidates:Array<SemanticSymbolId> = [];
+		for (candidate in candidates) {
+			var resolved = editorSymbolById(candidate);
+			if (resolved != null && isTypeKind(resolved.symbol.kind))
+				typeCandidates.push(candidate);
+		}
+		if (typeCandidates.length > 1)
 			return null;
 		var identity = editorResolveTypeSymbolId(from, name, program, token);
 		return editorNominalTypeIdentityById(identity, visited, token);
@@ -1815,6 +1821,7 @@ class SemanticWorkspace {
 						if (ownsType(state, model, classDecl.name, name)
 							&& (preferredIdentity == null || editorDeclarationIdentity(model, classDecl.span) == preferredIdentity)) {
 							var substitutions = editorTypeSubstitutions(classDecl.typeParameters, arguments);
+							var compilerSubstitutions = editorCompilerSubstitutions(classDecl.typeParameters, arguments);
 							for (field in classDecl.fields) {
 								if (token != null)
 									token.check();
@@ -1832,9 +1839,9 @@ class SemanticWorkspace {
 										+ editorAstTypeName(method.result, substitutions));
 							}
 							if (classDecl.base != null)
-								collectEditorMembers(editorInheritedType(state, classDecl.base, model.program, substitutions, token), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, classDecl.base, model.program, substitutions, compilerSubstitutions, token), result, seen, token);
 							for (interfaceType in classDecl.interfaces)
-								collectEditorMembers(editorInheritedType(state, interfaceType, model.program, substitutions, token), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, interfaceType, model.program, substitutions, compilerSubstitutions, token), result, seen, token);
 						}
 				}
 			case TInstance(NominalKind.Interface, name, arguments):
@@ -1848,6 +1855,7 @@ class SemanticWorkspace {
 						if (ownsType(state, model, interfaceDecl.name, name)
 							&& (preferredIdentity == null || editorDeclarationIdentity(model, interfaceDecl.span) == preferredIdentity)) {
 							var substitutions = editorTypeSubstitutions(interfaceDecl.typeParameters, arguments);
+							var compilerSubstitutions = editorCompilerSubstitutions(interfaceDecl.typeParameters, arguments);
 							for (method in interfaceDecl.methods) {
 								if (token != null)
 									token.check();
@@ -1857,7 +1865,7 @@ class SemanticWorkspace {
 									+ editorAstTypeName(method.result, substitutions));
 							}
 							for (baseType in interfaceDecl.bases)
-								collectEditorMembers(editorInheritedType(state, baseType, model.program, substitutions, token), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, baseType, model.program, substitutions, compilerSubstitutions, token), result, seen, token);
 						}
 				}
 			case TAbstract(name, arguments, _):
@@ -1999,22 +2007,96 @@ class SemanticWorkspace {
 
 	/** Build a member-lookup type from a source inheritance clause. */
 	function editorInheritedType(from:ModuleState, type:AstType, program:AstProgram,
-		substitutions:Map<String, String>, ?token:CancellationToken):CompilerType {
-		var identity = editorNominalTypeIdentity(from, type, program, [], token),
-			resolved = identity == null ? null : editorSymbolById(identity),
-			canonical = identity == null ? null : editorTypeName(identity);
-		if (resolved == null || canonical == null)
-			return editorTypeFromAst(type, substitutions);
-		var arguments:Array<CompilerType> = switch type {
-			case AppliedType(_, values): [for (value in values) editorTypeFromAst(value, substitutions)];
-			default: [];
-		};
-		return switch resolved.symbol.kind {
-			case DeclarationKind.Interface: TInstance(NominalKind.Interface, canonical, arguments);
-			case DeclarationKind.Abstract: TAbstract(canonical, arguments, TUnknown);
-			case DeclarationKind.Enum: TInstance(NominalKind.Enum, canonical, arguments);
-			default: TInstance(NominalKind.Class, canonical, arguments);
-		};
+		substitutions:Map<String, String>, compilerSubstitutions:Map<String, CompilerType>,
+		?token:CancellationToken):CompilerType {
+		var resolved = editorInheritedTypeInner(from, type, program, compilerSubstitutions, [], token);
+		return resolved == null ? editorTypeFromAst(type, substitutions) : resolved;
+	}
+
+	function editorInheritedTypeInner(from:ModuleState, type:AstType, program:AstProgram,
+		substitutions:Map<String, CompilerType>, visited:Array<SemanticSymbolId>,
+		?token:CancellationToken):Null<CompilerType> {
+		if (token != null)
+			token.check();
+		switch type {
+			case IntType: return TInt;
+			case BoolType: return TBool;
+			case FloatType: return TFloat;
+			case StringType: return TString;
+			case VoidType: return TVoid;
+			case ArrayType(element):
+				var resolvedElement = editorInheritedTypeInner(from, element, program, substitutions, visited, token);
+				return resolvedElement == null ? null : TArray(resolvedElement);
+			case NullableType(element):
+				var resolvedElement = editorInheritedTypeInner(from, element, program, substitutions, visited, token);
+				return resolvedElement == null ? null : TNullable(resolvedElement);
+			case MapType(key, value):
+				var resolvedKey = editorInheritedTypeInner(from, key, program, substitutions, visited, token),
+					resolvedValue = editorInheritedTypeInner(from, value, program, substitutions, visited, token);
+				return resolvedKey == null || resolvedValue == null ? null : TMap(resolvedKey, resolvedValue);
+			case AppliedType(name, arguments):
+				var rawIdentity = editorResolveTypeSymbolId(from, name, program, token),
+					rawResolved = rawIdentity == null ? null : editorSymbolById(rawIdentity),
+					identity = editorNominalTypeIdentityById(rawIdentity, visited, token),
+					resolved = identity == null ? null : editorSymbolById(identity),
+					canonical = identity == null ? null : editorTypeName(identity);
+				if (rawResolved != null && rawResolved.symbol.kind == DeclarationKind.Alias) {
+					if (rawIdentity == null)
+						return null;
+					var aliasModel = editorModel(rawResolved.state);
+					if (aliasModel == null)
+						return null;
+					for (alias in aliasModel.program.aliases)
+						if (sameSpan(alias.span, rawResolved.symbol.declaration)) {
+							var nextSubstitutions:Map<String, CompilerType> = [for (parameter => value in substitutions) parameter => value],
+								nextVisited = visited.copy();
+							nextVisited.push(rawIdentity);
+							for (index in 0...alias.typeParameters.length)
+								nextSubstitutions.set(alias.typeParameters[index], index < arguments.length
+									? editorInheritedTypeInner(from, arguments[index], program, substitutions, visited, token) : TUnknown);
+							return editorInheritedTypeInner(resolved.state, alias.type, aliasModel.program, nextSubstitutions, nextVisited, token);
+						}
+				}
+				if (resolved == null || canonical == null)
+					return null;
+				var resolvedArguments:Array<CompilerType> = [];
+				for (argument in arguments) {
+					var resolvedArgument = editorInheritedTypeInner(from, argument, program, substitutions, visited, token);
+					if (resolvedArgument == null)
+						return null;
+					resolvedArguments.push(resolvedArgument);
+				}
+				return switch resolved.symbol.kind {
+					case DeclarationKind.Interface: TInstance(NominalKind.Interface, canonical, resolvedArguments);
+					case DeclarationKind.Abstract: TAbstract(canonical, resolvedArguments, TUnknown);
+					case DeclarationKind.Enum: TInstance(NominalKind.Enum, canonical, resolvedArguments);
+					default: TInstance(NominalKind.Class, canonical, resolvedArguments);
+				};
+			case NamedType(name):
+				if (substitutions.exists(name))
+					return substitutions.get(name);
+				var identity = editorNominalTypeIdentity(from, type, program, visited, token),
+					resolved = identity == null ? null : editorSymbolById(identity),
+					canonical = identity == null ? null : editorTypeName(identity);
+				if (resolved == null || canonical == null)
+					return null;
+				return switch resolved.symbol.kind {
+					case DeclarationKind.Interface: TInstance(NominalKind.Interface, canonical, []);
+					case DeclarationKind.Abstract: TAbstract(canonical, [], TUnknown);
+					case DeclarationKind.Enum: TInstance(NominalKind.Enum, canonical, []);
+					default: TInstance(NominalKind.Class, canonical, []);
+				};
+			default:
+		}
+		return null;
+	}
+
+	static function editorCompilerSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (index in 0...parameters.length)
+			if (index < arguments.length)
+				result.set(parameters[index], arguments[index]);
+		return result;
 	}
 
 	function editorTypeFromName(name:String):CompilerType
