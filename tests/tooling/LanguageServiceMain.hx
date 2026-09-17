@@ -881,6 +881,44 @@ class LanguageServiceMain {
 			|| recoveredInheritedDefinition.path != "recovered/base/Base.hx"
 			|| recoveredInheritedReferences.length < 2)
 			throw 'recovered inherited-member navigation failed in a malformed module: definition=${recoveredInheritedDefinition == null ? "null" : recoveredInheritedDefinition.path}, references=${recoveredInheritedReferences.length}';
+		var recoveredGenericInheritanceService = new LanguageService(),
+			recoveredGenericInheritanceTarget = "package recovered.generic.base; class Base<T> { public var value:T; public function read():T return value; } function main():Void return;",
+			recoveredGenericInheritanceSource = "package recovered.generic.child; import recovered.generic.base.Base; class Child extends Base<String> { public function probe():String return this.value; public function use(value:Child):Void return value.";
+		recoveredGenericInheritanceService.update("recovered/generic/base/Base.hx", recoveredGenericInheritanceTarget);
+		recoveredGenericInheritanceService.compile("recovered.generic.base.Base");
+		recoveredGenericInheritanceService.update("recovered/generic/child/Child.hx", recoveredGenericInheritanceSource);
+		var recoveredGenericMemberPosition = recoveredGenericInheritanceSource.indexOf("this.value") + "this.".length + 1,
+			recoveredGenericMemberDefinition = recoveredGenericInheritanceService.definition("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
+			recoveredGenericMemberReferences = recoveredGenericInheritanceService.references("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
+			recoveredGenericMemberHover = recoveredGenericInheritanceService.hover("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
+			recoveredGenericCompletion = recoveredGenericInheritanceService.completeResult("recovered/generic/child/Child.hx", recoveredGenericInheritanceSource.length).items,
+			foundRecoveredGenericValue = false;
+		for (item in recoveredGenericCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundRecoveredGenericValue = true;
+		if (recoveredGenericMemberDefinition == null || recoveredGenericMemberDefinition.stale
+			|| recoveredGenericMemberDefinition.path != "recovered/generic/base/Base.hx"
+			|| recoveredGenericMemberReferences.length < 2
+			|| recoveredGenericMemberHover != "value:String"
+			|| !foundRecoveredGenericValue)
+			throw 'recovered generic inheritance lost substituted member identity: definition=${recoveredGenericMemberDefinition == null ? "null" : recoveredGenericMemberDefinition.path}, references=${recoveredGenericMemberReferences.length}, hover=${recoveredGenericMemberHover == null ? "null" : recoveredGenericMemberHover}, completion=$foundRecoveredGenericValue';
+		var recoveredGenericAliasService = new LanguageService(),
+			recoveredGenericAliasTarget = "package recovered.alias.base; class Box<T> { public var value:T; } typedef TextBox = Box<String>; function main():Void return;",
+			recoveredGenericAliasSource = "package recovered.alias.use; import recovered.alias.base.Box.TextBox; function use(box:TextBox):Void return box. ; function unfinished(";
+		recoveredGenericAliasService.update("recovered/alias/base/Box.hx", recoveredGenericAliasTarget);
+		recoveredGenericAliasService.compile("recovered.alias.base.Box");
+		recoveredGenericAliasService.update("recovered/alias/use/Main.hx", recoveredGenericAliasSource);
+		var recoveredGenericAliasPosition = recoveredGenericAliasSource.indexOf("box.") + "box.".length,
+			recoveredGenericAliasCompletion = recoveredGenericAliasService.completeResult("recovered/alias/use/Main.hx", recoveredGenericAliasPosition).items,
+			foundRecoveredGenericAliasValue = false,
+			recoveredGenericAliasTypePosition = recoveredGenericAliasSource.indexOf(":TextBox") + 2,
+			recoveredGenericAliasTypeDefinition = recoveredGenericAliasService.typeDefinition("recovered/alias/use/Main.hx", recoveredGenericAliasTypePosition);
+		for (item in recoveredGenericAliasCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundRecoveredGenericAliasValue = true;
+		if (!foundRecoveredGenericAliasValue || recoveredGenericAliasTypeDefinition == null
+			|| recoveredGenericAliasTypeDefinition.path != "recovered/alias/base/Box.hx")
+			throw 'recovered generic alias lost substituted member completion or alias identity: completion=$foundRecoveredGenericAliasValue, definition=${recoveredGenericAliasTypeDefinition == null ? "null" : recoveredGenericAliasTypeDefinition.path}';
 		var signatureService = new LanguageService(),
 			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);
