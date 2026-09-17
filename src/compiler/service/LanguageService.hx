@@ -292,8 +292,10 @@ class LanguageService {
 			state = compiler.update(path, source),
 			changed = state.revision != previousRevision;
 		compiler.semanticWorkspace.invalidateResolutionCache();
-		if (EditorWorkspaceView.currentExact(state) == null && EditorWorkspaceView.currentRecovered(state) == null)
+		if (EditorWorkspaceView.currentExact(state) == null && EditorWorkspaceView.currentRecovered(state) == null) {
 			recoverSyntax(state);
+			materializeEditorDependencies(state);
+		}
 		if (changed)
 			refreshDependentRecovery(state);
 		compiler.semanticWorkspace.invalidateResolutionCache();
@@ -741,6 +743,58 @@ class LanguageService {
 		state.recoveryDiagnostics = [];
 		state.clearRecoveredSnapshot();
 	}
+
+	/**
+	 * Bring source-root dependencies into the editor workspace before callers
+	 * ask for completion or navigation. ProjectWorkspace normally preloads disk
+	 * files, but the compiler service also supports direct source-root usage and
+	 * must make that path equally useful during recovery.
+	 */
+	function materializeEditorDependencies(root:ModuleState):Void {
+		var pending:Array<ModuleState> = [root],
+			queued:Map<String, Bool> = [root.name => true],
+			dependencyRecoveryChanged = false,
+			cursor = 0;
+		while (cursor < pending.length) {
+			var state = pending[cursor++],
+				program = effectiveAst(state);
+			if (program == null)
+				continue;
+			var dependencies:Array<ModuleState> = [];
+			for (importPath in program.imports) {
+				if (isWildcardImport(importPath)) {
+					var packageName = importPath.substring(0, importPath.length - 2);
+					for (dependency in compiler.loadSourcePackage(packageName))
+						if (dependencies.indexOf(dependency) < 0)
+							dependencies.push(dependency);
+				} else {
+					var dependency = compiler.loadSourceModule(importPath);
+					if (dependency != null && dependencies.indexOf(dependency) < 0)
+						dependencies.push(dependency);
+				}
+			}
+			for (dependency in dependencies) {
+				if (dependency == state)
+					continue;
+				if (!queued.exists(dependency.name)) {
+					queued.set(dependency.name, true);
+					pending.push(dependency);
+				}
+				if (EditorWorkspaceView.currentExact(dependency) == null
+					&& EditorWorkspaceView.currentRecovered(dependency) == null) {
+					recoverSyntax(dependency);
+					dependencyRecoveryChanged = true;
+				}
+			}
+		}
+		if (dependencyRecoveryChanged) {
+			clearRecoveredSnapshot(root);
+			recoverSyntax(root, null, null, true);
+		}
+	}
+
+	static function isWildcardImport(path:String):Bool
+		return path.length > 2 && StringTools.endsWith(path, ".*");
 
 	static function sameDiagnostic(left:Diagnostic, right:Diagnostic):Bool
 		return left.code == right.code

@@ -3429,7 +3429,50 @@ class LanguageServiceMain {
 		contextRecoveryService.update("ContextRecovery.hx", "function stable():Int { return 1; } class Context { public static var value:Int = 2; }");
 		if (contextRecoveryService.recoveredTypedFunctionReuses != contextReuseCount)
 			throw "recovered typing reused a body after its declaration context changed";
+		assertLazySourceRootRecovery();
 		Sys.println("PASS: compiler-backed language service snapshot works");
+	}
+
+	static function assertLazySourceRootRecovery():Void {
+		var root = "/tmp/haxeon-language-service-root-" + Std.string(Std.int(Sys.time() * 1000000)),
+			packageRoot = root + "/lazy";
+		sys.FileSystem.createDirectory(root);
+		sys.FileSystem.createDirectory(packageRoot);
+		sys.io.File.saveContent(packageRoot + "/Helper.hx",
+			"package lazy; class Helper { public function new() {} public function answer():Int return 1; }");
+		sys.io.File.saveContent(packageRoot + "/Other.hx", "package lazy; class Other { public var value:Int; }");
+		var service = new LanguageService();
+		service.compiler.addSourceRoot(root);
+		var source = "package app; import lazy.*; function main():Void { var helper:Helper = new Helper(); helper.answer(); }";
+		service.update("app/Main.hx", source);
+		var helper = service.compiler.modules.get("lazy.Helper"),
+			other = service.compiler.modules.get("lazy.Other");
+		if (helper == null || other == null || helper.recoveredSemanticModel == null || other.recoveredSemanticModel == null)
+			throw "editor recovery did not materialize wildcard source-root modules";
+		var memberPosition = source.indexOf("helper.answer") + "helper.".length,
+			items = service.complete("app/Main.hx", memberPosition),
+			context = service.completionContext("app/Main.hx", memberPosition),
+			foundAnswer = false;
+		for (item in items)
+			if (item.label == "answer")
+				foundAnswer = true;
+		if (!foundAnswer)
+			throw 'completion did not use a lazily recovered source-root receiver: ${[for (item in items) item.label].join(",")}, context=${context == null ? "null" : Std.string(context.context.kind) + ":" + Std.string(context.context.receiver)}';
+		var definition = service.definition("app/Main.hx", memberPosition + 1);
+		if (definition != null)
+			throw "definition crossed from a recovered consumer into a speculative recovered source-root target";
+		service.analyze("app.Main");
+		definition = service.definition("app/Main.hx", memberPosition + 1);
+		if (definition == null || definition.path != packageRoot + "/Helper.hx")
+			throw 'definition did not use the analyzed source-root module: ${definition == null ? "null" : definition.path}';
+		if (sys.FileSystem.exists(packageRoot + "/Helper.hx"))
+			sys.FileSystem.deleteFile(packageRoot + "/Helper.hx");
+		if (sys.FileSystem.exists(packageRoot + "/Other.hx"))
+			sys.FileSystem.deleteFile(packageRoot + "/Other.hx");
+		if (sys.FileSystem.exists(packageRoot))
+			sys.FileSystem.deleteDirectory(packageRoot);
+		if (sys.FileSystem.exists(root))
+			sys.FileSystem.deleteDirectory(root);
 	}
 
 	static function containsDocumentSymbol(symbols:Array<DocumentSymbol>, name:String):Bool {

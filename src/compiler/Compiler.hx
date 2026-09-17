@@ -492,6 +492,46 @@ class Compiler {
 		});
 	}
 
+	/**
+	 * Materialize one source-root dependency for editor queries.
+	 *
+	 * This is intentionally limited to source loading. Parsing, recovery, and
+	 * semantic publication remain owned by LanguageService, while compilation
+	 * still performs its normal transactional dependency discovery.
+	 */
+	public function loadSourceModule(name:String):Null<ModuleState> {
+		return withSourceLock(function():Null<ModuleState> {
+			var existing = modules.get(name);
+			if (existing != null)
+				return existing;
+			var state = sourceLoader.loadDependency(name, modules);
+			if (state != null) {
+				sourceGeneration++;
+				semanticWorkspace.invalidateResolutionCache();
+			}
+			return state;
+		});
+	}
+
+	/** Materialize direct source modules in a package for wildcard imports. */
+	public function loadSourcePackage(packageName:String):Array<ModuleState> {
+		return withSourceLock(function():Array<ModuleState> {
+			var before = moduleCount(), result = sourceLoader.loadPackage(packageName, modules);
+			if (moduleCount() != before) {
+				sourceGeneration++;
+				semanticWorkspace.invalidateResolutionCache();
+			}
+			return result;
+		});
+	}
+
+	function moduleCount():Int {
+		var result = 0;
+		for (_ in modules)
+			result++;
+		return result;
+	}
+
 	public function compact(entryModule:String):CompileResult {
 		var result = new CompilationTransaction(this, entryModule, null, new HlModuleAssembler(assembler.cache.stableIds)).run();
 		rememberCompile(entryModule, result);

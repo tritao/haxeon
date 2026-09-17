@@ -425,16 +425,8 @@ class ModuleAnalyzer {
 	}
 
 	function sourceModuleForDependency(path:String):Null<String> {
-		var candidate = path;
-		while (true) {
-			sourceLoader.load(candidate, modules);
-			if (modules.exists(candidate))
-				return candidate;
-			var parent = QualifiedName.parentOrEmpty(candidate);
-			if (parent.length == 0)
-				return null;
-			candidate = parent;
-		}
+		var state = sourceLoader.loadDependency(path, modules);
+		return state == null ? null : state.name;
 	}
 
 	public function loadSourceModuleDependency(path:String):Null<String>

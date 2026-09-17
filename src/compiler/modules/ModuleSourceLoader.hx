@@ -64,6 +64,28 @@ class ModuleSourceLoader {
 	}
 
 	/**
+	 * Resolve a source dependency and materialize its owning module.
+	 *
+	 * Imports may name a secondary declaration (`pkg.Container.Entry`) rather
+	 * than the source module (`pkg.Container`). Walk the qualified name from
+	 * longest to shortest so editor queries and compiler analysis share the
+	 * same source-root lookup behavior.
+	 */
+	public function loadDependency(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
+		var candidate = name;
+		while (candidate.length > 0) {
+			var state = load(candidate, modules);
+			if (state != null)
+				return state;
+			var separator = candidate.lastIndexOf(".");
+			if (separator < 0)
+				break;
+			candidate = candidate.substring(0, separator);
+		}
+		return null;
+	}
+
+	/**
 	 * Materialize the direct source modules in a package for a wildcard import.
 	 *
 	 * A package is not itself a compiler module, so resolving `pkg.*` cannot use

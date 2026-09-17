@@ -133,7 +133,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] `LanguageService` now selects one compiler-owned editor snapshot in the
   order current-valid, current-recovered, then last-known-good. Edits publish
   a recovered AST, tokens, and editor-only semantic model immediately; the
-  recovered model never becomes authoritative workspace state.
+  recovered model never becomes authoritative workspace state. Configured
+  source roots are also materialized through imports during the same recovery
+  pass, so direct compiler-service clients get current-source completion from
+  unopened dependencies before background analysis.
 - [~] Analysis and build transactions now detach module state at their snapshot
   boundary, retain published object identity for untouched modules, and reject
   candidates whose source/configuration generation was superseded. This keeps
