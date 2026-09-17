@@ -3479,6 +3479,17 @@ class LanguageServiceMain {
 		}
 		if (!hasDeclaration || !hasConsumerUse)
 			throw 'global references did not cross the analyzed lazy source-root identity: definition=${targetDefinition == null ? "null" : targetDefinition.path}, id=${service.compiler.modules.get("lazy.Helper").semanticModel.index.symbolIdAt(targetPosition)}, refs=${[for (reference in references) reference.path].join(",")}';
+		var renameEdits = service.rename(packageRoot + "/Helper.hx", targetPosition, "renamed"),
+			hasRenameDeclaration = false,
+			hasRenameUse = false;
+		for (edit in renameEdits) {
+			if (edit.path == packageRoot + "/Helper.hx")
+				hasRenameDeclaration = true;
+			if (edit.path == "app/Main.hx")
+				hasRenameUse = true;
+		}
+		if (!hasRenameDeclaration || !hasRenameUse)
+			throw 'rename did not use the authoritative lazy source-root identity: ${[for (edit in renameEdits) edit.path].join(",")}';
 		var helperState = service.compiler.modules.get("lazy.Helper"),
 			oldRevision = helperState.revision;
 		service.update(packageRoot + "/Helper.hx", "package lazy; class Helper { public function new() {} public function answer():Int return 2; }");
