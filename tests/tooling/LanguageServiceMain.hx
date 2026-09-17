@@ -260,6 +260,17 @@ class LanguageServiceMain {
 					foundSuperOwnerReference = true;
 		if (superOwnerId == null || !foundSuperOwnerReference)
 			throw "exact semantic traversal dropped the super-call owner reference";
+		var recoveredSuperService = new LanguageService(),
+			recoveredSuperSource = "class Base { public function new(value:Int) {} } class Child extends Base { public function new(value:Int) { super(value); } public function unfinished(";
+		recoveredSuperService.update("RecoveredSuper.hx", recoveredSuperSource);
+		var recoveredSuperPosition = recoveredSuperSource.indexOf("super") + 1,
+			recoveredSuperDefinition = recoveredSuperService.definition("RecoveredSuper.hx", recoveredSuperPosition),
+			recoveredSuperReferences = recoveredSuperService.references("RecoveredSuper.hx", recoveredSuperPosition);
+		if (recoveredSuperDefinition == null || recoveredSuperDefinition.stale
+			|| recoveredSuperDefinition.span.start > recoveredSuperSource.indexOf("class Base")
+			|| recoveredSuperDefinition.span.end < recoveredSuperSource.indexOf("class Base") + "class Base".length
+			|| recoveredSuperReferences.length < 2)
+			throw 'recovered super-call navigation lost the base identity: definition=${recoveredSuperDefinition == null ? "null" : recoveredSuperDefinition.span.start + ":" + recoveredSuperDefinition.span.end}, references=${recoveredSuperReferences.length}';
 		var switchTraversalService = new LanguageService(),
 			switchTraversalSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function main():Int return 0;";
 		switchTraversalService.update("SwitchTraversal.hx", switchTraversalSource);

@@ -1411,6 +1411,9 @@ class SemanticIndexBuilder {
 				if (name.length > 0)
 					addRecoveredQualifier(recoveredExpressionName(expression), span, recoveredMemberType(object, name));
 			case Call(name, arguments, span):
+				if (name == "super") {
+					indexRecoveredSuperCall(arguments, span, activeFunctionKey, expected);
+				} else {
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
 					var receiverName = name.substring(0, separator),
@@ -1447,6 +1450,7 @@ class SemanticIndexBuilder {
 							indexRecoveredExpression(arguments[index], expectedFunctionArgument(localType, index), activeFunctionKey);
 					else
 						indexRecoveredCallArguments(arguments, recoveredFunctionForCall(name), null, recoveredBuiltinCallArguments(name), activeFunctionKey, expected);
+				}
 				}
 			case ClosureCall(callee, arguments, _):
 				indexRecoveredExpression(callee, null, activeFunctionKey);
@@ -1573,6 +1577,39 @@ class SemanticIndexBuilder {
 					indexRecoveredExpression(fallback, expected, activeFunctionKey);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
 		}
+	}
+
+	/** Retain the base-class identity and constructor context for recovered super calls. */
+	function indexRecoveredSuperCall(arguments:Array<AstExpression>, span:SourceSpan,
+		functionKey:String, ?expected:CompilerType):Void {
+		var separator = functionKey.lastIndexOf("."),
+			owner = separator < 1 ? null : functionKey.substring(0, separator),
+			base:Null<AstType> = null;
+		if (owner != null) {
+			var declaration = recoveredClassDeclaration(owner);
+			if (declaration != null)
+				base = declaration.base;
+		}
+		if (base == null) {
+			for (argument in arguments)
+				indexRecoveredExpression(argument, null, functionKey);
+			return;
+		}
+		var baseType = recoveredType(base),
+			baseName = memberOwner(baseType);
+		if (baseName == null)
+			switch base {
+				case NamedType(name), AppliedType(name, _): baseName = name;
+				default:
+			}
+		if (baseName != null) {
+			bindNamed(resolveRecoveredSymbol, baseName, span);
+			var method = recoveredMethodWithSubstitutions(baseName, "new", [], recoveredTypeSubstitutions(baseType));
+			indexRecoveredCallArguments(arguments, method == null ? null : method.method,
+				method == null ? null : method.substitutions, null, functionKey, expected);
+		} else
+			for (argument in arguments)
+				indexRecoveredExpression(argument, null, functionKey);
 	}
 
 	/** Index a lambda as a nested lexical scope in the recovered editor model. */
