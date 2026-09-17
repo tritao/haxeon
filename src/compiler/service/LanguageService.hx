@@ -2662,7 +2662,7 @@ class LanguageService {
 		var family:Array<SemanticSymbolId> = [id],
 			indexed = compiler.semanticWorkspace.indexedSymbol(id);
 		if (indexed != null && indexed.symbol.kind == DeclarationKind.Member)
-			for (implementation in compiler.semanticWorkspace.editorImplementations(id, token)) {
+			for (implementation in compiler.semanticWorkspace.editorMemberFamily(id, token)) {
 				var implementationId = compiler.semanticWorkspace.editorDeclarationSymbolId(implementation.state, implementation.span);
 				if (implementationId != null
 					&& (EditorWorkspaceView.currentExact(implementation.state) != null
@@ -2716,7 +2716,7 @@ class LanguageService {
 		var family:Array<SemanticSymbolId> = indexedId == null ? [] : [indexedId];
 		var indexedSymbol = indexedId == null ? null : compiler.semanticWorkspace.indexedSymbol(indexedId);
 		if (indexedId != null && indexedSymbol != null && indexedSymbol.symbol.kind == DeclarationKind.Member) {
-			for (implementation in compiler.semanticWorkspace.editorImplementations(indexedId, token)) {
+			for (implementation in compiler.semanticWorkspace.editorMemberFamily(indexedId, token)) {
 				if (EditorWorkspaceView.currentExact(implementation.state) == null)
 					return result;
 				var implementationId = compiler.semanticWorkspace.editorDeclarationSymbolId(implementation.state, implementation.span);

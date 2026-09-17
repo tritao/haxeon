@@ -1947,6 +1947,70 @@ class SemanticWorkspace {
 		return collectImplementations(id, true, token);
 	}
 
+	/**
+	 * Collect the override family for an editor navigation query. Unlike
+	 * implementations(), this is symmetric: references and rename must not
+	 * depend on whether the cursor is on a base declaration or one of its
+	 * overrides. Recovered candidates are returned as editor declarations and
+	 * callers still decide whether their identities are authoritative enough to
+	 * participate in a global operation.
+	 */
+	public function editorMemberFamily(id:SemanticSymbolId, ?token:CancellationToken):Array<WorkspaceDeclaration> {
+		var resolved = editorSymbolById(id);
+		if (resolved == null)
+			return [];
+		var owner:Null<String> = null,
+			member:Null<String> = null,
+			ownerIsInterface = false;
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes)
+				for (methodDeclaration in decl.methods)
+					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
+						owner = qualifiedType(model, decl.name);
+						member = methodDeclaration.name;
+					}
+			for (decl in model.program.interfaces)
+				for (methodDeclaration in decl.methods)
+					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
+						owner = qualifiedType(model, decl.name);
+						member = methodDeclaration.name;
+						ownerIsInterface = true;
+					}
+		}
+		if (owner == null || member == null)
+			return [];
+		var result:Array<WorkspaceDeclaration> = [],
+			seen:Map<String, Bool> = [];
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			for (decl in model.program.classes) {
+				var candidateOwner = qualifiedType(model, decl.name),
+					related = candidateOwner == owner
+						|| editorInheritsFrom(state, candidateOwner, owner, [], token)
+						|| !ownerIsInterface && editorInheritsFrom(state, owner, candidateOwner, [], token);
+				if (!related)
+					continue;
+				for (methodDeclaration in decl.methods)
+					if (methodDeclaration.name == member)
+						addImplementation(result, seen, state, 'class:${decl.name}:method:$member', methodDeclaration.span);
+			}
+		}
+		result.sort(function(left, right) {
+			var path = Reflect.compare(left.span.file.path, right.span.file.path);
+			return path == 0 ? left.span.start - right.span.start : path;
+		});
+		return result;
+	}
+
 	function collectImplementations(id:SemanticSymbolId, editor:Bool, ?token:CancellationToken):Array<WorkspaceDeclaration> {
 		var indexed = indexedSymbol(id);
 		if (indexed == null)
