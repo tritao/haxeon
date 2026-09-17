@@ -27,12 +27,7 @@ private typedef Percentiles = {
 	final p99:Float;
 }
 
-private typedef ScaledSample = {
-	final updateMs:Float;
-	final completionMs:Float;
-}
-
-private typedef ProjectSample = {
+private typedef ScenarioSample = {
 	final updateMs:Float;
 	final completionMs:Float;
 	final definitionMs:Float;
@@ -40,6 +35,21 @@ private typedef ProjectSample = {
 	final malformedCompletionMs:Float;
 	final repairedUpdateMs:Float;
 	final repairedCompletionMs:Float;
+	final modulesInvalidated:Int;
+	final modulesAnalyzed:Int;
+	final retypedFunctions:Int;
+	final recoveredSnapshots:Int;
+}
+
+private typedef GeneratedSample = {
+	final topology:String;
+	final moduleCount:Int;
+	final updateMs:Float;
+	final completionMs:Float;
+	final modulesInvalidated:Int;
+	final modulesAnalyzed:Int;
+	final retypedFunctions:Int;
+	final recoveredSnapshots:Int;
 }
 
 /** Measures editor recovery latency and memory growth under rapid edits. */
@@ -61,34 +71,40 @@ class LanguageServiceBenchmarkMain {
 		var args = Sys.args(),
 			iterations = intArg(args, "--iterations", 100),
 			warmup = intArg(args, "--warmup", 10),
-			projectIterations = intArg(args, "--project-iterations", 5),
+			scenarioIterations = intArg(args, "--scenario-iterations", 5),
 			scaleIterations = intArg(args, "--scale-iterations", 3),
 			scaleModules = intArg(args, "--scale-modules", 64),
+			scaleTopology = stringArg(args, "--scale-topology", "fanout"),
 			enduranceEdits = intArg(args, "--endurance-edits", 250),
 			output = stringArg(args, "--json", "out/editor-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
-		if (iterations < 1 || warmup < 0 || projectIterations < 1 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
+		if (iterations < 1 || warmup < 0 || scenarioIterations < 1 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
 			throw "iterations and scale parameters must be positive; warmup cannot be negative";
+		if (scaleTopology != "fanout" && scaleTopology != "chain" && scaleTopology != "diamond")
+			throw 'unsupported generated workspace topology "$scaleTopology"';
 
 		for (_ in 0...warmup)
 			runIteration();
 		for (_ in 0...warmup)
-			runPragticalProjectScenario();
+			runSmallProjectScenario();
 		collectGarbage();
 		var benchmarkService = new LanguageService(),
 			benchmarkWorkspaceService = new LanguageService(),
 			before = processMemory(),
 			samples = [for (_ in 0...iterations) runIteration(benchmarkService, benchmarkWorkspaceService)],
-			projectSamples = [for (_ in 0...projectIterations) runPragticalProjectScenario()];
+			scenarioSamples = [for (_ in 0...scenarioIterations) runSmallProjectScenario()];
 		collectGarbage();
 		var after = processMemory(),
-			scaleSamples = [for (_ in 0...scaleIterations) runScaledWorkspaceScenario(scaleModules)],
-			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits);
+			generatedSamples = [for (_ in 0...scaleIterations) runGeneratedWorkspaceScenario(scaleModules, scaleTopology)],
+			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits, scaleTopology),
+			scenarios:Dynamic = {};
+		Reflect.setField(scenarios, "small-project", summarizeScenario(scenarioSamples));
+		Reflect.setField(scenarios, 'generated-$scaleModules-$scaleTopology', summarizeGenerated(generatedSamples));
 		var report = {
-			version: 4,
+			version: 5,
 			iterations: iterations,
 			warmup: warmup,
-			projectIterations: projectIterations,
+			scenarioIterations: scenarioIterations,
 			platform: Sys.systemName(),
 			memoryBeforeBytes: before,
 			memoryAfterBytes: after,
@@ -103,17 +119,10 @@ class LanguageServiceBenchmarkMain {
 			workspaceCompletionMs: percentiles([for (sample in samples) sample.workspaceCompletionMs]),
 			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
 			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
-			pragticalProjectUpdateMs: percentiles([for (sample in projectSamples) sample.updateMs]),
-			pragticalProjectCompletionMs: percentiles([for (sample in projectSamples) sample.completionMs]),
-			pragticalProjectDefinitionMs: percentiles([for (sample in projectSamples) sample.definitionMs]),
-			pragticalProjectMalformedUpdateMs: percentiles([for (sample in projectSamples) sample.malformedUpdateMs]),
-			pragticalProjectMalformedCompletionMs: percentiles([for (sample in projectSamples) sample.malformedCompletionMs]),
-			pragticalProjectRepairedUpdateMs: percentiles([for (sample in projectSamples) sample.repairedUpdateMs]),
-			pragticalProjectRepairedCompletionMs: percentiles([for (sample in projectSamples) sample.repairedCompletionMs]),
 			scaleModules: scaleModules,
+			scaleTopology: scaleTopology,
 			scaleIterations: scaleIterations,
-			scaledWorkspaceUpdateMs: percentiles([for (sample in scaleSamples) sample.updateMs]),
-			scaledWorkspaceCompletionMs: percentiles([for (sample in scaleSamples) sample.completionMs]),
+			scenarios: scenarios,
 			enduranceEdits: enduranceEdits,
 			longLivedMemoryGrowthBytes: longLivedMemoryGrowth,
 			recoveredSnapshots: {
@@ -140,15 +149,8 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Workspace completion median/p95/p99: ${format(report.workspaceCompletionMs.median)}/${format(report.workspaceCompletionMs.p95)}/${format(report.workspaceCompletionMs.p99)} ms');
 		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
 		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
-		Sys.println('Pragtical fixture update median/p95/p99: ${format(report.pragticalProjectUpdateMs.median)}/${format(report.pragticalProjectUpdateMs.p95)}/${format(report.pragticalProjectUpdateMs.p99)} ms');
-		Sys.println('Pragtical fixture completion median/p95/p99: ${format(report.pragticalProjectCompletionMs.median)}/${format(report.pragticalProjectCompletionMs.p95)}/${format(report.pragticalProjectCompletionMs.p99)} ms');
-		Sys.println('Pragtical fixture definition median/p95/p99: ${format(report.pragticalProjectDefinitionMs.median)}/${format(report.pragticalProjectDefinitionMs.p95)}/${format(report.pragticalProjectDefinitionMs.p99)} ms');
-		Sys.println('Pragtical fixture malformed update median/p95/p99: ${format(report.pragticalProjectMalformedUpdateMs.median)}/${format(report.pragticalProjectMalformedUpdateMs.p95)}/${format(report.pragticalProjectMalformedUpdateMs.p99)} ms');
-		Sys.println('Pragtical fixture malformed completion median/p95/p99: ${format(report.pragticalProjectMalformedCompletionMs.median)}/${format(report.pragticalProjectMalformedCompletionMs.p95)}/${format(report.pragticalProjectMalformedCompletionMs.p99)} ms');
-		Sys.println('Pragtical fixture repaired update median/p95/p99: ${format(report.pragticalProjectRepairedUpdateMs.median)}/${format(report.pragticalProjectRepairedUpdateMs.p95)}/${format(report.pragticalProjectRepairedUpdateMs.p99)} ms');
-		Sys.println('Pragtical fixture repaired completion median/p95/p99: ${format(report.pragticalProjectRepairedCompletionMs.median)}/${format(report.pragticalProjectRepairedCompletionMs.p95)}/${format(report.pragticalProjectRepairedCompletionMs.p99)} ms');
-		Sys.println('Scaled workspace (${scaleModules} modules) update median/p95/p99: ${format(report.scaledWorkspaceUpdateMs.median)}/${format(report.scaledWorkspaceUpdateMs.p95)}/${format(report.scaledWorkspaceUpdateMs.p99)} ms');
-		Sys.println('Scaled workspace completion median/p95/p99: ${format(report.scaledWorkspaceCompletionMs.median)}/${format(report.scaledWorkspaceCompletionMs.p95)}/${format(report.scaledWorkspaceCompletionMs.p99)} ms');
+		printScenarioSummary("small-project", Reflect.field(scenarios, "small-project"));
+		printScenarioSummary('generated-$scaleModules-$scaleTopology', Reflect.field(scenarios, 'generated-$scaleModules-$scaleTopology'));
 		Sys.println('Long-lived memory growth after ${enduranceEdits} edits: ${report.longLivedMemoryGrowthBytes} bytes');
 		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
 		if (checkBudgets) {
@@ -174,15 +176,18 @@ class LanguageServiceBenchmarkMain {
 		checkBudget("workspace-completion", report.workspaceCompletionMs.p95, 100.0);
 		checkBudget("malformed-edit-to-recovery", report.malformedUpdateMs.p95, 100.0);
 		checkBudget("malformed-completion", report.malformedCompletionMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-edit-to-recovery", report.pragticalProjectUpdateMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-completion", report.pragticalProjectCompletionMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-definition", report.pragticalProjectDefinitionMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-malformed-edit-to-recovery", report.pragticalProjectMalformedUpdateMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-malformed-completion", report.pragticalProjectMalformedCompletionMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-repaired-edit-to-recovery", report.pragticalProjectRepairedUpdateMs.p95, 100.0);
-		checkBudget("Pragtical-fixture-repaired-completion", report.pragticalProjectRepairedCompletionMs.p95, 100.0);
-		checkBudget("scaled-workspace-edit-to-recovery", report.scaledWorkspaceUpdateMs.p95, 500.0);
-		checkBudget("scaled-workspace-completion", report.scaledWorkspaceCompletionMs.p95, 500.0);
+		for (name in Reflect.fields(report.scenarios)) {
+			var scenario:Dynamic = Reflect.field(report.scenarios, name),
+				limit = StringTools.startsWith(name, "generated-") ? 500.0 : 100.0;
+			checkBudget('$name edit-to-recovery', scenario.updateMs.p95, limit);
+			checkBudget('$name completion', scenario.completionMs.p95, limit);
+			if (Reflect.hasField(scenario, "malformedUpdateMs")) {
+				checkBudget('$name malformed-edit-to-recovery', scenario.malformedUpdateMs.p95, limit);
+				checkBudget('$name malformed-completion', scenario.malformedCompletionMs.p95, limit);
+				checkBudget('$name repaired-edit-to-recovery', scenario.repairedUpdateMs.p95, limit);
+				checkBudget('$name repaired-completion', scenario.repairedCompletionMs.p95, limit);
+			}
+		}
 		var memoryGrowth:Float = report.memoryGrowthBytes;
 		if (memoryGrowth >= 0 && memoryGrowth > 32.0 * 1024.0 * 1024.0)
 			throw 'Editor benchmark memory-growth budget exceeded: ${memoryGrowth} bytes > ${32 * 1024 * 1024} bytes';
@@ -280,52 +285,59 @@ class LanguageServiceBenchmarkMain {
 		};
 	}
 
-	static function runPragticalProjectScenario():ProjectSample {
+	static function runSmallProjectScenario():ScenarioSample {
 		var service = new LanguageService(),
-			fixtureRoot = "tests/fixtures/pragtical/",
-			pluginPath = "pragtical/plugins/SearchPlugin.hx",
+			fixtureRoot = "tests/fixtures/workspace-small/",
+			pluginPath = "workspace/plugins/SearchPlugin.hx",
 			plugin = File.getContent(fixtureRoot + pluginPath);
-		for (absolutePath in fixtureSourcePaths(fixtureRoot + "pragtical")) {
+		for (absolutePath in fixtureSourcePaths(fixtureRoot + "workspace")) {
 			var path = absolutePath.substring(fixtureRoot.length);
 			service.update(path, File.getContent(absolutePath));
 		}
-		service.compile("pragtical.app.Main");
-		var mainPath = "pragtical/app/Main.hx",
+		service.compile("workspace.app.Main");
+		var mainPath = "workspace/app/Main.hx",
 			mainSource = File.getContent(fixtureRoot + mainPath),
 			mainPosition = mainSource.indexOf("searchPlugin.activate") + "searchPlugin.".length + 1,
+			bodySource = StringTools.replace(mainSource, 'return current.execute("find");', 'return current.execute("find") + 0;');
+		service.update(mainPath, bodySource);
+		var bodyAnalysis = service.analyze("workspace.app.Main"),
+			recoveredBefore = service.recoveredSnapshotBuilds,
+			currentSource = StringTools.replace(bodySource, 'return current.execute("find") + 0;', "return current."),
 			started = Sys.time();
-		service.update(mainPath, mainSource + " ");
-		var updateMs = (Sys.time() - started) * 1000.0;
+		service.update(mainPath, currentSource);
+		var updateMs = (Sys.time() - started) * 1000.0,
+			currentPosition = currentSource.lastIndexOf("current.") + "current.".length;
 		started = Sys.time();
-		var completion = service.completeResult(mainPath, mainSource.length);
+		var completion = service.completeResult(mainPath, currentPosition);
 		var completionMs = (Sys.time() - started) * 1000.0;
-		if (!hasLabel(completion.items, "runCommand"))
-			throw "Pragtical fixture completion lost current host symbols";
+		if (!completion.isIncomplete || !hasLabel(completion.items, "execute"))
+			throw "small project completion lost current editor members";
 		started = Sys.time();
 		var definition = service.definition(mainPath, mainPosition);
 		var definitionMs = (Sys.time() - started) * 1000.0;
 		if (definition == null)
-			throw "Pragtical fixture definition query lost SearchPlugin identity";
-		var malformed = StringTools.replace(plugin, "return state.cursor;", "return state.");
+			throw "small project definition query lost SearchPlugin identity";
+		var malformed = StringTools.replace(plugin, "return current.cursor;", "return current.");
 		started = Sys.time();
 		service.update(pluginPath, malformed);
 		var malformedUpdateMs = (Sys.time() - started) * 1000.0,
-			malformedPosition = malformed.lastIndexOf("state.") + "state.".length;
+			malformedPosition = malformed.lastIndexOf("current.") + "current.".length;
 		started = Sys.time();
 		var malformedCompletion = service.completeResult(pluginPath, malformedPosition);
 		var malformedCompletionMs = (Sys.time() - started) * 1000.0;
 		if (!malformedCompletion.isIncomplete || !hasLabel(malformedCompletion.items, "cursor"))
-			throw "Pragtical fixture malformed completion lost current state members";
+			throw "small project malformed completion lost current state members";
 		started = Sys.time();
+		service.update(mainPath, bodySource);
 		service.update(pluginPath, plugin);
 		var repairedUpdateMs = (Sys.time() - started) * 1000.0;
-		service.analyze("pragtical.app.Main");
-		var repairedPosition = plugin.lastIndexOf("state.cursor") + "state.".length;
+		service.analyze("workspace.app.Main");
+		var repairedPosition = plugin.lastIndexOf("current.cursor") + "current.".length;
 		started = Sys.time();
 		var repairedCompletion = service.completeResult(pluginPath, repairedPosition);
 		var repairedCompletionMs = (Sys.time() - started) * 1000.0;
 		if (repairedCompletion.isIncomplete || !hasLabel(repairedCompletion.items, "cursor"))
-			throw "Pragtical fixture repair did not restore an exact completion snapshot";
+			throw "small project repair did not restore an exact completion snapshot";
 		return {
 			updateMs: updateMs,
 			completionMs: completionMs,
@@ -333,7 +345,11 @@ class LanguageServiceBenchmarkMain {
 			malformedUpdateMs: malformedUpdateMs,
 			malformedCompletionMs: malformedCompletionMs,
 			repairedUpdateMs: repairedUpdateMs,
-			repairedCompletionMs: repairedCompletionMs
+			repairedCompletionMs: repairedCompletionMs,
+			modulesInvalidated: bodyAnalysis.invalidatedModules.length,
+			modulesAnalyzed: bodyAnalysis.moduleNames.length,
+			retypedFunctions: bodyAnalysis.retyped.length,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
 		};
 	}
 
@@ -353,50 +369,155 @@ class LanguageServiceBenchmarkMain {
 		return result;
 	}
 
-	static function runScaledWorkspaceScenario(moduleCount:Int):ScaledSample {
-		var service = prepareScaledWorkspace(moduleCount),
-			source = scaledSource(moduleCount, 0),
-			started = Sys.time();
-		service.update("scale/Main.hx", source);
-		var updateMs = (Sys.time() - started) * 1000.0;
-		started = Sys.time();
-		var completion = service.completeResult("scale/Main.hx", source.length),
-			completionMs = (Sys.time() - started) * 1000.0;
-		if (!completion.isIncomplete || !hasLabel(completion.items, "known0"))
-			throw 'scaled workspace recovery lost member completion across $moduleCount modules';
-		return {updateMs: updateMs, completionMs: completionMs};
+	static function summarizeScenario(samples:Array<ScenarioSample>):Dynamic {
+		return {
+			updateMs: percentiles([for (sample in samples) sample.updateMs]),
+			completionMs: percentiles([for (sample in samples) sample.completionMs]),
+			definitionMs: percentiles([for (sample in samples) sample.definitionMs]),
+			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
+			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
+			repairedUpdateMs: percentiles([for (sample in samples) sample.repairedUpdateMs]),
+			repairedCompletionMs: percentiles([for (sample in samples) sample.repairedCompletionMs]),
+			modulesInvalidated: percentiles([for (sample in samples) sample.modulesInvalidated]),
+			modulesAnalyzed: percentiles([for (sample in samples) sample.modulesAnalyzed]),
+			retypedFunctions: percentiles([for (sample in samples) sample.retypedFunctions]),
+			recoveredSnapshots: {
+				total: sumScenarioSnapshots(samples),
+				average: sumScenarioSnapshots(samples) / samples.length
+			}
+		};
 	}
 
-	static function runLongLivedScenario(moduleCount:Int, edits:Int):Float {
-		var service = prepareScaledWorkspace(moduleCount);
+	static function summarizeGenerated(samples:Array<GeneratedSample>):Dynamic {
+		return {
+			topology: samples[0].topology,
+			moduleCount: samples[0].moduleCount,
+			updateMs: percentiles([for (sample in samples) sample.updateMs]),
+			completionMs: percentiles([for (sample in samples) sample.completionMs]),
+			modulesInvalidated: percentiles([for (sample in samples) sample.modulesInvalidated]),
+			modulesAnalyzed: percentiles([for (sample in samples) sample.modulesAnalyzed]),
+			retypedFunctions: percentiles([for (sample in samples) sample.retypedFunctions]),
+			recoveredSnapshots: {
+				total: sumGeneratedSnapshots(samples),
+				average: sumGeneratedSnapshots(samples) / samples.length
+			}
+		};
+	}
+
+	static function printScenarioSummary(name:String, scenario:Dynamic):Void {
+		Sys.println('$name update median/p95/p99: ${format(scenario.updateMs.median)}/${format(scenario.updateMs.p95)}/${format(scenario.updateMs.p99)} ms');
+		Sys.println('$name completion median/p95/p99: ${format(scenario.completionMs.median)}/${format(scenario.completionMs.p95)}/${format(scenario.completionMs.p99)} ms');
+		Sys.println('$name modules invalidated/analyzed p95: ${format(scenario.modulesInvalidated.p95)}/${format(scenario.modulesAnalyzed.p95)}');
+		Sys.println('$name retyped functions p95: ${format(scenario.retypedFunctions.p95)}');
+	}
+
+	static function runGeneratedWorkspaceScenario(moduleCount:Int, topology:String):GeneratedSample {
+		var service = prepareGeneratedWorkspace(moduleCount, topology),
+			recoveredBefore = service.recoveredSnapshotBuilds,
+			validSource = generatedSource(moduleCount, topology, 0, false),
+			started = Sys.time();
+		service.update("generated/Main.hx", validSource);
+		var updateMs = (Sys.time() - started) * 1000.0;
+		service.compile("generated.Main");
+		var target = generatedTarget(moduleCount, topology),
+			bodySource = StringTools.replace(validSource, 'return value.known$target;', 'return value.known$target + 0;'),
+			bodyStarted = Sys.time();
+		service.update("generated/Main.hx", bodySource);
+		updateMs += (Sys.time() - bodyStarted) * 1000.0;
+		var analysis = service.analyze("generated.Main");
+		var malformed = generatedSource(moduleCount, topology, 1, true);
+		started = Sys.time();
+		service.update("generated/Main.hx", malformed);
+		updateMs += (Sys.time() - started) * 1000.0;
+		var position = malformed.length,
+			queryStarted = Sys.time(),
+			completion = service.completeResult("generated/Main.hx", position),
+			completionMs = (Sys.time() - queryStarted) * 1000.0;
+		if (!completion.isIncomplete || !hasLabel(completion.items, 'known${generatedTarget(moduleCount, topology)}'))
+			throw 'generated $topology workspace lost member completion across $moduleCount modules';
+		return {
+			topology: topology,
+			moduleCount: moduleCount,
+			updateMs: updateMs,
+			completionMs: completionMs,
+			modulesInvalidated: analysis.invalidatedModules.length,
+			modulesAnalyzed: analysis.moduleNames.length,
+			retypedFunctions: analysis.retyped.length,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
+		};
+	}
+
+	static function runLongLivedScenario(moduleCount:Int, edits:Int, topology:String):Float {
+		var service = prepareGeneratedWorkspace(moduleCount, topology);
 		collectGarbage();
 		var before = processMemory();
 		for (edit in 0...edits) {
-			var source = scaledSource(moduleCount, edit);
-			service.update("scale/Main.hx", source);
-			service.completeResult("scale/Main.hx", source.length);
+			var source = generatedSource(moduleCount, topology, edit, true);
+			service.update("generated/Main.hx", source);
+			service.completeResult("generated/Main.hx", source.length);
 		}
 		collectGarbage();
 		var after = processMemory();
 		return before < 0 || after < 0 ? -1 : after - before;
 	}
 
+	static function prepareGeneratedWorkspace(moduleCount:Int, topology:String):LanguageService {
+		var service = new LanguageService();
+		for (index in 0...moduleCount) {
+			var dependencies = generatedDependencies(index, topology),
+				importText = [for (dependency in dependencies) 'import generated.Type$dependency;'].join(" "),
+				fields = [for (dependency in dependencies) ' public var previous$dependency:Type$dependency;'].join("");
+			service.update('generated/Type$index.hx', 'package generated; $importText class Type$index {$fields public var known$index:Int; public function method$index(value:Int):Int return value; }');
+		}
+		return service;
+	}
+
+	static function generatedSource(moduleCount:Int, topology:String, edit:Int, malformed:Bool):String {
+		var target = generatedTarget(moduleCount, topology),
+			imports:Array<String> = [];
+		if (topology == "fanout")
+			for (index in 0...moduleCount)
+				imports.push('import generated.Type$index;');
+		else
+			imports.push('import generated.Type$target;');
+		var broken = malformed ? ' broken$edit.unresolved().thing;' : "",
+			tail = malformed ? 'value.' : 'value.known$target;',
+			closing = malformed ? "" : " }";
+		return 'package generated; ${imports.join(" ")} function main():Int { var value:Type$target = new Type$target();$broken return $tail$closing';
+	}
+
+	static function generatedTarget(moduleCount:Int, topology:String):Int {
+		return topology == "chain" ? moduleCount - 1 : topology == "diamond" && moduleCount > 3 ? 3 : 0;
+	}
+
+	static function generatedDependencies(index:Int, topology:String):Array<Int> {
+		if (index == 0)
+			return [];
+		return switch (topology) {
+			case "chain": [index - 1];
+			case "diamond": index == 1 || index == 2 ? [0] : index == 3 ? [1, 2] : [3];
+			default: [];
+		};
+	}
+
+	static function sumScenarioSnapshots(samples:Array<ScenarioSample>):Int {
+		var result = 0;
+		for (sample in samples)
+			result += sample.recoveredSnapshots;
+		return result;
+	}
+
+	static function sumGeneratedSnapshots(samples:Array<GeneratedSample>):Int {
+		var result = 0;
+		for (sample in samples)
+			result += sample.recoveredSnapshots;
+		return result;
+	}
+
 	static function collectGarbage():Void {
 		#if hl
 		hl.Gc.major();
 		#end
-	}
-
-	static function prepareScaledWorkspace(moduleCount:Int):LanguageService {
-		var service = new LanguageService();
-		for (index in 0...moduleCount)
-			service.update('scale/Type$index.hx', 'package scale; class Type$index { public var known$index:Int; public function method$index(value:Int):Int return value; }');
-		return service;
-	}
-
-	static function scaledSource(moduleCount:Int, edit:Int):String {
-		var imports = [for (index in 0...moduleCount) 'import scale.Type$index;'].join(" ");
-		return 'package scale; $imports function main():Int { var value:Type0 = new Type0(); broken$edit.unresolved().thing; return value.';
 	}
 
 	static function hasLabel(items:Array<compiler.service.LanguageService.CompletionItem>, label:String):Bool {

@@ -151,7 +151,9 @@ typedef ValidationResult = {
 /** Semantic analysis completed without runtime artifact assembly or publication. */
 typedef AnalysisResult = {
 	final moduleNames:Array<String>;
+	final invalidatedModules:Array<String>;
 	final retyped:Array<String>;
+	final invalidatedArtifacts:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final diagnosticModules:Array<String>;
 	final elapsedMs:Float;
 }

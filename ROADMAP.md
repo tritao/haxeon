@@ -103,7 +103,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   protocol; cooperative request cancellation now unwinds compiler phase
   boundaries, while shared snapshots and one-pass commit/rollback remain.
 - [ ] Parallel parse/type work with deterministic assembly on the editor thread.
-- [ ] Memory and latency budgets measured on a realistic Pragtical project.
+- [ ] Memory and latency budgets measured on a representative downstream
+  consumer project.
 
 ### C. Runtime and hot reload
 
@@ -200,7 +201,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   Member-family navigation now includes class fields while keeping static
   shadows owner-local instead of treating them as inherited implementations,
   and it does not merge field and method declarations that merely share a name.
-- [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
+- [x] A small JSON-lines protocol adapter for editor hosts; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
   There is no second typechecker.
@@ -208,19 +209,17 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   completion, signature-help, hover, definition, background-analysis latency,
   recovered-snapshot publication, and process-memory growth under rapid
   incomplete edits, including multi-module malformed-source scenarios. Its
-  opt-in `--check-budgets` gate defines representative budgets: 100 ms p95 for
-  small-workspace editor recovery and interactive queries, 500 ms p95 for
-  background analysis and scaled 64-module recovery/queries, 32 MiB maximum
-  small-workspace RSS growth, and 128 MiB maximum RSS growth across 250 edits
-  on one long-lived 64-module service. It also exercises the complete
-  `tests/fixtures/pragtical` source tree through package-qualified imports,
-  cross-module definition, a malformed plugin edit, and a repaired plugin
-  transition. Use
-  `--project-iterations`, `--scale-modules`, and `--endurance-edits` to
-  reproduce or enlarge the workload. The post-merge `--check-budgets` run
-  passed on 2026-09-17: small edit recovery p95 5.47 ms, malformed Pragtical
-  fixture recovery p95 27.13 ms, scaled 64-module recovery p95 47.41 ms, and
-  250-edit long-lived memory growth 790,528 bytes.
+  report is scenario-keyed rather than consumer-keyed: the checked-in
+  `tests/fixtures/workspace-small` corpus exercises rich package/import and
+  callback semantics, while generated fan-out, chain, and diamond workspaces
+  exercise scale. Each scenario records latency, invalidated modules, analyzed
+  modules, retyped functions, recovered snapshots, and RSS growth. Its opt-in
+  `--check-budgets` gate defines representative budgets: 100 ms p95 for the
+  small workspace and 500 ms p95 for generated workspaces, plus the existing
+  memory-growth limits. Use `--scenario-iterations`, `--scale-modules`,
+  `--scale-topology`, and `--endurance-edits` to reproduce or enlarge the
+  workload. Real consumer fixtures remain integration inputs and do not define
+  the generic benchmark schema.
 
 - [x] Recovery/LSP closure checkpoint (2026-09-17): the identity-family matrix,
   lifecycle and cancellation corpus, `main` reconciliation, full

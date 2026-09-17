@@ -64,7 +64,9 @@ class AnalysisTransaction {
 			diagnosticModules.sort(Reflect.compare);
 			return {
 				moduleNames: frontend.moduleNames,
+				invalidatedModules: frontend.invalidatedModules,
 				retyped: frontend.retyped,
+				invalidatedArtifacts: frontend.invalidations,
 				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt
 			};

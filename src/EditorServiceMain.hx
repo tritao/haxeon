@@ -1,7 +1,7 @@
 import editor.LanguageServiceProtocol;
 import haxe.io.Eof;
 
-/** Standalone JSON-lines entry point for a Pragtical host process. */
+/** Standalone JSON-lines entry point for an editor host process. */
 class EditorServiceMain {
 	static function main():Void {
 		var protocol = new LanguageServiceProtocol();

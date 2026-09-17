@@ -64,14 +64,17 @@ typedef Percentiles = {
 }
 
 class BenchmarkMain {
-	static final fixtureRoot = "tests/fixtures/pragtical/";
+	static final fixtureRoot = "tests/fixtures/workspace-small/";
+	static final fixtureEntry = "workspace.app.Main";
 	static final fixturePaths = [
-		"pragtical/api/Plugin.hx",
-		"pragtical/api/Document.hx",
-		"pragtical/api/Editor.hx",
-		"pragtical/plugins/PluginState.hx",
-		"pragtical/plugins/SearchPlugin.hx",
-		"Main.hx"
+		"workspace/api/Plugin.hx",
+		"workspace/model/Document.hx",
+		"workspace/model/SearchResult.hx",
+		"workspace/services/SearchService.hx",
+		"workspace/api/Editor.hx",
+		"workspace/plugins/PluginState.hx",
+		"workspace/plugins/SearchPlugin.hx",
+		"workspace/app/Main.hx"
 	];
 
 	static function main():Void {
@@ -130,7 +133,7 @@ class BenchmarkMain {
 	static function coldCompileLoad():Sample {
 		var started = stamp(),
 			compiler = fixtureCompiler(),
-			build = compiler.compile("Main"),
+			build = compiler.compile(fixtureEntry),
 			compileDone = stamp(),
 			bytes = HlWriter.encode(build.module),
 			module = Runtime.load(bytes, build.runtimeIdentity);
@@ -140,19 +143,19 @@ class BenchmarkMain {
 
 	static function noopRebuild():Sample {
 		var compiler = fixtureCompiler();
-		compiler.compile("Main");
-		var started = stamp(), build = compiler.compile("Main"), done = stamp();
+		compiler.compile(fixtureEntry);
+		var started = stamp(), build = compiler.compile(fixtureEntry), done = stamp();
 		return sample(started, done, done, 0, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function bodyEditPatch():Sample {
 		var compiler = fixtureCompiler(),
-			initial = compiler.compile("Main"),
+			initial = compiler.compile(fixtureEntry),
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
-			source = fixture("pragtical/plugins/SearchPlugin.hx");
-		compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", "state.cursor + 2"));
+			source = fixture("workspace/plugins/SearchPlugin.hx");
+		compiler.update("workspace/plugins/SearchPlugin.hx", StringTools.replace(source, "current.cursor + 1", "current.cursor + 2"));
 		var started = stamp(),
-			build = compiler.compile("Main"),
+			build = compiler.compile(fixtureEntry),
 			compileDone = stamp();
 		Runtime.patchSet(module, new PatchSet(initial.revision, build.revision, build.patchBytes, build.changedFunctions));
 		var done = stamp();
@@ -162,28 +165,28 @@ class BenchmarkMain {
 
 	static function signatureEditReload():Sample {
 		var compiler = fixtureCompiler(),
-			initial = compiler.compile("Main"),
+			initial = compiler.compile(fixtureEntry),
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
-			plugin = fixture("pragtical/plugins/SearchPlugin.hx");
+			plugin = fixture("workspace/plugins/SearchPlugin.hx");
 		plugin = StringTools.replace(plugin, "public function find():Int", "public function find(step:Int):Int");
-		plugin = StringTools.replace(plugin, "state.cursor + 1", "state.cursor + step");
+		plugin = StringTools.replace(plugin, "current.cursor + 1", "current.cursor + step");
 		plugin = StringTools.replace(plugin, "this.find()", "this.find(1)");
-		compiler.update("pragtical/plugins/SearchPlugin.hx", plugin);
+		compiler.update("workspace/plugins/SearchPlugin.hx", plugin);
 		return compileReload(compiler, module);
 	}
 
 	static function structuralEditReload():Sample {
 		var compiler = fixtureCompiler(),
-			initial = compiler.compile("Main"),
+			initial = compiler.compile(fixtureEntry),
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
-			editor = fixture("pragtical/api/Editor.hx");
-		compiler.update("pragtical/api/Editor.hx",
-			StringTools.replace(editor, "public var documents:Array<Document>;", "public var documents:Array<Document>; public var generation:Int;"));
+			editor = fixture("workspace/api/Editor.hx");
+		compiler.update("workspace/api/Editor.hx",
+			StringTools.replace(editor, "public final documents:Array<Document>;", "public final documents:Array<Document>; public var generation:Int;"));
 		return compileReload(compiler, module);
 	}
 
 	static function compileReload(compiler:Compiler, oldModule:LoadedModule):Sample {
-		var started = stamp(), build = compiler.compile("Main"), compileDone = stamp(), bytes = HlWriter.encode(build.module),
+		var started = stamp(), build = compiler.compile(fixtureEntry), compileDone = stamp(), bytes = HlWriter.encode(build.module),
 			module = Runtime.load(bytes, build.runtimeIdentity), done = stamp();
 		Runtime.dispose(oldModule);
 		Runtime.dispose(module);
@@ -192,9 +195,9 @@ class BenchmarkMain {
 
 	static function patchSoak(iterations:Int, mode:String):Dynamic {
 		var compiler = fixtureCompiler(),
-			initial = compiler.compile("Main"),
+			initial = compiler.compile(fixtureEntry),
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
-			source = fixture("pragtical/plugins/SearchPlugin.hx"),
+			source = fixture("workspace/plugins/SearchPlugin.hx"),
 			revision = initial.revision,
 			samples:Array<Sample> = [];
 		hl.Gc.major();
@@ -207,9 +210,9 @@ class BenchmarkMain {
 				functions:Array<Int>
 			}> = [];
 			for (i in 0...iterations) {
-				var replacement = i % 2 == 0 ? "state.cursor + 2" : "state.cursor + 3";
-				compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", replacement));
-				var build = compiler.compile("Main");
+				var replacement = i % 2 == 0 ? "current.cursor + 2" : "current.cursor + 3";
+				compiler.update("workspace/plugins/SearchPlugin.hx", StringTools.replace(source, "current.cursor + 1", replacement));
+				var build = compiler.compile(fixtureEntry);
 				patches.push({
 					base: revision,
 					revision: build.revision,
@@ -229,10 +232,10 @@ class BenchmarkMain {
 			return finishSoak(samples, module, rssBefore, heapBefore);
 		}
 		for (i in 0...iterations) {
-			var replacement = i % 2 == 0 ? "state.cursor + 2" : "state.cursor + 3";
-			compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", replacement));
+			var replacement = i % 2 == 0 ? "current.cursor + 2" : "current.cursor + 3";
+			compiler.update("workspace/plugins/SearchPlugin.hx", StringTools.replace(source, "current.cursor + 1", replacement));
 			var started = stamp(),
-				build = compiler.compile("Main"),
+				build = compiler.compile(fixtureEntry),
 				compileDone = stamp();
 			if (mode == "combined")
 				Runtime.patchSet(module, new PatchSet(revision, build.revision, build.patchBytes, build.changedFunctions));
@@ -287,7 +290,7 @@ class BenchmarkMain {
 		var rssBefore = residentKb(),
 			heapBefore = hl.Gc.stats().currentMemory,
 			compiler = generatedCompiler(size);
-		compiler.compile("Main");
+		compiler.compile(fixtureEntry);
 		hl.Gc.major();
 		var rssAfter = residentKb(), heapAfter = hl.Gc.stats().currentMemory;
 		return {
@@ -303,7 +306,7 @@ class BenchmarkMain {
 	static function scaleSample(size:Int, scenario:String):Sample {
 		var compiler = generatedCompiler(size), started = stamp();
 		if (scenario != "cold_compile") {
-			compiler.compile("Main");
+			compiler.compile(fixtureEntry);
 			started = stamp();
 			switch scenario {
 				case "noop_rebuild":
@@ -319,7 +322,7 @@ class BenchmarkMain {
 				default:
 			}
 		}
-		var build = compiler.compile("Main"),
+		var build = compiler.compile(fixtureEntry),
 			compileDone = stamp(),
 			artifactBytes = scenario == "cold_compile" ? HlWriter.encode(build.module)
 				.length : build.patchBytes != null ? build.patchBytes.length : build.changedFunctions.length == 0
@@ -366,8 +369,7 @@ class BenchmarkMain {
 	}
 
 	static function fixture(path:String):String {
-		var diskPath = path == "Main.hx" ? fixtureRoot + "pragtical/app/Main.hx" : fixtureRoot + path;
-		return File.getContent(diskPath);
+		return File.getContent(fixtureRoot + path);
 	}
 
 	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int, ?metrics:CompileMetrics):Sample

@@ -21,6 +21,7 @@ import compiler.semantic.SemanticDependencyCollector;
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
 	final moduleNames:Array<String>;
+	final invalidatedModules:Array<String>;
 	final typedProgram:TypedProgram;
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
@@ -279,11 +280,25 @@ class FrontendCompilation {
 				}
 			}
 		regenerated.sort(Reflect.compare);
+		var invalidatedModuleSet:Map<String, Bool> = [];
+		for (functionName in invalidated.keys()) {
+			var owner = owners.get(functionName);
+			if (owner != null)
+				invalidatedModuleSet.set(owner, true);
+		}
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
+			if (state != null && (state.lastGood == null || state.lastGood.revision != state.revision))
+				invalidatedModuleSet.set(moduleName, true);
+		}
+		var invalidatedModules = [for (name in invalidatedModuleSet.keys()) name];
+		invalidatedModules.sort(Reflect.compare);
 		var typingLoweringDoneAt = Sys.time() * 1000.0;
 		if (!lowerToIr)
 			return {
 				ir: null,
 				moduleNames: names,
+				invalidatedModules: invalidatedModules,
 				typedProgram: typedNew,
 				retyped: retyped,
 				invalidations: semanticAssembly.invalidations,
@@ -336,6 +351,7 @@ class FrontendCompilation {
 		return {
 			ir: ir,
 			moduleNames: names,
+			invalidatedModules: invalidatedModules,
 			typedProgram: typedNew,
 			retyped: retyped,
 			invalidations: semanticAssembly.invalidations,
