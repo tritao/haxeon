@@ -41,9 +41,8 @@ class SemanticIndexQueryState {
 	final unresolved:Array<UnresolvedSymbol>;
 	final typeParameterIds:Map<String, SemanticSymbolId>;
 	/**
-		Temporary compatibility boundary for recovery queries whose algorithms
-		still share traversal helpers with the builder. The builder is hidden by
-		SemanticIndexRecoveryQuery and is never exposed to callers after publication.
+		Read-only recovery facts and compatibility providers for algorithms still
+		being extracted from the construction builder.
 	*/
 	final recoveryQuery:SemanticIndexRecoveryQuery;
 

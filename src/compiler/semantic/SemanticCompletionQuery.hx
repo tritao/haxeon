@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.service.CancellationToken;
+import compiler.Source.SourceSpan;
 import compiler.syntax.Token;
 import compiler.types.DeclarationIndex;
 import compiler.types.Type.CompilerType;
@@ -12,12 +13,12 @@ import compiler.semantic.SemanticIndex.SemanticRecoveredTypeParameterScope;
 typedef SemanticCompletionFacts = {
 	final locals:Array<SemanticCompletionLocal>;
 	final typeParameters:Array<SemanticRecoveredTypeParameterScope>;
-	final receivers:Array<{span:compiler.Source.SourceSpan, type:CompilerType}>;
-	final expectedTypes:Array<{span:compiler.Source.SourceSpan, type:CompilerType}>;
+	final receivers:Array<{span:SourceSpan, type:CompilerType}>;
+	final expectedTypes:Array<{span:SourceSpan, type:CompilerType}>;
+	final qualifiers:Array<{name:String, span:SourceSpan, type:CompilerType}>;
 	final classBases:Map<String, CompilerType>;
 	final declarations:DeclarationIndex;
 	final tokens:Array<Token>;
-	final qualifierType:String->Int->Null<CompilerType>;
 }
 
 /** Builds completion context from an immutable semantic-facts view. */
@@ -67,8 +68,24 @@ class SemanticCompletionQuery {
 					receiver = facts.classBases.get(owner.name);
 					break;
 				}
-		if (receiver == null && qualifier != null)
-			receiver = facts.qualifierType(qualifier, position);
+		if (receiver == null && qualifier != null) {
+			var selectedQualifier:Null<{name:String, span:SourceSpan, type:CompilerType}> = null;
+			for (candidate in facts.qualifiers) {
+				if (cancellation != null)
+					cancellation.check();
+				if (candidate.name != qualifier
+					|| position < candidate.span.start
+					|| position > candidate.span.end + 1)
+					continue;
+				if (selectedQualifier == null
+					|| candidate.span.end - candidate.span.start < selectedQualifier.span.end - selectedQualifier.span.start
+					|| candidate.span.end - candidate.span.start == selectedQualifier.span.end - selectedQualifier.span.start
+					&& candidate.span.start > selectedQualifier.span.start)
+					selectedQualifier = candidate;
+			}
+			if (selectedQualifier != null)
+				receiver = selectedQualifier.type;
+		}
 		var expected:Null<CompilerType> = null, expectedWidth = 0x3fffffff;
 		for (candidate in facts.expectedTypes) {
 			if (cancellation != null)

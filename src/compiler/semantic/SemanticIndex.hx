@@ -108,6 +108,7 @@ typedef ResolvedSemanticReference = {
 /** Mutable construction state for one revision-local semantic index. */
 @:allow(compiler.semantic.SemanticIndex)
 @:allow(compiler.semantic.SemanticIndexQueryState)
+@:allow(compiler.semantic.SemanticIndexRecoveryQuery)
 class SemanticIndexBuilder {
 	public final revision:Int;
 	final symbols:Map<String, IndexedSemanticSymbol> = [];
@@ -124,6 +125,7 @@ class SemanticIndexBuilder {
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
+	final recoveredQualifiers:Array<{name:String, span:SourceSpan, type:CompilerType}> = [];
 	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
@@ -288,6 +290,8 @@ class SemanticIndexBuilder {
 			copy.functionReceivers.push({span: receiver.span, type: receiver.type});
 		for (completion in completionTypes)
 			copy.completionTypes.push({span: completion.span, type: completion.type});
+		for (qualifier in recoveredQualifiers)
+			copy.recoveredQualifiers.push({name: qualifier.name, span: qualifier.span, type: qualifier.type});
 		for (id => type in declarationTypes)
 			copy.declarationTypes.set(id, type);
 		for (span => id in declarationSymbolsBySpan)
@@ -655,6 +659,7 @@ class SemanticIndexBuilder {
 		// expression uses. Resolved names retain authoritative identities when
 		// available, while declarations from this module remain editor-local.
 		indexTypeReferences(function(name:String):Null<SemanticSymbolId> return resolvedRecoveredSymbol(name), token);
+		indexRecoveredTokenQualifiers();
 		cancellation = token;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
@@ -1351,11 +1356,17 @@ class SemanticIndexBuilder {
 					bindRecoveredReceiver(receiver, span);
 					if (bindRecoveredMember(Variable(receiver, span), member, span) == null)
 						bindNamed(resolveRecoveredSymbol, name, span);
+					addRecoveredQualifier(name, span, recoveredExpressionBindingType(recoveredQualifiedExpression(name, span)));
 				}
 			case Member(object, name, span):
 				indexRecoveredExpression(object, null, activeFunctionKey);
 				if (bindRecoveredMember(object, name, span) == null && name.length > 0 && !isKnownRecoveredMember(object, name))
 					recordUnresolved(name, span);
+				var objectName = recoveredExpressionName(object),
+					objectType = recoveredExpressionBindingType(object);
+				addRecoveredQualifier(objectName, span, objectType);
+				if (name.length > 0)
+					addRecoveredQualifier(recoveredExpressionName(expression), span, recoveredMemberType(object, name));
 			case Call(name, arguments, span):
 				var separator = name.lastIndexOf(".");
 				if (separator > 0) {
@@ -1365,6 +1376,7 @@ class SemanticIndexBuilder {
 					bindRecoveredReceiver(receiverName, span);
 					var receiverType = recoveredExpressionBindingType(receiver),
 						callee = bindRecoveredMember(receiver, memberName, span);
+					addRecoveredQualifier(receiverName, span, receiverType);
 					if (callee == null)
 						callee = bindNamed(resolveRecoveredSymbol, name, span);
 					var owner = memberOwner(receiverType),
@@ -1399,6 +1411,7 @@ class SemanticIndexBuilder {
 					indexRecoveredExpression(arguments[index], expectedFunctionArgument(recoveredExpressionType(callee), index), activeFunctionKey);
 			case MethodCall(object, name, arguments, span):
 				indexRecoveredExpression(object, null, activeFunctionKey);
+				addRecoveredQualifier(recoveredExpressionName(object), span, recoveredExpressionBindingType(object));
 				var callee = bindRecoveredMember(object, name, span);
 				addCall(callee, span, name);
 				if (callee == null && !isKnownRecoveredMember(object, name))
@@ -2823,11 +2836,86 @@ class SemanticIndexBuilder {
 			typeParameters: recoveredTypeParameterScopes,
 			receivers: functionReceivers,
 			expectedTypes: completionTypes,
+			qualifiers: recoveredQualifiers,
 			classBases: recoveredClassBases,
 			declarations: declarations,
-			tokens: tokens,
-			qualifierType: function(qualifier:String, position:Int) return recoveredQualifierType(qualifier, position)
+			tokens: tokens
 		}, position, qualifier, token);
+	}
+
+	/** Record a resolved nested receiver for the immutable completion query. */
+	function addRecoveredQualifier(name:Null<String>, span:SourceSpan, type:Null<CompilerType>):Void {
+		if (name == null || name.length == 0 || type == null || isRecoveryType(type))
+			return;
+		for (existing in recoveredQualifiers)
+			if (existing.name == name && existing.span.start == span.start && existing.span.end == span.end)
+				return;
+		recoveredQualifiers.push({name: name, span: currentSpan(span), type: type});
+	}
+
+	function recoveredExpressionName(expression:AstExpression):Null<String> {
+		return switch expression {
+			case Variable(name, _): name;
+			case Member(object, name, _) if (name.length > 0):
+				var prefix = recoveredExpressionName(object);
+				prefix == null ? null : prefix + "." + name;
+			case Member(object, _, _): recoveredExpressionName(object);
+			default: null;
+		};
+	}
+
+	function recoveredQualifiedExpression(name:String, span:SourceSpan):AstExpression {
+		var parts = name.split("."), expression:AstExpression = Variable(parts[0], span);
+		for (index in 1...parts.length)
+			expression = Member(expression, parts[index], span);
+		return expression;
+	}
+
+	/**
+		Recover receiver facts directly from the token stream as well as AST
+		nodes. Incomplete calls may not retain their outer expression node, but
+		the dotted receiver before the cursor is still enough to resolve members.
+	*/
+	function indexRecoveredTokenQualifiers():Void {
+		if (source == null)
+			return;
+		var boundary = 0;
+		for (index in 0...tokens.length) {
+			switch tokens[index].kind {
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace:
+					boundary = index;
+				default:
+			}
+		}
+		for (index in boundary + 1...tokens.length) {
+			checkpoint();
+			if (tokens[index].kind != TokenKind.Dot || tokens[index - 1].kind != TokenKind.Identifier)
+				continue;
+			// Qualified imports, package paths, and type annotations are already
+			// covered by indexTypeReferences(). Only expression receivers need the
+			// recovery-specific token fallback.
+			if (isTypeReferenceToken(index - 1))
+				continue;
+			var name = qualifiedTokenName(index - 1),
+				last = tokens[index - 1].span,
+				end = qualifierFactEnd(index, last.end),
+				span = source.span(last.start, end),
+				type = recoveredQualifierType(name, tokens[index].span.start);
+			addRecoveredQualifier(name, span, type);
+		}
+	}
+
+	function qualifierFactEnd(dotIndex:Int, initialEnd:Int):Int {
+		var end = initialEnd;
+		for (index in dotIndex + 1...tokens.length) {
+			var token = tokens[index];
+			if (token.kind == TokenKind.Semicolon || token.kind == TokenKind.RightBrace)
+				break;
+			if (token.kind == TokenKind.Eof)
+				return source.bytes.length;
+			end = token.span.end;
+		}
+		return end;
 	}
 
 	/** Resolve a dotted receiver such as `root.child` for member completion. */
@@ -2841,7 +2929,7 @@ class SemanticIndexBuilder {
 		for (index in 1...parts.length)
 			expression = Member(expression, parts[index], span);
 		var type = recoveredExpressionBindingType(expression);
-		return isRecoveryType(type) ? null : type;
+		return type == null || isRecoveryType(type) ? null : type;
 	}
 
 	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
