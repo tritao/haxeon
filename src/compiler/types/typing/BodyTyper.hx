@@ -1888,11 +1888,21 @@ class BodyTyper {
 			var resolvedMethodInfo = findMethod(owner, name);
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
-					method = requiredMapValue(session.signatures, methodKey);
-				if (isGeneric(method))
-					fail("E1007", "Generic instance method values are not supported yet", span);
-				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
-					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
+					method = requiredMapValue(session.signatures, methodKey),
+					substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),
+					generic = isGeneric(method);
+				if (generic) {
+					if (!session.tolerant)
+						fail("E1007", "Generic instance method values are not supported yet", span);
+					// A method value has no call-site arguments yet from which to
+					// infer its method parameters. Keep the callable shape in the
+					// recovered tree and make only those slots unknown; a later
+					// expression can still be typed and queried independently.
+					for (parameter in functionTypeParameters(method))
+						if (!substitutions.exists(parameter))
+							substitutions.set(parameter, TUnknown);
+				}
+				var arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
 					result = session.declarations.resolve(method.result, method.span, substitutions);
 				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
 			}

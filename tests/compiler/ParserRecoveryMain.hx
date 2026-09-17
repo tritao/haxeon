@@ -2432,6 +2432,30 @@ class ParserRecoveryMain {
 			|| invalidInlineTyped.classes.length != 1
 			|| invalidInlineTyped.classes[0].methods.length != 1)
 			throw "tolerant typing abandoned a class after an invalid inline initializer";
+
+		var genericMethodValueSource = new SourceFile("TolerantGenericMethodValue.hx",
+			"class Box { public function map<T>(value:T):T return value; } function main():Void { var box:Box = new Box(); var callback = box.map; var result = callback(1); var after:Int = 1; }");
+		var genericMethodValueProgram = new Parser(new Lexer(genericMethodValueSource).tokenize()).parseProgramRecovering().program,
+			genericMethodValueTyped = Typer.typeRecovered(genericMethodValueProgram),
+			genericMethodValueMain = genericMethodValueTyped == null ? null : [for (fn in genericMethodValueTyped.functions) if (fn.name == "main") fn][0];
+		if (genericMethodValueMain == null || genericMethodValueMain.statements.length != 4)
+			throw "tolerant typing discarded declarations around a generic instance method value";
+		switch genericMethodValueMain.statements[1] {
+			case TVar(_, value, _):
+				switch value.type {
+					case TFunction([TUnknown], TUnknown):
+					default: throw 'generic instance method value lost its recovered callable shape: ${value.type}';
+				}
+			default: throw "generic instance method value did not remain a declaration";
+		}
+		switch genericMethodValueMain.statements[2] {
+			case TVar(_, value, _):
+				switch value.expression {
+					case TClosureCall(_, arguments) if (arguments.length == 1 && arguments[0].type == TInt):
+					default: throw "generic instance method value did not retain its later call arguments";
+				}
+			default: throw "generic instance method value call did not remain a declaration";
+		}
 	}
 
 	static function assertTolerantDeclarationSnapshot():Void {
