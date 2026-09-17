@@ -27,10 +27,10 @@ HL_PRIM int HL_NAME(native_runtime_decode_guard_end)() {
 	return hl_runtime_decode_guard_end();
 }
 
-HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code_manifest)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *module_id,
+HL_PRIM vbyte *HL_NAME(native_runtime_module_load_haxe_metadata)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *module_id,
 	int revision, int *stable_ids, int *slots, int identity_count, int initializer_slot ) {
 	hl_runtime_module *runtime = NULL;
-	return hl_runtime_module_load_code_manifest((hl_code*)code,bytes == NULL ? NULL : bytes->data,length,
+	return hl_runtime_module_load_haxe_metadata((hl_code*)code,bytes == NULL ? NULL : bytes->data,length,
 		module_id == NULL ? NULL : module_id->data,module_id == NULL ? 0 : module_id->length,revision,stable_ids,slots,identity_count,initializer_slot,&runtime) == HL_RUNTIME_OK
 		? (vbyte*)runtime : NULL;
 }
@@ -242,10 +242,10 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code_haxe_types)( vbyte *modu
 	return (vbyte*)code;
 }
 
-HL_PRIM vbyte *HL_NAME(native_runtime_module_patch_code_haxe_metadata)( vbyte *module, vbyte *input, int type_count,
+HL_PRIM vbyte *HL_NAME(native_runtime_module_apply_haxe_patch)( vbyte *module, vbyte *input, int type_count,
 	vbyte *functions, int function_count, vbyte *pools, vbyte *debug, vbyte *status_out ) {
 	hl_patch_code *code = NULL;
-	hl_runtime_status status = hl_runtime_module_apply_hlp_capture_metadata_input((hl_runtime_module*)module,(hl_patch_input*)input,
+	hl_runtime_status status = hl_runtime_module_apply_haxe_patch((hl_runtime_module*)module,(hl_patch_input*)input,
 		type_count,(hl_function*)functions,function_count,(hl_patch_pools*)pools,(hl_patch_debug*)debug,&code);
 	if( status_out != NULL ) memcpy(status_out,&status,sizeof(status));
 	return (vbyte*)code;

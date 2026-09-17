@@ -22,8 +22,8 @@ The handoff is therefore narrow and explicit:
 
 | Operation | Haxe-owned entrypoint | Native responsibility |
 | --- | --- | --- |
-| Cold load | `hl_runtime_module_load_code_manifest` | Borrow `hl_code`, identity/slot arrays, and optional debugger payload; initialize JIT/runtime state |
-| Patch | `hl_runtime_module_apply_hlp_capture_metadata_input` | Validate the prepared projection, JIT changed functions, and publish executable slots |
+| Cold load | `hl_runtime_module_load_haxe_metadata` | Borrow `hl_code`, identity/slot arrays, and optional debugger payload; initialize JIT/runtime state |
+| Patch | `hl_runtime_module_apply_haxe_patch` | Validate the prepared projection, JIT changed functions, and publish executable slots |
 | Retirement | Haxe registry/module owner | Check native quiescence and release executable/platform resources |
 
 No pointer in the handoff is implicitly transferred. Haxe-owned arenas and
@@ -111,7 +111,7 @@ unverified and is intentionally not attempted.
 The Haxeon-native loader now exercises the external metadata boundary: it decodes
 HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
 passes that graph plus the decoded manifest to
-`hl_runtime_module_load_code_manifest`. HashLink initializes its JIT and runtime
+`hl_runtime_module_load_haxe_metadata`. HashLink initializes its JIT and runtime
 wrapper from those Haxe-owned records without reparsing HLB or HLI on this path.
 The normal Haxeon loader passes no raw HLB payload; debugger-compatible payloads
 are an explicit opt-in at the kernel boundary. Both

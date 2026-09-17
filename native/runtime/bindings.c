@@ -117,7 +117,7 @@ DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),load_code,_BYTES _BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_bytes,_ABSTRACT(realtime_bytes) _ABSTRACT(realtime_bytes));
-DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_code_manifest,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _BYTES _BYTES _I32 _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_module),native_runtime_module_load_haxe_metadata,_BYTES _ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _BYTES _BYTES _I32 _I32);
 DEFINE_PRIM(_VOID,native_runtime_decode_guard_begin,_NO_ARG);
 DEFINE_PRIM(_I32,native_runtime_decode_guard_end,_NO_ARG);
 DEFINE_PRIM(_BOOL,native_runtime_module_initialize_constant,_ABSTRACT(realtime_module) _I32);
@@ -150,7 +150,7 @@ DEFINE_PRIM(_I32,native_runtime_module_patch,_ABSTRACT(realtime_module) _ABSTRAC
 DEFINE_PRIM(_VOID,native_runtime_module_set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32 _BYTES);
 DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code_haxe_types,_ABSTRACT(realtime_module) _ABSTRACT(realtime_bytes) _I32 _I32 _BYTES);
-DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_patch_code_haxe_metadata,_ABSTRACT(realtime_module) _BYTES _I32 _BYTES _I32 _BYTES _BYTES _BYTES);
+DEFINE_PRIM(_ABSTRACT(realtime_jit_code),native_runtime_module_apply_haxe_patch,_ABSTRACT(realtime_module) _BYTES _I32 _BYTES _I32 _BYTES _BYTES _BYTES);
 DEFINE_PRIM(_BOOL,native_runtime_module_release_code,_ABSTRACT(realtime_jit_code));
 DEFINE_PRIM(_I32,native_runtime_module_code_revision,_ABSTRACT(realtime_jit_code));
 DEFINE_PRIM(_I32,native_runtime_module_allocation_count,_ABSTRACT(realtime_module));

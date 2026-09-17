@@ -40,7 +40,7 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public inline function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, moduleId:Bytes, revision:Int, dispatch:HlRuntimeDispatchTable,
 		?debugBytes:Bytes):HlRuntimeModuleHandle {
 		var debugLength = debugBytes == null ? 0 : debugBytes.length;
-		return HlTypeBridge.native_runtime_module_load_code_manifest(code, debugBytes, debugLength, moduleId, revision, dispatch.stableIds, dispatch.slots,
+		return HlTypeBridge.native_runtime_module_load_haxe_metadata(code, debugBytes, debugLength, moduleId, revision, dispatch.stableIds, dispatch.slots,
 			dispatch.count, dispatch.initializerSlot);
 	}
 

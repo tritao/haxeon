@@ -56,7 +56,7 @@ class NativeHlRuntimeJitBackend implements HlRuntimeJitBackend {
 	public inline function patchCodeWithHaxeMetadata(module:HlRuntimeModuleHandle, input:RawPtr<NativeModuleHlPatchInput>, typeCount:Int,
 		functions:HlRuntimePatchFunctions, pools:RawPtr<NativeModuleHlPatchPools>, debug:RawPtr<NativeModuleHlPatchDebug>):HlRuntimePatchPublication {
 		var status = Bytes.alloc(4),
-			code = HlTypeBridge.native_runtime_module_patch_code_haxe_metadata(module, input, typeCount, functions.pointer, functions.count,
+			code = HlTypeBridge.native_runtime_module_apply_haxe_patch(module, input, typeCount, functions.pointer, functions.count,
 				pools, debug, cast status.getData()),
 			result = status.getInt32(0);
 		return new HlRuntimePatchPublication(result, code);
