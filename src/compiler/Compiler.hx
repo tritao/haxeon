@@ -205,6 +205,20 @@ class Compiler {
 	/** Snapshot metadata used to retain live objects for untouched modules. */
 	var snapshotModules:Null<Map<String, ModuleState>>;
 	var snapshotOrigins:Null<Map<String, ModuleState>>;
+	/** Serializes source mutation with transactional snapshot publication. */
+	final sourceMutex = new sys.thread.Mutex();
+
+	function withSourceLock<T>(work:Void->T):T {
+		sourceMutex.acquire();
+		try {
+			var result = work();
+			sourceMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			sourceMutex.release();
+			throw error;
+		}
+	}
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration) {
 		semanticWorkspace = new SemanticWorkspace(modules);
@@ -274,12 +288,14 @@ class Compiler {
 		publication.acknowledge(revision);
 
 	public function rejectPublication(revision:Int):Void {
-		var candidate = publication.reject(revision);
-		// A newer edit may have arrived while the runtime publication was
-		// pending. Restore the compiler/runtime baseline without rolling back
-		// source modules that now belong to that newer generation.
-		restore(candidate.snapshot, sourceGeneration == candidate.sourceGeneration);
-		assembler = candidate.assembler;
+		withSourceLock(function():Void {
+			var candidate = publication.reject(revision);
+			// A newer edit may have arrived while the runtime publication was
+			// pending. Restore the compiler/runtime baseline without rolling back
+			// source modules that now belong to that newer generation.
+			restore(candidate.snapshot, sourceGeneration == candidate.sourceGeneration);
+			assembler = candidate.assembler;
+		});
 	}
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
@@ -462,14 +478,18 @@ class Compiler {
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
-		sourceLoader.addRoot(path);
-		sourceGeneration++;
+		withSourceLock(function():Void {
+			sourceLoader.addRoot(path);
+			sourceGeneration++;
+		});
 	}
 
 	/** Add a package-scoped source root for a resolved local dependency. */
 	public function addPackageSourceRoot(packageName:String, path:String):Void {
-		sourceLoader.addPackageRoot(packageName, path);
-		sourceGeneration++;
+		withSourceLock(function():Void {
+			sourceLoader.addPackageRoot(packageName, path);
+			sourceGeneration++;
+		});
 	}
 
 	public function compact(entryModule:String):CompileResult {
@@ -479,6 +499,10 @@ class Compiler {
 	}
 
 	public function update(path:String, source:String):ModuleState {
+		return withSourceLock(function():ModuleState return updateSource(path, source));
+	}
+
+	function updateSource(path:String, source:String):ModuleState {
 		var name = ModulePath.fromFile(path);
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
@@ -500,17 +524,25 @@ class Compiler {
 
 	/** Remove a source module and invalidate graph/cached compilation state. */
 	public function remove(path:String):Bool {
-		var name = ModulePath.fromFile(path);
-		if (!modules.exists(name))
-			return false;
-		modules.remove(name);
-		graph.rebuild(modules);
-		sourceGeneration++;
-		return true;
+		return withSourceLock(function():Bool {
+			var name = ModulePath.fromFile(path);
+			if (!modules.exists(name))
+				return false;
+			modules.remove(name);
+			graph.rebuild(modules);
+			sourceGeneration++;
+			return true;
+		});
 	}
 
 	/** Change semantic build context and invalidate every source-derived cache. */
 	public function configure(identity:String, scopeIdentity:String, values:Array<String>):Void {
+		withSourceLock(function():Void {
+			configureSource(identity, scopeIdentity, values);
+		});
+	}
+
+	function configureSource(identity:String, scopeIdentity:String, values:Array<String>):Void {
 		var nextDefines:Map<String, String> = [];
 		for (value in values) {
 			var separator = value.indexOf("="),
@@ -708,6 +740,10 @@ class Compiler {
 	}
 
 	function snapshot():CompilerSnapshot {
+		return withSourceLock(function():CompilerSnapshot return snapshotSource());
+	}
+
+	function snapshotSource():CompilerSnapshot {
 		var moduleCopies:Map<String, ModuleState> = [],
 			originalModules:Map<String, ModuleState> = [],
 			objectCopies:Map<String, IrObject> = [];
@@ -754,7 +790,25 @@ class Compiler {
 		return candidate;
 	}
 
-	function adoptCandidate(candidate:Compiler):Void {
+	function adoptCandidate(candidate:Compiler, generation:Int):Void {
+		withSourceLock(function():Void {
+			if (!isSourceGenerationCurrent(generation))
+				throw new CancellationError();
+			adoptCandidateSource(candidate);
+		});
+	}
+
+	function publishCandidate(candidate:Compiler, generation:Int, revision:Int, abi:RuntimeAbiDescriptor,
+		snapshot:CompilerSnapshot, previousAssembler:HlModuleAssembler):Void {
+		withSourceLock(function():Void {
+			if (!isSourceGenerationCurrent(generation))
+				throw new CancellationError();
+			adoptCandidateSource(candidate);
+			publication.candidate(revision, generation, abi, snapshot, previousAssembler);
+		});
+	}
+
+	function adoptCandidateSource(candidate:Compiler):Void {
 		for (name in [for (name in modules.keys()) name])
 			modules.remove(name);
 		for (name => state in candidate.modules) {

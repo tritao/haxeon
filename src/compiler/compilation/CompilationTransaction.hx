@@ -42,10 +42,7 @@ class CompilationTransaction {
 			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
-			if (!compiler.isSourceGenerationCurrent(generation))
-				throw new CancellationError();
-			compiler.adoptCandidate(candidate);
-			compiler.publication.candidate(result.revision, compiler.currentSourceGeneration(), abi, snapshot, previousAssembler);
+			compiler.publishCandidate(candidate, generation, result.revision, abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
 			if (!compiler.isSourceGenerationCurrent(generation))

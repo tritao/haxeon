@@ -54,7 +54,7 @@ class AnalysisTransaction {
 			}
 			if (!compiler.isSourceGenerationCurrent(generation))
 				throw new CancellationError();
-			compiler.adoptCandidate(candidate);
+			compiler.adoptCandidate(candidate, generation);
 			var diagnosticModules:Array<String> = [];
 			for (name => state in candidate.modules) {
 				var previous = snapshot.modules.get(name);
