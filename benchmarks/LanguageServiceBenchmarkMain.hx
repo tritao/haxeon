@@ -38,6 +38,8 @@ private typedef ProjectSample = {
 	final definitionMs:Float;
 	final malformedUpdateMs:Float;
 	final malformedCompletionMs:Float;
+	final repairedUpdateMs:Float;
+	final repairedCompletionMs:Float;
 }
 
 /** Measures editor recovery latency and memory growth under rapid edits. */
@@ -106,6 +108,8 @@ class LanguageServiceBenchmarkMain {
 			pragticalProjectDefinitionMs: percentiles([for (sample in projectSamples) sample.definitionMs]),
 			pragticalProjectMalformedUpdateMs: percentiles([for (sample in projectSamples) sample.malformedUpdateMs]),
 			pragticalProjectMalformedCompletionMs: percentiles([for (sample in projectSamples) sample.malformedCompletionMs]),
+			pragticalProjectRepairedUpdateMs: percentiles([for (sample in projectSamples) sample.repairedUpdateMs]),
+			pragticalProjectRepairedCompletionMs: percentiles([for (sample in projectSamples) sample.repairedCompletionMs]),
 			scaleModules: scaleModules,
 			scaleIterations: scaleIterations,
 			scaledWorkspaceUpdateMs: percentiles([for (sample in scaleSamples) sample.updateMs]),
@@ -141,6 +145,8 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Pragtical fixture definition median/p95/p99: ${format(report.pragticalProjectDefinitionMs.median)}/${format(report.pragticalProjectDefinitionMs.p95)}/${format(report.pragticalProjectDefinitionMs.p99)} ms');
 		Sys.println('Pragtical fixture malformed update median/p95/p99: ${format(report.pragticalProjectMalformedUpdateMs.median)}/${format(report.pragticalProjectMalformedUpdateMs.p95)}/${format(report.pragticalProjectMalformedUpdateMs.p99)} ms');
 		Sys.println('Pragtical fixture malformed completion median/p95/p99: ${format(report.pragticalProjectMalformedCompletionMs.median)}/${format(report.pragticalProjectMalformedCompletionMs.p95)}/${format(report.pragticalProjectMalformedCompletionMs.p99)} ms');
+		Sys.println('Pragtical fixture repaired update median/p95/p99: ${format(report.pragticalProjectRepairedUpdateMs.median)}/${format(report.pragticalProjectRepairedUpdateMs.p95)}/${format(report.pragticalProjectRepairedUpdateMs.p99)} ms');
+		Sys.println('Pragtical fixture repaired completion median/p95/p99: ${format(report.pragticalProjectRepairedCompletionMs.median)}/${format(report.pragticalProjectRepairedCompletionMs.p95)}/${format(report.pragticalProjectRepairedCompletionMs.p99)} ms');
 		Sys.println('Scaled workspace (${scaleModules} modules) update median/p95/p99: ${format(report.scaledWorkspaceUpdateMs.median)}/${format(report.scaledWorkspaceUpdateMs.p95)}/${format(report.scaledWorkspaceUpdateMs.p99)} ms');
 		Sys.println('Scaled workspace completion median/p95/p99: ${format(report.scaledWorkspaceCompletionMs.median)}/${format(report.scaledWorkspaceCompletionMs.p95)}/${format(report.scaledWorkspaceCompletionMs.p99)} ms');
 		Sys.println('Long-lived memory growth after ${enduranceEdits} edits: ${report.longLivedMemoryGrowthBytes} bytes');
@@ -173,6 +179,8 @@ class LanguageServiceBenchmarkMain {
 		checkBudget("Pragtical-fixture-definition", report.pragticalProjectDefinitionMs.p95, 100.0);
 		checkBudget("Pragtical-fixture-malformed-edit-to-recovery", report.pragticalProjectMalformedUpdateMs.p95, 100.0);
 		checkBudget("Pragtical-fixture-malformed-completion", report.pragticalProjectMalformedCompletionMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-repaired-edit-to-recovery", report.pragticalProjectRepairedUpdateMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-repaired-completion", report.pragticalProjectRepairedCompletionMs.p95, 100.0);
 		checkBudget("scaled-workspace-edit-to-recovery", report.scaledWorkspaceUpdateMs.p95, 500.0);
 		checkBudget("scaled-workspace-completion", report.scaledWorkspaceCompletionMs.p95, 500.0);
 		var memoryGrowth:Float = report.memoryGrowthBytes;
@@ -275,18 +283,12 @@ class LanguageServiceBenchmarkMain {
 	static function runPragticalProjectScenario():ProjectSample {
 		var service = new LanguageService(),
 			fixtureRoot = "tests/fixtures/pragtical/",
-			paths = [
-				"pragtical/api/Plugin.hx",
-				"pragtical/api/Document.hx",
-				"pragtical/api/Editor.hx",
-				"pragtical/plugins/PluginState.hx",
-				"pragtical/plugins/SearchPlugin.hx",
-				"pragtical/app/Main.hx"
-			],
 			pluginPath = "pragtical/plugins/SearchPlugin.hx",
 			plugin = File.getContent(fixtureRoot + pluginPath);
-		for (path in paths)
-			service.update(path, File.getContent(fixtureRoot + path));
+		for (absolutePath in fixtureSourcePaths(fixtureRoot + "pragtical")) {
+			var path = absolutePath.substring(fixtureRoot.length);
+			service.update(path, File.getContent(absolutePath));
+		}
 		service.compile("pragtical.app.Main");
 		var mainPath = "pragtical/app/Main.hx",
 			mainSource = File.getContent(fixtureRoot + mainPath),
@@ -314,13 +316,41 @@ class LanguageServiceBenchmarkMain {
 		var malformedCompletionMs = (Sys.time() - started) * 1000.0;
 		if (!malformedCompletion.isIncomplete || !hasLabel(malformedCompletion.items, "cursor"))
 			throw "Pragtical fixture malformed completion lost current state members";
+		started = Sys.time();
+		service.update(pluginPath, plugin);
+		var repairedUpdateMs = (Sys.time() - started) * 1000.0;
+		service.analyze("pragtical.app.Main");
+		var repairedPosition = plugin.lastIndexOf("state.cursor") + "state.".length;
+		started = Sys.time();
+		var repairedCompletion = service.completeResult(pluginPath, repairedPosition);
+		var repairedCompletionMs = (Sys.time() - started) * 1000.0;
+		if (repairedCompletion.isIncomplete || !hasLabel(repairedCompletion.items, "cursor"))
+			throw "Pragtical fixture repair did not restore an exact completion snapshot";
 		return {
 			updateMs: updateMs,
 			completionMs: completionMs,
 			definitionMs: definitionMs,
 			malformedUpdateMs: malformedUpdateMs,
-			malformedCompletionMs: malformedCompletionMs
+			malformedCompletionMs: malformedCompletionMs,
+			repairedUpdateMs: repairedUpdateMs,
+			repairedCompletionMs: repairedCompletionMs
 		};
+	}
+
+	static function fixtureSourcePaths(root:String):Array<String> {
+		var result:Array<String> = [], pending = [root];
+		while (pending.length > 0) {
+			var directory = pending.pop();
+			for (entry in FileSystem.readDirectory(directory)) {
+				var path = directory + "/" + entry;
+				if (FileSystem.isDirectory(path))
+					pending.push(path);
+				else if (StringTools.endsWith(entry, ".hx"))
+					result.push(path);
+			}
+		}
+		result.sort(Reflect.compare);
+		return result;
 	}
 
 	static function runScaledWorkspaceScenario(moduleCount:Int):ScaledSample {
