@@ -158,7 +158,10 @@ class ModuleState {
 		result.lastGood = lastGood;
 		result.parseVersion = parseVersion;
 		result.typeVersion = typeVersion;
-		result.tokens = tokens;
+		// Candidate analysis may replace or otherwise mutate its working token
+		// container. Keep the source snapshot detached even though the published
+		// token objects themselves are source-span values.
+		result.tokens = tokens.copy();
 		result.ast = ast;
 		result.semanticModel = semanticModel;
 		result.previousEditorSemanticModel = previousEditorSemanticModel;
@@ -184,11 +187,11 @@ class ModuleState {
 		result.irSourceRevisions = copyMap(irSourceRevisions);
 		result.irVersions = copyMap(irVersions);
 		result.dirty = dirty;
-		result.canonicalFunctions = canonicalFunctions;
+		result.canonicalFunctions = canonicalFunctions.copy();
 		result.canonicalRevision = canonicalRevision;
 		result.canonicalEntry = canonicalEntry;
 		result.canonicalAliasKey = canonicalAliasKey;
-		result.canonicalCalls = canonicalCalls;
+		result.canonicalCalls = copyCallMap(canonicalCalls);
 		return result;
 	}
 
@@ -227,6 +230,13 @@ class ModuleState {
 		var result:Map<String, Array<SemanticDependency>> = [];
 		for (name => dependencies in source)
 			result.set(name, dependencies.copy());
+		return result;
+	}
+
+	static function copyCallMap(source:Map<String, Array<String>>):Map<String, Array<String>> {
+		var result:Map<String, Array<String>> = [];
+		for (name => callees in source)
+			result.set(name, callees.copy());
 		return result;
 	}
 }

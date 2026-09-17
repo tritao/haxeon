@@ -4,6 +4,7 @@ import compiler.Source.SourceFile;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.semantic.SemanticModel;
 import compiler.modules.AnalysisSnapshot;
+import compiler.modules.ModuleState;
 
 class SemanticModelMain {
 	static function main():Void {
@@ -43,6 +44,20 @@ class SemanticModelMain {
 		makeLocations.pop();
 		expect(model.index.locations(make.id).length == locationCount,
 			"semantic index query locations must be detached from published state");
+		var sourceState = new ModuleState("Types", source);
+		sourceState.tokens = tokens;
+		sourceState.canonicalFunctions = program.functions.copy();
+		sourceState.canonicalCalls.set("make", ["Counter.new"]);
+		var candidateState = sourceState.copy();
+		candidateState.tokens.pop();
+		candidateState.canonicalFunctions.pop();
+		candidateState.canonicalCalls.get("make").push("Counter.open");
+		expect(sourceState.tokens.length == tokens.length,
+			"transactional module copies must detach token containers");
+		expect(sourceState.canonicalFunctions.length == program.functions.length,
+			"transactional module copies must detach canonical function containers");
+		expect(sourceState.canonicalCalls.get("make").length == 1,
+			"transactional module copies must detach canonical call containers");
 		var mutationRejected = false;
 		try {
 			model.indexTypeReferences(function(_name) return null);
