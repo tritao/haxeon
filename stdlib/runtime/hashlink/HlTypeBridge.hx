@@ -148,14 +148,6 @@ class HlTypeBridge {
 	/** Write the four-field retirement snapshot of an external runtime wrapper. */
 	public static function native_runtime_module_retirement_status(module:hl.Abstract<"realtime_module">, out:hl.Bytes):Void {}
 
-	/** Retry native runtime-module retirements that were deferred by borrowers. */
-	public static function native_runtime_retry_failed_retirements():Int
-		return 0;
-
-	/** Count native runtime-module retirements that remain deferred. */
-	public static function native_runtime_failed_retirement_count():Int
-		return 0;
-
 	/** Apply one HLP transaction to an externally loaded runtime wrapper. */
 	public static function native_runtime_module_patch(module:hl.Abstract<"realtime_module">, bytes:haxe.io.Bytes, length:Int):Int
 		return -1;

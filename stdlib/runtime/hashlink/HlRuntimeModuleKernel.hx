@@ -29,8 +29,6 @@ interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 	function dispose(module:HlRuntimeModuleHandle):Int;
 	function setPatchFailureStage(module:HlRuntimeModuleHandle, stage:Int):Void;
 	function unload(module:HlRuntimeModuleHandle):Bool;
-	function retryFailedRetirements():Int;
-	function failedRetirementCount():Int;
 }
 
 /** Current HashLink implementation of the narrow runtime-module kernel. */
@@ -92,11 +90,5 @@ class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 
 	public inline function unload(module:HlRuntimeModuleHandle):Bool
 		return HlTypeBridge.native_runtime_module_unload(module);
-
-	public inline function retryFailedRetirements():Int
-		return HlTypeBridge.native_runtime_retry_failed_retirements();
-
-	public inline function failedRetirementCount():Int
-		return HlTypeBridge.native_runtime_failed_retirement_count();
 
 }
