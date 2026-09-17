@@ -255,6 +255,12 @@ serialized policy transitions and lease lifetime; native metadata records still 
 implicit managed references. A raw `currentPublication()` view is only a
 point-in-time snapshot; consumers that retain native pointers use
 `currentLease()`.
+`Gc.stats()` exposes a coherent Haxe-owned `GcStats` snapshot with exact
+`Int64` counters for total allocation, allocation count, reserved heap bytes,
+major collection count, and accumulated mark time. The snapshot is an ordinary
+GC-managed opaque value, so callers do not need to retain or interpret native
+collector memory; the native boundary only captures the collector counters and
+serves immutable field reads.
 
 ## Deliberate exclusions
 

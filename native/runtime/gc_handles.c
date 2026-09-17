@@ -204,3 +204,48 @@ void haxeon_gc_handle_detach_owner( void *owner ) {
 HL_PRIM void HL_NAME(native_gc_major)() {
 	hl_gc_major();
 }
+
+typedef struct haxeon_gc_stats {
+	int64_t total_allocated;
+	int64_t allocation_count;
+	int64_t heap_bytes;
+	int64_t collection_count;
+	int64_t mark_micros;
+} haxeon_gc_stats;
+
+static haxeon_gc_stats *haxeon_gc_stats_require( haxeon_gc_stats *stats ) {
+	if( stats == NULL ) hl_error("GC statistics snapshot is null");
+	return stats;
+}
+
+HL_PRIM haxeon_gc_stats *HL_NAME(native_gc_stats_snapshot)() {
+	haxeon_gc_stats *stats = (haxeon_gc_stats *)hl_gc_alloc_raw(sizeof(haxeon_gc_stats));
+	unsigned long long total_allocated, allocation_count, heap_bytes, collection_count, mark_micros;
+	hl_gc_profile_stats(&total_allocated,&allocation_count,&heap_bytes,&collection_count,&mark_micros);
+	stats->total_allocated = (int64_t)total_allocated;
+	stats->allocation_count = (int64_t)allocation_count;
+	stats->heap_bytes = (int64_t)heap_bytes;
+	stats->collection_count = (int64_t)collection_count;
+	stats->mark_micros = (int64_t)mark_micros;
+	return stats;
+}
+
+HL_PRIM int64_t HL_NAME(native_gc_stats_total_allocated)( haxeon_gc_stats *stats ) {
+	return haxeon_gc_stats_require(stats)->total_allocated;
+}
+
+HL_PRIM int64_t HL_NAME(native_gc_stats_allocation_count)( haxeon_gc_stats *stats ) {
+	return haxeon_gc_stats_require(stats)->allocation_count;
+}
+
+HL_PRIM int64_t HL_NAME(native_gc_stats_heap_bytes)( haxeon_gc_stats *stats ) {
+	return haxeon_gc_stats_require(stats)->heap_bytes;
+}
+
+HL_PRIM int64_t HL_NAME(native_gc_stats_collection_count)( haxeon_gc_stats *stats ) {
+	return haxeon_gc_stats_require(stats)->collection_count;
+}
+
+HL_PRIM int64_t HL_NAME(native_gc_stats_mark_micros)( haxeon_gc_stats *stats ) {
+	return haxeon_gc_stats_require(stats)->mark_micros;
+}

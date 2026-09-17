@@ -173,6 +173,7 @@ hashlink-atomic	42
 hashlink-atomic-i64	42
 hashlink-atomic-pointer	42
 hashlink-gc-handles	42
+hashlink-gc-stats	42
 hashlink-weak-handles	42
 hashlink-synchronization	42
 hashlink-native-containers	42
