@@ -21,15 +21,23 @@ Each profile records edit and completion percentiles plus:
 - recovered snapshots rebuilt;
 - process-memory growth for the endurance workload.
 
-The generated topology is selected with `--scale-topology=fanout|chain|diamond`.
-By default the budgeted runner executes the generated size matrix `8,64`; select
-a larger matrix with `--scale-sizes=8,64,256`. The older
-`--scale-modules=64` option remains as a compatibility shortcut for one size.
-Use `--endurance-modules` to choose which matrix size receives the long-lived
-edit loop. The generic benchmark has no consumer-specific paths or report
-fields. A real consumer such as Pragtical belongs in an optional integration
-workload and can reuse these scenario and probe conventions without changing
-the core report.
+Each generated profile also contains an `editMatrix` with independent
+body-only, public-signature, field-type, import, base-class, interface,
+add-declaration, remove-declaration, malformed-intermediate, and repair edits.
+Every edit records update/follow-up latency and work-scope metrics, and the
+runner asserts the expected invalidation set for the generated topology.
+
+By default the budgeted runner executes the generated size matrix `8,64` across
+fan-out, chain, and diamond topologies. Select one topology with the compatible
+`--scale-topology=fanout|chain|diamond` option, or provide a comma-separated
+sweep with `--scale-topologies=fanout,chain,diamond`. Select a larger size
+matrix with `--scale-sizes=8,64,256`; the older `--scale-modules=64` option
+remains as a compatibility shortcut for one size. Use `--endurance-modules`
+and `--endurance-topology` to choose the workload receiving the long-lived edit
+loop. The generic benchmark has no consumer-specific paths or report fields. A
+real consumer such as Pragtical belongs in an optional integration workload and
+can reuse these scenario and probe conventions without changing the core
+report.
 
 Generated scenarios assert the invalidation closure as well as recording its
 size: body-only edits must invalidate only the entry module, while a Type0
@@ -47,7 +55,8 @@ To include the 256-module scale probe with a shorter endurance pass:
 
 ```sh
 LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/editor-benchmark.hl \
-  --scale-sizes=8,64,256 --endurance-modules=64
+  --scale-sizes=8,64,256 --scale-topologies=fanout,chain,diamond \
+  --endurance-modules=64 --endurance-topology=diamond
 ```
 
 The 256-module fan-out currently exceeds the 500 ms generated-workspace

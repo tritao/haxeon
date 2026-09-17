@@ -51,6 +51,34 @@ private typedef GeneratedSample = {
 	final modulesAnalyzed:Int;
 	final retypedFunctions:Int;
 	final recoveredSnapshots:Int;
+	final editMatrix:Array<GeneratedEditMeasurement>;
+}
+
+private typedef GeneratedEditMeasurement = {
+	final kind:String;
+	final updateMs:Float;
+	final followupMs:Float;
+	final modulesInvalidated:Int;
+	final modulesAnalyzed:Int;
+	final retypedFunctions:Int;
+	final recoveredSnapshots:Int;
+}
+
+private typedef GeneratedEditInput = {
+	final path:String;
+	final source:String;
+	final expectedInvalidated:Array<String>;
+}
+
+private enum GeneratedEditKind {
+	BodyOnly;
+	PublicSignature;
+	FieldType;
+	ImportChange;
+	BaseClassChange;
+	InterfaceChange;
+	AddDeclaration;
+	RemoveDeclaration;
 }
 
 private typedef GeneratedScenarioSpec = {
@@ -84,15 +112,19 @@ class LanguageServiceBenchmarkMain {
 			scaleSizes = scaleModulesOverride == null
 				? intListArg(args, "--scale-sizes", [8, 64])
 				: [parsePositiveInt(scaleModulesOverride, "--scale-modules")],
-			scaleTopology = stringArg(args, "--scale-topology", "fanout"),
+			scaleTopologyOverride = stringArg(args, "--scale-topology", null),
+			scaleTopologies = stringListArg(args, "--scale-topologies",
+				scaleTopologyOverride == null ? ["fanout", "chain", "diamond"] : [scaleTopologyOverride]),
+			enduranceTopology = stringArg(args, "--endurance-topology", scaleTopologies[0]),
 			enduranceModules = intArg(args, "--endurance-modules", scaleSizes[scaleSizes.length - 1]),
 			enduranceEdits = intArg(args, "--endurance-edits", 250),
 			output = stringArg(args, "--json", "out/editor-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
 		if (iterations < 1 || warmup < 0 || scenarioIterations < 1 || scaleIterations < 1 || scaleSizes.length == 0 || enduranceModules < 1 || enduranceEdits < 1)
 			throw "iterations and scale parameters must be positive; warmup cannot be negative";
-		if (scaleTopology != "fanout" && scaleTopology != "chain" && scaleTopology != "diamond")
-			throw 'unsupported generated workspace topology "$scaleTopology"';
+		for (topology in scaleTopologies)
+			validateTopology(topology);
+		validateTopology(enduranceTopology);
 
 		for (_ in 0...warmup)
 			runIteration();
@@ -106,19 +138,19 @@ class LanguageServiceBenchmarkMain {
 			scenarioSamples = [for (_ in 0...scenarioIterations) runSmallProjectScenario()];
 		collectGarbage();
 		var after = processMemory(),
-			generatedScenarios = generatedScenarioSpecs(scaleSizes, scaleTopology),
+			generatedScenarios = generatedScenarioSpecs(scaleSizes, scaleTopologies),
 			generatedReports:Dynamic = {};
 		for (scenario in generatedScenarios) {
 			var generatedSamples = [for (_ in 0...scaleIterations) runGeneratedWorkspaceScenario(scenario)];
 			Reflect.setField(generatedReports, scenario.name, summarizeGenerated(generatedSamples));
 		}
-		var longLivedMemoryGrowth = runLongLivedScenario(enduranceModules, enduranceEdits, scaleTopology),
+		var longLivedMemoryGrowth = runLongLivedScenario(enduranceModules, enduranceEdits, enduranceTopology),
 			scenarios:Dynamic = {};
 		Reflect.setField(scenarios, "small-project", summarizeScenario(scenarioSamples));
 		for (scenario in generatedScenarios)
 			Reflect.setField(scenarios, scenario.name, Reflect.field(generatedReports, scenario.name));
 		var report = {
-			version: 6,
+			version: 7,
 			iterations: iterations,
 			warmup: warmup,
 			scenarioIterations: scenarioIterations,
@@ -140,7 +172,8 @@ class LanguageServiceBenchmarkMain {
 			// scale, while scaleSizes is the authoritative matrix configuration.
 			scaleModules: scaleSizes[scaleSizes.length - 1],
 			scaleSizes: scaleSizes,
-			scaleTopology: scaleTopology,
+			scaleTopology: scaleTopologies.length == 1 ? scaleTopologies[0] : "matrix",
+			scaleTopologies: scaleTopologies,
 			scaleIterations: scaleIterations,
 			scenarios: scenarios,
 			enduranceEdits: enduranceEdits,
@@ -208,6 +241,12 @@ class LanguageServiceBenchmarkMain {
 				checkBudget('$name repaired-edit-to-recovery', scenario.repairedUpdateMs.p95, limit);
 				checkBudget('$name repaired-completion', scenario.repairedCompletionMs.p95, limit);
 			}
+			if (Reflect.hasField(scenario, "editMatrix"))
+				for (editName in Reflect.fields(scenario.editMatrix)) {
+					var edit:Dynamic = Reflect.field(scenario.editMatrix, editName);
+					checkBudget('$name $editName edit', edit.updateMs.p95, limit);
+					checkBudget('$name $editName follow-up', edit.followupMs.p95, limit);
+				}
 		}
 		var memoryGrowth:Float = report.memoryGrowthBytes;
 		if (memoryGrowth >= 0 && memoryGrowth > 32.0 * 1024.0 * 1024.0)
@@ -419,11 +458,35 @@ class LanguageServiceBenchmarkMain {
 			signatureModulesInvalidated: percentiles([for (sample in samples) sample.signatureModulesInvalidated]),
 			modulesAnalyzed: percentiles([for (sample in samples) sample.modulesAnalyzed]),
 			retypedFunctions: percentiles([for (sample in samples) sample.retypedFunctions]),
+			editMatrix: summarizeGeneratedEdits(samples),
 			recoveredSnapshots: {
 				total: sumGeneratedSnapshots(samples),
 				average: sumGeneratedSnapshots(samples) / samples.length
 			}
 		};
+	}
+
+	static function summarizeGeneratedEdits(samples:Array<GeneratedSample>):Dynamic {
+		var result:Dynamic = {};
+		for (measurement in samples[0].editMatrix) {
+			var selected:Array<GeneratedEditMeasurement> = [];
+			for (sample in samples)
+				for (candidate in sample.editMatrix)
+					if (candidate.kind == measurement.kind)
+						selected.push(candidate);
+			Reflect.setField(result, measurement.kind, {
+				updateMs: percentiles([for (sample in selected) sample.updateMs]),
+				followupMs: percentiles([for (sample in selected) sample.followupMs]),
+				modulesInvalidated: percentiles([for (sample in selected) sample.modulesInvalidated]),
+				modulesAnalyzed: percentiles([for (sample in selected) sample.modulesAnalyzed]),
+				retypedFunctions: percentiles([for (sample in selected) sample.retypedFunctions]),
+				recoveredSnapshots: {
+					total: sumEditSnapshots(selected),
+					average: sumEditSnapshots(selected) / selected.length
+				}
+			});
+		}
+		return result;
 	}
 
 	static function printScenarioSummary(name:String, scenario:Dynamic):Void {
@@ -433,14 +496,23 @@ class LanguageServiceBenchmarkMain {
 		if (Reflect.hasField(scenario, "signatureModulesInvalidated"))
 			Sys.println('$name signature modules invalidated p95: ${format(scenario.signatureModulesInvalidated.p95)}');
 		Sys.println('$name retyped functions p95: ${format(scenario.retypedFunctions.p95)}');
+		if (Reflect.hasField(scenario, "editMatrix"))
+			for (editName in Reflect.fields(scenario.editMatrix)) {
+				var edit:Dynamic = Reflect.field(scenario.editMatrix, editName);
+				Sys.println('$name $editName invalidated/analyzed p95: ${format(edit.modulesInvalidated.p95)}/${format(edit.modulesAnalyzed.p95)}');
+			}
 	}
 
-	static function generatedScenarioSpecs(scaleSizes:Array<Int>, topology:String):Array<GeneratedScenarioSpec> {
-		return [for (moduleCount in scaleSizes) {
-			name: 'generated-$moduleCount-$topology',
-			topology: topology,
-			moduleCount: moduleCount
-		}];
+	static function generatedScenarioSpecs(scaleSizes:Array<Int>, topologies:Array<String>):Array<GeneratedScenarioSpec> {
+		var result:Array<GeneratedScenarioSpec> = [];
+		for (topology in topologies)
+			for (moduleCount in scaleSizes)
+				result.push({
+					name: 'generated-$moduleCount-$topology',
+					topology: topology,
+					moduleCount: moduleCount
+				});
+		return result;
 	}
 
 	static function runGeneratedWorkspaceScenario(scenario:GeneratedScenarioSpec):GeneratedSample {
@@ -462,7 +534,7 @@ class LanguageServiceBenchmarkMain {
 		assertInvalidatedModules(analysis.invalidatedModules, ["generated.Main"], '${scenario.name} body edit');
 		var signaturePath = "generated/Type0.hx",
 			signatureStarted = Sys.time();
-		service.update(signaturePath, generatedTypeSource(0, topology, true));
+		service.update(signaturePath, generatedTypeSource(0, topology, PublicSignature));
 		updateMs += (Sys.time() - signatureStarted) * 1000.0;
 		var signatureAnalysis = service.analyze("generated.Main");
 		assertInvalidatedModules(signatureAnalysis.invalidatedModules, expectedSignatureInvalidations(moduleCount, topology), '${scenario.name} signature edit');
@@ -476,6 +548,7 @@ class LanguageServiceBenchmarkMain {
 			completionMs = (Sys.time() - queryStarted) * 1000.0;
 		if (!completion.isIncomplete || !hasLabel(completion.items, 'known${generatedTarget(moduleCount, topology)}'))
 			throw 'generated $topology workspace lost member completion across $moduleCount modules';
+		var editMatrix = runGeneratedEditMatrix(moduleCount, topology);
 		return {
 			topology: topology,
 			moduleCount: moduleCount,
@@ -485,7 +558,128 @@ class LanguageServiceBenchmarkMain {
 			signatureModulesInvalidated: signatureAnalysis.invalidatedModules.length,
 			modulesAnalyzed: analysis.moduleNames.length,
 			retypedFunctions: analysis.retyped.length,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore,
+			editMatrix: editMatrix
+		};
+	}
+
+	static function runGeneratedEditMatrix(moduleCount:Int, topology:String):Array<GeneratedEditMeasurement> {
+		var service = prepareGeneratedWorkspace(moduleCount, topology),
+			validSource = generatedSource(moduleCount, topology, 0, false),
+			mainPath = "generated/Main.hx";
+		service.update(mainPath, validSource);
+		service.compile("generated.Main");
+		var measurements:Array<GeneratedEditMeasurement> = [];
+		for (kind in generatedEditKinds()) {
+			resetGeneratedEditorState(service, moduleCount, topology, validSource);
+			measurements.push(measureGeneratedEdit(service, moduleCount, topology, kind, validSource));
+		}
+
+		resetGeneratedEditorState(service, moduleCount, topology, validSource);
+		var recoveredBefore = service.recoveredSnapshotBuilds,
+			malformed = generatedSource(moduleCount, topology, 2, true),
+			started = Sys.time();
+		service.update(mainPath, malformed);
+		var updateMs = (Sys.time() - started) * 1000.0,
+			position = malformed.length,
+			queryStarted = Sys.time(),
+			completion = service.completeResult(mainPath, position),
+			analysisMs = (Sys.time() - queryStarted) * 1000.0;
+		if (!completion.isIncomplete || !hasLabel(completion.items, 'known${generatedTarget(moduleCount, topology)}'))
+			throw 'generated $topology malformed edit lost member completion across $moduleCount modules';
+		measurements.push({
+			kind: "malformed-intermediate",
+			updateMs: updateMs,
+			followupMs: analysisMs,
+			modulesInvalidated: 0,
+			modulesAnalyzed: 0,
+			retypedFunctions: 0,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
+		});
+
+		started = Sys.time();
+		service.update(mainPath, validSource);
+		updateMs = (Sys.time() - started) * 1000.0;
+		queryStarted = Sys.time();
+		var repaired = service.analyze("generated.Main");
+		analysisMs = (Sys.time() - queryStarted) * 1000.0;
+		assertInvalidatedModules(repaired.invalidatedModules, ["generated.Main"], 'generated-$moduleCount-$topology repair');
+		measurements.push({
+			kind: "repair",
+			updateMs: updateMs,
+			followupMs: analysisMs,
+			modulesInvalidated: repaired.invalidatedModules.length,
+			modulesAnalyzed: repaired.moduleNames.length,
+			retypedFunctions: repaired.retyped.length,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
+		});
+		return measurements;
+	}
+
+	static function generatedEditKinds():Array<GeneratedEditKind> {
+		return [BodyOnly, PublicSignature, FieldType, ImportChange, BaseClassChange, InterfaceChange, AddDeclaration, RemoveDeclaration];
+	}
+
+	static function resetGeneratedEditorState(service:LanguageService, moduleCount:Int, topology:String, validSource:String):Void {
+		service.update("generated/Type0.hx", generatedTypeSource(0, topology));
+		if (moduleCount > 1)
+			service.update("generated/Type1.hx", generatedTypeSource(1, topology));
+		service.update("generated/Main.hx", validSource);
+		service.analyze("generated.Main");
+	}
+
+	static function measureGeneratedEdit(service:LanguageService, moduleCount:Int, topology:String, kind:GeneratedEditKind,
+		validSource:String):GeneratedEditMeasurement {
+		var input = generatedEditInput(moduleCount, topology, kind, validSource),
+			recoveredBefore = service.recoveredSnapshotBuilds,
+			started = Sys.time();
+		service.update(input.path, input.source);
+		var updateMs = (Sys.time() - started) * 1000.0,
+			analysisStarted = Sys.time(),
+			analysis = service.analyze("generated.Main"),
+			analysisMs = (Sys.time() - analysisStarted) * 1000.0;
+		assertInvalidatedModules(analysis.invalidatedModules, input.expectedInvalidated, 'generated-$moduleCount-$topology ${generatedEditName(kind)}');
+		return {
+			kind: generatedEditName(kind),
+			updateMs: updateMs,
+			followupMs: analysisMs,
+			modulesInvalidated: analysis.invalidatedModules.length,
+			modulesAnalyzed: analysis.moduleNames.length,
+			retypedFunctions: analysis.retyped.length,
+			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
+		};
+	}
+
+	static function generatedEditInput(moduleCount:Int, topology:String, kind:GeneratedEditKind, validSource:String):GeneratedEditInput {
+		var typeIndex = kind == FieldType && moduleCount > 1 ? 1 : 0,
+			path = kind == BodyOnly ? "generated/Main.hx" : 'generated/Type$typeIndex.hx',
+			source = kind == BodyOnly ? StringTools.replace(validSource, 'return value.known${generatedTarget(moduleCount, topology)};', 'return value.known${generatedTarget(moduleCount, topology)} + 0;') : generatedTypeSource(typeIndex, topology, kind);
+		return {
+			path: path,
+			source: source,
+			expectedInvalidated: expectedEditInvalidations(kind, typeIndex, moduleCount, topology)
+		};
+	}
+
+	static function expectedEditInvalidations(kind:GeneratedEditKind, typeIndex:Int, moduleCount:Int, topology:String):Array<String> {
+		return switch (kind) {
+			case BodyOnly: ["generated.Main"];
+			case ImportChange: ["generated.Base", 'generated.Type$typeIndex'];
+			case InterfaceChange: ["generated.Contract", 'generated.Type$typeIndex'];
+			default: expectedTypeInvalidations(typeIndex, moduleCount, topology);
+		};
+	}
+
+	static function generatedEditName(kind:GeneratedEditKind):String {
+		return switch (kind) {
+			case BodyOnly: "body-only";
+			case PublicSignature: "public-signature";
+			case FieldType: "field-type";
+			case ImportChange: "import-change";
+			case BaseClassChange: "base-class-change";
+			case InterfaceChange: "interface-change";
+			case AddDeclaration: "add-declaration";
+			case RemoveDeclaration: "remove-declaration";
 		};
 	}
 
@@ -505,18 +699,41 @@ class LanguageServiceBenchmarkMain {
 
 	static function prepareGeneratedWorkspace(moduleCount:Int, topology:String):LanguageService {
 		var service = new LanguageService();
+		service.update("generated/Base.hx", "package generated; class Base {} ");
+		service.update("generated/Contract.hx", "package generated; interface Contract {} ");
 		for (index in 0...moduleCount)
 			service.update('generated/Type$index.hx', generatedTypeSource(index, topology));
 		return service;
 	}
 
-	static function generatedTypeSource(index:Int, topology:String, ?signatureChanged:Bool = false):String {
+	static function generatedTypeSource(index:Int, topology:String, ?edit:GeneratedEditKind):String {
 		var dependencies = generatedDependencies(index, topology),
-			importText = [for (dependency in dependencies) 'import generated.Type$dependency;'].join(" "),
+			imports = [for (dependency in dependencies) 'import generated.Type$dependency;'],
 			fields = [for (dependency in dependencies) ' public var previous$dependency:Type$dependency;'].join(""),
-			methodReturn = signatureChanged ? "String" : "Int",
-			methodBody = signatureChanged ? '"changed"' : "value";
-		return 'package generated; $importText class Type$index {$fields public var known$index:Int; public function method$index(value:Int):$methodReturn return $methodBody; }';
+			methodReturn = edit == PublicSignature ? "String" : "Int",
+			methodBody = edit == PublicSignature ? '"changed"' : "value",
+			knownType = "Int",
+			typedType = edit == FieldType ? "String" : "Int",
+			inheritance = "",
+			declarations = ' public var known$index:$knownType; public var typed$index:$typedType;',
+			method = ' public function method$index(value:Int):$methodReturn return $methodBody;';
+		switch (edit) {
+			case ImportChange:
+				imports.push("import generated.Base;");
+			case BaseClassChange:
+				imports.push("import generated.Base;");
+				inheritance = " extends Base";
+			case InterfaceChange:
+				imports.push("import generated.Contract;");
+				inheritance = " implements Contract";
+			case AddDeclaration:
+				declarations += ' public var added$index:Int;';
+			case RemoveDeclaration:
+				method = "";
+			default:
+		}
+		var importText = imports.join(" ");
+		return 'package generated; $importText class Type$index$inheritance {$fields$declarations$method }';
 	}
 
 	static function generatedSource(moduleCount:Int, topology:String, edit:Int, malformed:Bool):String {
@@ -557,19 +774,16 @@ class LanguageServiceBenchmarkMain {
 	}
 
 	static function expectedSignatureInvalidations(moduleCount:Int, topology:String):Array<String> {
-		var result = ["generated.Type0"];
-		switch (topology) {
-			case "fanout":
-				result.push("generated.Main");
-			case "chain":
-				if (moduleCount > 1)
-					result.push("generated.Type1");
-			case "diamond":
-				if (moduleCount > 2) {
-					result.push("generated.Type1");
-					result.push("generated.Type2");
-				}
-		}
+		return expectedTypeInvalidations(0, moduleCount, topology);
+	}
+
+	static function expectedTypeInvalidations(typeIndex:Int, moduleCount:Int, topology:String):Array<String> {
+		var result = ['generated.Type$typeIndex'];
+		for (index in 0...moduleCount)
+			if (generatedDependencies(index, topology).contains(typeIndex))
+				result.push('generated.Type$index');
+		if (topology == "fanout" && typeIndex == generatedTarget(moduleCount, topology))
+			result.push("generated.Main");
 		return result;
 	}
 
@@ -581,6 +795,13 @@ class LanguageServiceBenchmarkMain {
 	}
 
 	static function sumGeneratedSnapshots(samples:Array<GeneratedSample>):Int {
+		var result = 0;
+		for (sample in samples)
+			result += sample.recoveredSnapshots;
+		return result;
+	}
+
+	static function sumEditSnapshots(samples:Array<GeneratedEditMeasurement>):Int {
 		var result = 0;
 		for (sample in samples)
 			result += sample.recoveredSnapshots;
@@ -664,6 +885,26 @@ class LanguageServiceBenchmarkMain {
 		for (part in value.split(","))
 			result.push(parsePositiveInt(StringTools.trim(part), name));
 		return result;
+	}
+
+	static function stringListArg(args:Array<String>, name:String, fallback:Array<String>):Array<String> {
+		var value = stringArg(args, name, null);
+		if (value == null)
+			return fallback;
+
+		var result:Array<String> = [];
+		for (part in value.split(",")) {
+			var item = StringTools.trim(part);
+			if (item.length == 0)
+				throw '$name values cannot be empty';
+			result.push(item);
+		}
+		return result;
+	}
+
+	static function validateTopology(topology:String):Void {
+		if (topology != "fanout" && topology != "chain" && topology != "diamond")
+			throw 'unsupported generated workspace topology "$topology"';
 	}
 
 	static function parsePositiveInt(value:String, name:String):Int {

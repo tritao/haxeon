@@ -217,14 +217,17 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   `--check-budgets` gate defines representative budgets: 100 ms p95 for the
   small workspace and 500 ms p95 for generated workspaces, plus the existing
   memory-growth limits. The generated workload is a data-driven size matrix
-  (8 and 64 modules by default, with 256-module scale probes available) over
-  fan-out, chain, or diamond topology.
+  (8 and 64 modules by default, with 256-module scale probes available) across
+  fan-out, chain, and diamond topologies.
   Use `--scenario-iterations`, `--scale-sizes`, `--scale-modules`,
-  `--scale-topology`, `--endurance-modules`, and `--endurance-edits` to
-  reproduce or enlarge the workload. Generated scenarios assert body-edit and
-  signature-edit invalidation closures rather than reporting counts alone.
-  Real consumer fixtures remain integration inputs and do not define the
-  generic benchmark schema.
+  `--scale-topology`, `--scale-topologies`, `--endurance-modules`,
+  `--endurance-topology`, and `--endurance-edits` to reproduce or enlarge the
+  workload. Generated scenarios assert body-edit and signature-edit
+  invalidation closures rather than reporting counts alone.
+  They also exercise field, import, base-class, interface, declaration,
+  malformed, and repair edit classes with work-scope assertions. Real consumer
+  fixtures remain integration inputs and do not define the generic benchmark
+  schema.
 
 - [x] Recovery/LSP closure checkpoint (2026-09-17): the identity-family matrix,
   lifecycle and cancellation corpus, `main` reconciliation, full
