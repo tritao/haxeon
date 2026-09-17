@@ -1789,7 +1789,8 @@ class LanguageService {
 	public function documentSymbols(path:String, ?token:CancellationToken):Array<DocumentSymbol> {
 		var state = stateFor(path),
 			result:Array<DocumentSymbol> = [],
-			ast = state == null ? null : effectiveAst(state);
+			ast = state == null ? null : effectiveAst(state),
+			snapshot = state == null ? null : editorSnapshot(state);
 		if (state == null || ast == null)
 			return result;
 		for (fn in ast.functions) {
@@ -1922,9 +1923,48 @@ class LanguageService {
 				});
 			}
 		}
-		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		var syntaxTree = snapshot == null ? null : syntaxTreeForSnapshot(snapshot, token);
+		if (syntaxTree != null && syntaxTree.grammarNodes().length > 0) {
+			var structural:Array<DocumentSymbol> = [];
+			for (symbol in result) {
+				if (token != null)
+					token.check();
+				if (cstOwnsDocumentSymbol(syntaxTree, symbol.span))
+					structural.push(symbol);
+			}
+			result = structural;
+			result.sort(function(a, b) {
+				var start = Reflect.compare(a.span.start, b.span.start);
+				return start == 0 ? Reflect.compare(a.span.end, b.span.end) : start;
+			});
+		} else
+			result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		tagResults(result, state);
 		return result;
+	}
+
+	static function cstOwnsDocumentSymbol(tree:SyntaxTree, span:SourceSpan):Bool {
+		var declarationNodes = tree.grammarNodes();
+		for (node in declarationNodes) {
+			var declaration = switch node.kind {
+				case SyntaxKind.PackageDeclaration, SyntaxKind.ImportDeclaration, SyntaxKind.TypeAliasDeclaration,
+					SyntaxKind.EnumDeclaration, SyntaxKind.EnumAbstractDeclaration, SyntaxKind.AbstractDeclaration,
+					SyntaxKind.InterfaceDeclaration, SyntaxKind.ClassDeclaration, SyntaxKind.FunctionDeclaration,
+					SyntaxKind.FieldDeclaration:
+					true;
+				default: false;
+			};
+			if (!declaration)
+				continue;
+			if (node.span.start == span.start && node.span.end == span.end)
+				return true;
+			// Enum cases and enum-abstract values are payload entries on their
+			// declaration node rather than separate grammar nodes.
+			if ((node.kind == SyntaxKind.EnumDeclaration || node.kind == SyntaxKind.EnumAbstractDeclaration)
+				&& node.span.start <= span.start && node.span.end >= span.end)
+				return true;
+		}
+		return false;
 	}
 
 	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>

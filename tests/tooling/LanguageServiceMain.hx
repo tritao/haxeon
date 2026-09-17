@@ -59,6 +59,19 @@ class LanguageServiceMain {
 		}
 		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum)
 			throw "language service did not expose document symbols";
+		var countIndex = -1, kindIndex = -1, pluginIndex = -1, editorIndex = -1;
+		for (index in 0...symbols.length) {
+			if (symbols[index].name == "Count")
+				countIndex = index;
+			if (symbols[index].name == "Kind" && symbols[index].kind == "enum")
+				kindIndex = index;
+			if (symbols[index].name == "Plugin")
+				pluginIndex = index;
+			if (symbols[index].name == "Editor")
+				editorIndex = index;
+		}
+		if (!(countIndex < kindIndex && kindIndex < pluginIndex && pluginIndex < editorIndex))
+			throw "document symbols were not ordered by the current CST source structure";
 		if (symbols[0].revision != 1 || symbols[0].stale)
 			throw "language service did not tag the current semantic snapshot";
 		var source = service.compiler.modules.get("Main").source.text,
