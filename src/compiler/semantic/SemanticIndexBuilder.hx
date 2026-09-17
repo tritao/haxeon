@@ -1744,11 +1744,9 @@ class SemanticIndexBuilder {
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
 			case Variable("this", span):
-				var receiver:Null<CompilerType> = null;
-				for (candidate in functionReceivers)
-					if (span.start >= candidate.span.start && span.end <= candidate.span.end)
-						receiver = candidate.type;
+				var receiver = recoveredReceiverTypeAt(span);
 				receiver == null ? TUnknown : receiver;
+			case Variable("super", span): recoveredSuperType(span);
 			case Variable(name, span):
 				var id = bindRecoveredLocal(name, span);
 				if (id != null && declarationTypes.exists(id))
@@ -1792,6 +1790,25 @@ class SemanticIndexBuilder {
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
 			default: recoveredExpressionType(expression);
 		};
+
+	function recoveredReceiverTypeAt(span:SourceSpan):Null<CompilerType> {
+		for (candidate in functionReceivers)
+			if (span.start >= candidate.span.start && span.end <= candidate.span.end)
+				return candidate.type;
+		return null;
+	}
+
+	/** Resolve a recovered super receiver to the current class's base type. */
+	function recoveredSuperType(span:SourceSpan):CompilerType {
+		var receiver = recoveredReceiverTypeAt(span),
+			owner = receiver == null ? null : memberOwner(receiver);
+		if (receiver == null || owner == null)
+			return TUnknown;
+		var declaration = recoveredClassDeclaration(owner);
+		if (declaration == null || declaration.base == null)
+			return TUnknown;
+		return recoveredClassBase(owner, declaration, recoveredTypeSubstitutions(receiver));
+	}
 
 	function recoveredConstructionType(name:String, ?expected:CompilerType):CompilerType {
 		return switch expected {

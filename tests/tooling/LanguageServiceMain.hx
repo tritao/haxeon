@@ -273,6 +273,16 @@ class LanguageServiceMain {
 			|| recoveredSuperDefinition.span.end < recoveredSuperSource.indexOf("class Base") + "class Base".length
 			|| recoveredSuperReferences.length < 2)
 			throw 'recovered super-call navigation lost the base identity: definition=${recoveredSuperDefinition == null ? "null" : recoveredSuperDefinition.span.start + ":" + recoveredSuperDefinition.span.end}, references=${recoveredSuperReferences.length}';
+		var recoveredSuperMemberService = new LanguageService(),
+			recoveredSuperMemberSource = "class Base { public var value:Int; public function new() {} } class Child extends Base { public function read():Int { return super.value; } public function unfinished(";
+		recoveredSuperMemberService.update("RecoveredSuperMember.hx", recoveredSuperMemberSource);
+		var recoveredSuperMemberPosition = recoveredSuperMemberSource.indexOf("super.value") + "super.".length + 1,
+			recoveredSuperMemberDefinition = recoveredSuperMemberService.definition("RecoveredSuperMember.hx", recoveredSuperMemberPosition),
+			recoveredSuperMemberReferences = recoveredSuperMemberService.references("RecoveredSuperMember.hx", recoveredSuperMemberPosition);
+		if (recoveredSuperMemberDefinition == null
+			|| recoveredSuperMemberDefinition.span.start != recoveredSuperMemberSource.indexOf("var value")
+			|| recoveredSuperMemberReferences.length < 2)
+			throw 'recovered super-member navigation lost the base field identity: definition=${recoveredSuperMemberDefinition == null ? "null" : Std.string(recoveredSuperMemberDefinition.span.start)}, references=${recoveredSuperMemberReferences.length}';
 		var switchTraversalService = new LanguageService(),
 			switchTraversalSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function main():Int return 0;";
 		switchTraversalService.update("SwitchTraversal.hx", switchTraversalSource);
