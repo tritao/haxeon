@@ -38,6 +38,13 @@ enum SyntaxKind {
 	IndexExpression;
 	TypeArgumentList;
 	TypeParameterList;
+	VariableDeclaration;
+	AssignmentStatement;
+	ThrowStatement;
+	TryStatement;
+	SwitchStatement;
+	IncrementStatement;
+	ExpressionStatement;
 	ReturnStatement;
 	BreakStatement;
 	ContinueStatement;
@@ -82,26 +89,146 @@ enum SyntaxUnaryOperator {
 	Not;
 }
 
+enum SyntaxNativeLayoutQueryKind {
+	SizeOf;
+	AlignOf;
+	OffsetOf;
+}
+
+enum SyntaxTypePayload {
+	IntType;
+	BoolType;
+	FloatType;
+	StringType;
+	VoidType;
+	InferredType;
+	ErrorType;
+	NativeAbstractType(declaration:String, tag:String);
+	NamedType(name:String);
+	AppliedType(name:String, arguments:Array<SyntaxTypePayload>);
+	ArrayType(element:SyntaxTypePayload);
+	MapType(key:SyntaxTypePayload, value:SyntaxTypePayload);
+	NullableType(element:SyntaxTypePayload);
+	FunctionType(arguments:Array<SyntaxTypePayload>, result:SyntaxTypePayload);
+	AnonymousType(fields:Array<SyntaxAnonymousFieldPayload>);
+}
+
+typedef SyntaxAnonymousFieldPayload = {
+	final name:String;
+	final type:SyntaxTypePayload;
+	final optional:Bool;
+}
+
+typedef SyntaxArgumentPayload = {
+	final name:String;
+	final type:SyntaxTypePayload;
+	final optional:Bool;
+	final defaultValue:Null<SyntaxExpressionPayload>;
+}
+
+typedef SyntaxObjectFieldPayload = {
+	final name:String;
+	final value:SyntaxExpressionPayload;
+}
+
+typedef SyntaxMapEntryPayload = {
+	final key:SyntaxExpressionPayload;
+	final value:SyntaxExpressionPayload;
+}
+
+typedef SyntaxSwitchExpressionCasePayload = {
+	final value:SyntaxExpressionPayload;
+	final guard:Null<SyntaxExpressionPayload>;
+	final result:SyntaxExpressionPayload;
+}
+
+typedef SyntaxSwitchCasePayload = {
+	final value:SyntaxExpressionPayload;
+	final guard:Null<SyntaxExpressionPayload>;
+	final statements:Array<SyntaxStatementPayload>;
+}
+
+typedef SyntaxCatchPayload = {
+	final name:String;
+	final type:SyntaxTypePayload;
+	final statements:Array<SyntaxStatementPayload>;
+}
+
+typedef SyntaxEnumParameterPayload = {
+	final name:Null<String>;
+	final type:SyntaxTypePayload;
+	final optional:Bool;
+}
+
+typedef SyntaxEnumCasePayload = {
+	final name:String;
+	final parameters:Array<SyntaxEnumParameterPayload>;
+}
+
+typedef SyntaxEnumValuePayload = {
+	final name:String;
+	final value:SyntaxExpressionPayload;
+}
+
 enum SyntaxExpressionPayload {
 	Integer(value:Int);
 	Float(value:Float);
 	String(value:String);
 	Bool(value:Bool);
 	NullValue;
+	Unreachable;
+	Empty;
+	Error;
 	Variable(name:String);
+	Member(object:SyntaxExpressionPayload, name:String);
 	Binary(operation:SyntaxBinaryOperator, left:SyntaxExpressionPayload, right:SyntaxExpressionPayload);
 	Unary(operation:SyntaxUnaryOperator, value:SyntaxExpressionPayload);
+	Conditional(condition:SyntaxExpressionPayload, whenTrue:SyntaxExpressionPayload, whenFalse:SyntaxExpressionPayload);
+	Block(statements:Array<SyntaxStatementPayload>, result:SyntaxExpressionPayload);
+	Throw(value:SyntaxExpressionPayload);
+	Cast(value:SyntaxExpressionPayload, target:Null<SyntaxTypePayload>);
+	Switch(value:SyntaxExpressionPayload, cases:Array<SyntaxSwitchExpressionCasePayload>, defaultValue:Null<SyntaxExpressionPayload>);
+	Object(fields:Array<SyntaxObjectFieldPayload>);
+	Array(values:Array<SyntaxExpressionPayload>);
+	Map(entries:Array<SyntaxMapEntryPayload>);
+	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:SyntaxExpressionPayload,
+		condition:Null<SyntaxExpressionPayload>, value:SyntaxExpressionPayload);
+	MapComprehension(keyName:String, valueName:Null<String>, iterable:SyntaxExpressionPayload,
+		condition:Null<SyntaxExpressionPayload>, key:SyntaxExpressionPayload, value:SyntaxExpressionPayload);
+	Range(start:SyntaxExpressionPayload, end:SyntaxExpressionPayload);
+	Call(name:String, arguments:Array<SyntaxExpressionPayload>);
+	NativeLayoutQuery(kind:SyntaxNativeLayoutQueryKind, type:SyntaxTypePayload, field:Null<String>);
+	ClosureCall(callee:SyntaxExpressionPayload, arguments:Array<SyntaxExpressionPayload>);
+	MethodCall(object:SyntaxExpressionPayload, name:String, arguments:Array<SyntaxExpressionPayload>);
+	New(typeName:String, arguments:Array<SyntaxExpressionPayload>);
+	NewGeneric(typeName:String, typeArguments:Array<SyntaxTypePayload>, arguments:Array<SyntaxExpressionPayload>);
+	NewArray(element:SyntaxTypePayload, length:SyntaxExpressionPayload);
+	NewMap(key:SyntaxTypePayload, value:SyntaxTypePayload);
+	Index(array:SyntaxExpressionPayload, index:SyntaxExpressionPayload);
+	PostfixIncrement(target:SyntaxExpressionPayload, delta:Int);
+	Lambda(arguments:Array<SyntaxArgumentPayload>, statements:Array<SyntaxStatementPayload>);
 }
 
 enum SyntaxStatementPayload {
+	Error;
+	UninitializedDeclaration(name:String, type:SyntaxTypePayload);
+	VarDeclaration(name:String, type:Null<SyntaxTypePayload>, initializer:SyntaxExpressionPayload);
+	Assignment(name:String, expression:SyntaxExpressionPayload);
+	IndexAssignment(array:SyntaxExpressionPayload, index:SyntaxExpressionPayload, expression:SyntaxExpressionPayload);
+	FieldAssignment(object:SyntaxExpressionPayload, field:String, expression:SyntaxExpressionPayload);
 	Break;
 	Continue;
 	ReturnVoid;
 	Return(value:SyntaxExpressionPayload);
+	Throw(value:SyntaxExpressionPayload);
+	Try(tryBranch:Array<SyntaxStatementPayload>, catches:Array<SyntaxCatchPayload>);
 	IfBranch(condition:SyntaxExpressionPayload, thenBranch:Array<SyntaxStatementPayload>, elseBranch:Array<SyntaxStatementPayload>);
 	WhileLoop(condition:SyntaxExpressionPayload, body:Array<SyntaxStatementPayload>);
 	DoWhileLoop(body:Array<SyntaxStatementPayload>, condition:SyntaxExpressionPayload);
 	ForLoop(keyName:String, valueName:Null<String>, iterable:SyntaxExpressionPayload, body:Array<SyntaxStatementPayload>);
+	Switch(expression:SyntaxExpressionPayload, cases:Array<SyntaxSwitchCasePayload>, defaultBranch:Array<SyntaxStatementPayload>, hasDefault:Bool);
+	Increment(name:String, delta:Int);
+	Expression(value:SyntaxExpressionPayload);
 }
 
 /** Source-only payload attached to grammar nodes that can already lower independently. */
@@ -109,9 +236,17 @@ enum SyntaxNodePayload {
 	PackageName(value:String);
 	Import(path:String, alias:Null<String>);
 	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>);
+	ClassHeaderRich(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>);
 	FieldHeader(name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
+	FieldHeaderRich(name:String, type:Null<SyntaxTypePayload>, initializer:Null<SyntaxExpressionPayload>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
 	FunctionHeader(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxFunctionParameter>, resultTypeName:Null<String>);
+	FunctionHeaderRich(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxArgumentPayload>, resultType:SyntaxTypePayload);
 	Statement(value:SyntaxStatementPayload);
+	TypeAliasHeader(name:String, isPrivate:Bool, typeParameters:Array<String>, type:SyntaxTypePayload);
+	EnumHeader(name:String, typeParameters:Array<String>, cases:Array<SyntaxEnumCasePayload>);
+	EnumAbstractHeader(name:String, underlying:SyntaxTypePayload, fromTypes:Array<SyntaxTypePayload>, toTypes:Array<SyntaxTypePayload>, values:Array<SyntaxEnumValuePayload>);
+	AbstractHeader(name:String, isExtern:Bool, typeParameters:Array<String>, underlying:SyntaxTypePayload, fromTypes:Array<SyntaxTypePayload>, toTypes:Array<SyntaxTypePayload>);
+	InterfaceHeader(name:String, typeParameters:Array<String>, bases:Array<SyntaxTypePayload>);
 }
 
 /** Trivia categories retained by tooling mode. */

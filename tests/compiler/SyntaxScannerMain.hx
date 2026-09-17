@@ -110,30 +110,48 @@ class SyntaxScannerMain {
 			throw "CST lowerer did not preserve generic class inheritance";
 
 		var declarationSource = new SourceFile("Declarations.hx",
-			"class Holder { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
+			"typedef Alias<T> = Array<T>; enum Choice { None; Some(value:Int); } "
+			+ "enum abstract Flags(Int) from Int to Int { var Ready = 1; } "
+			+ "abstract Box(Int) { public function get():Int return 1; } "
+			+ "class Holder { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
 			+ "public function choose(flag:Bool):Int if (flag) return value + 1; else return value; "
 			+ "public function loop(flag:Bool):Void while (flag) break; "
 			+ "public function doLoop(flag:Bool):Void do { break; } while (flag); "
-			+ "public function each(values:Array<Int>):Void for (value in values) break; }\n"
+			+ "public function each(values:Int):Void for (value in values) break; "
+			+ "public function control(value:Int):Int { var local = value; local += 1; "
+			+ "try { switch (local) { case 0: return 1; default: return local; } } "
+			+ "catch (error:Error) { return 0; } } }\n"
 			+ "interface Reader { function read(value:Int):String; }\n"),
 			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
 		var declarationProgram = declarationParser.parseProgram();
 		if (declarationParser.cst == null)
 			throw "CST declaration parser did not retain a tree";
-		var hasForStatement = false;
+		if (declarationProgram.aliases.length != 1 || declarationProgram.enums.length != 1 || declarationProgram.enumAbstracts.length != 1
+			|| declarationProgram.abstracts.length != 1 || declarationProgram.aliases[0].name != "Alias"
+			|| declarationProgram.enums[0].cases.length != 2 || declarationProgram.enumAbstracts[0].values.length != 1
+			|| declarationProgram.abstracts[0].methods.length != 1)
+			throw "CST lowerer did not preserve declaration payloads";
+		var hasForStatement = false, hasVariableDeclaration = false, hasAssignment = false, hasTry = false, hasSwitch = false;
 		for (node in declarationParser.cst.grammarNodes())
-			if (node.kind == SyntaxKind.ForStatement)
-				hasForStatement = true;
-		if (!hasForStatement)
-			throw "CST parser did not retain a for statement";
+			switch node.kind {
+				case SyntaxKind.ForStatement: hasForStatement = true;
+				case SyntaxKind.VariableDeclaration: hasVariableDeclaration = true;
+				case SyntaxKind.AssignmentStatement: hasAssignment = true;
+				case SyntaxKind.TryStatement: hasTry = true;
+				case SyntaxKind.SwitchStatement: hasSwitch = true;
+				default:
+			}
+		if (!hasForStatement || !hasVariableDeclaration || !hasAssignment || !hasTry || !hasSwitch)
+			throw "CST parser did not retain all compound statements";
 		var holder = declarationProgram.classes[0], reader = declarationProgram.interfaces[0];
 		if (holder.fields.length != 1 || holder.fields[0].name != "value" || holder.fields[0].initializer != null
-			|| holder.methods.length != 6 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
+			|| holder.methods.length != 7 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
 			|| holder.methods[1].statements.length != 1
 			|| holder.methods[2].name != "choose" || holder.methods[2].statements.length != 1
 			|| holder.methods[3].name != "loop" || holder.methods[3].statements.length != 1
 			|| holder.methods[4].name != "doLoop" || holder.methods[4].statements.length != 1
 			|| holder.methods[5].name != "each" || holder.methods[5].statements.length != 1
+			|| holder.methods[6].name != "control" || holder.methods[6].statements.length != 3
 			|| reader.methods.length != 1 || reader.methods[0].arguments.length != 1 || reader.methods[0].arguments[0].name != "value")
 			throw "CST lowerer did not preserve field and function signatures";
 		switch holder.methods[1].statements[0] {
@@ -171,6 +189,18 @@ class SyntaxScannerMain {
 				if (keyName != "value" || valueName != null || iterableName != "values" || body.length != 1)
 					throw "CST lowerer changed a for-in statement";
 			default: throw "CST lowerer did not lower a for-in statement";
+		}
+		switch holder.methods[6].statements[2] {
+			case AstStatement.Try(tryBranch, catches, _):
+				if (tryBranch.length != 1 || catches.length != 1 || catches[0].name != "error" || catches[0].statements.length != 1)
+					throw "CST lowerer changed a try/catch statement";
+				switch tryBranch[0] {
+					case AstStatement.Switch(_, cases, defaultBranch, hasDefault, _):
+						if (cases.length != 1 || defaultBranch.length != 1 || !hasDefault)
+							throw "CST lowerer changed a switch statement";
+					default: throw "CST lowerer did not lower a switch statement";
+				}
+			default: throw "CST lowerer did not lower a try/catch statement";
 		}
 		switch holder.fields[0].type {
 			case IntType:

@@ -67,6 +67,12 @@ class Parser {
 			cstBuilder.node(kind, span, payload);
 	}
 
+	inline function recordStatementCst(kind:SyntaxKind, statement:AstStatement, span:SourceSpan):Void {
+		var payload = simpleStatementPayload(statement);
+		if (payload != null)
+			recordCstNode(kind, span, SyntaxNodePayload.Statement(payload));
+	}
+
 	public function parseProgram():AstProgram {
 		var packageName:Null<String> = null, imports = [], importAliases:Map<String, String> = [];
 		if (match(TokenKind.Package)) {
@@ -114,7 +120,7 @@ class Parser {
 					var alias = parseTypeAlias(visibility == null ? previous().span : visibility.span,
 						visibility != null && visibility.kind == TokenKind.Private);
 					aliases.push(alias);
-					recordCstNode(SyntaxKind.TypeAliasDeclaration, alias.span);
+					recordCstNode(SyntaxKind.TypeAliasDeclaration, alias.span, typeAliasHeader(alias));
 				}
 				else if (match(TokenKind.Enum)) {
 					var start = previous().span;
@@ -122,28 +128,22 @@ class Parser {
 						advance();
 						var enumAbstract = parseEnumAbstract(start);
 						enumAbstracts.push(enumAbstract);
-						recordCstNode(SyntaxKind.EnumAbstractDeclaration, enumAbstract.span);
+						recordCstNode(SyntaxKind.EnumAbstractDeclaration, enumAbstract.span, enumAbstractHeader(enumAbstract));
 					} else {
 						var enumeration = parseEnum(start, metadata);
 						enums.push(enumeration);
-						recordCstNode(SyntaxKind.EnumDeclaration, enumeration.span);
+						recordCstNode(SyntaxKind.EnumDeclaration, enumeration.span, enumHeader(enumeration));
 					}
 				} else if (check(TokenKind.Interface)) {
 					var interfaceDeclaration = parseInterface();
 					interfaces.push(interfaceDeclaration);
-					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span);
+					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span, interfaceHeader(interfaceDeclaration));
 					for (method in interfaceDeclaration.methods)
 						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
-					var interfaceNames:Array<Null<String>> = [];
-					for (interfaceType in classDeclaration.interfaces)
-						interfaceNames.push(simpleTypeName(interfaceType));
 					classes.push(classDeclaration);
-					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span,
-						SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
-							classDeclaration.typeParameters, simpleTypeName(classDeclaration.base),
-							interfaceNames));
+					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span, classHeader(classDeclaration));
 					for (field in classDeclaration.fields)
 						recordCstNode(SyntaxKind.FieldDeclaration, field.span, fieldHeader(field));
 					for (method in classDeclaration.methods)
@@ -155,7 +155,7 @@ class Parser {
 					var start = advance().span;
 					var abstractDeclaration = parseAbstract(start, externDeclaration, metadata);
 					abstracts.push(abstractDeclaration);
-					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span);
+					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span, abstractHeader(abstractDeclaration));
 					for (method in abstractDeclaration.methods)
 						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
 				} else {
@@ -976,17 +976,85 @@ class Parser {
 		};
 	}
 
-	static function fieldHeader(field:AstField):SyntaxNodePayload
-		return SyntaxNodePayload.FieldHeader(field.name, simpleTypeName(field.type), field.isStatic, field.isInline, field.isFinal,
+	static function classHeader(classDeclaration:AstClass):SyntaxNodePayload {
+		var baseType = classDeclaration.base == null ? null : simpleTypePayload(classDeclaration.base), interfaceTypes = [];
+		for (interfaceType in classDeclaration.interfaces) {
+			var payload = simpleTypePayload(interfaceType);
+			if (payload == null)
+				return SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
+					classDeclaration.typeParameters, simpleTypeName(classDeclaration.base), [for (type in classDeclaration.interfaces) simpleTypeName(type)]);
+			interfaceTypes.push(payload);
+		}
+		return SyntaxNodePayload.ClassHeaderRich(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
+			classDeclaration.typeParameters, baseType, interfaceTypes);
+	}
+
+	static function typeAliasHeader(alias:AstTypeAlias):Null<SyntaxNodePayload> {
+		var type = simpleTypePayload(alias.type);
+		return type == null ? null : SyntaxNodePayload.TypeAliasHeader(alias.name, alias.isPrivate, alias.typeParameters, type);
+	}
+
+	static function enumHeader(enumeration:AstEnum):Null<SyntaxNodePayload> {
+		var cases:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload> = [];
+		for (caseDeclaration in enumeration.cases) {
+			var parameters:Array<compiler.syntax.SyntaxTree.SyntaxEnumParameterPayload> = [];
+			for (parameter in caseDeclaration.params) {
+				var type = simpleTypePayload(parameter.type);
+				if (type == null)
+					return null;
+				parameters.push({name: parameter.name, type: type, optional: parameter.optional});
+			}
+			cases.push({name: caseDeclaration.name, parameters: parameters});
+		}
+		return SyntaxNodePayload.EnumHeader(enumeration.name, enumeration.typeParameters, cases);
+	}
+
+	static function enumAbstractHeader(declaration:AstEnumAbstract):Null<SyntaxNodePayload> {
+		var underlying = simpleTypePayload(declaration.underlying), fromTypes = simpleTypePayloads(declaration.fromTypes), toTypes = simpleTypePayloads(declaration.toTypes), values:Array<compiler.syntax.SyntaxTree.SyntaxEnumValuePayload> = [];
+		if (underlying == null || fromTypes == null || toTypes == null)
+			return null;
+		for (value in declaration.values) {
+			var payload = simpleExpressionPayload(value.value);
+			if (payload == null)
+				return null;
+			values.push({name: value.name, value: payload});
+		}
+		return SyntaxNodePayload.EnumAbstractHeader(declaration.name, underlying, fromTypes, toTypes, values);
+	}
+
+	static function abstractHeader(declaration:AstAbstract):Null<SyntaxNodePayload> {
+		var underlying = simpleTypePayload(declaration.underlying), fromTypes = simpleTypePayloads(declaration.fromTypes), toTypes = simpleTypePayloads(declaration.toTypes);
+		return underlying == null || fromTypes == null || toTypes == null ? null
+			: SyntaxNodePayload.AbstractHeader(declaration.name, declaration.isExtern == true, declaration.typeParameters, underlying, fromTypes, toTypes);
+	}
+
+	static function interfaceHeader(declaration:AstInterface):Null<SyntaxNodePayload> {
+		var bases = simpleTypePayloads(declaration.bases);
+		return bases == null ? null : SyntaxNodePayload.InterfaceHeader(declaration.name, declaration.typeParameters, bases);
+	}
+
+	static function fieldHeader(field:AstField):SyntaxNodePayload {
+		var type = field.type == null ? null : simpleTypePayload(field.type), initializer = field.initializer == null ? null : simpleExpressionPayload(field.initializer);
+		if (field.type != null && type == null || field.initializer != null && initializer == null)
+			return SyntaxNodePayload.FieldHeader(field.name, simpleTypeName(field.type), field.isStatic, field.isInline, field.isFinal,
+				fieldAccessName(field.readAccess), fieldAccessName(field.writeAccess));
+		return SyntaxNodePayload.FieldHeaderRich(field.name, type, initializer, field.isStatic, field.isInline, field.isFinal,
 			fieldAccessName(field.readAccess), fieldAccessName(field.writeAccess));
+	}
 
 	static function functionHeader(functionDeclaration:AstFunction):SyntaxNodePayload {
-		var parameters:Array<SyntaxFunctionParameter> = [];
-		for (argument in functionDeclaration.arguments)
-			parameters.push({name: argument.name, typeName: simpleTypeName(argument.type), optional: argument.optional == true});
-		return SyntaxNodePayload.FunctionHeader(functionDeclaration.name, functionDeclaration.isStatic,
+		var parameters = simpleArgumentPayloads(functionDeclaration.arguments), resultType = simpleTypePayload(functionDeclaration.result);
+		if (parameters == null || resultType == null) {
+			var simpleParameters:Array<SyntaxFunctionParameter> = [];
+			for (argument in functionDeclaration.arguments)
+				simpleParameters.push({name: argument.name, typeName: simpleTypeName(argument.type), optional: argument.optional == true});
+			return SyntaxNodePayload.FunctionHeader(functionDeclaration.name, functionDeclaration.isStatic,
+				functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
+				simpleParameters, simpleTypeName(functionDeclaration.result));
+		}
+		return SyntaxNodePayload.FunctionHeaderRich(functionDeclaration.name, functionDeclaration.isStatic,
 			functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
-			parameters, simpleTypeName(functionDeclaration.result));
+			parameters, resultType);
 	}
 
 	static function fieldAccessName(access:Null<AstFieldAccess>):Null<String>
@@ -999,6 +1067,55 @@ class Parser {
 			case DynamicAccess: "dynamic";
 		};
 
+	static function simpleTypePayload(type:AstType):Null<compiler.syntax.SyntaxTree.SyntaxTypePayload>
+		return switch type {
+			case IntType: compiler.syntax.SyntaxTree.SyntaxTypePayload.IntType;
+			case BoolType: compiler.syntax.SyntaxTree.SyntaxTypePayload.BoolType;
+			case FloatType: compiler.syntax.SyntaxTree.SyntaxTypePayload.FloatType;
+			case StringType: compiler.syntax.SyntaxTree.SyntaxTypePayload.StringType;
+			case VoidType: compiler.syntax.SyntaxTree.SyntaxTypePayload.VoidType;
+			case InferredType: compiler.syntax.SyntaxTree.SyntaxTypePayload.InferredType;
+			case ErrorType(_): compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType;
+			case NativeAbstractType(declaration, tag): compiler.syntax.SyntaxTree.SyntaxTypePayload.NativeAbstractType(declaration, tag);
+			case NamedType(name): compiler.syntax.SyntaxTree.SyntaxTypePayload.NamedType(name);
+			case AppliedType(name, arguments):
+				var lowered = simpleTypePayloads(arguments);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxTypePayload.AppliedType(name, lowered);
+			case ArrayType(element):
+				var lowered = simpleTypePayload(element);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxTypePayload.ArrayType(lowered);
+			case MapType(key, value):
+				var loweredKey = simpleTypePayload(key), loweredValue = simpleTypePayload(value);
+				loweredKey == null || loweredValue == null ? null : compiler.syntax.SyntaxTree.SyntaxTypePayload.MapType(loweredKey, loweredValue);
+			case NullableType(element):
+				var lowered = simpleTypePayload(element);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxTypePayload.NullableType(lowered);
+			case FunctionType(arguments, result):
+				var loweredArguments = simpleTypePayloads(arguments), loweredResult = simpleTypePayload(result);
+				loweredArguments == null || loweredResult == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxTypePayload.FunctionType(loweredArguments, loweredResult);
+			case AnonymousType(fields):
+				var loweredFields:Array<compiler.syntax.SyntaxTree.SyntaxAnonymousFieldPayload> = [];
+				for (field in fields) {
+					var lowered = simpleTypePayload(field.type);
+					if (lowered == null)
+						return null;
+					loweredFields.push({name: field.name, type: lowered, optional: field.optional});
+				}
+				compiler.syntax.SyntaxTree.SyntaxTypePayload.AnonymousType(loweredFields);
+		};
+
+	static function simpleTypePayloads(types:Array<AstType>):Null<Array<compiler.syntax.SyntaxTree.SyntaxTypePayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
+		for (type in types) {
+			var payload = simpleTypePayload(type);
+			if (payload == null)
+				return null;
+			result.push(payload);
+		}
+		return result;
+	}
+
 	static function simpleExpressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>
 		return switch expression {
 			case IntegerLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(value);
@@ -1006,7 +1123,13 @@ class Parser {
 			case StringLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.String(value);
 			case BoolLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Bool(value);
 			case NullLiteral(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue;
+			case Unreachable(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Unreachable;
+			case EmptyExpression(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Empty;
+			case ErrorExpression(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Error;
 			case Variable(name, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(name);
+			case Member(object, name, _):
+				var lowered = simpleExpressionPayload(object);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Member(lowered, name);
 			case Add(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add, left, right);
 			case Sub(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub, left, right);
 			case Mul(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul, left, right);
@@ -1028,7 +1151,130 @@ class Parser {
 			case Or(left, right, _): binaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Or, left, right);
 			case Negate(value, _): unaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Negate, value);
 			case Not(value, _): unaryExpressionPayload(compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Not, value);
-			default: null;
+			case Conditional(condition, whenTrue, whenFalse, _):
+				var loweredCondition = simpleExpressionPayload(condition), loweredTrue = simpleExpressionPayload(whenTrue), loweredFalse = simpleExpressionPayload(whenFalse);
+				loweredCondition == null || loweredTrue == null || loweredFalse == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Conditional(loweredCondition, loweredTrue, loweredFalse);
+			case BlockExpression(statements, result, _):
+				var loweredStatements = simpleStatementPayloads(statements), loweredResult = simpleExpressionPayload(result);
+				loweredStatements == null || loweredResult == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Block(loweredStatements, loweredResult);
+			case ThrowExpression(value, _):
+				var lowered = simpleExpressionPayload(value);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Throw(lowered);
+			case Cast(value, target, _):
+				var loweredValue = simpleExpressionPayload(value), loweredTarget = target == null ? null : simpleTypePayload(target);
+				loweredValue == null || target != null && loweredTarget == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Cast(loweredValue, loweredTarget);
+			case SwitchExpression(value, cases, defaultExpression, _):
+				var loweredValue = simpleExpressionPayload(value), loweredCases = simpleSwitchExpressionCases(cases), loweredDefault = defaultExpression == null ? null : simpleExpressionPayload(defaultExpression);
+				loweredValue == null || loweredCases == null || defaultExpression != null && loweredDefault == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Switch(loweredValue, loweredCases, loweredDefault);
+			case ObjectLiteral(fields, _):
+				var loweredFields:Array<compiler.syntax.SyntaxTree.SyntaxObjectFieldPayload> = [];
+				for (field in fields) {
+					var value = simpleExpressionPayload(field.value);
+					if (value == null)
+						return null;
+					loweredFields.push({name: field.name, value: value});
+				}
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Object(loweredFields);
+			case ArrayLiteral(values, _):
+				var lowered = simpleExpressionPayloads(values);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array(lowered);
+			case MapLiteral(entries, _):
+				var loweredEntries:Array<compiler.syntax.SyntaxTree.SyntaxMapEntryPayload> = [];
+				for (entry in entries) {
+					var key = simpleExpressionPayload(entry.key), value = simpleExpressionPayload(entry.value);
+					if (key == null || value == null)
+						return null;
+					loweredEntries.push({key: key, value: value});
+				}
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Map(loweredEntries);
+			case ArrayComprehension(keyName, valueName, iterable, condition, value, _):
+				var loweredIterable = simpleExpressionPayload(iterable), loweredCondition = condition == null ? null : simpleExpressionPayload(condition), loweredValue = simpleExpressionPayload(value);
+				loweredIterable == null || condition != null && loweredCondition == null || loweredValue == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ArrayComprehension(keyName, valueName, loweredIterable, loweredCondition, loweredValue);
+			case MapComprehension(keyName, valueName, iterable, condition, key, value, _):
+				var loweredIterable = simpleExpressionPayload(iterable), loweredCondition = condition == null ? null : simpleExpressionPayload(condition), loweredKey = simpleExpressionPayload(key), loweredValue = simpleExpressionPayload(value);
+				loweredIterable == null || condition != null && loweredCondition == null || loweredKey == null || loweredValue == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.MapComprehension(keyName, valueName, loweredIterable, loweredCondition, loweredKey, loweredValue);
+			case Range(start, end, _):
+				var loweredStart = simpleExpressionPayload(start), loweredEnd = simpleExpressionPayload(end);
+				loweredStart == null || loweredEnd == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Range(loweredStart, loweredEnd);
+			case Call(name, arguments, _):
+				var lowered = simpleExpressionPayloads(arguments);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Call(name, lowered);
+			case NativeLayoutQuery(kind, type, field, _):
+				var lowered = simpleTypePayload(type);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NativeLayoutQuery(syntaxNativeLayoutKind(kind), lowered, field);
+			case ClosureCall(callee, arguments, _):
+				var loweredCallee = simpleExpressionPayload(callee), loweredArguments = simpleExpressionPayloads(arguments);
+				loweredCallee == null || loweredArguments == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ClosureCall(loweredCallee, loweredArguments);
+			case MethodCall(object, name, arguments, _):
+				var loweredObject = simpleExpressionPayload(object), loweredArguments = simpleExpressionPayloads(arguments);
+				loweredObject == null || loweredArguments == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.MethodCall(loweredObject, name, loweredArguments);
+			case New(typeName, arguments, _):
+				var lowered = simpleExpressionPayloads(arguments);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.New(typeName, lowered);
+			case NewGeneric(typeName, typeArguments, arguments, _):
+				var loweredTypes = simpleTypePayloads(typeArguments), loweredArguments = simpleExpressionPayloads(arguments);
+				loweredTypes == null || loweredArguments == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewGeneric(typeName, loweredTypes, loweredArguments);
+			case NewArray(element, length, _):
+				var loweredElement = simpleTypePayload(element), loweredLength = simpleExpressionPayload(length);
+				loweredElement == null || loweredLength == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewArray(loweredElement, loweredLength);
+			case NewMap(key, value, _):
+				var loweredKey = simpleTypePayload(key), loweredValue = simpleTypePayload(value);
+				loweredKey == null || loweredValue == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewMap(loweredKey, loweredValue);
+			case Index(array, index, _):
+				var loweredArray = simpleExpressionPayload(array), loweredIndex = simpleExpressionPayload(index);
+				loweredArray == null || loweredIndex == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Index(loweredArray, loweredIndex);
+			case PostfixIncrement(target, delta, _):
+				var lowered = simpleExpressionPayload(target);
+				lowered == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.PostfixIncrement(lowered, delta);
+			case Lambda(arguments, statements, _):
+				var loweredArguments = simpleArgumentPayloads(arguments), loweredStatements = simpleStatementPayloads(statements);
+				loweredArguments == null || loweredStatements == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Lambda(loweredArguments, loweredStatements);
+		};
+
+	static function simpleExpressionPayloads(expressions:Array<AstExpression>):Null<Array<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
+		for (expression in expressions) {
+			var payload = simpleExpressionPayload(expression);
+			if (payload == null)
+				return null;
+			result.push(payload);
+		}
+		return result;
+	}
+
+	static function simpleArgumentPayloads(arguments:Array<AstArgument>):Null<Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload> = [];
+		for (argument in arguments) {
+			var type = simpleTypePayload(argument.type), defaultValue = argument.defaultValue == null ? null : simpleExpressionPayload(argument.defaultValue);
+			if (type == null || argument.defaultValue != null && defaultValue == null)
+				return null;
+			result.push({name: argument.name, type: type, optional: argument.optional == true, defaultValue: defaultValue});
+		}
+		return result;
+	}
+
+	static function simpleSwitchExpressionCases(cases:Array<compiler.syntax.Ast.AstSwitchExpressionCase>):Null<Array<compiler.syntax.SyntaxTree.SyntaxSwitchExpressionCasePayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxSwitchExpressionCasePayload> = [];
+		for (entry in cases) {
+			var value = simpleExpressionPayload(entry.value), guard = entry.guard == null ? null : simpleExpressionPayload(entry.guard), loweredResult = simpleExpressionPayload(entry.result);
+			if (value == null || entry.guard != null && guard == null || loweredResult == null)
+				return null;
+			result.push({value: value, guard: guard, result: loweredResult});
+		}
+		return result;
+	}
+
+	static function syntaxNativeLayoutKind(kind:NativeLayoutQueryKind):compiler.syntax.SyntaxTree.SyntaxNativeLayoutQueryKind
+		return switch kind {
+			case SizeOf: compiler.syntax.SyntaxTree.SyntaxNativeLayoutQueryKind.SizeOf;
+			case AlignOf: compiler.syntax.SyntaxTree.SyntaxNativeLayoutQueryKind.AlignOf;
+			case OffsetOf: compiler.syntax.SyntaxTree.SyntaxNativeLayoutQueryKind.OffsetOf;
 		};
 
 	static function binaryExpressionPayload(operation:compiler.syntax.SyntaxTree.SyntaxBinaryOperator, left:AstExpression,
@@ -1045,6 +1291,25 @@ class Parser {
 
 	static function simpleStatementPayload(statement:AstStatement):Null<compiler.syntax.SyntaxTree.SyntaxStatementPayload>
 		return switch statement {
+			case ErrorStatement(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Error;
+			case UninitializedDeclaration(name, type, _):
+				var typePayload = simpleTypePayload(type);
+				typePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.UninitializedDeclaration(name, typePayload);
+			case VarDeclaration(name, type, initializer, _):
+				var typePayload = type == null ? null : simpleTypePayload(type), initializerPayload = simpleExpressionPayload(initializer);
+				type != null && typePayload == null || initializerPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.VarDeclaration(name, typePayload, initializerPayload);
+			case Assignment(name, expression, _):
+				var value = simpleExpressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Assignment(name, value);
+			case IndexAssignment(array, index, expression, _):
+				var loweredArray = simpleExpressionPayload(array), loweredIndex = simpleExpressionPayload(index), loweredExpression = simpleExpressionPayload(expression);
+				loweredArray == null || loweredIndex == null || loweredExpression == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.IndexAssignment(loweredArray, loweredIndex, loweredExpression);
+			case FieldAssignment(object, field, expression, _):
+				var loweredObject = simpleExpressionPayload(object), loweredExpression = simpleExpressionPayload(expression);
+				loweredObject == null || loweredExpression == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.FieldAssignment(loweredObject, field, loweredExpression);
 			case Break(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Break;
 			case Continue(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Continue;
 			case ReturnVoid(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.ReturnVoid;
@@ -1068,6 +1333,20 @@ class Parser {
 				var iterablePayload = simpleExpressionPayload(iterable), bodyPayload = simpleStatementPayloads(body);
 				iterablePayload == null || bodyPayload == null ? null
 					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.ForLoop(keyName, valueName, iterablePayload, bodyPayload);
+			case AstStatement.Throw(expression, _):
+				var value = simpleExpressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Throw(value);
+			case AstStatement.Try(tryBranch, catches, _):
+				var loweredTry = simpleStatementPayloads(tryBranch), loweredCatches = simpleCatchPayloads(catches);
+				loweredTry == null || loweredCatches == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Try(loweredTry, loweredCatches);
+			case AstStatement.Switch(expression, cases, defaultBranch, hasDefault, _):
+				var loweredExpression = simpleExpressionPayload(expression), loweredCases = simpleSwitchCasePayloads(cases), loweredDefault = simpleStatementPayloads(defaultBranch);
+				loweredExpression == null || loweredCases == null || loweredDefault == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.Switch(loweredExpression, loweredCases, loweredDefault, hasDefault);
+			case Increment(name, delta, _): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Increment(name, delta);
+			case Expression(expression, _):
+				var value = simpleExpressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Expression(value);
 			default: null;
 		};
 
@@ -1078,6 +1357,28 @@ class Parser {
 			if (payload == null)
 				return null;
 			result.push(payload);
+		}
+		return result;
+	}
+
+	static function simpleCatchPayloads(catches:Array<compiler.syntax.Ast.AstCatch>):Null<Array<compiler.syntax.SyntaxTree.SyntaxCatchPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxCatchPayload> = [];
+		for (catchClause in catches) {
+			var type = simpleTypePayload(catchClause.type), statements = simpleStatementPayloads(catchClause.statements);
+			if (type == null || statements == null)
+				return null;
+			result.push({name: catchClause.name, type: type, statements: statements});
+		}
+		return result;
+	}
+
+	static function simpleSwitchCasePayloads(cases:Array<compiler.syntax.Ast.AstSwitchCase>):Null<Array<compiler.syntax.SyntaxTree.SyntaxSwitchCasePayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxSwitchCasePayload> = [];
+		for (caseClause in cases) {
+			var value = simpleExpressionPayload(caseClause.value), guard = caseClause.guard == null ? null : simpleExpressionPayload(caseClause.guard), statements = simpleStatementPayloads(caseClause.statements);
+			if (value == null || caseClause.guard != null && guard == null || statements == null)
+				return null;
+			result.push({value: value, guard: guard, statements: statements});
 		}
 		return result;
 	}
@@ -1428,7 +1729,9 @@ class Parser {
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
 				span = start.merge(end),
 				declared = result == null ? null : FunctionType([for (argument in arguments) argument.type], result);
-			return VarDeclaration(name, declared, Lambda(arguments, body, span), span);
+			var statement = VarDeclaration(name, declared, Lambda(arguments, body, span), span);
+			recordStatementCst(SyntaxKind.VariableDeclaration, statement, span);
+			return statement;
 		}
 		if (match(TokenKind.Break)) {
 			var start = previous().span;
@@ -1451,7 +1754,9 @@ class Parser {
 			consume(TokenKind.Assign);
 			var initializer = parseExpression();
 			var end = expressionEnd(initializer);
-			return VarDeclaration(name, type, initializer, start.merge(end));
+			var statement = VarDeclaration(name, type, initializer, start.merge(end));
+			recordStatementCst(SyntaxKind.VariableDeclaration, statement, statementSpan(statement));
+			return statement;
 		}
 		if (match(TokenKind.Return)) {
 			var start = previous().span;
@@ -1473,7 +1778,9 @@ class Parser {
 			var start = previous().span,
 				expression = parseExpression(),
 				end = expressionEnd(expression);
-			return Throw(expression, start.merge(end));
+			var statement = AstStatement.Throw(expression, start.merge(end));
+			recordStatementCst(SyntaxKind.ThrowStatement, statement, statementSpan(statement));
+			return statement;
 		}
 		if (match(TokenKind.Try)) {
 			var start = previous().span,
@@ -1501,7 +1808,9 @@ class Parser {
 					span: catchStart.merge(end)
 				});
 			}
-			return Try(tryBranch, catches, start.merge(end));
+			var statement = AstStatement.Try(tryBranch, catches, start.merge(end));
+			recordStatementCst(SyntaxKind.TryStatement, statement, statementSpan(statement));
+			return statement;
 		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
@@ -1539,18 +1848,22 @@ class Parser {
 			recordCstNode(SyntaxKind.Block, switchBodyStart.merge(end));
 			if (match(TokenKind.Semicolon))
 				end = previous().span;
-			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
+			var statement = AstStatement.Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
+			recordStatementCst(SyntaxKind.SwitchStatement, statement, statementSpan(statement));
+			return statement;
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
 			var saved = position, target = parseOr();
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
 				var delta = previous().kind == TokenKind.Increment ? 1 : -1,
 					end = consume(TokenKind.Semicolon).span;
-				return switch target {
+				var statement:AstStatement = switch target {
 					case Variable(name, _):
 						Increment(name, delta, expressionSpan(target).merge(end));
 					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a variable", expressionSpan(target)));
 				};
+				recordStatementCst(SyntaxKind.IncrementStatement, statement, statementSpan(statement));
+				return statement;
 			}
 			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : match(TokenKind.StarAssign) ? 3 : match(TokenKind.SlashAssign) ? 4 : match(TokenKind.PercentAssign) ? 5 : match(TokenKind.AndAssign) ? 6 : match(TokenKind.OrAssign) ? 7 : match(TokenKind.XorAssign) ? 8 : -1;
 			if (assignmentKind >= 0) {
@@ -1584,10 +1897,14 @@ class Parser {
 							throw new CompileError(new Diagnostic("E0002", "Assignment target must be a variable, field, or array element",
 								expressionSpan(target)));
 					};
-				if (bindings.length == 0)
+				if (bindings.length == 0) {
+					recordStatementCst(SyntaxKind.AssignmentStatement, assignment, statementSpan(assignment));
 					return assignment;
+				}
 				bindings.push(assignment);
-				return Expression(BlockExpression(bindings, IntegerLiteral(0, span), span), span);
+				var statement = Expression(BlockExpression(bindings, IntegerLiteral(0, span), span), span);
+				recordStatementCst(SyntaxKind.ExpressionStatement, statement, span);
+				return statement;
 			}
 			position = saved;
 		}
@@ -1651,8 +1968,9 @@ class Parser {
 				recordCstNode(SyntaxKind.ForStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
 			return statement;
 		}
-		var expression = parseExpression(), end = expressionEnd(expression);
-		return Expression(expression, expressionSpan(expression).merge(end));
+		var expression = parseExpression(), end = expressionEnd(expression), statement = Expression(expression, expressionSpan(expression).merge(end));
+		recordStatementCst(SyntaxKind.ExpressionStatement, statement, statementSpan(statement));
+		return statement;
 	}
 
 	function parseTryBody():Array<AstStatement> {
@@ -1749,6 +2067,8 @@ class Parser {
 				default:
 			}
 		}
+		for (declaration in declarations)
+			recordStatementCst(SyntaxKind.VariableDeclaration, declaration, statementSpan(declaration));
 		return declarations;
 	}
 
