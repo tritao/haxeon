@@ -2277,8 +2277,15 @@ class SemanticIndexBuilder {
 							enumAbstract = candidate;
 							break;
 						}
-				enumAbstract == null ? recoveredType(type, substitutions)
-					: TAbstract(name, [], recoveredType(enumAbstract.underlying, substitutions));
+				if (enumAbstract != null)
+					TAbstract(name, [], recoveredType(enumAbstract.underlying, substitutions));
+				else {
+					var editorType = recoveryResolveType == null ? null : recoveryResolveType(name, []);
+					switch editorType {
+						case TAbstract(_, _, _): editorType;
+						default: recoveredType(type, substitutions);
+					}
+				}
 			case ArrayType(element): TArray(recoveredExpectedType(element, fn, substitutions, active));
 			case MapType(key, value): TMap(recoveredExpectedType(key, fn, substitutions, active),
 				recoveredExpectedType(value, fn, substitutions, active));

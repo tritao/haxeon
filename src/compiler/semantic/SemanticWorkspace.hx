@@ -576,6 +576,9 @@ class SemanticWorkspace {
 		for (decl in model.program.abstracts)
 			if (sameSpan(decl.span, resolved.symbol.declaration))
 				return qualifiedType(model, decl.name);
+		for (decl in model.program.enumAbstracts)
+			if (sameSpan(decl.span, resolved.symbol.declaration))
+				return qualifiedType(model, decl.name);
 		for (decl in model.program.enums)
 			if (sameSpan(decl.span, resolved.symbol.declaration))
 				return qualifiedType(model, decl.name);
@@ -1209,6 +1212,9 @@ class SemanticWorkspace {
 			for (decl in targetModel.program.abstracts)
 				if (decl.name == nestedName)
 					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
+			for (decl in targetModel.program.enumAbstracts)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
 			for (decl in targetModel.program.enums)
 				if (decl.name == nestedName)
 					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
@@ -1323,6 +1329,9 @@ class SemanticWorkspace {
 			if (moduleSourceName(decl.name) == nestedName)
 				return canonicalEditorTypeName(model, decl.name);
 		for (decl in model.program.abstracts)
+			if (moduleSourceName(decl.name) == nestedName)
+				return canonicalEditorTypeName(model, decl.name);
+		for (decl in model.program.enumAbstracts)
 			if (moduleSourceName(decl.name) == nestedName)
 				return canonicalEditorTypeName(model, decl.name);
 		for (decl in model.program.enums)
