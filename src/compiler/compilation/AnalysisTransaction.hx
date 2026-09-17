@@ -66,6 +66,7 @@ class AnalysisTransaction {
 				moduleNames: frontend.moduleNames,
 				invalidatedModules: frontend.invalidatedModules,
 				retyped: frontend.retyped,
+				reusedClasses: frontend.reusedClasses,
 				invalidatedArtifacts: frontend.invalidations,
 				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt

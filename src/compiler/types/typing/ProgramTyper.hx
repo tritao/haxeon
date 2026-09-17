@@ -41,7 +41,7 @@ class ProgramTyper {
 	}
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
-			entryPoint:Null<String>, ?reusedFunctions:Map<String, TypedFunction>):MeasuredTypedProgram {
+			entryPoint:Null<String>, ?reusedFunctions:Map<String, TypedFunction>, ?reusedClasses:Map<String, TypedClass>):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
@@ -194,7 +194,10 @@ class ProgramTyper {
 		], typedClasses:Array<TypedClass> = [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& recoveredNativeLibrary(classDecl) == null) typeClass(classDecl, selected, reusedFunctions)
+					&& recoveredNativeLibrary(classDecl) == null)
+					(reusedClasses != null && reusedClasses.exists(classDecl.name)
+						? reusedClasses.get(classDecl.name)
+						: typeClass(classDecl, selected, reusedFunctions))
 			], typedFunctions:Array<TypedFunction> = [];
 		for (enumDecl in typedEnums)
 			for (caseDecl in enumDecl.cases)

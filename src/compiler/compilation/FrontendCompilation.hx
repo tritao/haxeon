@@ -14,6 +14,7 @@ import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.TypedAst.TypedClass;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
@@ -24,6 +25,7 @@ typedef FrontendResult = {
 	final invalidatedModules:Array<String>;
 	final typedProgram:TypedProgram;
 	final retyped:Array<String>;
+	final reusedClasses:Int;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
@@ -75,7 +77,7 @@ class FrontendCompilation {
 			selected = semanticAssembly.selected,
 			entryPoint = semanticAssembly.entryPoint;
 		var frontendDoneAt = Sys.time() * 1000.0;
-		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
+		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics, reusedClasses:Map<String, TypedClass> = [];
 		try {
 			if (token != null)
 				token.check();
@@ -92,8 +94,9 @@ class FrontendCompilation {
 				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
+			reusedClasses = reusableClasses(context, names, owners, invalidated);
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget());
+				context.nativeLayoutTarget(), null, reusedClasses);
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			typerMetrics = typedResult.metrics;
@@ -301,6 +304,7 @@ class FrontendCompilation {
 				invalidatedModules: invalidatedModules,
 				typedProgram: typedNew,
 				retyped: retyped,
+				reusedClasses: mapCount(reusedClasses),
 				invalidations: semanticAssembly.invalidations,
 				regenerated: regenerated,
 				typerMetrics: typerMetrics,
@@ -354,6 +358,7 @@ class FrontendCompilation {
 			invalidatedModules: invalidatedModules,
 			typedProgram: typedNew,
 			retyped: retyped,
+			reusedClasses: mapCount(reusedClasses),
 			invalidations: semanticAssembly.invalidations,
 			regenerated: regenerated,
 			typerMetrics: typerMetrics,
@@ -361,6 +366,49 @@ class FrontendCompilation {
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt
 		};
+	}
+
+	static function reusableClasses(context:CompilationContext, names:Array<String>, owners:Map<String, String>,
+		invalidated:Map<String, Bool>):Map<String, TypedClass> {
+		var previous = context.lastTypedProgram();
+		if (previous == null)
+			return [];
+		var previousByName:Map<String, TypedClass> = [];
+		for (classDecl in previous.classes)
+			previousByName.set(classDecl.name, classDecl);
+		var blockedModules:Map<String, Bool> = [];
+		for (name in names) {
+			var state = context.modules.get(name);
+			if (state == null || state.lastGood == null || state.lastGood.revision != state.revision)
+				blockedModules.set(name, true);
+		}
+		for (functionName in invalidated.keys()) {
+			var owner = owners.get(functionName);
+			if (owner != null)
+				blockedModules.set(owner, true);
+		}
+		var result:Map<String, TypedClass> = [];
+		for (name in names) {
+			if (blockedModules.exists(name))
+				continue;
+			var state = context.modules.get(name);
+			if (state == null)
+				continue;
+			for (classDecl in state.parsedAst().classes) {
+				var qualified = ModuleCanonicalizer.qualifiedTypeName(state.parsedAst().packageName, classDecl.name),
+					previousClass = previousByName.get(qualified);
+				if (previousClass != null)
+					result.set(qualified, previousClass);
+			}
+		}
+		return result;
+	}
+
+	static function mapCount<T>(values:Map<String, T>):Int {
+		var count = 0;
+		for (_ in values)
+			count++;
+		return count;
 	}
 
 	static function resolveFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,

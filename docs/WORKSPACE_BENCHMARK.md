@@ -17,6 +17,7 @@ Each profile records edit and completion percentiles plus:
 - modules invalidated;
 - signature-edit invalidation closure size;
 - modules analyzed;
+- unchanged typed classes reused;
 - functions retyped;
 - recovered snapshots rebuilt;
 - process-memory growth for the endurance workload.
@@ -24,8 +25,9 @@ Each profile records edit and completion percentiles plus:
 Each generated profile also contains an `editMatrix` with independent
 body-only, public-signature, field-type, import, base-class, interface,
 add-declaration, remove-declaration, malformed-intermediate, and repair edits.
-Every edit records update/follow-up latency and work-scope metrics, and the
-runner asserts the expected invalidation set for the generated topology.
+Every edit records update/follow-up latency and work-scope metrics, including
+unchanged typed classes reused, and the runner asserts the expected
+invalidation set for the generated topology.
 
 By default the budgeted runner executes the generated size matrix `8,64` across
 fan-out, chain, and diamond topologies. Select one topology with the compatible

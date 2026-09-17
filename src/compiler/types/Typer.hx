@@ -7,6 +7,7 @@ import compiler.types.DeclarationIndex;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedClass;
 import compiler.types.typing.BodyTyper;
 import compiler.types.typing.ProgramTyper;
 import compiler.Diagnostic.CompileError;
@@ -87,7 +88,8 @@ class Typer {
 		return typeAnalyzedMeasured(semantic, selected, externals, entryPoint).program;
 
 	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
-			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
-			?nativeAbiTarget:String):MeasuredTypedProgram
-		return new ProgramTyper(new BodyTyper(externals, specializations, nativeAbiTarget)).typeProgramMeasured(semantic, selected, true, entryPoint);
+		?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
+		?nativeAbiTarget:String, ?reusedFunctions:Map<String, TypedFunction>, ?reusedClasses:Map<String, TypedClass>):MeasuredTypedProgram
+		return new ProgramTyper(new BodyTyper(externals, specializations, nativeAbiTarget)).typeProgramMeasured(semantic, selected, true, entryPoint,
+			reusedFunctions, reusedClasses);
 }

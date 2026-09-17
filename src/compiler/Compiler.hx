@@ -132,6 +132,7 @@ typedef CompileMetrics = {
 	final patchEncodingMs:Float;
 	final finalizeMs:Float;
 	final modules:Int;
+	final reusedClasses:Int;
 	final retypedFunctions:Int;
 	final invalidatedArtifacts:Int;
 	final invalidationReasons:Int;
@@ -153,6 +154,7 @@ typedef AnalysisResult = {
 	final moduleNames:Array<String>;
 	final invalidatedModules:Array<String>;
 	final retyped:Array<String>;
+	final reusedClasses:Int;
 	final invalidatedArtifacts:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final diagnosticModules:Array<String>;
 	final elapsedMs:Float;
@@ -738,6 +740,7 @@ class Compiler {
 					patchEncodingMs: 0.0,
 					finalizeMs: 0.0,
 					modules: cached.metrics.modules,
+					reusedClasses: 0,
 					retypedFunctions: 0,
 					invalidatedArtifacts: 0,
 					invalidationReasons: 0,

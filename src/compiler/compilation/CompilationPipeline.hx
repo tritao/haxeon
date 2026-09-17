@@ -134,6 +134,7 @@ class CompilationPipeline {
 				patchEncodingMs: patchEncodingDoneAt - backendAssemblyDoneAt,
 				finalizeMs: finishedAt - patchEncodingDoneAt,
 				modules: names.length,
+				reusedClasses: frontend.reusedClasses,
 				retypedFunctions: retyped.length,
 				invalidatedArtifacts: frontend.invalidations.length,
 				invalidationReasons: invalidationReasonCount,

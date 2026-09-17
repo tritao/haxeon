@@ -213,7 +213,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   `tests/fixtures/workspace-small` corpus exercises rich package/import and
   callback semantics, while generated fan-out, chain, and diamond workspaces
   exercise scale. Each scenario records latency, invalidated modules, analyzed
-  modules, retyped functions, recovered snapshots, and RSS growth. Its opt-in
+  modules, reused typed classes, retyped functions, recovered snapshots, and
+  RSS growth. Its opt-in
   `--check-budgets` gate defines representative budgets: 100 ms p95 for the
   small workspace and 500 ms p95 for generated workspaces, plus the existing
   memory-growth limits. The generated workload is a data-driven size matrix

@@ -49,6 +49,7 @@ private typedef GeneratedSample = {
 	final modulesInvalidated:Int;
 	final signatureModulesInvalidated:Int;
 	final modulesAnalyzed:Int;
+	final reusedClasses:Int;
 	final retypedFunctions:Int;
 	final recoveredSnapshots:Int;
 	final editMatrix:Array<GeneratedEditMeasurement>;
@@ -60,6 +61,7 @@ private typedef GeneratedEditMeasurement = {
 	final followupMs:Float;
 	final modulesInvalidated:Int;
 	final modulesAnalyzed:Int;
+	final reusedClasses:Int;
 	final retypedFunctions:Int;
 	final recoveredSnapshots:Int;
 }
@@ -457,6 +459,7 @@ class LanguageServiceBenchmarkMain {
 			modulesInvalidated: percentiles([for (sample in samples) sample.modulesInvalidated]),
 			signatureModulesInvalidated: percentiles([for (sample in samples) sample.signatureModulesInvalidated]),
 			modulesAnalyzed: percentiles([for (sample in samples) sample.modulesAnalyzed]),
+			reusedClasses: percentiles([for (sample in samples) sample.reusedClasses]),
 			retypedFunctions: percentiles([for (sample in samples) sample.retypedFunctions]),
 			editMatrix: summarizeGeneratedEdits(samples),
 			recoveredSnapshots: {
@@ -479,6 +482,7 @@ class LanguageServiceBenchmarkMain {
 				followupMs: percentiles([for (sample in selected) sample.followupMs]),
 				modulesInvalidated: percentiles([for (sample in selected) sample.modulesInvalidated]),
 				modulesAnalyzed: percentiles([for (sample in selected) sample.modulesAnalyzed]),
+				reusedClasses: percentiles([for (sample in selected) sample.reusedClasses]),
 				retypedFunctions: percentiles([for (sample in selected) sample.retypedFunctions]),
 				recoveredSnapshots: {
 					total: sumEditSnapshots(selected),
@@ -493,13 +497,15 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('$name update median/p95/p99: ${format(scenario.updateMs.median)}/${format(scenario.updateMs.p95)}/${format(scenario.updateMs.p99)} ms');
 		Sys.println('$name completion median/p95/p99: ${format(scenario.completionMs.median)}/${format(scenario.completionMs.p95)}/${format(scenario.completionMs.p99)} ms');
 		Sys.println('$name modules invalidated/analyzed p95: ${format(scenario.modulesInvalidated.p95)}/${format(scenario.modulesAnalyzed.p95)}');
+		if (Reflect.hasField(scenario, "reusedClasses"))
+			Sys.println('$name reused classes p95: ${format(scenario.reusedClasses.p95)}');
 		if (Reflect.hasField(scenario, "signatureModulesInvalidated"))
 			Sys.println('$name signature modules invalidated p95: ${format(scenario.signatureModulesInvalidated.p95)}');
 		Sys.println('$name retyped functions p95: ${format(scenario.retypedFunctions.p95)}');
 		if (Reflect.hasField(scenario, "editMatrix"))
 			for (editName in Reflect.fields(scenario.editMatrix)) {
 				var edit:Dynamic = Reflect.field(scenario.editMatrix, editName);
-				Sys.println('$name $editName invalidated/analyzed p95: ${format(edit.modulesInvalidated.p95)}/${format(edit.modulesAnalyzed.p95)}');
+				Sys.println('$name $editName invalidated/analyzed/reused p95: ${format(edit.modulesInvalidated.p95)}/${format(edit.modulesAnalyzed.p95)}/${format(edit.reusedClasses.p95)}');
 			}
 	}
 
@@ -532,6 +538,9 @@ class LanguageServiceBenchmarkMain {
 		updateMs += (Sys.time() - bodyStarted) * 1000.0;
 		var analysis = service.analyze("generated.Main");
 		assertInvalidatedModules(analysis.invalidatedModules, ["generated.Main"], '${scenario.name} body edit');
+		var expectedReusedClasses = generatedReachableTypeCount(moduleCount, topology);
+		if (analysis.reusedClasses != expectedReusedClasses)
+			throw '${scenario.name} body edit reused ${analysis.reusedClasses} classes, expected $expectedReusedClasses';
 		var signaturePath = "generated/Type0.hx",
 			signatureStarted = Sys.time();
 		service.update(signaturePath, generatedTypeSource(0, topology, PublicSignature));
@@ -557,6 +566,7 @@ class LanguageServiceBenchmarkMain {
 			modulesInvalidated: analysis.invalidatedModules.length,
 			signatureModulesInvalidated: signatureAnalysis.invalidatedModules.length,
 			modulesAnalyzed: analysis.moduleNames.length,
+			reusedClasses: analysis.reusedClasses,
 			retypedFunctions: analysis.retyped.length,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore,
 			editMatrix: editMatrix
@@ -593,6 +603,7 @@ class LanguageServiceBenchmarkMain {
 			followupMs: analysisMs,
 			modulesInvalidated: 0,
 			modulesAnalyzed: 0,
+			reusedClasses: 0,
 			retypedFunctions: 0,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
 		});
@@ -610,6 +621,7 @@ class LanguageServiceBenchmarkMain {
 			followupMs: analysisMs,
 			modulesInvalidated: repaired.invalidatedModules.length,
 			modulesAnalyzed: repaired.moduleNames.length,
+			reusedClasses: repaired.reusedClasses,
 			retypedFunctions: repaired.retyped.length,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
 		});
@@ -645,6 +657,7 @@ class LanguageServiceBenchmarkMain {
 			followupMs: analysisMs,
 			modulesInvalidated: analysis.invalidatedModules.length,
 			modulesAnalyzed: analysis.moduleNames.length,
+			reusedClasses: analysis.reusedClasses,
 			retypedFunctions: analysis.retyped.length,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
 		};
@@ -785,6 +798,10 @@ class LanguageServiceBenchmarkMain {
 		if (topology == "fanout" && typeIndex == generatedTarget(moduleCount, topology))
 			result.push("generated.Main");
 		return result;
+	}
+
+	static function generatedReachableTypeCount(moduleCount:Int, topology:String):Int {
+		return topology == "diamond" && moduleCount > 3 ? 4 : moduleCount;
 	}
 
 	static function sumScenarioSnapshots(samples:Array<ScenarioSample>):Int {

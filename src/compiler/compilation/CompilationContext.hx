@@ -96,6 +96,9 @@ class CompilationContext {
 	public function setLastTypedProgram(value:TypedProgram):Void
 		owner.lastTypedProgram = value;
 
+	public function lastTypedProgram():Null<TypedProgram>
+		return owner.lastTypedProgram;
+
 	public function clearRehydrationBaseline():Void
 		owner.rehydrationBaseline = null;
 
