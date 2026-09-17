@@ -8,6 +8,7 @@ import compiler.syntax.SyntaxTree.SyntaxTrivia;
 import compiler.syntax.SyntaxTree.SyntaxTriviaKind;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.formatter.FormatToken.FormatTokenKind;
+import compiler.formatter.FormatToken.FormatTokenTools;
 
 private typedef ProtectedRange = {
 	final start:Int;
@@ -42,6 +43,40 @@ class CstFormatterAdapter {
 		for (token in tokens)
 			output.add(token.text);
 		return output.toString();
+	}
+
+	/**
+		Returns the smallest parser-reported source region containing a partial
+		range. The result is constrained to the logical formatter unit so range
+		formatting cannot escape its already selected statement/declaration.
+	*/
+	public static function smallestEnclosing(tree:SyntaxTree, tokens:Array<FormatToken>, start:Int, end:Int, safeStart:Int,
+			safeEnd:Int):Null<{start:Int, end:Int}> {
+		var firstSyntax = -1, lastSyntax = -1;
+		for (index in 0...tokens.length)
+			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].end > start && tokens[index].start < end) {
+				if (firstSyntax < 0)
+					firstSyntax = index;
+				lastSyntax = index;
+			}
+		if (firstSyntax < 0)
+			return null;
+
+		var selectedStart = safeStart,
+			selectedEnd = safeEnd,
+			selectedWidth = safeEnd - safeStart,
+			firstStart = tokens[firstSyntax].start,
+			lastEnd = tokens[lastSyntax].end;
+		for (node in tree.grammarNodes()) {
+			var nodeStart = node.span.start, nodeEnd = node.span.end,
+				width = nodeEnd - nodeStart;
+			if (nodeStart < safeStart || nodeEnd > safeEnd || nodeStart > firstStart || nodeEnd < lastEnd || width >= selectedWidth)
+				continue;
+			selectedStart = nodeStart;
+			selectedEnd = nodeEnd;
+			selectedWidth = width;
+		}
+		return selectedStart == safeStart && selectedEnd == safeEnd ? null : {start: selectedStart, end: selectedEnd};
 	}
 
 	/** Returns the directive keyword without its condition or surrounding trivia. */

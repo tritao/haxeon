@@ -37,7 +37,7 @@ class Formatter {
 			if (syntaxTree == null)
 				return null;
 			var tokens = CstFormatterAdapter.tokens(syntaxTree),
-				comments = CommentAttachmentTools.attach(tokens),
+				comments = CommentAttachmentTools.attach(tokens, syntaxTree),
 				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
 				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
@@ -46,7 +46,7 @@ class Formatter {
 				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
 			if (rangeStart <= 0 && rangeEnd >= source.length)
 				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
-			return formatRange(file, tokens, syntax, units, rendered, newline, rangeStart, rangeEnd);
+			return formatRange(file, syntaxTree, tokens, syntax, units, rendered, newline, rangeStart, rangeEnd);
 		} catch (_:CompileError) {
 			return null;
 		} catch (_:Dynamic) {
@@ -85,7 +85,7 @@ class Formatter {
 		return trailingNewline ? result + newline : result;
 	}
 
-	static function formatRange(file:SourceFile, tokens:Array<FormatToken>, syntax:SyntaxInfo, units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
+	static function formatRange(file:SourceFile, syntaxTree:SyntaxTree, tokens:Array<FormatToken>, syntax:SyntaxInfo, units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
 			newline:String, rangeStart:Int, rangeEnd:Int):String {
 		var start = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeStart)))),
 			end = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeEnd)))),
@@ -97,7 +97,8 @@ class Formatter {
 				selectedUnit = unit;
 			}
 		var region = intersectingUnits == 1
-			&& selectedUnit != null ? expandRange(tokens, syntax, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd) : {
+			&& selectedUnit != null ? (CstFormatterAdapter.smallestEnclosing(syntaxTree, tokens, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd)
+				?? expandRange(tokens, syntax, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd)) : {
 				start: start,
 				end: end
 			},
