@@ -14,6 +14,22 @@ HL_PRIM bool HL_NAME(__map_string_i32_exists)( realtime_string_map *map, vbyte *
 
 HL_PRIM vdynamic *HL_NAME(__map_string_i32_get)( realtime_string_map *map, vbyte *key ) { return hl_hbget(map, (uchar *)key); }
 
+HL_PRIM realtime_string_map *HL_NAME(__map_string_i64_alloc)( void ) {
+	return hl_hballoc();
+}
+
+HL_PRIM void HL_NAME(__map_string_i64_set)( realtime_string_map *map, vbyte *key, int64_t value ) {
+	vdynamic *dynamic = hl_alloc_dynamic(&hlt_i64);
+	dynamic->v.i64 = value;
+	hl_hbset(map, (uchar *)key, dynamic);
+}
+
+HL_PRIM bool HL_NAME(__map_string_i64_exists)( realtime_string_map *map, vbyte *key ) {
+	return hl_hbexists(map, (uchar *)key);
+}
+
+HL_PRIM vdynamic *HL_NAME(__map_string_i64_get)( realtime_string_map *map, vbyte *key ) { return hl_hbget(map, (uchar *)key); }
+
 HL_PRIM realtime_string_map *HL_NAME(__map_string_bool_alloc)( void ) {
 	return hl_hballoc();
 }
@@ -63,18 +79,22 @@ HL_PRIM bool HL_NAME(__map_string_bytes_exists)( realtime_string_map *map, vbyte
 HL_PRIM vdynamic *HL_NAME(__map_string_bytes_get)( realtime_string_map *map, vbyte *key ) { return hl_hbget(map, (uchar *)key); }
 
 HL_PRIM varray *HL_NAME(__map_string_i32_keys)( realtime_string_map *map ) { return hl_hbkeys(map); }
+HL_PRIM varray *HL_NAME(__map_string_i64_keys)( realtime_string_map *map ) { return hl_hbkeys(map); }
 HL_PRIM varray *HL_NAME(__map_string_bool_keys)( realtime_string_map *map ) { return hl_hbkeys(map); }
 HL_PRIM varray *HL_NAME(__map_string_f64_keys)( realtime_string_map *map ) { return hl_hbkeys(map); }
 HL_PRIM varray *HL_NAME(__map_string_bytes_keys)( realtime_string_map *map ) { return hl_hbkeys(map); }
 HL_PRIM varray *HL_NAME(__map_string_i32_values)( realtime_string_map *map ) { return realtime_typed_values(hl_hbvalues(map), &hlt_i32); }
+HL_PRIM varray *HL_NAME(__map_string_i64_values)( realtime_string_map *map ) { return realtime_typed_values(hl_hbvalues(map), &hlt_i64); }
 HL_PRIM varray *HL_NAME(__map_string_bool_values)( realtime_string_map *map ) { return realtime_typed_values(hl_hbvalues(map), &hlt_bool); }
 HL_PRIM varray *HL_NAME(__map_string_f64_values)( realtime_string_map *map ) { return realtime_typed_values(hl_hbvalues(map), &hlt_f64); }
 HL_PRIM varray *HL_NAME(__map_string_bytes_values)( realtime_string_map *map ) { return realtime_typed_values(hl_hbvalues(map), &hlt_bytes); }
 HL_PRIM bool HL_NAME(__map_string_i32_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); }
+HL_PRIM bool HL_NAME(__map_string_i64_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); }
 HL_PRIM bool HL_NAME(__map_string_bool_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); }
 HL_PRIM bool HL_NAME(__map_string_f64_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); }
 HL_PRIM bool HL_NAME(__map_string_bytes_remove)( realtime_string_map *map, vbyte *key ) { return hl_hbremove(map, (uchar *)key); }
 HL_PRIM void HL_NAME(__map_string_i32_clear)( realtime_string_map *map ) { hl_hbclear(map); }
+HL_PRIM void HL_NAME(__map_string_i64_clear)( realtime_string_map *map ) { hl_hbclear(map); }
 HL_PRIM void HL_NAME(__map_string_bool_clear)( realtime_string_map *map ) { hl_hbclear(map); }
 HL_PRIM void HL_NAME(__map_string_f64_clear)( realtime_string_map *map ) { hl_hbclear(map); }
 HL_PRIM void HL_NAME(__map_string_bytes_clear)( realtime_string_map *map ) { hl_hbclear(map); }
@@ -83,6 +103,7 @@ HL_PRIM void HL_NAME(__map_string_bytes_clear)( realtime_string_map *map ) { hl_
 HL_PRIM int HL_NAME(__map_string_##SUFFIX##_size)( realtime_string_map *map ) { return hl_hbsize(map); }
 
 DEFINE_STRING_MAP_SIZE(i32)
+DEFINE_STRING_MAP_SIZE(i64)
 DEFINE_STRING_MAP_SIZE(bool)
 DEFINE_STRING_MAP_SIZE(f64)
 DEFINE_STRING_MAP_SIZE(bytes)
@@ -120,23 +141,28 @@ HL_PRIM bool HL_NAME(__map_int_##SUFFIX##_exists)( realtime_int_map *map, int ke
 HL_PRIM vdynamic *HL_NAME(__map_int_##SUFFIX##_get)( realtime_int_map *map, int key ) { return hl_higet(map, key); }
 
 DEFINE_INT_MAP(i32, int, i, hlt_i32)
+DEFINE_INT_MAP(i64, int64_t, i64, hlt_i64)
 DEFINE_INT_MAP(bool, bool, b, hlt_bool)
 DEFINE_INT_MAP(f64, double, d, hlt_f64)
 DEFINE_INT_MAP(bytes, vbyte *, bytes, hlt_bytes)
 
 HL_PRIM varray *HL_NAME(__map_int_i32_keys)( realtime_int_map *map ) { return hl_hikeys(map); }
+HL_PRIM varray *HL_NAME(__map_int_i64_keys)( realtime_int_map *map ) { return hl_hikeys(map); }
 HL_PRIM varray *HL_NAME(__map_int_bool_keys)( realtime_int_map *map ) { return hl_hikeys(map); }
 HL_PRIM varray *HL_NAME(__map_int_f64_keys)( realtime_int_map *map ) { return hl_hikeys(map); }
 HL_PRIM varray *HL_NAME(__map_int_bytes_keys)( realtime_int_map *map ) { return hl_hikeys(map); }
 HL_PRIM varray *HL_NAME(__map_int_i32_values)( realtime_int_map *map ) { return realtime_typed_values(hl_hivalues(map), &hlt_i32); }
+HL_PRIM varray *HL_NAME(__map_int_i64_values)( realtime_int_map *map ) { return realtime_typed_values(hl_hivalues(map), &hlt_i64); }
 HL_PRIM varray *HL_NAME(__map_int_bool_values)( realtime_int_map *map ) { return realtime_typed_values(hl_hivalues(map), &hlt_bool); }
 HL_PRIM varray *HL_NAME(__map_int_f64_values)( realtime_int_map *map ) { return realtime_typed_values(hl_hivalues(map), &hlt_f64); }
 HL_PRIM varray *HL_NAME(__map_int_bytes_values)( realtime_int_map *map ) { return realtime_typed_values(hl_hivalues(map), &hlt_bytes); }
 HL_PRIM bool HL_NAME(__map_int_i32_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); }
+HL_PRIM bool HL_NAME(__map_int_i64_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); }
 HL_PRIM bool HL_NAME(__map_int_bool_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); }
 HL_PRIM bool HL_NAME(__map_int_f64_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); }
 HL_PRIM bool HL_NAME(__map_int_bytes_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); }
 HL_PRIM void HL_NAME(__map_int_i32_clear)( realtime_int_map *map ) { hl_hiclear(map); }
+HL_PRIM void HL_NAME(__map_int_i64_clear)( realtime_int_map *map ) { hl_hiclear(map); }
 HL_PRIM void HL_NAME(__map_int_bool_clear)( realtime_int_map *map ) { hl_hiclear(map); }
 HL_PRIM void HL_NAME(__map_int_f64_clear)( realtime_int_map *map ) { hl_hiclear(map); }
 HL_PRIM void HL_NAME(__map_int_bytes_clear)( realtime_int_map *map ) { hl_hiclear(map); }
@@ -145,6 +171,7 @@ HL_PRIM void HL_NAME(__map_int_bytes_clear)( realtime_int_map *map ) { hl_hiclea
 HL_PRIM int HL_NAME(__map_int_##SUFFIX##_size)( realtime_int_map *map ) { return hl_hisize(map); }
 
 DEFINE_INT_MAP_SIZE(i32)
+DEFINE_INT_MAP_SIZE(i64)
 DEFINE_INT_MAP_SIZE(bool)
 DEFINE_INT_MAP_SIZE(f64)
 DEFINE_INT_MAP_SIZE(bytes)

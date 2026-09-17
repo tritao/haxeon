@@ -24,6 +24,10 @@ HL_PRIM varray *HL_NAME(__array_alloc_i32)( int length ) {
 	return hl_alloc_array(&hlt_i32, length);
 }
 
+HL_PRIM varray *HL_NAME(__array_alloc_i64)( int length ) {
+	return hl_alloc_array(&hlt_i64, length);
+}
+
 HL_PRIM varray *HL_NAME(__array_alloc_f64)( int length ) {
 	return hl_alloc_array(&hlt_f64, length);
 }
@@ -137,6 +141,7 @@ HL_PRIM varray *HL_NAME(__array_slice_##SUFFIX)( varray *array, int start, int e
 HL_PRIM varray *HL_NAME(__array_splice_##SUFFIX)( varray *array, int position, int length ) { return realtime_array_splice(array, position, length); }
 
 DEFINE_ARRAY_COPY(i32)
+DEFINE_ARRAY_COPY(i64)
 DEFINE_ARRAY_COPY(f64)
 DEFINE_ARRAY_COPY(bytes)
 DEFINE_ARRAY_COPY(bool)
@@ -152,6 +157,7 @@ HL_PRIM int HL_NAME(__array_index_of_##SUFFIX)( varray *array, VALUE_TYPE value 
 }
 
 DEFINE_ARRAY_INDEX_OF(i32, int, values[i] == value)
+DEFINE_ARRAY_INDEX_OF(i64, int64_t, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(f64, double, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(bool, bool, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
@@ -176,6 +182,7 @@ HL_PRIM bool HL_NAME(__array_remove_##SUFFIX)( varray *array, VALUE_TYPE value )
 }
 
 DEFINE_ARRAY_REMOVE(i32, int, values[index] == value)
+DEFINE_ARRAY_REMOVE(i64, int64_t, values[index] == value)
 DEFINE_ARRAY_REMOVE(f64, double, values[index] == value)
 DEFINE_ARRAY_REMOVE(bool, bool, values[index] == value)
 DEFINE_ARRAY_REMOVE(bytes, vbyte *, realtime_bytes_equal(values[index], value))
@@ -198,6 +205,7 @@ static void realtime_array_reverse(varray *array) {
 HL_PRIM void HL_NAME(__array_reverse_##SUFFIX)( varray *array ) { realtime_array_reverse(array); }
 
 DEFINE_ARRAY_REVERSE(i32)
+DEFINE_ARRAY_REVERSE(i64)
 DEFINE_ARRAY_REVERSE(f64)
 DEFINE_ARRAY_REVERSE(bytes)
 DEFINE_ARRAY_REVERSE(bool)
@@ -266,6 +274,7 @@ HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 }
 
 DEFINE_ARRAY_MUTATION(i32, int)
+DEFINE_ARRAY_MUTATION(i64, int64_t)
 DEFINE_ARRAY_MUTATION(f64, double)
 DEFINE_ARRAY_MUTATION(bytes, vbyte *)
 DEFINE_ARRAY_MUTATION(bool, bool)

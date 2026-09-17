@@ -10,9 +10,8 @@ runtime.
 - `Int` is encoded using MessagePack's compact integer markers and is limited
   to the Haxe `Int` range. `haxe.Int64` uses the same compact markers when the
   value fits in `Int`, and otherwise uses signed MessagePack `int64`. The
-  compiler-owned collection ABI currently supports `Int64` as a scalar field or
-  value, not as a direct array/map storage element; use a custom codec for a
-  different in-memory representation.
+  compiler-owned collection ABI stores `Int64` arrays and map values as native
+  64-bit elements.
 - `Float` is written as float64. The reader accepts both float32 and float64.
 - `String` is UTF-8 text; `Bytes` is MessagePack binary data.
 - Arrays, maps, and application-defined extension values are available as
@@ -123,7 +122,25 @@ class UserCodec implements MessagePackCodec<User> {
 }
 ```
 
-MessagePack is a value encoding, not a stream framing protocol. Network or
-file transports should add a length prefix or another framing layer around
-one encoded value. Existing runtime/plugin state envelopes remain responsible
-for their own versioning and lifecycle semantics.
+MessagePack is a value encoding, not a stream framing protocol. For a simple
+transport boundary, `haxe.wire.MessagePackFrame` provides a fixed versioned
+envelope:
+
+```text
+HMPK | version:u8 | flags:u8 | payloadLength:u32be | payload
+```
+
+`MessagePackFrame.CURRENT_VERSION` is `1`; version 1 requires flags to be
+zero, rejects truncation and trailing bytes, and applies the same bounded
+payload limit as `MessagePackReader` by default. It frames exactly one
+MessagePack value but does not replace `MessagePack.decode`'s exact-value
+validation:
+
+```haxe
+var frame = MessagePackFrame.pack(MessagePack.encode(user));
+var bytes = MessagePackFrame.unpack(frame);
+var decoded:User = MessagePack.decode(bytes);
+```
+
+Existing runtime/plugin state envelopes remain responsible for their own
+versioning and lifecycle semantics when they need a different contract.

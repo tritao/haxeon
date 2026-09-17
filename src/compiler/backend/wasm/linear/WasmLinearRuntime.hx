@@ -100,7 +100,7 @@ class WasmLinearRuntime {
 							functions.set(native.name, addTypeTest(module, native.name, program));
 						case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayCopy(module, native.name, 4, allocator));
-						case "__array_copy_f64":
+						case "__array_copy_f64", "__array_copy_i64":
 							functions.set(native.name, WasmLinearArrays.addArrayCopy(module, native.name, 8, allocator));
 						case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_ref":
 							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, null));
@@ -113,9 +113,11 @@ class WasmLinearRuntime {
 							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, stringEqual));
 						case "__array_index_of_f64":
 							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 8, F64, null));
+						case "__array_index_of_i64":
+							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 8, I64, null));
 						case "__array_slice_i32", "__array_slice_bool", "__array_slice_ref", "__array_slice_bytes":
 							functions.set(native.name, WasmLinearArrays.addArraySlice(module, native.name, 4, allocator));
-						case "__array_slice_f64":
+						case "__array_slice_f64", "__array_slice_i64":
 							functions.set(native.name, WasmLinearArrays.addArraySlice(module, native.name, 8, allocator));
 						case "__array_join_bytes":
 							var stringConcat = functions.get("__string_concat");
@@ -126,32 +128,36 @@ class WasmLinearRuntime {
 							functions.set(native.name, WasmLinearArrays.addArrayJoinBytes(module, native.name, allocator, stringConcat));
 						case "__array_concat_i32", "__array_concat_bool", "__array_concat_ref", "__array_concat_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayConcat(module, native.name, 4, allocator));
-						case "__array_concat_f64":
+						case "__array_concat_f64", "__array_concat_i64":
 							functions.set(native.name, WasmLinearArrays.addArrayConcat(module, native.name, 8, allocator));
 						case "__array_push_i32", "__array_push_bool", "__array_push_ref", "__array_push_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayPush(module, native.name, 4, I32, allocator));
-						case "__array_push_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayPush(module, native.name, 8, F64, allocator));
+						case "__array_push_f64", "__array_push_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayPush(module, native.name, 8, native.name == "__array_push_i64" ? I64 : F64, allocator));
 						case "__array_pop_i32", "__array_pop_bool", "__array_pop_ref", "__array_pop_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 4, I32));
-						case "__array_pop_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 8, F64));
+						case "__array_pop_f64", "__array_pop_i64":
+							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 8, native.name == "__array_pop_i64" ? I64 : F64));
 						case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref", "__array_unshift_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayUnshift(module, native.name, 4, I32, allocator));
-						case "__array_unshift_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayUnshift(module, native.name, 8, F64, allocator));
+						case "__array_unshift_f64", "__array_unshift_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayUnshift(module, native.name, 8, native.name == "__array_unshift_i64" ? I64 : F64, allocator));
 						case "__array_insert_i32", "__array_insert_bool", "__array_insert_ref", "__array_insert_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayInsert(module, native.name, 4, I32, allocator));
-						case "__array_insert_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayInsert(module, native.name, 8, F64, allocator));
+						case "__array_insert_f64", "__array_insert_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayInsert(module, native.name, 8, native.name == "__array_insert_i64" ? I64 : F64, allocator));
 						case "__array_shift_i32", "__array_shift_bool", "__array_shift_ref", "__array_shift_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 4, I32));
-						case "__array_shift_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 8, F64));
+						case "__array_shift_f64", "__array_shift_i64":
+							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 8, native.name == "__array_shift_i64" ? I64 : F64));
 						case "__array_resize_i32", "__array_resize_bool", "__array_resize_ref", "__array_resize_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayResize(module, native.name, 4, I32, allocator));
-						case "__array_resize_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayResize(module, native.name, 8, F64, allocator));
+						case "__array_resize_f64", "__array_resize_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayResize(module, native.name, 8, native.name == "__array_resize_i64" ? I64 : F64, allocator));
 						case "__array_remove_i32", "__array_remove_bool", "__array_remove_ref":
 							functions.set(native.name, WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, null));
 						case "__array_remove_bytes":
@@ -161,15 +167,17 @@ class WasmLinearRuntime {
 								functions.set("__string_equal", stringEqual);
 							}
 							functions.set(native.name, WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, stringEqual));
-						case "__array_remove_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayRemove(module, native.name, 8, F64, null));
+						case "__array_remove_f64", "__array_remove_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayRemove(module, native.name, 8, native.name == "__array_remove_i64" ? I64 : F64, null));
 						case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref", "__array_reverse_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayReverse(module, native.name, 4, I32));
-						case "__array_reverse_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayReverse(module, native.name, 8, F64));
+						case "__array_reverse_f64", "__array_reverse_i64":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayReverse(module, native.name, 8, native.name == "__array_reverse_i64" ? I64 : F64));
 						case "__array_splice_i32", "__array_splice_bool", "__array_splice_ref", "__array_splice_bytes":
 							functions.set(native.name, WasmLinearArrays.addArraySplice(module, native.name, 4, allocator));
-						case "__array_splice_f64":
+						case "__array_splice_f64", "__array_splice_i64":
 							functions.set(native.name, WasmLinearArrays.addArraySplice(module, native.name, 8, allocator));
 						default:
 					}
@@ -1672,15 +1680,16 @@ class WasmLinearRuntime {
 	public static function mapValueType(mapName:String):IrType
 		return if (StringTools.endsWith(mapName,
 			"_i32")) I32; else if (StringTools.endsWith(mapName,
+			"_i64")) I64; else if (StringTools.endsWith(mapName,
 			"_bool")) Bool; else if (StringTools.endsWith(mapName,
 			"_f64")) F64; else if (StringTools.endsWith(mapName,
 			"_bytes")) Bytes; else if (StringTools.endsWith(mapName, "_ref")) Dyn; else throw 'Unknown Wasm map value ABI "$mapName"';
 
 	public static function mapEntrySize(valueType:IrType):Int
-		return valueType == F64 ? 16 : 8;
+		return valueType == F64 || valueType == I64 ? 16 : 8;
 
 	public static function mapValueOffset(valueType:IrType):Int
-		return valueType == F64 ? 8 : 4;
+		return valueType == F64 || valueType == I64 ? 8 : 4;
 
 	static function ensureStringEqual(module:WasmModule, functions:Map<String, Int>):Int {
 		var result = functions.get("__string_equal");
@@ -1702,11 +1711,11 @@ class WasmLinearRuntime {
 	}
 
 	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int, valueType:IrType):Int {
-		var suffix = valueType == F64 ? "f64" : "i32",
+		var suffix = valueType == F64 ? "f64" : valueType == I64 ? "i64" : "i32",
 			name = "__array_alloc_" + suffix,
 			result = functions.get(name);
 		if (result == null) {
-			result = WasmLinearArrays.addArrayAllocator(module, name, valueType == F64 ? 8 : 4, allocator);
+			result = WasmLinearArrays.addArrayAllocator(module, name, valueType == F64 || valueType == I64 ? 8 : 4, allocator);
 			functions.set(name, result);
 		}
 		return result;
@@ -1784,10 +1793,10 @@ class WasmLinearRuntime {
 		return keyType == Bytes ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
 
 	static function loadMapValue(type:IrType, offset:Int):WasmInstruction
-		return type == F64 ? F64Load(offset) : I32Load(offset);
+		return type == F64 ? F64Load(offset) : type == I64 ? I64Load(offset) : I32Load(offset);
 
 	static function storeMapValue(type:IrType, offset:Int):WasmInstruction
-		return type == F64 ? F64Store(offset) : I32Store(offset);
+		return type == F64 ? F64Store(offset) : type == I64 ? I64Store(offset) : I32Store(offset);
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
@@ -2026,6 +2035,21 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(F64Load(valueOffset));
 				builder.emit(F64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
+			} else if (valueType == I64) {
+				builder.i32Const(WasmLayout.DYN_I64_SIZE);
+				builder.call(builder.functionRef(allocator));
+				builder.localSet(result);
+				builder.localGet(result);
+				builder.i32Const(WasmModuleSupport.typeId(I64));
+				builder.emit(I32Store(0));
+				builder.localGet(result);
+				builder.localGet(entries);
+				builder.localGet(index);
+				builder.i32Const(entrySize);
+				builder.emit(I32Mul);
+				builder.i32Add();
+				builder.emit(I64Load(valueOffset));
+				builder.emit(I64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
 			} else {
 				builder.localGet(entries);
 				builder.localGet(index);

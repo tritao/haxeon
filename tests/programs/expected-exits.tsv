@@ -5,6 +5,7 @@ bytes-codec	42
 messagepack-codec	42
 messagepack-generated	43
 messagepack-wire	42
+messagepack-malformed	42
 bytes-stream-edge	42
 call-many	42
 function-call	42

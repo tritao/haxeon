@@ -645,6 +645,7 @@ class WasmGcTypePlan {
 	static function mapValueIrType(mapName:String):IrType {
 		return if (StringTools.endsWith(mapName,
 			"_i32")) I32 else if (StringTools.endsWith(mapName,
+			"_i64")) I64 else if (StringTools.endsWith(mapName,
 			"_bool")) Bool else if (StringTools.endsWith(mapName,
 			"_f64")) F64 else if (StringTools.endsWith(mapName,
 			"_bytes")) Bytes else if (StringTools.endsWith(mapName, "_ref")) Dyn else throw 'Unknown Wasm GC map value type "$mapName"';
