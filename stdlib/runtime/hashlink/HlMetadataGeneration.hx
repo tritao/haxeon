@@ -464,6 +464,7 @@ class HlMetadataGeneration {
 		requireBuilding();
 		if (moduleContext.isNull())
 			throw "HashLink metadata generation requires a module context before publication";
+		var functions = requireFunctionTable(), functionCount = functions.length();
 		validateDescriptorTables();
 		validateDebugFiles();
 		for (functionIndex in 0...functionDescriptors.length()) {
@@ -474,9 +475,9 @@ class HlMetadataGeneration {
 		constantDescriptors.validate(globalCount);
 		debugSectionDescriptors.validate();
 		validateModulePools();
-		HlTypeLayout.validate(typeTable.pointer(), typeTable.length());
+		HlTypeLayout.validate(typeTable.pointer(), typeTable.length(), functionCount);
 		HlTypeLayout.bindModuleContexts(typeTable.pointer(), typeTable.length(), moduleContext);
-		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
+		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena, functionCount);
 		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
 		var usesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
 		HlTypeLayout.bindFunctionReferences(functionDescriptors.pointer(), functionDescriptors.length());

@@ -492,7 +492,7 @@ function main():Int {
 	try
 		invalidPrototypeGeneration.publish()
 	catch (error:Dynamic)
-		invalidPrototypeRejected = true;
+		invalidPrototypeRejected = Std.string(error).indexOf("object prototype function index") >= 0;
 	invalidPrototypeGeneration.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
