@@ -3,6 +3,7 @@ package runtime.hashlink;
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlObjectPrototypeKernel;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlCode;
 import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 
 /**
@@ -11,7 +12,7 @@ import runtime.hashlink.HlRuntimeJitBackend.HlRuntimeModuleHandle;
 	retirement; module policy and executable-code policy stay in Haxe.
 */
 interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
-	function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
+	function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle;
 	function initializeConstant(module:HlRuntimeModuleHandle, index:Int):Bool;
 	function callI32Slot(module:HlRuntimeModuleHandle, slot:Int):Int;
@@ -35,7 +36,7 @@ interface HlRuntimeModuleKernel extends HlObjectPrototypeKernel {
 class NativeHlRuntimeModuleKernel implements HlRuntimeModuleKernel {
 	public function new() {}
 
-	public inline function loadCodeManifest(code:RawPtr<HlNativeCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
+	public inline function loadCodeManifest(code:RawPtr<NativeModuleHlCode>, bytes:Bytes, moduleId:Bytes, revision:Int,
 		dispatch:HlRuntimeDispatchTable):HlRuntimeModuleHandle
 		return HlTypeBridge.native_runtime_module_load_code_manifest(code, bytes, bytes.length, moduleId, revision, dispatch.stableIds, dispatch.slots,
 			dispatch.count, dispatch.initializerSlot);

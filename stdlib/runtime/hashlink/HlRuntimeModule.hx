@@ -4,8 +4,9 @@ import haxe.io.Bytes;
 import runtime.memory.RawPtr;
 import runtime.memory.Mutex;
 import runtime.memory.GcHandle;
-import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
-import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchDebug;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInput;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchPools;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
@@ -120,8 +121,8 @@ class HlRuntimeModule {
 		});
 
 	/** Apply a patch while using Haxe-owned type and function metadata. */
-	public function patchCodeWithHaxeMetadata(input:RawPtr<HlRuntimePatchInput>, typeCount:Int, functions:HlRuntimePatchFunctions,
-		pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication
+	public function patchCodeWithHaxeMetadata(input:RawPtr<NativeModuleHlPatchInput>, typeCount:Int, functions:HlRuntimePatchFunctions,
+		pools:RawPtr<NativeModuleHlPatchPools>, debug:RawPtr<NativeModuleHlPatchDebug>):HlRuntimePatchPublication
 		return withModule(function(handle) {
 			if (input.isNull() || typeCount < 0 || functions == null || pools.isNull() || debug.isNull())
 				throw "HashLink external runtime patch requires decoded patch input, type count, function metadata, scalar pools, and debug metadata";

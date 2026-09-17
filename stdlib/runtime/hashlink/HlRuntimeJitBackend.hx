@@ -2,6 +2,9 @@ package runtime.hashlink;
 
 import haxe.io.Bytes;
 import runtime.memory.RawPtr;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchDebug;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInput;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchPools;
 
 /** Opaque native module handle consumed by the Haxe-owned JIT seam. */
 typedef HlRuntimeModuleHandle = hl.Abstract<"realtime_module">;
@@ -18,8 +21,8 @@ interface HlRuntimeJitBackend {
 	function patch(module:HlRuntimeModuleHandle, bytes:Bytes):Int;
 	function patchCode(module:HlRuntimeModuleHandle, bytes:Bytes):HlRuntimePatchPublication;
 	function patchCodeWithHaxeTypes(module:HlRuntimeModuleHandle, bytes:Bytes, typeCount:Int):HlRuntimePatchPublication;
-	function patchCodeWithHaxeMetadata(module:HlRuntimeModuleHandle, input:RawPtr<HlRuntimePatchInput>, typeCount:Int,
-		functions:HlRuntimePatchFunctions, pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication;
+	function patchCodeWithHaxeMetadata(module:HlRuntimeModuleHandle, input:RawPtr<NativeModuleHlPatchInput>, typeCount:Int,
+		functions:HlRuntimePatchFunctions, pools:RawPtr<NativeModuleHlPatchPools>, debug:RawPtr<NativeModuleHlPatchDebug>):HlRuntimePatchPublication;
 	function releaseCode(code:Null<HlRuntimeJitCodeHandle>):Bool;
 	function codeRevision(code:Null<HlRuntimeJitCodeHandle>):Int;
 	function allocationCount(module:HlRuntimeModuleHandle):Int;
@@ -50,8 +53,8 @@ class NativeHlRuntimeJitBackend implements HlRuntimeJitBackend {
 		return new HlRuntimePatchPublication(result, code);
 	}
 
-	public inline function patchCodeWithHaxeMetadata(module:HlRuntimeModuleHandle, input:RawPtr<HlRuntimePatchInput>, typeCount:Int,
-		functions:HlRuntimePatchFunctions, pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>):HlRuntimePatchPublication {
+	public inline function patchCodeWithHaxeMetadata(module:HlRuntimeModuleHandle, input:RawPtr<NativeModuleHlPatchInput>, typeCount:Int,
+		functions:HlRuntimePatchFunctions, pools:RawPtr<NativeModuleHlPatchPools>, debug:RawPtr<NativeModuleHlPatchDebug>):HlRuntimePatchPublication {
 		var status = Bytes.alloc(4),
 			code = HlTypeBridge.native_runtime_module_patch_code_haxe_metadata(module, input, typeCount, functions.pointer, functions.count,
 				pools, debug, cast status.getData()),
