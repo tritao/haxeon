@@ -9,6 +9,7 @@ import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 
 /** Regression gates for the shared lossless scanner, CST, and AST adapter. */
 class SyntaxScannerMain {
@@ -154,6 +155,19 @@ class SyntaxScannerMain {
 			|| declarationProgram.enums[0].cases.length != 2 || declarationProgram.enumAbstracts[0].values.length != 1
 			|| declarationProgram.abstracts[0].methods.length != 1)
 			throw "CST lowerer did not preserve declaration payloads";
+		var parserOwnedHeaderPayloads = 0;
+		for (node in declarationParser.cst.grammarNodes())
+			switch node.payload {
+				case SyntaxNodePayload.ClassHeaderRich(_, _, _, _, _, _),
+					SyntaxNodePayload.EnumHeader(_, _, _),
+					SyntaxNodePayload.EnumAbstractHeader(_, _, _, _, _),
+					SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _),
+					SyntaxNodePayload.InterfaceHeader(_, _, _):
+					parserOwnedHeaderPayloads++;
+				default:
+			}
+		if (parserOwnedHeaderPayloads < 5)
+			throw "CST declaration headers were not retained as parser-owned payloads";
 		var hasForStatement = false, hasVariableDeclaration = false, hasAssignment = false, hasTry = false, hasSwitch = false;
 		for (node in declarationParser.cst.grammarNodes())
 			switch node.kind {
