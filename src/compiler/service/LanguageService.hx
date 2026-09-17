@@ -44,6 +44,8 @@ import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxNode;
+import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxTriviaKind;
@@ -1617,36 +1619,55 @@ class LanguageService {
 	public function documentLinks(path:String, ?token:CancellationToken):Array<DocumentLink> {
 		var state = stateFor(path),
 			snapshot = state == null ? null : editorSnapshot(state),
-			tokens = snapshot == null ? null : snapshot.tokens,
 			result:Array<DocumentLink> = [];
-		if (state == null || tokens == null)
+		if (state == null || snapshot == null)
 			return result;
-		var index = 0;
-		while (index < tokens.length) {
+		var syntax = indexedStructure(state, token).syntaxTree;
+		for (node in syntax.grammarNodes()) {
 			if (token != null)
 				token.check();
-			if (tokens[index].kind != Import) {
-				index++;
+			if (node.kind != SyntaxKind.ImportDeclaration)
 				continue;
-			}
-			index++;
-			if (index >= tokens.length || tokens[index].kind != Identifier)
+			var importPath:Null<String> = switch node.payload {
+				case SyntaxNodePayload.Import(path, _): path;
+				default: null;
+			};
+			if (importPath == null)
 				continue;
-			var start = tokens[index].span.start,
-				end = tokens[index].span.end,
-				parts = [tokens[index].text];
-			index++;
-			while (index + 1 < tokens.length && tokens[index].kind == Dot && tokens[index + 1].kind == Identifier) {
-				parts.push(tokens[index + 1].text);
-				end = tokens[index + 1].span.end;
-				index += 2;
-			}
-			var importPath = parts.join("."),
+			var span = cstImportPathSpan(syntax, node),
 				target = compiler.semanticWorkspace.editorModuleForImport(importPath);
-			if (target != null)
-				result.push({span: snapshot.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
+			if (span != null && target != null)
+				result.push({span: span, targetPath: target.source.path, tooltip: "Open " + importPath});
 		}
 		return result;
+	}
+
+	static function cstImportPathSpan(tree:SyntaxTree, node:SyntaxNode):Null<SourceSpan> {
+		var started = false, start:Null<Int> = null, end:Null<Int> = null;
+		for (syntaxToken in tree.tokens) {
+			if (syntaxToken.span.start < node.span.start || syntaxToken.span.end > node.span.end)
+				continue;
+			if (!started) {
+				if (syntaxToken.kind == Import)
+					started = true;
+				continue;
+			}
+			if (syntaxToken.kind == Semicolon)
+				break;
+			if (syntaxToken.kind == Identifier && syntaxToken.text == "as")
+				break;
+			var pathToken = switch syntaxToken.kind {
+				case Identifier, TypeInt, TypeBool, TypeFloat, TypeString, Void, Dot, Star: true;
+				default: false;
+			};
+			if (!pathToken)
+				continue;
+			if (start == null && syntaxToken.kind != Dot)
+				start = syntaxToken.span.start;
+			if (start != null && syntaxToken.kind != Dot)
+				end = syntaxToken.span.end;
+		}
+		return start == null || end == null ? null : tree.source.span(start, end);
 	}
 
 	function workspaceSymbolIdentity(identity:String):Null<WorkspaceSymbol> {

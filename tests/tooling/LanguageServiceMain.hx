@@ -111,6 +111,15 @@ class LanguageServiceMain {
 			|| links[0].targetPath != "tools/Helper.hx"
 			|| aliasSource.substring(links[0].span.start, links[0].span.end) != "tools.Helper")
 			throw "language service did not resolve an aliased import's exact path span";
+		var conditionalLinkService = new LanguageService(),
+			conditionalLinkSource = "#if missing\nimport links.Missing;\n#else\nimport links.Target as T;\n#end\nfunction main():Void return;";
+		conditionalLinkService.update("links/Target.hx", "package links; class Target {}");
+		conditionalLinkService.update("links/Main.hx", conditionalLinkSource);
+		var conditionalLinks = conditionalLinkService.documentLinks("links/Main.hx");
+		if (conditionalLinks.length != 1
+			|| conditionalLinks[0].targetPath != "links/Target.hx"
+			|| conditionalLinkSource.substring(conditionalLinks[0].span.start, conditionalLinks[0].span.end) != "links.Target")
+			throw "CST document links did not retain the active aliased import path";
 		var kindStart = source.indexOf("Kind.One"), kindCompletionPosition = kindStart + "Kind.".length, kindPosition = kindStart + "Kind.One".length,
 			kindCompletion = service.complete("Main.hx", kindCompletionPosition), hasTwo = false;
 		for (item in kindCompletion)
