@@ -855,6 +855,32 @@ class LanguageServiceMain {
 		var enumSignature = enumService.signatureHelp("app/Main.hx", enumSource.lastIndexOf("41") + 1);
 		if (enumSignature == null || enumSignature.label != "Kind.Two(value:Int)" || enumSignature.activeParameter != 0)
 			throw "language service enum-constructor signature help failed";
+		var recoveredEnumService = new LanguageService(),
+			recoveredEnumTarget = "package recovered.enums; enum Result { Ok(value:Int); Err; } function main():Void return;",
+			recoveredEnumSource = "package recovered.app; import recovered.enums.Result; function read(value:Result):Int { var first:Result = Result.Ok(1); var second:Result = Result.Err; return value == first ? 1 : 0; } function unfinished(";
+		recoveredEnumService.update("recovered/enums/Result.hx", recoveredEnumTarget);
+		recoveredEnumService.compile("recovered.enums.Result");
+		recoveredEnumService.update("recovered/app/Main.hx", recoveredEnumSource);
+		var recoveredEnumCasePosition = recoveredEnumSource.indexOf("Result.Ok") + "Result.".length + 1,
+			recoveredEnumCaseDefinition = recoveredEnumService.definition("recovered/app/Main.hx", recoveredEnumCasePosition),
+			recoveredEnumCaseReferences = recoveredEnumService.references("recovered/app/Main.hx", recoveredEnumCasePosition);
+		if (recoveredEnumCaseDefinition == null || recoveredEnumCaseDefinition.stale
+			|| recoveredEnumCaseDefinition.path != "recovered/enums/Result.hx"
+			|| recoveredEnumCaseReferences.length < 2)
+			throw 'recovered enum-case navigation failed in a malformed module: definition=${recoveredEnumCaseDefinition == null ? "null" : recoveredEnumCaseDefinition.path}, references=${recoveredEnumCaseReferences.length}';
+		var recoveredInheritanceService = new LanguageService(),
+			recoveredInheritanceTarget = "package recovered.base; class Base { public var value:Int; public function read():Int return value; } function main():Void return;",
+			recoveredInheritanceSource = "package recovered.child; import recovered.base.Base; class Child extends Base { public function probe():Int return this.value; public function unfinished(";
+		recoveredInheritanceService.update("recovered/base/Base.hx", recoveredInheritanceTarget);
+		recoveredInheritanceService.compile("recovered.base.Base");
+		recoveredInheritanceService.update("recovered/child/Child.hx", recoveredInheritanceSource);
+		var recoveredInheritedPosition = recoveredInheritanceSource.indexOf("this.value") + "this.".length + 1,
+			recoveredInheritedDefinition = recoveredInheritanceService.definition("recovered/child/Child.hx", recoveredInheritedPosition),
+			recoveredInheritedReferences = recoveredInheritanceService.references("recovered/child/Child.hx", recoveredInheritedPosition);
+		if (recoveredInheritedDefinition == null || recoveredInheritedDefinition.stale
+			|| recoveredInheritedDefinition.path != "recovered/base/Base.hx"
+			|| recoveredInheritedReferences.length < 2)
+			throw 'recovered inherited-member navigation failed in a malformed module: definition=${recoveredInheritedDefinition == null ? "null" : recoveredInheritedDefinition.path}, references=${recoveredInheritedReferences.length}';
 		var signatureService = new LanguageService(),
 			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);
