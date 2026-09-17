@@ -1248,6 +1248,18 @@ class LanguageServiceMain {
 			|| recoveredFieldFamilyImplementations[0].stale
 			|| fieldFamilyService.rename("fields/Base.hx", fieldFamilyBase.indexOf("value") + 1, "renamed").length != 0)
 			throw 'recovered field member-family policy failed: references=${recoveredFieldFamilyReferences.length}, implementations=${recoveredFieldFamilyImplementations.length}, stale=${recoveredFieldFamilyImplementations.length == 0 ? "missing" : Std.string(recoveredFieldFamilyImplementations[0].stale)}';
+		var staticMemberService = new LanguageService(),
+			staticMemberBase = "package staticfamily; class Base { public static var value:Int; public static function make():Int return value; }",
+			staticMemberChild = "package staticfamily; import staticfamily.Base; class Child extends Base { public static var value:Int; public static function make():Int return value; function unfinished(",
+			staticMemberMain = "package staticapp; import staticfamily.Base; function main():Int return Base.value + Base.make();";
+		staticMemberService.update("staticfamily/Base.hx", staticMemberBase);
+		staticMemberService.update("staticfamily/Child.hx", staticMemberChild);
+		staticMemberService.update("staticapp/Main.hx", staticMemberMain);
+		staticMemberService.compile("staticapp.Main");
+		var staticFieldImplementations = staticMemberService.implementations("staticfamily/Base.hx", staticMemberBase.indexOf("value") + 1),
+			staticMethodImplementations = staticMemberService.implementations("staticfamily/Base.hx", staticMemberBase.indexOf("make") + 1);
+		if (staticFieldImplementations.length != 0 || staticMethodImplementations.length != 0)
+			throw 'static member navigation incorrectly crossed a derived shadow: field=${staticFieldImplementations.length}, method=${staticMethodImplementations.length}';
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",

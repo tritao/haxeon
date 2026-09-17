@@ -187,7 +187,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   rejected. Package-qualified identities, aliases, wildcard packages, lazy
   secondary modules, inherited generic members, constructors, enum values,
   super, and source-level type operands are covered. Full type-aware navigation
-  and global reference precision remain.
+  and global reference precision remain. Member-family navigation now includes
+  class fields while keeping static shadows owner-local instead of treating
+  them as inherited implementations.
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.

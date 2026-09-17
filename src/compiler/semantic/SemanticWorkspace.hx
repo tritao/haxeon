@@ -1954,7 +1954,8 @@ class SemanticWorkspace {
 		if (resolved == null)
 			return [];
 		var owner:Null<String> = null,
-			member:Null<String> = null;
+			member:Null<String> = null,
+			memberIsStatic:Null<Bool> = null;
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
@@ -1966,18 +1967,21 @@ class SemanticWorkspace {
 					if (sameSpan(field.span, resolved.symbol.declaration)) {
 						owner = qualifiedType(model, decl.name);
 						member = field.name;
+						memberIsStatic = field.isStatic;
 					}
 			for (decl in model.program.classes)
 				for (methodDeclaration in decl.methods)
 					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
 						owner = qualifiedType(model, decl.name);
 						member = methodDeclaration.name;
+						memberIsStatic = methodDeclaration.isStatic;
 					}
 			for (decl in model.program.interfaces)
 				for (methodDeclaration in decl.methods)
 					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
 						owner = qualifiedType(model, decl.name);
 						member = methodDeclaration.name;
+						memberIsStatic = false;
 					}
 		}
 		if (owner == null || member == null)
@@ -1993,26 +1997,26 @@ class SemanticWorkspace {
 			for (decl in model.program.classes) {
 				var candidateOwner = qualifiedType(model, decl.name),
 					related = candidateOwner == owner
-						|| editorInheritsFrom(state, candidateOwner, owner, [], token)
-						|| editorInheritsFrom(state, owner, candidateOwner, [], token);
+					|| memberIsStatic != true && (editorInheritsFrom(state, candidateOwner, owner, [], token)
+						|| editorInheritsFrom(state, owner, candidateOwner, [], token));
 				if (!related)
 					continue;
 				for (field in decl.fields)
-					if (field.name == member)
+					if (field.name == member && field.isStatic == memberIsStatic)
 						addImplementation(result, seen, state, 'class:${decl.name}:field:$member', field.span);
 				for (methodDeclaration in decl.methods)
-					if (methodDeclaration.name == member)
+					if (methodDeclaration.name == member && methodDeclaration.isStatic == memberIsStatic)
 						addImplementation(result, seen, state, 'class:${decl.name}:method:$member', methodDeclaration.span);
 			}
 			for (decl in model.program.interfaces) {
 				var candidateOwner = qualifiedType(model, decl.name),
 					related = candidateOwner == owner
-						|| editorInheritsFrom(state, candidateOwner, owner, [], token)
-						|| editorInheritsFrom(state, owner, candidateOwner, [], token);
+					|| memberIsStatic != true && (editorInheritsFrom(state, candidateOwner, owner, [], token)
+						|| editorInheritsFrom(state, owner, candidateOwner, [], token));
 				if (!related)
 					continue;
 				for (methodDeclaration in decl.methods)
-					if (methodDeclaration.name == member)
+					if (methodDeclaration.name == member && methodDeclaration.isStatic == memberIsStatic)
 						addImplementation(result, seen, state, 'interface:${decl.name}:method:$member', methodDeclaration.span);
 			}
 		}
@@ -2032,7 +2036,8 @@ class SemanticWorkspace {
 			return [];
 		var owner:Null<String> = null,
 			member:Null<String> = null,
-			targetIsType = false;
+			targetIsType = false,
+			targetIsStatic = false;
 		for (state in orderedStates()) {
 			var model = editor ? editorModel(state) : effectiveModel(state);
 			if (model == null)
@@ -2046,11 +2051,13 @@ class SemanticWorkspace {
 						if (sameSpan(field.span, resolved.symbol.declaration)) {
 							owner = qualifiedType(model, decl.name);
 							member = field.name;
+							targetIsStatic = field.isStatic;
 						}
 					for (method in decl.methods)
 						if (sameSpan(method.span, resolved.symbol.declaration)) {
 							owner = qualifiedType(model, decl.name);
 							member = method.name;
+							targetIsStatic = method.isStatic;
 						}
 				}
 			}
@@ -2063,6 +2070,7 @@ class SemanticWorkspace {
 						if (sameSpan(method.span, resolved.symbol.declaration)) {
 							owner = qualifiedType(model, decl.name);
 							member = method.name;
+							targetIsStatic = false;
 						}
 				}
 			}
@@ -2082,14 +2090,16 @@ class SemanticWorkspace {
 				var derived = editor ? editorInheritsFrom(state, identity, owner, [], token) : inheritsFrom(identity, owner, []);
 				if (identity == owner || !derived)
 					continue;
+				if (targetIsStatic)
+					continue;
 				if (targetIsType) {
 					addImplementation(result, seen, state, 'class:${decl.name}', decl.span);
 				} else {
 					for (field in decl.fields)
-						if (field.name == member)
+						if (field.name == member && field.isStatic == targetIsStatic)
 							addImplementation(result, seen, state, 'class:${decl.name}:field:$member', field.span);
 					for (method in decl.methods)
-						if (method.name == member)
+						if (method.name == member && method.isStatic == targetIsStatic)
 							addImplementation(result, seen, state, 'class:${decl.name}:method:$member', method.span);
 				}
 			}
