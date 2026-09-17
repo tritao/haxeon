@@ -34,6 +34,7 @@ typedef PublishedBaseline = {
 typedef PendingPublication = {
 	final baseline:PublishedBaseline;
 	final revision:Int;
+	final sourceGeneration:Int;
 	final abi:RuntimeAbiDescriptor;
 	final snapshot:CompilerSnapshot;
 	final assembler:HlModuleAssembler;
@@ -96,12 +97,14 @@ class CompilerPublication {
 			case Untracked, Ready(_):
 		}
 
-	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot, assembler:HlModuleAssembler):Void
+	public function candidate(revision:Int, sourceGeneration:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot,
+		assembler:HlModuleAssembler):Void
 		state = switch state {
 			case Untracked: Untracked;
 			case Ready(baseline): Pending({
 					baseline: baseline,
 					revision: revision,
+					sourceGeneration: sourceGeneration,
 					abi: abi,
 					snapshot: snapshot,
 					assembler: assembler

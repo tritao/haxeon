@@ -45,7 +45,7 @@ class CompilationTransaction {
 			if (!compiler.isSourceGenerationCurrent(generation))
 				throw new CancellationError();
 			compiler.adoptCandidate(candidate);
-			compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
+			compiler.publication.candidate(result.revision, compiler.currentSourceGeneration(), abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
 			if (!compiler.isSourceGenerationCurrent(generation))

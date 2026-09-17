@@ -275,7 +275,10 @@ class Compiler {
 
 	public function rejectPublication(revision:Int):Void {
 		var candidate = publication.reject(revision);
-		restore(candidate.snapshot);
+		// A newer edit may have arrived while the runtime publication was
+		// pending. Restore the compiler/runtime baseline without rolling back
+		// source modules that now belong to that newer generation.
+		restore(candidate.snapshot, sourceGeneration == candidate.sourceGeneration);
 		assembler = candidate.assembler;
 	}
 
@@ -780,11 +783,13 @@ class Compiler {
 		return state;
 	}
 
-	function restore(snapshot:CompilerSnapshot):Void {
-		for (name in [for (name in modules.keys()) name])
-			modules.remove(name);
-		for (name => state in snapshot.modules)
-			modules.set(name, state);
+	function restore(snapshot:CompilerSnapshot, restoreModules:Bool = true):Void {
+		if (restoreModules) {
+			for (name in [for (name in modules.keys()) name])
+				modules.remove(name);
+			for (name => state in snapshot.modules)
+				modules.set(name, state);
+		}
 		types = snapshot.types;
 		objectCache = snapshot.objectCache;
 		lastTypedProgram = snapshot.lastTypedProgram;

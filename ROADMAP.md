@@ -137,7 +137,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   boundary, retain published object identity for untouched modules, and reject
   candidates whose source/configuration generation was superseded. This keeps
   source, semantic artifacts, diagnostics, and revisions coherent while work is
-  in flight; immutable publication before parallel analysis remains future work.
+  in flight. Rejecting a pending runtime publication also preserves newer
+  source edits while restoring the acknowledged compiler/runtime baseline;
+  immutable publication before parallel analysis remains future work.
 - [~] Semantic index construction now has a dedicated `SemanticIndexBuilder`,
   shared exhaustive typed-AST traversal, and an immutable query-state snapshot
   detached from the construction workspace. Token-only completion-context

@@ -331,6 +331,20 @@ class ModuleMain {
 			|| retriedPublication.patchBytes.compare(rejectedPublication.patchBytes) != 0)
 			throw "Retry after runtime rejection disagreed with the rejected candidate";
 		publicationCompiler.acknowledgePublication(retriedPublication.revision);
+		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
+		var pendingEdit = publicationCompiler.compile("Main");
+		publicationCompiler.update("Main.hx", "function main():Int { return 42; }");
+		publicationCompiler.rejectPublication(pendingEdit.revision);
+		var editedState = publicationCompiler.modules.get("Main");
+		if (editedState == null
+			|| editedState.source.text.indexOf("return 42") < 0
+			|| editedState.ast != null
+			|| publicationCompiler.publicationStatus().hasPendingRevision)
+			throw "Rejecting a pending publication rolled back a newer source edit";
+		var afterPendingEdit = publicationCompiler.compile("Main");
+		if (afterPendingEdit.revision != pendingEdit.revision)
+			throw "Compiler did not rebuild the newer source after rejecting an older publication";
+		publicationCompiler.acknowledgePublication(afterPendingEdit.revision);
 		var structuralCompiler = new Compiler();
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public function new():Void { this.value = 42; } } function main():Int { var editor = new Editor(); return editor.value; }");
