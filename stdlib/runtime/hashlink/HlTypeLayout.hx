@@ -189,8 +189,8 @@ class HlTypeLayout {
 		}
 	}
 
-	public static function initialize(types:RawPtr<RawPtr<HlType>>, count:Int, arena:HlTypeArena, ?functionCount:Int = -1):Void {
-		if (count < 0 || (count > 0 && types.isNull()) || arena == null)
+	public static function initialize(types:RawPtr<RawPtr<HlType>>, count:Int, arena:HlTypeArena, functionCount:Int):Void {
+		if (count < 0 || functionCount < 0 || (count > 0 && types.isNull()) || arena == null)
 			throw "HashLink type layout initialization requires a type table and arena";
 		validate(types, count, functionCount);
 		var complete:Array<RawPtr<HlType>> = [], active:Array<RawPtr<HlType>> = [];

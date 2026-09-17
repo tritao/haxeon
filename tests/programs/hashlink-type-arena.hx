@@ -182,7 +182,7 @@ function main():Int {
 	derivedTable.add(recursiveObject);
 	derivedTable.add(builtEnum);
 	derivedTable.add(builtVirtual);
-	HlTypeLayout.initialize(derivedTable.pointer(), derivedTable.length(), arena);
+	HlTypeLayout.initialize(derivedTable.pointer(), derivedTable.length(), arena, 5);
 	var graphCorrect = cast(builtObject.ref.kind, Int) == 11
 		&& cast(objectData.ref.nfields, Int) == 1
 			&& objectData.ref.nfields == 1
@@ -456,7 +456,7 @@ function main():Int {
 	malformedTable.add(malformedObject);
 	var malformedObjectRejected = false;
 	try
-		HlTypeLayout.initialize(malformedTable.pointer(), malformedTable.length(), malformedArena)
+		HlTypeLayout.initialize(malformedTable.pointer(), malformedTable.length(), malformedArena, 0)
 	catch (error:Dynamic)
 		malformedObjectRejected = true;
 	malformedArena.dispose();
