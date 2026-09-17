@@ -48,6 +48,7 @@ class TestCatalog {
 		"AbiMatrixMain",
 		"ParserRecoveryMain",
 		"ParserRecoveryFuzzMain",
+		"SyntaxScannerMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
 		"WasmBackendMain",

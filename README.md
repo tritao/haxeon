@@ -581,6 +581,20 @@ Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
 `--scale-iterations` to tune a run. Benchmark comparisons are informational and
 do not enforce thresholds.
 
+The shared lexical baseline compares the compiler-token adapter with the
+lossless tooling stream before CST work is introduced:
+
+```sh
+./.tools/haxe/haxe benchmarks/syntax-scanner-benchmark.hxml
+LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/syntax-scanner-benchmark.hl \
+  --iterations 100 --warmup 10 --check-budgets
+```
+
+Compiler mode filters trivia and does not retain lossless tokens; tooling mode
+retains source spans and trivia for formatter/CST consumers. The benchmark
+records both latency distributions and token counts in
+`out/syntax-scanner-benchmark.json`.
+
 ## 🧪 Development
 
 ### Native build
