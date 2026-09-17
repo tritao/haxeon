@@ -2838,7 +2838,7 @@ class SemanticIndexBuilder {
 			expectedTypes: completionTypes,
 			qualifiers: recoveredQualifiers,
 			classBases: recoveredClassBases,
-			declarations: declarations,
+			classes: [for (name => declaration in declarations.classes) {name: name, span: declaration.span}],
 			tokens: tokens
 		}, position, qualifier, token);
 	}

@@ -48,7 +48,7 @@ class SemanticIndexRecoveryQuery {
 				type: qualifier.type
 			}],
 			classBases: builder.recoveredClassBases.copy(),
-			declarations: builder.declarations,
+			classes: [for (name => declaration in builder.declarations.classes) {name: name, span: declaration.span}],
 			tokens: builder.tokens.copy()
 		};
 		receiverSignatures = [];

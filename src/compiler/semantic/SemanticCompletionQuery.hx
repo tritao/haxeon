@@ -3,7 +3,6 @@ package compiler.semantic;
 import compiler.service.CancellationToken;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token;
-import compiler.types.DeclarationIndex;
 import compiler.types.Type.CompilerType;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticIndex.SemanticCompletionContextKind;
@@ -17,7 +16,7 @@ typedef SemanticCompletionFacts = {
 	final expectedTypes:Array<{span:SourceSpan, type:CompilerType}>;
 	final qualifiers:Array<{name:String, span:SourceSpan, type:CompilerType}>;
 	final classBases:Map<String, CompilerType>;
-	final declarations:DeclarationIndex;
+	final classes:Array<{name:String, span:SourceSpan}>;
 	final tokens:Array<Token>;
 }
 
@@ -63,7 +62,7 @@ class SemanticCompletionQuery {
 				}
 		}
 		if (receiver == null && overrideContext)
-			for (owner in facts.declarations.classes)
+			for (owner in facts.classes)
 				if (position >= owner.span.start && position <= owner.span.end && facts.classBases.exists(owner.name)) {
 					receiver = facts.classBases.get(owner.name);
 					break;
