@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 9;
+	public static inline final VERSION:Int = 10;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -52,7 +52,7 @@ class CanonicalIrCodec {
 			if (version < 1 || version > VERSION)
 				throw "Unsupported canonical Haxeon IR version";
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
-			program.natives = readNatives(input, bytes.length);
+			program.natives = readNatives(input, bytes.length, version);
 			program.cNatives = version >= 2 ? readCNatives(input, bytes.length, version) : [];
 			program.objects = readObjects(input, bytes.length);
 			program.interfaces = readInterfaces(input, bytes.length);
@@ -76,19 +76,35 @@ class CanonicalIrCodec {
 			IrTypeCodec.writeString(output, native.symbol);
 			writeTypes(output, native.arguments);
 			IrTypeCodec.writeType(output, native.result, 0);
+			var generatedFunctionDependencies = native.generatedFunctionDependencies;
+			writeCount(output, generatedFunctionDependencies == null ? 0 : generatedFunctionDependencies.length);
+			if (generatedFunctionDependencies != null)
+				for (functionName in generatedFunctionDependencies)
+					IrTypeCodec.writeString(output, functionName);
 		}
 	}
 
-	static function readNatives(input:BytesInput, limit:Int):Array<IrNative> {
+	static function readNatives(input:BytesInput, limit:Int, version:Int):Array<IrNative> {
 		var result:Array<IrNative> = [];
-		for (_ in 0...readCount(input))
+		for (_ in 0...readCount(input)) {
+			var name = IrTypeCodec.readString(input, limit),
+				library = IrTypeCodec.readString(input, limit),
+				symbol = IrTypeCodec.readString(input, limit),
+				arguments = readTypes(input, limit),
+				resultType = IrTypeCodec.readType(input, limit, 0),
+				generatedFunctionDependencies:Array<String> = [];
+			if (version >= 10)
+				for (_ in 0...readCount(input))
+					generatedFunctionDependencies.push(IrTypeCodec.readString(input, limit));
 			result.push({
-				name: IrTypeCodec.readString(input, limit),
-				library: IrTypeCodec.readString(input, limit),
-				symbol: IrTypeCodec.readString(input, limit),
-				arguments: readTypes(input, limit),
-				result: IrTypeCodec.readType(input, limit, 0)
+				name: name,
+				library: library,
+				symbol: symbol,
+				arguments: arguments,
+				result: resultType,
+				generatedFunctionDependencies: generatedFunctionDependencies.length == 0 ? null : generatedFunctionDependencies
 			});
+		}
 		return result;
 	}
 

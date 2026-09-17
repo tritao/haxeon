@@ -130,6 +130,9 @@ typedef IrNative = {
 	final symbol:String;
 	final arguments:Array<IrType>;
 	final result:IrType;
+
+	/** Functions referenced by backend-generated lowering for this native call. */
+	@:optional final generatedFunctionDependencies:Null<Array<String>>;
 }
 
 /** Ordinary C ABI symbol required by an IR program. */

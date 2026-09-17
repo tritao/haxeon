@@ -275,10 +275,11 @@ class Compiler {
 		assembler = candidate.assembler;
 	}
 
-	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
+	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+			?generatedFunctionDependencies:Array<String>):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
-		natives.registerNative(name, library, symbol, arguments, result);
+		natives.registerNative(name, library, symbol, arguments, result, generatedFunctionDependencies);
 	}
 
 	public function nativeConfiguration():Array<NativeFunction> {

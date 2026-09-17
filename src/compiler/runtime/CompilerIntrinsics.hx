@@ -10,7 +10,7 @@ class CompilerIntrinsics {
 
 	public static function register(compiler:Compiler):Void {
 		for (native in configuration())
-			compiler.registerNative(native.name, native.library, native.symbol, native.arguments, native.result);
+			compiler.registerNative(native.name, native.library, native.symbol, native.arguments, native.result, native.generatedFunctionDependencies);
 	}
 
 	/** Immutable native definitions shared by compiler snapshots and services. */
@@ -20,7 +20,7 @@ class CompilerIntrinsics {
 		definitions.push(native("trace", "haxeon_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("__std_int_f64", "haxeon_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("__std_int_dynamic", "haxeon_runtime", "__std_int_dynamic", [TDynamic], TInt));
-		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString));
+		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString, ["runtime.Ryu.format"]));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
 		definitions.push(native("__iterator_new", "haxeon_runtime", "__iterator_new", [TDynamic], TNativeAbstract("realtime_iterator")));
 		definitions.push(native("__iterator_has_next", "haxeon_runtime", "__iterator_has_next", [TNativeAbstract("realtime_iterator")], TBool));
@@ -69,12 +69,14 @@ class CompilerIntrinsics {
 		return definitions;
 	}
 
-	static function native(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):NativeFunction
+	static function native(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+			?generatedFunctionDependencies:Array<String>):NativeFunction
 		return {
 			name: name,
 			library: library,
 			symbol: symbol,
 			arguments: arguments,
-			result: result
+			result: result,
+			generatedFunctionDependencies: generatedFunctionDependencies == null ? null : generatedFunctionDependencies.copy()
 		};
 }

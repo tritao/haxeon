@@ -12,6 +12,7 @@ typedef NativeDefinition = {
 	final symbol:String;
 	final arguments:Array<CompilerType>;
 	final result:CompilerType;
+	@:optional final generatedFunctionDependencies:Null<Array<String>>;
 }
 
 /** Owns immutable compiler native definitions and their derived views. */
@@ -21,10 +22,11 @@ class NativeRegistry {
 	public function new(?configuration:Array<NativeDefinition>) {
 		if (configuration != null)
 			for (native in configuration)
-				registerNative(native.name, native.library, native.symbol, native.arguments, native.result);
+				registerNative(native.name, native.library, native.symbol, native.arguments, native.result, native.generatedFunctionDependencies);
 	}
 
-	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType):Void {
+	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+			?generatedFunctionDependencies:Array<String>):Void {
 		if (isReserved(name))
 			throw 'Native "$name" is reserved by the compiler runtime ABI';
 		if (definitions.exists(name))
@@ -34,7 +36,8 @@ class NativeRegistry {
 			library: library,
 			symbol: symbol,
 			arguments: arguments.copy(),
-			result: result
+			result: result,
+			generatedFunctionDependencies: generatedFunctionDependencies == null ? null : generatedFunctionDependencies.copy()
 		});
 	}
 
@@ -68,7 +71,8 @@ class NativeRegistry {
 					library: native.library,
 					symbol: native.symbol,
 					arguments: [for (argument in native.arguments) irType(argument)],
-					result: irType(native.result)
+					result: irType(native.result),
+					generatedFunctionDependencies: native.generatedFunctionDependencies == null ? null : native.generatedFunctionDependencies.copy()
 				};
 			}
 		];
@@ -91,7 +95,8 @@ class NativeRegistry {
 			library: native.library,
 			symbol: native.symbol,
 			arguments: native.arguments.copy(),
-			result: native.result
+			result: native.result,
+			generatedFunctionDependencies: native.generatedFunctionDependencies == null ? null : native.generatedFunctionDependencies.copy()
 		};
 
 	static function irType(type:CompilerType):IrType
