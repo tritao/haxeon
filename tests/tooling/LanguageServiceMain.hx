@@ -903,15 +903,15 @@ class LanguageServiceMain {
 			|| !foundRecoveredGenericValue)
 			throw 'recovered generic inheritance lost substituted member identity: definition=${recoveredGenericMemberDefinition == null ? "null" : recoveredGenericMemberDefinition.path}, references=${recoveredGenericMemberReferences.length}, hover=${recoveredGenericMemberHover == null ? "null" : recoveredGenericMemberHover}, completion=$foundRecoveredGenericValue';
 		var recoveredGenericAliasService = new LanguageService(),
-			recoveredGenericAliasTarget = "package recovered.alias.base; class Box<T> { public var value:T; } typedef TextBox = Box<String>; function main():Void return;",
-			recoveredGenericAliasSource = "package recovered.alias.use; import recovered.alias.base.Box.TextBox; function use(box:TextBox):Void return box. ; function unfinished(";
+			recoveredGenericAliasTarget = "package recovered.alias.base; class Box<T> { public var value:T; } typedef BoxAlias<T> = Box<T>; function main():Void return;",
+			recoveredGenericAliasSource = "package recovered.alias.use; import recovered.alias.base.Box.BoxAlias; function use(box:BoxAlias<String>):Void return box. ; function unfinished(";
 		recoveredGenericAliasService.update("recovered/alias/base/Box.hx", recoveredGenericAliasTarget);
 		recoveredGenericAliasService.compile("recovered.alias.base.Box");
 		recoveredGenericAliasService.update("recovered/alias/use/Main.hx", recoveredGenericAliasSource);
 		var recoveredGenericAliasPosition = recoveredGenericAliasSource.indexOf("box.") + "box.".length,
 			recoveredGenericAliasCompletion = recoveredGenericAliasService.completeResult("recovered/alias/use/Main.hx", recoveredGenericAliasPosition).items,
 			foundRecoveredGenericAliasValue = false,
-			recoveredGenericAliasTypePosition = recoveredGenericAliasSource.indexOf(":TextBox") + 2,
+			recoveredGenericAliasTypePosition = recoveredGenericAliasSource.indexOf(":BoxAlias") + 2,
 			recoveredGenericAliasTypeDefinition = recoveredGenericAliasService.typeDefinition("recovered/alias/use/Main.hx", recoveredGenericAliasTypePosition);
 		for (item in recoveredGenericAliasCompletion)
 			if (item.label == "value" && item.detail == "value:String")
