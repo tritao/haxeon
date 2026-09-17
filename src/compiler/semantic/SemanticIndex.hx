@@ -647,6 +647,7 @@ class SemanticIndexBuilder {
 			for (fn in owner.methods)
 				indexRecoveredFunction(fn, owner.name, owner.typeParameters);
 		}
+		indexRecoveredFieldInitializers(program);
 		if (typedProgram != null)
 			for (fn in typedProgram.functions) {
 				checkpoint();
@@ -1044,6 +1045,9 @@ class SemanticIndexBuilder {
 			functionReceivers.push({span: fn.span, type: recoveredReceiverType(owner, ownerTypeParameters)});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
+		for (argument in fn.arguments)
+			if (argument.defaultValue != null)
+				indexRecoveredExpression(argument.defaultValue, recoveredType(argument.type), functionKey);
 		indexRecoveredStatementUses(fn.statements, recoveredType(fn.result));
 		var tokenIndex = firstTokenAtOrAfter(fn.span.start);
 		while (tokenIndex < tokens.length) {
@@ -1056,6 +1060,38 @@ class SemanticIndexBuilder {
 		currentCaller = null;
 		currentRecoveredFunctionKey = "";
 		currentRecoveredTypeParameters = [];
+	}
+
+	/**
+	 * Field initializers are source expressions outside ordinary function
+	 * bodies. Keep their current-source bindings in a recovered index just as
+	 * exact typed initialization does, including instance-field `this` access.
+	 */
+	function indexRecoveredFieldInitializers(program:AstProgram):Void {
+		for (owner in program.classes) {
+			for (field in owner.fields) {
+				if (field.initializer == null)
+					continue;
+				checkpoint();
+				var callerName = owner.name + "." + field.name,
+					previousCaller = currentCaller,
+					previousCallerName = currentCallerName,
+					previousDependencyKind = currentDependencyKind,
+					receiverAdded = !field.isStatic;
+				currentCaller = recoveredDeclaredSymbol(callerName);
+				currentCallerName = callerName;
+				currentDependencyKind = SemanticDependencyKind.Initializer;
+				if (receiverAdded)
+					functionReceivers.push({span: field.span, type: recoveredReceiverType(owner.name, owner.typeParameters)});
+				indexRecoveredExpression(field.initializer,
+					field.type == null ? null : recoveredType(field.type), callerName);
+				if (receiverAdded)
+					functionReceivers.pop();
+				currentCaller = previousCaller;
+				currentCallerName = previousCallerName;
+				currentDependencyKind = previousDependencyKind;
+			}
+		}
 	}
 
 	/**

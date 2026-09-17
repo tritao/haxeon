@@ -100,7 +100,33 @@ class ParserRecoveryMain {
 		assertTruncationRecovery();
 		assertTolerantTruncationTyping();
 		assertRecoveredTypeNavigation();
+		assertRecoveredAuxiliaryExpressions();
 		Sys.println("PASS: incomplete member and type recovery support completion");
+	}
+
+	static function assertRecoveredAuxiliaryExpressions():Void {
+		var service = new LanguageService(),
+			source = "class Provider { public static function make():Int return 1; } class Main { public static var value:Int = Provider.make(); public function unfinished(";
+		service.update("AuxiliaryRecovery.hx", source);
+		var use = source.indexOf("Provider.make") + "Provider.".length,
+			definition = service.definition("AuxiliaryRecovery.hx", use),
+			references = service.references("AuxiliaryRecovery.hx", use);
+		if (definition == null || definition.stale || definition.span.start != source.indexOf("function make"))
+			throw 'recovered field initializer did not retain its method definition: ${definition == null ? "null" : definition.path + ":" + definition.span.start + ":" + definition.stale} expected ${source.indexOf("function make")}';
+		var currentUse = false;
+		for (reference in references)
+			if (reference.path == "AuxiliaryRecovery.hx" && !reference.stale
+				&& reference.span.start == use)
+				currentUse = true;
+		if (!currentUse)
+			throw "recovered field initializer did not retain its method reference";
+
+		var defaultSource = "class Provider { public static function make():Int return 1; } function use(value:Provider = Provider.make()):Void return;";
+		service.update("AuxiliaryRecovery.hx", defaultSource);
+		var defaultPosition = defaultSource.indexOf("Provider.make") + "Provider.".length,
+			defaultDefinition = service.definition("AuxiliaryRecovery.hx", defaultPosition);
+		if (defaultDefinition == null || defaultDefinition.stale || defaultDefinition.span.start != defaultSource.indexOf("function make"))
+			throw "recovered parameter default did not retain its method definition";
 	}
 
 	static function assertRecoveredTypeNavigation():Void {
