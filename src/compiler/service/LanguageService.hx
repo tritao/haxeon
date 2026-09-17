@@ -628,24 +628,23 @@ class LanguageService {
 	}
 
 	/**
-	 * Rebuild recovered snapshots that import or share a package with a changed
-	 * editor module. Valid compiler snapshots remain authoritative and are left
-	 * for normal analysis invalidation.
+	 * Rebuild recovered snapshots that depend on a changed editor module. Body
+	 * changes use resolved/unresolved symbol evidence; declaration-context
+	 * changes additionally invalidate direct importers and relevant same-package
+	 * users. Valid compiler snapshots remain authoritative and are left for
+	 * normal analysis invalidation.
 	 */
 	function refreshDependentRecovery(changed:ModuleState):Void {
 		var changedProgram = effectiveAst(changed),
 			changedBodies:Map<String, Bool> = [],
 			forceNoReuse = changedProgram != null && changed.previousEditorSemanticModel != null
 				&& SemanticSignature.recoveryContext(changed.previousEditorSemanticModel.program)
-					!= SemanticSignature.recoveryContext(changedProgram);
-		// A body-only edit cannot change the declarations visible to another
-		// recovered module. Keep its current snapshot intact and avoid walking the
-		// entire same-package recovery graph; the changed module has already been
-		// rebuilt above, and body reuse handles its local dependents.
-		if (changedProgram != null && changed.previousEditorSemanticModel != null && !forceNoReuse)
-			return;
+					!= SemanticSignature.recoveryContext(changedProgram),
+			contextChanged = changedProgram != null
+				&& (changed.previousEditorSemanticModel == null || forceNoReuse);
 		if (changedProgram != null)
 			changedBodies = changedRecoveredFunctionBodies(changed.previousEditorSemanticModel, changedProgram);
+		var changedSymbols = recoverySemanticIds(effectiveSemanticModel(changed));
 		var pending:Array<ModuleState> = [changed],
 			refreshed:Map<String, Bool> = [changed.name => true],
 			pendingIndex = 0;
@@ -658,12 +657,15 @@ class LanguageService {
 				if (candidate == dependency || EditorWorkspaceView.currentExact(candidate) != null || refreshed.exists(candidate.name))
 					continue;
 				var candidateProgram = effectiveAst(candidate);
-				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram))
+				if (candidateProgram == null || !recoveryModuleVisible(candidateProgram, dependency, dependencyProgram)
+					|| !recoveryModuleAffected(candidateProgram, candidate, dependency, dependencyProgram, changedSymbols, contextChanged))
 					continue;
 				if (!forceNoReuse)
 					addRecoveredBodyDependents(candidateProgram, changedBodies);
 				clearRecoveredSnapshot(candidate);
 				recoverSyntax(candidate, null, changedBodies, forceNoReuse);
+				for (id in recoverySemanticIds(effectiveSemanticModel(candidate)).keys())
+					changedSymbols.set(id, true);
 				refreshed.set(candidate.name, true);
 				pending.push(candidate);
 			}
@@ -751,6 +753,7 @@ class LanguageService {
 			if (candidate == state
 				|| model == null
 				|| !recoveryModuleVisible(program, candidate, model.program)
+				|| !recoveryModuleUsedByProgram(program, model.program)
 				|| queued.exists(candidate.name))
 				continue;
 			queued.set(candidate.name, true);
@@ -793,7 +796,8 @@ class LanguageService {
 				if (nested == state || queued.exists(nested.name))
 					continue;
 				var nestedModel = effectiveSemanticModel(nested);
-				if (nestedModel == null || !recoveryModuleVisible(model.program, nested, nestedModel.program))
+				if (nestedModel == null || !recoveryModuleVisible(model.program, nested, nestedModel.program)
+					|| !recoveryModuleUsedByProgram(model.program, nestedModel.program))
 					continue;
 				queued.set(nested.name, true);
 				pending.push(nested);
@@ -812,6 +816,122 @@ class LanguageService {
 			if (modulePathMatches(candidate.name, importPath, candidateProgram))
 				return true;
 		return false;
+	}
+
+	/**
+	 * Limit tolerant typing to modules that can contribute a declaration to the
+	 * current source. Visibility alone is deliberately broad for completion,
+	 * but making every visible module part of the temporary type universe turns
+	 * a single edit into an avoidable workspace-wide type pass.
+	 */
+	static function recoveryModuleUsedByProgram(program:AstProgram, candidateProgram:AstProgram):Bool {
+		var names = recoveryExportedNames(candidateProgram);
+		return recoveryProgramUsesNames(program, names);
+	}
+
+	static function recoveryExportedNames(program:AstProgram):Map<String, Bool> {
+		var result:Map<String, Bool> = [],
+			add = function(name:String):Void {
+				var shortName = sourceName(name);
+				if (shortName.length > 0)
+					result.set(shortName, true);
+			};
+		for (alias in program.aliases)
+			add(alias.name);
+		for (decl in program.enums) {
+			add(decl.name);
+			for (caseDecl in decl.cases)
+				add(caseDecl.name);
+		}
+		for (decl in program.enumAbstracts) {
+			add(decl.name);
+			for (value in decl.values)
+				add(value.name);
+		}
+		for (decl in program.interfaces)
+			add(decl.name);
+		for (decl in program.classes)
+			add(decl.name);
+		for (decl in program.abstracts)
+			add(decl.name);
+		// Member names are intentionally omitted: a member use is meaningful
+		// only with its receiver type, while common names such as "new" would
+		// otherwise make every visible class look used.
+		for (fn in program.functions)
+			add(fn.name);
+		return result;
+	}
+
+	static function recoveryProgramUsesNames(program:AstProgram, names:Map<String, Bool>):Bool {
+		var spans:Array<SourceSpan> = [];
+		for (alias in program.aliases)
+			spans.push(alias.span);
+		for (decl in program.enums)
+			spans.push(decl.span);
+		for (decl in program.enumAbstracts)
+			spans.push(decl.span);
+		for (decl in program.interfaces)
+			spans.push(decl.span);
+		for (decl in program.classes)
+			spans.push(decl.span);
+		for (fn in program.functions)
+			spans.push(fn.span);
+		for (name in names.keys())
+			for (span in spans)
+				if (spanContainsIdentifier(span, name))
+					return true;
+		return false;
+	}
+
+	static function spanContainsIdentifier(span:SourceSpan, name:String):Bool {
+		var source = span.file,
+			start = span.start < 0 ? 0 : span.start,
+			end = span.end > source.bytes.length ? source.bytes.length : span.end,
+			position = source.text.indexOf(name, start);
+		while (position >= 0 && position + name.length <= end) {
+			var before = position == 0 || !isIdentifierPart(source.bytes.get(position - 1)),
+				after = position + name.length >= source.bytes.length
+					|| !isIdentifierPart(source.bytes.get(position + name.length));
+			if (before && after)
+				return true;
+			position = source.text.indexOf(name, position + name.length);
+		}
+		return false;
+	}
+
+	static function recoveryModuleAffected(program:AstProgram, candidate:ModuleState, dependency:ModuleState,
+		dependencyProgram:AstProgram, changedSymbols:Map<String, Bool>, contextChanged:Bool):Bool {
+		if (contextChanged) {
+			for (importPath in program.imports)
+				if (modulePathMatches(dependency.name, importPath, dependencyProgram))
+					return true;
+			for (_ => importPath in program.importAliases)
+				if (modulePathMatches(dependency.name, importPath, dependencyProgram))
+					return true;
+		}
+		var model = effectiveSemanticModel(candidate);
+		if (model != null) {
+			for (reference in model.index.resolvedDependencies())
+				if (changedSymbols.exists(Std.string(reference.targetId)))
+					return true;
+			var names = recoveryExportedNames(dependencyProgram);
+			for (unresolved in model.index.unresolvedSymbols())
+				if (names.exists(sourceName(unresolved.name)))
+					return true;
+		}
+		return contextChanged
+			&& program.packageName != null
+			&& dependencyProgram.packageName != null
+			&& program.packageName == dependencyProgram.packageName
+			&& recoveryModuleUsedByProgram(program, dependencyProgram);
+	}
+
+	static function recoverySemanticIds(model:Null<SemanticModel>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		if (model != null)
+			for (id in model.index.symbols.keys())
+				result.set(id, true);
+		return result;
 	}
 
 	static function recoveryModuleQualifiers(program:AstProgram, candidate:ModuleState, candidateProgram:AstProgram):Array<String> {
