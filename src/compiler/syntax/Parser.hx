@@ -51,6 +51,7 @@ class Parser {
 	var cstMissingTokens:Array<SyntaxToken> = [];
 	var parserPayloads:Map<Int, SyntaxNodePayload> = [];
 	var parserExpressionPayloads:Map<Int, compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
+	var lastTypeArgumentPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -75,7 +76,7 @@ class Parser {
 	}
 
 	inline function recordStatementCst(kind:SyntaxKind, statement:AstStatement, span:SourceSpan):Void {
-		var payload = simpleStatementPayload(statement);
+		var payload = parserStatementPayload(statement);
 		if (payload != null)
 			recordCstNode(kind, span, SyntaxNodePayload.Statement(payload));
 	}
@@ -858,21 +859,27 @@ class Parser {
 	}
 
 	function parseTypeArguments():Array<AstType> {
-		var result = [];
+		var result:Array<AstType> = [], payloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
+		lastTypeArgumentPayloads = [];
 		if (!match(TokenKind.Less))
 			return result;
 		var typeArgumentStart = previous().span;
-		if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current())))
+		if (recovering && (isExpressionTerminator(current().kind) || isDeclarationBoundary(current()))) {
 			result.push(missingType("type argument"));
+			payloads.push(compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType);
+		}
 		else {
 			while (!check(TokenKind.Greater) && !recoveringAtEnd()) {
-				result.push(parseDelimitedType(TokenKind.Greater));
+				var parsed = parseDelimitedTypeResult(TokenKind.Greater);
+				result.push(parsed.ast);
+				payloads.push(parsed.payload);
 				if (!match(TokenKind.Comma) || check(TokenKind.Greater))
 					break;
 			}
 		}
 		var typeArgumentEnd = consume(TokenKind.Greater).span;
 		recordCstNode(SyntaxKind.TypeArgumentList, typeArgumentStart.merge(typeArgumentEnd));
+		lastTypeArgumentPayloads = payloads;
 		return result;
 	}
 
@@ -1198,6 +1205,124 @@ class Parser {
 		var valuePayload = expressionPayload(value),
 			payload = valuePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Unary(operation, valuePayload);
 		return rememberExpression(expression, payload);
+	}
+
+	function parserArgumentPayloads(arguments:Array<AstArgument>):Null<Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload> = [];
+		for (argument in arguments) {
+			var type = simpleTypePayload(argument.type), defaultValue = argument.defaultValue == null ? null : expressionPayload(argument.defaultValue);
+			if (type == null || argument.defaultValue != null && defaultValue == null)
+				return null;
+			result.push({name: argument.name, type: type, optional: argument.optional == true, defaultValue: defaultValue});
+		}
+		return result;
+	}
+
+	function parserStatementPayload(statement:AstStatement):Null<compiler.syntax.SyntaxTree.SyntaxStatementPayload>
+		return switch statement {
+			case ErrorStatement(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Error;
+			case UninitializedDeclaration(name, type, _):
+				var typePayload = simpleTypePayload(type);
+				typePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.UninitializedDeclaration(name, typePayload);
+			case VarDeclaration(name, type, initializer, _):
+				var typePayload = type == null ? null : simpleTypePayload(type), initializerPayload = expressionPayload(initializer);
+				type != null && typePayload == null || initializerPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.VarDeclaration(name, typePayload, initializerPayload);
+			case Assignment(name, expression, _):
+				var value = expressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Assignment(name, value);
+			case IndexAssignment(array, index, expression, _):
+				var loweredArray = expressionPayload(array), loweredIndex = expressionPayload(index), loweredExpression = expressionPayload(expression);
+				loweredArray == null || loweredIndex == null || loweredExpression == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.IndexAssignment(loweredArray, loweredIndex, loweredExpression);
+			case FieldAssignment(object, field, expression, _):
+				var loweredObject = expressionPayload(object), loweredExpression = expressionPayload(expression);
+				loweredObject == null || loweredExpression == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.FieldAssignment(loweredObject, field, loweredExpression);
+			case Break(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Break;
+			case Continue(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Continue;
+			case ReturnVoid(_): compiler.syntax.SyntaxTree.SyntaxStatementPayload.ReturnVoid;
+			case Return(expression, _):
+				var value = expressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Return(value);
+			case AstStatement.If(condition, thenBranch, elseBranch, _):
+				var conditionPayload = expressionPayload(condition), thenPayload = parserStatementPayloads(thenBranch),
+					elsePayload = parserStatementPayloads(elseBranch);
+				conditionPayload == null || thenPayload == null || elsePayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.IfBranch(conditionPayload, thenPayload, elsePayload);
+			case AstStatement.While(condition, body, _):
+				var conditionPayload = expressionPayload(condition), bodyPayload = parserStatementPayloads(body);
+				conditionPayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.WhileLoop(conditionPayload, bodyPayload);
+			case AstStatement.DoWhile(body, condition, _):
+				var conditionPayload = expressionPayload(condition), bodyPayload = parserStatementPayloads(body);
+				conditionPayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.DoWhileLoop(bodyPayload, conditionPayload);
+			case AstStatement.ForIn(keyName, valueName, iterable, body, _):
+				var iterablePayload = expressionPayload(iterable), bodyPayload = parserStatementPayloads(body);
+				iterablePayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.ForLoop(keyName, valueName, iterablePayload, bodyPayload);
+			case AstStatement.Throw(expression, _):
+				var value = expressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Throw(value);
+			case AstStatement.Try(tryBranch, catches, _):
+				var loweredTry = parserStatementPayloads(tryBranch), loweredCatches = parserCatchPayloads(catches);
+				loweredTry == null || loweredCatches == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Try(loweredTry, loweredCatches);
+			case AstStatement.Switch(expression, cases, defaultBranch, hasDefault, _):
+				var loweredExpression = expressionPayload(expression), loweredCases = parserSwitchCasePayloads(cases), loweredDefault = parserStatementPayloads(defaultBranch);
+				loweredExpression == null || loweredCases == null || loweredDefault == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.Switch(loweredExpression, loweredCases, loweredDefault, hasDefault);
+			case Increment(name, delta, _): compiler.syntax.SyntaxTree.SyntaxStatementPayload.Increment(name, delta);
+			case Expression(expression, _):
+				var value = expressionPayload(expression);
+				value == null ? null : compiler.syntax.SyntaxTree.SyntaxStatementPayload.Expression(value);
+			default: null;
+		};
+
+	function parserStatementPayloads(statements:Array<AstStatement>):Null<Array<compiler.syntax.SyntaxTree.SyntaxStatementPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxStatementPayload> = [];
+		for (statement in statements) {
+			var payload = parserStatementPayload(statement);
+			if (payload == null)
+				return null;
+			result.push(payload);
+		}
+		return result;
+	}
+
+	function parserCatchPayloads(catches:Array<compiler.syntax.Ast.AstCatch>):Null<Array<compiler.syntax.SyntaxTree.SyntaxCatchPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxCatchPayload> = [];
+		for (catchClause in catches) {
+			var type = simpleTypePayload(catchClause.type), statements = parserStatementPayloads(catchClause.statements);
+			if (type == null || statements == null)
+				return null;
+			result.push({name: catchClause.name, type: type, statements: statements});
+		}
+		return result;
+	}
+
+	function parserSwitchCasePayloads(cases:Array<compiler.syntax.Ast.AstSwitchCase>):Null<Array<compiler.syntax.SyntaxTree.SyntaxSwitchCasePayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxSwitchCasePayload> = [];
+		for (caseClause in cases) {
+			var value = expressionPayload(caseClause.value), guard = caseClause.guard == null ? null : expressionPayload(caseClause.guard), statements = parserStatementPayloads(caseClause.statements);
+			if (value == null || caseClause.guard != null && guard == null || statements == null)
+				return null;
+			result.push({value: value, guard: guard, statements: statements});
+		}
+		return result;
+	}
+
+	function parserLambdaPayload(arguments:Array<AstArgument>, body:Array<AstStatement>):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> {
+		var argumentPayloads = parserArgumentPayloads(arguments), statementPayloads = parserStatementPayloads(body);
+		return argumentPayloads == null || statementPayloads == null ? null
+			: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Lambda(argumentPayloads, statementPayloads);
+	}
+
+	function rememberBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan):AstExpression {
+		var statementPayloads = parserStatementPayloads(statements), resultPayload = expressionPayload(result),
+			payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = statementPayloads == null || resultPayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Block(statementPayloads, resultPayload);
+		return rememberExpression(BlockExpression(statements, result, span), payload);
 	}
 
 	static function simpleExpressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>
@@ -1852,7 +1977,7 @@ class Parser {
 			}
 			var expression = parseExpression();
 			var end = expressionEnd(expression);
-			var span = start.merge(end), payload = simpleExpressionPayload(expression);
+			var span = start.merge(end), payload = expressionPayload(expression);
 			if (payload != null)
 				recordCstNode(SyntaxKind.ReturnStatement, span,
 					SyntaxNodePayload.Statement(compiler.syntax.SyntaxTree.SyntaxStatementPayload.Return(payload)));
@@ -1961,17 +2086,17 @@ class Parser {
 					target = stabilized.target;
 					bindings = stabilized.bindings;
 				}
-				var operationSpan = expressionSpan(target).merge(expressionSpan(value)),
+					var operationSpan = expressionSpan(target).merge(expressionSpan(value)),
 					assigned:AstExpression = switch assignmentKind {
 						case 0: value;
-						case 1: Add(target, value, operationSpan);
-						case 2: Sub(target, value, operationSpan);
-						case 3: Mul(target, value, operationSpan);
-						case 4: Div(target, value, operationSpan);
-						case 5: Mod(target, value, operationSpan);
-						case 6: BitAnd(target, value, operationSpan);
-						case 7: BitOr(target, value, operationSpan);
-						default: BitXor(target, value, operationSpan);
+						case 1: rememberBinary(Add(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add, target, value);
+						case 2: rememberBinary(Sub(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub, target, value);
+						case 3: rememberBinary(Mul(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul, target, value);
+						case 4: rememberBinary(Div(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Div, target, value);
+						case 5: rememberBinary(Mod(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mod, target, value);
+						case 6: rememberBinary(BitAnd(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitAnd, target, value);
+						case 7: rememberBinary(BitOr(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitOr, target, value);
+						default: rememberBinary(BitXor(target, value, operationSpan), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor, target, value);
 					},
 					assignment = switch target {
 						case Variable(name, _): Assignment(name, assigned, expressionSpan(target).merge(end));
@@ -2001,7 +2126,7 @@ class Parser {
 			var hasElse = match(TokenKind.Else),
 				elseBranch = hasElse ? parseStatementOrBlock() : [];
 			var end = statementEnd(hasElse ? elseBranch : thenBranch);
-			var statement = AstStatement.If(condition, thenBranch, elseBranch, start.merge(end)), payload = simpleStatementPayload(statement);
+			var statement = AstStatement.If(condition, thenBranch, elseBranch, start.merge(end)), payload = parserStatementPayload(statement);
 			if (payload != null)
 				recordCstNode(SyntaxKind.IfStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
 			return statement;
@@ -2013,7 +2138,7 @@ class Parser {
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock();
 			var end = statementEnd(body);
-			var statement = AstStatement.While(condition, body, start.merge(end)), payload = simpleStatementPayload(statement);
+			var statement = AstStatement.While(condition, body, start.merge(end)), payload = parserStatementPayload(statement);
 			if (payload != null)
 				recordCstNode(SyntaxKind.WhileStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
 			return statement;
@@ -2025,7 +2150,7 @@ class Parser {
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
 			var end = consume(TokenKind.Semicolon).span;
-			var statement = AstStatement.DoWhile(body, condition, start.merge(end)), payload = simpleStatementPayload(statement);
+			var statement = AstStatement.DoWhile(body, condition, start.merge(end)), payload = parserStatementPayload(statement);
 			if (payload != null)
 				recordCstNode(SyntaxKind.DoWhileStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
 			return statement;
@@ -2047,7 +2172,7 @@ class Parser {
 			var iterable = parseExpression();
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock(), end = statementEnd(body);
-			var statement = ForIn(name, valueName, iterable, body, start.merge(end)), payload = simpleStatementPayload(statement);
+			var statement = ForIn(name, valueName, iterable, body, start.merge(end)), payload = parserStatementPayload(statement);
 			if (payload != null)
 				recordCstNode(SyntaxKind.ForStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
 			return statement;
@@ -2178,7 +2303,7 @@ class Parser {
 			var value = parseExpression(),
 				span = expressionSpan(expression).merge(expressionSpan(value));
 				expression = switch expression {
-					case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
+					case Variable(name, _): rememberBlockExpression([Assignment(name, value, span)], Variable(name, span), span);
 					default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
 				};
 			recordCstNode(SyntaxKind.AssignmentExpression, span);
@@ -2193,15 +2318,26 @@ class Parser {
 			advance();
 			advance();
 			var end = parseOr();
-			expression = Range(expression, end, expressionSpan(expression).merge(expressionSpan(end)));
+			var startPayload = expressionPayload(expression), endPayload = expressionPayload(end),
+				rangePayload = startPayload == null || endPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Range(startPayload, endPayload);
+			expression = rememberExpression(Range(expression, end, expressionSpan(expression).merge(expressionSpan(end))), rangePayload);
 		}
 		if (match(TokenKind.NullCoalesce)) {
 			var fallback = parseNullCoalesce(),
 				span = expressionSpan(expression).merge(expressionSpan(fallback)),
 				localName = '$' + 'null-coalesce:${span.start}',
 				local = Variable(localName, expressionSpan(expression));
-			return BlockExpression([VarDeclaration(localName, null, expression, expressionSpan(expression))],
-				Conditional(Equal(local, NullLiteral(expressionSpan(local)), expressionSpan(local)), fallback, local, span), span);
+			var localPayload = compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(localName),
+				nullValue = rememberExpression(NullLiteral(expressionSpan(local)), compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue),
+				equality = rememberBinary(Equal(local, nullValue, expressionSpan(local)), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal, local, nullValue),
+				fallbackPayload = expressionPayload(fallback),
+				conditionalPayload = fallbackPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Conditional(
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Binary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal,
+							localPayload, compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue), fallbackPayload, localPayload),
+				conditional = rememberExpression(Conditional(equality, fallback, local, span), conditionalPayload);
+			return rememberBlockExpression([VarDeclaration(localName, null, expression, expressionSpan(expression))], conditional, span);
 		}
 		return expression;
 	}
@@ -2369,19 +2505,30 @@ class Parser {
 			return parseTryExpression(previous().span);
 		if (match(TokenKind.Throw)) {
 			var start = previous().span, value = parseExpression();
-			return ThrowExpression(value, start.merge(expressionSpan(value)));
+			var payload = expressionPayload(value);
+			return rememberExpression(ThrowExpression(value, start.merge(expressionSpan(value))),
+				payload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Throw(payload));
 		}
 		if (check(TokenKind.Identifier) && current().text == "cast") {
 			var start = advance().span;
 			if (match(TokenKind.LeftParen)) {
-				var value = parseExpression(), target = null;
-				if (match(TokenKind.Comma))
-					target = parseType();
+				var value = parseExpression(), target:Null<AstType> = null,
+					targetPayload:Null<compiler.syntax.SyntaxTree.SyntaxTypePayload> = null;
+				if (match(TokenKind.Comma)) {
+					var parsedTarget = parseTypeResult();
+					target = parsedTarget.ast;
+					targetPayload = parsedTarget.payload;
+				}
 				var end = consume(TokenKind.RightParen).span;
-				return parsePostfix(Cast(value, target, start.merge(end)));
+				var valuePayload = expressionPayload(value),
+					payload = valuePayload == null ? null
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Cast(valuePayload, targetPayload);
+				return parsePostfix(rememberExpression(Cast(value, target, start.merge(end)), payload));
 			}
 			var value = parsePrimary();
-			return Cast(value, null, start.merge(expressionSpan(value)));
+			var valuePayload = expressionPayload(value);
+			return rememberExpression(Cast(value, null, start.merge(expressionSpan(value))),
+				valuePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Cast(valuePayload, null));
 		}
 		if (match(TokenKind.Function)) {
 			var start = previous().span;
@@ -2405,7 +2552,8 @@ class Parser {
 			recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 			var body = parseAnonymousFunctionBody(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]);
-			return Lambda(arguments, body, start.merge(end));
+			var lambda = Lambda(arguments, body, start.merge(end));
+			return rememberExpression(lambda, parserLambdaPayload(arguments, body));
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
 			var argument = advance(), start = argument.span;
@@ -2419,7 +2567,8 @@ class Parser {
 					defaultValue: null
 				}
 			], body = parseArrowFunctionBody();
-			return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+			var lambda = Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+			return rememberExpression(lambda, parserLambdaPayload(arguments, body));
 		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
@@ -2430,7 +2579,10 @@ class Parser {
 			match(TokenKind.Semicolon);
 			consume(TokenKind.Else);
 			var whenFalse = parseExpressionBranch();
-			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
+			var conditionPayload = expressionPayload(condition), truePayload = expressionPayload(whenTrue), falsePayload = expressionPayload(whenFalse),
+				payload = conditionPayload == null || truePayload == null || falsePayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Conditional(conditionPayload, truePayload, falsePayload);
+			return rememberExpression(Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse))), payload);
 		}
 		if (match(TokenKind.Minus)) {
 			var start = previous().span;
@@ -2478,7 +2630,12 @@ class Parser {
 				delimiter = token.text.lastIndexOf("/"),
 				pattern = StringTools.replace(token.text.substring(2, delimiter), "\\/", "/"),
 				options = token.text.substring(delimiter + 1);
-			return parsePostfix(New("EReg", [StringLiteral(pattern, token.span), StringLiteral(options, token.span)], token.span));
+			var expression:AstExpression = New("EReg", [StringLiteral(pattern, token.span), StringLiteral(options, token.span)], token.span),
+				payload = compiler.syntax.SyntaxTree.SyntaxExpressionPayload.New("EReg", [
+					compiler.syntax.SyntaxTree.SyntaxExpressionPayload.String(pattern),
+					compiler.syntax.SyntaxTree.SyntaxExpressionPayload.String(options)
+				]);
+			return parsePostfix(rememberExpression(expression, payload));
 		}
 		if (match(TokenKind.BoolTrue))
 			return parsePostfix(rememberExpression(BoolLiteral(true, previous().span),
@@ -2511,11 +2668,22 @@ class Parser {
 					var mapValue = parseComprehensionValue(),
 						end = consume(TokenKind.RightBracket).span;
 					recordCstNode(SyntaxKind.MapLiteral, start.merge(end));
-					return parsePostfix(MapComprehension(keyName, valueName, iterable, condition, value, mapValue, start.merge(end)));
+					var iterablePayload = expressionPayload(iterable), conditionPayload = condition == null ? null : expressionPayload(condition),
+						keyPayload = expressionPayload(value), mapValuePayload = expressionPayload(mapValue),
+						payload = iterablePayload == null || condition != null && conditionPayload == null
+							|| keyPayload == null || mapValuePayload == null ? null
+							: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.MapComprehension(keyName, valueName,
+								iterablePayload, conditionPayload, keyPayload, mapValuePayload);
+					return parsePostfix(rememberExpression(MapComprehension(keyName, valueName, iterable, condition, value, mapValue, start.merge(end)), payload));
 				}
 				var end = consume(TokenKind.RightBracket).span;
 				recordCstNode(SyntaxKind.ArrayLiteral, start.merge(end));
-				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
+				var iterablePayload = expressionPayload(iterable), conditionPayload = condition == null ? null : expressionPayload(condition),
+					valuePayload = expressionPayload(value),
+					payload = iterablePayload == null || condition != null && conditionPayload == null || valuePayload == null ? null
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ArrayComprehension(keyName, valueName,
+							iterablePayload, conditionPayload, valuePayload);
+				return parsePostfix(rememberExpression(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)), payload));
 			}
 			if (!check(TokenKind.RightBracket)) {
 				var first = parseDelimitedExpression(TokenKind.RightBracket, true);
@@ -2534,7 +2702,18 @@ class Parser {
 					}
 					var end = consume(TokenKind.RightBracket).span;
 					recordCstNode(SyntaxKind.MapLiteral, start.merge(end));
-					return parsePostfix(MapLiteral(entries, start.merge(end)));
+					var entryPayloads:Array<compiler.syntax.SyntaxTree.SyntaxMapEntryPayload> = [], entriesValid = true;
+					for (entry in entries) {
+						var keyPayload = expressionPayload(entry.key), valuePayload = expressionPayload(entry.value);
+						if (keyPayload == null || valuePayload == null) {
+							entriesValid = false;
+							break;
+						}
+						entryPayloads.push({key: keyPayload, value: valuePayload});
+					}
+					var payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = entriesValid
+						? compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Map(entryPayloads) : null;
+					return parsePostfix(rememberExpression(MapLiteral(entries, start.merge(end)), payload));
 				}
 				values.push(first);
 				while (match(TokenKind.Comma))
@@ -2543,7 +2722,8 @@ class Parser {
 			}
 			var end = consume(TokenKind.RightBracket).span;
 			recordCstNode(SyntaxKind.ArrayLiteral, start.merge(end));
-			return parsePostfix(ArrayLiteral(values, start.merge(end)));
+			return parsePostfix(rememberExpression(ArrayLiteral(values, start.merge(end)),
+				expressionPayloads(values) == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array(expressionPayloads(values))));
 		}
 		if (check(TokenKind.Identifier) && current().text == "null") {
 			var nullToken = advance();
@@ -2554,23 +2734,31 @@ class Parser {
 			var start = previous().span;
 			if (check(TokenKind.Identifier) && current().text == "List") {
 				advance();
+				lastTypeArgumentPayloads = [];
 				var typeArguments = check(TokenKind.Less) ? parseTypeArguments() : [];
+				var typeArgumentPayloads = lastTypeArgumentPayloads.copy();
 				if (isRecoveryBoundary()) {
 					recordExpected("left parenthesis");
 					var missingEnd = current().span;
-					return parsePostfix(typeArguments.length > 0
+					var expression:AstExpression = typeArguments.length > 0
 						? NewArray(typeArguments[0], IntegerLiteral(0, missingEnd), start.merge(missingEnd))
-						: ArrayLiteral([], start.merge(missingEnd)));
+						: ArrayLiteral([], start.merge(missingEnd));
+					var payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = typeArguments.length > 0 && typeArgumentPayloads.length > 0
+						? compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewArray(typeArgumentPayloads[0], compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(0))
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array([]);
+					return parsePostfix(rememberExpression(expression, payload));
 				}
 				var argumentStart = consume(TokenKind.LeftParen).span;
 				var end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				if (typeArguments.length > 0) {
-					if (typeArguments.length != 1)
+				if (typeArguments.length != 1)
 						fail(previous(), 'List expects 1 type argument, got ${typeArguments.length}');
-					return parsePostfix(NewArray(typeArguments[0], IntegerLiteral(0, end), start.merge(end)));
+					return parsePostfix(rememberExpression(NewArray(typeArguments[0], IntegerLiteral(0, end), start.merge(end)),
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewArray(typeArgumentPayloads[0], compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(0))));
 				}
-				return parsePostfix(ArrayLiteral([], start.merge(end)));
+				return parsePostfix(rememberExpression(ArrayLiteral([], start.merge(end)),
+					compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array([])));
 			}
 			if (check(TokenKind.Identifier) && current().text == "Array") {
 				advance();
@@ -2578,15 +2766,17 @@ class Parser {
 					var argumentStart = previous().span,
 						end = consume(TokenKind.RightParen).span;
 					recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
-					return parsePostfix(ArrayLiteral([], start.merge(end)));
+					return parsePostfix(rememberExpression(ArrayLiteral([], start.merge(end)),
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array([])));
 				}
 				if (isRecoveryBoundary()) {
 					recordExpected("type arguments or left parenthesis");
 					var missingEnd = current().span;
-					return parsePostfix(ArrayLiteral([], start.merge(missingEnd)));
+					return parsePostfix(rememberExpression(ArrayLiteral([], start.merge(missingEnd)),
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Array([])));
 				}
 				consume(TokenKind.Less);
-				var element = parseType();
+				var parsedElement = parseTypeResult(), element = parsedElement.ast;
 				consume(TokenKind.Greater);
 				if (isRecoveryBoundary()) {
 					recordExpected("left parenthesis");
@@ -2597,30 +2787,35 @@ class Parser {
 				var length = parseExpression();
 				var end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
-				return parsePostfix(NewArray(element, length, start.merge(end)));
+				var lengthPayload = expressionPayload(length), payload = lengthPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewArray(parsedElement.payload, lengthPayload);
+				return parsePostfix(rememberExpression(NewArray(element, length, start.merge(end)), payload));
 			}
 			if (check(TokenKind.Identifier) && current().text == "Map") {
 				advance();
 				if (match(TokenKind.LeftParen)) {
 					var end = consume(TokenKind.RightParen).span;
-					return parsePostfix(MapLiteral([], start.merge(end)));
+					return parsePostfix(rememberExpression(MapLiteral([], start.merge(end)),
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Map([])));
 				}
 				if (isRecoveryBoundary()) {
 					recordExpected("type arguments or left parenthesis");
 					var missingEnd = current().span;
-					return parsePostfix(MapLiteral([], start.merge(missingEnd)));
+					return parsePostfix(rememberExpression(MapLiteral([], start.merge(missingEnd)),
+						compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Map([])));
 				}
 				consume(TokenKind.Less);
-				var key = parseType();
-				var value = if (match(TokenKind.Comma))
-					parseType();
+				var parsedKey = parseTypeResult(), key = parsedKey.ast;
+				var parsedValue = if (match(TokenKind.Comma))
+					parseTypeResult();
 				else if (isRecoveryBoundary() || check(TokenKind.Greater)) {
 					recordExpected("comma");
-					missingType("map value");
+					parsedType(missingType("map value"), compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType);
 				} else {
 					consume(TokenKind.Comma);
-					parseType();
+					parseTypeResult();
 				};
+				var value = parsedValue.ast;
 				consume(TokenKind.Greater);
 				if (isRecoveryBoundary()) {
 					recordExpected("left parenthesis");
@@ -2630,15 +2825,21 @@ class Parser {
 				var argumentStart = consume(TokenKind.LeftParen).span;
 				var end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
-				return parsePostfix(NewMap(key, value, start.merge(end)));
+				return parsePostfix(rememberExpression(NewMap(key, value, start.merge(end)),
+					compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewMap(parsedKey.payload, parsedValue.payload)));
 			}
 			var typeName = parseQualifiedName();
 			var typeArguments = parseTypeArguments();
+			var typeArgumentPayloads = lastTypeArgumentPayloads.copy();
 			if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current()))) {
 				recordExpected("left parenthesis");
 				var end = current().span;
-				return parsePostfix(typeArguments.length == 0 ? New(typeName, [],
-					start.merge(end)) : NewGeneric(typeName, typeArguments, [], start.merge(end)));
+				var expression:AstExpression = typeArguments.length == 0 ? New(typeName, [], start.merge(end))
+					: NewGeneric(typeName, typeArguments, [], start.merge(end));
+				var payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = typeArguments.length == 0
+					? compiler.syntax.SyntaxTree.SyntaxExpressionPayload.New(typeName, [])
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewGeneric(typeName, typeArgumentPayloads, []);
+				return parsePostfix(rememberExpression(expression, payload));
 			}
 			var argumentStart = consume(TokenKind.LeftParen).span;
 			var arguments = [];
@@ -2648,23 +2849,33 @@ class Parser {
 			}
 			var end = consume(TokenKind.RightParen).span;
 			recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
-			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
-				start.merge(end)) : NewGeneric(typeName, typeArguments, arguments, start.merge(end)));
+			var argumentPayloads = expressionPayloads(arguments), payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = null;
+			if (argumentPayloads != null)
+				payload = typeArguments.length == 0
+					? compiler.syntax.SyntaxTree.SyntaxExpressionPayload.New(typeName, argumentPayloads)
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NewGeneric(typeName, typeArgumentPayloads, argumentPayloads);
+			var expression:AstExpression = typeArguments.length == 0 ? New(typeName, arguments, start.merge(end))
+				: NewGeneric(typeName, typeArguments, arguments, start.merge(end));
+			return parsePostfix(rememberExpression(expression, payload));
 		}
 		if (check(TokenKind.LeftParen)) {
 			var saved = position,
 				start = current().span,
 				isLambda = parenthesizedLambdaAhead();
-			if (!isLambda) {
-				advance();
-				var grouped = parseExpression();
-				var end:SourceSpan;
-				if (match(TokenKind.Colon)) {
-					var target = parseType();
-					end = consume(TokenKind.RightParen).span;
-					grouped = Cast(grouped, target, start.merge(end));
-				} else
-					end = consume(TokenKind.RightParen).span;
+				if (!isLambda) {
+					advance();
+					var grouped = parseExpression();
+					var end:SourceSpan;
+					var targetPayload:Null<compiler.syntax.SyntaxTree.SyntaxTypePayload> = null;
+					if (match(TokenKind.Colon)) {
+						var parsedTarget = parseTypeResult(), target = parsedTarget.ast;
+						targetPayload = parsedTarget.payload;
+						end = consume(TokenKind.RightParen).span;
+						var groupedPayload = expressionPayload(grouped), castPayload = groupedPayload == null ? null
+							: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Cast(groupedPayload, targetPayload);
+						grouped = rememberExpression(Cast(grouped, target, start.merge(end)), castPayload);
+					} else
+						end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ParenthesizedExpression, start.merge(end));
 				return parsePostfix(grouped);
 			}
@@ -2689,15 +2900,18 @@ class Parser {
 			if (match(TokenKind.Arrow)) {
 				recordCstNode(SyntaxKind.ParameterList, start.merge(parameterEnd));
 				var body = parseArrowFunctionBody();
-				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+				var lambda = Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+				return rememberExpression(lambda, parserLambdaPayload(arguments, body));
 			}
 			position = saved;
 			advance();
 			var grouped = parseExpression();
 			consume(TokenKind.Colon);
-			var target = parseType(), castEnd = consume(TokenKind.RightParen).span;
+			var parsedTarget = parseTypeResult(), target = parsedTarget.ast, castEnd = consume(TokenKind.RightParen).span;
 			recordCstNode(SyntaxKind.ParenthesizedExpression, start.merge(castEnd));
-			return parsePostfix(Cast(grouped, target, start.merge(castEnd)));
+			var groupedPayload = expressionPayload(grouped), castPayload = groupedPayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Cast(groupedPayload, parsedTarget.payload);
+			return parsePostfix(rememberExpression(Cast(grouped, target, start.merge(castEnd)), castPayload));
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
@@ -2740,7 +2954,18 @@ class Parser {
 			}
 			var end = consume(TokenKind.RightBrace).span;
 			recordCstNode(SyntaxKind.ObjectLiteral, start.merge(end));
-			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
+			var fieldPayloads:Array<compiler.syntax.SyntaxTree.SyntaxObjectFieldPayload> = [], fieldsValid = true;
+			for (field in fields) {
+				var valuePayload = expressionPayload(field.value);
+				if (valuePayload == null) {
+					fieldsValid = false;
+					break;
+				}
+				fieldPayloads.push({name: field.name, value: valuePayload});
+			}
+			var payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = fieldsValid
+				? compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Object(fieldPayloads) : null;
+			return parsePostfix(rememberExpression(ObjectLiteral(fields, start.merge(end)), payload));
 		}
 		if (check(TokenKind.Identifier)
 			&& peekKind(1) == TokenKind.Less
@@ -2769,7 +2994,9 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				var callSpan = start.merge(end);
-				expression = Call(name, arguments, callSpan);
+				var argumentPayloads = expressionPayloads(arguments), callPayload = argumentPayloads == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Call(name, argumentPayloads);
+				expression = rememberExpression(Call(name, arguments, callSpan), callPayload);
 				recordCstNode(SyntaxKind.CallExpression, callSpan);
 			}
 			return parsePostfix(expression);
@@ -2791,7 +3018,7 @@ class Parser {
 			default: throw "Invalid native layout query";
 		};
 		consume(TokenKind.Less);
-		var type = parseType();
+		var parsedType = parseTypeResult(), type = parsedType.ast;
 		consume(TokenKind.Greater);
 		consume(TokenKind.LeftParen);
 		var field:Null<String> = null;
@@ -2800,7 +3027,8 @@ class Parser {
 			field = decodeString(token.text);
 		}
 		var end = consume(TokenKind.RightParen).span;
-		return parsePostfix(NativeLayoutQuery(kind, type, field, name.span.merge(end)));
+		return parsePostfix(rememberExpression(NativeLayoutQuery(kind, type, field, name.span.merge(end)),
+			compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NativeLayoutQuery(syntaxNativeLayoutKind(kind), parsedType.payload, field)));
 	}
 
 	static function isExpressionTerminator(kind:TokenKind):Bool
@@ -2855,7 +3083,10 @@ class Parser {
 			consume(TokenKind.RightParen);
 		}
 		var value = parseComprehensionValue();
-		return ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(expressionSpan(value)));
+		var iterablePayload = expressionPayload(iterable), conditionPayload = condition == null ? null : expressionPayload(condition),
+			valuePayload = expressionPayload(value), payload = iterablePayload == null || condition != null && conditionPayload == null || valuePayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ArrayComprehension(keyName, valueName, iterablePayload, conditionPayload, valuePayload);
+		return rememberExpression(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(expressionSpan(value))), payload);
 	}
 
 	function parseExpressionBranch():AstExpression {
@@ -2875,7 +3106,7 @@ class Parser {
 					match(TokenKind.Semicolon);
 					if (check(TokenKind.RightBrace)) {
 						var end = consume(TokenKind.RightBrace).span;
-						return BlockExpression(statements, result, start.merge(end));
+						return rememberBlockExpression(statements, result, start.merge(end));
 					}
 					statements.push(Expression(result, expressionSpan(result)));
 					continue;
@@ -2883,7 +3114,7 @@ class Parser {
 				var saved = position, candidate = tryParseExpression();
 				if (candidate != null && check(TokenKind.RightBrace)) {
 					var end = consume(TokenKind.RightBrace).span;
-					return BlockExpression(statements, candidate, start.merge(end));
+					return rememberBlockExpression(statements, candidate, start.merge(end));
 				}
 				position = saved;
 				appendStatements(statements, parseStatements());
@@ -2899,12 +3130,12 @@ class Parser {
 		var trailing = trailingBlockResult(statements);
 		if (trailing != null) {
 			var end = consume(TokenKind.RightBrace).span;
-			return BlockExpression(trailing.statements, trailing.result, start.merge(end));
+			return rememberBlockExpression(trailing.statements, trailing.result, start.merge(end));
 		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));
-			return ErrorExpression(span);
+			return rememberExpression(ErrorExpression(span), compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Error);
 		}
 		fail(current(), "Expression block requires a result expression");
 		return null;
@@ -2968,7 +3199,23 @@ class Parser {
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		recordCstNode(SyntaxKind.Block, switchExpressionBodyStart.merge(end));
-		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
+		var subjectPayload = expressionPayload(subject), casePayloads = switchExpressionCasePayloads(cases),
+			fallbackPayload = fallback == null ? null : expressionPayload(fallback),
+			payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = subjectPayload == null || casePayloads == null
+				|| fallback != null && fallbackPayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Switch(subjectPayload, casePayloads, fallbackPayload);
+		return parsePostfix(rememberExpression(SwitchExpression(subject, cases, fallback, start.merge(end)), payload));
+	}
+
+	function switchExpressionCasePayloads(cases:Array<compiler.syntax.Ast.AstSwitchExpressionCase>):Null<Array<compiler.syntax.SyntaxTree.SyntaxSwitchExpressionCasePayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxSwitchExpressionCasePayload> = [];
+		for (entry in cases) {
+			var value = expressionPayload(entry.value), guard = entry.guard == null ? null : expressionPayload(entry.guard), loweredResult = expressionPayload(entry.result);
+			if (value == null || entry.guard != null && guard == null || loweredResult == null)
+				return null;
+			result.push({value: value, guard: guard, result: loweredResult});
+		}
+		return result;
 	}
 
 	static function appendExpressions(target:Array<AstExpression>, values:Array<AstExpression>):Void
@@ -3039,7 +3286,9 @@ class Parser {
 		var body = [
 			compiler.syntax.Ast.AstStatement.Try([Return(value, expressionSpan(value))], catches, start.merge(end))
 		], lambda = compiler.syntax.Ast.AstExpression.Lambda([], body, start.merge(end));
-		return parsePostfix(ClosureCall(lambda, [], start.merge(end)));
+		var lambdaPayload = parserLambdaPayload([], body), payload = lambdaPayload == null ? null
+			: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ClosureCall(lambdaPayload, []);
+		return parsePostfix(rememberExpression(ClosureCall(lambda, [], start.merge(end)), payload));
 	}
 
 	function parseSwitchGuard():Null<AstExpression> {
@@ -3060,10 +3309,10 @@ class Parser {
 			var statementStart = position;
 			try {
 				if (atSwitchBranchEnd() && statements.length == 0)
-					return EmptyExpression(start.merge(current().span));
+					return rememberExpression(EmptyExpression(start.merge(current().span)), compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Empty);
 				if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
 					var end = statementSpan(statements[statements.length - 1]);
-					return BlockExpression(statements, Unreachable(end), start.merge(end));
+					return rememberBlockExpression(statements, Unreachable(end), start.merge(end));
 				}
 				if (isStatementOnlyStart(current().kind)) {
 					appendStatements(statements, parseStatements());
@@ -3073,20 +3322,20 @@ class Parser {
 					var result = parseExpressionBranch();
 					match(TokenKind.Semicolon);
 					if (atSwitchBranchEnd())
-						return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+						return statements.length == 0 ? result : rememberBlockExpression(statements, result, start.merge(expressionSpan(result)));
 					statements.push(Expression(result, expressionSpan(result)));
 					continue;
 				}
 				var saved = position, result = tryParseExpression();
 				if (result != null && match(TokenKind.Semicolon)) {
 					if (atSwitchBranchEnd())
-						return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+						return statements.length == 0 ? result : rememberBlockExpression(statements, result, start.merge(expressionSpan(result)));
 					position = saved;
 					appendStatements(statements, parseStatements());
 					continue;
 				}
 				if (result != null && atSwitchBranchEnd())
-					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
+					return statements.length == 0 ? result : rememberBlockExpression(statements, result, start.merge(expressionSpan(result)));
 				position = saved;
 				appendStatements(statements, parseStatements());
 			}
@@ -3098,7 +3347,7 @@ class Parser {
 				synchronizeStatement(bodyStart, statementStart, true);
 				if (atSwitchBranchEnd()) {
 					var end = error.diagnostic.span;
-					return BlockExpression(statements, ErrorExpression(end), start.merge(end));
+					return rememberBlockExpression(statements, rememberExpression(ErrorExpression(end), compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Error), start.merge(end));
 				}
 			}
 		}

@@ -101,6 +101,14 @@ class SyntaxScannerMain {
 			|| !expressionKinds.exists(SyntaxKind.MemberExpression))
 			throw "CST parser did not retain expression-level grammar structure";
 
+		var payloadSource = new SourceFile("ExpressionPayloads.hx",
+			"function payloads(value:Int):Int { "
+			+ "var list = new List<Int>(); var array = new Array<Int>(1); var map = new Map<String, Int>(); "
+			+ "var values = [value, value + 1]; var entries = [value => value + 1]; var object = {field: value}; "
+			+ "var casted = cast(value, Int); var fn = function(x:Int) { return x + value; }; "
+			+ "var arrow = (x:Int) -> x + value; return switch (value) { case 0: value; default: value + 1; }; }\n");
+		assertCstAstParity("ExpressionPayloads.hx", payloadSource.text, false);
+
 		var headerSource = new SourceFile("Header.hx",
 			"package demo.core;\nimport foo.Bar as Baz;\nfunction main():Void return;\n"),
 			headerAst = new Parser(new Lexer(headerSource).tokenize()).parseProgram(),
