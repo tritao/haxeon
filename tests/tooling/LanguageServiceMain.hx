@@ -1236,6 +1236,12 @@ class LanguageServiceMain {
 		var baseMethodRename = implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute");
 		if (baseMethodRename.length != 4)
 			throw 'rename did not include the authoritative override family: ${baseMethodRename.length}';
+		var preparedBaseRename = implementationService.prepareRename("base/Base.hx", baseSource.indexOf("run") + 1);
+		if (preparedBaseRename == null
+			|| preparedBaseRename.placeholder != "run"
+			|| preparedBaseRename.span.start > baseSource.indexOf("run")
+			|| preparedBaseRename.span.end < baseSource.indexOf("run") + "run".length)
+			throw "prepareRename did not expose the exact authoritative member span";
 		var baseMethodReferences = implementationService.references("base/Base.hx", baseSource.indexOf("run") + 1);
 		if (baseMethodReferences.length != 4)
 			throw 'references did not include the authoritative override family: ${baseMethodReferences.length}';
@@ -1245,6 +1251,9 @@ class LanguageServiceMain {
 			throw 'references and rename did not include the base when queried on an override: references=${derivedMethodReferences.length}, rename=${derivedMethodRename.length}';
 		implementationService.update("impl/Derived.hx",
 			"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(");
+		var recoveredRenamePosition = "package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(".indexOf("run") + 1;
+		if (implementationService.prepareRename("impl/Derived.hx", recoveredRenamePosition) != null)
+			throw "prepareRename crossed into a recovered member snapshot";
 		if (implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute").length != 0)
 			throw "rename crossed into a recovered override family";
 		var fieldFamilyService = new LanguageService(),

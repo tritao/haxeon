@@ -192,7 +192,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   super, recovered super members, and source-level type operands (including
   casts, generic arrays/maps, `Std.isOfType`, and native layout queries) are
   covered.
-  Full type-aware navigation and global reference precision remain.
+  The identity-family regression suite now covers definition, type definition,
+  references, implementations, prepare-rename, and rename across exact and
+  recovered inheritance cases. Full type-aware navigation and global reference
+  precision remain.
   Member-family navigation now includes class fields while keeping static
   shadows owner-local instead of treating them as inherited implementations,
   and it does not merge field and method declarations that merely share a name.
