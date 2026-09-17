@@ -66,6 +66,8 @@ class GenericInstantiation {
 			if (!substitutions.exists(parameter)) {
 				if (!session.tolerant)
 					fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+				session.rememberRecoveryDiagnostic(new Diagnostic("E1003",
+					'Cannot infer generic type parameter "$parameter" for "$baseName"', span));
 				substitutions.set(parameter, TUnknown);
 			}
 		var constraints = fn.typeConstraints;
@@ -157,8 +159,14 @@ class GenericInstantiation {
 					else if (actual != TDynamic && !TypeRelations.equals(previous, actual)) {
 						if (session.relations.isAssignable(actual, previous))
 							substitutions.set(name, actual);
-						else if (!session.relations.isAssignable(previous, actual))
-							fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
+						else if (!session.relations.isAssignable(previous, actual)) {
+							var message = 'Conflicting types inferred for generic parameter "$name"';
+							if (session.tolerant) {
+								session.rememberRecoveryDiagnostic(new Diagnostic("E1003", message, span));
+								substitutions.set(name, TUnknown);
+							} else
+								fail("E1003", message, span);
+						}
 					}
 				} else
 					substitutions.set(name, actual);

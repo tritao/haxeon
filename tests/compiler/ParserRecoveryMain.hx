@@ -1941,6 +1941,34 @@ class ParserRecoveryMain {
 				foundConstraintMember = true;
 		if (!foundConstraintMember)
 			throw "invalid generic constraint discarded the later known receiver from editor recovery";
+		var conflictingGenericSource = new SourceFile("TolerantConflictingGeneric.hx",
+			"class Known { public var member:Int; } function missing<T>():T return null; function pair<T>(first:T, second:T):T return first; function main():Void { var unknown = missing(); var invalid = pair(1, \"wrong\"); var after:Known = new Known(); after. }");
+		var conflictingGenericProgram = new Parser(new Lexer(conflictingGenericSource).tokenize()).parseProgramRecovering().program,
+			conflictingGenericDiagnostics:Array<compiler.Diagnostic> = [],
+			conflictingGenericTyped = Typer.typeRecovered(conflictingGenericProgram, null, null, conflictingGenericDiagnostics),
+			conflictingGenericMain = conflictingGenericTyped == null ? null : [for (fn in conflictingGenericTyped.functions) if (fn.name == "main") fn][0];
+		if (conflictingGenericTyped == null || conflictingGenericMain == null || conflictingGenericMain.statements.length != 4)
+			throw "conflicting generic inference discarded the later recovered statements";
+		var foundConflictingGenericDiagnostic = false,
+			foundMissingGenericDiagnostic = false;
+		for (diagnostic in conflictingGenericDiagnostics)
+			if (diagnostic.code == "E1003") {
+				if (diagnostic.message.indexOf("Conflicting types") >= 0)
+					foundConflictingGenericDiagnostic = true;
+				if (diagnostic.message.indexOf("Cannot infer generic") >= 0)
+					foundMissingGenericDiagnostic = true;
+			}
+		if (!foundConflictingGenericDiagnostic || !foundMissingGenericDiagnostic)
+			throw "generic inference failures did not retain their recovery diagnostics";
+		var conflictingGenericService = new LanguageService();
+		conflictingGenericService.update("TolerantConflictingGeneric.hx", conflictingGenericSource.text);
+		var conflictingGenericCompletion = conflictingGenericService.complete("TolerantConflictingGeneric.hx", conflictingGenericSource.text.length),
+			foundConflictingGenericMember = false;
+		for (item in conflictingGenericCompletion)
+			if (item.label == "member")
+				foundConflictingGenericMember = true;
+		if (!foundConflictingGenericMember)
+			throw "conflicting generic inference discarded the later known receiver from editor recovery";
 
 		var conditionalSource = new SourceFile("TolerantConditional.hx",
 			"class Foo { public var value:Int; } function main():Void { var foo = broken ? new Foo() : new Foo(); foo. }");

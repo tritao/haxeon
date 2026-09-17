@@ -1506,9 +1506,11 @@ class CallResolver {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter)) {
 				if (session.tolerant)
-					substitutions.set(parameter, TUnknown);
+					session.rememberRecoveryDiagnostic(new Diagnostic("E1003",
+						'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span));
 				else
 					fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+				substitutions.set(parameter, TUnknown);
 			}
 		validateTypeParameterConstraints(typeName, declaration.typeConstraints, substitutions, span);
 
