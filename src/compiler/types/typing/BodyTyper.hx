@@ -540,7 +540,13 @@ class BodyTyper {
 				var context = session.currentContext;
 				context.loopEarlyExits[context.loopDepth] = true;
 				context.loopDepth++;
-				var typedBody = typeStatements(body, new Scope(scope), result);
+				var typedBody:Array<TypedStatement>;
+				try {
+					typedBody = typeStatements(body, new Scope(scope), result);
+				} catch (error:Dynamic) {
+					context.loopDepth--;
+					throw error;
+				}
 				context.loopDepth--;
 				return TWhile(typedCondition, typedBody, span);
 			case DoWhile(body, predicate, span):
@@ -548,9 +554,15 @@ class BodyTyper {
 				context.loopEarlyExits[context.loopDepth] = false;
 				context.loopDepth++;
 				var bodyScope = new Scope(scope),
-					typedBody = typeStatements(body, bodyScope, result),
-					typedCondition = typeExpression(predicate, bodyScope, null, false);
+					typedBody:Array<TypedStatement>;
+				try {
+					typedBody = typeStatements(body, bodyScope, result);
+				} catch (error:Dynamic) {
+					context.loopDepth--;
+					throw error;
+				}
 				context.loopDepth--;
+				var typedCondition = typeExpression(predicate, bodyScope, null, false);
 				return TDoWhile(typedBody, typedCondition, span);
 			case ForIn(name, valueName, iterable, body, span):
 				var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false)),
@@ -567,7 +579,13 @@ class BodyTyper {
 				var context = session.currentContext;
 				context.loopEarlyExits[context.loopDepth] = true;
 				context.loopDepth++;
-				var typedBody = typeStatements(body, loopScope, result);
+				var typedBody:Array<TypedStatement>;
+				try {
+					typedBody = typeStatements(body, loopScope, result);
+				} catch (error:Dynamic) {
+					context.loopDepth--;
+					throw error;
+				}
 				context.loopDepth--;
 				var loopIterable = switch originalIterable.type {
 					case TMap(_, value) if (valueName == null):

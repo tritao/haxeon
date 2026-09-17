@@ -2475,6 +2475,15 @@ class LanguageServiceMain {
 				foundCompoundMember = true;
 		if (!foundCompoundMember)
 			throw "a malformed compound recovery discarded declarations after the failing branch";
+		var malformedLoopService = new LanguageService(),
+			malformedLoopSource = "function main():Void { do {} while (sizeof<MissingLayout>()); break; }";
+		malformedLoopService.update("MalformedLoop.hx", malformedLoopSource);
+		var hasOutsideLoopDiagnostic = false;
+		for (diagnostic in malformedLoopService.diagnostics("MalformedLoop.hx"))
+			if (diagnostic.message == "break is only valid inside a loop")
+				hasOutsideLoopDiagnostic = true;
+		if (!hasOutsideLoopDiagnostic)
+			throw "compound recovery leaked loop context after a malformed do-while";
 		var incompleteGenericService = new LanguageService(),
 			incompleteGenericSource = "class GenericBox<T> { public var value:T; } function main():Void { var incomplete:GenericBox<>; var known:GenericBox<Int> = new GenericBox<Int>(); known.";
 		incompleteGenericService.update("IncompleteGeneric.hx", incompleteGenericSource);
