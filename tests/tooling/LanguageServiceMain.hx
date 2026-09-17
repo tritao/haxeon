@@ -2465,6 +2465,16 @@ class LanguageServiceMain {
 				foundRecoveredMember = true;
 		if (!foundRecoveredMember)
 			throw "recovered local type was lost after an unrelated malformed expression";
+		var malformedCompoundService = new LanguageService(),
+			malformedCompoundSource = "class CompoundValue { public var member:Int; } function main():Void { if (sizeof<MissingLayout>()) { var nested:Int = 1; } var value:CompoundValue = new CompoundValue(); value.";
+		malformedCompoundService.update("MalformedCompound.hx", malformedCompoundSource);
+		var malformedCompoundCompletion = malformedCompoundService.completeResult("MalformedCompound.hx", malformedCompoundSource.length).items,
+			foundCompoundMember = false;
+		for (item in malformedCompoundCompletion)
+			if (item.label == "member")
+				foundCompoundMember = true;
+		if (!foundCompoundMember)
+			throw "a malformed compound recovery discarded declarations after the failing branch";
 		var incompleteGenericService = new LanguageService(),
 			incompleteGenericSource = "class GenericBox<T> { public var value:T; } function main():Void { var incomplete:GenericBox<>; var known:GenericBox<Int> = new GenericBox<Int>(); known.";
 		incompleteGenericService.update("IncompleteGeneric.hx", incompleteGenericSource);

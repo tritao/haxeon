@@ -451,9 +451,22 @@ class BodyTyper {
 					session.rememberRecoveryDiagnostic(compileError.diagnostic);
 				} else
 					rememberRecoveryError(error, statementSpan(statement));
-				var recovered = recoverDeclaration(statement, scope);
+				var recovered:Null<TypedStatement> = null;
+				try {
+					recovered = recoverDeclaration(statement, scope);
+				} catch (recoveryError:Dynamic) {
+					if (Std.isOfType(recoveryError, CancellationError))
+						throw recoveryError;
+					rememberRecoveryError(recoveryError, statementSpan(statement));
+				}
 				if (recovered == null)
-					recovered = recoverCompoundStatement(statement, scope, result);
+					try {
+						recovered = recoverCompoundStatement(statement, scope, result);
+					} catch (recoveryError:Dynamic) {
+						if (Std.isOfType(recoveryError, CancellationError))
+							throw recoveryError;
+						rememberRecoveryError(recoveryError, statementSpan(statement));
+					}
 				if (recovered != null)
 					output.push(recovered);
 				else {
