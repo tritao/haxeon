@@ -1,6 +1,9 @@
 package compiler.formatter;
 
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxNode;
+import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
 
@@ -42,9 +45,21 @@ private typedef OpenNode = {
 	final block:Bool;
 }
 
-/** Adds just enough CST-like structure for formatting decisions. */
+/** Translates parser structure into the formatter's layout-oriented view. */
 class SyntaxAnnotator {
-	public static function annotate(tokens:Array<FormatToken>):SyntaxInfo {
+	/**
+		Annotates formatter tokens with the parser's syntax tree when tooling mode
+		is available. The legacy token pass remains as a compatibility fallback for
+		grammar constructs that have not yet received parser events.
+	*/
+	public static function annotate(tokens:Array<FormatToken>, ?tree:SyntaxTree):SyntaxInfo {
+		var result = annotateTokens(tokens);
+		if (tree != null)
+			applyGrammarNodes(tokens, result, tree);
+		return result;
+	}
+
+	static function annotateTokens(tokens:Array<FormatToken>):SyntaxInfo {
 		var nodes:Array<FormatNode> = [], matching:Map<Int, Int> = [], blockOpens:Map<Int, Bool> = [], blockCloses:Map<Int, Bool> = [],
 			blockDepth:Map<Int, Int> = [], stack:Array<OpenNode> = [], genericStack:Array<Int> = [], syntaxIndexes:Array<Int> = [], depth = 0;
 
@@ -111,6 +126,92 @@ class SyntaxAnnotator {
 			blockCloses: blockCloses,
 			blockDepth: blockDepth
 		};
+	}
+
+	/** Applies authoritative delimiter information already known by the parser. */
+	static function applyGrammarNodes(tokens:Array<FormatToken>, syntax:SyntaxInfo, tree:SyntaxTree):Void {
+		for (node in tree.grammarNodes())
+			switch node.kind {
+				case SyntaxKind.Block:
+					applyBlockNode(tokens, syntax, node);
+				case SyntaxKind.CallExpression:
+					applyCallNode(tokens, syntax, node);
+				case SyntaxKind.TypeArgumentList, SyntaxKind.TypeParameterList:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList);
+				default:
+					// Declaration and recovery nodes are consumed by structural tooling;
+					// they do not affect layout decisions yet.
+			}
+	}
+
+	static function applyBlockNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
+		var open = tokenIndexAt(tokens, node.span.start), close = tokenIndexEndingAt(tokens, node.span.end);
+		if (open < 0 || close < 0 || open >= close)
+			return;
+		if (FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftBrace
+			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightBrace)
+			return;
+		syntax.matching.set(open, close);
+		syntax.matching.set(close, open);
+		syntax.blockOpens.set(tokens[open].start, true);
+		syntax.blockCloses.set(tokens[close].start, true);
+		syntax.nodeKinds.set(open + ":" + close, FormatNodeKind.Block);
+	}
+
+	static function applyCallNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
+		var start = tokenIndexAt(tokens, node.span.start), end = tokenIndexEndingAt(tokens, node.span.end);
+		if (start < 0 || end < start || FormatTokenTools.syntaxKind(tokens[end]) != TokenKind.RightParen)
+			return;
+		var open = matchingLeftParen(tokens, start, end);
+		if (open >= 0) {
+			syntax.matching.set(open, end);
+			syntax.matching.set(end, open);
+			syntax.nodeKinds.set(tokens[open].start + ":" + tokens[end].start, FormatNodeKind.Call);
+		}
+	}
+
+	static function applyDelimitedNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind):Void {
+		var open = tokenIndexAt(tokens, node.span.start), close = tokenIndexEndingAt(tokens, node.span.end);
+		if (open < 0 || close < open)
+			return;
+		if (FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.Less
+			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.Greater)
+			return;
+		syntax.matching.set(open, close);
+		syntax.matching.set(close, open);
+		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, kind);
+	}
+
+	static function matchingLeftParen(tokens:Array<FormatToken>, start:Int, close:Int):Int {
+		var depth = 0, index = close;
+		while (index >= start) {
+			var kind = FormatTokenTools.syntaxKind(tokens[index]);
+			switch kind {
+				case TokenKind.RightParen:
+					depth++;
+				case TokenKind.LeftParen:
+					if (depth == 0)
+						return index;
+					depth--;
+				default:
+			}
+			index--;
+		}
+		return -1;
+	}
+
+	static function tokenIndexAt(tokens:Array<FormatToken>, offset:Int):Int {
+		for (index in 0...tokens.length)
+			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].start == offset)
+				return index;
+		return -1;
+	}
+
+	static function tokenIndexEndingAt(tokens:Array<FormatToken>, offset:Int):Int {
+		for (index in 0...tokens.length)
+			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].end == offset)
+				return index;
+		return -1;
 	}
 
 	static function closeNode(tokens:Array<FormatToken>, stack:Array<OpenNode>, nodes:Array<FormatNode>, matching:Map<Int, Int>, blockCloses:Map<Int, Bool>,

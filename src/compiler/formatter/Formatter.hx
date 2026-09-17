@@ -5,6 +5,8 @@ import compiler.Source.SourceFile;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
 import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
 import compiler.formatter.CommentAttachment.CommentAttachmentTools;
@@ -29,10 +31,12 @@ class Formatter {
 		var file = new SourceFile("<format>", source);
 		try {
 			var conditional = ConditionalCompilation.process(file, []);
-			new Parser(new Lexer(file, conditional.text).tokenize()).parseProgram();
+			var parser = new Parser(new Lexer(file, conditional.text).tokenize(), null, ParserMode.Cst(file));
+			parser.parseProgram();
+			var syntaxTree:Null<SyntaxTree> = parser.cst;
 			var tokens = new FormatScanner(file).scan(),
 				comments = CommentAttachmentTools.attach(tokens),
-				syntax = SyntaxAnnotator.annotate(tokens),
+				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
 				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
 				newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n";

@@ -4,6 +4,7 @@ import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
 import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxKind;
 
 /** Regression gates for the shared lossless scanner and compiler adapter. */
 class SyntaxScannerMain {
@@ -11,7 +12,8 @@ class SyntaxScannerMain {
 		var source = "function main():String {\r\n"
 			+ "\tvar value = 'text ${1 + 2}'; // line\r\n"
 			+ "\tvar pattern = ~/a[//]b/gi; /* block */\r\n"
-			+ "\treturn value;\r\n"
+			+ "\tvar item = new Box<Int>();\r\n"
+			+ "\treturn value.trim();\r\n"
 			+ "}\r\n",
 			file = new SourceFile("SyntaxScanner.hx", source),
 			lossless = new SyntaxScanner(file).scan(),
@@ -65,6 +67,14 @@ class SyntaxScannerMain {
 			throw "CST mode did not preserve source spans or syntax tokens";
 		if (cstProgram.classes.length != astOnlyProgram.classes.length || cstProgram.functions.length != astOnlyProgram.functions.length)
 			throw "CST parser mode changed the semantic AST shape";
+		var grammarKinds:Map<SyntaxKind, Bool> = [];
+		for (node in cst.grammarNodes())
+			grammarKinds.set(node.kind, true);
+		if (!grammarKinds.exists(SyntaxKind.FunctionDeclaration)
+			|| !grammarKinds.exists(SyntaxKind.Block)
+			|| !grammarKinds.exists(SyntaxKind.CallExpression)
+			|| !grammarKinds.exists(SyntaxKind.TypeArgumentList))
+			throw "CST parser mode did not retain grammar-level structure";
 
 		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
 			malformedParser = new Parser(new Lexer(malformed).tokenize(), null, ParserMode.Cst(malformed));
@@ -73,6 +83,11 @@ class SyntaxScannerMain {
 			throw "CST mode did not round-trip malformed source";
 		if (malformedParser.cst.syntheticTokens.length == 0)
 			throw "CST recovery did not retain a synthetic missing token";
+		var malformedKinds:Map<SyntaxKind, Bool> = [];
+		for (node in malformedParser.cst.grammarNodes())
+			malformedKinds.set(node.kind, true);
+		if (!malformedKinds.exists(SyntaxKind.Error) || !malformedKinds.exists(SyntaxKind.Missing))
+			throw "CST recovery did not retain explicit error/missing structure";
 
 		var directiveSource = new SourceFile("Directives.hx", "#if debug\nfunction main():Void return;\n#end\n"),
 			directiveTokens = new SyntaxScanner(directiveSource).scan(),

@@ -12,9 +12,25 @@ enum ParserMode {
 	Cst(source:SourceFile);
 }
 
-/** Grammar-independent node categories used by the initial lossless CST. */
+/** Grammar-level node categories used by the optional tooling CST. */
 enum SyntaxKind {
 	SourceFile;
+	PackageDeclaration;
+	ImportDeclaration;
+	TypeAliasDeclaration;
+	EnumDeclaration;
+	EnumAbstractDeclaration;
+	AbstractDeclaration;
+	InterfaceDeclaration;
+	ClassDeclaration;
+	FunctionDeclaration;
+	FieldDeclaration;
+	Block;
+	CallExpression;
+	MemberExpression;
+	IndexExpression;
+	TypeArgumentList;
+	TypeParameterList;
 	Error;
 	Missing;
 }
@@ -75,25 +91,27 @@ enum SyntaxElement {
 	Node(value:SyntaxNode);
 }
 
-/** Immutable source node. The first milestone uses a lossless root sequence. */
+/** Immutable source node with exact leaves and parser-reported grammar children. */
 class SyntaxNode {
 	public final kind:SyntaxKind;
 	public final span:SourceSpan;
 	public final children:Array<SyntaxElement>;
+	public final grammarChildren:Array<SyntaxNode>;
 
-	public function new(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>) {
+	public function new(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>, ?grammarChildren:Array<SyntaxNode>) {
 		this.kind = kind;
 		this.span = span;
 		this.children = children.copy();
+		this.grammarChildren = grammarChildren == null ? [] : grammarChildren.copy();
 	}
 }
 
 /**
-		Optional tooling syntax tree built from the shared scanner.
+		Optional tooling syntax tree built from the shared scanner and parser.
 
-		This first representation intentionally has no grammar nesting. It gives
-		formatter/refactoring code an immutable, exact source sequence while the
-		existing parser remains the sole grammar and recovery implementation.
+		The root retains an exact source sequence while grammarChildren contains
+		parser-reported structure. Keeping those views separate lets the formatter
+		adopt grammar information without making compiler ASTs depend on the CST.
  */
 class SyntaxTree {
 	public final source:SourceFile;
@@ -153,7 +171,20 @@ class SyntaxTree {
 		}
 		var synthetic = syntheticTokens.copy();
 		synthetic = synthetic.concat(ordered);
-		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, children), tokens, trivia, synthetic);
+		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, children, root.grammarChildren), tokens, trivia, synthetic);
+	}
+
+	/** Attaches parser-reported grammar nodes while retaining the source leaves. */
+	public function withGrammarRoots(roots:Array<SyntaxNode>):SyntaxTree {
+		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, root.children, roots), tokens, trivia, syntheticTokens);
+	}
+
+	/** Returns parser-reported grammar nodes in source order. */
+	public function grammarNodes():Array<SyntaxNode> {
+		var result:Array<SyntaxNode> = [];
+		for (node in root.grammarChildren)
+			appendGrammarNodes(node, result);
+		return result;
 	}
 
 	/** Reconstructs the original source, excluding only future synthetic nodes. */
@@ -194,5 +225,11 @@ class SyntaxTree {
 				case SyntaxElement.Node(value): output.add(nodeText(value));
 			}
 		return output.toString();
+	}
+
+	static function appendGrammarNodes(node:SyntaxNode, result:Array<SyntaxNode>):Void {
+		result.push(node);
+		for (child in node.grammarChildren)
+			appendGrammarNodes(child, result);
 	}
 }

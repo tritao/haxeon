@@ -581,8 +581,8 @@ Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
 `--scale-iterations` to tune a run. Benchmark comparisons are informational and
 do not enforce thresholds.
 
-The shared lexical baseline compares the compiler-token adapter with the
-lossless tooling stream before CST work is introduced:
+The shared lexical/CST baseline compares the compiler-token adapter with the
+lossless tooling stream and optional CST parser:
 
 ```sh
 ./.tools/haxe/haxe benchmarks/syntax-scanner-benchmark.hxml
@@ -591,9 +591,12 @@ LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/syntax-scanner-benc
 ```
 
 Compiler mode filters trivia and does not retain lossless tokens; tooling mode
-retains source spans and trivia for formatter/CST consumers. It also compares
-the default AST-only parser with the opt-in `ParserMode.Cst` path. The benchmark
-records latency distributions and token counts in
+retains source spans and trivia for formatter/CST consumers. The opt-in
+`ParserMode.Cst` path uses the same parser grammar to attach immutable
+declaration, block, call, member, generic, error, and missing-syntax nodes
+without changing the compiler AST. The formatter consumes that CST structure
+while retaining its existing layout engine. The benchmark compares AST-only
+and CST parsing and records latency distributions and token counts in
 `out/syntax-scanner-benchmark.json`.
 
 ## 🧪 Development
