@@ -37,7 +37,9 @@ class Runtime {
 	static function get_pendingRetirementCount():Int {
 		retirementMutex.acquire();
 		#if haxeon
-		var count = retirementBacklog.length + haxeRuntimeModuleKernel.failedRetirementCount();
+		// Haxeon modules retain blocked handles in the Haxe-owned backlog. The
+		// native retry queue belongs only to the legacy byte-decoder path.
+		var count = retirementBacklog.length;
 		#else
 		var count = retirementBacklog.length + RuntimeKernel.failed_retirement_count();
 		#end
@@ -299,9 +301,7 @@ class Runtime {
 					retirementBacklog[write++] = module;
 			}
 			retirementBacklog.resize(write);
-			#if haxeon
-			write += haxeRuntimeModuleKernel.retryFailedRetirements();
-			#else
+			#if !haxeon
 			write += RuntimeKernel.retry_failed_retirements();
 			#end
 			retirementMutex.release();

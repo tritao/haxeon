@@ -99,6 +99,11 @@ requires plugins to deactivate and unregister callbacks before disposal; native
 code that retains an unregistered raw JIT address, or a module that starts an
 untracked background thread, remains outside the supported runtime API.
 
+For Haxeon-built modules, that retry operation scans the Haxe-owned retirement
+backlog and keeps the native handle alive until HashLink reports quiescence. The
+native failed-retirement queue is retained only for the legacy byte-decoder
+facade.
+
 The public HashLink unload path uses the same borrower-checked retirement
 operation. Forceful module teardown has the explicit
 `hl_module_free_shutdown()` name and is limited to initialization cleanup and

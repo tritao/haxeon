@@ -182,6 +182,9 @@ module as pending while a lease is held, and `disposeRetired()` can reclaim it
 after the lease is released. Native HashLink still performs the final quiescence
 check and executable/metadata release, so this registry does not infer that a
 module is safe to unmap merely because Haxe policy no longer publishes it.
+The public Haxeon runtime facade uses this Haxe queue exclusively; HashLink's
+separate failed-retirement queue remains reachable only from the legacy native
+byte-decoder facade.
 
 The loaded-module lifecycle and registry transitions are serialized by Haxe
 mutexes. Removing a module from publication first closes its borrow gate, so a
