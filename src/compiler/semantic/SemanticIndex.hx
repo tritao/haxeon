@@ -1547,6 +1547,11 @@ class SemanticIndexBuilder {
 		direct = recoveredDeclaredSymbol(owner + "." + name);
 		if (direct != null)
 			return direct;
+		if (recoveryResolve != null) {
+			direct = recoveryResolve(owner + "." + name);
+			if (direct != null)
+				return direct;
+		}
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(owner);
 		var substitutions = recoveredTypeSubstitutions(type),

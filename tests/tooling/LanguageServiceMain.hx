@@ -937,7 +937,7 @@ class LanguageServiceMain {
 		var genericAliasedInheritanceService = new LanguageService(),
 			genericAliasedBase = "package generic.alias; class Base<T> { public function run(value:T):T return value; } function main():Void return;",
 			genericAliasedAlias = "package generic.alias; typedef Parent<T> = Base<Array<T>>; function main():Void return;",
-			genericAliasedChild = "package generic.child; import generic.alias.Parent as P; class Child extends P<String> { public function run(value:Array<String>):Array<String> return value; } function main():Void { var child:Child = new Child(); child.";
+			genericAliasedChild = "package generic.child; import generic.alias.Parent as P; class Child extends P<String> { public function run(value:Array<String>):Array<String> return value; } class Consumer extends P<String> {} function main():Void { var child:Child = new Child(); child.run([]); var consumer:Consumer = new Consumer(); consumer.run([]); child.";
 		genericAliasedInheritanceService.update("generic/alias/Base.hx", genericAliasedBase);
 		genericAliasedInheritanceService.update("generic/alias/Parent.hx", genericAliasedAlias);
 		genericAliasedInheritanceService.compile("generic.alias.Base");
@@ -946,11 +946,21 @@ class LanguageServiceMain {
 			genericAliasedBase.indexOf("Base") + 1),
 			genericAliasedMethodImplementations = genericAliasedInheritanceService.implementations("generic/alias/Base.hx",
 				genericAliasedBase.indexOf("run") + 1);
-		if (genericAliasedTypeImplementations.length != 1
+		if (genericAliasedTypeImplementations.length != 2
 			|| genericAliasedTypeImplementations[0].path != "generic/child/Child.hx"
+			|| genericAliasedTypeImplementations[1].path != "generic/child/Child.hx"
 			|| genericAliasedMethodImplementations.length != 1
 			|| genericAliasedMethodImplementations[0].path != "generic/child/Child.hx")
 			throw 'implementation navigation did not resolve a generic typedef parent: type=${genericAliasedTypeImplementations.length}, method=${genericAliasedMethodImplementations.length}';
+		var genericAliasedReferences = genericAliasedInheritanceService.references("generic/alias/Base.hx",
+			genericAliasedBase.indexOf("run") + 1),
+			foundGenericAliasedCall = false;
+		for (reference in genericAliasedReferences)
+			if (reference.path == "generic/child/Child.hx"
+				&& reference.span.start == genericAliasedChild.indexOf("run([])", genericAliasedChild.indexOf("consumer.run")))
+				foundGenericAliasedCall = true;
+		if (!foundGenericAliasedCall)
+			throw 'references did not resolve a recovered call through a generic typedef parent: ${genericAliasedReferences.length}';
 		var recoveredImplementationService = new LanguageService(),
 			recoveredContractSource = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
 			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(";
