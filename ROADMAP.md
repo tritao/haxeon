@@ -153,9 +153,12 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   completion facts, nested receiver types, direct recovered function
   signatures, callable signatures, and receiver-aware/inherited signature
   variants are materialized into the recovery query boundary, and call edges
-  are finalized before publication. Remaining work is richer error-tolerant
-  recovery resolution and broader immutable semantic-query state, not
-  request-time access to the construction builder.
+  are finalized before publication. Recovered source traversal is explicit for
+  all expression and statement constructors, uses the shared exhaustive
+  `AstType` walker, and separately indexes expression-shaped type operands
+  such as casts, generic array construction, and `Std.isOfType`. Remaining
+  work is richer error-tolerant recovery resolution and broader immutable
+  semantic-query state, not request-time access to the construction builder.
 - [~] Recovery construction is isolated in `RecoveryEngine`; workspace name
   resolution, dependency visibility, and recovered-body reuse remain explicit
   callbacks so editor snapshots cannot publish speculative declarations.
@@ -168,8 +171,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 - [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
   scopes and local types around unrelated failures, records expected argument
   types, retains nominal receivers with unknown generic arguments, and exposes
-  unresolved names and compiler-owned completion contexts. Full error-tolerant
-  type resolution remains.
+  unresolved names and compiler-owned completion contexts. Generic constraint
+  failures, conflicting inference, and generic instance-method values now
+  retain callable/result shapes in recovery. Full error-tolerant type
+  resolution remains.
 - [~] Completion, symbols, folding, selection ranges, links, highlights,
   semantic tokens, hover, and signature help consume current recovered source
   where safe. Completion reports incomplete results while recovery is active.
@@ -177,7 +182,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   stale fallback edits remain conservative and reject speculative or stale
   symbols. Implementation lookup now reads current recovered candidate classes
   only for authoritative targets, and ambiguous recovered inheritance names are
-  rejected. Full type-aware navigation and global reference precision remain.
+  rejected. Package-qualified identities, aliases, wildcard packages, lazy
+  secondary modules, inherited generic members, constructors, enum values,
+  super, and source-level type operands are covered. Full type-aware navigation
+  and global reference precision remain.
 - [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
