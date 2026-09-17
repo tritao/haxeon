@@ -120,13 +120,55 @@ class RecoveryEngine {
 				recoveredModel.indexRecoveredModule(module.program, module.declarations, module.qualifiers, token);
 			var previousModel = state.previousEditorSemanticModel != null ? state.previousEditorSemanticModel
 				: state.lastGood == null ? null : state.lastGood.semanticModel;
+			var resolvedSymbols:Map<String, Null<SemanticSymbolId>> = [],
+				resolvedTypeSymbols:Map<String, Null<SemanticSymbolId>> = [],
+				resolvedEnumCases:Map<String, Null<SemanticSymbolId>> = [],
+				resolvedTypes:Map<String, Null<CompilerType>> = [],
+				candidates:Map<String, Array<SemanticSymbolId>> = [];
+			var resolveSymbol = function(name:String):Null<SemanticSymbolId> {
+				if (resolvedSymbols.exists(name))
+					return resolvedSymbols.get(name);
+				var result = hooks.resolveSymbol(state, recovered.program, name, token);
+				resolvedSymbols.set(name, result);
+				return result;
+			};
+			var resolveTypeSymbol = function(name:String):Null<SemanticSymbolId> {
+				if (resolvedTypeSymbols.exists(name))
+					return resolvedTypeSymbols.get(name);
+				var result = hooks.resolveTypeSymbol(state, recovered.program, name, token);
+				resolvedTypeSymbols.set(name, result);
+				return result;
+			};
+			var resolveEnumCase = function(name:String, index:Int):Null<SemanticSymbolId> {
+				var key = name + ":" + index;
+				if (resolvedEnumCases.exists(key))
+					return resolvedEnumCases.get(key);
+				var result = hooks.resolveEnumCase(state, recovered.program, name, index, token);
+				resolvedEnumCases.set(key, result);
+				return result;
+			};
+			var resolveType = function(name:String, arguments:Array<CompilerType>):Null<CompilerType> {
+				var key = name + "|" + [for (argument in arguments) Std.string(argument)].join(",");
+				if (resolvedTypes.exists(key))
+					return resolvedTypes.get(key);
+				var result = hooks.resolveType(state, recovered.program, name, arguments, token);
+				resolvedTypes.set(key, result);
+				return result;
+			};
+			var symbolCandidates = function(name:String):Array<SemanticSymbolId> {
+				if (candidates.exists(name))
+					return candidates.get(name);
+				var result = hooks.symbolCandidates(state, name, token, recovered.program);
+				candidates.set(name, result);
+				return result;
+			};
 			recoveredModel.indexRecoveredSyntax(recovered.program, token, recoveredModel.partialTypedProgram,
-				function(name) return hooks.resolveSymbol(state, recovered.program, name, token),
-				function(name, index) return hooks.resolveEnumCase(state, recovered.program, name, index, token),
-				function(name, arguments) return hooks.resolveType(state, recovered.program, name, arguments, token),
-				function(name) return hooks.symbolCandidates(state, name, token, recovered.program),
+				resolveSymbol,
+				resolveEnumCase,
+				resolveType,
+				symbolCandidates,
 				previousModel,
-				function(name) return hooks.resolveTypeSymbol(state, recovered.program, name, token));
+				resolveTypeSymbol);
 			if (!isCurrent())
 				return {published: false, reusedFunctions: 0};
 			recoveredModel.freeze();
