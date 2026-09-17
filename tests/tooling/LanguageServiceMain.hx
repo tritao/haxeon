@@ -286,6 +286,16 @@ class LanguageServiceMain {
 		for (unresolved in recoveredSuperMemberService.unresolvedSymbols("RecoveredSuperMember.hx"))
 			if (unresolved.name == "this" || unresolved.name == "super")
 				throw 'recovered receiver keyword was incorrectly reported as unresolved: ${unresolved.name}';
+		var recoveredSwitchService = new LanguageService(),
+			recoveredSwitchSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function unfinished(";
+		recoveredSwitchService.update("RecoveredSwitch.hx", recoveredSwitchSource);
+		var recoveredSwitchUsePosition = recoveredSwitchSource.indexOf("return value") + "return ".length,
+			recoveredSwitchDefinition = recoveredSwitchService.definition("RecoveredSwitch.hx", recoveredSwitchUsePosition),
+			recoveredSwitchReferences = recoveredSwitchService.references("RecoveredSwitch.hx", recoveredSwitchUsePosition);
+		if (recoveredSwitchDefinition == null
+			|| recoveredSwitchDefinition.span.start != recoveredSwitchSource.indexOf("value", recoveredSwitchSource.indexOf("case Ok"))
+			|| recoveredSwitchReferences.length < 2)
+			throw 'recovered switch payload navigation was lost after a later malformed declaration: definition=${recoveredSwitchDefinition == null ? "null" : Std.string(recoveredSwitchDefinition.span.start)}, references=${recoveredSwitchReferences.length}';
 		var switchTraversalService = new LanguageService(),
 			switchTraversalSource = "enum Result { Ok(value:Int); Err; } function inspect(result:Result):Int { switch (result) { case Ok(value): return value; case Err: return 0; } } function main():Int return 0;";
 		switchTraversalService.update("SwitchTraversal.hx", switchTraversalSource);

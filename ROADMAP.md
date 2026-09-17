@@ -168,7 +168,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	and type lists, member access, calls, blocks, and control-flow constructs.
 	Recovery diagnostics are merged and deduplicated with compiler diagnostics,
 	and lexical, parser, partial-typing, indexing, and LSP work honor cooperative
-	cancellation. The interactive corpus covers real edit sequences and UTF-16
+	cancellation. Recovered switch payload bindings survive malformed later
+	declarations. The interactive corpus covers real edit sequences and UTF-16
 	positions in recovered source.
 - [~] Recovered typing propagates `TUnknown`/`TError` locally, preserves
   scopes and local types around unrelated failures, records expected argument
