@@ -1338,8 +1338,7 @@ class SemanticWorkspace {
 					for (parent in parents) {
 						if (token != null)
 							token.check();
-						var parentName = ModuleCanonicalizer.astTypeName(parent),
-							parentIdentity = resolveEditorTypeIdentity(state, parentName);
+						var parentIdentity = resolveEditorAstTypeIdentity(state, parent, model.program, token);
 						if (parentIdentity == target || editorInheritsFrom(state, parentIdentity, target, visiting, token))
 							return true;
 					}
@@ -1349,8 +1348,7 @@ class SemanticWorkspace {
 					for (base in decl.bases) {
 						if (token != null)
 							token.check();
-						var baseName = ModuleCanonicalizer.astTypeName(base),
-							baseIdentity = resolveEditorTypeIdentity(state, baseName);
+						var baseIdentity = resolveEditorAstTypeIdentity(state, base, model.program, token);
 						if (baseIdentity == target || editorInheritsFrom(state, baseIdentity, target, visiting, token))
 							return true;
 					}
@@ -1358,23 +1356,22 @@ class SemanticWorkspace {
 		return false;
 	}
 
-	function resolveEditorTypeIdentity(from:ModuleState, name:String):String {
-		var model = editorModel(from),
-			program = model == null ? null : model.program,
-			identity = program == null ? null : editorNominalTypeIdentity(from, NamedType(name), program, [], null);
+	function resolveEditorAstTypeIdentity(from:ModuleState, type:compiler.syntax.Ast.AstType,
+		program:AstProgram, ?token:CancellationToken):String {
+		var identity = editorNominalTypeIdentity(from, type, program, [], token);
 		if (identity == null)
-			return name;
+			return ModuleCanonicalizer.astTypeName(type);
 		var resolved = editorSymbolById(identity),
 			resolvedModel = resolved == null ? null : editorModel(resolved.state);
 		if (resolved == null || resolvedModel == null)
-			return name;
+			return ModuleCanonicalizer.astTypeName(type);
 		for (decl in resolvedModel.program.classes)
 			if (sameSpan(decl.span, resolved.symbol.declaration))
 				return qualifiedType(resolvedModel, decl.name);
 		for (decl in resolvedModel.program.interfaces)
 			if (sameSpan(decl.span, resolved.symbol.declaration))
 				return qualifiedType(resolvedModel, decl.name);
-		return name;
+		return ModuleCanonicalizer.astTypeName(type);
 	}
 
 	function inheritsFrom(candidate:String, target:String, visiting:Map<String, Bool>):Bool {

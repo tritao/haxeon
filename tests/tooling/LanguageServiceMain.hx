@@ -934,6 +934,23 @@ class LanguageServiceMain {
 		if (exactAliasedInheritanceImplementations.length != 1
 			|| exactAliasedInheritanceImplementations[0].path != "aliased/child/Child.hx")
 			throw 'exact implementation navigation did not resolve an imported typedef parent: ${exactAliasedInheritanceImplementations.length}';
+		var genericAliasedInheritanceService = new LanguageService(),
+			genericAliasedBase = "package generic.alias; class Base<T> { public function run(value:T):T return value; } function main():Void return;",
+			genericAliasedAlias = "package generic.alias; typedef Parent<T> = Base<Array<T>>; function main():Void return;",
+			genericAliasedChild = "package generic.child; import generic.alias.Parent as P; class Child extends P<String> { public function run(value:Array<String>):Array<String> return value; } function main():Void { var child:Child = new Child(); child.";
+		genericAliasedInheritanceService.update("generic/alias/Base.hx", genericAliasedBase);
+		genericAliasedInheritanceService.update("generic/alias/Parent.hx", genericAliasedAlias);
+		genericAliasedInheritanceService.compile("generic.alias.Base");
+		genericAliasedInheritanceService.update("generic/child/Child.hx", genericAliasedChild);
+		var genericAliasedTypeImplementations = genericAliasedInheritanceService.implementations("generic/alias/Base.hx",
+			genericAliasedBase.indexOf("Base") + 1),
+			genericAliasedMethodImplementations = genericAliasedInheritanceService.implementations("generic/alias/Base.hx",
+				genericAliasedBase.indexOf("run") + 1);
+		if (genericAliasedTypeImplementations.length != 1
+			|| genericAliasedTypeImplementations[0].path != "generic/child/Child.hx"
+			|| genericAliasedMethodImplementations.length != 1
+			|| genericAliasedMethodImplementations[0].path != "generic/child/Child.hx")
+			throw 'implementation navigation did not resolve a generic typedef parent: type=${genericAliasedTypeImplementations.length}, method=${genericAliasedMethodImplementations.length}';
 		var recoveredImplementationService = new LanguageService(),
 			recoveredContractSource = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
 			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(";
