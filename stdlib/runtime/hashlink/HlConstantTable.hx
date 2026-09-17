@@ -1,6 +1,7 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlConstant;
 
 /** Input used to construct one Haxe-owned HashLink constant descriptor. */
 typedef HlConstantDescriptorSpec = {
@@ -12,7 +13,7 @@ typedef HlConstantDescriptorSpec = {
 /** Owns a contiguous, stable array of HashLink global constant descriptors. */
 class HlConstantTable {
 	public final arena:HlTypeArena;
-	final entries:RawPtr<HlConstant>;
+	final entries:RawPtr<NativeModuleHlConstant>;
 	final capacity:Int;
 	var count:Int = 0;
 
@@ -25,7 +26,7 @@ class HlConstantTable {
 	}
 
 	/** Append one constant descriptor and return its stable address. */
-	public function add(spec:HlConstantDescriptorSpec):RawPtr<HlConstant> {
+	public function add(spec:HlConstantDescriptorSpec):RawPtr<NativeModuleHlConstant> {
 		if (spec == null)
 			throw "HashLink constant descriptor cannot be null";
 		if (count >= capacity)
@@ -39,7 +40,7 @@ class HlConstantTable {
 		return descriptor;
 	}
 
-	public inline function pointer():RawPtr<HlConstant>
+	public inline function pointer():RawPtr<NativeModuleHlConstant>
 		return entries;
 
 	public inline function length():Int
@@ -76,7 +77,7 @@ class HlConstantTable {
 		return count;
 	}
 
-	public function get(index:Int):RawPtr<HlConstant> {
+	public function get(index:Int):RawPtr<NativeModuleHlConstant> {
 		if (index < 0 || index >= count)
 			throw 'HashLink constant descriptor index $index is outside 0...$count';
 		return entries.offset(index);

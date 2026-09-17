@@ -1,12 +1,12 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
-import runtime.hashlink.HlDebugSection;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlDebugSection;
 
 /** Owns a contiguous, stable array of HashLink module debug sections. */
 class HlDebugSectionTable {
 	public final arena:HlTypeArena;
-	final entries:RawPtr<HlDebugSection>;
+	final entries:RawPtr<NativeModuleHlDebugSection>;
 	final capacity:Int;
 	var count:Int = 0;
 
@@ -19,7 +19,7 @@ class HlDebugSectionTable {
 	}
 
 	/** Append one immutable debug section and copy its payload into the arena. */
-	public function add(spec:HlDebugSectionSpec):RawPtr<HlDebugSection> {
+	public function add(spec:HlDebugSectionSpec):RawPtr<NativeModuleHlDebugSection> {
 		if (spec == null || spec.payload == null)
 			throw "HashLink debug section requires a payload";
 		if (count >= capacity)
@@ -39,7 +39,7 @@ class HlDebugSectionTable {
 		return section;
 	}
 
-	public inline function pointer():RawPtr<HlDebugSection>
+	public inline function pointer():RawPtr<NativeModuleHlDebugSection>
 		return entries;
 
 	public inline function length():Int
@@ -59,7 +59,7 @@ class HlDebugSectionTable {
 		return count;
 	}
 
-	public function get(index:Int):RawPtr<HlDebugSection> {
+	public function get(index:Int):RawPtr<NativeModuleHlDebugSection> {
 		if (index < 0 || index >= count)
 			throw 'HashLink debug section index $index is outside 0...$count';
 		return entries.offset(index);

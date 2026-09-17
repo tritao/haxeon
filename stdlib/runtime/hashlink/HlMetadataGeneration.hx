@@ -4,13 +4,13 @@ import runtime.memory.RawPtr;
 import runtime.memory.Mutex;
 import runtime.hashlink.HlTypeBridge;
 import runtime.hashlink.HlTypeLayout;
-import runtime.hashlink.HlFunction;
-import runtime.hashlink.HlNative;
-import runtime.hashlink.HlConstant;
 import runtime.hashlink.HlModulePools;
-import runtime.hashlink.HlDebugSection;
 import runtime.hashlink.HlDebugSectionTable;
-import runtime.hashlink.HlNativeCode;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlCode;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlConstant;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlDebugSection;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative;
 import runtime.hashlink.HlTypeArena.HlTypeArenaCheckpoint;
 import runtime.hashlink.HlTypeTable.HlTypeTableCheckpoint;
 
@@ -23,16 +23,16 @@ typedef HlMetadataPublication = {
 	final contiguousTypeCount:Int;
 	final contiguousTypeCapacity:Int;
 	final usesContiguousTypes:Bool;
-	final functionDescriptors:RawPtr<HlFunction>;
+	final functionDescriptors:RawPtr<NativeModuleHlFunction>;
 	final functionDescriptorCount:Int;
 	final functionDescriptorCapacity:Int;
-	final nativeDescriptors:RawPtr<HlNative>;
+	final nativeDescriptors:RawPtr<NativeModuleHlNative>;
 	final nativeDescriptorCount:Int;
 	final nativeDescriptorCapacity:Int;
-	final constants:RawPtr<HlConstant>;
+	final constants:RawPtr<NativeModuleHlConstant>;
 	final constantCount:Int;
 	final constantCapacity:Int;
-	final debugSections:RawPtr<HlDebugSection>;
+	final debugSections:RawPtr<NativeModuleHlDebugSection>;
 	final debugSectionCount:Int;
 	final debugSectionCapacity:Int;
 	final functionStableIds:RawPtr<Int32>;
@@ -61,7 +61,7 @@ typedef HlMetadataPublication = {
 	final functionTypes:RawPtr<RawPtr<HlType>>;
 	final functionCount:Int;
 	final moduleContext:RawPtr<HlModuleContext>;
-	final nativeCode:RawPtr<HlNativeCode>;
+	final nativeCode:RawPtr<NativeModuleHlCode>;
 }
 
 /** Builds and seals one Haxe-owned HashLink metadata generation. */
@@ -74,7 +74,7 @@ class HlMetadataGeneration {
 	public final debugSectionDescriptors:HlDebugSectionTable;
 	var modulePools:HlModulePools;
 	var modulePoolsDefined:Bool = false;
-	var nativeCode:RawPtr<HlNativeCode> = RawPtr.nullPtr();
+	var nativeCode:RawPtr<NativeModuleHlCode> = RawPtr.nullPtr();
 	var functionStableIds:RawPtr<Int32> = RawPtr.nullPtr();
 	var functionNames:RawPtr<RawPtr<UInt8>> = RawPtr.nullPtr();
 	var functionNameLengths:RawPtr<Int32> = RawPtr.nullPtr();
@@ -212,7 +212,7 @@ class HlMetadataGeneration {
 	}
 
 	/** Append one Haxe-owned HashLink function descriptor. */
-	public function addFunctionDescriptor(spec:HlFunctionDescriptorSpec):RawPtr<HlFunction> {
+	public function addFunctionDescriptor(spec:HlFunctionDescriptorSpec):RawPtr<NativeModuleHlFunction> {
 		requireBuilding();
 		return functionDescriptors.add(spec);
 	}
@@ -247,19 +247,19 @@ class HlMetadataGeneration {
 	}
 
 	/** Append one Haxe-owned HashLink native binding descriptor. */
-	public function addNativeDescriptor(spec:HlNativeDescriptorSpec):RawPtr<HlNative> {
+	public function addNativeDescriptor(spec:HlNativeDescriptorSpec):RawPtr<NativeModuleHlNative> {
 		requireBuilding();
 		return nativeDescriptors.add(spec);
 	}
 
 	/** Append one Haxe-owned HashLink global constant descriptor. */
-	public function addConstant(spec:HlConstantDescriptorSpec):RawPtr<HlConstant> {
+	public function addConstant(spec:HlConstantDescriptorSpec):RawPtr<NativeModuleHlConstant> {
 		requireBuilding();
 		return constantDescriptors.add(spec);
 	}
 
 	/** Append one Haxe-owned HashLink module debug section. */
-	public function addDebugSection(spec:HlDebugSectionSpec):RawPtr<HlDebugSection> {
+	public function addDebugSection(spec:HlDebugSectionSpec):RawPtr<NativeModuleHlDebugSection> {
 		requireBuilding();
 		return debugSectionDescriptors.add(spec);
 	}
