@@ -84,7 +84,8 @@ class WasmLinearRuntime {
 						case "__string_index_of":
 							functions.set(native.name, addStringIndexOf(module, native.name));
 						case "__string_substring":
-							functions.set(native.name, addStringSubstring(module, native.name, allocator));
+							if (!functions.exists(native.name))
+								functions.set(native.name, addStringSubstring(module, native.name, allocator));
 						case "__string_char_at":
 							functions.set(native.name, addStringCharAt(module, native.name, allocator));
 						case "__string_from_char_code":
@@ -93,6 +94,13 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringEqual(module, native.name));
 						case "__string_compare_full":
 							functions.set(native.name, addStringCompareFull(module, native.name));
+						case "__string_split":
+							var substring = functions.get("__string_substring");
+							if (substring == null) {
+								substring = addStringSubstring(module, "__string_substring", allocator);
+								functions.set("__string_substring", substring);
+							}
+							functions.set(native.name, addStringSplit(module, native.name, allocator, substring));
 						case "__std_int_f64":
 							functions.set(native.name,
 								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64], results: [I32]}, [],
@@ -2008,6 +2016,213 @@ class WasmLinearRuntime {
 		builder.localGet(result);
 		builder.return_();
 		return module.addFunction(builder.finish());
+	}
+
+	static function addStringSplit(module:WasmModule, name:String, allocator:Int, substring:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			source = builder.parameter("source", 0),
+			separator = builder.parameter("separator", 1),
+			sourceLength = builder.local("sourceLength", I32),
+			separatorLength = builder.local("separatorLength", I32),
+			result = builder.local("result", I32),
+			data = builder.local("data", I32),
+			capacity = builder.local("capacity", I32),
+			count = builder.local("count", I32),
+			scan = builder.local("scan", I32),
+			start = builder.local("start", I32),
+			separatorIndex = builder.local("separatorIndex", I32),
+			step = builder.local("step", I32),
+			firstByte = builder.local("firstByte", I32),
+			part = builder.local("part", I32);
+
+		builder.localGet(source);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(sourceLength);
+		builder.localGet(separator);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(separatorLength);
+
+		// At most sourceLength + 1 parts can be produced. Allocate the backing
+		// storage once so split does not depend on the array push runtime helper.
+		builder.i32Const(WasmLayout.ARRAY_HEADER_SIZE);
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.i32Const(0);
+		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(sourceLength);
+		builder.i32Const(1);
+		builder.i32Add();
+		builder.localTee(capacity);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(capacity);
+		builder.i32Const(4);
+		builder.emit(I32Mul);
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(data);
+		WasmLinearGc.appendGcContainerOwner(builder.body, data, result);
+		builder.localGet(result);
+		builder.localGet(data);
+		builder.emit(I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+
+		builder.i32Const(0);
+		builder.localSet(count);
+		builder.i32Const(0);
+		builder.localSet(scan);
+		builder.i32Const(0);
+		builder.localSet(start);
+		builder.localGet(separatorLength);
+		builder.i32Eqz();
+		builder.ifElse(function(builder) {
+			// Haxe splits an empty separator at UTF-8 code-point boundaries.
+			builder.block(function(builder) {
+				builder.loop(function(builder) {
+					builder.localGet(scan);
+					builder.localGet(sourceLength);
+					builder.emit(I32LtS);
+					builder.i32Eqz();
+					builder.emit(BrIf(1));
+					builder.localGet(source);
+					builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+					builder.i32Add();
+					builder.localGet(scan);
+					builder.i32Add();
+					builder.emit(I32Load8U(0));
+					builder.localSet(firstByte);
+					builder.localGet(firstByte);
+					builder.i32Const(240);
+					builder.emit(I32LtS);
+					builder.i32Eqz();
+					builder.ifElse(function(builder) {
+						builder.i32Const(4);
+						builder.localSet(step);
+					}, function(builder) {
+						builder.localGet(firstByte);
+						builder.i32Const(224);
+						builder.emit(I32LtS);
+						builder.i32Eqz();
+						builder.ifElse(function(builder) {
+							builder.i32Const(3);
+							builder.localSet(step);
+						}, function(builder) {
+							builder.localGet(firstByte);
+							builder.i32Const(192);
+							builder.emit(I32LtS);
+							builder.i32Eqz();
+							builder.ifElse(function(builder) {
+								builder.i32Const(2);
+								builder.localSet(step);
+							}, function(builder) {
+								builder.i32Const(1);
+								builder.localSet(step);
+							});
+						});
+					});
+					builder.localGet(scan);
+					builder.localSet(start);
+					builder.localGet(scan);
+					builder.localGet(step);
+					builder.i32Add();
+					builder.localSet(scan);
+					appendLinearSplitPart(builder, source, result, data, count, start, scan, part, substring);
+					builder.emit(Br(0));
+				});
+			});
+		}, function(builder) {
+			builder.block(function(builder) {
+				builder.loop(function(builder) {
+					builder.localGet(scan);
+					builder.localGet(separatorLength);
+					builder.i32Add();
+					builder.localGet(sourceLength);
+					builder.emit(I32LeS);
+					builder.i32Eqz();
+					builder.emit(BrIf(1));
+					builder.i32Const(0);
+					builder.localSet(separatorIndex);
+					builder.block(function(builder) {
+						builder.loop(function(builder) {
+							builder.localGet(separatorIndex);
+							builder.localGet(separatorLength);
+							builder.emit(I32LtS);
+							builder.i32Eqz();
+							builder.emit(BrIf(1));
+							builder.localGet(source);
+							builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+							builder.i32Add();
+							builder.localGet(scan);
+							builder.i32Add();
+							builder.localGet(separatorIndex);
+							builder.i32Add();
+							builder.emit(I32Load8U(0));
+							builder.localGet(separator);
+							builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+							builder.i32Add();
+							builder.localGet(separatorIndex);
+							builder.i32Add();
+							builder.emit(I32Load8U(0));
+							builder.emit(I32Eq);
+							builder.i32Eqz();
+							builder.emit(BrIf(1));
+							builder.localGet(separatorIndex);
+							builder.i32Const(1);
+							builder.i32Add();
+							builder.localSet(separatorIndex);
+							builder.emit(Br(0));
+						});
+					});
+					builder.localGet(separatorIndex);
+					builder.localGet(separatorLength);
+					builder.emit(I32Eq);
+					builder.ifElse(function(builder) {
+						appendLinearSplitPart(builder, source, result, data, count, start, scan, part, substring);
+						builder.localGet(scan);
+						builder.localGet(separatorLength);
+						builder.i32Add();
+						builder.localSet(scan);
+						builder.localGet(scan);
+						builder.localSet(start);
+					}, function(builder) {
+						builder.localGet(scan);
+						builder.i32Const(1);
+						builder.i32Add();
+						builder.localSet(scan);
+					});
+					builder.emit(Br(0));
+				});
+			});
+			appendLinearSplitPart(builder, source, result, data, count, start, sourceLength, part, substring);
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function appendLinearSplitPart(builder:WasmFunctionBuilder, source:WasmLocalRef, result:WasmLocalRef, data:WasmLocalRef,
+			count:WasmLocalRef, start:WasmLocalRef, end:WasmLocalRef, part:WasmLocalRef, substring:Int):Void {
+		builder.localGet(source);
+		builder.localGet(start);
+		builder.localGet(end);
+		builder.call(builder.functionRef(substring));
+		builder.localSet(part);
+		builder.localGet(data);
+		builder.localGet(count);
+		builder.i32Const(4);
+		builder.emit(I32Mul);
+		builder.i32Add();
+		builder.localGet(part);
+		builder.emit(I32Store(0));
+		builder.localGet(count);
+		builder.i32Const(1);
+		builder.i32Add();
+		builder.localSet(count);
+		builder.localGet(result);
+		builder.localGet(count);
+		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
 	}
 
 	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {

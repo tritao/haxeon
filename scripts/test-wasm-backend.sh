@@ -127,6 +127,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm-gc --output=out/wasm-cli-gc-strings.wasm --entry=wasm-gc-strings \
 	--root=tests/programs tests/programs/wasm-gc-strings.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
+	--root=tests/programs tests/programs/wasm-string-split.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -208,6 +211,7 @@ const cases = [
 	["out/wasm-cli-gc-exceptions.wasm", 42],
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
+	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
