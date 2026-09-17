@@ -2417,7 +2417,21 @@ class LanguageService {
 		var id = context.symbol;
 		if (id == null)
 			return null;
-		var result = symbolLocations(context.state, id, token);
+		var family:Array<SemanticSymbolId> = [id],
+			indexed = compiler.semanticWorkspace.indexedSymbol(id);
+		if (indexed != null && indexed.symbol.kind == DeclarationKind.Member)
+			for (implementation in compiler.semanticWorkspace.editorImplementations(id, token)) {
+				var implementationId = compiler.semanticWorkspace.editorDeclarationSymbolId(implementation.state, implementation.span);
+				if (implementationId != null
+					&& (EditorWorkspaceView.currentExact(implementation.state) != null
+						|| compiler.semanticWorkspace.indexedSymbol(implementationId) != null)
+					&& family.indexOf(implementationId) < 0)
+					family.push(implementationId);
+			}
+		var result:Array<SymbolLocation> = [];
+		for (familyId in family)
+			for (location in symbolLocations(context.state, familyId, token))
+				addUniqueLocation(result, location);
 		result.sort(function(left, right) {
 			var path = Reflect.compare(left.path, right.path);
 			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;

@@ -906,6 +906,9 @@ class LanguageServiceMain {
 		var baseMethodRename = implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute");
 		if (baseMethodRename.length != 3)
 			throw 'rename did not include the authoritative override family: ${baseMethodRename.length}';
+		var baseMethodReferences = implementationService.references("base/Base.hx", baseSource.indexOf("run") + 1);
+		if (baseMethodReferences.length != 3)
+			throw 'references did not include the authoritative override family: ${baseMethodReferences.length}';
 		implementationService.update("impl/Derived.hx",
 			"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(");
 		if (implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute").length != 0)
