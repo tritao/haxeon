@@ -110,12 +110,24 @@ even on non-Windows hosts. It uses Clang's MSVC mangled names and LLP64 layout
 rules; executing the resulting library still requires a Windows build and
 runtime.
 
+Large C++ headers can be narrowed with repeatable `--cxx-select=<qualified-name>`
+options. Select a record to retain all of its supported members, or select
+individual methods, free functions, enums, and aliases. Selecting a method
+implicitly retains its owning record; named type declarations used by selected
+signatures should be selected as well. This is useful for headers that expose a
+small supported facade alongside internal constructors, virtual classes, or
+template-heavy declarations.
+
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:
 its methods are not `noexcept`, and the shared UI library hides its C++ symbols.
-It therefore must not be presented as a direct CXX_ABI_V1 success case. An
-opt-in audit checks the real header and NativeKit compilation database and
-asserts that Haxeon reports the expected actionable diagnostics:
+It therefore must not be presented as a direct call into the shipped shared
+library. An opt-in audit checks the real header and NativeKit compilation
+database and asserts the expected actionable diagnostics. It also builds the
+actual `display_list.cpp` beside a test-only factory and Haxeon's generated
+thunks, then executes `reset()` and `size()` through the generated projection.
+That positive path verifies the importer and thunk ABI against NativeKit's real
+C++ implementation without changing NativeKit's production exports:
 
 ```sh
 NATIVEKIT_ROOT=/path/to/nativekit \
@@ -123,10 +135,9 @@ NATIVEKIT_BUILD_DIR=/path/to/nativekit/build-ui-integrated \
 tests/integration/test-nativekit-cxx-profile.sh
 ```
 
-When NativeKit exposes a supported C++ surface, or after C++ thunk support is
-added, this audit is the integration point for promoting `DisplayList` to a
-positive direct-call test. The existing C API remains the correct binding for
-the current NativeKit build.
+The existing C API remains the correct production binding for the current
+NativeKit build. A future NativeKit release can promote the source-level test
+to a shared-library test once it exports an intentional C++ surface.
 
 Use repeatable `--define=<name[=value]>` options for explicit preprocessor
 definitions. `--compile-commands=<path>` accepts a Clang

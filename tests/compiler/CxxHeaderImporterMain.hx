@@ -52,6 +52,20 @@ class CxxHeaderImporterMain {
 		expect(size != null && size.isNoexcept && size.isConst && size.symbol == "_ZNK4nkui11DisplayList4sizeEv",
 			"const C++ methods should retain const semantics and their mangled symbol");
 		expect(make != null && make.isStatic, "static C++ methods should not require a synthetic this parameter");
+		var selected = CxxHeaderImporter.importHeader("tests/ffi/cxx_import_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_selected", null,
+			null, null, "c++20", null, null, false, false, false, false, [
+				"nkui::DisplayList::reset",
+				"nkui::DisplayList::size",
+				"nkui::Count",
+				"nkui::acquire"
+			]);
+		expect(selected.model.records.length == 1
+			&& selected.model.records[0].methods.length == 2
+			&& Lambda.exists(selected.model.records[0].methods, method -> method.name == "reset")
+			&& Lambda.exists(selected.model.records[0].methods, method -> method.name == "size")
+			&& selected.model.functions.length == 1
+			&& selected.model.functions[0].name == "acquire",
+			"C++ declaration selection should retain only explicitly selected records, methods, and functions");
 		var generated = HxiWriter.write(imported.hxi, "// test");
 		expect(imported.plans.length == 5, "C++ lowering should expose one direct native call plan per imported function or method");
 		for (plan in imported.plans)

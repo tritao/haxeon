@@ -13,7 +13,8 @@ class FfiImportMain {
 		var args = Sys.args(), target = "", output = "", language = "c", standard = "c11", clang = "clang", compileCommands:Null<String> = null,
 			library:Null<String> = null, interfaceName:Null<String> = null, includes:Array<String> = [], defines:Array<String> = [],
 			dependencies:Array<String> = [], sourceLabel:Null<String> = null, excludedHeaders:Array<String> = [], paths:Array<String> = [],
-			trivialValues = false, cxxLifetimes = false, cxxVirtual = false, cxxThunksPath:Null<String> = null, haxeOutputDir:Null<String> = null;
+			cxxSelections:Array<String> = [], trivialValues = false, cxxLifetimes = false, cxxVirtual = false, cxxThunksPath:Null<String> = null,
+			haxeOutputDir:Null<String> = null;
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--target="))
 				target = arg.substring(9);
@@ -49,6 +50,8 @@ class FfiImportMain {
 				sourceLabel = arg.substring(15);
 			else if (StringTools.startsWith(arg, "--haxe-output-dir="))
 				haxeOutputDir = arg.substring(arg.indexOf("=") + 1);
+			else if (StringTools.startsWith(arg, "--cxx-select="))
+				cxxSelections.push(arg.substring(arg.indexOf("=") + 1));
 			else if (StringTools.startsWith(arg, "--exclude-header="))
 				excludedHeaders.push(arg.substring(17));
 			else if (StringTools.startsWith(arg, "--"))
@@ -57,6 +60,8 @@ class FfiImportMain {
 				paths.push(arg);
 		if (language != "c" && language != "c++")
 			throw 'Unsupported FFI language "$language"';
+		if (cxxSelections.length != 0 && language != "c++")
+			throw "--cxx-select requires --language=c++";
 		if (haxeOutputDir != null && language != "c++")
 			throw "--haxe-output-dir requires --language=c++";
 		if (cxxThunksPath != null && language != "c++")
@@ -66,9 +71,10 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import --language=c|c++ --target=<triple> --output=<file> [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-import --language=c|c++ --target=<triple> --output=<file> [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
-			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null) : null,
+			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null,
+			cxxSelections.length == 0 ? null : cxxSelections) : null,
 			model = cxxResult == null ? CHeaderImporter.importHeaderWithOptions(paths[0], target, includes, clang, library, interfaceName, dependencies,
 				excludedHeaders, defines, compileCommands) : cxxResult.hxi,
 			label = sourceLabel == null ? paths[0] : sourceLabel,

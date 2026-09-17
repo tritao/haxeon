@@ -44,15 +44,19 @@ done
 case "$(uname -s):$(uname -m)" in
 	Linux:x86_64)
 		target="x86_64-linux-gnu"
+		shared_flag="-shared"
 		;;
 	Linux:aarch64|Linux:arm64)
 		target="aarch64-linux-gnu"
+		shared_flag="-shared"
 		;;
 	Darwin:x86_64)
 		target="x86_64-apple-darwin"
+		shared_flag="-dynamiclib"
 		;;
 	Darwin:arm64)
 		target="arm64-apple-darwin"
+		shared_flag="-dynamiclib"
 		;;
 	*)
 		echo "unsupported host for NativeKit C++ profile audit" >&2
@@ -92,3 +96,67 @@ if grep -q "std::launder\|__get_first_arg" "$diagnostics"; then
 fi
 
 echo "PASS NativeKit C++ profile audit: internal DisplayList is rejected with actionable CXX diagnostics"
+
+positive_dir="$run_dir/positive"
+mkdir -p "$positive_dir/projection"
+positive_hxi="$positive_dir/nativekit-display-list.hxi"
+positive_thunks="$positive_dir/nativekit-display-list-generated.cpp"
+positive_library="$positive_dir/libnativekit_display_list_fixture.so"
+
+"$repo_dir/scripts/haxeon-ffi-import" \
+	--language=c++ \
+	--std=c++20 \
+	--target="$target" \
+	--include="$nativekit_root/modules/ui/src" \
+	--library="$positive_library" \
+	--interface=NativeKitDisplayList \
+	--cxx-thunks="$positive_thunks" \
+	--haxe-output-dir="$positive_dir/projection" \
+	--output="$positive_hxi" \
+	--cxx-select=nkui::DisplayList::reset \
+	--cxx-select=nkui::DisplayList::size \
+	--cxx-select=nkui::haxeon_display_list_acquire \
+	"$repo_dir/tests/ffi/nativekit_display_list_bridge.hpp"
+
+cxx="${CXX:-c++}"
+case "$(uname -s)" in
+	Linux)
+		positive_library="$positive_dir/libnativekit_display_list_fixture.so"
+		"$cxx" -std=c++20 -fPIC "$shared_flag" \
+			"$nativekit_root/modules/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
+			"$positive_thunks" \
+			-I"$nativekit_root/modules/ui/src" \
+			-o "$positive_library"
+		;;
+	Darwin)
+		positive_library="$positive_dir/libnativekit_display_list_fixture.dylib"
+		"$cxx" -std=c++20 -fPIC "$shared_flag" \
+			"$nativekit_root/modules/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
+			"$positive_thunks" \
+			-I"$nativekit_root/modules/ui/src" \
+			-o "$positive_library"
+		;;
+esac
+sed -i "s#${positive_dir}/libnativekit_display_list_fixture.so#${positive_library}#" "$positive_hxi"
+grep -q 'public function reset():Void' "$positive_dir/projection/DisplayList.hx"
+grep -q 'public function size():haxe.Int64' "$positive_dir/projection/DisplayList.hx"
+grep -q 'DisplayListFunctions' "$positive_dir/projection/NativeKitDisplayListFunctions.hx"
+
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run NativeKitCxxMain \
+	"$repo_dir/out/nativekit-cxx-display-list-test.hl" "$positive_hxi" "$positive_dir/projection/DisplayList.hx" \
+	"$positive_dir/projection/NativeKitDisplayListFunctions.hx"
+(
+	cd "$repo_dir/out"
+	set +e
+	LD_LIBRARY_PATH="$positive_dir:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/.tools/hashlink/hl" nativekit-cxx-display-list-test.hl
+	status=$?
+	set -e
+	if [[ $status -ne 42 ]]; then
+		echo "NativeKit DisplayList C++ call returned $status, expected 42" >&2
+		exit 1
+	fi
+)
+echo "PASS NativeKit C++ source integration: DisplayList methods execute through generated Haxeon thunks"

@@ -33,7 +33,8 @@ typedef CxxImportResult = {
 class CxxHeaderImporter {
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
 			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, standard:String = "c++20", ?defines:Array<String>,
-			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false):CxxImportResult {
+			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
+			?selectedDeclarations:Array<String>):CxxImportResult {
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,
@@ -52,7 +53,7 @@ class CxxHeaderImporter {
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
 				excluded.push(ClangAstTools.pathKey(FileSystem.fullPath(excludedHeader)));
-		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts);
+		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts, selectedDeclarations);
 		builder.visit(frontend.ast, [], null, sourcePath);
 		var model = builder.finish(target);
 		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
@@ -79,14 +80,16 @@ private class CxxAstBuilder {
 	final enumNames:Map<String, Bool> = [];
 	final aliasNames:Map<String, Bool> = [];
 	final functionSymbols:Map<String, Bool> = [];
+	final selectedDeclarations:Null<Array<String>>;
 
 	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>, layouts:Map<String, RecordLayout>,
-			vtableLayouts:Map<String, VtableLayout>) {
+			vtableLayouts:Map<String, VtableLayout>, selectedDeclarations:Null<Array<String>>) {
 		this.sourcePath = sourcePath;
 		this.roots = roots;
 		this.excluded = excluded;
 		this.layouts = layouts;
 		this.vtableLayouts = vtableLayouts;
+		this.selectedDeclarations = selectedDeclarations;
 	}
 
 	public function visit(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String):Void {
@@ -107,7 +110,11 @@ private class CxxAstBuilder {
 				for (child in ClangAstTools.children(node))
 					visit(child, nested, owner, currentFile);
 			case "CXXRecordDecl":
-				if (name != null && name.length != 0 && ClangAstTools.field(node, "isImplicit") != true && user) {
+				if (name != null
+					&& name.length != 0
+					&& ClangAstTools.field(node, "isImplicit") != true
+					&& (user || selectedRecord(qualify(name, namespaces)))
+					&& selectedRecordOrAll(qualify(name, namespaces))) {
 					var qualified = qualify(name, namespaces),
 						record = makeRecord(node, qualified, namespaces);
 					if (!recordNames.exists(qualified)) {
@@ -121,7 +128,11 @@ private class CxxAstBuilder {
 					if (ClangAstTools.field(child, "kind") == "CXXRecordDecl")
 						visit(child, namespaces, name == null ? owner : qualify(name, namespaces), currentFile);
 			case "EnumDecl":
-				if (name != null && name.length != 0 && ClangAstTools.field(node, "isImplicit") != true && user) {
+				if (name != null
+					&& name.length != 0
+					&& ClangAstTools.field(node, "isImplicit") != true
+					&& (user || explicitlySelected(qualify(name, namespaces)))
+					&& selectedDeclaration(qualify(name, namespaces))) {
 					var enumModel = makeEnum(node, qualify(name, namespaces));
 					if (!enumNames.exists(enumModel.qualifiedName)) {
 						enumNames.set(enumModel.qualifiedName, true);
@@ -129,7 +140,11 @@ private class CxxAstBuilder {
 					}
 				}
 			case "TypedefDecl" | "TypeAliasDecl":
-				if (name != null && name.length != 0 && ClangAstTools.field(node, "isImplicit") != true && user) {
+				if (name != null
+					&& name.length != 0
+					&& ClangAstTools.field(node, "isImplicit") != true
+					&& (user || explicitlySelected(qualify(name, namespaces)))
+					&& selectedDeclaration(qualify(name, namespaces))) {
 					var alias = makeAlias(node, qualify(name, namespaces), namespaces, owner);
 					if (!aliasNames.exists(alias.qualifiedName)) {
 						aliasNames.set(alias.qualifiedName, true);
@@ -137,7 +152,11 @@ private class CxxAstBuilder {
 					}
 				}
 			case "FunctionDecl":
-				if (owner == null && name != null && ClangAstTools.field(node, "isImplicit") != true && user) {
+				if (owner == null
+					&& name != null
+					&& ClangAstTools.field(node, "isImplicit") != true
+					&& (user || explicitlySelected(qualify(name, namespaces)))
+					&& selectedDeclaration(qualify(name, namespaces))) {
 					var functionModel = makeFunction(node, qualify(name, namespaces));
 					if (!functionSymbols.exists(functionModel.symbol)) {
 						functionSymbols.set(functionModel.symbol, true);
@@ -157,6 +176,30 @@ private class CxxAstBuilder {
 		functions.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
 		var source = new SourceFile(sourcePath, FileSystem.exists(sourcePath) ? sys.io.File.getContent(sourcePath) : "");
 		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), records, enums, aliases, functions);
+	}
+
+	function selectedDeclaration(name:String):Bool
+		return selectedDeclarations == null || selectedDeclarations.indexOf(name) >= 0;
+
+	function explicitlySelected(name:String):Bool
+		return selectedDeclarations != null && selectedDeclaration(name);
+
+	function selectedRecord(name:String):Bool {
+		if (selectedDeclarations == null)
+			return false;
+		for (selection in selectedDeclarations)
+			if (selection == name || StringTools.startsWith(selection, name + "::"))
+				return true;
+		return false;
+	}
+
+	function selectedRecordOrAll(name:String):Bool
+		return selectedDeclarations == null || selectedRecord(name);
+
+	function selectedMethod(name:String, owner:String):Bool {
+		if (selectedDeclarations == null)
+			return true;
+		return selectedDeclarations.indexOf(owner) >= 0 || selectedDeclarations.indexOf(name) >= 0;
 	}
 
 	function makeRecord(node:Dynamic, qualified:String, namespaces:Array<String>):CxxRecord {
@@ -202,8 +245,10 @@ private class CxxAstBuilder {
 				if (ClangAstTools.field(child, "isImplicit") == true)
 					continue;
 				var method = makeMethod(child, qualified, access, namespaces);
-				methods.push(method);
-				hasVirtual = hasVirtual || method.isVirtual;
+				if (selectedMethod(method.qualifiedName, qualified)) {
+					methods.push(method);
+					hasVirtual = hasVirtual || method.isVirtual;
+				}
 			}
 		}
 		var vtable = vtableLayouts.get(qualified);
