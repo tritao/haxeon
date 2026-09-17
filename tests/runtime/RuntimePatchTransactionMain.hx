@@ -178,6 +178,7 @@ class RuntimePatchTransactionMain {
 			|| Runtime.metadataTypeCapacity(loaded) < initialTypeCount
 			|| Runtime.liveAllocationCount(loaded) != initialRetirement.liveManagedAllocations
 			|| Runtime.nativeRootCount(loaded) != initialRetirement.ownedNativeRoots
+			|| initialRetirement.haxeBorrowers != 0
 			|| Runtime.retainedCodeAllocationCount(loaded) != 1
 			|| Runtime.patchJitCount(loaded) != 0
 			|| Runtime.debugRegionCount(loaded) != 0)
@@ -247,6 +248,9 @@ class RuntimePatchTransactionMain {
 		var retained = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.callRetainedClosureInt(retained) != 42)
 			throw "Haxeon module kernel did not invoke a retained closure";
+		var retainedStatus = Runtime.retirementStatus(loaded);
+		if (retainedStatus.haxeBorrowers != 1 || !retainedStatus.hasKnownBorrowers())
+			throw "retained runtime values were missing from Haxe retirement diagnostics";
 		try {
 			committed.commit();
 			throw "committed host patch transaction committed twice";

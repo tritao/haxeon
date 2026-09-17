@@ -237,7 +237,7 @@ class Runtime {
 		return module.createGcHandle(value);
 
 	public static function retirementStatus(module:LoadedModule):ModuleRetirementStatus
-		return module.access(function(handle) {
+		return module.accessWithBorrowers(function(handle, haxeBorrowers) {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
 			#if haxeon
@@ -245,7 +245,7 @@ class Runtime {
 			#else
 			RuntimeKernel.retirement_status(handle, bytes.getData());
 			#end
-			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12));
+			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12), haxeBorrowers);
 		});
 
 	public static function liveRevision(module:LoadedModule):Int

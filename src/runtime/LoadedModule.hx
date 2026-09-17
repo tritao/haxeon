@@ -202,6 +202,25 @@ class LoadedModule {
 		}
 	}
 
+	/** Read native retirement state together with Haxe-side retained borrowers. */
+	@:allow(runtime.Runtime)
+	function accessWithBorrowers<T>(operation:RuntimeModuleHandle->Int->T):T {
+		mutex.acquire();
+		var current = handle;
+		if (current == null || closeRequested) {
+			mutex.release();
+			throw new RuntimeError(RuntimeStatus.BadArgument, "Runtime module has been disposed");
+		}
+		try {
+			var result = operation(current, borrowers);
+			mutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			mutex.release();
+			throw error;
+		}
+	}
+
 	@:allow(runtime.RetainedValue)
 	function accessBorrowed<T>(operation:RuntimeModuleHandle->T):T {
 		mutex.acquire();

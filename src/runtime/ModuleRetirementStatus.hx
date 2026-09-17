@@ -9,19 +9,22 @@ enum abstract ModuleRetirementFlag(Int) from Int to Int {
 
 /**
  * A quiesced snapshot of the ownership information known to HashLink.
- * Owned roots are resources removed by teardown; managed values and registry
- * readers can borrow module metadata or executable code.
+ * Owned roots are resources removed by teardown; managed values, registry
+ * readers, and Haxe retained values can borrow module metadata or executable
+ * code.
  */
 class ModuleRetirementStatus {
 	public final liveManagedAllocations:Int;
 	public final ownedNativeRoots:Int;
 	public final registryReaders:Int;
+	public final haxeBorrowers:Int;
 	public final flags:Int;
 
-	public function new(liveManagedAllocations:Int, ownedNativeRoots:Int, registryReaders:Int, flags:Int) {
+	public function new(liveManagedAllocations:Int, ownedNativeRoots:Int, registryReaders:Int, flags:Int, ?haxeBorrowers:Int = 0) {
 		this.liveManagedAllocations = liveManagedAllocations;
 		this.ownedNativeRoots = ownedNativeRoots;
 		this.registryReaders = registryReaders;
+		this.haxeBorrowers = haxeBorrowers;
 		this.flags = flags;
 	}
 
@@ -29,5 +32,5 @@ class ModuleRetirementStatus {
 		return flags & (flag : Int) != 0;
 
 	public inline function hasKnownBorrowers():Bool
-		return has(ModuleRetirementFlag.LiveManagedAllocations) || has(ModuleRetirementFlag.RegistryReaders);
+		return haxeBorrowers > 0 || has(ModuleRetirementFlag.LiveManagedAllocations) || has(ModuleRetirementFlag.RegistryReaders);
 }
