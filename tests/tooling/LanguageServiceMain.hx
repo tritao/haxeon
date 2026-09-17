@@ -3441,6 +3441,8 @@ class LanguageServiceMain {
 		sys.FileSystem.createDirectory(packageRoot);
 		var helperSource = "package lazy; class Helper { public function new() {} public function answer():Int return 1; }";
 		sys.io.File.saveContent(packageRoot + "/Helper.hx", helperSource);
+		sys.io.File.saveContent(packageRoot + "/Container.hx",
+			"package lazy; class Entry { public function new() {} public var member:Int; }");
 		sys.io.File.saveContent(packageRoot + "/Other.hx", "package lazy; class Other { public var value:Int; }");
 		var service = new LanguageService();
 		service.compiler.addSourceRoot(root);
@@ -3479,6 +3481,16 @@ class LanguageServiceMain {
 		}
 		if (!hasDeclaration || !hasConsumerUse)
 			throw 'global references did not cross the analyzed lazy source-root identity: definition=${targetDefinition == null ? "null" : targetDefinition.path}, id=${service.compiler.modules.get("lazy.Helper").semanticModel.index.symbolIdAt(targetPosition)}, refs=${[for (reference in references) reference.path].join(",")}';
+		var aliasSource = "package app; import lazy.Container as C; function main():Void { var entry:C.Entry = new C.Entry(); entry.member; }";
+		service.update("app/Alias.hx", aliasSource);
+		var aliasPosition = aliasSource.indexOf("entry.member") + "entry.".length,
+			aliasItems = service.complete("app/Alias.hx", aliasPosition),
+			foundAliasMember = false;
+		for (item in aliasItems)
+			if (item.label == "member")
+				foundAliasMember = true;
+		if (!foundAliasMember)
+			throw "lazy source-root module aliases did not preserve secondary-type member completion";
 		var renameEdits = service.rename(packageRoot + "/Helper.hx", targetPosition, "renamed"),
 			hasRenameDeclaration = false,
 			hasRenameUse = false;
@@ -3511,6 +3523,8 @@ class LanguageServiceMain {
 			throw "removing an external source-root module did not use its logical identity";
 		if (sys.FileSystem.exists(packageRoot + "/Helper.hx"))
 			sys.FileSystem.deleteFile(packageRoot + "/Helper.hx");
+		if (sys.FileSystem.exists(packageRoot + "/Container.hx"))
+			sys.FileSystem.deleteFile(packageRoot + "/Container.hx");
 		if (sys.FileSystem.exists(packageRoot + "/Other.hx"))
 			sys.FileSystem.deleteFile(packageRoot + "/Other.hx");
 		if (sys.FileSystem.exists(packageRoot))
