@@ -1184,14 +1184,14 @@ class LanguageServiceMain {
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
 		var baseMethodRename = implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute");
-		if (baseMethodRename.length != 3)
+		if (baseMethodRename.length != 4)
 			throw 'rename did not include the authoritative override family: ${baseMethodRename.length}';
 		var baseMethodReferences = implementationService.references("base/Base.hx", baseSource.indexOf("run") + 1);
-		if (baseMethodReferences.length != 3)
+		if (baseMethodReferences.length != 4)
 			throw 'references did not include the authoritative override family: ${baseMethodReferences.length}';
 		var derivedMethodReferences = implementationService.references("impl/Derived.hx", derivedSource.indexOf("run") + 1),
 			derivedMethodRename = implementationService.rename("impl/Derived.hx", derivedSource.indexOf("run") + 1, "execute");
-		if (derivedMethodReferences.length != 3 || derivedMethodRename.length != 3)
+		if (derivedMethodReferences.length != 4 || derivedMethodRename.length != 4)
 			throw 'references and rename did not include the base when queried on an override: references=${derivedMethodReferences.length}, rename=${derivedMethodRename.length}';
 		implementationService.update("impl/Derived.hx",
 			"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(");

@@ -1960,8 +1960,7 @@ class SemanticWorkspace {
 		if (resolved == null)
 			return [];
 		var owner:Null<String> = null,
-			member:Null<String> = null,
-			ownerIsInterface = false;
+			member:Null<String> = null;
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
@@ -1979,7 +1978,6 @@ class SemanticWorkspace {
 					if (sameSpan(methodDeclaration.span, resolved.symbol.declaration)) {
 						owner = qualifiedType(model, decl.name);
 						member = methodDeclaration.name;
-						ownerIsInterface = true;
 					}
 		}
 		if (owner == null || member == null)
@@ -1996,12 +1994,23 @@ class SemanticWorkspace {
 				var candidateOwner = qualifiedType(model, decl.name),
 					related = candidateOwner == owner
 						|| editorInheritsFrom(state, candidateOwner, owner, [], token)
-						|| !ownerIsInterface && editorInheritsFrom(state, owner, candidateOwner, [], token);
+						|| editorInheritsFrom(state, owner, candidateOwner, [], token);
 				if (!related)
 					continue;
 				for (methodDeclaration in decl.methods)
 					if (methodDeclaration.name == member)
 						addImplementation(result, seen, state, 'class:${decl.name}:method:$member', methodDeclaration.span);
+			}
+			for (decl in model.program.interfaces) {
+				var candidateOwner = qualifiedType(model, decl.name),
+					related = candidateOwner == owner
+						|| editorInheritsFrom(state, candidateOwner, owner, [], token)
+						|| editorInheritsFrom(state, owner, candidateOwner, [], token);
+				if (!related)
+					continue;
+				for (methodDeclaration in decl.methods)
+					if (methodDeclaration.name == member)
+						addImplementation(result, seen, state, 'interface:${decl.name}:method:$member', methodDeclaration.span);
 			}
 		}
 		result.sort(function(left, right) {
