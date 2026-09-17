@@ -174,12 +174,96 @@ class HlTypeLayout {
 	public static function initialize(types:RawPtr<RawPtr<HlType>>, count:Int, arena:HlTypeArena):Void {
 		if (count < 0 || (count > 0 && types.isNull()) || arena == null)
 			throw "HashLink type layout initialization requires a type table and arena";
+		validate(types, count);
 		var complete:Array<RawPtr<HlType>> = [], active:Array<RawPtr<HlType>> = [];
 		for (index in 0...count) {
 			var type = types.offset(index).load();
 			if (type.isNull())
 				throw 'HashLink metadata contains a null type at index $index';
 			initializeType(type, arena, complete, active);
+		}
+	}
+
+	/** Validate every reachable record before layout code dereferences its native storage. */
+	public static function validate(types:RawPtr<RawPtr<HlType>>, count:Int):Void {
+		if (count < 0 || (count > 0 && types.isNull()))
+			throw "HashLink type metadata validation requires a type table";
+		var visited:Array<RawPtr<HlType>> = [];
+		for (index in 0...count)
+			validateType(types.offset(index).load(), visited);
+	}
+
+	static function validateType(type:RawPtr<HlType>, visited:Array<RawPtr<HlType>>):Void {
+		if (type.isNull())
+			throw "HashLink type metadata contains a null reachable type";
+		if (contains(visited, type))
+			return;
+		visited.push(type);
+		var kind:Int = cast type.ref.kind;
+		if (kind < cast(HlTypeKind.VoidType, Int) || kind > cast(HlTypeKind.Guid, Int))
+			throw 'HashLink type metadata contains an invalid kind $kind';
+		switch cast(kind, HlTypeKind) {
+			case HlTypeKind.Reference | HlTypeKind.Nullable | HlTypeKind.Packed:
+				validateType(type.ref.data.ref.typeParam, visited);
+			case HlTypeKind.Function | HlTypeKind.Method:
+				var functionData = type.ref.data.ref.fun;
+				if (functionData.isNull())
+					throw "HashLink function type has no function metadata";
+				var argumentCount:Int = cast functionData.ref.nargs;
+				if (argumentCount < 0 || (argumentCount > 0 && functionData.ref.args.isNull()) || functionData.ref.ret.isNull())
+					throw "HashLink function type has incomplete signature metadata";
+				for (index in 0...argumentCount)
+					validateType(functionData.ref.args.offset(index).load(), visited);
+				validateType(functionData.ref.ret, visited);
+				if (!functionData.ref.parent.isNull())
+					validateType(functionData.ref.parent, visited);
+			case HlTypeKind.Object | HlTypeKind.Struct:
+				var object = type.ref.data.ref.obj;
+				if (object.isNull())
+					throw "HashLink object type has no object metadata";
+				var fieldCount:Int = cast object.ref.nfields, prototypeCount:Int = cast object.ref.nproto,
+					bindingCount:Int = cast object.ref.nbindings;
+				if (fieldCount < 0 || prototypeCount < 0 || bindingCount < 0
+					|| (fieldCount > 0 && object.ref.fields.isNull())
+					|| (prototypeCount > 0 && object.ref.proto.isNull())
+					|| (bindingCount > 0 && object.ref.bindings.isNull()))
+					throw "HashLink object type has incomplete object metadata";
+				for (index in 0...fieldCount) {
+					var field = object.ref.fields.offset(index);
+					validateType(field.ref.type, visited);
+				}
+				if (prototypeCount > 0 && object.ref.module.isNull())
+					throw "HashLink object prototypes require a module context";
+				if (!object.ref.superType.isNull()) {
+					var superKind:Int = cast object.ref.superType.ref.kind;
+					if (superKind != cast(HlTypeKind.Object, Int) && superKind != cast(HlTypeKind.Struct, Int))
+						throw "HashLink object type has a non-object super type";
+					validateType(object.ref.superType, visited);
+				}
+			case HlTypeKind.Enum:
+				var enumData = type.ref.data.ref.enumType;
+				if (enumData.isNull())
+					throw "HashLink enum type has no enum metadata";
+				var constructorCount:Int = cast enumData.ref.nconstructs;
+				if (constructorCount < 0 || (constructorCount > 0 && enumData.ref.constructs.isNull()))
+					throw "HashLink enum type has incomplete constructor metadata";
+				for (index in 0...constructorCount) {
+					var constructor = enumData.ref.constructs.offset(index), parameterCount:Int = cast constructor.ref.nparams;
+					if (parameterCount < 0 || (parameterCount > 0 && (constructor.ref.params.isNull() || constructor.ref.offsets.isNull())))
+						throw "HashLink enum constructor has incomplete parameter metadata";
+					for (parameter in 0...parameterCount)
+						validateType(constructor.ref.params.offset(parameter).load(), visited);
+				}
+			case HlTypeKind.Virtual:
+				var virtualData = type.ref.data.ref.virtualType;
+				if (virtualData.isNull())
+					throw "HashLink virtual type has no virtual metadata";
+				var fieldCount:Int = cast virtualData.ref.nfields;
+				if (fieldCount < 0 || (fieldCount > 0 && virtualData.ref.fields.isNull()))
+					throw "HashLink virtual type has incomplete field metadata";
+				for (index in 0...fieldCount)
+					validateType(virtualData.ref.fields.offset(index).ref.type, visited);
+			case _:
 		}
 	}
 

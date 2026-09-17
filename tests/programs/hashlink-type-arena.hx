@@ -356,11 +356,22 @@ function main():Int {
 		new HlRuntimeDispatchTable(arena, [17], [3], -1, 3)
 	catch (error:Dynamic)
 		slotRejected = true;
+	var malformedArena = new HlTypeArena(128, 4);
+	var malformedTable = new HlTypeTable(malformedArena, 1);
+	var malformedObject = new HlTypeBuilder(malformedArena).objectTypeSkeleton();
+	malformedObject.ref.data.ref.obj.ref.nfields = 1;
+	malformedTable.add(malformedObject);
+	var malformedObjectRejected = false;
+	try
+		HlTypeLayout.initialize(malformedTable.pointer(), malformedTable.length(), malformedArena)
+	catch (error:Dynamic)
+		malformedObjectRejected = true;
+	malformedArena.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected && dispatchCorrect
-		&& initializerRejected && slotRejected ? 42 : 1;
+		&& initializerRejected && slotRejected && malformedObjectRejected ? 42 : 1;
 }

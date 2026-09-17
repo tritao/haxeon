@@ -47,6 +47,8 @@ class HlTypeTable {
 
 	/** Append one type pointer and return its stable table index. */
 	public function add(type:RawPtr<HlType>):Int {
+		if (type.isNull())
+			throw "HashLink type table cannot contain a null type";
 		ensureCapacity(count + 1);
 		var index = count++;
 		entries.offset(index).store(type);

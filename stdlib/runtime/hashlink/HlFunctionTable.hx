@@ -10,13 +10,15 @@ class HlFunctionTable {
 	final count:Int;
 
 	public function new(arena:HlTypeArena, functionPointers:Array<RawPtr<UInt8>>, functionTypes:Array<RawPtr<HlType>>) {
-		if (functionPointers.length != functionTypes.length)
+		if (arena == null || functionPointers == null || functionTypes == null || functionPointers.length != functionTypes.length)
 			throw "HashLink function and type tables must have equal lengths";
 		this.arena = arena;
 		count = functionPointers.length;
 		functions = count == 0 ? RawPtr.nullPtr() : arena.allocNativePointerArray(count);
 		types = count == 0 ? RawPtr.nullPtr() : arena.allocTypePointerArray(count);
 		for (index in 0...count) {
+			if (functionTypes[index].isNull())
+				throw 'HashLink function table type at slot $index cannot be null';
 			functions.offset(index).store(functionPointers[index]);
 			types.offset(index).store(functionTypes[index]);
 		}
