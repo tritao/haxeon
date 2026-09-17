@@ -20,6 +20,10 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstEnumParameter;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstInterface;
+import compiler.syntax.Ast.AstAbstract;
+import compiler.syntax.Ast.AstEnum;
 import compiler.service.CancellationToken;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
@@ -125,6 +129,10 @@ class SemanticIndexBuilder {
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final knownRecoveredMembers:Map<String, Bool> = [];
 	final recoveredFunctions:Map<String, AstFunction> = [];
+	final recoveredClasses:Map<String, AstClass> = [];
+	final recoveredInterfaces:Map<String, AstInterface> = [];
+	final recoveredAbstracts:Map<String, AstAbstract> = [];
+	final recoveredEnums:Map<String, AstEnum> = [];
 	final recoveredClassBases:Map<String, CompilerType> = [];
 	final recoveredLocalNext:Map<String, Int> = [];
 	final unresolved:Array<UnresolvedSymbol> = [];
@@ -290,6 +298,14 @@ class SemanticIndexBuilder {
 			copy.knownRecoveredMembers.set(name, value);
 		for (name => fn in recoveredFunctions)
 			copy.recoveredFunctions.set(name, fn);
+		for (name => decl in recoveredClasses)
+			copy.recoveredClasses.set(name, decl);
+		for (name => decl in recoveredInterfaces)
+			copy.recoveredInterfaces.set(name, decl);
+		for (name => decl in recoveredAbstracts)
+			copy.recoveredAbstracts.set(name, decl);
+		for (name => decl in recoveredEnums)
+			copy.recoveredEnums.set(name, decl);
 		for (name => type in recoveredClassBases)
 			copy.recoveredClassBases.set(name, type);
 		for (name => next in recoveredLocalNext)
@@ -560,6 +576,7 @@ class SemanticIndexBuilder {
 		prepareRecoveredLocalReuse(previous);
 		if (token != null)
 			token.check();
+		rememberRecoveredTypes(program, []);
 		indexRecoveredProgramTypes(program);
 		for (fn in program.functions) {
 			checkpoint();
@@ -802,10 +819,45 @@ class SemanticIndexBuilder {
 	static function recoveredLocalKey(functionKey:String, name:String):String
 		return functionKey + "\u0000" + name;
 
+	/** Retain recovered declarations under their package-qualified editor names. */
+	function rememberRecoveredTypes(program:AstProgram, qualifiers:Array<String>):Void {
+		var packagePrefix = program.packageName == null || program.packageName.length == 0 ? "" : program.packageName + ".";
+		var keys = function(name:String):Array<String> {
+			var result = [name];
+			if (packagePrefix.length > 0)
+				result.push(packagePrefix + name);
+			for (qualifier in qualifiers) {
+				var qualified = qualifier == name || StringTools.endsWith(qualifier, "." + name)
+					? qualifier : qualifier + "." + name;
+				if (result.indexOf(qualified) < 0)
+					result.push(qualified);
+			}
+			return result;
+		};
+		for (declaration in program.classes)
+			for (key in keys(declaration.name))
+				addRecoveredTypeKey(recoveredClasses, key, declaration);
+		for (declaration in program.interfaces)
+			for (key in keys(declaration.name))
+				addRecoveredTypeKey(recoveredInterfaces, key, declaration);
+		for (declaration in program.abstracts)
+			for (key in keys(declaration.name))
+				addRecoveredTypeKey(recoveredAbstracts, key, declaration);
+		for (declaration in program.enums)
+			for (key in keys(declaration.name))
+				addRecoveredTypeKey(recoveredEnums, key, declaration);
+	}
+
+	static function addRecoveredTypeKey<T>(map:Map<String, T>, key:String, declaration:T):Void {
+		if (key.length > 0 && !map.exists(key))
+			map.set(key, declaration);
+	}
+
 	/** Index signatures from a visible module for editor-only recovery queries. */
 	public function indexRecoveredModule(program:AstProgram, external:DeclarationIndex, qualifiers:Array<String>, ?token:CancellationToken):Void {
 		ensureMutable();
 		cancellation = token;
+		rememberRecoveredTypes(program, qualifiers);
 		for (name => declaration in external.aliases)
 			if (!declarations.aliases.exists(name))
 				declarations.aliases.set(name, declaration);
@@ -865,6 +917,39 @@ class SemanticIndexBuilder {
 	function addRecoveredFunction(name:String, fn:AstFunction):Void {
 		if (!recoveredFunctions.exists(name))
 			recoveredFunctions.set(name, fn);
+	}
+
+	function recoveredClassDeclaration(name:String):Null<AstClass> {
+		var local = declarations.classes.get(name);
+		return local == null ? recoveredClasses.get(name) : local;
+	}
+
+	function recoveredInterfaceDeclaration(name:String):Null<AstInterface> {
+		var local = declarations.interfaces.get(name);
+		return local == null ? recoveredInterfaces.get(name) : local;
+	}
+
+	function recoveredAbstractDeclaration(name:String):Null<AstAbstract> {
+		var local = declarations.abstracts.get(name);
+		return local == null ? recoveredAbstracts.get(name) : local;
+	}
+
+	function recoveredEnumDeclaration(name:String):Null<AstEnum> {
+		var local = declarations.enums.get(name);
+		return local == null ? recoveredEnums.get(name) : local;
+	}
+
+	function recoveredClassBase(owner:String, declaration:AstClass, ?substitutions:Map<String, CompilerType>):CompilerType {
+		var hasSubstitutions = false;
+		if (substitutions != null)
+			for (_ in substitutions) {
+					hasSubstitutions = true;
+					break;
+				}
+		var cached:Null<CompilerType> = hasSubstitutions ? null : recoveredClassBases.get(owner);
+		if (cached == null && !hasSubstitutions)
+			cached = recoveredClassBases.get(sourceName(owner));
+		return cached == null ? recoveredType(declaration.base, substitutions) : cached;
 	}
 
 	/** Return a signature retained for a current or visible recovered module. */
@@ -1555,9 +1640,9 @@ class SemanticIndexBuilder {
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(owner);
 		var substitutions = recoveredTypeSubstitutions(type),
-			classDecl = declarations.classes.get(owner);
+			classDecl = recoveredClassDeclaration(owner);
 		if (classDecl != null && classDecl.base != null) {
-			var baseType = recoveredType(classDecl.base, substitutions),
+			var baseType = recoveredClassBase(owner, classDecl, substitutions),
 				inherited = recoveredMemberSymbol(baseType, name, nextVisiting);
 			if (inherited != null)
 				return inherited;
@@ -1569,7 +1654,7 @@ class SemanticIndexBuilder {
 				if (inherited != null)
 					return inherited;
 			}
-		var interfaceDecl = declarations.interfaces.get(owner);
+		var interfaceDecl = recoveredInterfaceDeclaration(owner);
 		if (interfaceDecl != null)
 			for (base in interfaceDecl.bases) {
 				var baseType = recoveredType(base, substitutions),
@@ -2164,7 +2249,7 @@ class SemanticIndexBuilder {
 			return null;
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(owner);
-		var classDecl = declarations.classes.get(owner);
+		var classDecl = recoveredClassDeclaration(owner);
 		if (classDecl != null) {
 			for (field in classDecl.fields) {
 				checkpoint();
@@ -2172,7 +2257,7 @@ class SemanticIndexBuilder {
 					return field.type == null ? (field.initializer == null ? TUnknown : recoveredExpressionType(field.initializer)) : recoveredType(field.type, substitutions);
 			}
 			if (classDecl.base != null) {
-				var baseType = recoveredType(classDecl.base, substitutions),
+				var baseType = recoveredClassBase(owner, classDecl, substitutions),
 					base = memberOwner(baseType);
 				if (base != null) {
 					var inherited = recoveredFieldType(base, name, nextVisiting, recoveredTypeSubstitutions(baseType));
@@ -2196,13 +2281,19 @@ class SemanticIndexBuilder {
 		if (visiting.indexOf(owner) >= 0)
 			return null;
 		var direct = recoveredFunctions.get(owner + "." + name);
+		var classDecl = recoveredClassDeclaration(owner);
+		if (direct == null && classDecl != null)
+			for (method in classDecl.methods)
+				if (method.name == name) {
+					direct = method;
+					break;
+				}
 		if (direct != null)
 			return {method: direct, substitutions: substitutions};
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(owner);
-		var classDecl = declarations.classes.get(owner);
 		if (classDecl != null && classDecl.base != null) {
-			var baseType = recoveredType(classDecl.base, substitutions),
+			var baseType = recoveredClassBase(owner, classDecl, substitutions),
 				base = memberOwner(baseType);
 			if (base != null) {
 				var inherited = recoveredMethodWithSubstitutions(base, name, nextVisiting, recoveredTypeSubstitutions(baseType));
@@ -2221,7 +2312,7 @@ class SemanticIndexBuilder {
 						return inherited;
 				}
 			}
-		var interfaceDecl = declarations.interfaces.get(owner);
+		var interfaceDecl = recoveredInterfaceDeclaration(owner);
 		if (interfaceDecl != null)
 			for (baseType in interfaceDecl.bases) {
 				var resolvedBaseType = recoveredType(baseType, substitutions),
@@ -3373,25 +3464,25 @@ class SemanticIndexBuilder {
 			case TNullable(element):
 				return recoveredTypeSubstitutions(element);
 			case TInstance(_, name, arguments):
-			var parameters:Null<Array<String>> = null,
-				classDecl = declarations.classes.get(name),
-				interfaceDecl = declarations.interfaces.get(name),
-				abstractDecl = declarations.abstracts.get(name),
-				enumDecl = declarations.enums.get(name);
-			if (classDecl != null)
-				parameters = classDecl.typeParameters;
-			else if (interfaceDecl != null)
-				parameters = interfaceDecl.typeParameters;
-			else if (abstractDecl != null)
-				parameters = abstractDecl.typeParameters;
-			else if (enumDecl != null)
-				parameters = enumDecl.typeParameters;
+				var parameters:Null<Array<String>> = null,
+				classDecl = recoveredClassDeclaration(name),
+				interfaceDecl = recoveredInterfaceDeclaration(name),
+				abstractDecl = recoveredAbstractDeclaration(name),
+				enumDecl = recoveredEnumDeclaration(name);
+				if (classDecl != null)
+					parameters = classDecl.typeParameters;
+				else if (interfaceDecl != null)
+					parameters = interfaceDecl.typeParameters;
+				else if (abstractDecl != null)
+					parameters = abstractDecl.typeParameters;
+				else if (enumDecl != null)
+					parameters = enumDecl.typeParameters;
 				if (parameters != null)
 					for (index in 0...parameters.length)
 						if (index < arguments.length)
 							result.set(parameters[index], arguments[index]);
 			case TAbstract(name, arguments, _):
-				var abstractDecl = declarations.abstracts.get(name);
+				var abstractDecl = recoveredAbstractDeclaration(name);
 				if (abstractDecl != null)
 					for (index in 0...abstractDecl.typeParameters.length)
 						if (index < arguments.length)

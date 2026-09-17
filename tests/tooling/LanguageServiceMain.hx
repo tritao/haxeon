@@ -961,6 +961,10 @@ class LanguageServiceMain {
 				foundGenericAliasedCall = true;
 		if (!foundGenericAliasedCall)
 			throw 'references did not resolve a recovered call through a generic typedef parent: ${genericAliasedReferences.length}';
+		var genericAliasedSignature = genericAliasedInheritanceService.signatureHelp("generic/child/Child.hx",
+			genericAliasedChild.indexOf("consumer.run(") + "consumer.run(".length);
+		if (genericAliasedSignature == null || genericAliasedSignature.label != "run(value:Array<String>):Array<String>")
+			throw 'signature help lost a generic typedef parent substitution: ${genericAliasedSignature == null ? "null" : genericAliasedSignature.label}';
 		var recoveredImplementationService = new LanguageService(),
 			recoveredContractSource = "package recovered.api; interface Contract { function run():Int; } function main():Int return 0;",
 			recoveredImplementationSource = "package recovered.impl; import recovered.api.Contract; class Current implements Contract { public function run():Int return 1; function unfinished(";
