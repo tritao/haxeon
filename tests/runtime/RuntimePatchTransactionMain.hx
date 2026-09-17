@@ -14,8 +14,8 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 import runtime.RuntimeModuleHandle.RuntimeGcHandle;
-import runtime.memory.Gc;
 #if haxeon
+import runtime.memory.Gc;
 import runtime.hashlink.HlTypeBridge;
 #end
 
