@@ -4,7 +4,6 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.runtime.PlatformAbi;
-import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstStatement;
@@ -314,6 +313,8 @@ class StatementTyper {
 			typedIndex = typeExpression(offset, scope, null, false);
 		return switch typedArray.type {
 			case TMap(key, mapValue):
+				if (session.mapName(key, mapValue) == null)
+					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				typedIndex = coerce(typedIndex, key, "map key", "E1002");
 				var value = coerce(typeExpression(expression, scope, mapValue, false), mapValue, "map value", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
@@ -478,7 +479,7 @@ class StatementTyper {
 			case TIterator(element): element;
 			case TRange: TInt;
 			case TMap(key, value):
-				var mapName = RuntimeType.mapName(key, value);
+				var mapName = session.mapName(key, value);
 				if (mapName == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				if (valueName == null) {

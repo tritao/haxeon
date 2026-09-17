@@ -6,6 +6,7 @@ import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
@@ -45,6 +46,15 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
+	static var enumConstructorCounts:Map<String, Int> = [];
+
+	/** Supply enum layout information needed by compiler-generated key adapters. */
+	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
+		enumConstructorCounts = [];
+		for (enumDecl in enums)
+			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
+	}
+
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
 
@@ -394,8 +404,7 @@ class IrGenerator {
 						localTypes.set(valueName, lowerType(mapValue));
 						builder.debugLocal(valueName, span, statementsScopeEnd(body, span.end));
 						builder.store(mapName, lowerExpression(iterable, builder, localTypes));
-						builder.store(arrayName,
-							builder.call(RuntimeType.mapNative(mapKey, mapValue, "keys"), [builder.load(mapName, loweredMapType)], arrayType));
+						builder.store(arrayName, lowerMapKeys(builder, localTypes, builder.load(mapName, loweredMapType), mapKey, mapValue));
 					}
 					if (!iterator)
 						builder.store(indexName, builder.constInt(-1));
@@ -570,14 +579,83 @@ class IrGenerator {
 			?resultType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType),
 			target = lowerType(resultType == null ? valueType : resultType);
-		var value = builder.call('__${name}_get', [map, key], Dyn);
+		var value = builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], Dyn);
 		return abiBoundaryCast(builder, value, target);
 	}
 
 	static function lowerMapSet(builder:CfgBuilder, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType);
 		var stored = StringTools.endsWith(name, "_ref") && requiresDynamicBox(value.type) ? abiBoundaryCast(builder, value, Dyn) : value;
-		return builder.call('__${name}_set', [map, key, stored], Void);
+		return builder.call('__${name}_set', [map, lowerMapKey(builder, key, keyType), stored], Void);
+	}
+
+	static function mapEnumName(type:CompilerType):Null<String>
+		return switch type {
+			case TAbstract(_, _, representation): mapEnumName(representation);
+			case TInstance(NominalKind.Enum, name, _): name;
+			default: null;
+		};
+
+	static function lowerMapKey(builder:CfgBuilder, key:CfgValue, keyType:CompilerType):CfgValue
+		return mapEnumName(keyType) == null ? key : builder.enumIndex(key);
+
+	/** Convert the int-backed native key array back to source-level enum values. */
+	static function lowerMapKeys(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
+		var nativeName = RuntimeType.mapNative(keyType, valueType, "keys"),
+			nativeKeyArrayType:IrType = Array(I32),
+			sourceKeyArrayType:IrType = Array(lowerType(keyType));
+		if (mapEnumName(keyType) == null)
+			return builder.call(nativeName, [map], sourceKeyArrayType);
+
+		var enumName = cast mapEnumName(keyType),
+			enumConstructorCount = enumConstructorCounts.get(enumName);
+		if (enumConstructorCount == null || enumConstructorCount == 0)
+			throw 'Missing non-empty enum layout for map key "$enumName"';
+		var sourceKeyType = lowerType(keyType),
+			rawArray = builder.call(nativeName, [map], nativeKeyArrayType),
+			rawName = '$' + 'map-enum-keys-raw:${rawArray.id}',
+			resultName = '$' + 'map-enum-keys-result:${rawArray.id}',
+			indexName = '$' + 'map-enum-keys-index:${rawArray.id}',
+			rawKeyName = '$' + 'map-enum-key-raw:${rawArray.id}';
+		localTypes.set(rawName, nativeKeyArrayType);
+		localTypes.set(resultName, sourceKeyArrayType);
+		localTypes.set(indexName, I32);
+		localTypes.set(rawKeyName, I32);
+		builder.store(rawName, rawArray);
+		builder.store(resultName, lowerArrayAllocation(builder, keyType, builder.arraySize(builder.load(rawName, nativeKeyArrayType))));
+		builder.store(indexName, builder.constInt(0));
+		var conditionBlock = builder.createBlock(),
+			bodyBlock = builder.createBlock(),
+			afterBlock = builder.createBlock();
+		builder.jump(conditionBlock);
+		builder.select(conditionBlock);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(rawName, nativeKeyArrayType))), bodyBlock, afterBlock);
+		builder.select(bodyBlock);
+		var index = builder.load(indexName, I32),
+			enumKeyName = '$' + 'map-enum-key:${rawArray.id}',
+			enumJoinBlock = builder.createBlock(),
+			nextCheckBlock = bodyBlock;
+		localTypes.set(enumKeyName, sourceKeyType);
+		builder.store(rawKeyName, builder.arrayGet(builder.load(rawName, nativeKeyArrayType), index, I32));
+		for (constructor in 0...enumConstructorCount) {
+			builder.select(nextCheckBlock);
+			var constructorBlock = builder.createBlock(),
+				nextBlock = builder.createBlock();
+			builder.branch(builder.equal(builder.load(rawKeyName, I32), builder.constInt(constructor)), constructorBlock, nextBlock);
+			builder.select(constructorBlock);
+			builder.store(enumKeyName, builder.makeEnum(enumName, constructor, []));
+			builder.jump(enumJoinBlock);
+			nextCheckBlock = nextBlock;
+		}
+		builder.select(nextCheckBlock);
+		builder.markUnreachable();
+		builder.select(enumJoinBlock);
+		var resultIndex = builder.load(indexName, I32);
+		builder.arraySet(builder.load(resultName, sourceKeyArrayType), resultIndex, builder.load(enumKeyName, sourceKeyType));
+		builder.store(indexName, builder.add(resultIndex, builder.constInt(1)));
+		builder.jump(conditionBlock);
+		builder.select(afterBlock);
+		return builder.load(resultName, sourceKeyArrayType);
 	}
 
 	/**
@@ -878,6 +956,11 @@ class IrGenerator {
 				switch receiver.type {
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
+					case TMap(key, value) if (operation == "keys"):
+						lowerMapKeys(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value) if (operation == "exists" || operation == "remove"):
+						lowered[1] = lowerMapKey(builder, lowered[1], key);
+						builder.call(nativeName, lowered, lowerType(expression.type));
 					default:
 						var resultType = lowerType(expression.type);
 						builder.call(nativeName, lowered, resultType);
@@ -1127,8 +1210,7 @@ class IrGenerator {
 					localTypes.set(mapName, loweredMapType);
 					localTypes.set(valueName, lowerType(mapTypes.value));
 					builder.store(mapName, lowerExpression(iterable, builder, localTypes));
-					builder.store(inputName,
-						builder.call(RuntimeType.mapNative(mapTypes.key, mapTypes.value, "keys"), [builder.load(mapName, loweredMapType)], inputType));
+					builder.store(inputName, lowerMapKeys(builder, localTypes, builder.load(mapName, loweredMapType), mapTypes.key, mapTypes.value));
 				}
 				var flattened = switch value.expression {
 					case TArrayComprehension(_, _, _, _, _): true;
@@ -1222,8 +1304,7 @@ class IrGenerator {
 					localTypes.set(valueName, lowerType(sourceMapTypes.value));
 					builder.store(sourceMapName, lowerExpression(iterable, builder, localTypes));
 					builder.store(inputName,
-						builder.call(RuntimeType.mapNative(sourceMapTypes.key, sourceMapTypes.value, "keys"), [builder.load(sourceMapName, sourceMapType)],
-							inputType));
+						lowerMapKeys(builder, localTypes, builder.load(sourceMapName, sourceMapType), sourceMapTypes.key, sourceMapTypes.value));
 				}
 				builder.store(resultName, builder.call(RuntimeType.mapNative(resultTypes.key, resultTypes.value, "alloc"), [], resultType));
 				builder.store(indexName, builder.constInt(0));

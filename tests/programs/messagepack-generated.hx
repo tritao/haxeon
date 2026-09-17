@@ -20,6 +20,14 @@ enum WireStatus {
 }
 
 @:wire
+enum WireKind {
+	@:wireId(8)
+	Low;
+	@:wireId(2)
+	High;
+}
+
+@:wire
 class WireEnvelope {
 	@:wireId(1)
 	public var user:Null<WireUser>;
@@ -170,6 +178,57 @@ function main():Int {
 	var restoredIds:Map<Int, Int> = MessagePack.decode(firstIdBytes);
 	if (restoredIds.get(-3) != 1 || restoredIds.get(20) != 2)
 		return 8;
+
+	var firstKinds:Map<WireKind, Int> = new Map<WireKind, Int>();
+	firstKinds.set(Low, 8);
+	firstKinds.set(High, 2);
+	var secondKinds:Map<WireKind, Int> = new Map<WireKind, Int>();
+	secondKinds.set(High, 2);
+	secondKinds.set(Low, 8);
+	var firstKindBytes = MessagePack.encode(firstKinds);
+	var secondKindBytes = MessagePack.encode(secondKinds);
+	if (firstKindBytes.compare(secondKindBytes) != 0)
+		return 14;
+	var restoredKinds:Map<WireKind, Int> = MessagePack.decode(firstKindBytes);
+	if (restoredKinds.get(Low) != 8 || restoredKinds.get(High) != 2 || !restoredKinds.exists(High))
+		return 15;
+	var copiedKinds:Map<WireKind, Int> = restoredKinds.copy();
+	if (copiedKinds.get(Low) != 8 || copiedKinds.get(High) != 2)
+		return 16;
+	if (!copiedKinds.remove(High) || copiedKinds.exists(High))
+		return 21;
+	var kindCount = 0, kindTotal = 0;
+	for (kind => amount in restoredKinds) {
+		if (kind != Low && kind != High)
+			return 17;
+		kindCount++;
+		kindTotal += amount;
+	}
+	if (kindCount != 2 || kindTotal != 10)
+		return 18;
+	var keyCount = 0;
+	for (kind in restoredKinds.keys()) {
+		if (kind != Low && kind != High)
+			return 19;
+		keyCount++;
+	}
+	if (keyCount != 2)
+		return 20;
+	var kindAmounts:Array<Int> = [for (kind => amount in restoredKinds) amount];
+	if (kindAmounts.length != 2 || kindAmounts[0] + kindAmounts[1] != 10)
+		return 22;
+	var unknownKind = new MessagePackWriter();
+	unknownKind.writeMapHeader(1);
+	unknownKind.writeInt(99);
+	unknownKind.writeInt(1);
+	var unknownKindRejected = false;
+	try {
+		var ignoredKinds:Map<WireKind, Int> = MessagePack.decode(unknownKind.getBytes());
+	} catch (_:Dynamic) {
+		unknownKindRejected = true;
+	}
+	if (!unknownKindRejected)
+		return 23;
 
 	var optionalUser:Null<WireUser> = user;
 	var optionalBytes = MessagePack.encode(optionalUser);

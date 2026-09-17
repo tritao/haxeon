@@ -902,6 +902,8 @@ class TestMain {
 			'MessagePack enum "DuplicateEnumWireId" constructors "Left" and "Right" use duplicate @:wireId(1)');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:wireId(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxe.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
+		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
+			'This map key/value type has no compiler-owned runtime ABI');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;

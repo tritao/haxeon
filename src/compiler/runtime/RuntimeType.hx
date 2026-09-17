@@ -41,6 +41,7 @@ class RuntimeType {
 			case TAbstract(_, _, representation): mapName(representation, value);
 			case TString: mapValueName("map_string_", value);
 			case TInt: mapValueName("map_int_", value);
+			case TInstance(NominalKind.Enum, _, _): mapValueName("map_int_", value);
 			default: null;
 		};
 

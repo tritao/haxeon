@@ -7,7 +7,6 @@ import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
-import compiler.runtime.RuntimeType;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstMapEntry;
 import compiler.syntax.Ast.AstObjectField;
@@ -305,7 +304,7 @@ class ExpressionTyper {
 		}
 		if (keyType == null || valueType == null)
 			throw "Map key/value types were not resolved";
-		if (RuntimeType.mapName(keyType, valueType) == null)
+		if (session.mapName(keyType, valueType) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
@@ -330,7 +329,7 @@ class ExpressionTyper {
 					fail("E1014", "Key/value array comprehension requires a Map", span);
 				keyType = TInt;
 			case TMap(key, mapValue):
-				if (RuntimeType.mapName(key, mapValue) == null)
+				if (session.mapName(key, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
@@ -399,7 +398,7 @@ class ExpressionTyper {
 					fail("E1014", "Key/value map comprehension requires a Map", span);
 				itemType = TInt;
 			case TMap(mapKey, mapValue):
-				if (RuntimeType.mapName(mapKey, mapValue) == null)
+				if (session.mapName(mapKey, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
@@ -426,7 +425,7 @@ class ExpressionTyper {
 			resultValue = expected == null ? typedValue.type : expected.value;
 		typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
 		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
-		if (RuntimeType.mapName(resultKey, resultValue) == null)
+		if (session.mapName(resultKey, resultValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
@@ -446,6 +445,8 @@ class ExpressionTyper {
 			typedIndex = typeExpressionCallback(offset, scope, null, false);
 		return switch typedArray.type {
 			case TMap(key, value):
+				if (session.mapName(key, value) == null)
+					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
@@ -470,8 +471,8 @@ class ExpressionTyper {
 
 	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan, lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var loweredKey = lowerType(key), loweredValue = lowerType(value);
-		if (RuntimeType.mapName(loweredKey, loweredValue) == null)
-			fail("E1016", "Only compiler-owned primitive Map<String,T> specializations are supported", span);
+		if (session.mapName(loweredKey, loweredValue) == null)
+			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 

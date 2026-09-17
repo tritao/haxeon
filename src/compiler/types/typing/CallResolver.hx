@@ -1243,7 +1243,7 @@ class CallResolver {
 			case TMap(key, value): {key: key, value: value};
 			default: throw "Not a map";
 		};
-		if (RuntimeType.mapName(mapType.key, mapType.value) == null)
+		if (session.mapName(mapType.key, mapType.value) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		if (name == "set") {
 			if (arguments.length != 2)

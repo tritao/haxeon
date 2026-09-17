@@ -49,11 +49,14 @@ fields receive an empty array. Recursive record schemas are rejected because
 the value codec does not represent object identity or cycles. `Map<String, T>`
 and `Map<Int, T>` are also supported for the same value profile. String keys
 are encoded and sorted lexicographically; integer keys are encoded and sorted
-numerically. Both produce deterministic output, while missing map fields
-receive an empty map. `@:wire` enums are encoded as a one-entry map from the
-stable constructor `@:wireId` to an array of constructor arguments. Unknown
-constructor IDs and malformed payloads are rejected. Maps with other key types
-remain explicit next-step extensions to the generator.
+numerically. `Map<Enum, T>` is supported when every enum constructor is
+nullary and the enum is marked `@:wire`; enum keys are encoded as their stable
+constructor `@:wireId` integers and sorted by that ID. All three map forms
+produce deterministic output, while missing map fields receive an empty map.
+`@:wire` enums are encoded as a one-entry map from the stable constructor
+`@:wireId` to an array of constructor arguments. Unknown constructor IDs and
+malformed payloads are rejected. Payload-bearing enums remain unsupported as
+map keys because their values are not unique by constructor index.
 
 ## Example shape
 
