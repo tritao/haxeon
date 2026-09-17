@@ -4,6 +4,32 @@ This table defines the ownership rules used by the reload runtime. Logical IDs
 belong to compiler state; physical pointers always belong to one loaded runtime
 module generation.
 
+## Cutover contract
+
+The Haxe-owned path is identified by `HL_MODULE_HAXE_METADATA`. In that path,
+Haxeon is the sole owner of decoded module metadata, type/function identity,
+patch policy, and generation lifetime. HashLink borrows those records while it
+performs JIT, executable-memory, GC, native-symbol, and platform work. The
+native kernel must not decode HLB/HLP bytes or reconstruct a metadata graph for
+this path.
+
+The legacy path remains deliberately separate: `hl_runtime_module_load` may
+decode HLB and the legacy byte-oriented patch entry points may decode HLP. Those
+entry points own the native compatibility graph until their module is retired;
+they are not alternate implementations of the Haxe-owned path.
+
+The handoff is therefore narrow and explicit:
+
+| Operation | Haxe-owned entrypoint | Native responsibility |
+| --- | --- | --- |
+| Cold load | `hl_runtime_module_load_code_manifest` | Borrow `hl_code`, identity/slot arrays, and optional debugger payload; initialize JIT/runtime state |
+| Patch | `hl_runtime_module_apply_hlp_capture_metadata_input` | Validate the prepared projection, JIT changed functions, and publish executable slots |
+| Retirement | Haxe registry/module owner | Check native quiescence and release executable/platform resources |
+
+No pointer in the handoff is implicitly transferred. Haxe-owned arenas and
+decoded models stay alive until native retirement succeeds; native executable
+allocations stay alive until their Haxe generation owner releases its handle.
+
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
 | Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state and Haxeon `LoadedModule`; the decoded Haxe manifest is borrowed by `hl_runtime_module` | Host reconnect logic, stable-ID resolver, native call validation | Compiler state and `LoadedModule` release; legacy native copies release with the runtime module |
@@ -81,7 +107,9 @@ The Haxeon-native loader now exercises the external metadata boundary: it decode
 HLB and HLI, builds the complete `hl_code` graph in `HlMetadataGeneration`, and
 passes that graph plus the decoded manifest to
 `hl_runtime_module_load_code_manifest`. HashLink initializes its JIT and runtime
-wrapper from those Haxe-owned records without reparsing HLI on this path. Both
+wrapper from those Haxe-owned records without reparsing HLB or HLI on this path.
+The normal Haxeon loader passes no raw HLB payload; debugger-compatible payloads
+are an explicit opt-in at the kernel boundary. Both
 the external loader and the legacy host facade use the same native opaque
 `hl.Abstract<"realtime_module">` ABI type; the host source exposes a local
 `RuntimeModuleHandle` alias while standalone stdlib builds use the native type

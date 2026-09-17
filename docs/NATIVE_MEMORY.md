@@ -130,8 +130,9 @@ those records. There is no individual `free` operation.
 
 Haxeon performs layout-based alignment, bump advancement, block growth, and
 reset. The native runtime acquires aligned raw backing blocks and releases
-them. This implementation currently targets
-HashLink; it does not change the HashLink fork. HXI-imported records can be
+them. This foundation currently targets HashLink, and its runtime integration
+uses the dedicated HashLink fork only for the small bootstrap/JIT boundary.
+HXI-imported records can be
 projected as fresh native records or bound to an existing canonical Haxe
 native declaration with `HxiNativeRecordEmitter`. The binding form emits a
 type alias, so the imported declaration and the canonical declaration share
