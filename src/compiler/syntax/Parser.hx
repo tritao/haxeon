@@ -999,6 +999,17 @@ class Parser {
 			case DynamicAccess: "dynamic";
 		};
 
+	static function simpleExpressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>
+		return switch expression {
+			case IntegerLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(value);
+			case FloatLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Float(value);
+			case StringLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.String(value);
+			case BoolLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Bool(value);
+			case NullLiteral(_): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue;
+			case Variable(name, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(name);
+			default: null;
+		};
+
 	inline function isMacroModifier():Bool
 		return check(TokenKind.Identifier) && current().text == "macro";
 
@@ -1349,11 +1360,17 @@ class Parser {
 		}
 		if (match(TokenKind.Break)) {
 			var start = previous().span;
-			return Break(start.merge(consume(TokenKind.Semicolon).span));
+			var span = start.merge(consume(TokenKind.Semicolon).span);
+			recordCstNode(SyntaxKind.BreakStatement, span,
+				SyntaxNodePayload.Statement(compiler.syntax.SyntaxTree.SyntaxStatementPayload.Break));
+			return Break(span);
 		}
 		if (match(TokenKind.Continue)) {
 			var start = previous().span;
-			return Continue(start.merge(consume(TokenKind.Semicolon).span));
+			var span = start.merge(consume(TokenKind.Semicolon).span);
+			recordCstNode(SyntaxKind.ContinueStatement, span,
+				SyntaxNodePayload.Statement(compiler.syntax.SyntaxTree.SyntaxStatementPayload.Continue));
+			return Continue(span);
 		}
 		if (match(TokenKind.Var)) {
 			var start = previous().span;
@@ -1366,11 +1383,19 @@ class Parser {
 		}
 		if (match(TokenKind.Return)) {
 			var start = previous().span;
-			if (check(TokenKind.Semicolon))
-				return ReturnVoid(start.merge(consume(TokenKind.Semicolon).span));
+			if (check(TokenKind.Semicolon)) {
+				var span = start.merge(consume(TokenKind.Semicolon).span);
+				recordCstNode(SyntaxKind.ReturnStatement, span,
+					SyntaxNodePayload.Statement(compiler.syntax.SyntaxTree.SyntaxStatementPayload.ReturnVoid));
+				return ReturnVoid(span);
+			}
 			var expression = parseExpression();
 			var end = expressionEnd(expression);
-			return Return(expression, start.merge(end));
+			var span = start.merge(end), payload = simpleExpressionPayload(expression);
+			if (payload != null)
+				recordCstNode(SyntaxKind.ReturnStatement, span,
+					SyntaxNodePayload.Statement(compiler.syntax.SyntaxTree.SyntaxStatementPayload.Return(payload)));
+			return Return(expression, span);
 		}
 		if (match(TokenKind.Throw)) {
 			var start = previous().span,

@@ -8,9 +8,14 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstFieldAccess;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstStatement;
+import compiler.Source.SourceSpan;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
+import compiler.syntax.SyntaxTree.SyntaxExpressionPayload;
+import compiler.syntax.SyntaxTree.SyntaxStatementPayload;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 
 /**
@@ -51,6 +56,7 @@ class AstLowerer {
 				case SyntaxNodePayload.ClassHeader(_, _, _, _, _, _):
 				case SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _):
 				case SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _):
+				case SyntaxNodePayload.Statement(_):
 				case null:
 			}
 		if (packageName == null && direct.packageName != null)
@@ -106,7 +112,7 @@ class AstLowerer {
 	static function lowerFunctionsFromPayloads(direct:Array<AstFunction>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstFunction> {
 		var result:Array<AstFunction> = [];
 		for (functionDeclaration in direct) {
-			var lowered = lowerFunction(functionDeclaration, nodePayloads.get(functionDeclaration.span.start));
+			var lowered = lowerFunction(functionDeclaration, nodePayloads.get(functionDeclaration.span.start), nodePayloads);
 			result.push(lowered == null ? functionDeclaration : lowered);
 		}
 		return result;
@@ -127,7 +133,7 @@ class AstLowerer {
 						interfaceNames: interfaceNames
 					});
 				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _),
-					SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _), null:
+					SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _), SyntaxNodePayload.Statement(_), null:
 			}
 		var result:Array<AstClass> = [];
 		for (classDeclaration in direct) {
@@ -191,7 +197,8 @@ class AstLowerer {
 			switch node.payload {
 				case null:
 				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.ClassHeader(_, _, _, _, _, _),
-					SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _), SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _):
+					SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _), SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _),
+					SyntaxNodePayload.Statement(_):
 					result.set(node.span.start, node.payload);
 			}
 		return result;
@@ -229,11 +236,13 @@ class AstLowerer {
 		};
 	}
 
-	static function lowerFunction(functionDeclaration:AstFunction, payload:Null<SyntaxNodePayload>):Null<AstFunction> {
+	static function lowerFunction(functionDeclaration:AstFunction, payload:Null<SyntaxNodePayload>,
+			nodePayloads:Map<Int, SyntaxNodePayload>):Null<AstFunction> {
 		return switch payload {
 			case SyntaxNodePayload.FunctionHeader(name, isStatic, isExtern, typeParameters, parameters, resultTypeName):
-				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters;
-				if (functionDeclaration.statements.length > 0 || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
+				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
+					loweredStatements = lowerStatements(functionDeclaration.statements, nodePayloads);
+				if (loweredStatements == null || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
 					|| functionDeclaration.typeConstraints != null && functionDeclaration.typeConstraints.length > 0
 					|| resultTypeName == null || !simpleTypeMatches(functionDeclaration.result, resultTypeName)
 					|| functionDeclaration.arguments.length != parameters.length
@@ -275,13 +284,57 @@ class AstLowerer {
 							typeConstraints: [],
 							arguments: loweredArguments,
 							result: lowerSimpleType(resultTypeName),
-							statements: [],
+							statements: loweredStatements,
 							span: functionDeclaration.span
 						};
 				}
 			default: null;
 		};
 	}
+
+	static function lowerStatements(direct:Array<AstStatement>, nodePayloads:Map<Int, SyntaxNodePayload>):Null<Array<AstStatement>> {
+		var result:Array<AstStatement> = [];
+		for (statement in direct) {
+			var lowered:Null<AstStatement> = switch nodePayloads.get(statementSpan(statement).start) {
+				case SyntaxNodePayload.Statement(value): lowerStatement(statement, value);
+				default: null;
+			};
+			if (lowered == null)
+				return null;
+			result.push(lowered);
+		}
+		return result;
+	}
+
+	static function lowerStatement(statement:AstStatement, payload:SyntaxStatementPayload):Null<AstStatement>
+		return switch [statement, payload] {
+			case [Break(span), SyntaxStatementPayload.Break]: Break(span);
+			case [Continue(span), SyntaxStatementPayload.Continue]: Continue(span);
+			case [ReturnVoid(span), SyntaxStatementPayload.ReturnVoid]: ReturnVoid(span);
+			case [Return(expression, span), SyntaxStatementPayload.Return(value)]:
+				var loweredExpression = lowerExpression(expression, value);
+				loweredExpression == null ? null : Return(loweredExpression, span);
+			default: null;
+		};
+
+	static function lowerExpression(expression:AstExpression, payload:SyntaxExpressionPayload):Null<AstExpression>
+		return switch [expression, payload] {
+			case [IntegerLiteral(_, span), SyntaxExpressionPayload.Integer(value)]: IntegerLiteral(value, span);
+			case [FloatLiteral(_, span), SyntaxExpressionPayload.Float(value)]: FloatLiteral(value, span);
+			case [StringLiteral(_, span), SyntaxExpressionPayload.String(value)]: StringLiteral(value, span);
+			case [BoolLiteral(_, span), SyntaxExpressionPayload.Bool(value)]: BoolLiteral(value, span);
+			case [NullLiteral(span), SyntaxExpressionPayload.NullValue]: NullLiteral(span);
+			case [Variable(_, span), SyntaxExpressionPayload.Variable(name)]: Variable(name, span);
+			default: null;
+		};
+
+	static function statementSpan(statement:AstStatement):SourceSpan
+		return switch statement {
+			case ErrorStatement(span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
+				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
+				DoWhile(_, _, span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+		};
 
 	static function lowerSimpleType(name:Null<String>):Null<AstType>
 		return name == null ? null : switch name {

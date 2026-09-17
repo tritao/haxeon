@@ -38,6 +38,9 @@ enum SyntaxKind {
 	IndexExpression;
 	TypeArgumentList;
 	TypeParameterList;
+	ReturnStatement;
+	BreakStatement;
+	ContinueStatement;
 	Error;
 	Missing;
 }
@@ -48,6 +51,22 @@ typedef SyntaxFunctionParameter = {
 	final optional:Bool;
 }
 
+enum SyntaxExpressionPayload {
+	Integer(value:Int);
+	Float(value:Float);
+	String(value:String);
+	Bool(value:Bool);
+	NullValue;
+	Variable(name:String);
+}
+
+enum SyntaxStatementPayload {
+	Break;
+	Continue;
+	ReturnVoid;
+	Return(value:SyntaxExpressionPayload);
+}
+
 /** Source-only payload attached to grammar nodes that can already lower independently. */
 enum SyntaxNodePayload {
 	PackageName(value:String);
@@ -55,6 +74,7 @@ enum SyntaxNodePayload {
 	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>);
 	FieldHeader(name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
 	FunctionHeader(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxFunctionParameter>, resultTypeName:Null<String>);
+	Statement(value:SyntaxStatementPayload);
 }
 
 /** Trivia categories retained by tooling mode. */
