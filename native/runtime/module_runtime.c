@@ -19,6 +19,14 @@ HL_PRIM vbyte *HL_NAME(native_runtime_module_load_bytes)( realtime_bytes *bytes,
 		identity == NULL ? NULL : identity->data,identity == NULL ? 0 : identity->length,&runtime) == HL_RUNTIME_OK ? (vbyte*)runtime : NULL;
 }
 
+HL_PRIM void HL_NAME(native_runtime_decode_guard_begin)() {
+	hl_runtime_decode_guard_begin();
+}
+
+HL_PRIM int HL_NAME(native_runtime_decode_guard_end)() {
+	return hl_runtime_decode_guard_end();
+}
+
 HL_PRIM vbyte *HL_NAME(native_runtime_module_load_code_manifest)( vbyte *code, realtime_bytes *bytes, int length, realtime_bytes *module_id,
 	int revision, int *stable_ids, int *slots, int identity_count, int initializer_slot ) {
 	hl_runtime_module *runtime = NULL;

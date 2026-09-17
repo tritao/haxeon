@@ -10,6 +10,7 @@ import compiler.hl.patch.HlPatchReader;
 import runtime.RuntimeModuleHandle.RuntimeGcHandle;
 #if haxeon
 import runtime.hashlink.HlRuntimeModuleKernel;
+import runtime.hashlink.HlTypeBridge;
 #end
 import sys.thread.Mutex;
 
@@ -66,7 +67,7 @@ class Runtime {
 	}
 
 	public static function load(bytes:Bytes, identity:Bytes):LoadedModule {
-		var model:HlModule, identityModel:HlRuntimeManifest;
+		var model:HlModule = null, identityModel:HlRuntimeManifest = null;
 		try {
 			model = HlModule.decode(bytes);
 			identityModel = HlRuntimeCallPolicy.validateManifest(HlRuntimeIdentity.decode(identity), model);
@@ -75,7 +76,7 @@ class Runtime {
 		}
 		retryRetirements();
 		#if haxeon
-		return haxeRuntimeModuleLoader.load(model, identityModel);
+		return withHaxeOwnedDecodeGuard(function() return haxeRuntimeModuleLoader.load(model, identityModel));
 		#else
 		retryRetirements();
 		var module = RuntimeKernel.load(bytes.getData(), bytes.length, identity.getData(), identity.length);
@@ -364,7 +365,7 @@ class Runtime {
 	@:allow(runtime.RuntimePatchTransaction)
 	static function commitPatch(transaction:RuntimePatchTransaction):Void {
 		#if haxeon
-		var status:RuntimeStatus = haxePatchCoordinator.commit(transaction);
+		var status:RuntimeStatus = withHaxeOwnedDecodeGuard(function() return haxePatchCoordinator.commit(transaction));
 		#else
 		var module = transaction.owner,
 			envelope = transaction.envelope,
@@ -409,6 +410,26 @@ class Runtime {
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
 		}
 	}
+
+	#if haxeon
+	/** Keep legacy native decoders available, but reject them during Haxe-owned execution. */
+	static function withHaxeOwnedDecodeGuard<T>(operation:Void->T):T {
+		HlTypeBridge.native_runtime_decode_guard_begin();
+		var result:Null<T> = null, failure:Dynamic = null, failed = false;
+		try {
+			result = operation();
+		} catch (error:Dynamic) {
+			failed = true;
+			failure = error;
+		}
+		var attempts = HlTypeBridge.native_runtime_decode_guard_end();
+		if (failed)
+			throw failure;
+		if (attempts != 0)
+			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxe-owned runtime reached a native decoder ($attempts attempt(s))');
+		return cast result;
+	}
+	#end
 
 	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:RuntimeModuleHandle->T):T
 		return module.access(function(handle) {

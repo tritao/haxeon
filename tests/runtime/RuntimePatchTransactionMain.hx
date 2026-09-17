@@ -14,6 +14,9 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.RuntimePatchTransaction.RuntimePatchTransactionState;
 import runtime.RuntimeModuleHandle.RuntimeGcHandle;
+#if haxeon
+import runtime.hashlink.HlTypeBridge;
+#end
 
 class RuntimeGcHandleValue {
 	public final value:Int;
@@ -139,6 +142,39 @@ class RuntimePatchTransactionMain {
 		if (Runtime.callInt(loaded, 101) != 42)
 			throw "public Haxeon runtime did not materialize an object constant";
 		Runtime.dispose(loaded);
+	}
+
+	static function testNativeDecodeGuard():Void {
+		var compiler = new Compiler();
+		compiler.update("DecodeGuardMain.hx", "function main():Int return 40;");
+		var initial = compiler.compile("DecodeGuardMain"),
+			moduleBytes = HlWriter.encode(initial.module),
+			blockedHlb:hl.Abstract<"realtime_module">;
+		HlTypeBridge.native_runtime_decode_guard_begin();
+		blockedHlb = HlTypeBridge.native_runtime_module_load_bytes(moduleBytes, initial.runtimeIdentity);
+		var hlbAttempts = HlTypeBridge.native_runtime_decode_guard_end();
+		if (blockedHlb != null || hlbAttempts != 1)
+			throw "Haxe-owned decode guard did not reject native HLB decoding";
+
+		compiler.update("DecodeGuardMain.hx", "function main():Int return 42;");
+		var changed = compiler.compile("DecodeGuardMain"),
+			legacy = HlTypeBridge.native_runtime_module_load_bytes(moduleBytes, initial.runtimeIdentity);
+		if (legacy == null)
+			throw "legacy native HLB decoding probe could not initialize";
+		var patchBytes = changed.patchBytes;
+		if (patchBytes == null)
+			throw "native HLP decoding probe did not produce a patch";
+		var status = haxe.io.Bytes.alloc(4);
+		HlTypeBridge.native_runtime_decode_guard_begin();
+		var blockedHlp = HlTypeBridge.native_runtime_module_patch_code(legacy, patchBytes, patchBytes.length, cast status.getData()),
+			hlpAttempts = HlTypeBridge.native_runtime_decode_guard_end(),
+			disposeStatus = HlTypeBridge.native_runtime_module_dispose(legacy);
+		if (blockedHlp != null
+			|| status.getInt32(0) != RuntimeStatus.BadFormat
+			|| hlpAttempts != 1
+			|| disposeStatus != RuntimeStatus.Ok)
+			throw "Haxe-owned decode guard did not reject native HLP decoding";
+		Sys.println("PASS: Haxe-owned runtime rejects native HLB/HLP decoding");
 	}
 
 	static function testFailedInitializerCleanup():Void {
@@ -324,6 +360,7 @@ class RuntimePatchTransactionMain {
 		testModuleInitializer();
 		testFailedInitializerCleanup();
 		testPublicObjectConstant();
+		testNativeDecodeGuard();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");
 	}

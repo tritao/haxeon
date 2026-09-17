@@ -30,6 +30,11 @@ No pointer in the handoff is implicitly transferred. Haxe-owned arenas and
 decoded models stay alive until native retirement succeeds; native executable
 allocations stay alive until their Haxe generation owner releases its handle.
 
+The dedicated Haxeon runtime facade also enters a thread-local native-decoder
+guard around its cold-load and Haxe-decoded patch publication operations. Any
+accidental call to `hl_code_read` or `hl_patch_read` is rejected immediately;
+the legacy byte-decoder APIs remain available outside those guarded operations.
+
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |
 | Module identity and stable IDs | Compiler HCS/HLI codecs | Compiler state and Haxeon `LoadedModule`; the decoded Haxe manifest is borrowed by `hl_runtime_module` | Host reconnect logic, stable-ID resolver, native call validation | Compiler state and `LoadedModule` release; legacy native copies release with the runtime module |
