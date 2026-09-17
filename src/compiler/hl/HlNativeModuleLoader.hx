@@ -13,6 +13,7 @@ import runtime.hashlink.HlMetadataTypeAppend;
 import runtime.hashlink.HlNativeModule;
 import runtime.hashlink.HlRuntimePatchCode;
 import runtime.hashlink.HlRuntimeModule;
+import runtime.hashlink.HlRuntimeModuleKernel;
 import runtime.hashlink.HlRuntimePatchPublication;
 import runtime.memory.Mutex;
 import runtime.memory.RawPtr;
@@ -348,8 +349,50 @@ class HlRuntimeModuleLease {
 		return released;
 }
 
+/**
+	Owns the metadata side of a failed external load until native retirement can
+	complete. The native wrapper keeps its metadata lease alive while blocked.
+ */
+class HlRuntimeLoadRetirement {
+	final loaded:Null<HlLoadedRuntimeModule>;
+	final nativeModule:Null<HlRuntimeModule>;
+	final metadata:HlMetadataGeneration;
+	var disposed:Bool = false;
+
+	public function new(?loaded:HlLoadedRuntimeModule, ?nativeModule:HlRuntimeModule, metadata:HlMetadataGeneration) {
+		if ((loaded == null) == (nativeModule == null) || metadata == null)
+			throw "HashLink failed runtime retirement requires one loaded wrapper and metadata";
+		this.loaded = loaded;
+		this.nativeModule = nativeModule;
+		this.metadata = metadata;
+	}
+
+	/** Try native retirement and release metadata only after it succeeds. */
+	public function unload():Bool {
+		if (disposed)
+			return true;
+		if (loaded != null) {
+			if (!loaded.unload())
+				return false;
+		} else {
+			if (!nativeModule.unload())
+				return false;
+			metadata.dispose();
+		}
+		disposed = true;
+		return true;
+	}
+}
+
 /** Loads HLB through Haxe policy before handing the resulting record to HashLink. */
 class HlNativeModuleLoader {
+	static final retirementMutex:Mutex = Mutex.create();
+	static final failedRetirements:Array<HlRuntimeLoadRetirement> = [];
+
+	/** Return the number of external-load wrappers retained for retry. */
+	public static function failedRetirementCount():Int
+		return withRetirementLock(function() return failedRetirements.length);
+
 	public static function load(bytes:Bytes, ?functionPointers:Array<RawPtr<UInt8>>, ?flags:Int = 0):HlLoadedNativeModule {
 		var module = HlModule.decode(bytes),
 			metadata = HlNativeMetadataBuilder.buildModule(module, functionPointers);
@@ -362,7 +405,7 @@ class HlNativeModuleLoader {
 	}
 
 	/** Build Haxe-owned metadata, then hand its complete code record to HashLink. */
-	public static function loadRuntime(bytes:Bytes, identity:Bytes):HlLoadedRuntimeModule {
+	public static function loadRuntime(bytes:Bytes, identity:Bytes, ?kernel:HlRuntimeModuleKernel):HlLoadedRuntimeModule {
 		var module = HlModule.decode(bytes),
 			identityModel = HlRuntimeCallPolicy.validateManifest(HlRuntimeIdentity.decode(identity), module),
 			metadata = HlNativeMetadataBuilder.buildModule(module);
@@ -372,18 +415,48 @@ class HlNativeModuleLoader {
 			var functions = functionVersions(module, identityModel, metadata);
 			nativeModule = new HlRuntimeModule(metadata, bytes, identityModel.moduleId, identityModel.revision,
 				[for (entry in identityModel.entries) entry.stableId], [for (entry in identityModel.entries) entry.functionIndex],
-				identityModel.initializerSlot);
+				identityModel.initializerSlot, null, kernel);
 			loaded = new HlLoadedRuntimeModule(module, identityModel, metadata, nativeModule, functions);
 			loaded.initialize();
 			return loaded;
 		} catch (error:Dynamic) {
-			if (loaded == null) {
-				if (nativeModule == null)
-					metadata.dispose();
-				else if (!nativeModule.unload())
-					throw "HashLink external runtime module could not be unloaded after initialization failure";
-			} else if (!loaded.unload())
-				throw "HashLink external runtime module could not be unloaded after initialization failure";
+			var retirement:Null<HlRuntimeLoadRetirement> = null;
+			if (loaded != null)
+				retirement = new HlRuntimeLoadRetirement(loaded, null, metadata);
+			else if (nativeModule != null)
+				retirement = new HlRuntimeLoadRetirement(null, nativeModule, metadata);
+			else
+				metadata.dispose();
+			if (retirement != null && !retirement.unload())
+				withRetirementLock(function() failedRetirements.push(retirement));
+			throw error;
+		}
+	}
+
+	/** Retry failed external-load retirement and return wrappers reclaimed. */
+	public static function retryFailedRetirements():Int {
+		return withRetirementLock(function() {
+			var reclaimed = 0, remaining:Array<HlRuntimeLoadRetirement> = [];
+			for (retirement in failedRetirements)
+				if (retirement.unload())
+					reclaimed++;
+				else
+					remaining.push(retirement);
+			failedRetirements.resize(0);
+			for (retirement in remaining)
+				failedRetirements.push(retirement);
+			return reclaimed;
+		});
+	}
+
+	static function withRetirementLock<T>(operation:Void->T):T {
+		retirementMutex.acquire();
+		try {
+			var result = operation();
+			retirementMutex.release();
+			return result;
+		} catch (error:Dynamic) {
+			retirementMutex.release();
 			throw error;
 		}
 	}

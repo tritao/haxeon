@@ -193,6 +193,13 @@ valid until they are released. Calls and patch publication are serialized with
 the same module lifecycle lock, while a failed native retirement remains in the
 registry for a later retry.
 
+If Haxe-owned initialization fails before `HlRuntimeModuleRegistry` can publish
+the candidate, `HlNativeModuleLoader` retains the native wrapper and metadata
+arena when HashLink reports retirement blocked. The loader exposes this
+process-local queue through `failedRetirementCount()` and
+`retryFailedRetirements()`; metadata is released only after the wrapper is
+reclaimed.
+
 HashLink records module ownership when a managed allocation is created. A major
 collection removes records for dead allocations, and the runtime exposes the
 remaining per-module count for diagnostics and reclamation tests. Closure and
