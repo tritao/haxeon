@@ -1102,6 +1102,32 @@ class LanguageServiceMain {
 			|| !foundFunctionPackageUse
 			|| foundFunctionPackageExternal)
 			throw 'same-package function did not take precedence over wildcard import: ${functionPackagePrecedenceDefinition == null ? "null" : functionPackagePrecedenceDefinition.path}';
+		var defaultPackageService = new LanguageService(),
+			defaultPackageTarget = "class Base { public var member:Int; } function answer():Int return 42; function main():Int return answer();",
+			defaultPackageUse = "class Use { public function read():Int { var base:Base = new Base(); return base.member; } } function main():Int return answer();";
+		defaultPackageService.update("default/Base.hx", defaultPackageTarget);
+		defaultPackageService.compile("default.Base");
+		defaultPackageService.update("default/Use.hx", defaultPackageUse);
+		var defaultPackageCompletionSource = "class Use { public function read():Int { var base:Base = new Base(); return base.";
+		defaultPackageService.update("default/Use.hx", defaultPackageCompletionSource);
+		var defaultPackageCompletion = defaultPackageService.complete("default/Use.hx", defaultPackageCompletionSource.length),
+			defaultPackageMember = false;
+		for (item in defaultPackageCompletion)
+			if (item.label == "member")
+				defaultPackageMember = true;
+		var defaultPackageTypePosition = defaultPackageCompletionSource.indexOf(":Base") + 2,
+			defaultPackageTypeDefinition = defaultPackageService.typeDefinition("default/Use.hx", defaultPackageTypePosition),
+			defaultPackageTypeReferences = defaultPackageService.references("default/Use.hx", defaultPackageTypePosition);
+		defaultPackageService.update("default/Use.hx", defaultPackageUse);
+		var defaultPackageFunctionPosition = defaultPackageUse.lastIndexOf("answer()") + 1,
+			defaultPackageFunctionDefinition = defaultPackageService.definition("default/Use.hx", defaultPackageFunctionPosition),
+			defaultPackageFunctionReferences = defaultPackageService.references("default/Use.hx", defaultPackageFunctionPosition);
+		if (!defaultPackageMember
+			|| defaultPackageTypeDefinition == null || defaultPackageTypeDefinition.path != "default/Base.hx"
+			|| defaultPackageTypeReferences.length < 2
+			|| defaultPackageFunctionDefinition == null || defaultPackageFunctionDefinition.path != "default/Base.hx"
+			|| defaultPackageFunctionReferences.length < 2)
+			throw 'default-package recovery visibility failed: member=$defaultPackageMember, type=${defaultPackageTypeDefinition == null ? "null" : defaultPackageTypeDefinition.path}, typeRefs=${defaultPackageTypeReferences.length}, function=${defaultPackageFunctionDefinition == null ? "null" : defaultPackageFunctionDefinition.path}, functionRefs=${defaultPackageFunctionReferences.length}';
 		var signatureService = new LanguageService(),
 			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);

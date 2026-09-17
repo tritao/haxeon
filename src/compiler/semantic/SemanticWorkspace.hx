@@ -1377,10 +1377,8 @@ class SemanticWorkspace {
 		var candidateModel = editorModel(candidate),
 			candidatePackage = candidateModel == null || candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName),
 			logicalCandidateName = candidatePackage == null ? candidate.name : candidatePackage + "." + moduleSourceName(candidate.name);
-		if (resolvedPackage != null) {
-			if (candidatePackage == resolvedPackage)
-				return true;
-		}
+		if (sameEditorPackage(resolvedPackage, candidatePackage))
+			return true;
 		if (program == null)
 			return false;
 		for (importPath in program.imports) {
@@ -1437,14 +1435,12 @@ class SemanticWorkspace {
 		?token:CancellationToken):Array<SemanticSymbolId> {
 		var packageName = program.packageName == null ? null : Std.string(program.packageName),
 			result:Array<SemanticSymbolId> = [];
-		if (packageName == null)
-			return result;
-	for (state in orderedStates()) {
+		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
 			var model = editorModel(state),
 				candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
-			if (model == null || candidatePackage != packageName)
+			if (model == null || !sameEditorPackage(candidatePackage, packageName))
 				continue;
 			for (symbol in model.index.symbols) {
 				if (token != null)
@@ -1460,14 +1456,12 @@ class SemanticWorkspace {
 		?token:CancellationToken):Array<SemanticSymbolId> {
 		var packageName = program.packageName == null ? null : Std.string(program.packageName),
 			result:Array<SemanticSymbolId> = [];
-		if (packageName == null)
-			return result;
 		for (state in orderedStates()) {
 			if (token != null)
 				token.check();
 			var model = editorModel(state),
 				candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
-			if (model == null || candidatePackage != packageName)
+			if (model == null || !sameEditorPackage(candidatePackage, packageName))
 				continue;
 			for (id in editorTopLevelFunctionIds(state, name, token))
 				addUniqueIdentity(result, id);
@@ -2285,7 +2279,7 @@ class SemanticWorkspace {
 			return false;
 		if (candidate == from)
 			return true;
-		if (fromPackage != null && fromPackage == candidatePackage)
+		if (sameEditorPackage(fromPackage, candidatePackage))
 			return true;
 		for (importPath in fromModel.program.imports) {
 			if (token != null)
@@ -2332,7 +2326,7 @@ class SemanticWorkspace {
 		}
 		var fromPackage = fromModel.program.packageName == null ? null : Std.string(fromModel.program.packageName),
 			candidatePackage = candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
-		return fromPackage != null && fromPackage == candidatePackage
+		return sameEditorPackage(fromPackage, candidatePackage)
 			|| editorTopLevelFunctionImported(from, candidate, functionName, token);
 	}
 
@@ -3094,6 +3088,13 @@ class SemanticWorkspace {
 			return true;
 		var packageName = model.program.packageName;
 		return packageName != null && requestedName == packageName + "." + declaredName;
+	}
+
+	/** Treat an omitted package declaration as the ordinary default package. */
+	static function sameEditorPackage(left:Null<String>, right:Null<String>):Bool {
+		var leftName = left == null ? "" : left,
+			rightName = right == null ? "" : right;
+		return leftName == rightName;
 	}
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel> {
