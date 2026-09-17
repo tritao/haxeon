@@ -3199,8 +3199,7 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram,
-			?floatString:Int):Int {
+	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram, ?floatString:Int):Int {
 		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
 			nullString = requiredStringOffset(strings, "null"),
@@ -3283,8 +3282,7 @@ class WasmLinearRuntime {
 			floatString = context.functions.get("runtime.Ryu.format");
 		if (dynamicString == null || floatString == null)
 			return;
-		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction,
-			context.strings, context.program, floatString);
+		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction, context.strings, context.program, floatString);
 		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
 	}
 

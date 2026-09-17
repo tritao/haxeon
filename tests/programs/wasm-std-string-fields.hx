@@ -12,6 +12,5 @@ function main():Int {
 	var value = new StringFieldProbe();
 	var text = 'image(${value.identity},${value.width}x${value.width})';
 	var dynamic:Dynamic = 1.5;
-	return text == "image(7,12x12)" && Std.string(value) == "Object"
-		&& Std.string(dynamic) == "1.5" ? 42 : 0;
+	return text == "image(7,12x12)" && Std.string(value) == "Object" && Std.string(dynamic) == "1.5" ? 42 : 0;
 }
