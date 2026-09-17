@@ -27,6 +27,17 @@ typedef GenericRepresentationResult = {
 	final policies:Array<String>;
 };
 
+/** Complete semantic and physical contract for one generic function call. */
+typedef GenericCallRepresentationResult = {
+	final representation:GenericRepresentationResult;
+	final argumentTypes:Array<CompilerType>;
+	final arguments:Array<TypedExpression>;
+	final result:TypeRepresentationResult;
+	final typeArguments:Array<CompilerType>;
+};
+
+typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerType>>) -> CompilerType;
+
 /**
  * Owns the boundary between source-level types and emitted representations.
  *
@@ -124,6 +135,30 @@ class TypeRepresentation {
 			policies.push(decision.policy);
 		}
 		return {substitutions: substitutions, policies: policies};
+	}
+
+	/** Resolve and adapt one generic call across its shared-body ABI boundary. */
+	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>, arguments:Array<TypedExpression>,
+			argumentType:GenericArgumentTypeResolver):GenericCallRepresentationResult {
+		var representation = genericFunction(fn, semanticSubstitutions),
+			argumentTypes = [
+				for (argument in fn.arguments)
+					argumentType(argument, representation.substitutions)
+			],
+			result:TypeRepresentationResult = {
+				semantic: semanticType(fn.result, fn.span, semanticSubstitutions),
+				physical: physicalType(fn.result, fn.span, representation.substitutions)
+			};
+		return {
+			representation: representation,
+			argumentTypes: argumentTypes,
+			arguments: adaptArguments(arguments, argumentTypes),
+			result: result,
+			typeArguments: [
+				for (parameter in functionTypeParameters(fn))
+					requiredMapValue(representation.substitutions, parameter)
+			]
+		};
 	}
 
 	/** Substitutions used by a shared body owned by a generic class/interface. */

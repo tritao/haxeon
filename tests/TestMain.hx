@@ -52,6 +52,9 @@ import compiler.syntax.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedExpressionKind;
+import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession;
 import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
@@ -1387,6 +1390,75 @@ class TestMain {
 			|| fieldResult.physical != compiler.types.Type.CompilerType.TDynamic)
 			throw "Representation service did not preserve semantic and physical type pairs";
 		Sys.println("PASS: semantic and physical generic representation matrix");
+		var genericAbiSource = 'function identity<T>(value:T):T return value; function main():Int { var text:String = identity("text"); return identity(42); }',
+			genericAbiProgram = new Parser(new Lexer(new SourceFile("generic-abi.hx", genericAbiSource)).tokenize()).parseProgram(),
+			genericAbiTyped = Typer.type(genericAbiProgram),
+			genericAbiMains = [for (fn in genericAbiTyped.functions) if (fn.name == "main") fn];
+		if (genericAbiMains.length != 1)
+			throw "Generic ABI fixture did not produce one main function";
+		var genericAbiExpressions:Array<TypedExpression> = [];
+		for (statement in genericAbiMains[0].statements)
+			switch statement {
+				case TVar(_, initializer, _), TReturn(initializer, _):
+					genericAbiExpressions.push(initializer);
+				default:
+			}
+		if (genericAbiExpressions.length != 2)
+			throw "Generic ABI fixture did not preserve both call expressions";
+		var textPhysical:Null<TypedExpression> = switch genericAbiExpressions[0].expression {
+			case TAbiCast(inner): inner;
+			default: null;
+		};
+		if (textPhysical == null
+			|| genericAbiExpressions[0].type != compiler.types.Type.CompilerType.TString
+			|| textPhysical.type != compiler.types.Type.CompilerType.TDynamic)
+			throw "Typed AST did not preserve the generic call semantic/physical result boundary";
+		switch textPhysical.expression {
+			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TDynamic):
+			default:
+				throw "Typed AST did not adapt the generic call argument to its physical representation";
+		}
+		if (genericAbiExpressions[1].type != compiler.types.Type.CompilerType.TInt)
+			throw "Typed AST changed the concrete generic call result representation";
+		switch genericAbiExpressions[1].expression {
+			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TInt):
+			default:
+				throw "Typed AST did not preserve the concrete generic call argument representation";
+		}
+		var genericAbiCompiler = new Compiler();
+		genericAbiCompiler.update("Main.hx", genericAbiSource);
+		var genericAbiBuild = genericAbiCompiler.compile("Main"),
+			dynamicIdentity:Null<IrFunction> = null,
+			intIdentity:Null<IrFunction> = null,
+			genericAbiMain:Null<IrFunction> = null;
+		for (fn in genericAbiBuild.ir.functions) {
+			if (fn.name == "main")
+				genericAbiMain = fn;
+			if (fn.name.indexOf("$generic:Main.identity") == 0)
+				if (fn.arguments.length == 1 && fn.arguments[0].type == IrType.Dyn && fn.result == IrType.Dyn)
+					dynamicIdentity = fn;
+				else if (fn.arguments.length == 1 && fn.arguments[0].type == IrType.I32 && fn.result == IrType.I32)
+					intIdentity = fn;
+		}
+		if (dynamicIdentity == null || intIdentity == null || genericAbiMain == null)
+			throw "IR did not preserve distinct generic function ABI specializations: " + [
+				for (fn in genericAbiBuild.ir.functions)
+					fn.name + " (" + fn.arguments.length + "," + fn.result + ")"
+			].join("; ");
+		var dynamicCallFound = false, intCallFound = false;
+		for (block in genericAbiMain.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case compiler.ir.Ir.IrInstruction.Call(output, name, arguments) if (name.indexOf("$generic:Main.identity") == 0):
+						if (output.type == IrType.Dyn && arguments.length == 1 && arguments[0].type == IrType.Dyn)
+							dynamicCallFound = true;
+						if (output.type == IrType.I32 && arguments.length == 1 && arguments[0].type == IrType.I32)
+							intCallFound = true;
+					default:
+				}
+		if (!dynamicCallFound || !intCallFound)
+			throw "IR call operands did not match their generic specialization ABI types";
+		Sys.println("PASS: generic function typed AST and IR ABI representations");
 		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
 			.tokenize()).parseProgram(),

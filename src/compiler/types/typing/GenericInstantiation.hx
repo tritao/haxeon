@@ -84,20 +84,15 @@ class GenericInstantiation {
 					"E1009"));
 		}
 		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
-			result = session.representation.semanticType(fn.result, fn.span, substitutions),
-			genericRepresentation = session.representation.genericFunction(fn, substitutions),
+			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
+			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
-			specializationPolicies = genericRepresentation.policies;
-		var representationExpected = [
-			for (argument in fn.arguments)
-				argumentType(argument, representationSubstitutions)
-		], typed = [
-			for (index in 0...semanticArguments.length)
-				session.representation.boundaryCast(semanticArguments[index], representationExpected[index])
-			], representationResult = session.representation.physicalType(fn.result, fn.span, representationSubstitutions), representationArguments = [
-			for (parameter in parameters)
-				requiredMapValue(representationSubstitutions, parameter)
-			], specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies);
+			specializationPolicies = genericRepresentation.policies,
+			representationResult = genericCall.result.physical,
+			representationArguments = genericCall.typeArguments,
+			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
+			result = genericCall.result.semantic,
+			typed = genericCall.arguments;
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
