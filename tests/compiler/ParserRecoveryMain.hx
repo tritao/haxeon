@@ -1099,6 +1099,32 @@ class ParserRecoveryMain {
 				abstractMemberGet = item.detail;
 		if (abstractMemberGet != "get():Int")
 			throw 'recovered abstract member type was not substituted: $abstractMemberGet';
+		var abstractConstructorService = new LanguageService(),
+			abstractConstructorSource = "abstract Box<T>(T) { public function new(value:T) { this = value; } } function main():Void { new Box<Int>(";
+		abstractConstructorService.update("AbstractConstructor.hx", abstractConstructorSource);
+		var abstractConstructorPosition = abstractConstructorSource.indexOf("Box<Int>") + 1,
+			abstractConstructorDefinition = abstractConstructorService.definition("AbstractConstructor.hx", abstractConstructorPosition),
+			abstractConstructorSignature = abstractConstructorService.signatureHelp("AbstractConstructor.hx", abstractConstructorSource.length);
+		if (abstractConstructorDefinition == null || abstractConstructorDefinition.stale
+			|| abstractConstructorDefinition.span.start > abstractConstructorSource.indexOf("Box<T>")
+			|| abstractConstructorDefinition.span.end < abstractConstructorSource.indexOf("Box<T>") + "Box<T>".length
+			|| abstractConstructorSignature == null || abstractConstructorSignature.label != "Box(value:Int)")
+			throw 'recovered generic abstract constructor lost identity or substitution: definition=${abstractConstructorDefinition == null ? "null" : abstractConstructorDefinition.span.start + ":" + abstractConstructorDefinition.stale}, signature=${abstractConstructorSignature == null ? "null" : abstractConstructorSignature.label}';
+		var exactAbstractConstructorService = new LanguageService(),
+			exactAbstractConstructorSource = abstractConstructorSource + ") ; }";
+		exactAbstractConstructorService.update("ExactAbstractConstructor.hx", exactAbstractConstructorSource);
+		try
+			exactAbstractConstructorService.analyze("ExactAbstractConstructor")
+		catch (_:CompileError) {}
+		var exactAbstractConstructorPosition = exactAbstractConstructorSource.indexOf("Box<Int>") + 1,
+			exactAbstractConstructorDefinition = exactAbstractConstructorService.definition("ExactAbstractConstructor.hx", exactAbstractConstructorPosition),
+			exactAbstractConstructorReferences = exactAbstractConstructorService.references("ExactAbstractConstructor.hx", exactAbstractConstructorPosition);
+		if (exactAbstractConstructorDefinition == null
+			|| exactAbstractConstructorDefinition.stale
+			|| exactAbstractConstructorDefinition.span.start > exactAbstractConstructorSource.indexOf("Box<T>")
+			|| exactAbstractConstructorDefinition.span.end < exactAbstractConstructorSource.indexOf("Box<T>") + "Box<T>".length
+			|| exactAbstractConstructorReferences.length < 2)
+			throw "exact generic abstract constructor did not preserve its authoritative identity";
 		var exactAbstractService = new LanguageService(),
 			exactAbstractSource = "abstract Box(Int) { public function new(value:Int) { this = value; } public function get():Void return; } function main():Void { var box = new Box(1); box.get(); }";
 		exactAbstractService.update("ExactAbstract.hx", exactAbstractSource);
