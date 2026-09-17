@@ -593,9 +593,10 @@ LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/syntax-scanner-benc
 Compiler mode filters trivia and does not retain lossless tokens; tooling mode
 retains source spans and trivia for formatter/CST consumers. The opt-in
 `ParserMode.Cst` path uses the same parser grammar to attach immutable
-declaration, block, call, member, generic, error, and missing-syntax nodes
-without changing the compiler AST. The formatter consumes that CST structure
-while retaining its existing layout engine. The benchmark compares AST-only
+declaration, block, parameter/argument list, call, member, literal, generic,
+anonymous-type, error, and missing-syntax nodes without changing the compiler
+AST. The formatter consumes that CST structure while retaining its existing
+layout engine. The benchmark compares AST-only
 and CST parsing and records latency distributions and token counts in
 `out/syntax-scanner-benchmark.json`.
 

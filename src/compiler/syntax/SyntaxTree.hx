@@ -26,6 +26,13 @@ enum SyntaxKind {
 	FunctionDeclaration;
 	FieldDeclaration;
 	Block;
+	ParameterList;
+	ArgumentList;
+	ParenthesizedExpression;
+	ArrayLiteral;
+	ObjectLiteral;
+	MapLiteral;
+	AnonymousType;
 	CallExpression;
 	MemberExpression;
 	IndexExpression;

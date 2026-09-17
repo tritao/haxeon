@@ -1,4 +1,5 @@
 import compiler.Source.SourceFile;
+import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
@@ -13,6 +14,8 @@ class SyntaxScannerMain {
 			+ "\tvar value = 'text ${1 + 2}'; // line\r\n"
 			+ "\tvar pattern = ~/a[//]b/gi; /* block */\r\n"
 			+ "\tvar item = new Box<Int>();\r\n"
+			+ "\tvar values = [1, 2];\r\n"
+			+ "\tvar record = {value: value};\r\n"
 			+ "\treturn value.trim();\r\n"
 			+ "}\r\n",
 			file = new SourceFile("SyntaxScanner.hx", source),
@@ -65,7 +68,7 @@ class SyntaxScannerMain {
 			throw "CST mode did not round-trip the valid source";
 		if (cst.root.span.start != 0 || cst.root.span.end != file.bytes.length || cst.tokens.length != syntaxCount)
 			throw "CST mode did not preserve source spans or syntax tokens";
-		if (cstProgram.classes.length != astOnlyProgram.classes.length || cstProgram.functions.length != astOnlyProgram.functions.length)
+		if (programShape(cstProgram) != programShape(astOnlyProgram))
 			throw "CST parser mode changed the semantic AST shape";
 		var grammarKinds:Map<SyntaxKind, Bool> = [];
 		for (node in cst.grammarNodes())
@@ -73,7 +76,11 @@ class SyntaxScannerMain {
 		if (!grammarKinds.exists(SyntaxKind.FunctionDeclaration)
 			|| !grammarKinds.exists(SyntaxKind.Block)
 			|| !grammarKinds.exists(SyntaxKind.CallExpression)
-			|| !grammarKinds.exists(SyntaxKind.TypeArgumentList))
+			|| !grammarKinds.exists(SyntaxKind.ArgumentList)
+			|| !grammarKinds.exists(SyntaxKind.ParameterList)
+			|| !grammarKinds.exists(SyntaxKind.TypeArgumentList)
+			|| !grammarKinds.exists(SyntaxKind.ArrayLiteral)
+			|| !grammarKinds.exists(SyntaxKind.ObjectLiteral))
 			throw "CST parser mode did not retain grammar-level structure";
 
 		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
@@ -99,5 +106,25 @@ class SyntaxScannerMain {
 			throw "lossless scanner did not retain directives";
 
 		Sys.println("PASS: shared lossless scanner preserves source and compiler parity");
+	}
+
+	static function programShape(program:AstProgram):String {
+		var shape:Array<String> = ["package=" + (program.packageName == null ? "" : program.packageName)];
+		for (path in program.imports)
+			shape.push("import=" + path);
+		for (alias in program.aliases)
+			shape.push('alias=${alias.name}:${alias.span.start}:${alias.span.end}');
+		for (functionDeclaration in program.functions)
+			shape.push('function=${functionDeclaration.name}:${functionDeclaration.span.start}:${functionDeclaration.span.end}:args=${functionDeclaration.arguments.length}:statements=${functionDeclaration.statements.length}');
+		for (classDeclaration in program.classes) {
+			shape.push('class=${classDeclaration.name}:${classDeclaration.span.start}:${classDeclaration.span.end}:fields=${classDeclaration.fields.length}:methods=${classDeclaration.methods.length}');
+			for (method in classDeclaration.methods)
+				shape.push('method=${method.name}:${method.span.start}:${method.span.end}:args=${method.arguments.length}:statements=${method.statements.length}');
+		}
+		for (interfaceDeclaration in program.interfaces)
+			shape.push('interface=${interfaceDeclaration.name}:${interfaceDeclaration.span.start}:${interfaceDeclaration.span.end}:methods=${interfaceDeclaration.methods.length}');
+		for (enumeration in program.enums)
+			shape.push('enum=${enumeration.name}:${enumeration.span.start}:${enumeration.span.end}:cases=${enumeration.cases.length}');
+		return shape.join("|");
 	}
 }

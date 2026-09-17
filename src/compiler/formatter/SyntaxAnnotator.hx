@@ -138,6 +138,16 @@ class SyntaxAnnotator {
 					applyCallNode(tokens, syntax, node);
 				case SyntaxKind.TypeArgumentList, SyntaxKind.TypeParameterList:
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList);
+				case SyntaxKind.ParameterList:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ParameterList);
+				case SyntaxKind.ArgumentList:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArgumentList);
+				case SyntaxKind.ParenthesizedExpression:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.Parenthesized);
+				case SyntaxKind.ArrayLiteral:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArrayLiteral);
+				case SyntaxKind.ObjectLiteral, SyntaxKind.MapLiteral, SyntaxKind.AnonymousType:
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ObjectLiteral);
 				default:
 					// Declaration and recovery nodes are consumed by structural tooling;
 					// they do not affect layout decisions yet.
@@ -174,8 +184,14 @@ class SyntaxAnnotator {
 		var open = tokenIndexAt(tokens, node.span.start), close = tokenIndexEndingAt(tokens, node.span.end);
 		if (open < 0 || close < open)
 			return;
-		if (FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.Less
-			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.Greater)
+		var openKind = FormatTokenTools.syntaxKind(tokens[open]), closeKind = FormatTokenTools.syntaxKind(tokens[close]), valid = switch kind {
+			case FormatNodeKind.TypeArgumentList: openKind == TokenKind.Less && closeKind == TokenKind.Greater;
+			case FormatNodeKind.ParameterList, FormatNodeKind.ArgumentList, FormatNodeKind.Parenthesized: openKind == TokenKind.LeftParen && closeKind == TokenKind.RightParen;
+			case FormatNodeKind.ArrayLiteral: openKind == TokenKind.LeftBracket && closeKind == TokenKind.RightBracket;
+			case FormatNodeKind.ObjectLiteral: openKind == TokenKind.LeftBrace && closeKind == TokenKind.RightBrace;
+			default: false;
+		};
+		if (!valid)
 			return;
 		syntax.matching.set(open, close);
 		syntax.matching.set(close, open);

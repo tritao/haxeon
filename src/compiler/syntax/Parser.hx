@@ -284,7 +284,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 		}
-		consume(TokenKind.LeftBrace);
+		var enumBodyStart = consume(TokenKind.LeftBrace).span;
 		var methods = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var memberStart = position;
@@ -308,6 +308,7 @@ class Parser {
 			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, enumBodyStart.merge(end));
 		return {
 			name: name,
 			isExtern: isExtern,
@@ -361,7 +362,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 		}
-		consume(TokenKind.LeftBrace);
+		var abstractBodyStart = consume(TokenKind.LeftBrace).span;
 		var values = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var valueStart = position;
@@ -380,6 +381,7 @@ class Parser {
 			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, abstractBodyStart.merge(end));
 		return {
 			name: name,
 			underlying: underlying,
@@ -426,7 +428,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 		}
-		consume(TokenKind.LeftBrace);
+		var enumAbstractBodyStart = consume(TokenKind.LeftBrace).span;
 		var bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !recoveringAtEnd()) {
 			var caseStart = position;
@@ -469,6 +471,7 @@ class Parser {
 			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, enumAbstractBodyStart.merge(end));
 		return {
 			name: name,
 			typeParameters: typeParameters,
@@ -511,10 +514,11 @@ class Parser {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		var arguments = [];
+		var parameterStart:Null<SourceSpan> = null;
 		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
 			recordExpected("left parenthesis");
 		else {
-			consume(TokenKind.LeftParen);
+			parameterStart = consume(TokenKind.LeftParen).span;
 			while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
 				if (check(TokenKind.Comma)) {
 					recordExpected("parameter");
@@ -535,7 +539,9 @@ class Parser {
 				if (!match(TokenKind.Comma))
 					break;
 			}
-			consume(TokenKind.RightParen);
+			var parameterEnd = consume(TokenKind.RightParen).span;
+			if (parameterStart != null)
+				recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 		}
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn && name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
@@ -1185,7 +1191,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 		}
-		consume(TokenKind.LeftBrace);
+		var interfaceBodyStart = consume(TokenKind.LeftBrace).span;
 		var methods = [], bodyStart = position;
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			var memberStart = position;
@@ -1198,10 +1204,11 @@ class Parser {
 				var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 					typeParameters = parseTypeParameters(typeConstraints);
 				var arguments = [];
+				var parameterStart:Null<SourceSpan> = null;
 				if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
 					recordExpected("left parenthesis");
 				else {
-					consume(TokenKind.LeftParen);
+					parameterStart = consume(TokenKind.LeftParen).span;
 					while (!check(TokenKind.RightParen) && !recoveringAtEnd() && !canInsert(TokenKind.RightParen)) {
 						if (check(TokenKind.Comma)) {
 							recordExpected("parameter");
@@ -1221,7 +1228,9 @@ class Parser {
 						if (!match(TokenKind.Comma))
 							break;
 					}
-					consume(TokenKind.RightParen);
+					var parameterEnd = consume(TokenKind.RightParen).span;
+					if (parameterStart != null)
+						recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 				}
 				var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
 					end = consume(TokenKind.Semicolon).span;
@@ -1245,6 +1254,7 @@ class Parser {
 			}
 		}
 		var end = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, interfaceBodyStart.merge(end));
 		return {
 			name: name,
 			typeParameters: typeParameters,
@@ -1259,7 +1269,7 @@ class Parser {
 		if (match(TokenKind.Function)) {
 			var start = previous().span,
 				name = consumeDeclarationName("local function");
-			consume(TokenKind.LeftParen);
+			var parameterStart = consume(TokenKind.LeftParen).span;
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
@@ -1275,7 +1285,8 @@ class Parser {
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
-			consume(TokenKind.RightParen);
+			var parameterEnd = consume(TokenKind.RightParen).span;
+			recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 			var result = match(TokenKind.Colon) ? parseType() : null,
 				body = parseStatementOrBlock(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
@@ -1350,7 +1361,7 @@ class Parser {
 				consume(TokenKind.RightParen);
 			} else
 				expression = parseExpression();
-			consume(TokenKind.LeftBrace);
+			var switchBodyStart = consume(TokenKind.LeftBrace).span;
 			var cases = [];
 			while (match(TokenKind.Case)) {
 				var caseStart = previous().span,
@@ -1375,6 +1386,7 @@ class Parser {
 				defaultBranch = parseSwitchCaseBody();
 			}
 			var end = consume(TokenKind.RightBrace).span;
+			recordCstNode(SyntaxKind.Block, switchBodyStart.merge(end));
 			if (match(TokenKind.Semicolon))
 				end = previous().span;
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
@@ -1769,7 +1781,7 @@ class Parser {
 		}
 		if (match(TokenKind.Function)) {
 			var start = previous().span;
-			consume(TokenKind.LeftParen);
+			var parameterStart = consume(TokenKind.LeftParen).span;
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
@@ -1785,7 +1797,8 @@ class Parser {
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
-			consume(TokenKind.RightParen);
+			var parameterEnd = consume(TokenKind.RightParen).span;
+			recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 			var body = parseAnonymousFunctionBody(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]);
 			return Lambda(arguments, body, start.merge(end));
@@ -1875,9 +1888,11 @@ class Parser {
 					consume(TokenKind.Greater);
 					var mapValue = parseComprehensionValue(),
 						end = consume(TokenKind.RightBracket).span;
+					recordCstNode(SyntaxKind.MapLiteral, start.merge(end));
 					return parsePostfix(MapComprehension(keyName, valueName, iterable, condition, value, mapValue, start.merge(end)));
 				}
 				var end = consume(TokenKind.RightBracket).span;
+				recordCstNode(SyntaxKind.ArrayLiteral, start.merge(end));
 				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
 			}
 			if (!check(TokenKind.RightBracket)) {
@@ -1896,6 +1911,7 @@ class Parser {
 						entries.push({key: key, value: entryValue, span: expressionSpan(key).merge(expressionSpan(entryValue))});
 					}
 					var end = consume(TokenKind.RightBracket).span;
+					recordCstNode(SyntaxKind.MapLiteral, start.merge(end));
 					return parsePostfix(MapLiteral(entries, start.merge(end)));
 				}
 				values.push(first);
@@ -1904,6 +1920,7 @@ class Parser {
 						values.push(parseDelimitedExpression(TokenKind.RightBracket, false));
 			}
 			var end = consume(TokenKind.RightBracket).span;
+			recordCstNode(SyntaxKind.ArrayLiteral, start.merge(end));
 			return parsePostfix(ArrayLiteral(values, start.merge(end)));
 		}
 		if (check(TokenKind.Identifier) && current().text == "null") {
@@ -1922,8 +1939,9 @@ class Parser {
 						? NewArray(typeArguments[0], IntegerLiteral(0, missingEnd), start.merge(missingEnd))
 						: ArrayLiteral([], start.merge(missingEnd)));
 				}
-				consume(TokenKind.LeftParen);
+				var argumentStart = consume(TokenKind.LeftParen).span;
 				var end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				if (typeArguments.length > 0) {
 					if (typeArguments.length != 1)
 						fail(previous(), 'List expects 1 type argument, got ${typeArguments.length}');
@@ -1934,7 +1952,9 @@ class Parser {
 			if (check(TokenKind.Identifier) && current().text == "Array") {
 				advance();
 				if (match(TokenKind.LeftParen)) {
-					var end = consume(TokenKind.RightParen).span;
+					var argumentStart = previous().span,
+						end = consume(TokenKind.RightParen).span;
+					recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 					return parsePostfix(ArrayLiteral([], start.merge(end)));
 				}
 				if (isRecoveryBoundary()) {
@@ -1950,9 +1970,10 @@ class Parser {
 					var missingEnd = current().span;
 					return parsePostfix(NewArray(element, ErrorExpression(missingEnd), start.merge(missingEnd)));
 				}
-				consume(TokenKind.LeftParen);
+				var argumentStart = consume(TokenKind.LeftParen).span;
 				var length = parseExpression();
 				var end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				return parsePostfix(NewArray(element, length, start.merge(end)));
 			}
 			if (check(TokenKind.Identifier) && current().text == "Map") {
@@ -1983,8 +2004,9 @@ class Parser {
 					var missingEnd = current().span;
 					return parsePostfix(NewMap(key, value, start.merge(missingEnd)));
 				}
-				consume(TokenKind.LeftParen);
+				var argumentStart = consume(TokenKind.LeftParen).span;
 				var end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				return parsePostfix(NewMap(key, value, start.merge(end)));
 			}
 			var typeName = parseQualifiedName();
@@ -1995,13 +2017,14 @@ class Parser {
 				return parsePostfix(typeArguments.length == 0 ? New(typeName, [],
 					start.merge(end)) : NewGeneric(typeName, typeArguments, [], start.merge(end)));
 			}
-			consume(TokenKind.LeftParen);
+			var argumentStart = consume(TokenKind.LeftParen).span;
 			var arguments = [];
 			if (!check(TokenKind.RightParen)) {
 				do
 					arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 			}
 			var end = consume(TokenKind.RightParen).span;
+			recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
 				start.merge(end)) : NewGeneric(typeName, typeArguments, arguments, start.merge(end)));
 		}
@@ -2012,12 +2035,14 @@ class Parser {
 			if (!isLambda) {
 				advance();
 				var grouped = parseExpression();
+				var end:SourceSpan;
 				if (match(TokenKind.Colon)) {
-					var target = parseType(),
-						end = consume(TokenKind.RightParen).span;
+					var target = parseType();
+					end = consume(TokenKind.RightParen).span;
 					grouped = Cast(grouped, target, start.merge(end));
 				} else
-					consume(TokenKind.RightParen);
+					end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ParenthesizedExpression, start.merge(end));
 				return parsePostfix(grouped);
 			}
 			advance();
@@ -2037,8 +2062,9 @@ class Parser {
 					});
 				} while (match(TokenKind.Comma));
 			}
-			consume(TokenKind.RightParen);
+			var parameterEnd = consume(TokenKind.RightParen).span;
 			if (match(TokenKind.Arrow)) {
+				recordCstNode(SyntaxKind.ParameterList, start.merge(parameterEnd));
 				var body = parseArrowFunctionBody();
 				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 			}
@@ -2046,8 +2072,9 @@ class Parser {
 			advance();
 			var grouped = parseExpression();
 			consume(TokenKind.Colon);
-			var target = parseType(), end = consume(TokenKind.RightParen).span;
-			return parsePostfix(Cast(grouped, target, start.merge(end)));
+			var target = parseType(), castEnd = consume(TokenKind.RightParen).span;
+			recordCstNode(SyntaxKind.ParenthesizedExpression, start.merge(castEnd));
+			return parsePostfix(Cast(grouped, target, start.merge(castEnd)));
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
@@ -2087,6 +2114,7 @@ class Parser {
 				}
 			}
 			var end = consume(TokenKind.RightBrace).span;
+			recordCstNode(SyntaxKind.ObjectLiteral, start.merge(end));
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
 		if (check(TokenKind.Identifier)
@@ -2105,12 +2133,14 @@ class Parser {
 			}
 			var expression:AstExpression = Variable(name, start.merge(end));
 			if (match(TokenKind.LeftParen)) {
+				var argumentStart = previous().span;
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {
 					do
-						arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
+					arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 				}
 				var end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				var callSpan = start.merge(end);
 				expression = Call(name, arguments, callSpan);
 				recordCstNode(SyntaxKind.CallExpression, callSpan);
@@ -2286,7 +2316,7 @@ class Parser {
 			consume(TokenKind.RightParen);
 		} else
 			subject = parseExpression();
-		consume(TokenKind.LeftBrace);
+		var switchExpressionBodyStart = consume(TokenKind.LeftBrace).span;
 		var cases = [];
 		while (match(TokenKind.Case)) {
 			var caseStart = previous().span,
@@ -2310,6 +2340,7 @@ class Parser {
 			fallback = parseSwitchExpressionBranch();
 		}
 		var end = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, switchExpressionBodyStart.merge(end));
 		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
 	}
 
@@ -2477,12 +2508,14 @@ class Parser {
 			if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot)
 				break;
 			if (match(TokenKind.LeftParen)) {
+				var argumentStart = previous().span;
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {
 					do
 						arguments.push(parseExpression()) while (match(TokenKind.Comma));
 				}
 				var end = consume(TokenKind.RightParen).span;
+				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				var callSpan = expressionSpan(expression).merge(end);
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments, callSpan);
@@ -2510,12 +2543,14 @@ class Parser {
 				}
 				var nameToken = consumeName(), name = nameToken.text;
 				if (match(TokenKind.LeftParen)) {
+					var argumentStart = previous().span;
 					var arguments = [];
 					if (!check(TokenKind.RightParen)) {
 						do
 							arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
 					}
 					var end = consume(TokenKind.RightParen).span;
+					recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 					var methodSpan = expressionSpan(expression).merge(end);
 					expression = MethodCall(expression, name, arguments, methodSpan);
 					recordCstNode(SyntaxKind.CallExpression, methodSpan);
@@ -2577,6 +2612,7 @@ class Parser {
 			return ErrorType(span);
 		}
 		if (match(TokenKind.LeftBrace)) {
+			var anonymousTypeStart = previous().span;
 			var fields = [];
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 				var fieldName = "<missing>", fieldStart = current().span;
@@ -2619,7 +2655,8 @@ class Parser {
 				if (!match(TokenKind.Comma))
 					match(TokenKind.Semicolon);
 			}
-			consume(TokenKind.RightBrace);
+			var anonymousTypeEnd = consume(TokenKind.RightBrace).span;
+			recordCstNode(SyntaxKind.AnonymousType, anonymousTypeStart.merge(anonymousTypeEnd));
 			return AnonymousType(fields);
 		}
 		if (match(TokenKind.TypeInt))
@@ -2637,9 +2674,10 @@ class Parser {
 				advance();
 				if (isRecoveryBoundary())
 					return ArrayType(missingType("type arguments"));
-				consume(TokenKind.Less);
+				var arrayTypeStart = consume(TokenKind.Less).span;
 					var element = parseDelimitedType(TokenKind.Greater);
-				consume(TokenKind.Greater);
+				var arrayTypeEnd = consume(TokenKind.Greater).span;
+				recordCstNode(SyntaxKind.TypeArgumentList, arrayTypeStart.merge(arrayTypeEnd));
 				return ArrayType(element);
 			} else if (current().text == "Map") {
 				advance();
@@ -2648,7 +2686,7 @@ class Parser {
 					var missing = missingType("type arguments");
 					return MapType(missing, ErrorType(missingSpan));
 				}
-				consume(TokenKind.Less);
+				var mapTypeStart = consume(TokenKind.Less).span;
 					var key = parseDelimitedType(TokenKind.Greater);
 					var value = if (match(TokenKind.Comma))
 						parseDelimitedType(TokenKind.Greater);
@@ -2659,26 +2697,30 @@ class Parser {
 					consume(TokenKind.Comma);
 					parseType();
 				};
-				consume(TokenKind.Greater);
+				var mapTypeEnd = consume(TokenKind.Greater).span;
+				recordCstNode(SyntaxKind.TypeArgumentList, mapTypeStart.merge(mapTypeEnd));
 				return MapType(key, value);
 			} else if (current().text == "Null") {
 				advance();
 				if (isRecoveryBoundary())
 					return NullableType(missingType("type arguments"));
-				consume(TokenKind.Less);
+				var nullableTypeStart = consume(TokenKind.Less).span;
 					var element = parseDelimitedType(TokenKind.Greater);
-				consume(TokenKind.Greater);
+				var nullableTypeEnd = consume(TokenKind.Greater).span;
+				recordCstNode(SyntaxKind.TypeArgumentList, nullableTypeStart.merge(nullableTypeEnd));
 				return NullableType(element);
 			}
 		var name = parseQualifiedName();
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.StringLiteral) {
-			advance();
+			var nativeTypeStart = advance().span;
 			var tag = consume(TokenKind.StringLiteral),
 				value = decodeString(tag.text);
-			consume(TokenKind.Greater);
+			var nativeTypeEnd = consume(TokenKind.Greater).span;
+			recordCstNode(SyntaxKind.TypeArgumentList, nativeTypeStart.merge(nativeTypeEnd));
 			return NativeAbstractType(name, value);
 		}
 		if (match(TokenKind.Less)) {
+			var appliedTypeStart = previous().span;
 			var arguments = [];
 			if (!check(TokenKind.Greater) && !recoveringAtEnd()) {
 				arguments.push(parseDelimitedType(TokenKind.Greater));
@@ -2686,7 +2728,8 @@ class Parser {
 					if (!check(TokenKind.Greater) && !recoveringAtEnd())
 						arguments.push(parseDelimitedType(TokenKind.Greater));
 			}
-			consume(TokenKind.Greater);
+			var appliedTypeEnd = consume(TokenKind.Greater).span;
+			recordCstNode(SyntaxKind.TypeArgumentList, appliedTypeStart.merge(appliedTypeEnd));
 			return AppliedType(name, arguments);
 		}
 		return NamedType(name);
@@ -2705,8 +2748,10 @@ class Parser {
 			}
 			return parseStatements();
 		}
+		var blockStart = previous().span;
 		var statements = parseStatementBlockBody();
-		consume(TokenKind.RightBrace);
+		var blockEnd = consume(TokenKind.RightBrace).span;
+		recordCstNode(SyntaxKind.Block, blockStart.merge(blockEnd));
 		return statements;
 	}
 
