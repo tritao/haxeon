@@ -934,7 +934,7 @@ class LanguageService {
 		for (importPath in program.imports) {
 			if (importQualifier(program, importPath) != name)
 				continue;
-			var imported = importedModule(importPath),
+			var imported = compiler.semanticWorkspace.editorModuleForImport(importPath),
 				importedAst = imported == null ? null : effectiveAst(imported);
 			if (importedAst == null)
 				continue;
@@ -1342,7 +1342,7 @@ class LanguageService {
 				index += 2;
 			}
 			var importPath = parts.join("."),
-				target = importedModule(importPath);
+				target = compiler.semanticWorkspace.editorModuleForImport(importPath);
 			if (target != null)
 				result.push({span: snapshot.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
 		}
@@ -1358,6 +1358,9 @@ class LanguageService {
 	}
 
 	function importedModule(importPath:String):Null<ModuleState> {
+		var editorTarget = compiler.semanticWorkspace.editorModuleForImport(importPath);
+		if (editorTarget != null)
+			return editorTarget;
 		var candidate = importPath;
 		while (candidate.length > 0) {
 			var state = compiler.modules.get(candidate);

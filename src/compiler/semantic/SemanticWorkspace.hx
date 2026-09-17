@@ -1375,6 +1375,10 @@ class SemanticWorkspace {
 		return best;
 	}
 
+	/** Resolve a source import against current editor module names. */
+	public function editorModuleForImport(importPath:String):Null<ModuleState>
+		return editorImportTarget(importPath);
+
 	function editorImportModule(importPath:String):Null<String> {
 		var target = editorImportTarget(importPath);
 		var model = target == null ? null : editorModel(target);
