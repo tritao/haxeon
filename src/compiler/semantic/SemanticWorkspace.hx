@@ -793,13 +793,128 @@ class SemanticWorkspace {
 		return null;
 	}
 
+	/**
+	 * Render an authoritative member against the instantiated receiver type.
+	 * Exact indexes retain declaration-level generic parameters, so editor
+	 * queries must apply the current receiver's arguments before displaying a
+	 * method signature.
+	 */
+	public function editorMemberSignature(state:ModuleState, id:SemanticSymbolId,
+		type:Null<CompilerType>, ?token:CancellationToken):Null<SemanticSignatureInfo> {
+		var resolved = editorSymbol(state, id);
+		if (resolved == null || type == null)
+			return null;
+		return memberSignatureForType(state, type, resolved.symbol.declaration, [], token);
+	}
+
+	function memberSignatureForType(from:ModuleState, type:CompilerType, declaration:SourceSpan,
+		visited:Array<String>, ?token:CancellationToken):Null<SemanticSignatureInfo> {
+		if (token != null)
+			token.check();
+		var key = Std.string(type);
+		if (visited.indexOf(key) >= 0)
+			return null;
+		var nextVisited = visited.concat([key]);
+		switch type {
+			case TNullable(element):
+				return memberSignatureForType(from, element, declaration, nextVisited, token);
+			case TInstance(_, name, arguments):
+				for (state in orderedStates()) {
+					if (token != null)
+						token.check();
+					var model = editorModel(state);
+					if (model == null)
+						continue;
+					for (decl in model.program.classes) {
+						if (!ownsType(state, model, decl.name, Std.string(name)))
+							continue;
+						for (method in decl.methods)
+							if (method.name != "new" && sameSpan(method.span, declaration))
+								return memberSignature(decl.name, decl.typeParameters, method, type, token);
+						var substitutions = editorTypeSubstitutions(decl.typeParameters, arguments),
+							compilerSubstitutions = editorCompilerSubstitutions(decl.typeParameters, arguments);
+						if (decl.base != null) {
+							var inherited = editorInheritedType(state, decl.base, model.program, substitutions, compilerSubstitutions, token),
+								result = memberSignatureForType(from, inherited, declaration, nextVisited, token);
+							if (result != null)
+								return result;
+						}
+						for (interfaceType in decl.interfaces) {
+							var inherited = editorInheritedType(state, interfaceType, model.program, substitutions, compilerSubstitutions, token),
+								result = memberSignatureForType(from, inherited, declaration, nextVisited, token);
+							if (result != null)
+								return result;
+						}
+					}
+					for (decl in model.program.interfaces) {
+						if (!ownsType(state, model, decl.name, Std.string(name)))
+							continue;
+						for (method in decl.methods)
+							if (sameSpan(method.span, declaration))
+								return memberSignature(decl.name, decl.typeParameters, method, type, token);
+						var substitutions = editorTypeSubstitutions(decl.typeParameters, arguments),
+							compilerSubstitutions = editorCompilerSubstitutions(decl.typeParameters, arguments);
+						for (base in decl.bases) {
+							var inherited = editorInheritedType(state, base, model.program, substitutions, compilerSubstitutions, token),
+								result = memberSignatureForType(from, inherited, declaration, nextVisited, token);
+							if (result != null)
+								return result;
+						}
+					}
+				}
+			case TAbstract(name, arguments, _):
+				for (state in orderedStates()) {
+					if (token != null)
+						token.check();
+					var model = editorModel(state);
+					if (model == null)
+						continue;
+					for (decl in model.program.abstracts)
+						if (ownsType(state, model, decl.name, Std.string(name))) {
+							for (method in decl.methods)
+								if (method.name != "new" && sameSpan(method.span, declaration))
+									return memberSignature(decl.name, decl.typeParameters, method, type, token);
+						}
+				}
+			default:
+		}
+		return null;
+	}
+
+	static function memberSignature(owner:String, typeParameters:Array<String>, method:compiler.syntax.Ast.AstFunction,
+		type:Null<CompilerType>, ?token:CancellationToken):SemanticSignatureInfo {
+		var substitutions = editorTypeSubstitutions(typeParameters, editorTypeArguments(type, owner)),
+			parameters:Array<String> = [];
+		for (argument in method.arguments) {
+			if (token != null)
+				token.check();
+			parameters.push((argument.optional ? "?" : "") + argument.name + ":"
+				+ editorAstTypeName(argument.type, substitutions));
+		}
+		var result = editorAstTypeName(method.result, substitutions);
+		return {
+			label: method.name + "(" + parameters.join(",") + "):" + result,
+			parameters: parameters,
+			result: result
+		};
+	}
+
 	static function enumTypeArguments(type:Null<CompilerType>, name:String):Array<CompilerType> {
 		return switch type {
-			case TNullable(element): enumTypeArguments(element, name);
+			case TNullable(element): editorTypeArguments(element, name);
 			case TInstance(_, declaration, arguments) if (moduleSourceName(Std.string(declaration)) == moduleSourceName(name)): arguments;
+			case TAbstract(declaration, arguments, _) if (moduleSourceName(Std.string(declaration)) == moduleSourceName(name)): arguments;
 			default: [];
 		};
 	}
+
+	static function editorTypeArguments(type:Null<CompilerType>, name:String):Array<CompilerType>
+		return switch type {
+			case TNullable(element): editorTypeArguments(element, name);
+			case TInstance(_, declaration, arguments) if (moduleSourceName(Std.string(declaration)) == moduleSourceName(name)): arguments;
+			case TAbstract(declaration, arguments, _) if (moduleSourceName(Std.string(declaration)) == moduleSourceName(name)): arguments;
+			default: [];
+		};
 
 	/**
 	 * Render a constructor against the instantiated type at a recovered call

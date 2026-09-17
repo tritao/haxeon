@@ -2200,6 +2200,7 @@ class LanguageService {
 			indexedDetail = indexedId == null ? null : compiler.semanticWorkspace.editorSymbolDetail(state, indexedId, indexedType, token),
 			name = indexed == null ? identifierTokenName(snapshot.tokens, position) : sourceName(indexed.name),
 			qualifier = memberQualifier(snapshot.source, position);
+		var memberContext = qualifier == null || model == null ? null : model.index.completionContext(position, qualifier, token);
 		if (name.length == 0)
 			name = identifierPrefix(snapshot.source, position);
 		if (snapshot.recovered && model != null && qualifier != null && name.length > 0) {
@@ -2208,6 +2209,12 @@ class LanguageService {
 				recoveredSignature = owner == null ? null : model.index.recoveredSignature(owner + "." + name, context.receiver);
 			if (recoveredSignature != null)
 				return recoveredSignature.label;
+		}
+		if (indexedId != null && memberContext != null && memberContext.receiver != null) {
+			var memberSignature = compiler.semanticWorkspace.editorMemberSignature(state, indexedId,
+				memberContext.receiver, token);
+			if (memberSignature != null)
+				return memberSignature.label;
 		}
 		if (indexedDetail != null)
 			return indexedDetail;
@@ -2320,6 +2327,11 @@ class LanguageService {
 			var enumSignature = compiler.semanticWorkspace.editorEnumConstructorSignature(state, id, calleeType, token);
 			if (enumSignature != null)
 				signature = enumSignature;
+		}
+		if (id != null && !snapshot.recovered && recoveredReceiver != null) {
+			var memberSignature = compiler.semanticWorkspace.editorMemberSignature(state, id, recoveredReceiver, token);
+			if (memberSignature != null)
+				signature = memberSignature;
 		}
 		// Recovery may bind a current-source call directly to an authoritative
 		// external enum constructor or other callable declaration whose compact

@@ -246,6 +246,26 @@ class ParserRecoveryMain {
 			|| recoveredImportedHover != "Result.Value(value:Int)"
 			|| recoveredImportedSignature == null || recoveredImportedSignature.label != "Result.Value(value:Int)")
 			throw 'recovered imported generic enum metadata was not substituted: definition=${recoveredImportedDefinition == null ? "null" : recoveredImportedDefinition.path}, hover=$recoveredImportedHover, signature=${recoveredImportedSignature == null ? "null" : recoveredImportedSignature.label}';
+		var memberTarget = "package generic.types; class Box<T> { public function get():T return cast null; } function main():Void return;",
+			memberConsumer = "package generic.app; import generic.types.Box; function main():Int { var box:Box<Int> = new Box<Int>(); return box.get(); }";
+		service.update("generic/types/Box.hx", memberTarget);
+		service.analyze("generic.types.Box");
+		service.update("generic/app/Member.hx", memberConsumer);
+		service.analyze("generic.app.Member");
+		var memberPosition = memberConsumer.indexOf("box.get") + "box.".length + 1,
+			memberHover = service.hover("generic/app/Member.hx", memberPosition),
+			memberSignature = service.signatureHelp("generic/app/Member.hx", memberConsumer.lastIndexOf("box.get(") + "box.get(".length);
+		if (memberHover != "get():Int"
+			|| memberSignature == null || memberSignature.label != "get():Int")
+			throw 'exact generic external member metadata was not substituted: hover=$memberHover, signature=${memberSignature == null ? "null" : memberSignature.label}';
+		var recoveredMemberConsumer = memberConsumer + " function unfinished(";
+		service.update("generic/app/Member.hx", recoveredMemberConsumer);
+		var recoveredMemberPosition = recoveredMemberConsumer.indexOf("box.get") + "box.".length + 1,
+			recoveredMemberHover = service.hover("generic/app/Member.hx", recoveredMemberPosition),
+			recoveredMemberSignature = service.signatureHelp("generic/app/Member.hx", recoveredMemberConsumer.lastIndexOf("box.get(") + "box.get(".length);
+		if (recoveredMemberHover != "get():Int"
+			|| recoveredMemberSignature == null || recoveredMemberSignature.label != "get():Int")
+			throw 'recovered generic external member metadata was not substituted: hover=$recoveredMemberHover, signature=${recoveredMemberSignature == null ? "null" : recoveredMemberSignature.label}';
 	}
 
 	static function assertPackageVisibilityClosure():Void {
@@ -1109,6 +1129,17 @@ class ParserRecoveryMain {
 		}
 		if (genericInheritanceValue != "value:Int" || genericInheritanceGet != "get():Int")
 			throw 'generic inherited member types were not substituted: value=$genericInheritanceValue, get=$genericInheritanceGet';
+		var exactGenericInheritanceService = new LanguageService(),
+			exactGenericInheritanceSource = "class Base<T> { public function get():T return cast null; } class Child<U> extends Base<U> {} function main():Int { var child:Child<Int> = new Child<Int>(); return child.get(); }";
+		exactGenericInheritanceService.update("ExactGenericInheritance.hx", exactGenericInheritanceSource);
+		exactGenericInheritanceService.analyze("ExactGenericInheritance");
+		var exactGenericInheritancePosition = exactGenericInheritanceSource.indexOf("child.get") + "child.".length + 1,
+			exactGenericInheritanceHover = exactGenericInheritanceService.hover("ExactGenericInheritance.hx", exactGenericInheritancePosition),
+			exactGenericInheritanceSignature = exactGenericInheritanceService.signatureHelp("ExactGenericInheritance.hx",
+				exactGenericInheritanceSource.lastIndexOf("child.get(") + "child.get(".length);
+		if (exactGenericInheritanceHover != "get():Int"
+			|| exactGenericInheritanceSignature == null || exactGenericInheritanceSignature.label != "get():Int")
+			throw 'exact inherited generic member metadata was not substituted: hover=$exactGenericInheritanceHover, signature=${exactGenericInheritanceSignature == null ? "null" : exactGenericInheritanceSignature.label}';
 		var genericInheritanceCallSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.get(",
 			genericInheritanceCallPosition = genericInheritanceCallSource.length;
 		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceCallSource);
