@@ -3,6 +3,7 @@ package compiler.syntax;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
+import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 
 /**
@@ -11,7 +12,8 @@ import compiler.syntax.SyntaxTree.SyntaxTree;
 	The parser still owns AST construction while the CST grammar coverage is
 	being completed. This boundary deliberately does not reparse source or keep
 	AST references in syntax nodes. It validates the syntax outline against the
-	direct AST and returns the same immutable program for the current transition.
+	direct AST and independently lowers the source header for the current
+	transition.
 	Once all AST-producing parser actions have syntax payloads, this is the only
 	class that needs to change to construct AstProgram from CST nodes directly.
 */
@@ -19,7 +21,58 @@ class AstLowerer {
 	public static function lower(tree:SyntaxTree, direct:AstProgram):AstProgram {
 		validateSpans(tree);
 		validateDeclarations(tree, direct);
-		return direct;
+		return lowerHeader(tree, direct);
+	}
+
+	/**
+		Lower the source header from CST payloads. Declaration and body fields stay
+		on the direct AST until their syntax payloads are complete, so this first
+		step exercises an independent lowering path without reparsing.
+	*/
+	static function lowerHeader(tree:SyntaxTree, direct:AstProgram):AstProgram {
+		var packageName:Null<String> = null,
+			imports:Array<String> = [],
+			importAliases:Map<String, String> = [];
+		for (node in tree.grammarNodes())
+			switch node.payload {
+				case SyntaxNodePayload.PackageName(value):
+					packageName = value;
+				case SyntaxNodePayload.Import(path, alias):
+					imports.push(path);
+					if (alias != null)
+						importAliases.set(alias, path);
+				case null:
+			}
+		if (packageName == null && direct.packageName != null)
+			throw "CST/AST lowering lost the package declaration";
+		if (imports.length != direct.imports.length)
+			throw 'CST/AST lowering lost imports: expected ${direct.imports.length}, got ${imports.length}';
+		for (index in 0...imports.length)
+			if (imports[index] != direct.imports[index])
+				throw 'CST/AST lowering changed import ${direct.imports[index]}';
+		var directAliasCount = 0;
+		for (alias in direct.importAliases.keys()) {
+			directAliasCount++;
+			if (!importAliases.exists(alias) || importAliases.get(alias) != direct.importAliases.get(alias))
+				throw 'CST/AST lowering changed import alias $alias';
+		}
+		var loweredAliasCount = 0;
+		for (_ in importAliases.keys())
+			loweredAliasCount++;
+		if (loweredAliasCount != directAliasCount)
+			throw "CST/AST lowering changed import alias count";
+		return {
+			packageName: packageName,
+			imports: imports,
+			importAliases: importAliases,
+			aliases: direct.aliases,
+			enums: direct.enums,
+			enumAbstracts: direct.enumAbstracts,
+			abstracts: direct.abstracts,
+			interfaces: direct.interfaces,
+			classes: direct.classes,
+			functions: direct.functions
+		};
 	}
 
 	static function validateSpans(tree:SyntaxTree):Void {

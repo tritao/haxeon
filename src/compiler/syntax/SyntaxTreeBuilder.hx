@@ -4,6 +4,7 @@ import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
+import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 
 class SyntaxTreeDraft {
@@ -11,11 +12,13 @@ class SyntaxTreeDraft {
 	public final start:Int;
 	public var end:Int;
 	public final children:Array<SyntaxTreeDraft> = [];
+	public final payload:Null<SyntaxNodePayload>;
 
-	public function new(kind:SyntaxKind, start:Int, end:Int) {
+	public function new(kind:SyntaxKind, start:Int, end:Int, ?payload:SyntaxNodePayload) {
 		this.kind = kind;
 		this.start = start;
 		this.end = end;
+		this.payload = payload;
 	}
 }
 
@@ -27,8 +30,8 @@ class SyntaxTreeBuilder {
 	public function new(source:SourceFile)
 		this.source = source;
 
-	public function node(kind:SyntaxKind, span:SourceSpan):Void
-		drafts.push(new SyntaxTreeDraft(kind, span.start, span.end));
+	public function node(kind:SyntaxKind, span:SourceSpan, ?payload:SyntaxNodePayload):Void
+		drafts.push(new SyntaxTreeDraft(kind, span.start, span.end, payload));
 
 	public function missing(span:SourceSpan):Void
 		drafts.push(new SyntaxTreeDraft(SyntaxKind.Missing, span.start, span.end));
@@ -79,6 +82,6 @@ class SyntaxTreeBuilder {
 
 	function materialize(draft:SyntaxTreeDraft):SyntaxNode {
 		return new SyntaxNode(draft.kind, source.span(draft.start, draft.end), [],
-			[for (child in draft.children) materialize(child)]);
+			[for (child in draft.children) materialize(child)], draft.payload);
 	}
 }

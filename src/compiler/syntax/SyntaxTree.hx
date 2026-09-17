@@ -42,6 +42,12 @@ enum SyntaxKind {
 	Missing;
 }
 
+/** Source-only payload attached to grammar nodes that can already lower independently. */
+enum SyntaxNodePayload {
+	PackageName(value:String);
+	Import(path:String, alias:Null<String>);
+}
+
 /** Trivia categories retained by tooling mode. */
 enum SyntaxTriviaKind {
 	Whitespace;
@@ -104,12 +110,15 @@ class SyntaxNode {
 	public final span:SourceSpan;
 	public final children:Array<SyntaxElement>;
 	public final grammarChildren:Array<SyntaxNode>;
+	public final payload:Null<SyntaxNodePayload>;
 
-	public function new(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>, ?grammarChildren:Array<SyntaxNode>) {
+	public function new(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>, ?grammarChildren:Array<SyntaxNode>,
+			?payload:SyntaxNodePayload) {
 		this.kind = kind;
 		this.span = span;
 		this.children = children.copy();
 		this.grammarChildren = grammarChildren == null ? [] : grammarChildren.copy();
+		this.payload = payload;
 	}
 }
 

@@ -20,6 +20,7 @@ import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTreeBuilder;
 import compiler.syntax.AstLowerer;
 import compiler.Diagnostic.CompileError;
@@ -59,9 +60,9 @@ class Parser {
 	function get_cst():Null<SyntaxTree>
 		return currentCst;
 
-	inline function recordCstNode(kind:SyntaxKind, span:SourceSpan):Void {
+	inline function recordCstNode(kind:SyntaxKind, span:SourceSpan, ?payload:SyntaxNodePayload):Void {
 		if (cstBuilder != null)
-			cstBuilder.node(kind, span);
+			cstBuilder.node(kind, span, payload);
 	}
 
 	public function parseProgram():AstProgram {
@@ -70,11 +71,11 @@ class Parser {
 			var packageStart = previous().span;
 			packageName = parseQualifiedName();
 			var packageEnd = consume(TokenKind.Semicolon).span;
-			recordCstNode(SyntaxKind.PackageDeclaration, packageStart.merge(packageEnd));
+			recordCstNode(SyntaxKind.PackageDeclaration, packageStart.merge(packageEnd), SyntaxNodePayload.PackageName(packageName));
 		}
 		while (match(TokenKind.Import)) {
 			var importStart = previous().span;
-			var path = parseQualifiedName(true);
+			var path = parseQualifiedName(true), aliasName:Null<String> = null;
 			if (recovering && check(TokenKind.Dot)) {
 				advance();
 				recordExpected("import name");
@@ -84,13 +85,14 @@ class Parser {
 				advance();
 				var alias = consumeDeclarationToken("import alias");
 				if (alias.text != "<missing>") {
+					aliasName = alias.text;
 					if (importAliases.exists(alias.text))
 						fail(alias, 'Duplicate import alias "${alias.text}"');
 					importAliases.set(alias.text, path);
 				}
 			}
 			var importEnd = consume(TokenKind.Semicolon).span;
-			recordCstNode(SyntaxKind.ImportDeclaration, importStart.merge(importEnd));
+			recordCstNode(SyntaxKind.ImportDeclaration, importStart.merge(importEnd), SyntaxNodePayload.Import(path, aliasName));
 		}
 		var functions = [], aliases:Array<AstTypeAlias> = [], enums:Array<AstEnum> = [], enumAbstracts:Array<AstEnumAbstract> = [],
 			abstracts:Array<AstAbstract> = [], interfaces:Array<AstInterface> = [], classes = [];

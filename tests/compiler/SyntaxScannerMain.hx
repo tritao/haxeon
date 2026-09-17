@@ -83,6 +83,14 @@ class SyntaxScannerMain {
 			|| !grammarKinds.exists(SyntaxKind.ObjectLiteral))
 			throw "CST parser mode did not retain grammar-level structure";
 
+		var headerSource = new SourceFile("Header.hx",
+			"package demo.core;\nimport foo.Bar as Baz;\nfunction main():Void return;\n"),
+			headerAst = new Parser(new Lexer(headerSource).tokenize()).parseProgram(),
+			headerParser = new Parser(new Lexer(headerSource).tokenize(), null, ParserMode.Cst(headerSource)),
+			headerCstAst = headerParser.parseProgram();
+		if (programShape(headerCstAst) != programShape(headerAst))
+			throw "CST lowerer changed the source header AST shape";
+
 		var declarationSource = new SourceFile("Declarations.hx",
 			"class Holder { public var value:Int; public function read():Int return value; }\n"
 			+ "interface Reader { function read():Int; }\n"),
