@@ -54,14 +54,19 @@ zero/null fallback for the declared result. Generated Haxe projections read
 that diagnostic immediately after the call and throw a Haxe exception. This
 mode currently excludes throwing constructors/destructors, references as
 results, and non-trivial/STL conversions other than the explicitly supported
-`std::string_view` input adapter. A `std::string_view` parameter is lowered to
-`const char*` plus a target-sized byte length inside the generated thunk; the
-Haxe projection accepts a `String` and computes its UTF-8 byte length. The
-string is borrowed for the duration of the synchronous call, so the C++ API
-must not retain the view. Embedded NUL bytes are not supported by the current
-UTF-8 bridge. Unsupported string-view positions, such as results, pointers,
-and references, report `CXX017`. Without `--cxx-thunks`, throwing declarations
-continue to report `CXX003`, and string-view declarations report `CXX017`.
+`std::string_view` and read-only byte `std::span` input adapters. A
+`std::string_view` parameter is lowered to `const char*` plus a target-sized
+byte length inside the generated thunk; the Haxe projection accepts a `String`
+and computes its UTF-8 byte length. A `std::span<const std::byte>` or
+`std::span<const uint8_t>` parameter is lowered to `const byte*` plus a
+target-sized element count; the Haxe projection accepts `haxe.io.Bytes`. Both
+views are borrowed for the duration of the synchronous call, so the C++ API
+must not retain them. Embedded NUL bytes are not supported by the current
+UTF-8 bridge. Mutable, fixed-extent, non-byte, result, pointer, and reference
+span positions are unsupported. Unsupported string-view positions report
+`CXX017`; unsupported byte-span positions report `CXX018`. Without
+`--cxx-thunks`, throwing declarations continue to report `CXX003`, and view
+adapters report their corresponding diagnostic.
 
 With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
 class module per imported record. The generated class stores the raw opaque

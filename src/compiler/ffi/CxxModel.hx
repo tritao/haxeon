@@ -15,7 +15,15 @@ enum CxxType {
 	/** std::string_view; lowered through a generated (const char *, size_t) adapter. */
 	CxxStringView;
 
+	/** A supported read-only byte std::span; lowered through a generated (const byte *, size_t) adapter. */
+	CxxByteSpan(element:CxxSpanElement);
+
 	CxxUnsupported(raw:String, reason:String);
+}
+
+enum CxxSpanElement {
+	CxxStdByte;
+	CxxUInt8;
 }
 
 typedef CxxParameter = {

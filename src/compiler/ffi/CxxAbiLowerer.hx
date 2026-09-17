@@ -161,7 +161,7 @@ class CxxAbiLowerer {
 				metadata: [],
 				span: parameter.span
 			});
-			if (CxxTypeTools.isStringView(parameter.type))
+			if (CxxTypeTools.isStringView(parameter.type) || CxxTypeTools.isByteSpan(parameter.type))
 				result.push({
 					name: parameter.name + "__length",
 					type: Primitive("usize"),
@@ -184,6 +184,7 @@ class CxxAbiLowerer {
 			case CxxPointer(element): Pointer(lowerType(element, records, enums, aliases, false));
 			case CxxReference(element): Pointer(lowerType(element, records, enums, aliases, false));
 			case CxxStringView: Primitive("utf8");
+			case CxxByteSpan(_): Pointer(Primitive("u8"));
 			case CxxNamed(name):
 				if (!records.exists(name) && !enums.exists(name) && !aliases.exists(name))
 					throw 'CXX012 unknown type "$name"';

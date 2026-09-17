@@ -131,6 +131,13 @@ class CxxSubsetValidator {
 				message: 'std::string_view adapters are unsupported for constructors and destructors (${method.qualifiedName})',
 				span: method.span
 			});
+		if ((method.isConstructor || method.isDestructor)
+			&& CxxTypeTools.hasByteSpan([for (parameter in method.parameters) parameter.type]))
+			diagnostics.push({
+				code: "CXX018",
+				message: 'std::span byte adapters are unsupported for constructors and destructors (${method.qualifiedName})',
+				span: method.span
+			});
 		if (method.symbol.length == 0)
 			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
 		if (!method.isNoexcept && !cxxThunks)
@@ -194,6 +201,19 @@ class CxxSubsetValidator {
 						message: "std::string_view is supported only as a by-value input parameter",
 						span: span
 					});
+			case CxxType.CxxByteSpan(_):
+				if (!cxxThunks)
+					diagnostics.push({
+						code: "CXX018",
+						message: 'std::span byte adapters require a generated C++ adapter; pass --cxx-thunks=<file>',
+						span: span
+					});
+				else if (!byValue)
+					diagnostics.push({
+						code: "CXX018",
+						message: "std::span byte adapters are supported only as by-value input parameters",
+						span: span
+					});
 			case CxxType.CxxUnsupported(raw, reason):
 				diagnostics.push({code: "CXX009", message: 'unsupported C++ type "$raw": $reason', span: span});
 			case CxxType.CxxNamed(name):
@@ -218,6 +238,12 @@ class CxxSubsetValidator {
 			diagnostics.push({
 				code: "CXX017",
 				message: "std::string_view results are unsupported; return an owning std::string or a pointer/length pair",
+				span: span
+			});
+		if (cxxThunks && CxxTypeTools.isByteSpan(type))
+			diagnostics.push({
+				code: "CXX018",
+				message: "std::span byte results are unsupported; return an owning byte container or a pointer/length pair",
 				span: span
 			});
 	}

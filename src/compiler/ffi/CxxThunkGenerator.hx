@@ -4,6 +4,7 @@ import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxRecord;
+import compiler.ffi.CxxModel.CxxSpanElement;
 import compiler.ffi.CxxModel.CxxType;
 import haxe.crypto.Sha256;
 
@@ -21,19 +22,20 @@ class CxxThunkGenerator {
 
 	static function needsAdapter(parameters:Array<CxxModel.CxxParameter>):Bool {
 		for (parameter in parameters)
-			if (CxxTypeTools.isStringView(parameter.type))
+			if (CxxTypeTools.isStringView(parameter.type) || CxxTypeTools.isByteSpan(parameter.type))
 				return true;
 		return false;
 	}
 
 	public static function source(model:CxxModel):String {
 		var output = new StringBuf();
-		output.add("// Generated C++ exception thunks for Haxeon. Do not edit.\n");
+		output.add("// Generated C++ adapter thunks for Haxeon. Do not edit.\n");
 		output.add('#include "${escape(model.header)}"\n');
 		output.add("#include <cstddef>\n");
 		output.add("#include <cstdint>\n");
 		output.add("#include <cstring>\n");
 		output.add("#include <exception>\n\n");
+		output.add("#include <span>\n");
 		output.add("#include <string_view>\n\n");
 		output.add("namespace {\n");
 		output.add("thread_local char haxeon_cxx_thunk_error[512] = {};\n");
@@ -108,6 +110,9 @@ class CxxThunkGenerator {
 			if (CxxTypeTools.isStringView(parameter.type)) {
 				result.push('const char *arg$index');
 				result.push('std::size_t arg${index}__length');
+			} else if (CxxTypeTools.isByteSpan(parameter.type)) {
+				result.push('const ${spanElementType(parameter.type)} *arg$index');
+				result.push('std::size_t arg${index}__length');
 			} else
 				result.push('${cppType(parameter.type)} arg$index');
 		}
@@ -116,10 +121,22 @@ class CxxThunkGenerator {
 
 	static function callArguments(parameters:Array<CxxModel.CxxParameter>):String {
 		var result:Array<String> = [];
-		for (index in 0...parameters.length)
-			result.push(CxxTypeTools.isStringView(parameters[index].type) ? 'std::string_view(arg$index, arg${index}__length)' : 'arg$index');
+		for (index in 0...parameters.length) {
+			var type = parameters[index].type;
+			result.push(CxxTypeTools.isStringView(type) ? 'std::string_view(arg$index, arg${index}__length)' : CxxTypeTools.isByteSpan(type) ? 'std::span<const ${spanElementType(type)}>(arg$index, arg${index}__length)' : 'arg$index');
+		}
 		return result.join(", ");
 	}
+
+	static function spanElementType(type:CxxType):String
+		return switch type {
+			case CxxConst(element): spanElementType(element);
+			case CxxByteSpan(element): switch element {
+					case CxxStdByte: "std::byte";
+					case CxxUInt8: "std::uint8_t";
+				};
+			case _: throw "CXX016 expected a byte std::span";
+		};
 
 	static function cppType(type:CxxType):String {
 		return switch type {
@@ -131,6 +148,7 @@ class CxxThunkGenerator {
 			case CxxReference(element): cppType(element) + " &";
 			case CxxRValueReference(_): throw "CXX016 cannot generate a thunk for an rvalue reference";
 			case CxxStringView: throw "CXX016 std::string_view is emitted through the adapter parameter expansion";
+			case CxxByteSpan(_): throw "CXX016 byte std::span is emitted through the adapter parameter expansion";
 			case CxxUnsupported(raw, reason): throw 'CXX016 cannot generate a thunk for "$raw": $reason';
 		};
 	}

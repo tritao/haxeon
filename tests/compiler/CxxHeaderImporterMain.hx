@@ -294,6 +294,54 @@ class CxxHeaderImporterMain {
 				case _:
 					throw "std::string_view function should use UTF-8 and target-sized length arguments";
 			}
+		var spanDisabled = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+		} catch (error:Dynamic)
+			spanDisabled = Std.string(error);
+		expect(spanDisabled.indexOf("CXX018") >= 0, "std::span byte adapters should require an explicit generated adapter");
+		var span = CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_span",
+			"CxxSpanFixture", null, null, "c++20", null, null, false, false, false, true),
+			spanText = HxiWriter.write(span.hxi, "// test"),
+			spanSource = CxxThunkGenerator.source(span.model),
+			spanSources = CxxProjection.sources(span.model, span.hxi, null, span.plans),
+			spanProjection = Lambda.find(spanSources, source -> source.file == "Buffer.hx").source,
+			spanFunctions = Lambda.find(spanSources, source -> source.file == "CxxSpanFixtureFunctions.hx").source,
+			spanMethod = Lambda.find(span.model.records[0].methods, method -> method.name == "byteCount"),
+			spanFunction = Lambda.find(span.model.functions, functionModel -> functionModel.name == "byteCount"),
+			spanMethodPlan = spanMethod == null
+				|| spanMethod.loweredName == null ? null : Lambda.find(span.plans, plan -> plan.name == spanMethod.loweredName),
+			spanFunctionPlan = spanFunction == null
+				|| spanFunction.loweredName == null ? null : Lambda.find(span.plans, plan -> plan.name == spanFunction.loweredName);
+		expect(spanMethod != null
+			&& spanFunction != null
+			&& CxxTypeTools.isByteSpan(spanMethod.parameters[0].type)
+			&& CxxTypeTools.isByteSpan(spanFunction.parameters[0].type)
+			&& spanMethod.thunkSymbol != null
+			&& spanFunction.thunkSymbol != null
+			&& spanText.indexOf("value: ptr<u8>, value__length: usize") >= 0
+			&& spanSource.indexOf("std::span<const std::byte>(arg0, arg0__length)") >= 0
+			&& spanSource.indexOf("std::span<const std::uint8_t>(arg0, arg0__length)") >= 0
+			&& spanProjection.indexOf("public function byteCount(value:haxe.io.Bytes):Int") >= 0
+			&& spanProjection.indexOf("haxe.Int64.ofInt(value.length)") >= 0
+			&& spanFunctions.indexOf("public static function byteCount(value:haxe.io.Bytes):Int") >= 0,
+			"read-only byte std::span should lower to a thunked pointer/length ABI and a Bytes projection");
+		if (spanMethodPlan != null)
+			switch spanMethodPlan.arguments {
+				case [
+					PointerValue(_, _, _, _),
+					PointerValue(64, false, null, null),
+					IntegerValue(64, Unsigned)
+				]:
+				case _:
+					throw "std::span byte method should use a this pointer and target-sized byte pointer/length arguments";
+			}
+		if (spanFunctionPlan != null)
+			switch spanFunctionPlan.arguments {
+				case [PointerValue(64, false, null, null), IntegerValue(64, Unsigned)]:
+				case _:
+					throw "std::span byte function should use target-sized byte pointer/length arguments";
+			}
 	}
 
 	static function expect(value:Bool, message:String):Void {

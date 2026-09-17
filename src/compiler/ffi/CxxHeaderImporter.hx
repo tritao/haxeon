@@ -15,6 +15,7 @@ import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxParameter;
 import compiler.ffi.CxxModel.CxxRecord;
+import compiler.ffi.CxxModel.CxxSpanElement;
 import compiler.ffi.CxxModel.CxxType;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
@@ -300,6 +301,11 @@ private class CxxAstBuilder {
 			value = StringTools.trim(value.substring(value.indexOf(" ") + 1));
 		if (isStringViewName(value))
 			return CxxType.CxxStringView;
+		var spanElement = byteSpanElement(value);
+		if (spanElement != null)
+			return CxxType.CxxByteSpan(spanElement);
+		if (StringTools.startsWith(compactType(value), "std::span<"))
+			return CxxType.CxxUnsupported(value, "only dynamic read-only byte spans are supported");
 		if (value.indexOf("<") >= 0 || value.indexOf(">") >= 0)
 			return CxxType.CxxUnsupported(value, "dependent or template types are not supported");
 		var primitive = primitiveType(value);
@@ -339,11 +345,32 @@ private class CxxAstBuilder {
 	}
 
 	static function isStringViewName(value:String):Bool {
-		value = StringTools.replace(StringTools.trim(value), " ", "");
+		value = compactType(value);
 		return value == "std::string_view"
 			|| value == "std::basic_string_view<char>"
 			|| value == "std::basic_string_view<char,std::char_traits<char>>";
 	}
+
+	static function byteSpanElement(value:String):Null<CxxSpanElement> {
+		value = compactType(value);
+		var prefix = "std::span<const";
+		if (!StringTools.startsWith(value, prefix) || !StringTools.endsWith(value, ">"))
+			return null;
+		var contents = value.substring(prefix.length, value.length - 1),
+			comma = contents.indexOf(","),
+			element = comma < 0 ? contents : contents.substring(0, comma),
+			extent = comma < 0 ? "" : contents.substring(comma + 1);
+		if (extent.length != 0 && extent != "std::dynamic_extent" && extent != "18446744073709551615" && extent != "18446744073709551615UL")
+			return null;
+		return switch element {
+			case "std::byte": CxxSpanElement.CxxStdByte;
+			case "uint8_t" | "std::uint8_t" | "unsignedchar": CxxSpanElement.CxxUInt8;
+			case _: null;
+		};
+	}
+
+	static function compactType(value:String):String
+		return StringTools.replace(StringTools.trim(value), " ", "");
 
 	static function typeName(node:Dynamic):String
 		return stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "desugaredQualType"),

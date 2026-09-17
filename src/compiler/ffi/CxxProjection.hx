@@ -305,6 +305,20 @@ class CxxProjection {
 			calls.push(lengthValue.haxeType == "haxe.Int64" ? 'haxe.Int64.ofInt($bytesName.length)' : '$bytesName.length');
 			return cursor + 2;
 		}
+		if (CxxTypeTools.isByteSpan(parameter.type)) {
+			var spanValue = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile),
+				lengthValue = HxiHaxeEmitter.project(nativeArguments[cursor + 1], false, profile);
+			if (spanValue == null
+				|| spanValue.haxeType != "haxe.io.Bytes"
+				|| lengthValue == null
+				|| lengthValue.haxeType != "Int"
+				&& lengthValue.haxeType != "haxe.Int64")
+				throw 'CXX201 unsupported Haxe std::span projection for $owner parameter ${index + 1}';
+			arguments.push('$argumentName:haxe.io.Bytes');
+			calls.push(argumentName);
+			calls.push(lengthValue.haxeType == "haxe.Int64" ? 'haxe.Int64.ofInt($argumentName.length)' : '$argumentName.length');
+			return cursor + 2;
+		}
 		var projected = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile);
 		if (projected == null)
 			throw 'CXX201 unsupported Haxe projection for $owner parameter ${index + 1}';
