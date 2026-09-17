@@ -27,20 +27,29 @@ class CompilationTransaction {
 	public function run():CompileResult {
 		var transactionStartedAt = Sys.time() * 1000.0;
 		compiler.publication.beforeCompile();
-		var snapshot = compiler.snapshot();
+		var generation = compiler.currentSourceGeneration(),
+			snapshot = compiler.snapshot();
 		var snapshotDoneAt = Sys.time() * 1000.0;
 		var previousAssembler = compiler.assembler;
 		var candidate = compiler.createCandidate(snapshot, startingAssembler);
+		if (!compiler.isSourceGenerationCurrent(generation))
+			throw new CancellationError();
 		try {
 			var context = new CompilationContext(candidate, indexSemantics);
 			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, indexSemantics);
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			compiler.adoptCandidate(candidate);
 			compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			if (Std.isOfType(error, CancellationError))
 				throw error;
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

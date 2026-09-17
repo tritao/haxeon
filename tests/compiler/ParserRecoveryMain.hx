@@ -1,4 +1,5 @@
 import compiler.service.LanguageService;
+import compiler.Compiler;
 import compiler.service.CancellationError;
 import compiler.service.CancellationToken;
 import compiler.service.RecoveryEngine;
@@ -99,6 +100,7 @@ class ParserRecoveryMain {
 		assertTolerantDeclarationSnapshot();
 		assertRecoveryCancellation();
 		assertSupersededRecovery();
+		assertTransactionSourceGeneration();
 		assertDiagnosticOrigins();
 		assertTruncationRecovery();
 		assertTolerantTruncationTyping();
@@ -2133,6 +2135,46 @@ class ParserRecoveryMain {
 			throw "superseded recovery published stale syntax or diagnostics";
 	}
 
+	static function assertTransactionSourceGeneration():Void {
+		var compiler = new Compiler();
+		compiler.update("TransactionGeneration.hx", "function main():Int return 1;");
+		compiler.analyze("TransactionGeneration");
+		var state = compiler.modules.get("TransactionGeneration");
+		if (state == null || state.ast == null)
+			throw "transaction generation fixture did not establish an exact snapshot";
+
+		var nextSource = "function main():Int return 2;",
+			analysisToken = new SourceSupersedingToken(compiler, "TransactionGeneration.hx", nextSource),
+			cancelled = false;
+		try
+			compiler.analyze("TransactionGeneration", analysisToken)
+		catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled
+			|| state.source.text != nextSource
+			|| state.ast != null
+			|| state.semanticModel != null)
+			throw "analysis published a candidate after its source generation was superseded";
+
+		var compile = new Compiler();
+		compile.update("CachedGeneration.hx", "function main():Int return 1;");
+		compile.compile("CachedGeneration");
+		var compileState = compile.modules.get("CachedGeneration"),
+			compileSource = "function main():Int return 3;",
+			compileToken = new SourceSupersedingToken(compile, "CachedGeneration.hx", compileSource);
+		cancelled = false;
+		try
+			compile.compile("CachedGeneration", compileToken)
+		catch (error:CancellationError)
+			cancelled = true;
+		if (!cancelled
+			|| compileState == null
+			|| compileState.source.text != compileSource
+			|| compileState.ast != null
+			|| compileState.semanticModel != null)
+			throw "cached compilation returned a result after its source generation was superseded";
+	}
+
 	static function assertDiagnosticOrigins():Void {
 		var parserService = new LanguageService();
 		parserService.update("ParserDiagnostic.hx", "function main():Void { var value:");
@@ -2221,5 +2263,27 @@ class ParserRecoveryMain {
 			if (Typer.typeRecovered(program) == null)
 				throw 'tolerant typing abandoned ordinary prefix $end';
 		}
+	}
+}
+
+class SourceSupersedingToken extends CancellationToken {
+	final compiler:Compiler;
+	final path:String;
+	final source:String;
+	var first = true;
+
+	public function new(compiler:Compiler, path:String, source:String) {
+		super();
+		this.compiler = compiler;
+		this.path = path;
+		this.source = source;
+	}
+
+	public override function check():Void {
+		if (first) {
+			first = false;
+			compiler.update(path, source);
+		}
+		super.check();
 	}
 }

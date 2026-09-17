@@ -12,6 +12,8 @@ import compiler.semantic.SemanticProgram;
 /** Compiler-owned semantic state captured before staging a publication. */
 typedef CompilerSnapshot = {
 	final modules:Map<String, ModuleState>;
+	/** Live module objects corresponding to the detached transactional copies. */
+	final originalModules:Map<String, ModuleState>;
 	final types:TypeRegistry;
 	final objectCache:Map<String, IrObject>;
 	final lastTypedProgram:Null<TypedProgram>;

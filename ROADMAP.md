@@ -133,6 +133,11 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   order current-valid, current-recovered, then last-known-good. Edits publish
   a recovered AST, tokens, and editor-only semantic model immediately; the
   recovered model never becomes authoritative workspace state.
+- [~] Analysis and build transactions now detach module state at their snapshot
+  boundary, retain published object identity for untouched modules, and reject
+  candidates whose source/configuration generation was superseded. This keeps
+  source, semantic artifacts, diagnostics, and revisions coherent while work is
+  in flight; immutable publication before parallel analysis remains future work.
 - [~] Semantic index construction now has a dedicated `SemanticIndexBuilder`,
   shared exhaustive typed-AST traversal, and an immutable query-state snapshot
   detached from the construction workspace. Token-only completion-context

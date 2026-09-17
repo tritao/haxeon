@@ -20,10 +20,13 @@ class AnalysisTransaction {
 	}
 
 	public function run():AnalysisResult {
-		var snapshot = compiler.snapshot(),
+		var generation = compiler.currentSourceGeneration(),
+			snapshot = compiler.snapshot(),
 			candidate = compiler.createCandidate(snapshot, null),
 			context = new CompilationContext(candidate),
 			startedAt = Sys.time() * 1000.0;
+		if (!compiler.isSourceGenerationCurrent(generation))
+			throw new CancellationError();
 		var diagnosticWork = [entryModule],
 			diagnosticSeen:Map<String, Bool> = [],
 			diagnosticCursor = 0;
@@ -39,6 +42,8 @@ class AnalysisTransaction {
 		}
 		try {
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			context.setLastTypedProgram(frontend.typedProgram);
 			for (name in frontend.moduleNames) {
 				var state:ModuleState = candidate.modules.get(name);
@@ -47,6 +52,8 @@ class AnalysisTransaction {
 					state.captureLastGoodSnapshot();
 				}
 			}
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			compiler.adoptCandidate(candidate);
 			var diagnosticModules:Array<String> = [];
 			for (name => state in candidate.modules) {
@@ -62,6 +69,8 @@ class AnalysisTransaction {
 				elapsedMs: Sys.time() * 1000.0 - startedAt
 			};
 		} catch (error:Dynamic) {
+			if (!compiler.isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			if (Std.isOfType(error, CancellationError))
 				throw error;
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

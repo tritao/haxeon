@@ -27,6 +27,7 @@ import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.service.CancellationToken;
+import compiler.service.CancellationError;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
@@ -201,6 +202,9 @@ class Compiler {
 	var cachedCompileEntry:Null<String>;
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
+	/** Snapshot metadata used to retain live objects for untouched modules. */
+	var snapshotModules:Null<Map<String, ModuleState>>;
+	var snapshotOrigins:Null<Map<String, ModuleState>>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration) {
 		semanticWorkspace = new SemanticWorkspace(modules);
@@ -285,6 +289,14 @@ class Compiler {
 	public function nativeConfiguration():Array<NativeFunction> {
 		return natives.configuration();
 	}
+
+	/** Monotonic source/configuration generation used by transactional publication. */
+	public function currentSourceGeneration():Int
+		return sourceGeneration;
+
+	/** Whether work captured at a source generation may still be published. */
+	public function isSourceGenerationCurrent(generation:Int):Bool
+		return sourceGeneration == generation;
 
 	/** Parse and register one immutable target-specific ABI interface before compilation. */
 	public function addFfiInterface(path:String, source:String):Void {
@@ -592,14 +604,17 @@ class Compiler {
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
-		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
+		var generation = sourceGeneration,
+			cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking
 			&& cached != null
-			&& cachedCompileGeneration == sourceGeneration
+			&& cachedCompileGeneration == generation
 			&& cachedEntry != null
 			&& cachedEntry == entryModule) {
 			if (token != null)
 				token.check();
+			if (!isSourceGenerationCurrent(generation))
+				throw new CancellationError();
 			return {
 				ir: cached.ir,
 				module: cached.module,
@@ -691,13 +706,17 @@ class Compiler {
 
 	function snapshot():CompilerSnapshot {
 		var moduleCopies:Map<String, ModuleState> = [],
+			originalModules:Map<String, ModuleState> = [],
 			objectCopies:Map<String, IrObject> = [];
-		for (name => state in modules)
-			moduleCopies.set(name, state);
+		for (name => state in modules) {
+			originalModules.set(name, state);
+			moduleCopies.set(name, state.copy());
+		}
 		for (name => object in objectCache)
 			objectCopies.set(name, object);
 		return {
 			modules: moduleCopies,
+			originalModules: originalModules,
 			types: types.copy(),
 			objectCache: objectCopies,
 			lastTypedProgram: lastTypedProgram,
@@ -718,6 +737,8 @@ class Compiler {
 			candidate.modules.remove(name);
 		for (name => state in snapshot.modules)
 			candidate.modules.set(name, state);
+		candidate.snapshotModules = snapshot.modules;
+		candidate.snapshotOrigins = snapshot.originalModules;
 		candidate.types = snapshot.types.copy();
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
@@ -733,8 +754,11 @@ class Compiler {
 	function adoptCandidate(candidate:Compiler):Void {
 		for (name in [for (name in modules.keys()) name])
 			modules.remove(name);
-		for (name => state in candidate.modules)
-			modules.set(name, state);
+		for (name => state in candidate.modules) {
+			var origin = candidate.snapshotOrigins == null ? null : candidate.snapshotOrigins.get(name),
+				originalSnapshot = candidate.snapshotModules == null ? null : candidate.snapshotModules.get(name);
+			modules.set(name, origin != null && originalSnapshot == state ? origin : state);
+		}
 		types = candidate.types;
 		objectCache = candidate.objectCache;
 		lastTypedProgram = candidate.lastTypedProgram;
