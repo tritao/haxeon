@@ -560,8 +560,8 @@ class LanguageService {
 					scanRecoveredStatementReferences(nested, references);
 			case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _),
 				VarDeclaration(_, _, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _),
-				Return(_, _), Throw(_, _), Expression(_, _):
-			}
+				Return(_, _), Throw(_, _), Expression(_, _): {}
+		}
 	}
 
 	static function scanRecoveredExpressionReferences(expression:AstExpression, references:Map<String, Bool>):Void {
@@ -580,8 +580,15 @@ class LanguageService {
 			case Lambda(_, statements, _):
 				for (nested in statements)
 					scanRecoveredStatementReferences(nested, references);
-			default:
-			}
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+				ErrorExpression(_), NativeLayoutQuery(_, _, _, _), NewMap(_, _, _): {}
+			case Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
+				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
+				Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Negate(_, _), Not(_, _), ClosureCall(_, _, _),
+				PostfixIncrement(_, _, _), And(_, _, _), Or(_, _, _), Conditional(_, _, _, _), ThrowExpression(_, _), SwitchExpression(_, _, _, _),
+				Cast(_, _, _), NewArray(_, _, _), ObjectLiteral(_, _), ArrayLiteral(_, _), MapLiteral(_, _), ArrayComprehension(_, _, _, _, _, _),
+				MapComprehension(_, _, _, _, _, _), Range(_, _, _), Index(_, _, _): {}
+		}
 		for (child in AstChildren.expressions(expression))
 			scanRecoveredExpressionReferences(child, references);
 	}

@@ -3426,8 +3426,38 @@ class SemanticIndexBuilder {
 		if (previous == TokenKind.Arrow)
 			return functionTypeResultAt(index);
 		if (previous == TokenKind.Comma)
-			return insideTypeArguments(index) || insideFunctionType(index) || precededByEither(TokenKind.Extends, TokenKind.Implements, index);
+			return insideTypeArguments(index) || insideFunctionType(index)
+				|| precededByEither(TokenKind.Extends, TokenKind.Implements, index)
+				|| startsCastTarget(index);
 		return precededBy(TokenKind.Import, index) && followedBy(TokenKind.Semicolon, index);
+	}
+
+	/** Whether the identifier after this comma is the target of cast(value, T). */
+	function startsCastTarget(index:Int):Bool {
+		if (index < 2 || tokens[index - 1].kind != TokenKind.Comma)
+			return false;
+		var depth = 0;
+		var cursor = index - 2;
+		while (cursor >= 0) {
+			var token = tokens[cursor];
+			switch token.kind {
+				case TokenKind.RightParen:
+					depth++;
+				case TokenKind.LeftParen:
+					if (depth > 0)
+						depth--;
+					else
+						return cursor > 0
+							&& tokens[cursor - 1].kind == TokenKind.Identifier
+							&& tokens[cursor - 1].text == "cast";
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace:
+					if (depth == 0)
+						return false;
+				default:
+			}
+			cursor--;
+		}
+		return false;
 	}
 
 	/** Whether the parenthesized group at open starts a source function type. */
