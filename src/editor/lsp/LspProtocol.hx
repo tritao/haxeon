@@ -1106,7 +1106,20 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var locations = service.references(compilerPath(document), positionOffset(document, position(request)), token);
+		var params:Dynamic = required(request, "params"),
+			context:Dynamic = Reflect.field(params, "context"),
+			includeDeclaration = context != null && Reflect.field(context, "includeDeclaration") == true,
+			path = compilerPath(document),
+			offset = positionOffset(document, position(request)),
+			locations = service.references(path, offset, token);
+		if (!includeDeclaration) {
+			var declaration = service.definition(path, offset, token);
+			if (declaration != null)
+				locations = [for (location in locations)
+					if (location.path != declaration.path
+						|| location.span.start != declaration.span.start
+						|| location.span.end != declaration.span.end) location];
+		}
 		return [
 			for (location in locations)
 				locationJson(location.path, location.span.start, location.span.end)

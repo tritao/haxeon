@@ -523,6 +523,24 @@ class LspProtocolMain {
 		}));
 		if (highlights.result.length != 2 || highlights.result[0].kind != 3 || highlights.result[1].kind != 2)
 			throw "LSP document highlights did not classify declaration and read occurrences";
+		var referencesWithoutDeclaration = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 6,
+			method: "textDocument/references",
+			params: {textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 2}}
+		})),
+			referencesWithDeclaration = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 7,
+			method: "textDocument/references",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.lastIndexOf("answer") + 2},
+				context: {includeDeclaration: true}
+			}
+		}));
+		if (referencesWithoutDeclaration.result.length != 1 || referencesWithDeclaration.result.length != 2)
+			throw "LSP references did not honor context.includeDeclaration";
 		var localHints = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 50,
