@@ -367,11 +367,45 @@ function main():Int {
 	catch (error:Dynamic)
 		malformedObjectRejected = true;
 	malformedArena.dispose();
+	var invalidPrototypeGeneration = new HlMetadataGeneration(128, 1),
+		invalidPrototypeType = invalidPrototypeGeneration.builder.primitive(HlTypeKind.Int32Type),
+		invalidPrototypeModule = invalidPrototypeGeneration.defineModule([RawPtr.nullPtr()], [invalidPrototypeType]),
+		invalidPrototypeObject = invalidPrototypeGeneration.builder.objectType(RawPtr.nullPtr(), RawPtr.nullPtr(), [], [
+			{
+				name: RawPtr.nullPtr(),
+				findex: 99,
+				pindex: 0,
+				hashedName: 0
+			}
+		], [], RawPtr.nullPtr(), invalidPrototypeModule, RawPtr.nullPtr());
+	invalidPrototypeGeneration.addType(invalidPrototypeType);
+	invalidPrototypeGeneration.addType(invalidPrototypeObject);
+	invalidPrototypeGeneration.addFunctionDescriptor({
+		findex: 0,
+		nregs: 0,
+		nops: 0,
+		reference: 0,
+		nassigns: 0,
+		type: invalidPrototypeType,
+		regs: RawPtr.nullPtr(),
+		ops: RawPtr.nullPtr(),
+		debug: RawPtr.nullPtr(),
+		assigns: RawPtr.nullPtr(),
+		object: RawPtr.nullPtr(),
+		fieldName: RawPtr.nullPtr(),
+		fieldReference: RawPtr.nullPtr()
+	});
+	var invalidPrototypeRejected = false;
+	try
+		invalidPrototypeGeneration.publish()
+	catch (error:Dynamic)
+		invalidPrototypeRejected = true;
+	invalidPrototypeGeneration.dispose();
 	invalidGeneration.dispose();
 	generation.dispose();
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected && dispatchCorrect
-		&& initializerRejected && slotRejected && malformedObjectRejected ? 42 : 1;
+		&& initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
 }
