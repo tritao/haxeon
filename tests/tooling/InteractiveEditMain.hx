@@ -83,8 +83,87 @@ class InteractiveEditMain {
 			}
 
 		assertRecoveryEquivalence();
+		assertCompoundRecoveryEquivalence();
 
 		Sys.println('PASS: ${tails.length + 7} interactive edits retained recovery queries');
+	}
+
+	static function assertCompoundRecoveryEquivalence():Void {
+		var switchService = new LanguageService(),
+			switchValid = "class SwitchBox { public var member:Int; } enum Choice { Ready(value:SwitchBox); Empty; } function main():Void { var choice:Choice = Choice.Ready(new SwitchBox()); switch (choice) { case Ready(value): value.member; case Empty: } }";
+		switchService.update("CompoundRecovery.hx", switchValid);
+		switchService.compile("CompoundRecovery");
+		var switchValidState = switchService.compiler.modules.get("CompoundRecovery"),
+			switchBindingPosition = switchValid.indexOf("Ready(value)") + "Ready(".length + 1,
+			switchBindingUsePosition = switchValid.indexOf("value.member") + 1,
+			switchValidBindingId = switchValidState.semanticModel.index.symbolIdAt(switchBindingPosition),
+			switchValidBindingUseId = switchValidState.semanticModel.index.symbolIdAt(switchBindingUsePosition);
+		if (switchValidBindingId == null || switchValidBindingUseId == null
+			|| Std.string(switchValidBindingId) != Std.string(switchValidBindingUseId))
+			throw "switch recovery fixture did not establish a payload binding identity";
+
+		var switchMalformed = "class SwitchBox { public var member:Int; } enum Choice { Ready(value:SwitchBox); Empty; } function main():Void { var choice:Choice = Choice.Ready(new SwitchBox()); switch (choice) { case Ready(value): broken.unresolved().thing; value.member; case Empty: } }";
+		switchService.update("CompoundRecovery.hx", switchMalformed);
+		var switchPosition = switchMalformed.indexOf("value.member") + "value.".length,
+			switchCompletion = switchService.completeResult("CompoundRecovery.hx", switchPosition),
+			foundSwitchMember = false;
+		for (item in switchCompletion.items)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundSwitchMember = true;
+		var switchRecoveredState = switchService.compiler.modules.get("CompoundRecovery"),
+			switchRecoveredModel = switchRecoveredState.recoveredSemanticModel,
+			switchRecoveredBindingId = switchRecoveredModel == null ? null : switchRecoveredModel.index.symbolIdAt(switchMalformed.indexOf("Ready(value)") + "Ready(".length + 1),
+			switchRecoveredBindingUseId = switchRecoveredModel == null ? null : switchRecoveredModel.index.symbolIdAt(switchMalformed.indexOf("value.member") + 1);
+		if (!foundSwitchMember || !switchCompletion.isIncomplete
+			|| switchRecoveredModel == null || switchRecoveredBindingId == null || switchRecoveredBindingUseId == null
+			|| Std.string(switchRecoveredBindingId) != Std.string(switchRecoveredBindingUseId))
+			throw "malformed switch recovery lost the payload scope or current member completion";
+
+		switchService.update("CompoundRecovery.hx", switchValid);
+		switchService.compile("CompoundRecovery");
+		var switchRepairedState = switchService.compiler.modules.get("CompoundRecovery"),
+			switchRepairedBindingId = switchRepairedState.semanticModel.index.symbolIdAt(switchBindingPosition);
+		if (switchRepairedBindingId == null || Std.string(switchRepairedBindingId) != Std.string(switchValidBindingId)
+			|| switchService.completeResult("CompoundRecovery.hx", switchValid.length).isIncomplete)
+			throw "repair did not restore the exact switch payload identity";
+
+		var tryService = new LanguageService(),
+			tryValid = "class CatchBox { public var member:Int; } function main():Void { try { var value:CatchBox = new CatchBox(); value.member; } catch (error:CatchBox) { error.member; } }";
+		tryService.update("TryCompoundRecovery.hx", tryValid);
+		tryService.compile("TryCompoundRecovery");
+		var tryValidState = tryService.compiler.modules.get("TryCompoundRecovery"),
+			tryBindingPosition = tryValid.indexOf("catch (error:") + "catch (".length + 1,
+			tryBindingUsePosition = tryValid.indexOf("error.member") + 1,
+			tryValidBindingId = tryValidState.semanticModel.index.symbolIdAt(tryBindingPosition),
+			tryValidBindingUseId = tryValidState.semanticModel.index.symbolIdAt(tryBindingUsePosition);
+		if (tryValidBindingId == null || tryValidBindingUseId == null
+			|| Std.string(tryValidBindingId) != Std.string(tryValidBindingUseId))
+			throw "try/catch recovery fixture did not establish a catch binding identity";
+
+		var tryMalformed = "class CatchBox { public var member:Int; } function main():Void { try { broken.unresolved().thing; } catch (error:CatchBox) { error.member; } }";
+		tryService.update("TryCompoundRecovery.hx", tryMalformed);
+		var tryPosition = tryMalformed.indexOf("error.member") + "error.".length,
+			tryCompletion = tryService.completeResult("TryCompoundRecovery.hx", tryPosition),
+			foundTryMember = false;
+		for (item in tryCompletion.items)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundTryMember = true;
+		var tryRecoveredState = tryService.compiler.modules.get("TryCompoundRecovery"),
+			tryRecoveredModel = tryRecoveredState.recoveredSemanticModel,
+			tryRecoveredBindingId = tryRecoveredModel == null ? null : tryRecoveredModel.index.symbolIdAt(tryMalformed.indexOf("catch (error:") + "catch (".length + 1),
+			tryRecoveredBindingUseId = tryRecoveredModel == null ? null : tryRecoveredModel.index.symbolIdAt(tryMalformed.indexOf("error.member") + 1);
+		if (!foundTryMember || !tryCompletion.isIncomplete
+			|| tryRecoveredModel == null || tryRecoveredBindingId == null || tryRecoveredBindingUseId == null
+			|| Std.string(tryRecoveredBindingId) != Std.string(tryRecoveredBindingUseId))
+			throw "malformed try/catch recovery lost the catch scope or current member completion";
+
+		tryService.update("TryCompoundRecovery.hx", tryValid);
+		tryService.compile("TryCompoundRecovery");
+		var tryRepairedState = tryService.compiler.modules.get("TryCompoundRecovery"),
+			tryRepairedBindingId = tryRepairedState.semanticModel.index.symbolIdAt(tryBindingPosition);
+		if (tryRepairedBindingId == null || Std.string(tryRepairedBindingId) != Std.string(tryValidBindingId)
+			|| tryService.completeResult("TryCompoundRecovery.hx", tryValid.length).isIncomplete)
+			throw "repair did not restore the exact catch binding identity";
 	}
 
 	static function assertRecoveryEquivalence():Void {
