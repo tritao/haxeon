@@ -140,6 +140,23 @@ class RuntimePatchTransactionMain {
 			throw "public Haxeon runtime did not materialize an object constant";
 		Runtime.dispose(loaded);
 	}
+
+	static function testFailedInitializerCleanup():Void {
+		var code = new HlCode();
+		code.strings = ["failed initializer"];
+		code.types = [Simple(HlType.Bytes), Simple(HlType.Dyn), Simple(HlType.Void), Function([], 2)];
+		code.functions = [new HlFunction(3, 0, [0, 1], [LoadString(0, 0), ToDyn(1, 0), Throw(1)])];
+		code.entryPoint = 0;
+		var identity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["__init" => 0], ["__init" => 101]),
+			rejected = false;
+		try
+			Runtime.load(HlWriter.encode(code), identity);
+		catch (error:Dynamic)
+			rejected = true;
+		if (!rejected || Runtime.pendingRetirementCount != 0)
+			throw "failed Haxeon module initialization leaked its registered runtime module";
+		Sys.println("PASS: failed Haxeon module initialization cleans up its registered runtime module");
+	}
 	#end
 
 	static function main():Void {
@@ -288,6 +305,7 @@ class RuntimePatchTransactionMain {
 		testBoundFunctionField();
 		testInheritedInterfaceMethodDispatch();
 		testModuleInitializer();
+		testFailedInitializerCleanup();
 		testPublicObjectConstant();
 		#end
 		Sys.println("PASS: host patch transactions stage, roll back, and commit exactly once");

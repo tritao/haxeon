@@ -45,7 +45,7 @@ class LoadedModule {
 	var closeRequested = false;
 	var borrowers = 0;
 	var deferredDispose:Null<RuntimeModuleHandle->Void>;
-	@:allow(runtime.Runtime)
+	@:allow(runtime.Runtime, runtime.HaxeRuntimeModuleLoader)
 	#if haxeon
 	function new(handle:RuntimeModuleHandle, model:HlModule, identity:HlRuntimeManifest, metadata:HlMetadataGeneration, dispatch:HlRuntimeDispatchTable) {
 		if (metadata == null)

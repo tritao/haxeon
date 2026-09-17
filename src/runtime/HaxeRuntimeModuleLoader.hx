@@ -37,6 +37,7 @@ class HaxeRuntimeModuleLoader {
 			throw new RuntimeError(RuntimeStatus.BadFormat, 'Haxeon rejected the native metadata: ${Std.string(error)}');
 		}
 		var module:Null<HlRuntimeModuleHandle> = null;
+		var loaded:Null<LoadedModule> = null;
 		try {
 			var publication = metadata.snapshot(),
 				dispatch = new HlRuntimeDispatchTable(metadata.arena, [for (entry in identity.entries) entry.stableId],
@@ -44,14 +45,19 @@ class HaxeRuntimeModuleLoader {
 			module = kernel.loadCodeManifest(publication.nativeCode, bytes, identity.moduleId, identity.revision, dispatch);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
+			// Register the native handle with the Haxe lifecycle owner before any
+			// GC-sensitive initialization can fail. A blocked cleanup must retain
+			// both the handle and its metadata arena for a later retry.
+			loaded = new LoadedModule(module, model, identity, metadata, dispatch);
 			HlTypeLayout.publishObjectPrototypes(publication.types, publication.typeCount, kernel);
 			metadata.constantDescriptors.initialize(function(index) return kernel.initializeConstant(cast module, index));
 			initializeModule(module, model, identity, dispatch);
-			return new LoadedModule(module, model, identity, metadata, dispatch);
+			return loaded;
 		} catch (error:Dynamic) {
-			if (module != null)
-				kernel.dispose(cast module);
-			metadata.dispose();
+			if (loaded != null)
+				Runtime.dispose(loaded);
+			else
+				metadata.dispose();
 			throw error;
 		}
 	}
