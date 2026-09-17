@@ -42,6 +42,10 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
+import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxTree;
+import compiler.syntax.SyntaxTree.SyntaxTriviaKind;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticOrigin;
 import compiler.documentation.Documentation;
@@ -181,6 +185,7 @@ typedef DocumentLink = {
 
 private typedef StructuralIndexEntry = {
 	final revision:Int;
+	final syntaxTree:SyntaxTree;
 	final folds:Array<FoldingRegion>;
 	final containers:Array<SourceSpan>;
 }
@@ -3446,109 +3451,96 @@ class LanguageService {
 		var folds:Array<FoldingRegion> = [],
 			containers:Array<SourceSpan> = [],
 			snapshot = editorSnapshot(state),
-			tokens = snapshot == null ? null : snapshot.tokens,
-			source = snapshot == null ? state.source : snapshot.source;
-		if (tokens != null) {
-			var braces:Array<compiler.syntax.Token> = [],
-				firstImport:Null<Int> = null,
-				lastImport:Null<Int> = null,
-				inImport = false;
-			for (lexicalToken in tokens) {
-				if (token != null)
-					token.check();
-				switch lexicalToken.kind {
-					case LeftBrace:
-						braces.push(lexicalToken);
-					case RightBrace:
-						if (braces.length > 0) {
-							var open = braces.pop(),
-								span = source.span(open.span.start, lexicalToken.span.end);
-							folds.push({span: span, kind: "region"});
-							containers.push(span);
-						}
-					case Import:
-						inImport = true;
-						if (firstImport == null)
-							firstImport = lexicalToken.span.start;
-					case Semicolon:
-						if (inImport) {
-							lastImport = lexicalToken.span.end;
-							inImport = false;
-						}
-					default:
-				}
-			}
-			for (open in braces) {
-				var span = source.span(open.span.start, source.bytes.length);
-				folds.push({span: span, kind: "region"});
-				containers.push(span);
-			}
-			if (firstImport != null && lastImport != null)
-				folds.push({span: source.span(firstImport, lastImport), kind: "imports"});
-		}
-		for (span in commentSpans(source.text, source, token)) {
+			source = snapshot == null ? state.source : snapshot.source,
+			syntaxTree = snapshot == null ? SyntaxTree.fromSource(source) : syntaxTreeForSnapshot(snapshot, token);
+		if (syntaxTree == null)
+			syntaxTree = SyntaxTree.fromSource(source);
+		indexCstStructure(syntaxTree, folds, containers, token);
+		for (span in commentSpans(syntaxTree, token)) {
 			folds.push({span: span, kind: "comment"});
 			containers.push(span);
 		}
-		addConditionalFolds(source, folds, containers, token);
-		for (symbol in indexedWorkspaceSymbols(state, token)) {
-			if (token != null)
-				token.check();
-			containers.push(symbol.span);
-		}
+		addConditionalFolds(syntaxTree, folds, containers, token);
 		containers.push(source.span(0, source.bytes.length));
 		folds.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
-		structuralIndex.set(state.name, cached = {revision: state.revision, folds: folds, containers: containers});
+		structuralIndex.set(state.name, cached = {
+			revision: state.revision,
+			syntaxTree: syntaxTree,
+			folds: folds,
+			containers: containers
+		});
 		return cached;
 	}
 
-	static function commentSpans(text:String, file:compiler.Source.SourceFile, ?token:CancellationToken):Array<SourceSpan> {
-		var result:Array<SourceSpan> = [], position = 0;
-		while (position + 1 < text.length) {
+	function syntaxTreeForSnapshot(snapshot:EditorSnapshot, ?token:CancellationToken):Null<SyntaxTree> {
+		if (token != null)
+			token.check();
+		try {
+			var conditional = ConditionalCompilation.process(snapshot.source, editorDefines),
+				checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
+				parser = new Parser(new Lexer(snapshot.source, conditional.text, checkpoint).tokenize(), checkpoint, ParserMode.Cst(snapshot.source));
+			parser.parseProgramRecovering();
+			return parser.cst;
+		} catch (error:CompileError) {
+			// The lossless tree still gives structural tokens/trivia when strict
+			// compiler lexing cannot represent a malformed literal.
+			return SyntaxTree.fromSource(snapshot.source);
+		}
+	}
+
+	static function indexCstStructure(tree:SyntaxTree, folds:Array<FoldingRegion>, containers:Array<SourceSpan>,
+			?token:CancellationToken):Void {
+		var imports:Array<SourceSpan> = [];
+		for (node in tree.grammarNodes()) {
 			if (token != null)
 				token.check();
-			var quote = text.charAt(position);
-			if (quote == "\"" || quote == "'") {
-				position++;
-				while (position < text.length)
-					if (text.charAt(position) == "\\")
-						position += 2;
-					else if (text.charAt(position++) == quote)
-						break;
-				continue;
+			if (node.span.end > node.span.start)
+				containers.push(node.span);
+			switch node.kind {
+				case SyntaxKind.Block, SyntaxKind.ArrayLiteral, SyntaxKind.ObjectLiteral, SyntaxKind.MapLiteral, SyntaxKind.AnonymousType:
+					folds.push({span: node.span, kind: "region"});
+				case SyntaxKind.ImportDeclaration:
+					imports.push(node.span);
+				default:
 			}
-			var marker = text.substr(position, 2), start = position;
-			if (marker == "//") {
-				var newline = text.indexOf("\n", position + 2);
-				position = newline < 0 ? text.length : newline;
-				result.push(file.span(file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position)));
-			} else if (marker == "/*") {
-				var close = text.indexOf("*/", position + 2);
-				position = close < 0 ? text.length : close + 2;
-				result.push(file.span(file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position)));
-			} else
-				position++;
+		}
+		if (imports.length > 0)
+			folds.push({span: tree.source.span(imports[0].start, imports[imports.length - 1].end), kind: "imports"});
+	}
+
+static function commentSpans(tree:SyntaxTree, ?token:CancellationToken):Array<SourceSpan> {
+		var result:Array<SourceSpan> = [];
+		for (trivia in tree.trivia) {
+			if (token != null)
+				token.check();
+			switch trivia.kind {
+				case SyntaxTriviaKind.LineComment, SyntaxTriviaKind.BlockComment, SyntaxTriviaKind.DocComment:
+					result.push(trivia.span);
+				default:
+			}
 		}
 		return result;
 	}
 
-	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>,
+	static function addConditionalFolds(tree:SyntaxTree, folds:Array<FoldingRegion>, containers:Array<SourceSpan>,
 			?token:CancellationToken):Void {
-		var source = file.text, offset = 0, stack:Array<Int> = [];
-		while (offset < source.length) {
+		var file = tree.source, stack:Array<Int> = [];
+		for (trivia in tree.trivia) {
 			if (token != null)
 				token.check();
-			var newline = source.indexOf("\n", offset),
-				end = newline < 0 ? source.length : newline + 1,
-				line = StringTools.trim(source.substring(offset, end));
+			if (trivia.kind != SyntaxTriviaKind.Directive)
+				continue;
+			var line = StringTools.trim(trivia.text),
+				lineNumber = file.lineAt(trivia.span.start) - 1,
+				lineStart = file.byteOffsetAt(lineNumber, 0),
+				nextLineStart = lineNumber + 1 < file.lineAt(file.bytes.length) ? file.byteOffsetAt(lineNumber + 1, 0) : file.bytes.length;
 			if (StringTools.startsWith(line, "#if"))
-				stack.push(offset);
+				stack.push(lineStart);
 			else if (StringTools.startsWith(line, "#end") && stack.length > 0) {
-				var span = file.span(file.byteOffsetForStringOffset(stack.pop()), file.byteOffsetForStringOffset(end));
+				var span = file.span(stack.pop(), nextLineStart);
 				folds.push({span: span, kind: "region"});
 				containers.push(span);
 			}
-			offset = end;
 		}
 	}
 

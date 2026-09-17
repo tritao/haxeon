@@ -1777,6 +1777,24 @@ class LanguageServiceMain {
 				hasUnclosedFold = true;
 		if (!hasUnclosedFold)
 			throw "unmatched recovered blocks did not produce an end-of-source fold";
+		var cstStructureService = new LanguageService(),
+			cstStructureSource = "#if missing\nfunction ignored():Void { return; }\n#else\nfunction active():Int { var value = 1; return value + 1; }\n#end\n";
+		cstStructureService.update("CstStructure.hx", cstStructureSource);
+		var cstFolds = cstStructureService.foldingRanges("CstStructure.hx"),
+			hasConditionalFold = false;
+		for (fold in cstFolds)
+			if (fold.kind == "region" && fold.span.start == 0 && fold.span.end == cstStructureSource.length)
+				hasConditionalFold = true;
+		if (!hasConditionalFold)
+			throw "CST structural indexing lost conditional-region folding";
+		var expressionStart = cstStructureSource.indexOf("value + 1"),
+			selectionResult = cstStructureService.selectionRanges("CstStructure.hx", [expressionStart + 2]),
+			hasExpressionSelection = false;
+		for (span in selectionResult[0])
+			if (span.start == expressionStart && span.end == expressionStart + "value + 1".length)
+				hasExpressionSelection = true;
+		if (!hasExpressionSelection)
+			throw "CST structural indexing lost expression selection ranges";
 		var recoveredTopLevelService = new LanguageService(),
 			recoveredTopLevelSource = "function complete(value:Int):String return \"\"; function main():Void { compl";
 		recoveredTopLevelService.update("RecoveredTopLevel.hx", recoveredTopLevelSource);
