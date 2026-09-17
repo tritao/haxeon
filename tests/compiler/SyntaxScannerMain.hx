@@ -113,19 +113,27 @@ class SyntaxScannerMain {
 			"class Holder { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
 			+ "public function choose(flag:Bool):Int if (flag) return value + 1; else return value; "
 			+ "public function loop(flag:Bool):Void while (flag) break; "
-			+ "public function doLoop(flag:Bool):Void do { break; } while (flag); }\n"
+			+ "public function doLoop(flag:Bool):Void do { break; } while (flag); "
+			+ "public function each(values:Array<Int>):Void for (value in values) break; }\n"
 			+ "interface Reader { function read(value:Int):String; }\n"),
 			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
 		var declarationProgram = declarationParser.parseProgram();
 		if (declarationParser.cst == null)
 			throw "CST declaration parser did not retain a tree";
+		var hasForStatement = false;
+		for (node in declarationParser.cst.grammarNodes())
+			if (node.kind == SyntaxKind.ForStatement)
+				hasForStatement = true;
+		if (!hasForStatement)
+			throw "CST parser did not retain a for statement";
 		var holder = declarationProgram.classes[0], reader = declarationProgram.interfaces[0];
 		if (holder.fields.length != 1 || holder.fields[0].name != "value" || holder.fields[0].initializer != null
-			|| holder.methods.length != 5 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
+			|| holder.methods.length != 6 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
 			|| holder.methods[1].statements.length != 1
 			|| holder.methods[2].name != "choose" || holder.methods[2].statements.length != 1
 			|| holder.methods[3].name != "loop" || holder.methods[3].statements.length != 1
 			|| holder.methods[4].name != "doLoop" || holder.methods[4].statements.length != 1
+			|| holder.methods[5].name != "each" || holder.methods[5].statements.length != 1
 			|| reader.methods.length != 1 || reader.methods[0].arguments.length != 1 || reader.methods[0].arguments[0].name != "value")
 			throw "CST lowerer did not preserve field and function signatures";
 		switch holder.methods[1].statements[0] {
@@ -157,6 +165,12 @@ class SyntaxScannerMain {
 				if (body.length != 1)
 					throw "CST lowerer changed a do-while body";
 			default: throw "CST lowerer did not lower a do-while statement";
+		}
+		switch holder.methods[5].statements[0] {
+			case AstStatement.ForIn(keyName, valueName, AstExpression.Variable(iterableName, _), body, _):
+				if (keyName != "value" || valueName != null || iterableName != "values" || body.length != 1)
+					throw "CST lowerer changed a for-in statement";
+			default: throw "CST lowerer did not lower a for-in statement";
 		}
 		switch holder.fields[0].type {
 			case IntType:

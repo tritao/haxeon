@@ -326,6 +326,10 @@ class AstLowerer {
 			case [AstStatement.DoWhile(body, condition, span), SyntaxStatementPayload.DoWhileLoop(bodyPayload, conditionPayload)]:
 				var loweredBody = lowerStatementList(body, bodyPayload), loweredCondition = lowerExpression(condition, conditionPayload);
 				loweredBody == null || loweredCondition == null ? null : AstStatement.DoWhile(loweredBody, loweredCondition, span);
+			case [AstStatement.ForIn(keyName, valueName, iterable, body, span), SyntaxStatementPayload.ForLoop(payloadKeyName, payloadValueName, iterablePayload, bodyPayload)]:
+				var loweredIterable = lowerExpression(iterable, iterablePayload), loweredBody = lowerStatementList(body, bodyPayload);
+				loweredIterable == null || keyName != payloadKeyName || valueName != payloadValueName || loweredBody == null ? null
+					: AstStatement.ForIn(payloadKeyName, payloadValueName, loweredIterable, loweredBody, span);
 			default: null;
 		};
 

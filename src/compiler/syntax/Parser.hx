@@ -1064,6 +1064,10 @@ class Parser {
 				var conditionPayload = simpleExpressionPayload(condition), bodyPayload = simpleStatementPayloads(body);
 				conditionPayload == null || bodyPayload == null ? null
 					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.DoWhileLoop(bodyPayload, conditionPayload);
+			case AstStatement.ForIn(keyName, valueName, iterable, body, _):
+				var iterablePayload = simpleExpressionPayload(iterable), bodyPayload = simpleStatementPayloads(body);
+				iterablePayload == null || bodyPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxStatementPayload.ForLoop(keyName, valueName, iterablePayload, bodyPayload);
 			default: null;
 		};
 
@@ -1642,7 +1646,10 @@ class Parser {
 			var iterable = parseExpression();
 			consume(TokenKind.RightParen);
 			var body = parseStatementOrBlock(), end = statementEnd(body);
-			return ForIn(name, valueName, iterable, body, start.merge(end));
+			var statement = ForIn(name, valueName, iterable, body, start.merge(end)), payload = simpleStatementPayload(statement);
+			if (payload != null)
+				recordCstNode(SyntaxKind.ForStatement, start.merge(end), SyntaxNodePayload.Statement(payload));
+			return statement;
 		}
 		var expression = parseExpression(), end = expressionEnd(expression);
 		return Expression(expression, expressionSpan(expression).merge(end));
