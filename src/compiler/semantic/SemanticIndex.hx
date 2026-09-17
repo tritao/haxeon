@@ -571,7 +571,7 @@ class SemanticIndexBuilder {
 	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
 	public function indexRecoveredSyntax(program:AstProgram, ?token:CancellationToken, ?typedProgram:TypedProgram, ?resolve:String->Null<SemanticSymbolId>,
 			?resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>, ?resolveType:(String, Array<CompilerType>) -> Null<CompilerType>,
-			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndexBuilder,
+			?candidates:String->Array<SemanticSymbolId>, ?previous:SemanticIndex,
 			?resolveTypeSymbol:String->Null<SemanticSymbolId>):Void {
 		ensureMutable();
 		cancellation = token;
@@ -775,7 +775,7 @@ class SemanticIndexBuilder {
 	 * every later local in a recovered editor model. The fallback remains the
 	 * existing revision-local ordinal when no safe predecessor exists.
 	 */
-	function prepareRecoveredLocalReuse(previous:Null<SemanticIndexBuilder>):Void {
+	function prepareRecoveredLocalReuse(previous:Null<SemanticIndex>):Void {
 		recoveryPreviousLocalIds = [];
 		recoveryPreviousLocalSpans = [];
 		recoveryUsedLocalIds = [];
