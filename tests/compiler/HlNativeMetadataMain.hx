@@ -71,6 +71,8 @@ class HlNativeMetadataMain {
 			'var initializerIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["__init" => 0], ["__init" => 101]), initializerRejected = false; '
 			+ 'try { HlNativeModuleLoader.loadRuntime(HlWriter.encode(loadCode), initializerIdentity); } catch (error:Dynamic) initializerRejected = true; '
 			+
+			'var failedInitializerCode = new HlCode(); failedInitializerCode.strings = ["initialization failed"]; failedInitializerCode.types = [Simple(HlType.Bytes), Simple(HlType.Dyn), Simple(HlType.Void), Function([], 2)]; failedInitializerCode.functions = [new compiler.hl.HlFunction(3, 0, [0, 1], [LoadString(0, 0), ToDyn(1, 0), Throw(1)])]; failedInitializerCode.entryPoint = 0; var failedInitializerIdentity = HlRuntimeIdentity.encode(haxe.io.Bytes.alloc(16), 1, ["__init" => 0], ["__init" => 303]), failedInitializerRejected = false; try { HlNativeModuleLoader.loadRuntime(HlWriter.encode(failedInitializerCode), failedInitializerIdentity); } catch (error:Dynamic) failedInitializerRejected = true; initializerRejected = initializerRejected && failedInitializerRejected; '
+			+
 			'var patchCode = new HlCode(); patchCode.strings = ["haxeon_runtime", "native_pointer_size", "patch"]; patchCode.ints = [42]; patchCode.types = [Simple(HlType.I32), Function([], 0), Function([], 0), Function([], 0)]; '
 			+
 			'patchCode.natives = [{library: 0, name: 1, type: 2, functionIndex: 1}]; patchCode.functions = [new compiler.hl.HlFunction(1, 0, [0], [LoadInt(0, 0), Return(0)])]; patchCode.entryPoint = 0; '
