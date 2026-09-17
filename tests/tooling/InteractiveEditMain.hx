@@ -1,6 +1,23 @@
 import compiler.Source.SourceSpan;
 import compiler.service.LanguageService;
 
+typedef RecoveryProbe = {
+	final validMarker:String;
+	final validOffset:Int;
+	final malformedMarker:String;
+	final malformedOffset:Int;
+}
+
+typedef RecoveryCase = {
+	final name:String;
+	final path:String;
+	final module:String;
+	final valid:String;
+	final malformed:String;
+	final probes:Array<RecoveryProbe>;
+	final symbols:Array<String>;
+}
+
 /** Exercises the language service as a sequence of real editor updates. */
 class InteractiveEditMain {
 	static function main():Void {
@@ -84,8 +101,125 @@ class InteractiveEditMain {
 
 		assertRecoveryEquivalence();
 		assertCompoundRecoveryEquivalence();
+		assertRecoveryMatrix();
 
-		Sys.println('PASS: ${tails.length + 7} interactive edits retained recovery queries');
+		Sys.println('PASS: ${tails.length + 11} interactive edits retained recovery queries');
+	}
+
+	static function assertRecoveryMatrix():Void {
+		var cases:Array<RecoveryCase> = [
+			{
+				name: "unrelated expression errors",
+				path: "matrix/RecoveryBody.hx",
+				module: "matrix.RecoveryBody",
+				valid: "package matrix; class Box { public var member:Int; } function main():Void { var before:Box = new Box(); before.member; var after:Box = before; after.member; }",
+				malformed: "package matrix; class Box { public var member:Int; } function main():Void { var before:Box = new Box(); before.member; broken.unresolved().thing; another.unresolved().thing; var after:Box = before; after.member; }",
+				probes: [
+					{validMarker: "before:Box", validOffset: 0, malformedMarker: "before:Box", malformedOffset: 0},
+					{validMarker: "before.member", validOffset: 0, malformedMarker: "before.member", malformedOffset: 0},
+					{validMarker: "after:Box", validOffset: 0, malformedMarker: "after:Box", malformedOffset: 0},
+					{validMarker: "after.member", validOffset: 0, malformedMarker: "after.member", malformedOffset: 0}
+				],
+				symbols: ["Box", "main"]
+			},
+			{
+				name: "unfinished call",
+				path: "matrix/RecoveryCall.hx",
+				module: "matrix.RecoveryCall",
+				valid: "package matrix; class CallBox { public function value(argument:Int):Int return argument; } function main():Void { var box:CallBox = new CallBox(); var before:Int = box.value(1); box.value(1); var after:Int = before; }",
+				malformed: "package matrix; class CallBox { public function value(argument:Int):Int return argument; } function main():Void { var box:CallBox = new CallBox(); var before:Int = box.value(1); box.value( ; var after:Int = before; }",
+				probes: [
+					{validMarker: "box:CallBox", validOffset: 0, malformedMarker: "box:CallBox", malformedOffset: 0},
+					{validMarker: "before:Int", validOffset: 0, malformedMarker: "before:Int", malformedOffset: 0},
+					{validMarker: "after:Int", validOffset: 0, malformedMarker: "after:Int", malformedOffset: 0}
+				],
+				symbols: ["CallBox", "main"]
+			},
+			{
+				name: "unfinished generic type",
+				path: "matrix/RecoveryGeneric.hx",
+				module: "matrix.RecoveryGeneric",
+				valid: "package matrix; class GenericBox<T> { public var value:T; } function main():Void { var before:Int = 1; var box:GenericBox<Int> = new GenericBox<Int>(); var after:Int = box.value; }",
+				malformed: "package matrix; class GenericBox<T> { public var value:T; } function main():Void { var before:Int = 1; var box:GenericBox<Int = new GenericBox<Int>(); var after:Int = box.value; }",
+				probes: [
+					{validMarker: "before:Int", validOffset: 0, malformedMarker: "before:Int", malformedOffset: 0},
+					{validMarker: "after:Int", validOffset: 0, malformedMarker: "after:Int", malformedOffset: 0},
+					{validMarker: "box.value", validOffset: 0, malformedMarker: "box.value", malformedOffset: 0}
+				],
+				symbols: ["GenericBox", "main"]
+			},
+			{
+				name: "unfinished declaration",
+				path: "matrix/RecoveryDeclaration.hx",
+				module: "matrix.RecoveryDeclaration",
+				valid: "package matrix; class Holder { public function before():Int return 1; public function after():Int return 2; } function main():Void {}",
+				malformed: "package matrix; class Holder { public function before():Int return 1; public function unfinished(argument:Int { return 2; } public function after():Int return 3; } function main():Void {}",
+				probes: [
+					{validMarker: "before():Int", validOffset: 0, malformedMarker: "before():Int", malformedOffset: 0},
+					{validMarker: "after():Int", validOffset: 0, malformedMarker: "after():Int", malformedOffset: 0}
+				],
+				symbols: ["Holder", "before", "after", "main"]
+			}
+		];
+
+		for (testCase in cases) {
+			var service = new LanguageService();
+			service.update(testCase.path, testCase.valid);
+			service.analyze(testCase.module);
+			var validState = service.compiler.modules.get(testCase.module),
+				validModel = validState == null ? null : validState.semanticModel;
+			if (validModel == null)
+				throw 'recovery matrix case "${testCase.name}" did not produce an exact semantic model';
+
+			var validIds:Array<String> = [];
+			for (probe in testCase.probes) {
+				var validPosition = markerPosition(testCase.valid, probe.validMarker, probe.validOffset),
+					validId = validModel.index.symbolIdAt(validPosition);
+				if (validId == null)
+					throw 'recovery matrix case "${testCase.name}" could not index valid probe "${probe.validMarker}"';
+				validIds.push(Std.string(validId));
+			}
+
+			service.update(testCase.path, testCase.malformed);
+			var malformedState = service.compiler.modules.get(testCase.module),
+				recoveredModel = malformedState == null ? null : malformedState.recoveredSemanticModel;
+			if (malformedState == null || malformedState.currentRecovered == null || recoveredModel == null
+				|| malformedState.diagnostics.length == 0
+				|| malformedState.currentRecovered.source != malformedState.source
+				|| malformedState.currentRecovered.revision != malformedState.revision)
+				throw 'recovery matrix case "${testCase.name}" did not publish a coherent current-source snapshot';
+
+			for (symbol in testCase.symbols)
+				assertSymbol(service.documentSymbols(testCase.path), symbol, testCase.name);
+			for (index in 0...testCase.probes.length) {
+				var probe = testCase.probes[index],
+					malformedPosition = markerPosition(testCase.malformed, probe.malformedMarker, probe.malformedOffset),
+					recoveredId = recoveredModel.index.symbolIdAt(malformedPosition);
+				if (recoveredId == null || Std.string(recoveredId) != validIds[index])
+					throw 'recovery matrix case "${testCase.name}" changed unaffected identity at "${probe.malformedMarker}" (expected ${validIds[index]}, got ${recoveredId == null ? "null" : Std.string(recoveredId)})';
+			}
+
+			service.update(testCase.path, testCase.valid);
+			service.analyze(testCase.module);
+			var repairedState = service.compiler.modules.get(testCase.module),
+				repairedModel = repairedState == null ? null : repairedState.semanticModel;
+			if (repairedState == null || repairedState.currentExact == null || repairedModel == null)
+				throw 'recovery matrix case "${testCase.name}" did not repair to an exact semantic model';
+			for (index in 0...testCase.probes.length) {
+				var probe = testCase.probes[index],
+					repairedPosition = markerPosition(testCase.valid, probe.validMarker, probe.validOffset),
+					repairedId = repairedModel.index.symbolIdAt(repairedPosition);
+				if (repairedId == null || Std.string(repairedId) != validIds[index])
+					throw 'recovery matrix case "${testCase.name}" did not restore identity at "${probe.validMarker}"';
+			}
+		}
+	}
+
+	static function markerPosition(source:String, marker:String, offset:Int):Int {
+		var position = source.indexOf(marker);
+		if (position < 0)
+			throw 'recovery matrix could not locate marker "$marker"';
+		return position + offset;
 	}
 
 	static function assertCompoundRecoveryEquivalence():Void {
