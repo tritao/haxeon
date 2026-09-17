@@ -50,6 +50,7 @@ class Parser {
 	var cstBuilder:Null<SyntaxTreeBuilder>;
 	var cstMissingTokens:Array<SyntaxToken> = [];
 	var parserPayloads:Map<Int, SyntaxNodePayload> = [];
+	var parserExpressionPayloads:Map<Int, compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -568,7 +569,7 @@ class Parser {
 					optional: optional || defaultValue != null,
 					defaultValue: defaultValue
 				});
-				var defaultPayload = defaultValue == null ? null : simpleExpressionPayload(defaultValue);
+				var defaultPayload = defaultValue == null ? null : expressionPayload(defaultValue);
 				if (defaultValue != null && defaultPayload == null)
 					payloadComplete = false;
 				parameterPayloads.push({name: argumentToken.text, type: parsedArgumentType.payload,
@@ -960,7 +961,7 @@ class Parser {
 					var parsedFieldType:Null<ParsedType> = match(TokenKind.Colon) ? parseTypeResult() : null,
 						fieldType = parsedFieldType == null ? null : parsedFieldType.ast,
 						initializer = match(TokenKind.Assign) ? parseExpression() : null,
-						initializerPayload = initializer == null ? null : simpleExpressionPayload(initializer);
+						initializerPayload = initializer == null ? null : expressionPayload(initializer);
 					if (fieldType == null) {
 						if (initializer == null)
 							fail(current(), 'Field "$fieldName" requires a type or initializer');
@@ -1159,6 +1160,44 @@ class Parser {
 			result.push(payload);
 		}
 		return result;
+	}
+
+	function rememberExpression(expression:AstExpression,
+			payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>):AstExpression {
+		if (payload != null)
+			parserExpressionPayloads.set(expressionSpan(expression).start, payload);
+		return expression;
+	}
+
+	function expressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> {
+		var payload = parserExpressionPayloads.get(expressionSpan(expression).start);
+		return payload == null ? simpleExpressionPayload(expression) : payload;
+	}
+
+	function expressionPayloads(expressions:Array<AstExpression>):Null<Array<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
+		for (expression in expressions) {
+			var payload = expressionPayload(expression);
+			if (payload == null)
+				return null;
+			result.push(payload);
+		}
+		return result;
+	}
+
+	function rememberBinary(expression:AstExpression, operation:compiler.syntax.SyntaxTree.SyntaxBinaryOperator,
+			left:AstExpression, right:AstExpression):AstExpression {
+		var leftPayload = expressionPayload(left), rightPayload = expressionPayload(right),
+			payload = leftPayload == null || rightPayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Binary(operation, leftPayload, rightPayload);
+		return rememberExpression(expression, payload);
+	}
+
+	function rememberUnary(expression:AstExpression, operation:compiler.syntax.SyntaxTree.SyntaxUnaryOperator,
+			value:AstExpression):AstExpression {
+		var valuePayload = expressionPayload(value),
+			payload = valuePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Unary(operation, valuePayload);
+		return rememberExpression(expression, payload);
 	}
 
 	static function simpleExpressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>
@@ -2128,7 +2167,10 @@ class Parser {
 			consume(TokenKind.Colon);
 			var whenFalse = parseExpressionBranch();
 			var span = expressionSpan(expression).merge(expressionSpan(whenFalse));
-			expression = Conditional(expression, whenTrue, whenFalse, span);
+			var conditionPayload = expressionPayload(expression), truePayload = expressionPayload(whenTrue), falsePayload = expressionPayload(whenFalse),
+				payload = conditionPayload == null || truePayload == null || falsePayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Conditional(conditionPayload, truePayload, falsePayload);
+			expression = rememberExpression(Conditional(expression, whenTrue, whenFalse, span), payload);
 			recordCstNode(SyntaxKind.ConditionalExpression, span);
 		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
@@ -2169,7 +2211,7 @@ class Parser {
 		while (match(TokenKind.OrOr)) {
 			var right = parseAnd(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = Or(expression, right, span);
+			expression = rememberBinary(Or(expression, right, span), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Or, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2180,7 +2222,7 @@ class Parser {
 		while (match(TokenKind.AndAnd)) {
 			var right = parseComparison(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = And(expression, right, span);
+			expression = rememberBinary(And(expression, right, span), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.And, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2191,7 +2233,7 @@ class Parser {
 		while (match(TokenKind.Pipe)) {
 			var right = parseBitXor();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = BitOr(expression, right, span);
+			expression = rememberBinary(BitOr(expression, right, span), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitOr, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2202,7 +2244,7 @@ class Parser {
 		while (match(TokenKind.Caret)) {
 			var right = parseBitAnd();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = BitXor(expression, right, span);
+			expression = rememberBinary(BitXor(expression, right, span), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2213,7 +2255,7 @@ class Parser {
 		while (match(TokenKind.Ampersand)) {
 			var right = parseShift();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = BitAnd(expression, right, span);
+			expression = rememberBinary(BitAnd(expression, right, span), compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitAnd, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2226,14 +2268,23 @@ class Parser {
 			var operation = advance().kind;
 			var right = parseBitOr();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = switch operation {
-				case TokenKind.Less: Less(expression, right, span);
-				case TokenKind.LessEqual: LessEqual(expression, right, span);
-				case TokenKind.Greater: Greater(expression, right, span);
-				case TokenKind.GreaterEqual: GreaterEqual(expression, right, span);
-				case TokenKind.NotEqual: NotEqual(expression, right, span);
-				default: Equal(expression, right, span);
-			}
+		var result:AstExpression = switch operation {
+			case TokenKind.Less: AstExpression.Less(expression, right, span);
+			case TokenKind.LessEqual: AstExpression.LessEqual(expression, right, span);
+			case TokenKind.Greater: AstExpression.Greater(expression, right, span);
+			case TokenKind.GreaterEqual: AstExpression.GreaterEqual(expression, right, span);
+			case TokenKind.NotEqual: AstExpression.NotEqual(expression, right, span);
+			default: AstExpression.Equal(expression, right, span);
+		};
+		var binaryOperation = switch operation {
+				case TokenKind.Less: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Less;
+				case TokenKind.LessEqual: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.LessEqual;
+				case TokenKind.Greater: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Greater;
+				case TokenKind.GreaterEqual: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.GreaterEqual;
+				case TokenKind.NotEqual: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.NotEqual;
+			default: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Equal;
+		};
+			expression = rememberBinary(result, binaryOperation, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2250,8 +2301,12 @@ class Parser {
 				advance();
 			var right = parseAdditive(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = leftShift ? ShiftLeft(expression, right,
-				span) : unsigned ? UnsignedShiftRight(expression, right, span) : ShiftRight(expression, right, span);
+			var result = leftShift ? ShiftLeft(expression, right,
+				span) : unsigned ? UnsignedShiftRight(expression, right, span) : ShiftRight(expression, right, span),
+				operation = leftShift ? compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftLeft
+					: unsigned ? compiler.syntax.SyntaxTree.SyntaxBinaryOperator.UnsignedShiftRight
+					: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.ShiftRight;
+			expression = rememberBinary(result, operation, expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2269,7 +2324,9 @@ class Parser {
 			var operation = advance().kind;
 			var right = parseMultiplicative();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = operation == TokenKind.Plus ? Add(expression, right, span) : Sub(expression, right, span);
+			expression = rememberBinary(operation == TokenKind.Plus ? Add(expression, right, span) : Sub(expression, right, span),
+				operation == TokenKind.Plus ? compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Add : compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Sub,
+				expression, right);
 			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2281,11 +2338,16 @@ class Parser {
 			var operation = advance().kind,
 				right = parsePrimary(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-				expression = switch operation {
+				var result = switch operation {
 					case TokenKind.Star: Mul(expression, right, span);
 					case TokenKind.Slash: Div(expression, right, span);
 					default: Mod(expression, right, span);
+				}, binaryOperation = switch operation {
+					case TokenKind.Star: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mul;
+					case TokenKind.Slash: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Div;
+					default: compiler.syntax.SyntaxTree.SyntaxBinaryOperator.Mod;
 				};
+				expression = rememberBinary(result, binaryOperation, expression, right);
 				recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
@@ -2295,7 +2357,7 @@ class Parser {
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected expression", span));
-			return ErrorExpression(span);
+			return rememberExpression(ErrorExpression(span), compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Error);
 		}
 		if (check(TokenKind.At)) {
 			parseMetadata();
@@ -2374,27 +2436,43 @@ class Parser {
 			var start = previous().span;
 			if (match(TokenKind.Integer)) {
 				var token = previous(), value = parseIntegerToken(token, true);
-				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
+				return parsePostfix(rememberExpression(IntegerLiteral(value, start.merge(token.span)),
+					compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(value)));
 			}
 			var value = parsePrimary();
-			return Negate(value, start.merge(expressionSpan(value)));
+			return rememberUnary(Negate(value, start.merge(expressionSpan(value))),
+				compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Negate, value);
 		}
 		if (match(TokenKind.Not)) {
 			var start = previous().span, value = parsePrimary();
-			return Not(value, start.merge(expressionSpan(value)));
+			return rememberUnary(Not(value, start.merge(expressionSpan(value))),
+				compiler.syntax.SyntaxTree.SyntaxUnaryOperator.Not, value);
 		}
 		if (match(TokenKind.BitNot)) {
-			var start = previous().span, value = parsePrimary();
-			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
+			var start = previous().span, value = parsePrimary(), negated = IntegerLiteral(-1, start),
+				result = BitXor(value, negated, start.merge(expressionSpan(value))), valuePayload = expressionPayload(value);
+			return rememberExpression(result, valuePayload == null ? null
+				: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Binary(compiler.syntax.SyntaxTree.SyntaxBinaryOperator.BitXor,
+					valuePayload, compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(-1)));
 		}
 		if (match(TokenKind.Integer)) {
 			var token = previous();
-			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
+			var value = parseIntegerToken(token);
+			return parsePostfix(rememberExpression(IntegerLiteral(value, token.span),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Integer(value)));
 		}
-		if (match(TokenKind.Float))
-			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
-		if (match(TokenKind.StringLiteral))
-			return parsePostfix(parseStringExpression(previous()));
+		if (match(TokenKind.Float)) {
+			var token = previous(), value = Std.parseFloat(token.text);
+			return parsePostfix(rememberExpression(FloatLiteral(value, token.span),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Float(value)));
+		}
+		if (match(TokenKind.StringLiteral)) {
+			var parsed = parseStringExpression(previous());
+			return parsePostfix(rememberExpression(parsed, switch parsed {
+				case StringLiteral(value, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.String(value);
+				default: null;
+			}));
+		}
 		if (match(TokenKind.RegexLiteral)) {
 			var token = previous(),
 				delimiter = token.text.lastIndexOf("/"),
@@ -2403,9 +2481,11 @@ class Parser {
 			return parsePostfix(New("EReg", [StringLiteral(pattern, token.span), StringLiteral(options, token.span)], token.span));
 		}
 		if (match(TokenKind.BoolTrue))
-			return parsePostfix(BoolLiteral(true, previous().span));
+			return parsePostfix(rememberExpression(BoolLiteral(true, previous().span),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Bool(true)));
 		if (match(TokenKind.BoolFalse))
-			return parsePostfix(BoolLiteral(false, previous().span));
+			return parsePostfix(rememberExpression(BoolLiteral(false, previous().span),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Bool(false)));
 		if (match(TokenKind.LeftBracket)) {
 			var start = previous().span, values = [];
 			if (match(TokenKind.For)) {
@@ -2467,7 +2547,8 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) && current().text == "null") {
 			var nullToken = advance();
-			return parsePostfix(NullLiteral(nullToken.span));
+			return parsePostfix(rememberExpression(NullLiteral(nullToken.span),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.NullValue));
 		}
 		if (match(TokenKind.New)) {
 			var start = previous().span;
@@ -2629,7 +2710,8 @@ class Parser {
 				end = part.span;
 				recordCstNode(SyntaxKind.MemberExpression, start.merge(end));
 			}
-			var expression:AstExpression = Variable(name, start.merge(end));
+			var expression:AstExpression = rememberExpression(Variable(name, start.merge(end)),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(name));
 			return parsePostfix(expression);
 		}
 		if (match(TokenKind.LeftBrace)) {
@@ -2675,7 +2757,8 @@ class Parser {
 				end = part.span;
 				recordCstNode(SyntaxKind.MemberExpression, start.merge(end));
 			}
-			var expression:AstExpression = Variable(name, start.merge(end));
+			var expression:AstExpression = rememberExpression(Variable(name, start.merge(end)),
+				compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Variable(name));
 			if (match(TokenKind.LeftParen)) {
 				var argumentStart = previous().span;
 				var arguments = [];
@@ -3061,10 +3144,19 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 				var callSpan = expressionSpan(expression).merge(end);
+				var argumentPayloads = expressionPayloads(arguments), payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = null;
+				if (argumentPayloads != null)
+					payload = switch expression {
+						case Variable(name, _): compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Call(name, argumentPayloads);
+						default:
+							var calleePayload = expressionPayload(expression);
+							calleePayload == null ? null : compiler.syntax.SyntaxTree.SyntaxExpressionPayload.ClosureCall(calleePayload, argumentPayloads);
+					};
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments, callSpan);
 					default: ClosureCall(expression, arguments, callSpan);
 				};
+				expression = rememberExpression(expression, payload);
 				recordCstNode(SyntaxKind.CallExpression, callSpan);
 				continue;
 			}
@@ -3072,7 +3164,10 @@ class Parser {
 				var offset = parseExpression(),
 					end = consume(TokenKind.RightBracket).span;
 				var indexSpan = expressionSpan(expression).merge(end);
-				expression = Index(expression, offset, indexSpan);
+				var arrayPayload = expressionPayload(expression), indexPayload = expressionPayload(offset),
+					payload = arrayPayload == null || indexPayload == null ? null
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Index(arrayPayload, indexPayload);
+				expression = rememberExpression(Index(expression, offset, indexSpan), payload);
 				recordCstNode(SyntaxKind.IndexExpression, indexSpan);
 				continue;
 			}
@@ -3081,7 +3176,9 @@ class Parser {
 					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 					recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected member name", span));
 					var memberSpan = expressionSpan(expression).merge(span);
-					expression = Member(expression, "", memberSpan);
+					var objectPayload = expressionPayload(expression), payload = objectPayload == null ? null
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Member(objectPayload, "");
+					expression = rememberExpression(Member(expression, "", memberSpan), payload);
 					recordCstNode(SyntaxKind.MemberExpression, memberSpan);
 					break;
 				}
@@ -3096,11 +3193,16 @@ class Parser {
 					var end = consume(TokenKind.RightParen).span;
 					recordCstNode(SyntaxKind.ArgumentList, argumentStart.merge(end));
 					var methodSpan = expressionSpan(expression).merge(end);
-					expression = MethodCall(expression, name, arguments, methodSpan);
+					var objectPayload = expressionPayload(expression), argumentPayloads = expressionPayloads(arguments),
+						payload = objectPayload == null || argumentPayloads == null ? null
+							: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.MethodCall(objectPayload, name, argumentPayloads);
+					expression = rememberExpression(MethodCall(expression, name, arguments, methodSpan), payload);
 					recordCstNode(SyntaxKind.CallExpression, methodSpan);
 				} else {
 					var memberSpan = expressionSpan(expression).merge(nameToken.span);
-					expression = Member(expression, name, memberSpan);
+					var objectPayload = expressionPayload(expression), payload = objectPayload == null ? null
+						: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.Member(objectPayload, name);
+					expression = rememberExpression(Member(expression, name, memberSpan), payload);
 					recordCstNode(SyntaxKind.MemberExpression, memberSpan);
 				}
 				continue;
@@ -3108,7 +3210,9 @@ class Parser {
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
 				var end = previous().span,
 					delta = previous().kind == TokenKind.Increment ? 1 : -1;
-				expression = PostfixIncrement(expression, delta, expressionSpan(expression).merge(end));
+				var targetPayload = expressionPayload(expression), payload = targetPayload == null ? null
+					: compiler.syntax.SyntaxTree.SyntaxExpressionPayload.PostfixIncrement(targetPayload, delta);
+				expression = rememberExpression(PostfixIncrement(expression, delta, expressionSpan(expression).merge(end)), payload);
 				break;
 			}
 			break;
