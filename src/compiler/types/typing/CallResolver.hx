@@ -738,7 +738,25 @@ class CallResolver {
 		return null;
 	}
 
-	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.encodeName(value.type), [value]), TBytes, span);
+		}
+		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			if (expectedType == null || expectedType == TNull)
+				fail("E1009", "MessagePack.decode requires an expected result type", span);
+			var bytes = coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input", "E1002"),
+				resultType = cast expectedType;
+			WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.decodeName(resultType), [bytes]), resultType, span);
+		}
 		if (name == "Type.enumEq") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
@@ -1178,7 +1196,7 @@ class CallResolver {
 			case TMap(key, value): {key: key, value: value};
 			default: throw "Not a map";
 		};
-		if (RuntimeType.mapName(mapType.key, mapType.value) == null)
+		if (session.mapName(mapType.key, mapType.value) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		if (name == "set") {
 			if (arguments.length != 2)

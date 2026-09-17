@@ -23,6 +23,7 @@ import compiler.ir.SourceProvenance.Located;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
+		IrGenerator.bindEnumConstructors(typed.enums);
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
 			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed), null, cNativesFrom(typed));
 	}
@@ -322,6 +323,13 @@ class IrProgramAssembler {
 				result: Array(I32)
 			});
 			program.natives.push({
+				name: "__array_alloc_i64",
+				library: "haxeon_runtime",
+				symbol: "__array_alloc_i64",
+				arguments: [I32],
+				result: Array(I64)
+			});
+			program.natives.push({
 				name: "__array_alloc_f64",
 				library: "haxeon_runtime",
 				symbol: "__array_alloc_f64",
@@ -351,6 +359,7 @@ class IrProgramAssembler {
 			});
 			var arrayKinds:Array<{name:String, type:IrType}> = [
 				{name: "i32", type: I32},
+				{name: "i64", type: I64},
 				{name: "f64", type: F64},
 				{name: "bytes", type: Bytes},
 				{name: "bool", type: Bool},

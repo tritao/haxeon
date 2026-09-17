@@ -68,7 +68,8 @@ class HxiCallMain {
 			'\textern fn callSystemCallback(callback: FixtureSystemBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback") @callconv("system");\n'
 			+ '\textern fn callCallbackOnThread(callback: FixtureBinary) -> i32 @symbol("native_fixture_call_callback_on_thread");\n'
 			+ '\textern fn callEvent(callback: FixtureEvent, withUserData: i32) -> i32 @symbol("native_fixture_call_event");\n'
-			+ '\textern fn callSurfaceEventResult(callback: FixtureNullableSurfaceEvent @retained, userData: nullable<ptr<void>>) -> FixtureResult @symbol("native_fixture_call_surface_event");\n'
+			+
+			'\textern fn callSurfaceEventResult(callback: FixtureNullableSurfaceEvent @retained, userData: nullable<ptr<void>>) -> FixtureResult @symbol("native_fixture_call_surface_event");\n'
 			+ '\textern fn callInvalidEvent(callback: FixtureEvent) -> i32 @symbol("native_fixture_call_invalid_event");\n'
 			+ '\textern fn setCallback(callback: FixtureBinary) -> void @symbol("native_fixture_set_callback");\n'
 			+ '\textern fn setNullableCallback(callback: nullable<FixtureBinary>) -> void @symbol("native_fixture_set_callback");\n'

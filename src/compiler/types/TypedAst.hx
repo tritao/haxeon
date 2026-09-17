@@ -36,6 +36,8 @@ enum TypedExpressionKind {
 	TBoolLiteral(value:Bool);
 	TEnumLiteral(name:String, index:Int);
 	TEnumConstruct(name:String, index:Int, arguments:Array<TypedExpression>);
+	TEnumIndex(value:TypedExpression);
+	TEnumField(value:TypedExpression, constructor:Int, field:Int);
 	TNullLiteral;
 	TUnreachable;
 	TVoidLiteral;
@@ -245,10 +247,20 @@ typedef TypedSwitchCoverageCase = {
 typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
 
 /** Resolved enum-constructor signature. */
-typedef TypedEnumCase = {final name:String; final params:Array<CompilerType>; final span:SourceSpan;}
+typedef TypedEnumCase = {
+	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
+	final params:Array<CompilerType>;
+	final span:SourceSpan;
+}
 
 /** Type-checked enum declaration. */
-typedef TypedEnum = {final name:String; final cases:Array<TypedEnumCase>; final span:SourceSpan;}
+typedef TypedEnum = {
+	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
+	final cases:Array<TypedEnumCase>;
+	final span:SourceSpan;
+}
 
 /**
  * Fully typed function or method body.
@@ -274,6 +286,7 @@ typedef TypedFunction = {
 /** Class field after annotation inference and initializer type checking. */
 typedef TypedField = {
 	final name:String;
+	final metadata:Array<compiler.syntax.Ast.AstMetadata>;
 	final type:CompilerType;
 	final initializer:Null<TypedExpression>;
 

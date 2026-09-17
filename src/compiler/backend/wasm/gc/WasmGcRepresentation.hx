@@ -4668,6 +4668,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	static function arrayNativeSuffix(type:IrType):String
 		return switch type {
 			case I32: "i32";
+			case I64: "i64";
 			case Bool: "bool";
 			case RawPtr: "i32";
 			case F32: "f64";

@@ -16,6 +16,7 @@ fi
 
 "$root_dir/scripts/build-native.sh" >/dev/null
 mkdir -p "$root_dir/out"
+bash "$root_dir/scripts/test-messagepack-interop.sh"
 
 "$root_dir/tests/differential/run.sh"
 "$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild test "${TEST_JOBS:-16}"

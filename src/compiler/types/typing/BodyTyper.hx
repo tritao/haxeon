@@ -40,6 +40,7 @@ import compiler.Source.SourceSpan;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
+@:allow(compiler.types.typing.WireCodecGenerator)
 class BodyTyper {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;

@@ -57,6 +57,7 @@ import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession;
 import compiler.Compiler;
+import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import sys.io.File;
@@ -879,12 +880,46 @@ class TestMain {
 		voidEntryCompiler.compile("Main");
 		Sys.println("PASS: constructor parameters infer from declared field constraints");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
-			'@:hlNative("sample") private class Native { @:noCompletion public static function read():Int return @:privateAccess 42; }')).tokenize())
-			.parseProgram();
+			'@:hlNative("sample") private class Native { @:id(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; } @:wire enum MetadataStatus { @:id(5) Ready; }'))
+			.tokenize()).parseProgram();
 		if (!metadataProgram.classes[0].isPrivate
 			|| metadataProgram.classes[0].metadata[0].name != "hlNative"
-			|| metadataProgram.classes[0].metadata[0].arguments.length != 1)
+			|| metadataProgram.classes[0].metadata[0].arguments.length != 1
+			|| metadataProgram.classes[0].fields[0].metadata[0].name != "id"
+			|| metadataProgram.classes[0].fields[0].metadata[0].arguments.length != 1
+			|| metadataProgram.enums[0].metadata[0].name != "wire"
+			|| metadataProgram.enums[0].cases[0].metadata[0].name != "id")
 			throw "Class metadata and top-level visibility were not preserved";
+		var wireCollisionCompiler = new Compiler();
+		CompilerIntrinsics.register(wireCollisionCompiler);
+		wireCollisionCompiler.addSourceRoot("stdlib");
+		wireCollisionCompiler.update("foo/Bar.hx", "package foo; @:wire class Bar { @:id(1) public var value:Int; }");
+		wireCollisionCompiler.update("foo_Bar.hx", "@:wire class foo_Bar { @:id(1) public var value:Int; }");
+		wireCollisionCompiler.update("Main.hx",
+			"import foo.Bar; function main():Int { var left:Bar = new Bar(); var right:foo_Bar = new foo_Bar(); return haxeon.wire.MessagePack.encode(left).length + haxeon.wire.MessagePack.encode(right).length; }");
+		wireCollisionCompiler.compile("Main");
+		expectCompileError('@:wire class MissingId { public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
+			'MessagePack record field "MissingId.id" requires @:id(n)');
+		expectCompileError('@:wire class DuplicateId { @:id(1) public var left:Int; @:id(1) public var right:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new DuplicateId()).length; }',
+			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)');
+		expectCompileError('@:wire class UnsupportedWireDefault { @:id(1) public var value:Int = 1 + 2; } function main():Int { return haxeon.wire.MessagePack.encode(new UnsupportedWireDefault()).length; }',
+			'MessagePack record field "UnsupportedWireDefault.value" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal');
+		expectCompileError('@:wire class RecursiveWire { @:id(1) public var child:Null<RecursiveWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveWire()).length; }',
+			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)');
+		expectCompileError('@:wire class RecursiveArrayWire { @:id(1) public var children:Array<RecursiveArrayWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveArrayWire()).length; }',
+			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)');
+		expectCompileError('@:wire class RecursiveMapWire { @:id(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
+			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)');
+		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxeon.wire.MessagePack.encode(values).length; }',
+			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
+		expectCompileError('@:wire enum MissingEnumId { Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
+			'MessagePack enum constructor "MissingEnumId.Value" requires @:id(n)');
+		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
+			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
+		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
+			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
+		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
+			'This map key/value type has no compiler-owned runtime ABI');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;

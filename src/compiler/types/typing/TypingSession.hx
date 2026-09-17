@@ -3,15 +3,24 @@ package compiler.types.typing;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
+import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedNativeLayout;
+import compiler.Source.SourceSpan;
 
 typedef ResolvedInlineConstant = {
 	final initializer:TypedExpression;
 	final value:TypedExpression;
+}
+
+typedef WireCodecRequest = {
+	final type:CompilerType;
+	final origin:String;
+	final span:SourceSpan;
 }
 
 /** Mutable semantic state shared by all typing phases for one compilation. */
@@ -35,6 +44,7 @@ class TypingSession {
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
+	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
@@ -66,6 +76,30 @@ class TypingSession {
 	public function bindNominalDeclarations():Void {
 		interfaceDecls = declarations.interfaces;
 		classDecls = declarations.classes;
+	}
+
+	/** Resolve a source Map ABI, restricting enum keys to nullary constructors. */
+	public function mapName(key:CompilerType, value:CompilerType):Null<String> {
+		var enumKey = enumKeyType(key);
+		if (enumKey != null) {
+			if (enumKey.arguments.length != 0)
+				return null;
+			var declaration = enumDecls.get(enumKey.name);
+			if (declaration == null)
+				return null;
+			for (constructor in declaration.cases)
+				if (constructor.params.length != 0)
+					return null;
+		}
+		return RuntimeType.mapName(key, value);
+	}
+
+	static function enumKeyType(type:CompilerType):Null<{name:String, arguments:Array<CompilerType>}> {
+		return switch type {
+			case TAbstract(_, _, representation): enumKeyType(representation);
+			case TInstance(NominalKind.Enum, name, arguments): {name: name, arguments: arguments};
+			default: null;
+		};
 	}
 
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):TypingContext {

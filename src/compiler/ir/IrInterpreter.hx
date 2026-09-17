@@ -187,21 +187,21 @@ class IrInterpreter {
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
 		return switch name {
 			case "__exit": null;
-			case "__array_alloc_i32", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
+			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
-			case "__array_copy_i32", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref":
+			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity);
-			case "__array_concat_i32", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref":
+			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref":
 				var left = interpArray(arguments[0]),
 					right = interpArray(arguments[1]);
 				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8);
-			case "__array_push_i32", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
+			case "__array_push_i32", "__array_push_i64", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
 				var pushed = interpArray(arguments[0]);
 				pushed.values.push(arguments[1]);
 				pushed.capacity = pushed.values.length + 8;
 				pushed.values.length;
-			case "__array_pop_i32", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes", "__array_pop_ref":
+			case "__array_pop_i32", "__array_pop_i64", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes", "__array_pop_ref":
 				var popped = interpArray(arguments[0]);
 				popped.values.length == 0 ? null : popped.values.pop();
 			case "__string_length": Std.string(arguments[0]).length;

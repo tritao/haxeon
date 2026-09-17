@@ -8,15 +8,15 @@ import compiler.types.Type.NominalKind;
  *
  * Keeping these specializations in one place prevents the typer, IR builder,
  * and native registration table from silently drifting apart as collections
- * grow.  The first map ABI deliberately remains closed: every new
- * specialization has to be added here, typed, lowered, and covered by an
- * end-to-end runtime test.
+ * grow. Every new specialization has to be added here, typed, lowered, and
+ * covered by an end-to-end runtime test.
  */
 class RuntimeType {
 	public static function arrayName(element:CompilerType):Null<String>
 		return switch element {
 			case TAbstract(_, _, representation): arrayName(representation);
 			case TInt: "i32";
+			case TInt64: "i64";
 			case TFloat: "f64";
 			case TBool: "bool";
 			case TString: "bytes";
@@ -41,6 +41,7 @@ class RuntimeType {
 			case TAbstract(_, _, representation): mapName(representation, value);
 			case TString: mapValueName("map_string_", value);
 			case TInt: mapValueName("map_int_", value);
+			case TInstance(NominalKind.Enum, _, _): mapValueName("map_int_", value);
 			default: null;
 		};
 
@@ -49,6 +50,7 @@ class RuntimeType {
 			case TAbstract(_, _, representation): mapValueName(prefix, representation);
 			case TNullable(element): nullableMapValueName(prefix, element);
 			case TInt: prefix + "i32";
+			case TInt64: prefix + "i64";
 			case TBool: prefix + "bool";
 			case TFloat: prefix + "f64";
 			case TString: prefix + "bytes";
@@ -59,7 +61,7 @@ class RuntimeType {
 		return switch element {
 			case TAbstract(_, _, representation): nullableMapValueName(prefix, representation);
 			case TString: prefix + "bytes";
-			case TInt, TBool, TFloat: prefix + "ref";
+			case TInt, TInt64, TBool, TFloat: prefix + "ref";
 			default: isRuntimeReference(element) ? prefix + "ref" : null;
 		};
 
@@ -81,10 +83,12 @@ class RuntimeType {
 	public static function mapValueType(name:String):Null<CompilerType>
 		return switch name {
 			case "map_string_i32": CompilerType.TInt;
+			case "map_string_i64": CompilerType.TInt64;
 			case "map_string_bool": CompilerType.TBool;
 			case "map_string_f64": CompilerType.TFloat;
 			case "map_string_bytes": CompilerType.TString;
 			case "map_int_i32": CompilerType.TInt;
+			case "map_int_i64": CompilerType.TInt64;
 			case "map_int_bool": CompilerType.TBool;
 			case "map_int_f64": CompilerType.TFloat;
 			case "map_int_bytes": CompilerType.TString;

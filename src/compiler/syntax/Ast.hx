@@ -49,6 +49,7 @@ enum AstFieldAccess {
 /** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
+	final metadata:Array<AstMetadata>;
 	final type:Null<AstType>;
 	final initializer:Null<AstExpression>;
 	final readAccess:Null<AstFieldAccess>;
@@ -101,10 +102,22 @@ typedef AstTypeAlias = {
 typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
 
 /** Parsed enum constructor and its ordered payload parameters. */
-typedef AstEnumCase = {final name:String; final params:Array<AstEnumParameter>; final span:SourceSpan;}
+typedef AstEnumCase = {
+	final name:String;
+	final metadata:Array<AstMetadata>;
+	final params:Array<AstEnumParameter>;
+	final span:SourceSpan;
+}
 
 /** Parsed algebraic enum declaration. */
-typedef AstEnum = {final name:String; final typeParameters:Array<String>; final ?typeConstraints:Array<AstTypeConstraint>; final cases:Array<AstEnumCase>; final span:SourceSpan;}
+typedef AstEnum = {
+	final name:String;
+	final typeParameters:Array<String>;
+	final ?typeConstraints:Array<AstTypeConstraint>;
+	final metadata:Array<AstMetadata>;
+	final cases:Array<AstEnumCase>;
+	final span:SourceSpan;
+}
 
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
