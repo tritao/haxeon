@@ -19,6 +19,7 @@ class HlNativeDescriptorTable {
 	final entries:RawPtr<NativeModuleHlNative>;
 	final capacity:Int;
 	var count:Int = 0;
+	var sealed:Bool = false;
 
 	public function new(arena:HlTypeArena, ?capacity:Int = 8) {
 		if (arena == null || capacity <= 0)
@@ -30,6 +31,8 @@ class HlNativeDescriptorTable {
 
 	/** Append one descriptor and return its stable address. */
 	public function add(spec:HlNativeDescriptorSpec):RawPtr<HlNative> {
+		if (sealed)
+			throw "HashLink native descriptor table is sealed after publication";
 		if (spec == null)
 			throw "HashLink native descriptor cannot be null";
 		if (count >= capacity)
@@ -42,6 +45,11 @@ class HlNativeDescriptorTable {
 		descriptor.ref.type = spec.type;
 		descriptor.ref.findex = cast spec.findex;
 		return descriptor;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function seal():Void {
+		sealed = true;
 	}
 
 	public inline function pointer():RawPtr<NativeModuleHlNative>

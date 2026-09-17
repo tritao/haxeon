@@ -483,6 +483,10 @@ class HlMetadataGeneration {
 		validateNativeCode();
 		publishedContiguousTypeCount = arena.typeCountOf();
 		publishedUsesContiguousTypes = usesContiguousTypes;
+		functionDescriptors.seal();
+		nativeDescriptors.seal();
+		constantDescriptors.seal();
+		debugSectionDescriptors.seal();
 		published = true;
 		return snapshot();
 	}

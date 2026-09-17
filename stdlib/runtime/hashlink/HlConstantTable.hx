@@ -16,6 +16,7 @@ class HlConstantTable {
 	final entries:RawPtr<NativeModuleHlConstant>;
 	final capacity:Int;
 	var count:Int = 0;
+	var sealed:Bool = false;
 
 	public function new(arena:HlTypeArena, ?capacity:Int = 8) {
 		if (arena == null || capacity <= 0)
@@ -27,6 +28,8 @@ class HlConstantTable {
 
 	/** Append one constant descriptor and return its stable address. */
 	public function add(spec:HlConstantDescriptorSpec):RawPtr<NativeModuleHlConstant> {
+		if (sealed)
+			throw "HashLink constant descriptor table is sealed after publication";
 		if (spec == null)
 			throw "HashLink constant descriptor cannot be null";
 		if (count >= capacity)
@@ -38,6 +41,11 @@ class HlConstantTable {
 		descriptor.ref.nfields = cast spec.nfields;
 		descriptor.ref.fields = spec.fields;
 		return descriptor;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function seal():Void {
+		sealed = true;
 	}
 
 	public inline function pointer():RawPtr<NativeModuleHlConstant>

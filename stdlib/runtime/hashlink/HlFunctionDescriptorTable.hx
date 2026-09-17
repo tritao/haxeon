@@ -28,6 +28,7 @@ class HlFunctionDescriptorTable {
 	final entries:RawPtr<NativeModuleHlFunction>;
 	final capacity:Int;
 	var count:Int = 0;
+	var sealed:Bool = false;
 
 	public function new(arena:HlTypeArena, ?capacity:Int = 8) {
 		if (arena == null || capacity <= 0)
@@ -39,6 +40,8 @@ class HlFunctionDescriptorTable {
 
 	/** Append one descriptor and return its stable address. */
 	public function add(spec:HlFunctionDescriptorSpec):RawPtr<HlFunction> {
+		if (sealed)
+			throw "HashLink function descriptor table is sealed after publication";
 		if (spec == null)
 			throw "HashLink function descriptor cannot be null";
 		if (count >= capacity)
@@ -62,6 +65,11 @@ class HlFunctionDescriptorTable {
 		else
 			descriptor.ref.field.ref.name = spec.fieldName;
 		return descriptor;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function seal():Void {
+		sealed = true;
 	}
 
 	public inline function pointer():RawPtr<NativeModuleHlFunction>

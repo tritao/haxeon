@@ -9,6 +9,7 @@ class HlDebugSectionTable {
 	final entries:RawPtr<NativeModuleHlDebugSection>;
 	final capacity:Int;
 	var count:Int = 0;
+	var sealed:Bool = false;
 
 	public function new(arena:HlTypeArena, ?capacity:Int = 8) {
 		if (arena == null || capacity <= 0)
@@ -20,6 +21,8 @@ class HlDebugSectionTable {
 
 	/** Append one immutable debug section and copy its payload into the arena. */
 	public function add(spec:HlDebugSectionSpec):RawPtr<NativeModuleHlDebugSection> {
+		if (sealed)
+			throw "HashLink debug section table is sealed after publication";
 		if (spec == null || spec.payload == null)
 			throw "HashLink debug section requires a payload";
 		if (count >= capacity)
@@ -37,6 +40,11 @@ class HlDebugSectionTable {
 		section.ref.size = cast payload.length;
 		section.ref.data = data;
 		return section;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function seal():Void {
+		sealed = true;
 	}
 
 	public inline function pointer():RawPtr<NativeModuleHlDebugSection>

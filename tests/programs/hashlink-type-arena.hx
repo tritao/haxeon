@@ -326,6 +326,47 @@ function main():Int {
 		generation.addType(generationInt)
 	catch (error:Dynamic)
 		generationSealed = true;
+	var descriptorTablesSealed = true;
+	try {
+		generation.functionDescriptors.add({
+			findex: 0,
+			nregs: 0,
+			nops: 0,
+			reference: 0,
+			nassigns: 0,
+			type: generationFunction,
+			regs: RawPtr.nullPtr(),
+			ops: RawPtr.nullPtr(),
+			debug: RawPtr.nullPtr(),
+			assigns: RawPtr.nullPtr(),
+			object: RawPtr.nullPtr(),
+			fieldName: RawPtr.nullPtr(),
+			fieldReference: RawPtr.nullPtr()
+		});
+		descriptorTablesSealed = false;
+	} catch (error:Dynamic) {}
+	try {
+		generation.nativeDescriptors.add({
+			library: RawPtr.nullPtr(),
+			name: RawPtr.nullPtr(),
+			type: generationFunction,
+			findex: 0
+		});
+		descriptorTablesSealed = false;
+	} catch (error:Dynamic) {}
+	try {
+		generation.constantDescriptors.add({global: 0, nfields: 0, fields: RawPtr.nullPtr()});
+		descriptorTablesSealed = false;
+	} catch (error:Dynamic) {}
+	try {
+		generation.debugSectionDescriptors.add({
+			kind: 1,
+			version: 1,
+			flags: 0,
+			payload: haxe.io.Bytes.alloc(0)
+		});
+		descriptorTablesSealed = false;
+	} catch (error:Dynamic) {}
 	var inheritedGeneration = new HlMetadataGeneration(128, 1),
 		inheritedBindingCorrect = false;
 	try {
@@ -453,6 +494,6 @@ function main():Int {
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
-		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && inheritedBindingCorrect && invalidDescriptorRejected
-		&& dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
+		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && descriptorTablesSealed && inheritedBindingCorrect
+		&& invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
 }
