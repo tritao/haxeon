@@ -194,8 +194,9 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   covered.
   The identity-family regression suite now covers definition, type definition,
   references, implementations, prepare-rename, and rename across exact and
-  recovered inheritance cases. Full type-aware navigation and global reference
-  precision remain.
+  recovered inheritance cases. Broader rare-construct navigation and global
+  reference coverage remains intentionally outside this milestone;
+  uncertain cases return no result rather than guessing.
   Member-family navigation now includes class fields while keeping static
   shadows owner-local instead of treating them as inherited implementations,
   and it does not merge field and method declarations that merely share a name.
@@ -203,7 +204,7 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   semantic queries, transactional validation, and base64 HLB/HLP payloads with
   runtime identity, plus a caller-owned cancellation token and `cancel` method.
   There is no second typechecker.
-- [~] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
+- [x] `benchmarks/editor-benchmark.hxml` measures edit-to-recovery,
   completion, signature-help, hover, definition, background-analysis latency,
   recovered-snapshot publication, and process-memory growth under rapid
   incomplete edits, including multi-module malformed-source scenarios. Its
@@ -216,8 +217,17 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   cross-module definition, a malformed plugin edit, and a repaired plugin
   transition. Use
   `--project-iterations`, `--scale-modules`, and `--endurance-edits` to
-  reproduce or enlarge the workload; broader production-workspace validation
-  remains.
+  reproduce or enlarge the workload. The post-merge `--check-budgets` run
+  passed on 2026-09-17: small edit recovery p95 5.47 ms, malformed Pragtical
+  fixture recovery p95 27.13 ms, scaled 64-module recovery p95 47.41 ms, and
+  250-edit long-lived memory growth 790,528 bytes.
+
+- [x] Recovery/LSP closure checkpoint (2026-09-17): the identity-family matrix,
+  lifecycle and cancellation corpus, `main` reconciliation, full
+  compiler/tooling validation (`43 passed, 0 failed`), and the editor benchmark
+  budget gate are green. Further semantic edge cases are maintenance work
+  unless they produce a wrong edit or navigation target, a crash/stale result,
+  or unacceptable interactive latency.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).
