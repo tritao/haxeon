@@ -195,7 +195,7 @@ class HlTypeDefStateCodec {
 					}
 					for (method in methods) {
 						validateStringReference(method.name, strings);
-						if (method.functionIndex < 0 || method.prototype < 0)
+						if (method.functionIndex < 0)
 							throw "Invalid HashLink object method";
 					}
 					for (binding in bindings)
@@ -211,7 +211,7 @@ class HlTypeDefStateCodec {
 					}
 					for (method in methods) {
 						validateStringReference(method.name, strings);
-						if (method.functionIndex < 0 || method.prototype < 0)
+						if (method.functionIndex < 0)
 							throw "Invalid HashLink structure method";
 					}
 					for (binding in bindings)

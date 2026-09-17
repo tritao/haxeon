@@ -66,8 +66,6 @@ class HlValidator {
 					for (method in methods) {
 						requireString(code, method.name, "object method name");
 						requireFunctionIndex(code, method.functionIndex, "object method");
-						if (method.prototype < 0)
-							throw 'Invalid object method prototype ${method.prototype}';
 					}
 				case Structure(name, global, fields, methods, bindings):
 					requireString(code, name, "structure name");
@@ -80,8 +78,6 @@ class HlValidator {
 					for (method in methods) {
 						requireString(code, method.name, "structure method name");
 						requireFunctionIndex(code, method.functionIndex, "structure method");
-						if (method.prototype < 0)
-							throw 'Invalid structure method prototype ${method.prototype}';
 					}
 				case Virtual(fields):
 					for (field in fields) {

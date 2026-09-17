@@ -6,6 +6,7 @@ import compiler.hl.HlModule;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.persistence.HlRuntimeIdentity;
+import compiler.hl.persistence.HlTypeDefStateCodec;
 import compiler.Compiler;
 import haxe.io.Bytes as HaxeBytes;
 
@@ -255,6 +256,27 @@ function main():Void {
 		&& decoded.functions[0].debugLocations[4].line == 5, "HLB debug locations did not decode");
 	expect(decoded.functions[0].debugAssignments[0].position == -1 && decoded.functions[0].debugAssignments[0].scopeEnd == -1,
 		"HLB debug assignments did not decode");
+	var newMethodCode = new HlCode();
+	newMethodCode.strings = ["NewObject", "run"];
+	newMethodCode.types = [
+		Simple(HlType.I32),
+		Object(0, -1, 0, [], [{name: 1, functionIndex: 0, prototype: -1}], [])
+	];
+	newMethodCode.functions = [new compiler.hl.HlFunction(0, 0, [0], [HlInstruction.Return(0)])];
+	newMethodCode.entryPoint = 0;
+	var newMethodBytes = HlWriter.encode(newMethodCode),
+		newMethodDecoded = HlReader.decode(newMethodBytes);
+	expect(HlWriter.encode(newMethodDecoded).compare(newMethodBytes) == 0, "HLB negative method prototype did not round trip canonically");
+	switch newMethodDecoded.types[1] {
+		case Object(_, _, _, _, methods, _):
+			expect(methods.length == 1 && methods[0].prototype == -1, "HLB negative method prototype did not survive decoding");
+		case _:
+			throw "HLB negative method prototype changed type kind";
+	}
+	var negativePrototypeState = HlTypeDefStateCodec.encode(newMethodCode.types);
+	expect(HlTypeDefStateCodec.encode(HlTypeDefStateCodec.decode(negativePrototypeState, newMethodCode.strings.length, 0))
+		.compare(negativePrototypeState) == 0,
+		"HashLink type state did not preserve negative method prototypes");
 	var numeric = new HlCode();
 	numeric.ints = [1];
 	numeric.types = [Simple(HlType.I32)];
