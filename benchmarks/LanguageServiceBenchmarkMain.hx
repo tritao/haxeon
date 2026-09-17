@@ -52,6 +52,12 @@ private typedef GeneratedSample = {
 	final recoveredSnapshots:Int;
 }
 
+private typedef GeneratedScenarioSpec = {
+	final name:String;
+	final topology:String;
+	final moduleCount:Int;
+}
+
 /** Measures editor recovery latency and memory growth under rapid edits. */
 class LanguageServiceBenchmarkMain {
 	static final prefix = "class Foo { public function bar(value:Int):Int return value; }\n" + "function main():Void { var foo:Foo = new Foo(); ";
@@ -73,12 +79,16 @@ class LanguageServiceBenchmarkMain {
 			warmup = intArg(args, "--warmup", 10),
 			scenarioIterations = intArg(args, "--scenario-iterations", 5),
 			scaleIterations = intArg(args, "--scale-iterations", 3),
-			scaleModules = intArg(args, "--scale-modules", 64),
+			scaleModulesOverride = stringArg(args, "--scale-modules", null),
+			scaleSizes = scaleModulesOverride == null
+				? intListArg(args, "--scale-sizes", [8, 64])
+				: [parsePositiveInt(scaleModulesOverride, "--scale-modules")],
 			scaleTopology = stringArg(args, "--scale-topology", "fanout"),
+			enduranceModules = intArg(args, "--endurance-modules", scaleSizes[scaleSizes.length - 1]),
 			enduranceEdits = intArg(args, "--endurance-edits", 250),
 			output = stringArg(args, "--json", "out/editor-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
-		if (iterations < 1 || warmup < 0 || scenarioIterations < 1 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
+		if (iterations < 1 || warmup < 0 || scenarioIterations < 1 || scaleIterations < 1 || scaleSizes.length == 0 || enduranceModules < 1 || enduranceEdits < 1)
 			throw "iterations and scale parameters must be positive; warmup cannot be negative";
 		if (scaleTopology != "fanout" && scaleTopology != "chain" && scaleTopology != "diamond")
 			throw 'unsupported generated workspace topology "$scaleTopology"';
@@ -95,13 +105,19 @@ class LanguageServiceBenchmarkMain {
 			scenarioSamples = [for (_ in 0...scenarioIterations) runSmallProjectScenario()];
 		collectGarbage();
 		var after = processMemory(),
-			generatedSamples = [for (_ in 0...scaleIterations) runGeneratedWorkspaceScenario(scaleModules, scaleTopology)],
-			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits, scaleTopology),
+			generatedScenarios = generatedScenarioSpecs(scaleSizes, scaleTopology),
+			generatedReports:Dynamic = {};
+		for (scenario in generatedScenarios) {
+			var generatedSamples = [for (_ in 0...scaleIterations) runGeneratedWorkspaceScenario(scenario)];
+			Reflect.setField(generatedReports, scenario.name, summarizeGenerated(generatedSamples));
+		}
+		var longLivedMemoryGrowth = runLongLivedScenario(enduranceModules, enduranceEdits, scaleTopology),
 			scenarios:Dynamic = {};
 		Reflect.setField(scenarios, "small-project", summarizeScenario(scenarioSamples));
-		Reflect.setField(scenarios, 'generated-$scaleModules-$scaleTopology', summarizeGenerated(generatedSamples));
+		for (scenario in generatedScenarios)
+			Reflect.setField(scenarios, scenario.name, Reflect.field(generatedReports, scenario.name));
 		var report = {
-			version: 5,
+			version: 6,
 			iterations: iterations,
 			warmup: warmup,
 			scenarioIterations: scenarioIterations,
@@ -119,7 +135,10 @@ class LanguageServiceBenchmarkMain {
 			workspaceCompletionMs: percentiles([for (sample in samples) sample.workspaceCompletionMs]),
 			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
 			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
-			scaleModules: scaleModules,
+			// Keep the legacy field useful for consumers that only display one
+			// scale, while scaleSizes is the authoritative matrix configuration.
+			scaleModules: scaleSizes[scaleSizes.length - 1],
+			scaleSizes: scaleSizes,
 			scaleTopology: scaleTopology,
 			scaleIterations: scaleIterations,
 			scenarios: scenarios,
@@ -150,7 +169,8 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
 		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
 		printScenarioSummary("small-project", Reflect.field(scenarios, "small-project"));
-		printScenarioSummary('generated-$scaleModules-$scaleTopology', Reflect.field(scenarios, 'generated-$scaleModules-$scaleTopology'));
+		for (scenario in generatedScenarios)
+			printScenarioSummary(scenario.name, Reflect.field(scenarios, scenario.name));
 		Sys.println('Long-lived memory growth after ${enduranceEdits} edits: ${report.longLivedMemoryGrowthBytes} bytes');
 		Sys.println('Recovered snapshots average: ${format(report.recoveredSnapshots.average)}');
 		if (checkBudgets) {
@@ -411,8 +431,18 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('$name retyped functions p95: ${format(scenario.retypedFunctions.p95)}');
 	}
 
-	static function runGeneratedWorkspaceScenario(moduleCount:Int, topology:String):GeneratedSample {
-		var service = prepareGeneratedWorkspace(moduleCount, topology),
+	static function generatedScenarioSpecs(scaleSizes:Array<Int>, topology:String):Array<GeneratedScenarioSpec> {
+		return [for (moduleCount in scaleSizes) {
+			name: 'generated-$moduleCount-$topology',
+			topology: topology,
+			moduleCount: moduleCount
+		}];
+	}
+
+	static function runGeneratedWorkspaceScenario(scenario:GeneratedScenarioSpec):GeneratedSample {
+		var moduleCount = scenario.moduleCount,
+			topology = scenario.topology,
+			service = prepareGeneratedWorkspace(moduleCount, topology),
 			recoveredBefore = service.recoveredSnapshotBuilds,
 			validSource = generatedSource(moduleCount, topology, 0, false),
 			started = Sys.time();
@@ -580,6 +610,24 @@ class LanguageServiceBenchmarkMain {
 			if (StringTools.startsWith(argument, prefix))
 				return argument.substring(prefix.length);
 		return fallback;
+	}
+
+	static function intListArg(args:Array<String>, name:String, fallback:Array<Int>):Array<Int> {
+		var value = stringArg(args, name, null);
+		if (value == null)
+			return fallback;
+
+		var result:Array<Int> = [];
+		for (part in value.split(","))
+			result.push(parsePositiveInt(StringTools.trim(part), name));
+		return result;
+	}
+
+	static function parsePositiveInt(value:String, name:String):Int {
+		var parsed = Std.parseInt(value);
+		if (parsed == null || parsed < 1)
+			throw '$name values must be positive integers';
+		return parsed;
 	}
 
 	static function hasFlag(args:Array<String>, name:String):Bool {

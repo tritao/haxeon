@@ -21,9 +21,14 @@ Each profile records edit and completion percentiles plus:
 - process-memory growth for the endurance workload.
 
 The generated topology is selected with `--scale-topology=fanout|chain|diamond`.
-The generic benchmark has no consumer-specific paths or report fields. A real
-consumer such as Pragtical belongs in an optional integration workload and can
-reuse these scenario and probe conventions without changing the core report.
+By default the budgeted runner executes the generated size matrix `8,64`; select
+a larger matrix with `--scale-sizes=8,64,256`. The older
+`--scale-modules=64` option remains as a compatibility shortcut for one size.
+Use `--endurance-modules` to choose which matrix size receives the long-lived
+edit loop. The generic benchmark has no consumer-specific paths or report
+fields. A real consumer such as Pragtical belongs in an optional integration
+workload and can reuse these scenario and probe conventions without changing
+the core report.
 
 Example:
 
@@ -32,3 +37,14 @@ Example:
 LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/editor-benchmark.hl \
   --check-budgets --scale-modules=64 --scale-topology=diamond
 ```
+
+To include the 256-module scale probe with a shorter endurance pass:
+
+```sh
+LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/editor-benchmark.hl \
+  --scale-sizes=8,64,256 --endurance-modules=64
+```
+
+The 256-module fan-out currently exceeds the 500 ms generated-workspace
+budget, so adding `--check-budgets` to this larger probe intentionally exposes
+the next scaling target rather than masking it.
