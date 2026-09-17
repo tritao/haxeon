@@ -251,6 +251,9 @@ class SemanticWorkspace {
 			return {explicit: true, ids: result};
 		if (blockedByModuleAlias)
 			return {explicit: true, ids: result};
+		var samePackage = editorSamePackageFunctionMatches(program, name, token);
+		if (samePackage.length > 0)
+			return {explicit: false, ids: samePackage};
 		for (importPath in program.imports) {
 			if (token != null)
 				token.check();
@@ -1059,6 +1062,25 @@ class SemanticWorkspace {
 				if (isTypeKind(symbol.kind) && symbol.name == name)
 					addUniqueIdentity(result, symbol.id);
 			}
+		}
+		return result;
+	}
+
+	function editorSamePackageFunctionMatches(program:AstProgram, name:String,
+		?token:CancellationToken):Array<SemanticSymbolId> {
+		var packageName = program.packageName == null ? null : Std.string(program.packageName),
+			result:Array<SemanticSymbolId> = [];
+		if (packageName == null)
+			return result;
+		for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state),
+				candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
+			if (model == null || candidatePackage != packageName)
+				continue;
+			for (id in editorTopLevelFunctionIds(state, name, token))
+				addUniqueIdentity(result, id);
 		}
 		return result;
 	}

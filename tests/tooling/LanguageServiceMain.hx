@@ -1010,6 +1010,30 @@ class LanguageServiceMain {
 		if (packagePrecedenceMemberDefinition == null
 			|| packagePrecedenceMemberDefinition.path != "prefer/app/Thing.hx")
 			throw 'same-package member navigation did not retain the selected receiver: ${packagePrecedenceMemberDefinition == null ? "null" : packagePrecedenceMemberDefinition.path}';
+		var functionPackagePrecedenceService = new LanguageService(),
+			functionPackagePrecedenceExternal = "package prefer.fn.external; function answer():Int return 1;",
+			functionPackagePrecedenceLocal = "package prefer.fn.app; function answer():Int return 2; function main():Void return;",
+			functionPackagePrecedenceUse = "package prefer.fn.app; import prefer.fn.external.*; function use():Int return answer( ; function unfinished(";
+		functionPackagePrecedenceService.update("prefer/fn/external/Answer.hx", functionPackagePrecedenceExternal);
+		functionPackagePrecedenceService.update("prefer/fn/app/Answer.hx", functionPackagePrecedenceLocal);
+		functionPackagePrecedenceService.compile("prefer.fn.app.Answer");
+		functionPackagePrecedenceService.update("prefer/fn/app/Use.hx", functionPackagePrecedenceUse);
+		var functionPackagePrecedencePosition = functionPackagePrecedenceUse.indexOf("answer") + 1,
+			functionPackagePrecedenceDefinition = functionPackagePrecedenceService.definition("prefer/fn/app/Use.hx", functionPackagePrecedencePosition),
+			functionPackagePrecedenceReferences = functionPackagePrecedenceService.references("prefer/fn/app/Use.hx", functionPackagePrecedencePosition),
+			foundFunctionPackageUse = false,
+			foundFunctionPackageExternal = false;
+		for (reference in functionPackagePrecedenceReferences) {
+			if (reference.path == "prefer/fn/app/Use.hx")
+				foundFunctionPackageUse = true;
+			if (reference.path == "prefer/fn/external/Answer.hx")
+				foundFunctionPackageExternal = true;
+		}
+		if (functionPackagePrecedenceDefinition == null
+			|| functionPackagePrecedenceDefinition.path != "prefer/fn/app/Answer.hx"
+			|| !foundFunctionPackageUse
+			|| foundFunctionPackageExternal)
+			throw 'same-package function did not take precedence over wildcard import: ${functionPackagePrecedenceDefinition == null ? "null" : functionPackagePrecedenceDefinition.path}';
 		var signatureService = new LanguageService(),
 			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);
