@@ -340,6 +340,30 @@ class ParserRecoveryMain {
 		if (ambiguousEnumImportService.definition("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition) != null
 			|| ambiguousEnumImportService.references("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition).length != 0)
 			throw "strict analysis guessed through ambiguous explicit enum-constructor imports";
+
+		var secondaryEnumImportService = new LanguageService(),
+			secondaryEnumImportTarget = "package visibility.secondary; enum Result { Value(value:Int); } class Container {} function main():Void return;",
+			secondaryEnumImportConsumer = "package visibility.secondary.app; import visibility.secondary.Container.Result.Value as V; function main():Void { V(1); }";
+		secondaryEnumImportService.update("visibility/secondary/Container.hx", secondaryEnumImportTarget);
+		secondaryEnumImportService.analyze("visibility.secondary.Container");
+		secondaryEnumImportService.update("visibility/secondary/app/Main.hx", secondaryEnumImportConsumer);
+		secondaryEnumImportService.analyze("visibility.secondary.app.Main");
+		var secondaryEnumImportPosition = secondaryEnumImportConsumer.lastIndexOf("V(1)") + 1,
+			secondaryEnumImportDefinition = secondaryEnumImportService.definition("visibility/secondary/app/Main.hx", secondaryEnumImportPosition),
+			secondaryEnumImportReferences = secondaryEnumImportService.references("visibility/secondary/app/Main.hx", secondaryEnumImportPosition);
+		if (secondaryEnumImportDefinition == null || secondaryEnumImportDefinition.stale
+			|| secondaryEnumImportDefinition.path != "visibility/secondary/Container.hx"
+			|| secondaryEnumImportReferences.length < 2)
+			throw 'secondary-module enum constructor import did not retain identity: definition=${secondaryEnumImportDefinition == null ? "null" : secondaryEnumImportDefinition.path}, references=${secondaryEnumImportReferences.length}';
+		var secondaryEnumImportRecovered = StringTools.replace(secondaryEnumImportConsumer, "V(1)", "V(");
+		secondaryEnumImportService.update("visibility/secondary/app/Main.hx", secondaryEnumImportRecovered);
+		var secondaryEnumImportRecoveredPosition = secondaryEnumImportRecovered.lastIndexOf("V(") + 1,
+			secondaryEnumImportRecoveredDefinition = secondaryEnumImportService.definition("visibility/secondary/app/Main.hx", secondaryEnumImportRecoveredPosition),
+			secondaryEnumImportRecoveredReferences = secondaryEnumImportService.references("visibility/secondary/app/Main.hx", secondaryEnumImportRecoveredPosition);
+		if (secondaryEnumImportRecoveredDefinition == null || secondaryEnumImportRecoveredDefinition.stale
+			|| secondaryEnumImportRecoveredDefinition.path != "visibility/secondary/Container.hx"
+			|| secondaryEnumImportRecoveredReferences.length < 2)
+			throw 'recovered secondary-module enum constructor import did not retain identity: definition=${secondaryEnumImportRecoveredDefinition == null ? "null" : secondaryEnumImportRecoveredDefinition.path}, references=${secondaryEnumImportRecoveredReferences.length}';
 	}
 
 	static function assertIncompleteDeclarations():Void {
