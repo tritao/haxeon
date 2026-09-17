@@ -346,6 +346,9 @@ class SemanticWorkspace {
 	/** Resolve a recovered type name without bypassing editor visibility. */
 	public function editorResolveTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
 		?token:CancellationToken):Null<SemanticSymbolId> {
+		var importedModuleType = editorImportedModuleTypeSymbolId(from, name, sourceProgram, token);
+		if (importedModuleType != null)
+			return importedModuleType;
 		var qualifiedType = editorQualifiedTypeSymbolId(name, token);
 		if (qualifiedType != null)
 			return qualifiedType;
@@ -1075,6 +1078,8 @@ class SemanticWorkspace {
 				token.check();
 			var receiverName = name.substring(0, separator),
 				memberName = name.substring(separator + 1),
+				typeId = editorImportedModuleTypeSymbolId(from, receiverName, sourceProgram, token);
+			if (typeId == null)
 				typeId = editorQualifiedTypeSymbolId(receiverName, token);
 			if (typeId != null) {
 				var nominalId = editorNominalTypeIdentityById(typeId, [], token),
@@ -1087,6 +1092,53 @@ class SemanticWorkspace {
 				}
 			}
 			separator = receiverName.lastIndexOf(".");
+		}
+		return null;
+	}
+
+	/**
+	 * Resolve a secondary type through a module qualifier, for example
+	 * `import pkg.Container as C; var value:C.Entry`. Top-level functions have
+	 * a separate module-alias path, but secondary source-module types need this
+	 * context-aware lookup before ordinary qualified-name resolution.
+	 */
+	function editorImportedModuleTypeSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var separator = name.indexOf(".");
+		if (separator < 1)
+			return null;
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram,
+			qualifier = name.substring(0, separator),
+			nestedName = name.substring(separator + 1);
+		if (program == null || nestedName.length == 0)
+			return null;
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != qualifier)
+				continue;
+			var target = editorImportTarget(importPath);
+			if (target == null || target.name != importPath)
+				continue;
+			var targetModel = editorModel(target);
+			if (targetModel == null)
+				continue;
+			for (decl in targetModel.program.classes)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
+			for (decl in targetModel.program.interfaces)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
+			for (decl in targetModel.program.abstracts)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
+			for (decl in targetModel.program.enums)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
+			for (decl in targetModel.program.aliases)
+				if (decl.name == nestedName)
+					return editorTypeIdentityByName(canonicalEditorTypeName(targetModel, decl.name), token, false);
 		}
 		return null;
 	}

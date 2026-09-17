@@ -597,6 +597,29 @@ class LanguageServiceMain {
 		if (secondaryTypeDefinition == null || secondaryTypeDefinition.path != "secondary/types/Container.hx"
 			|| !hasSecondaryTypeReference || !hasCurrentSecondaryTypeReference)
 			throw 'recovered secondary module type did not retain its canonical type identity: definition=${secondaryTypeDefinition == null ? "null" : secondaryTypeDefinition.path}, position=$secondaryTypePosition, references=${secondaryTypeReferences.length}';
+		var moduleAliasSecondaryService = new LanguageService(),
+			moduleAliasSecondaryTarget = "package modulealias.types; class Entry { public var member:Int; public static function create():Void return; } function main():Void return;",
+			moduleAliasSecondarySource = "package modulealias.app; import modulealias.types.Container as C; function main():Void { var entry:C.Entry; entry.member; C.Entry.create(); }";
+		moduleAliasSecondaryService.update("modulealias/types/Container.hx", moduleAliasSecondaryTarget);
+		moduleAliasSecondaryService.compile("modulealias.types.Container");
+		moduleAliasSecondaryService.update("modulealias/app/Main.hx", moduleAliasSecondarySource);
+		var moduleAliasSecondaryCompletion = moduleAliasSecondaryService.complete("modulealias/app/Main.hx",
+			moduleAliasSecondarySource.indexOf("entry.member") + "entry.".length),
+			moduleAliasSecondaryTypePosition = moduleAliasSecondarySource.indexOf("C.Entry") + "C.".length + 1,
+			moduleAliasSecondaryTypeDefinition = moduleAliasSecondaryService.typeDefinition("modulealias/app/Main.hx", moduleAliasSecondaryTypePosition),
+			moduleAliasSecondaryMemberPosition = moduleAliasSecondarySource.indexOf("entry.member") + "entry.".length + 1,
+			moduleAliasSecondaryMemberDefinition = moduleAliasSecondaryService.definition("modulealias/app/Main.hx", moduleAliasSecondaryMemberPosition),
+			moduleAliasSecondaryStaticPosition = moduleAliasSecondarySource.lastIndexOf("create") + 1,
+			moduleAliasSecondaryStaticDefinition = moduleAliasSecondaryService.definition("modulealias/app/Main.hx", moduleAliasSecondaryStaticPosition),
+			hasModuleAliasSecondaryMember = false;
+		for (item in moduleAliasSecondaryCompletion)
+			if (item.label == "member")
+				hasModuleAliasSecondaryMember = true;
+		if (!hasModuleAliasSecondaryMember
+			|| moduleAliasSecondaryTypeDefinition == null || moduleAliasSecondaryTypeDefinition.path != "modulealias/types/Container.hx"
+			|| moduleAliasSecondaryMemberDefinition == null || moduleAliasSecondaryMemberDefinition.path != "modulealias/types/Container.hx"
+			|| moduleAliasSecondaryStaticDefinition == null || moduleAliasSecondaryStaticDefinition.path != "modulealias/types/Container.hx")
+			throw 'module aliases did not resolve secondary types and members: type=${moduleAliasSecondaryTypeDefinition == null ? "null" : moduleAliasSecondaryTypeDefinition.path}, member=${moduleAliasSecondaryMemberDefinition == null ? "null" : moduleAliasSecondaryMemberDefinition.path}, static=${moduleAliasSecondaryStaticDefinition == null ? "null" : moduleAliasSecondaryStaticDefinition.path}';
 		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
 		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
 		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,
