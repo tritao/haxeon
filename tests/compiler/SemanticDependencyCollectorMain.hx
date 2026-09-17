@@ -26,13 +26,15 @@ class SemanticDependencyCollectorMain {
 		var entryDependencies = SemanticDependencyCollector.collectSemanticDependencies(entry, "Main", []);
 		expect(count(entryDependencies.get("main"), Body, "Main.helper") == 1, "entry-point ownership should remain canonical");
 
-		var scannerSource = 'function main():Void { var value:Imported; var values = new Array<Imported>(0); var map = new Map<Imported, Imported>(); var casted = (value:Imported); sizeof<Imported>(); var lambda = (item:Imported) -> item; }',
+		var scannerSource = 'function main():Void { var value:Declared; var values = new Array<ArrayElement>(0); var map = new Map<MapKey, MapValue>(); var casted = (value:CastTarget); sizeof<LayoutTarget>(); var lambda = (item:LambdaType) -> item; }',
 			scannerFile = new SourceFile("deps/Main.hx", scannerSource),
 			scannerProgram = new Parser(new Lexer(scannerFile).tokenize()).parseProgram(),
 			scanned:Map<String, Bool> = [];
 		for (statement in scannerProgram.functions[0].statements)
 			DependencyScanner.scanStatement(statement, scanned);
-		expect(scanned.exists("Imported"), "dependency scanning should retain local and nested type references");
+		expect(scanned.exists("Declared") && scanned.exists("ArrayElement") && scanned.exists("MapKey") && scanned.exists("MapValue")
+			&& scanned.exists("CastTarget") && scanned.exists("LayoutTarget") && scanned.exists("LambdaType"),
+			"dependency scanning should retain every declaration-bearing source type");
 
 		var moduleCompiler = new Compiler();
 		moduleCompiler.update("deps/Imported.hx", "package deps; class Imported<T> {} function main():Void return;");

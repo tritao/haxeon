@@ -3,6 +3,7 @@ package compiler.service;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticSignature;
 import compiler.semantic.SemanticDependencyCollector;
+import compiler.semantic.DependencyScanner;
 import compiler.syntax.AstChildren;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstExpression;
@@ -509,8 +510,14 @@ class LanguageService {
 		if (mapSize(changedBodies) == 0)
 			return false;
 		var references:Map<String, Bool> = [];
-		for (statement in fn.statements)
+		for (statement in fn.statements) {
+			// DependencyScanner is the exhaustive source-AST dependency path. In
+			// particular, it visits declaration-bearing AstType operands that are
+			// leaves of AstChildren.expressions (casts, generic arguments, typed
+			// lambdas, array/map types, and native layout queries).
+			DependencyScanner.scanStatement(statement, references);
 			scanRecoveredStatementReferences(statement, references);
+		}
 		for (reference in references.keys())
 			for (changed in changedBodies.keys())
 				if (SemanticDependencyCollector.sameDependencyTarget(reference, changed))
