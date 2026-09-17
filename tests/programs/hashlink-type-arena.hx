@@ -326,6 +326,53 @@ function main():Int {
 		generation.addType(generationInt)
 	catch (error:Dynamic)
 		generationSealed = true;
+	var inheritedGeneration = new HlMetadataGeneration(128, 1),
+		inheritedBindingCorrect = false;
+	try {
+		var inheritedVoid = inheritedGeneration.builder.primitive(HlTypeKind.VoidType),
+			inheritedFunction = inheritedGeneration.builder.functionType([], inheritedVoid),
+			inheritedModule = inheritedGeneration.defineModule([RawPtr.nullPtr(), RawPtr.nullPtr()], [inheritedFunction, inheritedFunction]),
+			inheritedFieldName = inheritedGeneration.builder.utf16Name("callback"),
+			inheritedParent = inheritedGeneration.builder.objectType(inheritedGeneration.builder.utf16Name("InheritedParent"), RawPtr.nullPtr(), [
+				{
+					name: inheritedFieldName,
+					type: inheritedFunction,
+					hashedName: 41
+				}
+			],
+				[], [], RawPtr.nullPtr(), inheritedModule, RawPtr.nullPtr()),
+			inheritedChild = inheritedGeneration.builder.objectType(inheritedGeneration.builder.utf16Name("InheritedChild"), inheritedParent, [], [], [
+				{
+					fieldIndex: 0,
+					functionIndex: 1
+				}
+			], RawPtr.nullPtr(), inheritedModule, RawPtr.nullPtr());
+		inheritedGeneration.addType(inheritedVoid);
+		inheritedGeneration.addType(inheritedFunction);
+		inheritedGeneration.addType(inheritedParent);
+		inheritedGeneration.addType(inheritedChild);
+		for (functionIndex in 0...2)
+			inheritedGeneration.addFunctionDescriptor({
+				findex: functionIndex,
+				nregs: 0,
+				nops: 0,
+				reference: 0,
+				nassigns: 0,
+				type: inheritedFunction,
+				regs: RawPtr.nullPtr(),
+				ops: RawPtr.nullPtr(),
+				debug: RawPtr.nullPtr(),
+				assigns: RawPtr.nullPtr(),
+				object: RawPtr.nullPtr(),
+				fieldName: RawPtr.nullPtr(),
+				fieldReference: RawPtr.nullPtr()
+			});
+		inheritedGeneration.publish();
+		inheritedBindingCorrect = inheritedChild.ref.data.ref.obj.ref.runtime.ref.nbindings == 1
+			&& inheritedGeneration.functionDescriptors.get(1).ref.object == inheritedChild.ref.data.ref.obj
+			&& inheritedGeneration.functionDescriptors.get(1).ref.field.ref.name == inheritedFieldName;
+	} catch (error:Dynamic) {}
+	inheritedGeneration.dispose();
 	var invalidGeneration = new HlMetadataGeneration(128, 1),
 		invalidType = invalidGeneration.builder.primitive(HlTypeKind.Int32Type),
 		invalidFunction = invalidGeneration.builder.functionType([invalidType], invalidType);
@@ -406,6 +453,6 @@ function main():Int {
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
-		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && invalidDescriptorRejected && dispatchCorrect
-		&& initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
+		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && inheritedBindingCorrect && invalidDescriptorRejected
+		&& dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
 }

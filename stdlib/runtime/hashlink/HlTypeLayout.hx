@@ -36,6 +36,24 @@ class HlTypeLayout {
 		}
 	}
 
+	/** Associate every object record with its module context before layout initialization. */
+	public static function bindModuleContexts(types:RawPtr<RawPtr<HlType>>, count:Int, context:RawPtr<HlModuleContext>):Void {
+		if (count < 0 || (count > 0 && types.isNull()) || context.isNull())
+			throw "HashLink module context binding requires a type table and module context";
+		for (index in 0...count) {
+			var type = types.offset(index).load();
+			if (type.isNull())
+				throw 'HashLink metadata contains a null type at index $index';
+			var kind:HlTypeKind = cast type.ref.kind;
+			if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
+				continue;
+			var object = type.ref.data.ref.obj;
+			if (object.isNull())
+				throw "HashLink module context binding contains an invalid object";
+			object.ref.module = context;
+		}
+	}
+
 	/** Attach descriptors when the type records are one contiguous native slab. */
 	public static function bindContiguousFunctionDescriptors(types:RawPtr<HlType>, count:Int, functions:RawPtr<HlFunction>, functionCount:Int,
 		context:RawPtr<HlModuleContext>):Void {

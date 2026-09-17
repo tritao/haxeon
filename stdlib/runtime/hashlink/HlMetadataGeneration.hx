@@ -472,8 +472,9 @@ class HlMetadataGeneration {
 		debugSectionDescriptors.validate();
 		validateModulePools();
 		HlTypeLayout.validate(typeTable.pointer(), typeTable.length());
-		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
+		HlTypeLayout.bindModuleContexts(typeTable.pointer(), typeTable.length(), moduleContext);
 		HlTypeLayout.initialize(typeTable.pointer(), typeTable.length(), arena);
+		HlTypeLayout.bindFunctionDescriptors(typeTable.pointer(), typeTable.length(), functionDescriptors.pointer(), functionDescriptors.length(), moduleContext);
 		var usesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
 		HlTypeLayout.bindFunctionReferences(functionDescriptors.pointer(), functionDescriptors.length());
 		HlTypeLayout.bindEntrypointDescriptor(functionDescriptors.pointer(), functionDescriptors.length(), modulePools.entryPoint, builder);
