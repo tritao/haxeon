@@ -755,7 +755,7 @@ class LanguageService {
 			if (candidate == state
 				|| model == null
 				|| !recoveryModuleVisible(program, candidate, model.program)
-				|| !recoveryModuleUsedByProgram(program, model.program)
+				|| !recoveryModuleUsedByProgram(program, candidate, model.program)
 				|| queued.exists(candidate.name))
 				continue;
 			queued.set(candidate.name, true);
@@ -799,7 +799,7 @@ class LanguageService {
 					continue;
 				var nestedModel = effectiveSemanticModel(nested);
 				if (nestedModel == null || !recoveryModuleVisible(model.program, nested, nestedModel.program)
-					|| !recoveryModuleUsedByProgram(model.program, nestedModel.program))
+					|| !recoveryModuleUsedByProgram(model.program, nested, nestedModel.program))
 					continue;
 				queued.set(nested.name, true);
 				pending.push(nested);
@@ -826,9 +826,15 @@ class LanguageService {
 	 * but making every visible module part of the temporary type universe turns
 	 * a single edit into an avoidable workspace-wide type pass.
 	 */
-	static function recoveryModuleUsedByProgram(program:AstProgram, candidateProgram:AstProgram):Bool {
+	static function recoveryModuleUsedByProgram(program:AstProgram, candidate:ModuleState, candidateProgram:AstProgram):Bool {
 		var names = recoveryExportedNames(candidateProgram);
-		return recoveryProgramUsesNames(program, names);
+		if (recoveryProgramUsesNames(program, names))
+			return true;
+		for (alias => importPath in program.importAliases)
+			if (modulePathMatches(candidate.name, importPath, candidateProgram)
+				&& recoveryProgramUsesNames(program, [alias => true]))
+				return true;
+		return false;
 	}
 
 	static function recoveryExportedNames(program:AstProgram):Map<String, Bool> {
@@ -923,7 +929,7 @@ class LanguageService {
 			&& program.packageName != null
 			&& dependencyProgram.packageName != null
 			&& program.packageName == dependencyProgram.packageName
-			&& recoveryModuleUsedByProgram(program, dependencyProgram);
+			&& recoveryModuleUsedByProgram(program, dependency, dependencyProgram);
 	}
 
 	static function recoverySemanticIds(model:Null<SemanticModel>, ?changedBodies:Map<String, Bool>, contextChanged:Bool = true):Map<String, Bool> {
