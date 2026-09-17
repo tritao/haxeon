@@ -1875,7 +1875,9 @@ class LanguageService {
 					&& !moduleAliasFunction
 					&& counts.get(candidate.name) == 1
 					&& module != state.name)
-					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
+					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null,
+						"workspace|" + candidate.identity,
+						candidateState == null ? module : compiler.semanticWorkspace.editorImportPath(candidateState));
 			}
 		}
 		for (symbol in documentSymbols(path, token))
@@ -1910,7 +1912,7 @@ class LanguageService {
 		var signature = compiler.semanticWorkspace.editorSignatureById(identity),
 			insertText = signature != null && signature.parameters.length > 0 ? label + "(" : null,
 			authoritative = compiler.semanticWorkspace.indexedSymbol(identity) != null,
-			importPath = authoritative && resolved.state != state ? resolved.state.name : null;
+			importPath = authoritative && resolved.state != state ? compiler.semanticWorkspace.editorImportPath(resolved.state) : null;
 		addMember(label, completionDeclarationKind(resolved.symbol.kind),
 			signature == null ? resolved.symbol.name : signature.label, prefix, result, 1, insertText,
 			authoritative ? Std.string(identity) : null, importPath);
@@ -2002,7 +2004,12 @@ class LanguageService {
 						return;
 					counts.set(name, (counts.exists(name) ? counts.get(name) : 0) + 1);
 					if (!candidates.exists(name))
-						candidates.set(name, {kind: kind, detail: detail, insertText: insertText, importPath: candidate.name});
+						candidates.set(name, {
+							kind: kind,
+							detail: detail,
+							insertText: insertText,
+							importPath: compiler.semanticWorkspace.editorImportPath(candidate)
+						});
 				};
 			for (alias in completionAst.aliases)
 				add(alias.name, "type", 'typedef ${alias.name}=${typeName(alias.type)}', alias.name);

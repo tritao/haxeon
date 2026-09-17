@@ -680,6 +680,20 @@ class LanguageServiceMain {
 				foundAbsoluteAliasedMember = true;
 		if (!foundAbsoluteAliasedMember)
 			throw "workspace-prefixed aliased import did not preserve recovered receiver typing";
+		var absoluteAutoImportSource = "package absolute.app; function main():Void { Typ";
+		absoluteImportService.update("/workspace/absolute/app/AutoImport.hx", absoluteAutoImportSource);
+		var absoluteAutoImportResult = absoluteImportService.completeResult("/workspace/absolute/app/AutoImport.hx", absoluteAutoImportSource.length),
+			absoluteAutoImport:Null<compiler.service.LanguageService.CompletionItem> = null;
+		for (item in absoluteAutoImportResult.items)
+			if (item.label == "Types")
+				absoluteAutoImport = item;
+		if (absoluteAutoImport == null || absoluteAutoImport.importPath != "absolute.types.Types")
+			throw 'workspace-prefixed auto-import used a non-source module path: ${absoluteAutoImport == null ? "null" : absoluteAutoImport.importPath}';
+		var absoluteAutoImportEdit = absoluteImportService.resolveCompletion("/workspace/absolute/app/AutoImport.hx",
+			absoluteAutoImport.identity, absoluteAutoImport.revision, absoluteAutoImport.importPath);
+		if (absoluteAutoImportEdit == null || absoluteAutoImportEdit.edits.length != 1
+			|| absoluteAutoImportEdit.edits[0].replacement != "\nimport absolute.types.Types;")
+			throw "workspace-prefixed auto-import did not produce a source-level import edit";
 		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
 		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
 		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,

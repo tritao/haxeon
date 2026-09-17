@@ -1379,6 +1379,12 @@ class SemanticWorkspace {
 	public function editorModuleForImport(importPath:String):Null<ModuleState>
 		return editorImportTarget(importPath);
 
+	/** Return the source-level import path for an editor module. */
+	public function editorImportPath(state:ModuleState):String {
+		var model = editorModel(state);
+		return model == null || model.program.packageName == null ? state.name : editorLogicalModuleName(state, model);
+	}
+
 	function editorImportModule(importPath:String):Null<String> {
 		var target = editorImportTarget(importPath);
 		var model = target == null ? null : editorModel(target);
@@ -1855,7 +1861,7 @@ class SemanticWorkspace {
 					var matches = byName.get(symbol.name);
 					if (matches == null)
 						byName.set(symbol.name, matches = []);
-					matches.push({state: state, symbol: symbol, importPath: state.name});
+					matches.push({state: state, symbol: symbol, importPath: editorImportPath(state)});
 				}
 		}
 		var result:Array<ImportableSymbol> = [];
