@@ -16,6 +16,9 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxToken;
+import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.Diagnostic.CompileError;
 import haxe.Int64;
 import compiler.Diagnostic.DiagnosticOrigin;
@@ -31,14 +34,24 @@ class Parser {
 
 	final tokens:Array<Token>;
 	final checkpointCallback:Null<Void->Void>;
+	public var cst(get, never):Null<SyntaxTree>;
+	var currentCst:Null<SyntaxTree>;
+	var cstMissingTokens:Array<SyntaxToken> = [];
 	var position:Int = 0;
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
-	public function new(tokens:Array<Token>, ?checkpoint:Void->Void) {
+	public function new(tokens:Array<Token>, ?checkpoint:Void->Void, ?mode:ParserMode) {
 		this.tokens = tokens;
 		this.checkpointCallback = checkpoint;
+		this.currentCst = mode == null ? null : switch mode {
+			case ParserMode.AstOnly: null;
+			case ParserMode.Cst(source): SyntaxTree.fromSource(source);
+		};
 	}
+
+	function get_cst():Null<SyntaxTree>
+		return currentCst;
 
 	public function parseProgram():AstProgram {
 		var packageName:Null<String> = null, imports = [], importAliases:Map<String, String> = [];
@@ -106,7 +119,7 @@ class Parser {
 				synchronizeTopLevel(declarationStart);
 			}
 		}
-		return {
+		var program:AstProgram = {
 			packageName: packageName,
 			imports: imports,
 			importAliases: importAliases,
@@ -118,6 +131,9 @@ class Parser {
 			classes: classes,
 			functions: functions
 		};
+		if (currentCst != null && cstMissingTokens.length > 0)
+			currentCst = currentCst.withSyntheticTokens(cstMissingTokens);
+		return program;
 	}
 
 	/** Parse as much current source as possible for editor features. */
@@ -2725,6 +2741,8 @@ class Parser {
 	function insertMissing(kind:TokenKind):Token {
 		var replacement = tokenText(kind),
 			span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		if (currentCst != null)
+			cstMissingTokens.push(SyntaxToken.missing(kind, span.file, span.start, replacement));
 		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span, compiler.Diagnostic.DiagnosticSeverity.Error,
 			[
 				{
@@ -2787,6 +2805,8 @@ class Parser {
 		if (!recovering)
 			return consume(TokenKind.Identifier);
 		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		if (currentCst != null)
+			cstMissingTokens.push(SyntaxToken.missing(TokenKind.Identifier, span.file, span.start, "<missing>"));
 		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected Identifier, got ${current().kind}', span));
 		return new Token(TokenKind.Identifier, "<missing>", new SourceSpan(current().span.file, current().span.start, current().span.start));
 	}

@@ -591,8 +591,9 @@ LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/syntax-scanner-benc
 ```
 
 Compiler mode filters trivia and does not retain lossless tokens; tooling mode
-retains source spans and trivia for formatter/CST consumers. The benchmark
-records both latency distributions and token counts in
+retains source spans and trivia for formatter/CST consumers. It also compares
+the default AST-only parser with the opt-in `ParserMode.Cst` path. The benchmark
+records latency distributions and token counts in
 `out/syntax-scanner-benchmark.json`.
 
 ## 🧪 Development

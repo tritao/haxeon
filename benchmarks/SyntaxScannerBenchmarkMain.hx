@@ -2,7 +2,9 @@ package;
 
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
+import compiler.syntax.SyntaxTree.ParserMode;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -27,9 +29,11 @@ class SyntaxScannerBenchmarkMain {
 		for (_ in 0...warmup) {
 			new Lexer(file).tokenize();
 			new SyntaxScanner(file).scan();
+			new Parser(new Lexer(file).tokenize()).parseProgram();
+			new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file)).parseProgram();
 		}
 
-		var compilerTimes = [], toolingTimes = [], compilerTokens = 0, toolingTokens = 0;
+		var compilerTimes = [], toolingTimes = [], compilerParseTimes = [], cstParseTimes = [], compilerTokens = 0, toolingTokens = 0;
 		for (_ in 0...iterations) {
 			var started = Sys.time(), compiler = new Lexer(file).tokenize();
 			compilerTimes.push((Sys.time() - started) * 1000.0);
@@ -38,6 +42,12 @@ class SyntaxScannerBenchmarkMain {
 			var tooling = new SyntaxScanner(file).scan();
 			toolingTimes.push((Sys.time() - started) * 1000.0);
 			toolingTokens = tooling.length;
+			started = Sys.time();
+			new Parser(new Lexer(file).tokenize()).parseProgram();
+			compilerParseTimes.push((Sys.time() - started) * 1000.0);
+			started = Sys.time();
+			new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file)).parseProgram();
+			cstParseTimes.push((Sys.time() - started) * 1000.0);
 		}
 
 		var report = {
@@ -48,7 +58,9 @@ class SyntaxScannerBenchmarkMain {
 			compilerTokens: compilerTokens,
 			toolingTokens: toolingTokens,
 			compilerMs: percentiles(compilerTimes),
-			toolingLosslessMs: percentiles(toolingTimes)
+			toolingLosslessMs: percentiles(toolingTimes),
+			compilerParseMs: percentiles(compilerParseTimes),
+			cstParseMs: percentiles(cstParseTimes)
 		};
 		var separator = output.lastIndexOf("/");
 		if (separator > 0) {
@@ -60,11 +72,17 @@ class SyntaxScannerBenchmarkMain {
 		Sys.println('Compiler tokens: ${compilerTokens}, tooling lossless tokens: ${toolingTokens}');
 		Sys.println('Compiler median/p95/p99: ${format(report.compilerMs.median)}/${format(report.compilerMs.p95)}/${format(report.compilerMs.p99)} ms');
 		Sys.println('Tooling median/p95/p99: ${format(report.toolingLosslessMs.median)}/${format(report.toolingLosslessMs.p95)}/${format(report.toolingLosslessMs.p99)} ms');
+		Sys.println('AST-only parse median/p95/p99: ${format(report.compilerParseMs.median)}/${format(report.compilerParseMs.p95)}/${format(report.compilerParseMs.p99)} ms');
+		Sys.println('CST parse median/p95/p99: ${format(report.cstParseMs.median)}/${format(report.cstParseMs.p95)}/${format(report.cstParseMs.p99)} ms');
 		if (checkBudgets) {
 			if (report.compilerMs.p95 > 100.0)
 				throw 'Compiler scanner budget exceeded: ${format(report.compilerMs.p95)} ms > 100 ms';
 			if (report.toolingLosslessMs.p95 > 100.0)
 				throw 'Tooling scanner budget exceeded: ${format(report.toolingLosslessMs.p95)} ms > 100 ms';
+			if (report.compilerParseMs.p95 > 100.0)
+				throw 'AST-only parse budget exceeded: ${format(report.compilerParseMs.p95)} ms > 100 ms';
+			if (report.cstParseMs.p95 > 100.0)
+				throw 'CST parse budget exceeded: ${format(report.cstParseMs.p95)} ms > 100 ms';
 			Sys.println("Syntax scanner budget check: passed");
 		}
 		Sys.println('JSON: $output');

@@ -21,7 +21,7 @@ enum SyntaxTokenKind {
 }
 
 /** One lossless source slice. Text is derived from the source whenever possible. */
-class SyntaxToken {
+class LosslessToken {
 	public final kind:SyntaxTokenKind;
 	public final span:SourceSpan;
 	final replacementText:Null<String>;
@@ -66,8 +66,8 @@ class SyntaxScanner {
 	}
 
 	/** Returns slices that cover the input in order without dropping trivia. */
-	public function scan():Array<SyntaxToken> {
-		var result:Array<SyntaxToken> = [];
+	public function scan():Array<LosslessToken> {
+		var result:Array<LosslessToken> = [];
 		while (position < source.length) {
 			checkpoint();
 			var code = source.get(position);
@@ -259,7 +259,7 @@ class SyntaxScanner {
 		return result;
 	}
 
-	function emit(result:Array<SyntaxToken>, kind:SyntaxTokenKind, start:Int, end:Int):Void {
+	function emit(result:Array<LosslessToken>, kind:SyntaxTokenKind, start:Int, end:Int):Void {
 		if (end <= start)
 			return;
 		if (!includeTrivia)
@@ -270,7 +270,7 @@ class SyntaxScanner {
 				default:
 			}
 		var replacement = sourceIsFile ? null : text(start, end);
-		result.push(new SyntaxToken(kind, file.span(start, end), replacement));
+		result.push(new LosslessToken(kind, file.span(start, end), replacement));
 	}
 
 	function fail(message:String, start:Int, end:Int):Void

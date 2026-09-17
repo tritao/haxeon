@@ -2,7 +2,7 @@ package compiler.formatter;
 
 import compiler.Source.SourceFile;
 import compiler.syntax.SyntaxScanner;
-import compiler.syntax.SyntaxScanner.SyntaxToken;
+import compiler.syntax.SyntaxScanner.LosslessToken;
 import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
 import compiler.formatter.FormatToken.FormatTokenKind;
 
@@ -47,7 +47,7 @@ class FormatScanner {
 		return output.toString();
 	}
 
-	function append(tokens:Array<SyntaxToken>, start:Int, end:Int, result:Array<FormatToken>):Void {
+	function append(tokens:Array<LosslessToken>, start:Int, end:Int, result:Array<FormatToken>):Void {
 		if (end <= start)
 			return;
 		for (token in tokens) {
@@ -74,7 +74,7 @@ class FormatScanner {
 			case SyntaxTokenKind.Unknown: FormatTokenKind.Whitespace;
 		};
 
-	function findFormatterOffRanges(tokens:Array<SyntaxToken>):Array<ProtectedRange> {
+	function findFormatterOffRanges(tokens:Array<LosslessToken>):Array<ProtectedRange> {
 		var markers:Array<{offset:Int, off:Bool}> = [];
 		for (token in tokens)
 			switch token.kind {
@@ -98,7 +98,7 @@ class FormatScanner {
 		return result;
 	}
 
-	function collectMarkers(token:SyntaxToken, result:Array<{offset:Int, off:Bool}>):Void {
+	function collectMarkers(token:LosslessToken, result:Array<{offset:Int, off:Bool}>):Void {
 		var text = token.text, index = 0;
 		while (index < text.length) {
 			var offIndex = text.indexOf("@formatter:off", index),

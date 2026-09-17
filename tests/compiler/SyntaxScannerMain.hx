@@ -1,7 +1,9 @@
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
+import compiler.syntax.SyntaxTree.ParserMode;
 
 /** Regression gates for the shared lossless scanner and compiler adapter. */
 class SyntaxScannerMain {
@@ -49,6 +51,28 @@ class SyntaxScannerMain {
 			}
 		if (compilerTokens[compilerIndex].kind != compiler.syntax.Token.TokenKind.Eof)
 			throw "compiler adapter did not terminate at EOF";
+
+		var astOnlyParser = new Parser(compilerTokens),
+			astOnlyProgram = astOnlyParser.parseProgram();
+		if (astOnlyParser.cst != null)
+			throw "default parser mode retained a CST";
+		var cstParser = new Parser(compilerTokens, null, ParserMode.Cst(file)),
+			cstProgram = cstParser.parseProgram(),
+			cst = cstParser.cst;
+		if (cst == null || cst.roundTrip() != source)
+			throw "CST mode did not round-trip the valid source";
+		if (cst.root.span.start != 0 || cst.root.span.end != file.bytes.length || cst.tokens.length != syntaxCount)
+			throw "CST mode did not preserve source spans or syntax tokens";
+		if (cstProgram.classes.length != astOnlyProgram.classes.length || cstProgram.functions.length != astOnlyProgram.functions.length)
+			throw "CST parser mode changed the semantic AST shape";
+
+		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
+			malformedParser = new Parser(new Lexer(malformed).tokenize(), null, ParserMode.Cst(malformed));
+		malformedParser.parseProgramRecovering();
+		if (malformedParser.cst == null || malformedParser.cst.roundTrip() != malformed.text)
+			throw "CST mode did not round-trip malformed source";
+		if (malformedParser.cst.syntheticTokens.length == 0)
+			throw "CST recovery did not retain a synthetic missing token";
 
 		var directiveSource = new SourceFile("Directives.hx", "#if debug\nfunction main():Void return;\n#end\n"),
 			directiveTokens = new SyntaxScanner(directiveSource).scan(),
