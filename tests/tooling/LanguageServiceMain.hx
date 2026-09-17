@@ -3486,6 +3486,31 @@ class LanguageServiceMain {
 		}
 		if (ambiguousTypeDefinition != null || foundAmbiguousOne || foundAmbiguousTwo)
 			throw 'ambiguous wildcard type resolution guessed a declaration: type=${ambiguousTypeDefinition == null ? "null" : ambiguousTypeDefinition.path}, one=$foundAmbiguousOne, two=$foundAmbiguousTwo';
+
+		var packageRoot = "/tmp/haxeon-package-root-" + Std.string(Std.int(Sys.time() * 1000000)),
+			packageDirectory = packageRoot + "/nested";
+		sys.FileSystem.createDirectory(packageRoot);
+		sys.FileSystem.createDirectory(packageDirectory);
+		var packageSourcePath = packageDirectory + "/Types.hx";
+		sys.io.File.saveContent(packageSourcePath, "package vendor.nested; class Types { public var member:Int; }");
+		var packageRootService = new LanguageService();
+		packageRootService.compiler.addPackageSourceRoot("vendor", packageRoot);
+		var packageRootSource = "package vendor.app; import vendor.nested.*; function use(value:Types):Void { value.member; } function unfinished(";
+		packageRootService.update("vendor/app/Main.hx", packageRootSource);
+		var packageRootState = packageRootService.compiler.modules.get("vendor.nested.Types"),
+			packageRootItems = packageRootService.complete("vendor/app/Main.hx", packageRootSource.indexOf("value.member") + "value.".length),
+			foundPackageRootMember = false;
+		for (item in packageRootItems)
+			if (item.label == "member")
+				foundPackageRootMember = true;
+		if (packageRootState == null || packageRootState.source.path != packageSourcePath || !foundPackageRootMember)
+			throw 'package-scoped source root did not retain its logical module identity or member completion: state=${packageRootState == null ? "null" : packageRootState.name}, member=$foundPackageRootMember';
+		if (sys.FileSystem.exists(packageSourcePath))
+			sys.FileSystem.deleteFile(packageSourcePath);
+		if (sys.FileSystem.exists(packageDirectory))
+			sys.FileSystem.deleteDirectory(packageDirectory);
+		if (sys.FileSystem.exists(packageRoot))
+			sys.FileSystem.deleteDirectory(packageRoot);
 	}
 
 	static function assertLazySourceRootRecovery():Void {
