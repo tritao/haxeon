@@ -1,5 +1,4 @@
 import compiler.Source.SourceFile;
-import compiler.formatter.FormatScanner;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
@@ -8,6 +7,7 @@ import compiler.service.SourceFormatter;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.Token.TokenKind;
 
 class FormatterMain {
@@ -20,10 +20,10 @@ class FormatterMain {
 
 		var file = new SourceFile("round-trip.hx",
 			"function main():String { var values:Array<Int> = [1,2]; var pattern=~/a[//]b/gi; var text='value ${1 + 2}'; // comment\nreturn text; }\n"),
-			scanner = new FormatScanner(file),
-			tokens = scanner.scan();
-		if (scanner.roundTrip(tokens) != file.text)
-			throw "lossless formatter scanner did not round-trip source bytes";
+			losslessTree = SyntaxTree.fromSource(file),
+			tokens = CstFormatterAdapter.tokens(losslessTree);
+		if (CstFormatterAdapter.roundTrip(tokens) != file.text)
+			throw "shared lossless scanner did not round-trip source bytes";
 		var cstParser = new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file));
 		cstParser.parseProgram();
 		var cst = cstParser.cst;

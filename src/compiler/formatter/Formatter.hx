@@ -38,7 +38,7 @@ class Formatter {
 				return null;
 			var tokens = CstFormatterAdapter.tokens(syntaxTree),
 				comments = CommentAttachmentTools.attach(tokens, syntaxTree),
-				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree),
+				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree, conditional.text),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
 				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
 				newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
