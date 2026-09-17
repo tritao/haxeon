@@ -326,6 +326,11 @@ function main():Int {
 		generation.addType(generationInt)
 	catch (error:Dynamic)
 		generationSealed = true;
+	var builderSealed = false;
+	try
+		generation.builder.primitive(HlTypeKind.BoolType)
+	catch (error:Dynamic)
+		builderSealed = true;
 	var descriptorTablesSealed = true;
 	try {
 		generation.functionDescriptors.add({
@@ -494,6 +499,7 @@ function main():Int {
 	arena.dispose();
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
-		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && descriptorTablesSealed && inheritedBindingCorrect
-		&& invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected && invalidPrototypeRejected ? 42 : 1;
+		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
+		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
+		&& invalidPrototypeRejected ? 42 : 1;
 }

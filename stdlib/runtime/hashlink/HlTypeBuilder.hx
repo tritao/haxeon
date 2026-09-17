@@ -32,17 +32,21 @@ typedef HlEnumConstructSpec = {
 /** Builds HashLink type graphs in stable storage without exposing allocation policy. */
 class HlTypeBuilder {
 	public final arena:HlTypeArena;
+	var sealed:Bool = false;
+	var typeAppendOpen:Bool = false;
 
 	public function new(arena:HlTypeArena)
 		this.arena = arena;
 
 	public function primitive(kind:HlTypeKind):RawPtr<HlType> {
+		requireWritable();
 		var type = allocateType(kind);
 		return type;
 	}
 
 	/** Copy a Haxe string into arena-owned, null-terminated UTF-16 storage. */
 	public function utf16Name(value:String):RawPtr<UInt16> {
+		requireWritable();
 		var result = arena.allocUtf16Array(value.length + 1);
 		for (index in 0...value.length)
 			result.offset(index).store(cast value.charCodeAt(index));
@@ -52,6 +56,7 @@ class HlTypeBuilder {
 
 	/** Copy a Haxe string into arena-owned, null-terminated UTF-8 storage. */
 	public function utf8Name(value:String):RawPtr<UInt8> {
+		requireWritable();
 		var bytes = NativeString.utf8Bytes(value), result = arena.allocUInt8Array(bytes.length + 1);
 		for (index in 0...bytes.length)
 			result.offset(index).store(cast bytes[index]);
@@ -77,6 +82,7 @@ class HlTypeBuilder {
 
 	/** Allocate any of HashLink's parameterized type forms. */
 	public function parameterizedType(kind:HlTypeKind, parameter:RawPtr<HlType>):RawPtr<HlType> {
+		requireWritable();
 		if (kind != HlTypeKind.Reference && kind != HlTypeKind.Nullable && kind != HlTypeKind.Packed)
 			throw "HashLink parameterized types must be references, nullable values, or packed values";
 		var type = allocateType(kind);
@@ -86,6 +92,7 @@ class HlTypeBuilder {
 
 	/** Allocate a function type header before its signature is known. */
 	public function functionTypeSkeleton(?kind:HlTypeKind = HlTypeKind.Function):RawPtr<HlType> {
+		requireWritable();
 		if (kind != HlTypeKind.Function && kind != HlTypeKind.Method)
 			throw "HashLink function type skeletons must be functions or methods";
 		var type = allocateType(kind), functionData = arena.allocTypeFunction();
@@ -105,6 +112,7 @@ class HlTypeBuilder {
 
 	/** Complete a function type skeleton after all recursive signature types are available. */
 	public function defineFunctionType(type:RawPtr<HlType>, arguments:Array<RawPtr<HlType>>, returnType:RawPtr<HlType>):Void {
+		requireWritable();
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Function && kind != HlTypeKind.Method)
 			throw "HashLink function definition requires a function type skeleton";
@@ -139,6 +147,7 @@ class HlTypeBuilder {
 
 	/** Construct an abstract type with its arena-owned name. */
 	public function abstractType(name:RawPtr<UInt16>):RawPtr<HlType> {
+		requireWritable();
 		var type = allocateType(HlTypeKind.Abstract);
 		type.ref.data.ref.absName = name;
 		return type;
@@ -146,6 +155,7 @@ class HlTypeBuilder {
 
 	/** Allocate an object type header before its fields are known. */
 	public function objectTypeSkeleton(?kind:HlTypeKind = HlTypeKind.Object):RawPtr<HlType> {
+		requireWritable();
 		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
 			throw "HashLink object type skeletons must be objects or structures";
 		var type = allocateType(kind), objectData = arena.allocTypeObject();
@@ -168,6 +178,7 @@ class HlTypeBuilder {
 	public function defineObjectType(type:RawPtr<HlType>, name:RawPtr<UInt16>, superType:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>,
 			prototypes:Array<HlObjectProtoSpec>, bindings:Array<HlObjectBindingSpec>, globalValue:RawPtr<RawPtr<UInt8>>,
 			module:RawPtr<HlModuleContext>, runtime:RawPtr<HlRuntimeObject>):Void {
+		requireWritable();
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Object && kind != HlTypeKind.Struct)
 			throw "HashLink object definition requires an object type skeleton";
@@ -193,11 +204,13 @@ class HlTypeBuilder {
 	}
 
 	public function moduleContext(functions:Array<RawPtr<UInt8>>, types:Array<RawPtr<HlType>>):RawPtr<HlModuleContext> {
+		requireWritable();
 		return moduleContextFromTable(new HlFunctionTable(arena, functions, types));
 	}
 
 	/** Bind a Haxe-owned function table into a HashLink module context. */
 	public function moduleContextFromTable(table:HlFunctionTable):RawPtr<HlModuleContext> {
+		requireWritable();
 		if (table.arena != arena)
 			throw "HashLink function table and module context must share an arena";
 		var context = arena.allocModuleContext(),
@@ -212,6 +225,7 @@ class HlTypeBuilder {
 
 	/** Allocate an enum type header before its constructors are known. */
 	public function enumTypeSkeleton():RawPtr<HlType> {
+		requireWritable();
 		var type = allocateType(HlTypeKind.Enum), enumData = arena.allocTypeEnum();
 		enumData.ref.name = RawPtr.nullPtr();
 		enumData.ref.nconstructs = 0;
@@ -224,6 +238,7 @@ class HlTypeBuilder {
 	/** Complete an enum type skeleton after all recursive constructor types are available. */
 	public function defineEnumType(type:RawPtr<HlType>, name:RawPtr<UInt16>, constructs:Array<HlEnumConstructSpec>,
 			globalValue:RawPtr<RawPtr<UInt8>>):Void {
+		requireWritable();
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Enum)
 			throw "HashLink enum definition requires an enum type skeleton";
@@ -242,6 +257,7 @@ class HlTypeBuilder {
 
 	/** Allocate a virtual type header before its fields are known. */
 	public function virtualTypeSkeleton():RawPtr<HlType> {
+		requireWritable();
 		var type = allocateType(HlTypeKind.Virtual), virtualData = arena.allocTypeVirtual();
 		virtualData.ref.fields = RawPtr.nullPtr();
 		virtualData.ref.nfields = 0;
@@ -255,6 +271,7 @@ class HlTypeBuilder {
 	/** Complete a virtual type skeleton after all recursive field types are available. */
 	public function defineVirtualType(type:RawPtr<HlType>, fields:Array<HlObjectFieldSpec>, dataSize:Int, indexes:Array<Int>,
 			lookup:RawPtr<HlFieldLookup>):Void {
+		requireWritable();
 		var kind:HlTypeKind = cast type.ref.kind;
 		if (kind != HlTypeKind.Virtual)
 			throw "HashLink virtual definition requires a virtual type skeleton";
@@ -352,5 +369,33 @@ class HlTypeBuilder {
 		type.ref.markBits = RawPtr.nullPtr();
 		type.ref.gcOwner = RawPtr.nullPtr();
 		return type;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function seal():Void {
+		if (typeAppendOpen)
+			throw "HashLink type builder cannot seal during a type append";
+		sealed = true;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function openTypeAppend():Void {
+		if (!sealed)
+			throw "HashLink type builder append requires a published generation";
+		if (typeAppendOpen)
+			throw "HashLink type builder already has an active type append";
+		typeAppendOpen = true;
+	}
+
+	@:allow(runtime.hashlink.HlMetadataGeneration)
+	function closeTypeAppend():Void {
+		if (!typeAppendOpen)
+			throw "HashLink type builder has no active type append";
+		typeAppendOpen = false;
+	}
+
+	function requireWritable():Void {
+		if (sealed && !typeAppendOpen)
+			throw "HashLink type builder is sealed after publication";
 	}
 }

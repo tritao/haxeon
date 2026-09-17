@@ -160,6 +160,7 @@ class HlMetadataGeneration {
 		if (nativeCode.isNull() || arena.typeCountOf() != typeTable.length())
 			throw "HashLink metadata type table is not a contiguous arena prefix";
 		var result = new HlMetadataTypeAppend(this, arena.checkpoint(), typeTable.checkpoint(), modulePools);
+		builder.openTypeAppend();
 		activeTypeAppend = result;
 		return result;
 	}
@@ -187,6 +188,7 @@ class HlMetadataGeneration {
 		nativeCode.ref.typeCount = cast typeTable.length();
 		publishedContiguousTypeCount = arena.typeCountOf();
 		publishedUsesContiguousTypes = typeTable.isContiguousPrefix(arena.typePointer());
+		builder.closeTypeAppend();
 		activeTypeAppend = null;
 	}
 
@@ -199,6 +201,7 @@ class HlMetadataGeneration {
 		typeTable.rollback(tableCheckpoint);
 		arena.rollback(arenaCheckpoint);
 		modulePools = previousModulePools;
+		builder.closeTypeAppend();
 		activeTypeAppend = null;
 	}
 
@@ -483,6 +486,7 @@ class HlMetadataGeneration {
 		validateNativeCode();
 		publishedContiguousTypeCount = arena.typeCountOf();
 		publishedUsesContiguousTypes = usesContiguousTypes;
+		builder.seal();
 		functionDescriptors.seal();
 		nativeDescriptors.seal();
 		constantDescriptors.seal();
