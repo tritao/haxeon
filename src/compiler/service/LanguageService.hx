@@ -44,6 +44,7 @@ import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxKind;
+import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxTriviaKind;
 import compiler.Diagnostic.CompileError;
@@ -2462,23 +2463,24 @@ class LanguageService {
 		var state = stateFor(path),
 			result:Array<SemanticToken> = [],
 			snapshot = state == null ? null : editorSnapshot(state),
-			tokens = snapshot == null ? null : snapshot.tokens,
 			model = snapshot == null ? null : snapshot.semanticModel;
-		if (state == null || tokens == null)
+		if (state == null || snapshot == null)
 			return result;
+		var syntax = indexedStructure(state, token).syntaxTree,
+			tokens = syntax.tokens;
 		for (index in 0...tokens.length) {
 			var lexical = tokens[index];
 			if (token != null)
 				token.check();
-			if (lexical.kind == Eof)
-				continue;
 			var tokenModel = semanticModelAt(state, snapshot, lexical.span.start, token);
 			var type:Null<String> = switch lexical.kind {
-				case Identifier: var semantic = semanticTokenType(tokenModel,
-						lexical.span.start); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+				case Identifier:
+					var semantic = semanticTokenType(tokenModel, lexical.span.start);
+					semantic == "variable" && isParameterSyntaxToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
 				case StringLiteral: "string";
+				case RegexLiteral: "regexp";
 				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment, Decrement, Plus,
 					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, BitNot, AndAnd, OrOr, Ampersand,
 					Pipe, Caret, LeftBracket, RightBracket, Question, At: "operator";
@@ -2490,15 +2492,25 @@ class LanguageService {
 					modifiers.push("declaration");
 					if (documentationFor(state, indexed.declaration).deprecated)
 						modifiers.push("deprecated");
-					if (hasDeclarationModifier(tokens, index, Static))
+					if (hasDeclarationSyntaxModifier(tokens, index, Static))
 						modifiers.push("static");
-					if (hasDeclarationModifier(tokens, index, Final))
+					if (hasDeclarationSyntaxModifier(tokens, index, Final))
 						modifiers.push("readonly");
 				}
 				addSemanticSpan(snapshot.source, lexical.span.start, lexical.span.end, type, modifiers, result);
 			}
 		}
-		addCommentTokens(snapshot.source, result);
+		for (trivia in syntax.trivia) {
+			if (token != null)
+				token.check();
+			switch trivia.kind {
+				case SyntaxTriviaKind.LineComment, SyntaxTriviaKind.BlockComment, SyntaxTriviaKind.DocComment:
+					addSemanticSpan(snapshot.source, trivia.span.start, trivia.span.end, "comment", [], result);
+				case SyntaxTriviaKind.Directive:
+					addSemanticSpan(snapshot.source, trivia.span.start, trivia.span.end, "keyword", [], result);
+				default:
+			}
+		}
 		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		return result;
 	}
@@ -3243,7 +3255,7 @@ class LanguageService {
 		};
 	}
 
-	static function isParameterToken(tokens:Array<compiler.syntax.Token>, index:Int):Bool {
+	static function isParameterSyntaxToken(tokens:Array<SyntaxToken>, index:Int):Bool {
 		if (index + 1 >= tokens.length || tokens[index + 1].kind != Colon)
 			return false;
 		var depth = 0, cursor = index - 1;
@@ -3264,7 +3276,7 @@ class LanguageService {
 		return false;
 	}
 
-	static function hasDeclarationModifier(tokens:Array<compiler.syntax.Token>, index:Int, modifier:TokenKind):Bool {
+	static function hasDeclarationSyntaxModifier(tokens:Array<SyntaxToken>, index:Int, modifier:TokenKind):Bool {
 		var cursor = index - 1;
 		while (cursor >= 0) {
 			var kind = tokens[cursor].kind;
@@ -3280,41 +3292,6 @@ class LanguageService {
 	static function semanticDeclaration(model:SemanticModel, id:SemanticSymbolId, span:SourceSpan):Bool {
 		var locations = model.index.locations(id);
 		return locations.length > 0 && sameSpan(locations[0], span);
-	}
-
-	static function addCommentTokens(file:compiler.Source.SourceFile, result:Array<SemanticToken>):Void {
-		var source = file.text, position = 0;
-		while (position + 1 < source.length) {
-			var quote = source.charAt(position);
-			if (quote == "\"" || quote == "'") {
-				position++;
-				while (position < source.length) {
-					if (source.charAt(position) == "\\")
-						position += 2;
-					else if (source.charAt(position++) == quote)
-						break;
-				}
-				continue;
-			}
-			if (source.charAt(position) != "/") {
-				position++;
-				continue;
-			}
-			var next = source.charAt(position + 1), start = position;
-			if (next == "/") {
-				position += 2;
-				while (position < source.length && source.charCodeAt(position) != 10)
-					position++;
-				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
-			} else if (next == "*") {
-				position += 2;
-				while (position + 1 < source.length && !(source.charAt(position) == "*" && source.charAt(position + 1) == "/"))
-					position++;
-				position = Std.int(Math.min(source.length, position + 2));
-				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
-			} else
-				position++;
-		}
 	}
 
 	static function addSemanticSpan(file:compiler.Source.SourceFile, start:Int, end:Int, type:String, modifiers:Array<String>,

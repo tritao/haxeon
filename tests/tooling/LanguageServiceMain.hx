@@ -83,6 +83,24 @@ class LanguageServiceMain {
 				hasMain = true;
 		if (!hasMain || service.hover("Main.hx", hoverPosition) != "main():Int")
 			throw "language service completion or hover failed";
+		var losslessTokenService = new LanguageService(),
+			losslessTokenSource = "#if missing\nfunction hidden():Void return; // hidden branch\n#else\nfunction main():Void { var value = ; /* recovered comment */ }\n#end\n";
+		losslessTokenService.update("LosslessTokens.hx", losslessTokenSource);
+		var losslessTokens = losslessTokenService.semanticTokens("LosslessTokens.hx"),
+			hasDirectiveToken = false,
+			hasInactiveIdentifier = false,
+			hasRecoveredComment = false;
+		for (semanticToken in losslessTokens) {
+			var text = losslessTokenSource.substring(semanticToken.span.start, semanticToken.span.end);
+			if (text == "#if missing" && semanticToken.type == "keyword")
+				hasDirectiveToken = true;
+			if (text == "hidden" && semanticToken.type == "variable")
+				hasInactiveIdentifier = true;
+			if (text == "/* recovered comment */" && semanticToken.type == "comment")
+				hasRecoveredComment = true;
+		}
+		if (!hasDirectiveToken || !hasInactiveIdentifier || !hasRecoveredComment)
+			throw "semantic tokens did not retain lossless directives, inactive syntax, and recovered comments";
 		var linkService = new LanguageService(),
 			aliasSource = "import tools.Helper as H; function main():Int return 0;";
 		linkService.update("tools/Helper.hx", "package tools; class Helper {}");
