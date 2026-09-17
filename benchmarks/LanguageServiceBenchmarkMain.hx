@@ -47,6 +47,7 @@ private typedef GeneratedSample = {
 	final updateMs:Float;
 	final completionMs:Float;
 	final modulesInvalidated:Int;
+	final signatureModulesInvalidated:Int;
 	final modulesAnalyzed:Int;
 	final retypedFunctions:Int;
 	final recoveredSnapshots:Int;
@@ -415,6 +416,7 @@ class LanguageServiceBenchmarkMain {
 			updateMs: percentiles([for (sample in samples) sample.updateMs]),
 			completionMs: percentiles([for (sample in samples) sample.completionMs]),
 			modulesInvalidated: percentiles([for (sample in samples) sample.modulesInvalidated]),
+			signatureModulesInvalidated: percentiles([for (sample in samples) sample.signatureModulesInvalidated]),
 			modulesAnalyzed: percentiles([for (sample in samples) sample.modulesAnalyzed]),
 			retypedFunctions: percentiles([for (sample in samples) sample.retypedFunctions]),
 			recoveredSnapshots: {
@@ -428,6 +430,8 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('$name update median/p95/p99: ${format(scenario.updateMs.median)}/${format(scenario.updateMs.p95)}/${format(scenario.updateMs.p99)} ms');
 		Sys.println('$name completion median/p95/p99: ${format(scenario.completionMs.median)}/${format(scenario.completionMs.p95)}/${format(scenario.completionMs.p99)} ms');
 		Sys.println('$name modules invalidated/analyzed p95: ${format(scenario.modulesInvalidated.p95)}/${format(scenario.modulesAnalyzed.p95)}');
+		if (Reflect.hasField(scenario, "signatureModulesInvalidated"))
+			Sys.println('$name signature modules invalidated p95: ${format(scenario.signatureModulesInvalidated.p95)}');
 		Sys.println('$name retyped functions p95: ${format(scenario.retypedFunctions.p95)}');
 	}
 
@@ -455,6 +459,13 @@ class LanguageServiceBenchmarkMain {
 		service.update("generated/Main.hx", bodySource);
 		updateMs += (Sys.time() - bodyStarted) * 1000.0;
 		var analysis = service.analyze("generated.Main");
+		assertInvalidatedModules(analysis.invalidatedModules, ["generated.Main"], '${scenario.name} body edit');
+		var signaturePath = "generated/Type0.hx",
+			signatureStarted = Sys.time();
+		service.update(signaturePath, generatedTypeSource(0, topology, true));
+		updateMs += (Sys.time() - signatureStarted) * 1000.0;
+		var signatureAnalysis = service.analyze("generated.Main");
+		assertInvalidatedModules(signatureAnalysis.invalidatedModules, expectedSignatureInvalidations(moduleCount, topology), '${scenario.name} signature edit');
 		var malformed = generatedSource(moduleCount, topology, 1, true);
 		started = Sys.time();
 		service.update("generated/Main.hx", malformed);
@@ -471,6 +482,7 @@ class LanguageServiceBenchmarkMain {
 			updateMs: updateMs,
 			completionMs: completionMs,
 			modulesInvalidated: analysis.invalidatedModules.length,
+			signatureModulesInvalidated: signatureAnalysis.invalidatedModules.length,
 			modulesAnalyzed: analysis.moduleNames.length,
 			retypedFunctions: analysis.retyped.length,
 			recoveredSnapshots: service.recoveredSnapshotBuilds - recoveredBefore
@@ -493,13 +505,18 @@ class LanguageServiceBenchmarkMain {
 
 	static function prepareGeneratedWorkspace(moduleCount:Int, topology:String):LanguageService {
 		var service = new LanguageService();
-		for (index in 0...moduleCount) {
-			var dependencies = generatedDependencies(index, topology),
-				importText = [for (dependency in dependencies) 'import generated.Type$dependency;'].join(" "),
-				fields = [for (dependency in dependencies) ' public var previous$dependency:Type$dependency;'].join("");
-			service.update('generated/Type$index.hx', 'package generated; $importText class Type$index {$fields public var known$index:Int; public function method$index(value:Int):Int return value; }');
-		}
+		for (index in 0...moduleCount)
+			service.update('generated/Type$index.hx', generatedTypeSource(index, topology));
 		return service;
+	}
+
+	static function generatedTypeSource(index:Int, topology:String, ?signatureChanged:Bool = false):String {
+		var dependencies = generatedDependencies(index, topology),
+			importText = [for (dependency in dependencies) 'import generated.Type$dependency;'].join(" "),
+			fields = [for (dependency in dependencies) ' public var previous$dependency:Type$dependency;'].join(""),
+			methodReturn = signatureChanged ? "String" : "Int",
+			methodBody = signatureChanged ? '"changed"' : "value";
+		return 'package generated; $importText class Type$index {$fields public var known$index:Int; public function method$index(value:Int):$methodReturn return $methodBody; }';
 	}
 
 	static function generatedSource(moduleCount:Int, topology:String, edit:Int, malformed:Bool):String {
@@ -528,6 +545,32 @@ class LanguageServiceBenchmarkMain {
 			case "diamond": index == 1 || index == 2 ? [0] : index == 3 ? [1, 2] : [3];
 			default: [];
 		};
+	}
+
+	static function assertInvalidatedModules(actual:Array<String>, expected:Array<String>, label:String):Void {
+		var actualSorted = actual.copy(),
+			expectedSorted = expected.copy();
+		actualSorted.sort(Reflect.compare);
+		expectedSorted.sort(Reflect.compare);
+		if (actualSorted.join("\n") != expectedSorted.join("\n"))
+			throw '$label invalidated ${actualSorted.join(", ")}, expected ${expectedSorted.join(", ")}';
+	}
+
+	static function expectedSignatureInvalidations(moduleCount:Int, topology:String):Array<String> {
+		var result = ["generated.Type0"];
+		switch (topology) {
+			case "fanout":
+				result.push("generated.Main");
+			case "chain":
+				if (moduleCount > 1)
+					result.push("generated.Type1");
+			case "diamond":
+				if (moduleCount > 2) {
+					result.push("generated.Type1");
+					result.push("generated.Type2");
+				}
+		}
+		return result;
 	}
 
 	static function sumScenarioSnapshots(samples:Array<ScenarioSample>):Int {

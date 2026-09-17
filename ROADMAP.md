@@ -221,8 +221,10 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   fan-out, chain, or diamond topology.
   Use `--scenario-iterations`, `--scale-sizes`, `--scale-modules`,
   `--scale-topology`, `--endurance-modules`, and `--endurance-edits` to
-  reproduce or enlarge the workload. Real consumer fixtures remain integration
-  inputs and do not define the generic benchmark schema.
+  reproduce or enlarge the workload. Generated scenarios assert body-edit and
+  signature-edit invalidation closures rather than reporting counts alone.
+  Real consumer fixtures remain integration inputs and do not define the
+  generic benchmark schema.
 
 - [x] Recovery/LSP closure checkpoint (2026-09-17): the identity-family matrix,
   lifecycle and cancellation corpus, `main` reconciliation, full

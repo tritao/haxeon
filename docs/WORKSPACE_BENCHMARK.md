@@ -15,6 +15,7 @@ The report contains a `scenarios` object. The current profiles are:
 Each profile records edit and completion percentiles plus:
 
 - modules invalidated;
+- signature-edit invalidation closure size;
 - modules analyzed;
 - functions retyped;
 - recovered snapshots rebuilt;
@@ -29,6 +30,10 @@ edit loop. The generic benchmark has no consumer-specific paths or report
 fields. A real consumer such as Pragtical belongs in an optional integration
 workload and can reuse these scenario and probe conventions without changing
 the core report.
+
+Generated scenarios assert the invalidation closure as well as recording its
+size: body-only edits must invalidate only the entry module, while a Type0
+signature edit follows the topology-specific direct declaration closure.
 
 Example:
 
