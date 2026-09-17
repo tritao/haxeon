@@ -18,6 +18,21 @@ required_symbols=(
 	"native_runtime_module_apply_haxe_patch"
 )
 
+canonical_backend="$root_dir/stdlib/runtime/hashlink/HlRuntimeJitBackend.hx"
+legacy_backend="$root_dir/stdlib/runtime/hashlink/HlLegacyRuntimePatchBackend.hx"
+
+if rg -n -- 'function (patch|patchCode|patchCodeWithHaxeTypes)\(' "$canonical_backend"; then
+	echo "FAIL: Haxe-owned JIT backend still exposes an encoded patch operation" >&2
+	exit 1
+fi
+
+for symbol in patch patchCode patchCodeWithHaxeTypes; do
+	if ! rg -F -q -- "function $symbol(" "$legacy_backend"; then
+		echo "FAIL: legacy patch backend is missing $symbol" >&2
+		exit 1
+	fi
+done
+
 for symbol in "${required_symbols[@]}"; do
 	if ! rg -F -q -- "$symbol" "${source_paths[@]}"; then
 		echo "FAIL: Haxe-owned runtime boundary is missing $symbol" >&2

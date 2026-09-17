@@ -155,6 +155,14 @@ operations enter a thread-local decoder guard; an accidental `hl_code_read` or
 `hl_patch_read` call fails and is counted. The boundary audit also checks that
 removed Haxeon aliases and bridge declarations do not return.
 
+The Haxe bindings enforce the same separation. `HlRuntimeJitBackend` exposes
+only publication of a decoded patch projection plus executable-code lifetime
+and inspection operations. Encoded `patch`, `patchCode`, and
+`patchCodeWithHaxeTypes` calls live behind the explicitly named
+`HlLegacyRuntimePatchBackend`, which is retained only by the compatibility
+facade. `HlLoadedRuntimeModule` and the host runtime publisher use the decoded
+metadata method directly.
+
 ## Native kernel responsibilities
 
 The native boundary should remain small and mechanism-focused:

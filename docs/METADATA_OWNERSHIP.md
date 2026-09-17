@@ -39,6 +39,9 @@ The dedicated Haxeon runtime facade also enters a thread-local native-decoder
 guard around its cold-load and Haxe-decoded patch publication operations. Any
 accidental call to `hl_code_read` or `hl_patch_read` is rejected immediately;
 the legacy byte-decoder APIs remain available outside those guarded operations.
+The Haxe interface mirrors this boundary: `HlRuntimeJitBackend` accepts only
+decoded patch metadata, while encoded patch methods are isolated in
+`HlLegacyRuntimePatchBackend` for compatibility callers.
 
 | Category | Allocator | Owner | Borrowers | Retirement |
 | --- | --- | --- | --- | --- |

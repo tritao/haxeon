@@ -7,16 +7,19 @@ import runtime.memory.GcHandle;
 import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchDebug;
 import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInput;
 import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchPools;
+import runtime.hashlink.HlLegacyRuntimePatchBackend.NativeHlLegacyRuntimePatchBackend;
 
 /** Owns one runtime wrapper initialized from Haxe-built HashLink metadata. */
 class HlRuntimeModule {
 	public static var defaultKernel(default, null):HlRuntimeModuleKernel = new NativeHlRuntimeModuleKernel();
 	public static var defaultJitBackend(default, null):HlRuntimeJitBackend = new NativeHlRuntimeJitBackend();
+	public static var defaultLegacyPatchBackend(default, null):HlLegacyRuntimePatchBackend = new NativeHlLegacyRuntimePatchBackend();
 
 	public final metadata:HlMetadataGeneration;
 	final lease:HlMetadataLease;
 	final kernel:HlRuntimeModuleKernel;
 	final jitBackend:HlRuntimeJitBackend;
+	final legacyPatchBackend:HlLegacyRuntimePatchBackend;
 	final moduleMutex:Mutex = Mutex.create();
 	final dispatch:HlRuntimeDispatchTable;
 	final gcHandles:Array<GcHandle<Dynamic>> = [];
@@ -24,14 +27,16 @@ class HlRuntimeModule {
 	var constantsInitialized:Bool = false;
 
 	public function new(metadata:HlMetadataGeneration, moduleId:Bytes, revision:Int, stableIds:Array<Int>, slots:Array<Int>, initializerSlot:Int,
-		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel, ?debugBytes:Bytes) {
+		?jitBackend:HlRuntimeJitBackend, ?kernel:HlRuntimeModuleKernel, ?debugBytes:Bytes, ?legacyPatchBackend:HlLegacyRuntimePatchBackend) {
 		if (metadata == null || moduleId == null || moduleId.length != 16 || stableIds == null || slots == null
 			|| stableIds.length != slots.length || revision < 0 || initializerSlot < -1
-			|| kernel == null && defaultKernel == null || jitBackend == null && defaultJitBackend == null)
+			|| kernel == null && defaultKernel == null || jitBackend == null && defaultJitBackend == null
+			|| legacyPatchBackend == null && defaultLegacyPatchBackend == null)
 			throw "HashLink runtime module requires metadata and a decoded HLI manifest";
 		this.metadata = metadata;
 		this.kernel = kernel == null ? defaultKernel : kernel;
 		this.jitBackend = jitBackend == null ? defaultJitBackend : jitBackend;
+		this.legacyPatchBackend = legacyPatchBackend == null ? defaultLegacyPatchBackend : legacyPatchBackend;
 		lease = metadata.acquire();
 		module = null;
 		try {
@@ -92,32 +97,32 @@ class HlRuntimeModule {
 		return slot;
 	}
 
-	/** Apply an HLP transaction; policy validation belongs to the owning loader. */
+	/** Apply an encoded HLP transaction through the legacy compatibility seam. */
 	public function patch(bytes:Bytes):Int
 		return withModule(function(handle) {
 			if (bytes == null)
 				throw "HashLink external runtime patch requires patch bytes";
-			return jitBackend.patch(handle, bytes);
+			return legacyPatchBackend.patch(handle, bytes);
 		});
 
 	/** Inject one native patch-staging failure for external rollback tests. */
 	public function setPatchFailureStage(stage:Int):Void
 		withModule(function(handle) kernel.setPatchFailureStage(handle, stage));
 
-	/** Apply a patch while retaining the published native code allocation. */
+	/** Apply encoded HLP while retaining the published native code allocation. */
 	public function patchCode(bytes:Bytes):HlRuntimePatchPublication
 		return withModule(function(handle) {
 			if (bytes == null)
 				throw "HashLink external runtime patch requires patch bytes";
-			return patchCodeInternal(handle, bytes, -1);
+			return legacyPatchBackend.patchCode(handle, bytes);
 		});
 
-	/** Apply a patch while using Haxe-owned compatible appended type records. */
+	/** Apply encoded HLP using Haxe-owned compatible appended type records. */
 	public function patchCodeWithHaxeTypes(bytes:Bytes, typeCount:Int):HlRuntimePatchPublication
 		return withModule(function(handle) {
 			if (bytes == null || typeCount < 0)
 				throw "HashLink external runtime patch requires patch bytes and a non-negative type count";
-			return patchCodeInternal(handle, bytes, typeCount);
+			return legacyPatchBackend.patchCodeWithHaxeTypes(handle, bytes, typeCount);
 		});
 
 	/** Apply a patch while using Haxe-owned type and function metadata. */
@@ -128,10 +133,6 @@ class HlRuntimeModule {
 				throw "HashLink external runtime patch requires decoded patch input, type count, function metadata, scalar pools, and debug metadata";
 			return jitBackend.patchCodeWithHaxeMetadata(handle, input, typeCount, functions, pools, debug);
 		});
-
-	function patchCodeInternal(handle:HlRuntimeModuleHandle, bytes:Bytes, typeCount:Int):HlRuntimePatchPublication {
-		return typeCount < 0 ? jitBackend.patchCode(handle, bytes) : jitBackend.patchCodeWithHaxeTypes(handle, bytes, typeCount);
-	}
 
 	/** Release one externally retained patch-code allocation. */
 	public function releaseCode(code:Null<hl.Abstract<"realtime_jit_code">>):Bool
