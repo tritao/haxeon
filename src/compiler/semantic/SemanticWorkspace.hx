@@ -210,10 +210,7 @@ class SemanticWorkspace {
 			if (isWildcardImport(importPath))
 				continue;
 			var importTarget = editorImportTarget(importPath),
-				aliasedModule = false;
-			for (_alias => path in program.importAliases)
-				if (path == importPath && importTarget != null && importTarget.name == importPath)
-					aliasedModule = true;
+				aliasedModule = editorImportIsAliasedModule(program, importPath);
 			if (aliasedModule) {
 				// A module alias exposes its functions only through the qualifier
 				// (for example `S.answer`). Remember the name so the final global
@@ -238,10 +235,11 @@ class SemanticWorkspace {
 				token.check();
 			if (alias != name)
 				continue;
-			var target = editorImportTarget(importPath);
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
 			// An alias of a module is used as a qualifier (M.add), while an
 			// alias of a declaration (Math.add as sum) is callable directly.
-			if (target == null || importPath == target.name)
+			if (target == null || targetModel == null || editorLogicalModuleName(target, targetModel) == importPath)
 				continue;
 			for (id in editorTopLevelFunctionIds(target, moduleSourceName(importPath), token))
 				if (target == from || indexedSymbol(id) != null)
@@ -293,10 +291,11 @@ class SemanticWorkspace {
 				token.check();
 			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != qualifier)
 				continue;
-			var target = editorImportTarget(importPath);
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
 			// Only an imported module exposes its top-level functions through a
 			// qualifier. A path below the module names a specific declaration.
-			if (target == null || target.name != importPath)
+			if (target == null || targetModel == null || editorLogicalModuleName(target, targetModel) != importPath)
 				continue;
 			for (id in editorTopLevelFunctionIds(target, memberName, token))
 				if (target == from || indexedSymbol(id) != null)
@@ -309,7 +308,7 @@ class SemanticWorkspace {
 				continue;
 			var packageName = importPath.substring(0, importPath.length - 2),
 				candidate = packageName + "." + qualifier,
-				target = modules.get(candidate);
+				target = editorImportTarget(candidate);
 			if (target == null)
 				continue;
 			var targetModel = editorModel(target),
@@ -349,12 +348,15 @@ class SemanticWorkspace {
 		var importedModuleType = editorImportedModuleTypeSymbolId(from, name, sourceProgram, token);
 		if (importedModuleType != null)
 			return importedModuleType;
-		var qualifiedType = editorQualifiedTypeSymbolId(name, token);
+		var qualifiedType = name.indexOf(".") < 0 ? null : editorQualifiedTypeSymbolId(name, token);
 		if (qualifiedType != null)
 			return qualifiedType;
 		var importedType = editorImportedTypeSymbolId(from, name, sourceProgram, token);
 		if (importedType != null)
 			return importedType;
+		var program = sourceProgram == null ? (editorModel(from) == null ? null : editorModel(from).program) : sourceProgram;
+		if (program != null && name.indexOf(".") < 0 && editorHasExplicitTypeImport(program, name))
+			return null;
 		var matches:Array<SemanticSymbolId> = [];
 		for (candidate in editorSymbolCandidates(from, name, token, sourceProgram)) {
 			if (token != null)
@@ -896,16 +898,28 @@ class SemanticWorkspace {
 		};
 		if (name == null)
 			return null;
-		var candidates = editorSymbolCandidates(from, name, token, program),
-			typeCandidates:Array<SemanticSymbolId> = [];
-		for (candidate in candidates) {
-			var resolved = editorSymbolById(candidate);
-			if (resolved != null && isTypeKind(resolved.symbol.kind))
-				typeCandidates.push(candidate);
-		}
-		if (typeCandidates.length > 1)
-			return null;
+		// Resolve once through the editor visibility policy. A preliminary
+		// workspace-wide short-name scan would reject a same-package type before
+		// the resolver can apply its precedence over wildcard imports.
 		var identity = editorResolveTypeSymbolId(from, name, program, token);
+		if (name.indexOf(".") < 0 && !editorHasExplicitTypeImport(program, name)) {
+			var samePackage = editorSamePackageTypeMatches(from, program, name, token);
+			if (samePackage.length > 1)
+				return null;
+			if (samePackage.length == 1)
+				identity = samePackage[0];
+			else {
+				var candidates = editorSymbolCandidates(from, name, token, program),
+					typeCandidates:Array<SemanticSymbolId> = [];
+				for (candidate in candidates) {
+					var resolved = editorSymbolById(candidate);
+					if (resolved != null && isTypeKind(resolved.symbol.kind))
+						addUniqueIdentity(typeCandidates, candidate);
+				}
+				if (typeCandidates.length > 1)
+					return null;
+			}
+		}
 		return editorNominalTypeIdentityById(identity, visited, token);
 	}
 
@@ -981,7 +995,7 @@ class SemanticWorkspace {
 				prefix = wildcard ? importPath.substring(0, importPath.length - 2) : importPath;
 			if (candidate.name == prefix || StringTools.startsWith(candidate.name, prefix + ".")
 				|| logicalCandidateName == prefix || StringTools.startsWith(logicalCandidateName, prefix + ".")
-				|| editorImportModule(importPath) == candidate.name)
+				|| editorImportModule(importPath) == logicalCandidateName)
 				return true;
 		}
 		return false;
@@ -1006,15 +1020,57 @@ class SemanticWorkspace {
 				explicitName = true;
 				addImportedTypeMatches(from, program, importPath, matches, token);
 			}
-		if (!explicitName)
+		if (!explicitName) {
+			// Same-package declarations are visible without an import and take
+			// precedence over wildcard candidates. Keep this before wildcard
+			// expansion so an unrelated package cannot make a valid receiver
+			// ambiguous during recovery.
+			var samePackageMatches = editorSamePackageTypeMatches(from, program, name, token);
+			if (samePackageMatches.length > 0)
+				return uniqueIdentity(samePackageMatches);
 			for (importPath in program.imports)
 				if (isWildcardImport(importPath))
 					addWildcardTypeMatches(from, program, importPath, name, matches, token);
+		}
 		var unique:Array<SemanticSymbolId> = [];
 		for (id in matches)
 			if (unique.indexOf(id) < 0)
 				unique.push(id);
 		return unique.length == 1 ? unique[0] : null;
+	}
+
+	/** Return unqualified types declared in the source module's package. */
+	function editorSamePackageTypeMatches(from:ModuleState, program:AstProgram, name:String,
+		?token:CancellationToken):Array<SemanticSymbolId> {
+		var packageName = program.packageName == null ? null : Std.string(program.packageName),
+			result:Array<SemanticSymbolId> = [];
+		if (packageName == null)
+			return result;
+	for (state in orderedStates()) {
+			if (token != null)
+				token.check();
+			var model = editorModel(state),
+				candidatePackage = model == null || model.program.packageName == null ? null : Std.string(model.program.packageName);
+			if (model == null || candidatePackage != packageName)
+				continue;
+			for (symbol in model.index.symbols) {
+				if (token != null)
+					token.check();
+				if (isTypeKind(symbol.kind) && symbol.name == name)
+					addUniqueIdentity(result, symbol.id);
+			}
+		}
+		return result;
+	}
+
+	static function editorHasExplicitTypeImport(program:AstProgram, name:String):Bool {
+		for (importPath in program.imports)
+			if (!isWildcardImport(importPath) && editorImportQualifier(program, importPath) == name)
+				return true;
+		for (alias => importPath in program.importAliases)
+			if (alias == name)
+				return true;
+		return false;
 	}
 
 	/** Resolve a type imported from all direct modules in a wildcard package. */
@@ -1118,11 +1174,9 @@ class SemanticWorkspace {
 				token.check();
 			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != qualifier)
 				continue;
-			var target = editorImportTarget(importPath);
-			if (target == null || target.name != importPath)
-				continue;
-			var targetModel = editorModel(target);
-			if (targetModel == null)
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
+			if (target == null || targetModel == null || editorLogicalModuleName(target, targetModel) != importPath)
 				continue;
 			for (decl in targetModel.program.classes)
 				if (decl.name == nestedName)
@@ -1229,8 +1283,17 @@ class SemanticWorkspace {
 	}
 
 	function editorImportedTypeName(target:ModuleState, model:compiler.semantic.SemanticModel, importPath:String):Null<String> {
-		var moduleName = target.name,
-			nestedName = importPath == moduleName ? moduleSourceName(moduleName) : importPath.substring(moduleName.length + 1);
+		var logicalModule = editorLogicalModuleName(target, model),
+			nestedName:Null<String> = if (importPath == target.name || importPath == logicalModule)
+			moduleSourceName(target.name)
+		else if (StringTools.startsWith(importPath, logicalModule + "."))
+			importPath.substring(logicalModule.length + 1)
+		else if (StringTools.startsWith(importPath, target.name + "."))
+			importPath.substring(target.name.length + 1)
+		else
+			null;
+		if (nestedName == null)
+			return null;
 		for (decl in model.program.classes)
 			if (moduleSourceName(decl.name) == nestedName)
 				return canonicalEditorTypeName(model, decl.name);
@@ -1254,6 +1317,11 @@ class SemanticWorkspace {
 		return packageName.length == 0 || StringTools.startsWith(name, packageName + ".") ? name : packageName + "." + name;
 	}
 
+	static function editorLogicalModuleName(state:ModuleState, model:compiler.semantic.SemanticModel):String {
+		var packageName = model.program.packageName == null ? "" : Std.string(model.program.packageName);
+		return packageName.length == 0 ? moduleSourceName(state.name) : packageName + "." + moduleSourceName(state.name);
+	}
+
 	function editorImportTarget(importPath:String):Null<ModuleState> {
 		var candidate = importPath;
 		while (candidate.length > 0) {
@@ -1265,12 +1333,40 @@ class SemanticWorkspace {
 				break;
 			candidate = candidate.substring(0, separator);
 		}
-		return null;
+		// Project-backed module names may include a workspace/class-path
+		// prefix, while source imports are always package-qualified. Match the
+		// logical Haxe module name as a fallback (and prefer the longest
+		// module prefix for secondary module types).
+		var best:Null<ModuleState> = null,
+			bestLength = -1;
+		for (state in orderedStates()) {
+			var model = editorModel(state);
+			if (model == null)
+				continue;
+			var logical = editorLogicalModuleName(state, model);
+			if ((importPath == logical || StringTools.startsWith(importPath, logical + "."))
+				&& logical.length > bestLength) {
+				best = state;
+				bestLength = logical.length;
+			}
+		}
+		return best;
 	}
 
 	function editorImportModule(importPath:String):Null<String> {
 		var target = editorImportTarget(importPath);
-		return target == null ? null : target.name;
+		var model = target == null ? null : editorModel(target);
+		return target == null || model == null ? null : editorLogicalModuleName(target, model);
+	}
+
+	function editorImportIsAliasedModule(program:AstProgram, importPath:String):Bool {
+		for (_alias => path in program.importAliases)
+			if (path == importPath) {
+				var target = editorImportTarget(importPath),
+					model = target == null ? null : editorModel(target);
+				return target != null && model != null && editorLogicalModuleName(target, model) == importPath;
+			}
+		return false;
 	}
 
 	static function editorImportQualifier(program:AstProgram, importPath:String):String {
@@ -1612,14 +1708,18 @@ class SemanticWorkspace {
 				var packageName = importPath.substring(0, importPath.length - 2);
 				if (candidatePackage == packageName)
 					return true;
-			} else if (importPath == candidate.name || importPath == candidate.name + "." + functionName) {
-				return true;
+			} else {
+				var candidateModule = editorLogicalModuleName(candidate, model);
+				if ((importPath == candidateModule && !editorImportIsAliasedModule(fromModel.program, importPath))
+					|| importPath == candidateModule + "." + functionName)
+					return true;
 			}
 		}
 		for (_alias => importPath in fromModel.program.importAliases) {
 			if (token != null)
 				token.check();
-			if (importPath == candidate.name || importPath == candidate.name + "." + functionName)
+			var candidateModule = editorLogicalModuleName(candidate, model);
+			if (importPath == candidateModule + "." + functionName)
 				return true;
 		}
 		return false;
@@ -1636,10 +1736,11 @@ class SemanticWorkspace {
 		for (importPath in fromModel.program.imports) {
 			if (token != null)
 				token.check();
-			if (importPath == candidate.name) {
-				for (_alias => path in fromModel.program.importAliases)
-					if (path == importPath)
-						return false;
+			var candidateModule = editorLogicalModuleName(candidate, candidateModel);
+			if (importPath == candidateModule) {
+				if (editorImportIsAliasedModule(fromModel.program, importPath)) {
+					return false;
+				}
 				return true;
 			}
 		}
@@ -1647,6 +1748,15 @@ class SemanticWorkspace {
 			candidatePackage = candidateModel.program.packageName == null ? null : Std.string(candidateModel.program.packageName);
 		return fromPackage != null && fromPackage == candidatePackage
 			|| editorTopLevelFunctionImported(from, candidate, functionName, token);
+	}
+
+	/** Whether a module alias intentionally hides its functions from bare lookup. */
+	public function editorTopLevelFunctionHiddenByModuleAlias(from:ModuleState, candidate:ModuleState):Bool {
+		var fromModel = editorModel(from),
+			candidateModel = editorModel(candidate);
+		if (fromModel == null || candidateModel == null)
+			return false;
+		return editorImportIsAliasedModule(fromModel.program, editorLogicalModuleName(candidate, candidateModel));
 	}
 
 	/**
@@ -1712,7 +1822,9 @@ class SemanticWorkspace {
 				continue;
 			for (symbol in model.index.symbols)
 				if (symbol.name.indexOf(".") < 0 && (isTypeKind(symbol.kind) || symbol.kind == DeclarationKind.Function)) {
-					if (symbol.kind == DeclarationKind.Function && editorTopLevelFunctionImported(from, state, symbol.name, token))
+					if (symbol.kind == DeclarationKind.Function
+						&& (editorTopLevelFunctionImported(from, state, symbol.name, token)
+							|| editorTopLevelFunctionHiddenByModuleAlias(from, state)))
 						continue;
 					var matches = byName.get(symbol.name);
 					if (matches == null)
@@ -1776,7 +1888,13 @@ class SemanticWorkspace {
 		?token:CancellationToken):Array<EditorMember> {
 		var name = editorNominalName(type),
 			candidates:Array<SemanticSymbolId> = [];
-		if (name != null)
+		if (name != null) {
+			// Reuse the receiver's visibility and precedence policy. Re-scanning
+			// all visible short names here would turn a same-package resolution
+			// into wildcard ambiguity during recovered member completion.
+			var identity = editorResolveTypeSymbolId(from, name, program, token);
+			if (identity != null)
+				return editorMembersForIdentity(type, identity, token);
 			for (candidate in editorSymbolCandidates(from, name, token, program)) {
 				if (token != null)
 					token.check();
@@ -1784,6 +1902,7 @@ class SemanticWorkspace {
 				if (resolved != null && isTypeKind(resolved.symbol.kind))
 					addUniqueIdentity(candidates, candidate);
 			}
+		}
 		if (candidates.length == 1)
 			return editorMembersForIdentity(type, candidates[0], token);
 		if (candidates.length > 1)

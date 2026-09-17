@@ -1842,7 +1842,8 @@ class LanguageService {
 				var candidateState = compiler.modules.get(ModulePath.fromFile(candidate.path)),
 					moduleAliasFunction = candidate.kind == "function" && candidate.container == null
 						&& candidateState != null
-						&& compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token);
+						&& (compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token)
+							|| compiler.semanticWorkspace.editorTopLevelFunctionHiddenByModuleAlias(state, candidateState));
 				if (candidate.container == null && isImportableCompletionKind(candidate.kind) && !moduleAliasFunction)
 					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
 			}
@@ -1853,7 +1854,8 @@ class LanguageService {
 					candidateState = compiler.modules.get(module),
 					moduleAliasFunction = candidate.kind == "function" && candidate.container == null
 						&& candidateState != null
-						&& compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token);
+						&& (compiler.semanticWorkspace.editorTopLevelFunctionImported(state, candidateState, candidate.name, token)
+							|| compiler.semanticWorkspace.editorTopLevelFunctionHiddenByModuleAlias(state, candidateState));
 				if (candidate.container == null
 					&& isImportableCompletionKind(candidate.kind)
 					&& !moduleAliasFunction
@@ -1884,6 +1886,9 @@ class LanguageService {
 		var identity = unresolved.candidates[0],
 			resolved = compiler.semanticWorkspace.editorSymbolById(identity);
 		if (resolved == null)
+			return;
+		if (resolved.symbol.kind == DeclarationKind.Function
+			&& !compiler.semanticWorkspace.editorTopLevelFunctionVisible(state, resolved.state, resolved.symbol.name, token))
 			return;
 		var label = sourceName(resolved.symbol.name);
 		if (label.length == 0 || (unresolved.name != label && !StringTools.startsWith(label, prefix)))
@@ -1954,6 +1959,8 @@ class LanguageService {
 			for (fn in completionAst.functions) {
 				if (token != null)
 					token.check();
+				if (compiler.semanticWorkspace.editorTopLevelFunctionHiddenByModuleAlias(state, candidate))
+					continue;
 				if (!compiler.semanticWorkspace.editorTopLevelFunctionVisible(state, candidate, fn.name, token))
 					continue;
 				addMember(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}', prefix, result, 2,
@@ -1995,8 +2002,11 @@ class LanguageService {
 				add(decl.name, "interface", 'interface ${decl.name}', null);
 			for (decl in completionAst.classes)
 				add(decl.name, "class", 'class ${decl.name}', null);
-			for (fn in completionAst.functions)
+			for (fn in completionAst.functions) {
+				if (compiler.semanticWorkspace.editorTopLevelFunctionHiddenByModuleAlias(state, candidate))
+					continue;
 				add(fn.name, "function", '${fn.name}(${[for (argument in fn.arguments) typeName(argument.type)].join(",")}):${typeName(fn.result)}', fn.name + "(");
+			}
 		}
 		for (name in candidates.keys())
 			if (counts.get(name) == 1) {
@@ -2754,7 +2764,7 @@ class LanguageService {
 	}
 
 	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String,
-			?identity:String, ?importPath:String):Void {
+		?identity:String, ?importPath:String):Void {
 		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
 			result.push({
 				label: label,

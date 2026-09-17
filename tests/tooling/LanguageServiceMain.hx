@@ -552,8 +552,9 @@ class LanguageServiceMain {
 			moduleAliasUnqualifiedCompletionSource.length),
 			moduleAliasExposedBareFunction = false;
 		for (item in moduleAliasUnqualifiedCompletion.items)
-			if (item.label == "answer")
+			if (item.label == "answer") {
 				moduleAliasExposedBareFunction = true;
+			}
 		if (moduleAliasExposedBareFunction)
 			throw "recovered module alias incorrectly exposed a bare completion";
 		var moduleAliasQualifiedCompletionSource =
@@ -927,6 +928,88 @@ class LanguageServiceMain {
 		if (!foundRecoveredGenericAliasValue || recoveredGenericAliasTypeDefinition == null
 			|| recoveredGenericAliasTypeDefinition.path != "recovered/alias/base/Box.hx")
 			throw 'recovered generic alias lost substituted member completion or alias identity: completion=$foundRecoveredGenericAliasValue, definition=${recoveredGenericAliasTypeDefinition == null ? "null" : recoveredGenericAliasTypeDefinition.path}';
+		var recoveredGenericAliasImportSource = "package recovered.alias.use; import recovered.alias.base.Box.BoxAlias as Alias; function use(box:Alias<String>):Void return box. ; function unfinished(";
+		recoveredGenericAliasService.update("recovered/alias/use/ExplicitAlias.hx", recoveredGenericAliasImportSource);
+		var recoveredGenericAliasImportPosition = recoveredGenericAliasImportSource.indexOf("box.") + "box.".length,
+			recoveredGenericAliasImportCompletion = recoveredGenericAliasService.completeResult("recovered/alias/use/ExplicitAlias.hx", recoveredGenericAliasImportPosition).items,
+			foundRecoveredGenericAliasImportValue = false,
+			recoveredGenericAliasImportTypePosition = recoveredGenericAliasImportSource.indexOf(":Alias") + 2,
+			recoveredGenericAliasImportTypeDefinition = recoveredGenericAliasService.typeDefinition("recovered/alias/use/ExplicitAlias.hx", recoveredGenericAliasImportTypePosition);
+		for (item in recoveredGenericAliasImportCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundRecoveredGenericAliasImportValue = true;
+		if (!foundRecoveredGenericAliasImportValue
+			|| recoveredGenericAliasImportTypeDefinition == null
+			|| recoveredGenericAliasImportTypeDefinition.path != "recovered/alias/base/Box.hx")
+			throw 'explicitly aliased generic typedef lost substituted member completion or identity: completion=$foundRecoveredGenericAliasImportValue, definition=${recoveredGenericAliasImportTypeDefinition == null ? "null" : recoveredGenericAliasImportTypeDefinition.path}';
+		var recoveredGenericAliasWildcardSource = "package recovered.alias.use; import recovered.alias.base.*; function use(box:BoxAlias<String>):Void return box. ; function unfinished(";
+		recoveredGenericAliasService.update("recovered/alias/use/WildcardAlias.hx", recoveredGenericAliasWildcardSource);
+		var recoveredGenericAliasWildcardPosition = recoveredGenericAliasWildcardSource.indexOf("box.") + "box.".length,
+			recoveredGenericAliasWildcardCompletion = recoveredGenericAliasService.completeResult("recovered/alias/use/WildcardAlias.hx", recoveredGenericAliasWildcardPosition).items,
+			foundRecoveredGenericAliasWildcardValue = false;
+		for (item in recoveredGenericAliasWildcardCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundRecoveredGenericAliasWildcardValue = true;
+		if (!foundRecoveredGenericAliasWildcardValue)
+			throw "wildcard generic typedef lost substituted member completion";
+		var recoveredGenericAliasQualifiedSource = "package recovered.alias.use; function use(box:recovered.alias.base.Box.BoxAlias<String>):Void return box. ; function unfinished(";
+		recoveredGenericAliasService.update("recovered/alias/use/QualifiedAlias.hx", recoveredGenericAliasQualifiedSource);
+		var recoveredGenericAliasQualifiedPosition = recoveredGenericAliasQualifiedSource.indexOf("box.") + "box.".length,
+			recoveredGenericAliasQualifiedCompletion = recoveredGenericAliasService.completeResult("recovered/alias/use/QualifiedAlias.hx", recoveredGenericAliasQualifiedPosition).items,
+			foundRecoveredGenericAliasQualifiedValue = false,
+			recoveredGenericAliasQualifiedTypePosition = recoveredGenericAliasQualifiedSource.indexOf("BoxAlias") + 1,
+			recoveredGenericAliasQualifiedTypeDefinition = recoveredGenericAliasService.typeDefinition("recovered/alias/use/QualifiedAlias.hx", recoveredGenericAliasQualifiedTypePosition);
+		for (item in recoveredGenericAliasQualifiedCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundRecoveredGenericAliasQualifiedValue = true;
+		if (!foundRecoveredGenericAliasQualifiedValue
+			|| recoveredGenericAliasQualifiedTypeDefinition == null
+			|| recoveredGenericAliasQualifiedTypeDefinition.path != "recovered/alias/base/Box.hx")
+			throw 'fully qualified generic typedef lost substituted member completion or identity: completion=$foundRecoveredGenericAliasQualifiedValue, definition=${recoveredGenericAliasQualifiedTypeDefinition == null ? "null" : recoveredGenericAliasQualifiedTypeDefinition.path}';
+		var aliasChainService = new LanguageService(),
+			aliasChainTarget = "package recovered.chain.base; class Box<T> { public var value:T; } typedef First<T> = Box<T>; typedef Second<T> = First<T>; function main():Void return;",
+			aliasChainSource = "package recovered.chain.use; import recovered.chain.base.Box.Second; function use(box:Second<String>):Void return box. ; function unfinished(";
+		aliasChainService.update("recovered/chain/base/Box.hx", aliasChainTarget);
+		aliasChainService.compile("recovered.chain.base.Box");
+		aliasChainService.update("recovered/chain/use/Main.hx", aliasChainSource);
+		var aliasChainPosition = aliasChainSource.indexOf("box.") + "box.".length,
+			aliasChainCompletion = aliasChainService.completeResult("recovered/chain/use/Main.hx", aliasChainPosition).items,
+			foundAliasChainValue = false,
+			aliasChainTypePosition = aliasChainSource.indexOf(":Second") + 2,
+			aliasChainTypeDefinition = aliasChainService.typeDefinition("recovered/chain/use/Main.hx", aliasChainTypePosition);
+		for (item in aliasChainCompletion)
+			if (item.label == "value" && item.detail == "value:String")
+				foundAliasChainValue = true;
+		if (!foundAliasChainValue || aliasChainTypeDefinition == null
+			|| aliasChainTypeDefinition.path != "recovered/chain/base/Box.hx")
+			throw 'generic typedef alias chain lost substituted member completion or identity: completion=$foundAliasChainValue, definition=${aliasChainTypeDefinition == null ? "null" : aliasChainTypeDefinition.path}';
+		var packagePrecedenceService = new LanguageService(),
+			packagePrecedenceExternal = "package prefer.external; class Thing { public var external:Int; } function main():Void return;",
+			packagePrecedenceLocal = "package prefer.app; class Thing { public var local:Int; } function main():Void return;",
+			packagePrecedenceUse = "package prefer.app; import prefer.external.*; function use():Void { var thing:Thing = new Thing(); thing.";
+		packagePrecedenceService.update("prefer/external/Thing.hx", packagePrecedenceExternal);
+		packagePrecedenceService.update("prefer/app/Thing.hx", packagePrecedenceLocal);
+		packagePrecedenceService.update("prefer/app/Use.hx", packagePrecedenceUse);
+		var packagePrecedencePosition = packagePrecedenceUse.indexOf("thing.") + "thing.".length,
+			packagePrecedenceCompletion = packagePrecedenceService.completeResult("prefer/app/Use.hx", packagePrecedencePosition).items,
+			foundPackageLocal = false,
+			foundPackageExternal = false;
+		for (item in packagePrecedenceCompletion) {
+			if (item.label == "local")
+				foundPackageLocal = true;
+			if (item.label == "external")
+				foundPackageExternal = true;
+		}
+		if (!foundPackageLocal || foundPackageExternal)
+			throw 'same-package type did not take precedence over wildcard import: local=$foundPackageLocal, external=$foundPackageExternal';
+		packagePrecedenceService.compile("prefer.app.Thing");
+		var packagePrecedenceNavigationSource = "package prefer.app; import prefer.external.*; function use():Void { var thing:Thing = new Thing(); thing.local; } function unfinished(";
+		packagePrecedenceService.update("prefer/app/Navigation.hx", packagePrecedenceNavigationSource);
+		var packagePrecedenceMemberPosition = packagePrecedenceNavigationSource.lastIndexOf("local") + 1,
+			packagePrecedenceMemberDefinition = packagePrecedenceService.definition("prefer/app/Navigation.hx", packagePrecedenceMemberPosition);
+		if (packagePrecedenceMemberDefinition == null
+			|| packagePrecedenceMemberDefinition.path != "prefer/app/Thing.hx")
+			throw 'same-package member navigation did not retain the selected receiver: ${packagePrecedenceMemberDefinition == null ? "null" : packagePrecedenceMemberDefinition.path}';
 		var signatureService = new LanguageService(),
 			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);
