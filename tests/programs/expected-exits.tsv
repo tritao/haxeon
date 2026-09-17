@@ -168,6 +168,7 @@ hashlink-type-arena	42
 hashlink-type-layout	42
 hashlink-metadata-registry	42
 hashlink-hot-reload-state	42
+hashlink-hot-reload-race	42
 hashlink-atomic	42
 hashlink-atomic-i64	42
 hashlink-atomic-pointer	42

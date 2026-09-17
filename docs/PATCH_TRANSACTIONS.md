@@ -218,5 +218,11 @@ type staging, and finalized JIT staging; the same patch must then succeed withou
 changing its base revision. The `sanitize` CMake preset now provides
 AddressSanitizer and UndefinedBehaviorSanitizer builds for that gate; run
 `scripts/test-sanitizers.sh` to exercise the repeated hot-reload and retirement
-integration under both checks. Broader shutdown-race instrumentation remains
-future work.
+integration under both checks.
+
+The `hashlink-hot-reload-race` program adds the concurrent shutdown gate. A
+worker repeatedly borrows the current Haxe generation while the main thread
+publishes compatible generations and drains retired state. The final shutdown
+is attempted while the worker holds a lease, must remain blocked, and is
+retried only after that lease is released. This exercises the Haxe policy locks
+and borrower gate without depending on scheduler timing.
