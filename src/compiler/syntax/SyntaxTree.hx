@@ -36,6 +36,9 @@ enum SyntaxKind {
 	CallExpression;
 	MemberExpression;
 	IndexExpression;
+	BinaryExpression;
+	ConditionalExpression;
+	AssignmentExpression;
 	TypeArgumentList;
 	TypeParameterList;
 	VariableDeclaration;

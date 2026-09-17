@@ -72,14 +72,6 @@ class SyntaxAnnotator {
 		};
 		applyGrammarNodes(tokens, result, tree);
 		mergeUnparsedSourceRegions(tokens, result);
-		// Binary/conditional/member layout constraints are not represented by
-		// grammar nodes yet. Keep this narrow pass until those parser events are
-		// available; it cannot classify delimiters or braces.
-		var syntaxIndexes:Array<Int> = [];
-		for (index in 0...tokens.length)
-			if (FormatTokenTools.isSyntax(tokens[index]))
-				syntaxIndexes.push(index);
-		annotateExpressionNodes(tokens, syntaxIndexes, result.nodes);
 		annotateParents(result.nodes);
 		for (index in 0...tokens.length) {
 			if (!FormatTokenTools.isSyntax(tokens[index]))
@@ -108,16 +100,6 @@ class SyntaxAnnotator {
 		for (key in fallback.blockCloses.keys())
 			if (!syntax.blockCloses.exists(key))
 				syntax.blockCloses.set(key, fallback.blockCloses.get(key));
-		for (key in fallback.matching.keys())
-			if (!syntax.matching.exists(key))
-				syntax.matching.set(key, fallback.matching.get(key));
-		for (node in fallback.nodes) {
-			var key = tokens[node.start].start + ":" + tokens[node.end].start;
-			if (!syntax.nodeKinds.exists(key)) {
-				syntax.nodeKinds.set(key, node.kind);
-				syntax.nodes.push({kind: node.kind, start: node.start, end: node.end, parent: null});
-			}
-		}
 	}
 
 	static function annotateTokens(tokens:Array<FormatToken>):SyntaxInfo {
@@ -192,11 +174,19 @@ class SyntaxAnnotator {
 	/** Applies authoritative delimiter information already known by the parser. */
 	static function applyGrammarNodes(tokens:Array<FormatToken>, syntax:SyntaxInfo, tree:SyntaxTree):Void {
 		for (node in tree.grammarNodes())
-			switch node.kind {
-				case SyntaxKind.Block:
-					applyBlockNode(tokens, syntax, node);
-				case SyntaxKind.CallExpression:
-					applyCallNode(tokens, syntax, node);
+				switch node.kind {
+					case SyntaxKind.Block:
+						applyBlockNode(tokens, syntax, node);
+					case SyntaxKind.CallExpression:
+						applyCallNode(tokens, syntax, node);
+					case SyntaxKind.BinaryExpression:
+						applyExpressionNode(tokens, syntax, node, FormatNodeKind.BinaryExpression);
+					case SyntaxKind.ConditionalExpression:
+						applyExpressionNode(tokens, syntax, node, FormatNodeKind.ConditionalExpression);
+					case SyntaxKind.AssignmentExpression, SyntaxKind.AssignmentStatement:
+						applyExpressionNode(tokens, syntax, node, FormatNodeKind.Assignment);
+					case SyntaxKind.MemberExpression:
+						applyExpressionNode(tokens, syntax, node, FormatNodeKind.MemberChain);
 				case SyntaxKind.TypeArgumentList, SyntaxKind.TypeParameterList:
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList);
 				case SyntaxKind.ParameterList:
@@ -213,6 +203,16 @@ class SyntaxAnnotator {
 					// Declaration and recovery nodes are consumed by structural tooling;
 					// they do not affect layout decisions yet.
 			}
+	}
+
+	static function applyExpressionNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind):Void {
+		var start = tokenIndexAt(tokens, node.span.start), end = tokenIndexEndingAt(tokens, node.span.end);
+		if (start < 0 || end < start)
+			return;
+		var key = tokens[start].start + ":" + tokens[end].start;
+		if (!syntax.nodeKinds.exists(key) || !isDelimiterNode(syntax.nodeKinds.get(key)))
+			syntax.nodeKinds.set(key, kind);
+		syntax.nodes.push({kind: kind, start: start, end: end, parent: null});
 	}
 
 	static function applyBlockNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {

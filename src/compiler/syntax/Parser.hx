@@ -2082,16 +2082,19 @@ class Parser {
 			var whenTrue = parseExpressionBranch();
 			consume(TokenKind.Colon);
 			var whenFalse = parseExpressionBranch();
-			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
+			var span = expressionSpan(expression).merge(expressionSpan(whenFalse));
+			expression = Conditional(expression, whenTrue, whenFalse, span);
+			recordCstNode(SyntaxKind.ConditionalExpression, span);
 		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
 			advance();
 			var value = parseExpression(),
 				span = expressionSpan(expression).merge(expressionSpan(value));
-			expression = switch expression {
-				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
-				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
-			};
+				expression = switch expression {
+					case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
+					default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
+				};
+			recordCstNode(SyntaxKind.AssignmentExpression, span);
 		}
 		return expression;
 	}
@@ -2122,6 +2125,7 @@ class Parser {
 			var right = parseAnd(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = Or(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2132,6 +2136,7 @@ class Parser {
 			var right = parseComparison(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = And(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2140,7 +2145,9 @@ class Parser {
 		var expression = parseBitXor();
 		while (match(TokenKind.Pipe)) {
 			var right = parseBitXor();
-			expression = BitOr(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+			var span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = BitOr(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2149,7 +2156,9 @@ class Parser {
 		var expression = parseBitAnd();
 		while (match(TokenKind.Caret)) {
 			var right = parseBitAnd();
-			expression = BitXor(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+			var span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = BitXor(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2158,7 +2167,9 @@ class Parser {
 		var expression = parseShift();
 		while (match(TokenKind.Ampersand)) {
 			var right = parseShift();
-			expression = BitAnd(expression, right, expressionSpan(expression).merge(expressionSpan(right)));
+			var span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = BitAnd(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2178,6 +2189,7 @@ class Parser {
 				case TokenKind.NotEqual: NotEqual(expression, right, span);
 				default: Equal(expression, right, span);
 			}
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2195,6 +2207,7 @@ class Parser {
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = leftShift ? ShiftLeft(expression, right,
 				span) : unsigned ? UnsignedShiftRight(expression, right, span) : ShiftRight(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2212,6 +2225,7 @@ class Parser {
 			var right = parseMultiplicative();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = operation == TokenKind.Plus ? Add(expression, right, span) : Sub(expression, right, span);
+			recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2222,11 +2236,12 @@ class Parser {
 			var operation = advance().kind,
 				right = parsePrimary(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = switch operation {
-				case TokenKind.Star: Mul(expression, right, span);
-				case TokenKind.Slash: Div(expression, right, span);
-				default: Mod(expression, right, span);
-			};
+				expression = switch operation {
+					case TokenKind.Star: Mul(expression, right, span);
+					case TokenKind.Slash: Div(expression, right, span);
+					default: Mod(expression, right, span);
+				};
+				recordCstNode(SyntaxKind.BinaryExpression, span);
 		}
 		return expression;
 	}
@@ -2567,6 +2582,7 @@ class Parser {
 				var part = consumeName();
 				name += "." + part.text;
 				end = part.span;
+				recordCstNode(SyntaxKind.MemberExpression, start.merge(end));
 			}
 			var expression:AstExpression = Variable(name, start.merge(end));
 			return parsePostfix(expression);
@@ -2612,6 +2628,7 @@ class Parser {
 				var part = consumeName();
 				name += "." + part.text;
 				end = part.span;
+				recordCstNode(SyntaxKind.MemberExpression, start.merge(end));
 			}
 			var expression:AstExpression = Variable(name, start.merge(end));
 			if (match(TokenKind.LeftParen)) {

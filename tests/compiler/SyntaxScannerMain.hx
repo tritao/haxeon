@@ -86,6 +86,19 @@ class SyntaxScannerMain {
 			|| !grammarKinds.exists(SyntaxKind.ObjectLiteral))
 			throw "CST parser mode did not retain grammar-level structure";
 
+		var expressionSource = new SourceFile("Expressions.hx",
+			"function main(value:Int):Int { var result = value + 1; var nested = result = value; return object.field + result > 0 ? result : 0; }\n"),
+			expressionParser = new Parser(new Lexer(expressionSource).tokenize(), null, ParserMode.Cst(expressionSource));
+		expressionParser.parseProgram();
+		var expressionKinds:Map<SyntaxKind, Bool> = [];
+		for (node in expressionParser.cst.grammarNodes())
+			expressionKinds.set(node.kind, true);
+		if (!expressionKinds.exists(SyntaxKind.BinaryExpression)
+			|| !expressionKinds.exists(SyntaxKind.ConditionalExpression)
+			|| !expressionKinds.exists(SyntaxKind.AssignmentExpression)
+			|| !expressionKinds.exists(SyntaxKind.MemberExpression))
+			throw "CST parser did not retain expression-level grammar structure";
+
 		var headerSource = new SourceFile("Header.hx",
 			"package demo.core;\nimport foo.Bar as Baz;\nfunction main():Void return;\n"),
 			headerAst = new Parser(new Lexer(headerSource).tokenize()).parseProgram(),
