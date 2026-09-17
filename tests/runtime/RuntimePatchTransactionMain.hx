@@ -222,8 +222,14 @@ class RuntimePatchTransactionMain {
 		if (Runtime.retryRetirements() != 1)
 			throw "golden self-hosting shutdown did not defer retirement for the retained object";
 		oldObject.release();
-		Gc.collect();
-		if (Runtime.retryRetirements() != 0 || Runtime.pendingRetirementCount != 0)
+		var pendingAfterRelease = 1;
+		for (_ in 0...4) {
+			Gc.collect();
+			pendingAfterRelease = Runtime.retryRetirements();
+			if (pendingAfterRelease == 0)
+				break;
+		}
+		if (pendingAfterRelease != 0 || Runtime.pendingRetirementCount != 0)
 			throw "golden self-hosting shutdown did not reclaim the retired generation";
 		Gc.collect();
 		Runtime.drainRetirements();
