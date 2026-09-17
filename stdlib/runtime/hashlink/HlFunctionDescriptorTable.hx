@@ -106,7 +106,9 @@ class HlFunctionDescriptorTable {
 
 	/** Validate one descriptor's native opcode storage and opcode identities. */
 	public function validateCodeAt(index:Int):Int {
-		var descriptor = get(index), nops:Int = cast descriptor.ref.nops;
+		var descriptor = get(index), nregs:Int = cast descriptor.ref.nregs, nops:Int = cast descriptor.ref.nops;
+		if (nregs < 0 || (nregs > 0 && descriptor.ref.regs.isNull()))
+			throw 'HashLink function descriptor $index contains an incomplete register array';
 		if (nops < 0 || (nops > 0 && descriptor.ref.ops.isNull()))
 			throw 'HashLink function descriptor $index contains an incomplete opcode array';
 		for (opcodeIndex in 0...nops) {

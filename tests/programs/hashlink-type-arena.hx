@@ -103,6 +103,27 @@ function main():Int {
 		&& descriptorReference.ref.findex == 8
 		&& descriptorReference.ref.reference == 1
 		&& descriptorReference.ref.field.ref.reference == descriptor;
+	var malformedRegisterTable = new HlFunctionDescriptorTable(arena, 1);
+	malformedRegisterTable.add({
+		findex: 0,
+		nregs: 1,
+		nops: 0,
+		reference: 0,
+		nassigns: 0,
+		type: builtFunction,
+		regs: RawPtr.nullPtr(),
+		ops: RawPtr.nullPtr(),
+		debug: RawPtr.nullPtr(),
+		assigns: RawPtr.nullPtr(),
+		object: RawPtr.nullPtr(),
+		fieldName: RawPtr.nullPtr(),
+		fieldReference: RawPtr.nullPtr()
+	});
+	var malformedRegisterRejected = false;
+	try
+		malformedRegisterTable.validateCodeAt(0)
+	catch (error:Dynamic)
+		malformedRegisterRejected = Std.string(error).indexOf("incomplete register array") >= 0;
 	var nativeLibrary:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeName:RawPtr<UInt8> = arena.allocNativePointerArray(1).castTo(),
 		nativeTable = new HlNativeDescriptorTable(arena, 2),
@@ -262,6 +283,7 @@ function main():Int {
 	var generationObjectName = generation.builder.utf16Name("GenerationObject"),
 		generationMethodName = generation.builder.utf16Name("run"),
 		generationModule = generation.defineModule([RawPtr.nullPtr(), RawPtr.nullPtr()], [generationFunction, generationFunction]),
+		generationRegs = generation.arena.allocTypePointerArray(1),
 		generationObject = generation.builder.objectType(generationObjectName, RawPtr.nullPtr(), [], [
 			{
 				name: generationMethodName,
@@ -276,6 +298,7 @@ function main():Int {
 	generation.addType(generationInt);
 	generation.addType(generationFunction);
 	generation.addType(generationObject);
+	generationRegs.store(generationInt);
 	var generationDescriptor = generation.addFunctionDescriptor({
 		findex: 0,
 		nregs: 1,
@@ -283,7 +306,7 @@ function main():Int {
 		reference: 0,
 		nassigns: 0,
 		type: generationFunction,
-		regs: RawPtr.nullPtr(),
+		regs: generationRegs,
 		ops: RawPtr.nullPtr(),
 		debug: RawPtr.nullPtr(),
 		assigns: RawPtr.nullPtr(),
@@ -578,7 +601,7 @@ function main():Int {
 	arena.dispose();
 	return correct && builtCorrect && descriptorCorrect && descriptorBindingCorrect && graphCorrect && tableCorrect && functionTableCorrect && namesCorrect
 		&& moduleCorrect && nativeObjectCorrect && generationCorrect && generationSealed && builderSealed && descriptorTablesSealed
-		&& inheritedBindingCorrect && invalidDescriptorRejected && dispatchCorrect && initializerRejected && slotRejected && malformedObjectRejected
-		&& invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignBuilderRejected && foreignFunctionTableRejected
-		&& duplicateTypeRejected && foreignTypeTableRejected && setDuplicateTypeRejected && foreignTypeRejected ? 42 : 1;
+		&& inheritedBindingCorrect && invalidDescriptorRejected && malformedRegisterRejected && dispatchCorrect && initializerRejected && slotRejected
+		&& malformedObjectRejected && invalidPrototypeRejected && invalidGlobalRejected && incompleteTypeRejected && foreignBuilderRejected
+		&& foreignFunctionTableRejected && duplicateTypeRejected && foreignTypeTableRejected && setDuplicateTypeRejected && foreignTypeRejected ? 42 : 1;
 }
