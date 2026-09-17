@@ -1,6 +1,8 @@
 package compiler.semantic;
 
 import compiler.service.CancellationToken;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
@@ -18,11 +20,15 @@ class SemanticIndexRecoveryQuery {
 	/** Remaining recovered-signature algorithms are extracted next. */
 	final builder:SemanticIndexBuilder;
 	final completionFacts:SemanticCompletionFacts;
+	final recoveredFunctions:Map<String, AstFunction>;
 
 	public function new(builder:SemanticIndexBuilder) {
 		if (!builder.isFrozen)
 			throw "Recovery query requires a frozen semantic index builder";
 		this.builder = builder;
+		recoveredFunctions = [];
+		for (name => fn in builder.recoveredFunctions)
+			recoveredFunctions.set(name, fn);
 		completionFacts = {
 			locals: [for (local in builder.completionLocals) {
 				name: local.name,
@@ -52,8 +58,29 @@ class SemanticIndexRecoveryQuery {
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
 		return SemanticCompletionQuery.build(completionFacts, position, qualifier, token);
 
-	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo>
+	public function recoveredSignature(name:String, ?receiverType:CompilerType):Null<SemanticSignatureInfo> {
+		// Direct function and constructor signatures do not require the mutable
+		// recovery resolver. Keep these queries entirely on copied declarations;
+		// inherited/generic receiver signatures use the compatibility resolver
+		// until that richer algorithm gets its own immutable state.
+		if (receiverType == null) {
+			var fn = recoveredFunctions.get(name);
+			if (fn == null)
+				fn = recoveredFunctions.get(name + ".new");
+			if (fn != null) {
+				var parameters = [for (argument in fn.arguments)
+					argument.name + ":" + displayAstType(argument.type)],
+					labelName = name.lastIndexOf(".") < 0 ? name : name.substr(name.lastIndexOf(".") + 1),
+					result = displayAstType(fn.result);
+				return {
+					label: labelName + "(" + parameters.join(",") + "):" + result,
+					parameters: parameters,
+					result: result
+				};
+			}
+		}
 		return builder.recoveredSignature(name, receiverType);
+	}
 
 	public function callableSignature(type:Null<CompilerType>, name:String):Null<SemanticSignatureInfo>
 		return switch type {
@@ -84,6 +111,24 @@ class SemanticIndexRecoveryQuery {
 			case TTypeParameter(_, name): name;
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name + "<" + [for (argument in arguments) displayType(argument)].join(",") + ">";
 			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",") + ")->" + displayType(result);
+			default: Std.string(type);
+		};
+
+	static function displayAstType(type:AstType):String
+		return switch type {
+			case IntType: "Int";
+			case BoolType: "Bool";
+			case FloatType: "Float";
+			case StringType: "String";
+			case VoidType: "Void";
+			case InferredType: "_";
+			case NamedType(name): name;
+			case AppliedType(name, arguments): name + "<" + [for (argument in arguments) displayAstType(argument)].join(",") + ">";
+			case ArrayType(element): 'Array<${displayAstType(element)}>';
+			case MapType(key, value): 'Map<${displayAstType(key)},${displayAstType(value)}>';
+			case NullableType(element): 'Null<${displayAstType(element)}>';
+			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",") + ")->" + displayAstType(result);
+			case AnonymousType(fields): "{" + [for (field in fields) field.name + ":" + displayAstType(field.type)].join(",") + "}";
 			default: Std.string(type);
 		};
 }
