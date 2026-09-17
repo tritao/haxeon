@@ -670,6 +670,16 @@ class LanguageServiceMain {
 				foundAbsoluteImportMember = true;
 		if (!foundAbsoluteImportMember)
 			throw "workspace-prefixed package import did not populate recovered typing modules";
+		var absoluteAliasedSource = "package absolute.app; import absolute.types.Types as T; function main():Void { var value:T; value. } function unfinished(";
+		absoluteImportService.update("/workspace/absolute/app/Alias.hx", absoluteAliasedSource);
+		var absoluteAliasedPosition = absoluteAliasedSource.indexOf("value.") + "value.".length,
+			absoluteAliasedCompletion = absoluteImportService.complete("/workspace/absolute/app/Alias.hx", absoluteAliasedPosition),
+			foundAbsoluteAliasedMember = false;
+		for (item in absoluteAliasedCompletion)
+			if (item.label == "member")
+				foundAbsoluteAliasedMember = true;
+		if (!foundAbsoluteAliasedMember)
+			throw "workspace-prefixed aliased import did not preserve recovered receiver typing";
 		var qualifiedSecondarySource = "package secondary.app; function main():Void { secondary.types.Container.Entry.create(); }";
 		secondaryModuleService.update("secondary/app/Qualified.hx", qualifiedSecondarySource);
 		var qualifiedSecondaryPosition = qualifiedSecondarySource.indexOf("create") + 1,

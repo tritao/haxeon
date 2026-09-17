@@ -2048,7 +2048,7 @@ class LanguageService {
 	static function recoveredCompletionName(program:AstProgram, candidate:ModuleState, name:String):String {
 		for (importPath in program.imports)
 			if (!StringTools.endsWith(importPath, ".*")
-				&& modulePathMatches(candidate.name, importPath)
+				&& modulePathMatches(candidate.name, importPath, effectiveAst(candidate))
 				&& importQualifier(program, importPath) != sourceName(importPath)
 				&& name == sourceName(importPath))
 				return importQualifier(program, importPath);
