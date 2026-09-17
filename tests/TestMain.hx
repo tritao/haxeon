@@ -125,6 +125,13 @@ class TestMain {
 			outOfRangeInteger = error.diagnostic.message.indexOf("outside the signed 32-bit range") >= 0;
 		if (!outOfRangeInteger)
 			throw "Out-of-range decimal integer literals did not produce a parser diagnostic";
+		var oversizedInteger = false;
+		try {
+			Frontend.compile('function main():Int return 999999999999999999999999999999999999999999;');
+		} catch (error:CompileError)
+			oversizedInteger = error.diagnostic.message.indexOf("outside the supported range") >= 0;
+		if (!oversizedInteger)
+			throw "Oversized integer literals did not produce a parser diagnostic";
 		var scientificLiteralProgram = Frontend.compile('function main():Int return 1.0e3 == 1000 ? 42 : 0;');
 		if (new IrInterpreter(scientificLiteralProgram).run("main") != 42)
 			throw "Scientific-notation literals did not parse or type as Float values";
@@ -916,6 +923,8 @@ class TestMain {
 			'MessagePack enum constructor "MissingEnumId.Value" requires @:id(n)');
 		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
+		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
+			'MessagePack.decode requires an expected result type');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',

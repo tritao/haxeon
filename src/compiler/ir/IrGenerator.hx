@@ -596,6 +596,12 @@ class IrGenerator {
 			default: null;
 		};
 
+	static function requireMapEnumName(type:CompilerType):String
+		return switch mapEnumName(type) {
+			case null: throw "Expected an enum map key";
+			case name: name;
+		};
+
 	static function lowerMapKey(builder:CfgBuilder, key:CfgValue, keyType:CompilerType):CfgValue
 		return mapEnumName(keyType) == null ? key : builder.enumIndex(key);
 
@@ -607,7 +613,7 @@ class IrGenerator {
 		if (mapEnumName(keyType) == null)
 			return builder.call(nativeName, [map], sourceKeyArrayType);
 
-		var enumName = cast mapEnumName(keyType),
+		var enumName = requireMapEnumName(keyType),
 			enumConstructorCount = enumConstructorCounts.get(enumName);
 		if (enumConstructorCount == null || enumConstructorCount == 0)
 			throw 'Missing non-empty enum layout for map key "$enumName"';

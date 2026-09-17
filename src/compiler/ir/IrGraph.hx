@@ -54,7 +54,7 @@ class IrGraph {
 		var stack:Array<{id:Int, next:Int}> = [{id: id, next: 0}];
 		while (stack.length > 0) {
 			var frame = stack[stack.length - 1],
-				next = successors.get(frame.id);
+				next = requiredSuccessors(successors, frame.id);
 			if (frame.next < next.length) {
 				var target = next[frame.next++];
 				if (!predecessors.exists(target))
@@ -112,6 +112,12 @@ class IrGraph {
 	static function requiredInt(values:Map<Int, Int>, key:Int):Int {
 		if (!values.exists(key))
 			throw 'Missing graph index $key';
+		return values.get(key);
+	}
+
+	static function requiredSuccessors(values:Map<Int, Array<Int>>, key:Int):Array<Int> {
+		if (!values.exists(key))
+			throw 'Missing graph successors $key';
 		return values.get(key);
 	}
 

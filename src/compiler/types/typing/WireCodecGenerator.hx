@@ -227,10 +227,14 @@ class WireCodecGenerator {
 					'MessagePack record field "${declaration.name}.${field.name}" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal',
 					field.span);
 			var id = fieldId(declaration, field);
-			if (ids.exists(id))
+			if (ids.exists(id)) {
+				var previous = ids.get(id);
+				if (previous == null)
+					throw 'Missing MessagePack record field for @:id($id)';
 				BodyTyper.fail("E1024",
-					'MessagePack record fields "${declaration.name}.${ids.get(id).name}" and "${declaration.name}.${field.name}" use duplicate @:id($id)',
+					'MessagePack record fields "${declaration.name}.${previous.name}" and "${declaration.name}.${field.name}" use duplicate @:id($id)',
 					field.span);
+			}
 			ids.set(id, field);
 			result.push({field: field, id: id});
 		}
@@ -266,9 +270,13 @@ class WireCodecGenerator {
 		for (index in 0...declaration.cases.length) {
 			var caseDecl = declaration.cases[index];
 			var id = enumCaseId(declaration, caseDecl);
-			if (ids.exists(id))
+			if (ids.exists(id)) {
+				var previous = ids.get(id);
+				if (previous == null)
+					throw 'Missing MessagePack enum constructor for @:id($id)';
 				BodyTyper.fail("E1024",
-					'MessagePack enum "${declaration.name}" constructors "${ids.get(id).name}" and "${caseDecl.name}" use duplicate @:id($id)', caseDecl.span);
+					'MessagePack enum "${declaration.name}" constructors "${previous.name}" and "${caseDecl.name}" use duplicate @:id($id)', caseDecl.span);
+			}
 			ids.set(id, caseDecl);
 			result.push({caseDecl: caseDecl, index: index, id: id});
 		}

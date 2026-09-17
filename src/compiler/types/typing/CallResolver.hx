@@ -750,10 +750,13 @@ class CallResolver {
 		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			if (expectedType == null || expectedType == TNull)
-				fail("E1009", "MessagePack.decode requires an expected result type", span);
-			var bytes = coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input", "E1002"),
-				resultType = cast expectedType;
+			var resultType = switch expectedType {
+				case null, TNull:
+					throw new CompileError(new Diagnostic("E1009", "MessagePack.decode requires an expected result type", span));
+				case type:
+					type;
+			};
+			var bytes = coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input", "E1002");
 			WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
 			return new TypedExpression(TCall(WireCodecGenerator.decodeName(resultType), [bytes]), resultType, span);
 		}

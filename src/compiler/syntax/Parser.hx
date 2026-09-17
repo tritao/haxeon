@@ -2191,9 +2191,8 @@ class Parser {
 				fail(token, 'Integer literal "${token.text}" is outside the supported range');
 			return value;
 		} catch (_:Dynamic) {
-			fail(token, 'Integer literal "${token.text}" is outside the supported range');
+			throw new CompileError(new Diagnostic("E0002", 'Integer literal "${token.text}" is outside the supported range', token.span));
 		}
-		return Int64.ofInt(0);
 	}
 
 	static function expressionSpan(expression:AstExpression):SourceSpan

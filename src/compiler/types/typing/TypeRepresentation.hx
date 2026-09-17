@@ -118,7 +118,7 @@ class TypeRepresentation {
 		if (declaration != null)
 			for (parameter in declaration.typeParameters)
 				arguments.push(substitutions != null && substitutions.exists(parameter) ? substitutions.get(parameter) : TDynamic);
-		return TInstance(Class, owner, arguments);
+		return TInstance(NominalKind.Class, owner, arguments);
 	}
 
 	/**
