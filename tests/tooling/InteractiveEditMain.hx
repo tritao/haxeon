@@ -103,8 +103,9 @@ class InteractiveEditMain {
 		assertCompoundRecoveryEquivalence();
 		assertRecoveryMatrix();
 		assertIdentityResolutionClosure();
+		assertNavigationClosure();
 
-		Sys.println('PASS: ${tails.length + 12} interactive edits retained recovery queries');
+		Sys.println('PASS: ${tails.length + 13} interactive edits retained recovery queries');
 	}
 
 	static function assertRecoveryMatrix():Void {
@@ -285,6 +286,83 @@ class InteractiveEditMain {
 			|| repairedMemberId == null
 			|| Std.string(repairedMemberId) != Std.string(exactMemberId))
 			throw "repair did not restore imported type and member identities";
+	}
+
+	static function assertNavigationClosure():Void {
+		var service = new LanguageService(),
+			basePath = "navigation/base/Base.hx",
+			childPath = "navigation/child/Child.hx",
+			consumerPath = "navigation/app/Main.hx",
+			base = "package navigation.base; class Base { public var seed:Int; public function new(seed:Int) { this.seed = seed; } public function run():Int return seed; } function main():Void return;",
+			child = "package navigation.child; import navigation.base.Base; class Child extends Base { public function new(seed:Int) { super(seed); } public function run():Int return 1; } function main():Void return;",
+			consumer = "package navigation.app; import navigation.child.Child; function main():Void { var child:Child = new Child(1); child.run(); }";
+		service.update(basePath, base);
+		service.compile("navigation.base.Base");
+		service.update(childPath, child);
+		service.update(consumerPath, consumer);
+		service.compile("navigation.app.Main");
+
+		var baseRunPosition = base.indexOf("run():Int") + 1,
+			childRunPosition = child.indexOf("run():Int") + 1,
+			consumerTypePosition = consumer.indexOf(":Child") + 2,
+			consumerConstructorPosition = consumer.indexOf("new Child") + "new ".length + 1,
+			consumerMemberPosition = consumer.lastIndexOf("run()") + 1,
+			baseDefinition = service.definition(basePath, baseRunPosition),
+			childDefinition = service.definition(childPath, childRunPosition),
+			consumerTypeDefinition = service.typeDefinition(consumerPath, consumerTypePosition),
+			constructorDefinition = service.definition(consumerPath, consumerConstructorPosition),
+			childImplementations = service.implementations(basePath, baseRunPosition),
+			baseReferences = service.references(basePath, baseRunPosition),
+			childReferences = service.references(childPath, childRunPosition);
+		if (baseDefinition == null || baseDefinition.path != basePath
+			|| childDefinition == null || childDefinition.path != childPath
+			|| consumerTypeDefinition == null || consumerTypeDefinition.path != childPath
+			|| constructorDefinition == null || constructorDefinition.path != childPath)
+			throw 'navigation closure disagreed on declaration identities: base=${baseDefinition == null ? "null" : baseDefinition.path}, child=${childDefinition == null ? "null" : childDefinition.path}, type=${consumerTypeDefinition == null ? "null" : consumerTypeDefinition.path}, constructor=${constructorDefinition == null ? "null" : constructorDefinition.path}';
+
+		var foundChildImplementation = false,
+			foundBaseDeclaration = false,
+			foundChildDeclaration = false,
+			foundConsumerUse = false;
+		for (implementation in childImplementations)
+			if (implementation.path == childPath)
+				foundChildImplementation = true;
+		for (reference in baseReferences) {
+			if (reference.path == basePath && reference.span.start <= baseRunPosition && baseRunPosition < reference.span.end)
+				foundBaseDeclaration = true;
+			if (reference.path == consumerPath && reference.span.start <= consumerMemberPosition && consumerMemberPosition < reference.span.end)
+				foundConsumerUse = true;
+		}
+		for (reference in childReferences)
+			if (reference.path == childPath && reference.span.start <= childRunPosition && childRunPosition < reference.span.end)
+				foundChildDeclaration = true;
+		if (!foundChildImplementation || !foundBaseDeclaration || !foundChildDeclaration || !foundConsumerUse)
+			throw 'navigation closure lost a shared member family: implementation=$foundChildImplementation, base=$foundBaseDeclaration, child=$foundChildDeclaration, consumer=$foundConsumerUse, baseReferences=${baseReferences.length}, childReferences=${childReferences.length}';
+
+		var recoveredChild = "package navigation.child; import navigation.base.Base; class Child extends Base { public function new(seed:Int) { super(seed); } public function run():Int return super.run(); } function unfinished(";
+		service.update(childPath, recoveredChild);
+		var superRunPosition = recoveredChild.lastIndexOf("super.run") + "super.".length + 1,
+			recoveredSuperDefinition = service.definition(childPath, superRunPosition),
+			recoveredBaseReferences = service.references(basePath, baseRunPosition),
+			foundSuperUse = false;
+		for (reference in recoveredBaseReferences)
+			if (reference.path == childPath && reference.span.start <= superRunPosition && superRunPosition < reference.span.end)
+				foundSuperUse = true;
+		if (recoveredSuperDefinition == null || recoveredSuperDefinition.path != basePath || !foundSuperUse)
+			throw 'recovered super navigation disagreed with the base identity: definition=${recoveredSuperDefinition == null ? "null" : recoveredSuperDefinition.path}, references=${recoveredBaseReferences.length}';
+
+		service.update("navigation/unrelated/Broken.hx", "package navigation.unrelated; class Broken { public function unfinished(");
+		var afterNeighborReferences = service.references(basePath, baseRunPosition),
+			retainedConsumerUse = false,
+			retainedSuperUse = false;
+		for (reference in afterNeighborReferences) {
+			if (reference.path == consumerPath && !reference.stale)
+				retainedConsumerUse = true;
+			if (reference.path == childPath && reference.span.start <= superRunPosition && superRunPosition < reference.span.end)
+				retainedSuperUse = true;
+		}
+		if (!retainedConsumerUse || !retainedSuperUse)
+			throw 'malformed neighboring module disrupted authoritative navigation: references=${afterNeighborReferences.length}';
 	}
 
 	static function assertCompoundRecoveryEquivalence():Void {
