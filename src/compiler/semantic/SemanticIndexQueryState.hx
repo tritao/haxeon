@@ -6,7 +6,7 @@ import compiler.types.Type.CompilerType;
 import compiler.semantic.SemanticIndex.SemanticCallEdge;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
 import compiler.semantic.SemanticIndex.SemanticCompletionLocal;
-import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
+import compiler.semantic.SemanticIndexBuilder;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;

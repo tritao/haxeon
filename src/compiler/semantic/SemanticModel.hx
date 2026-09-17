@@ -10,7 +10,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;
 import compiler.service.CancellationToken;
-import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
+import compiler.semantic.SemanticIndexBuilder;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */

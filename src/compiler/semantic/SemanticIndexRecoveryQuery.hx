@@ -5,7 +5,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 import compiler.semantic.SemanticIndex.SemanticCompletionContext;
-import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
+import compiler.semantic.SemanticIndexBuilder;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
 import compiler.semantic.SemanticCompletionQuery.SemanticCompletionFacts;
 
