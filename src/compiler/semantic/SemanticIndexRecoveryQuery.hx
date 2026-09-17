@@ -21,6 +21,7 @@ class SemanticIndexRecoveryQuery {
 	final builder:SemanticIndexBuilder;
 	final completionFacts:SemanticCompletionFacts;
 	final recoveredFunctions:Map<String, AstFunction>;
+	final receiverSignatures:Map<String, SemanticSignatureInfo>;
 
 	public function new(builder:SemanticIndexBuilder) {
 		if (!builder.isFrozen)
@@ -53,6 +54,27 @@ class SemanticIndexRecoveryQuery {
 			declarations: builder.declarations,
 			tokens: builder.tokens.copy()
 		};
+		receiverSignatures = [];
+		var receiverTypes:Array<CompilerType> = [], seenReceiverTypes:Map<String, Bool> = [];
+		for (receiver in completionFacts.receivers)
+			addReceiverType(receiverTypes, seenReceiverTypes, receiver.type);
+		for (local in completionFacts.locals)
+			addReceiverType(receiverTypes, seenReceiverTypes, local.type);
+		for (qualifier in completionFacts.qualifiers)
+			addReceiverType(receiverTypes, seenReceiverTypes, qualifier.type);
+		for (base in completionFacts.classBases)
+			addReceiverType(receiverTypes, seenReceiverTypes, base);
+		var names:Array<String> = [for (name in recoveredFunctions.keys()) name];
+		names.sort(Reflect.compare);
+		for (name in names) {
+			if (name.lastIndexOf(".") < 1)
+				continue;
+			for (receiverType in receiverTypes) {
+				var signature = builder.recoveredSignature(name, receiverType);
+				if (signature != null)
+					receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
+			}
+		}
 	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
@@ -78,6 +100,11 @@ class SemanticIndexRecoveryQuery {
 					result: result
 				};
 			}
+		}
+		if (receiverType != null) {
+			var cached = receiverSignatures.get(signatureKey(name, receiverType));
+			if (cached != null)
+				return copySignature(cached);
 		}
 		return builder.recoveredSignature(name, receiverType);
 	}
@@ -112,6 +139,24 @@ class SemanticIndexRecoveryQuery {
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name + "<" + [for (argument in arguments) displayType(argument)].join(",") + ">";
 			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",") + ")->" + displayType(result);
 			default: Std.string(type);
+		};
+
+	static function addReceiverType(result:Array<CompilerType>, seen:Map<String, Bool>, type:CompilerType):Void {
+		var key = Std.string(type);
+		if (!seen.exists(key)) {
+			seen.set(key, true);
+			result.push(type);
+		}
+	}
+
+	static function signatureKey(name:String, receiverType:CompilerType):String
+		return name + "\u0000" + Std.string(receiverType);
+
+	static function copySignature(signature:SemanticSignatureInfo):SemanticSignatureInfo
+		return {
+			label: signature.label,
+			parameters: signature.parameters.copy(),
+			result: signature.result
 		};
 
 	static function displayAstType(type:AstType):String
