@@ -143,6 +143,9 @@ class SemanticWorkspace {
 			var localFunction = editorTopLevelFunctionId(from, name, token);
 			if (localFunction != null)
 				return localFunction;
+			var importedEnumCase = editorImportedEnumCaseSymbolId(from, name, sourceProgram, token);
+			if (importedEnumCase != null)
+				return importedEnumCase;
 			var importedFunction = editorImportedFunctionMatches(from, sourceProgram, name, token);
 			if (importedFunction.explicit || importedFunction.ids.length > 0)
 				return uniqueIdentity(importedFunction.ids);
@@ -177,6 +180,55 @@ class SemanticWorkspace {
 			return null;
 		var direct = resolveSymbolId(name);
 		return direct != null && editorSymbolVisible(from, direct, sourceProgram, token) ? direct : null;
+	}
+
+	/** Resolve a directly imported enum constructor/value by its local spelling. */
+	function editorImportedEnumCaseSymbolId(from:ModuleState, name:String, sourceProgram:Null<AstProgram>,
+		?token:CancellationToken):Null<SemanticSymbolId> {
+		var model = editorModel(from),
+			program = sourceProgram == null && model != null ? model.program : sourceProgram,
+			matches:Array<SemanticSymbolId> = [];
+		if (program == null)
+			return null;
+		var collect = function(importPath:String):Void {
+			if (isWildcardImport(importPath) || editorImportQualifier(program, importPath) != name)
+				return;
+			var target = editorImportTarget(importPath),
+				targetModel = target == null ? null : editorModel(target);
+			if (target == null || targetModel == null)
+				return;
+			var logicalModule = editorLogicalModuleName(target, targetModel),
+				nestedName = importPath == target.name ? "" : importPath == logicalModule ? "" : StringTools.startsWith(importPath, logicalModule + ".")
+					? importPath.substring(logicalModule.length + 1)
+					: StringTools.startsWith(importPath, target.name + ".") ? importPath.substring(target.name.length + 1) : "";
+			if (nestedName.length == 0)
+				return;
+			var separator = nestedName.lastIndexOf("."),
+				enumName = separator < 0 ? moduleSourceName(target.name) : nestedName.substring(0, separator),
+				caseName = separator < 0 ? nestedName : nestedName.substring(separator + 1);
+			for (decl in targetModel.program.enums)
+				if (decl.name == enumName)
+					for (enumCase in decl.cases)
+						if (enumCase.name == caseName) {
+							var id = editorDeclarationSymbolId(target, enumCase.span);
+							if (id != null && (target == from || indexedSymbol(id) != null))
+								addUniqueIdentity(matches, id);
+						}
+			for (decl in targetModel.program.enumAbstracts)
+				if (decl.name == enumName)
+					for (value in decl.values)
+						if (value.name == caseName) {
+							var id = editorDeclarationSymbolId(target, value.span);
+							if (id != null && (target == from || indexedSymbol(id) != null))
+								addUniqueIdentity(matches, id);
+						}
+		};
+		for (importPath in program.imports) {
+			if (token != null)
+				token.check();
+			collect(importPath);
+		}
+		return uniqueIdentity(matches);
 	}
 
 	function editorTopLevelFunctionId(state:ModuleState, name:String, ?token:CancellationToken):Null<SemanticSymbolId> {

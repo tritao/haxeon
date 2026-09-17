@@ -247,6 +247,99 @@ class ParserRecoveryMain {
 			|| recoveredDefinition.path != "visibility/same/Peer.hx"
 			|| recoveredReferences.length < 2)
 			throw 'recovered same-package function visibility lost its identity: definition=${recoveredDefinition == null ? "null" : recoveredDefinition.path}, references=${recoveredReferences.length}';
+
+		var explicitFunctionService = new LanguageService(),
+			explicitFunctionTarget = "package visibility.explicit; function answer():Int return 1; function main():Void return;",
+			explicitFunctionConsumer = "package visibility.consumer; import visibility.explicit.Provider.answer as result; function main():Int return result();";
+		explicitFunctionService.update("visibility/explicit/Provider.hx", explicitFunctionTarget);
+		explicitFunctionService.analyze("visibility.explicit.Provider");
+		explicitFunctionService.update("visibility/consumer/Main.hx", explicitFunctionConsumer);
+		explicitFunctionService.analyze("visibility.consumer.Main");
+		var explicitFunctionPosition = explicitFunctionConsumer.indexOf("result()") + 1,
+			explicitFunctionDefinition = explicitFunctionService.definition("visibility/consumer/Main.hx", explicitFunctionPosition),
+			explicitFunctionReferences = explicitFunctionService.references("visibility/consumer/Main.hx", explicitFunctionPosition);
+		if (explicitFunctionDefinition == null || explicitFunctionDefinition.stale
+			|| explicitFunctionDefinition.path != "visibility/explicit/Provider.hx"
+			|| explicitFunctionReferences.length < 2)
+			throw 'explicit function alias did not preserve its owning module identity: definition=${explicitFunctionDefinition == null ? "null" : explicitFunctionDefinition.path}, references=${explicitFunctionReferences.length}';
+
+		var explicitFunctionRecovered = StringTools.replace(explicitFunctionConsumer, "return result();", "return result(");
+		explicitFunctionService.update("visibility/consumer/Main.hx", explicitFunctionRecovered);
+		var explicitFunctionRecoveredPosition = explicitFunctionRecovered.indexOf("result(") + 1,
+			explicitFunctionRecoveredDefinition = explicitFunctionService.definition("visibility/consumer/Main.hx", explicitFunctionRecoveredPosition),
+			explicitFunctionRecoveredReferences = explicitFunctionService.references("visibility/consumer/Main.hx", explicitFunctionRecoveredPosition);
+		if (explicitFunctionRecoveredDefinition == null || explicitFunctionRecoveredDefinition.stale
+			|| explicitFunctionRecoveredDefinition.path != "visibility/explicit/Provider.hx"
+			|| explicitFunctionRecoveredReferences.length < 2)
+			throw 'recovered explicit function alias lost its owning module identity: definition=${explicitFunctionRecoveredDefinition == null ? "null" : explicitFunctionRecoveredDefinition.path}, references=${explicitFunctionRecoveredReferences.length}';
+
+		var enumImportService = new LanguageService(),
+			enumImportTarget = "package visibility.enumlib; enum Result { Ready; Value(value:Int); } function main():Void return;",
+			enumImportConsumer = "package visibility.enumapp; import visibility.enumlib.Result.Value; function main():Void { Value(1); }";
+		enumImportService.update("visibility/enumlib/Result.hx", enumImportTarget);
+		enumImportService.analyze("visibility.enumlib.Result");
+		enumImportService.update("visibility/enumapp/Main.hx", enumImportConsumer);
+		enumImportService.analyze("visibility.enumapp.Main");
+		var enumImportPosition = enumImportConsumer.lastIndexOf("Value(1)") + 1,
+			enumImportDefinition = enumImportService.definition("visibility/enumapp/Main.hx", enumImportPosition),
+			enumImportReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportPosition);
+		if (enumImportDefinition == null || enumImportDefinition.stale
+			|| enumImportDefinition.path != "visibility/enumlib/Result.hx"
+			|| enumImportReferences.length < 2)
+			throw 'explicit enum-constructor import did not preserve its owner identity: definition=${enumImportDefinition == null ? "null" : enumImportDefinition.path}, references=${enumImportReferences.length}';
+
+		var enumImportRecovered = StringTools.replace(enumImportConsumer, "Value(1)", "Value(");
+		enumImportService.update("visibility/enumapp/Main.hx", enumImportRecovered);
+		var enumImportRecoveredPosition = enumImportRecovered.lastIndexOf("Value(") + 1,
+			enumImportRecoveredDefinition = enumImportService.definition("visibility/enumapp/Main.hx", enumImportRecoveredPosition),
+			enumImportRecoveredReferences = enumImportService.references("visibility/enumapp/Main.hx", enumImportRecoveredPosition);
+		if (enumImportRecoveredDefinition == null || enumImportRecoveredDefinition.stale
+			|| enumImportRecoveredDefinition.path != "visibility/enumlib/Result.hx"
+			|| enumImportRecoveredReferences.length < 2)
+			throw 'recovered explicit enum-constructor import lost its owner identity: definition=${enumImportRecoveredDefinition == null ? "null" : enumImportRecoveredDefinition.path}, references=${enumImportRecoveredReferences.length}';
+
+		var enumAbstractImportService = new LanguageService(),
+			enumAbstractImportTarget = "package visibility.flags; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;",
+			enumAbstractImportConsumer = "package visibility.flagapp; import visibility.flags.Flags.Ready; function main():Void { Ready; }";
+		enumAbstractImportService.update("visibility/flags/Flags.hx", enumAbstractImportTarget);
+		enumAbstractImportService.analyze("visibility.flags.Flags");
+		enumAbstractImportService.update("visibility/flagapp/Main.hx", enumAbstractImportConsumer);
+		enumAbstractImportService.analyze("visibility.flagapp.Main");
+		var enumAbstractImportPosition = enumAbstractImportConsumer.lastIndexOf("Ready") + 1,
+			enumAbstractImportDefinition = enumAbstractImportService.definition("visibility/flagapp/Main.hx", enumAbstractImportPosition),
+			enumAbstractImportReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportPosition);
+		if (enumAbstractImportDefinition == null || enumAbstractImportDefinition.stale
+			|| enumAbstractImportDefinition.path != "visibility/flags/Flags.hx"
+			|| enumAbstractImportReferences.length < 2)
+			throw 'explicit enum-abstract value import did not preserve its owner identity: definition=${enumAbstractImportDefinition == null ? "null" : enumAbstractImportDefinition.path}, references=${enumAbstractImportReferences.length}';
+
+		var enumAbstractImportRecovered = StringTools.replace(enumAbstractImportConsumer, "Ready;", "Ready");
+		enumAbstractImportService.update("visibility/flagapp/Main.hx", enumAbstractImportRecovered);
+		var enumAbstractImportRecoveredPosition = enumAbstractImportRecovered.lastIndexOf("Ready") + 1,
+			enumAbstractImportRecoveredDefinition = enumAbstractImportService.definition("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition),
+			enumAbstractImportRecoveredReferences = enumAbstractImportService.references("visibility/flagapp/Main.hx", enumAbstractImportRecoveredPosition);
+		if (enumAbstractImportRecoveredDefinition == null || enumAbstractImportRecoveredDefinition.stale
+			|| enumAbstractImportRecoveredDefinition.path != "visibility/flags/Flags.hx"
+			|| enumAbstractImportRecoveredReferences.length < 2)
+			throw 'recovered explicit enum-abstract value import lost its owner identity: definition=${enumAbstractImportRecoveredDefinition == null ? "null" : enumAbstractImportRecoveredDefinition.path}, references=${enumAbstractImportRecoveredReferences.length}';
+
+		var ambiguousEnumImportService = new LanguageService();
+		ambiguousEnumImportService.update("visibility/enumone/Result.hx",
+			"package visibility.enumone; enum Result { Value(value:Int); } function main():Void return;");
+		ambiguousEnumImportService.update("visibility/enumtwo/Result.hx",
+			"package visibility.enumtwo; enum Result { Value(value:Int); } function main():Void return;");
+		var ambiguousEnumImportConsumer = "package visibility.enumapp; import visibility.enumone.Result.Value; import visibility.enumtwo.Result.Value; function main():Void { Value(1); }";
+		ambiguousEnumImportService.update("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportConsumer);
+		var ambiguousEnumImportPosition = ambiguousEnumImportConsumer.lastIndexOf("Value(1)") + 1;
+		if (ambiguousEnumImportService.definition("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition) != null
+			|| ambiguousEnumImportService.references("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition).length != 0)
+			throw "ambiguous explicit enum-constructor imports guessed a semantic identity";
+		try
+			ambiguousEnumImportService.analyze("visibility.enumapp.Ambiguous")
+		catch (_:CompileError) {}
+		if (ambiguousEnumImportService.definition("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition) != null
+			|| ambiguousEnumImportService.references("visibility/enumapp/Ambiguous.hx", ambiguousEnumImportPosition).length != 0)
+			throw "strict analysis guessed through ambiguous explicit enum-constructor imports";
 	}
 
 	static function assertIncompleteDeclarations():Void {

@@ -396,6 +396,31 @@ class ModuleAnalyzer {
 			for (fn in program.functions)
 				if (fn.name == nestedName)
 					return sourceModule + "." + nestedName;
+		if (program != null) {
+			var parts = nestedName.split(".");
+			if (parts.length == 1)
+				for (enumDecl in program.enums)
+					for (enumCase in enumDecl.cases)
+						if (enumCase.name == nestedName)
+							return ModuleCanonicalizer.qualifiedTypeName(program.packageName, enumDecl.name) + "." + nestedName;
+			if (parts.length == 2)
+				for (enumDecl in program.enums)
+					if (enumDecl.name == parts[0])
+						for (enumCase in enumDecl.cases)
+							if (enumCase.name == parts[1])
+								return ModuleCanonicalizer.qualifiedTypeName(program.packageName, enumDecl.name) + "." + parts[1];
+			if (parts.length == 1)
+				for (abstractDecl in program.enumAbstracts)
+					for (value in abstractDecl.values)
+						if (value.name == nestedName)
+							return ModuleCanonicalizer.qualifiedTypeName(program.packageName, abstractDecl.name) + "." + nestedName;
+			if (parts.length == 2)
+				for (abstractDecl in program.enumAbstracts)
+					if (abstractDecl.name == parts[0])
+						for (value in abstractDecl.values)
+							if (value.name == parts[1])
+								return ModuleCanonicalizer.qualifiedTypeName(program.packageName, abstractDecl.name) + "." + parts[1];
+		}
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 

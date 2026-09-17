@@ -92,7 +92,8 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
 	aliases retain their owning module identity; nominal class,
 	interface, enum, and alias identities now retain their package-qualified names.
 	Wildcard package imports now resolve direct source modules, secondary
-	declarations, enum constructors, top-level functions, and explicit-import
+	declarations, enum constructors, directly imported enum constructors/values,
+	top-level functions, and explicit-import
 	precedence; conflicting wildcard or explicit imports remain unresolved instead
 	of using last-write-wins; deeper namespace and broader alias semantics remain.
 - [~] Unsaved edits can be validated transactionally against a forked compiler
