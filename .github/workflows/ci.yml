@@ -13,7 +13,7 @@ jobs:
         with:
           submodules: recursive
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Set up Node.js runtime
@@ -62,7 +62,7 @@ jobs:
       - name: Verify ARM64 runner
         run: test "$(uname -m)" = aarch64
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
       - name: Bootstrap pinned tools
         run: scripts/bootstrap-tools.sh
       - name: Compiler, differential, and runtime gates

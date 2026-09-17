@@ -144,3 +144,14 @@ var decoded:User = MessagePack.decode(bytes);
 
 Existing runtime/plugin state envelopes remain responsible for their own
 versioning and lifecycle semantics when they need a different contract.
+
+## Interoperability checks
+
+The canonical MessagePack values live in
+`tests/fixtures/messagepack-vectors.tsv`; the framed envelope cases live in
+`tests/fixtures/messagepack-frame-vectors.tsv`. The
+`messagepack-interop` program decodes and re-encodes the canonical bytes with
+the Haxe reader and writer. `scripts/test-messagepack-interop.sh` additionally
+uses Python's `msgpack` package to decode every canonical value, produce
+compatible encodings, and validate framed payloads. The Python portion is
+optional for local runs and is installed in the Ubuntu CI jobs.
