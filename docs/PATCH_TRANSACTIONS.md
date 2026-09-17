@@ -215,5 +215,8 @@ metadata references, arena exhaustion, foreign identities, stale patches,
 exceptions, repeated replacement, a call overlapping publication, and two
 competing writers. One-shot test checkpoints force rollback after symbol staging,
 type staging, and finalized JIT staging; the same patch must then succeed without
-changing its base revision. Native sanitizer support and shutdown races remain
-to be added to the gate.
+changing its base revision. The `sanitize` CMake preset now provides
+AddressSanitizer and UndefinedBehaviorSanitizer builds for that gate; run
+`scripts/test-sanitizers.sh` to exercise the repeated hot-reload and retirement
+integration under both checks. Broader shutdown-race instrumentation remains
+future work.

@@ -95,7 +95,8 @@ class HaxeonBuild {
 
 	static function test(arguments:Array<String>):Int {
 		var jobs = arguments.length == 0 ? "4" : arguments[0];
-		var nativeStatus = native([]);
+		var preset = Sys.getEnv("HAXEON_CMAKE_PRESET");
+		var nativeStatus = native(preset == null || preset == "" ? ["release"] : [preset]);
 		if (nativeStatus != 0)
 			return nativeStatus;
 		configureRuntimeLibraryPath();

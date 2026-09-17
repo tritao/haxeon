@@ -38,6 +38,9 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
 endif()
 option(HL_JIT_AARCH64_OLD "Use the legacy direct HL-bytecode AArch64 JIT" ${HAXEON_AARCH64_JIT_DEFAULT})
 
+option(HAXEON_ENABLE_SANITIZERS "Build the native runtime with compiler sanitizers" OFF)
+set(HAXEON_SANITIZERS "address,undefined" CACHE STRING "Comma-separated sanitizers for the native runtime")
+
 add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 set_target_properties(hlprof-live PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_SOURCE_DIR}/.tools/hashlink>"
@@ -137,3 +140,15 @@ if(UNIX)
 endif()
 
 add_custom_target(haxeon-native DEPENDS hl hlprof-live haxeon_runtime)
+
+if(HAXEON_ENABLE_SANITIZERS)
+  if(NOT CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    message(FATAL_ERROR "HAXEON_ENABLE_SANITIZERS requires a GNU or Clang C compiler")
+  endif()
+  foreach(target hl libhl hlprof-live haxeon_runtime haxeon-jit-support-lifetime)
+    if(TARGET ${target})
+      target_compile_options(${target} PRIVATE -fno-omit-frame-pointer "-fsanitize=${HAXEON_SANITIZERS}")
+      target_link_options(${target} PRIVATE "-fsanitize=${HAXEON_SANITIZERS}")
+    endif()
+  endforeach()
+endif()

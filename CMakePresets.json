@@ -25,6 +25,21 @@
       }
     },
     {
+      "name": "sanitize",
+      "displayName": "Haxeon sanitizer validation",
+      "inherits": "dev",
+      "binaryDir": "${sourceDir}/out/cmake/sanitize",
+      "cacheVariables": {
+        "HAXEON_ENABLE_SANITIZERS": "ON",
+        "HAXEON_SANITIZERS": "address,undefined"
+      },
+      "condition": {
+        "type": "inList",
+        "string": "${hostSystemName}",
+        "list": ["Linux", "Darwin"]
+      }
+    },
+    {
       "name": "windows-msvc",
       "displayName": "Windows MSVC development",
       "inherits": "dev",
@@ -76,6 +91,11 @@
     {
       "name": "release",
       "configurePreset": "release",
+      "targets": ["haxeon-native"]
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
       "targets": ["haxeon-native"]
     },
     {

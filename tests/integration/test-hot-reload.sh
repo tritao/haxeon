@@ -10,6 +10,6 @@ mkdir -p "$repo_dir/out"
 cmake --build --preset "${HAXEON_CMAKE_PRESET:-release}" --target haxeon-jit-support-lifetime
 (
   cd "$repo_dir/out"
-  LD_LIBRARY_PATH="$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     "$repo_dir/.tools/hashlink/hl" hot-reload-test.hl
 )
