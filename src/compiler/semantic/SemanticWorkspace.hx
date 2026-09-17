@@ -1755,8 +1755,7 @@ class SemanticWorkspace {
 							method.name + "(" + [for (argument in method.arguments)
 								editorAstTypeName(argument.type, substitutions)].join(",") + "):" + editorAstTypeName(method.result, substitutions));
 				if (decl.base != null) {
-					var baseName = ModuleCanonicalizer.astTypeName(decl.base),
-						baseIdentity = editorResolveTypeSymbolId(resolved.state, baseName, model.program, token);
+					var baseIdentity = editorNominalTypeIdentity(resolved.state, decl.base, model.program, [], token);
 					if (baseIdentity != null)
 						collectEditorStaticMembers(baseIdentity, result, seen, visited, token);
 				}
@@ -1833,9 +1832,9 @@ class SemanticWorkspace {
 										+ editorAstTypeName(method.result, substitutions));
 							}
 							if (classDecl.base != null)
-								collectEditorMembers(editorTypeFromAst(classDecl.base, substitutions), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, classDecl.base, model.program, substitutions, token), result, seen, token);
 							for (interfaceType in classDecl.interfaces)
-								collectEditorMembers(editorTypeFromAst(interfaceType, substitutions), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, interfaceType, model.program, substitutions, token), result, seen, token);
 						}
 				}
 			case TInstance(NominalKind.Interface, name, arguments):
@@ -1858,7 +1857,7 @@ class SemanticWorkspace {
 									+ editorAstTypeName(method.result, substitutions));
 							}
 							for (baseType in interfaceDecl.bases)
-								collectEditorMembers(editorTypeFromAst(baseType, substitutions), result, seen, token);
+								collectEditorMembers(editorInheritedType(state, baseType, model.program, substitutions, token), result, seen, token);
 						}
 				}
 			case TAbstract(name, arguments, _):
@@ -1995,6 +1994,26 @@ class SemanticWorkspace {
 			case MapType(key, value): TMap(editorTypeFromAst(key, substitutions), editorTypeFromAst(value, substitutions));
 			case NullableType(element): TNullable(editorTypeFromAst(element, substitutions));
 			default: TUnknown;
+		};
+	}
+
+	/** Build a member-lookup type from a source inheritance clause. */
+	function editorInheritedType(from:ModuleState, type:AstType, program:AstProgram,
+		substitutions:Map<String, String>, ?token:CancellationToken):CompilerType {
+		var identity = editorNominalTypeIdentity(from, type, program, [], token),
+			resolved = identity == null ? null : editorSymbolById(identity),
+			canonical = identity == null ? null : editorTypeName(identity);
+		if (resolved == null || canonical == null)
+			return editorTypeFromAst(type, substitutions);
+		var arguments:Array<CompilerType> = switch type {
+			case AppliedType(_, values): [for (value in values) editorTypeFromAst(value, substitutions)];
+			default: [];
+		};
+		return switch resolved.symbol.kind {
+			case DeclarationKind.Interface: TInstance(NominalKind.Interface, canonical, arguments);
+			case DeclarationKind.Abstract: TAbstract(canonical, arguments, TUnknown);
+			case DeclarationKind.Enum: TInstance(NominalKind.Enum, canonical, arguments);
+			default: TInstance(NominalKind.Class, canonical, arguments);
 		};
 	}
 

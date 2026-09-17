@@ -904,18 +904,24 @@ class LanguageServiceMain {
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
 		var aliasedInheritanceService = new LanguageService(),
-			aliasedInheritanceBase = "package aliased.base; class Base { public function run():Int return 1; }",
+			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",
-			aliasedInheritanceChild = "package aliased.child; import aliased.base.Parent; class Child extends Parent { public function run():Int return 2; } function main():Void return;";
+			aliasedInheritanceChild = "package aliased.child; import aliased.base.Parent; class Child extends Parent { public function run():Int return 2; } function main():Void { var child:Child = new Child(); child.";
 		aliasedInheritanceService.update("aliased/base/Base.hx", aliasedInheritanceBase);
 		aliasedInheritanceService.update("aliased/base/Parent.hx", aliasedInheritanceAlias);
 		aliasedInheritanceService.compile("aliased.base.Parent");
 		aliasedInheritanceService.update("aliased/child/Child.hx", aliasedInheritanceChild);
+		var aliasedInheritanceCompletion = aliasedInheritanceService.complete("aliased/child/Child.hx", aliasedInheritanceChild.length),
+			foundAliasedInheritedMember = false;
+		for (item in aliasedInheritanceCompletion)
+			if (item.label == "inherited")
+				foundAliasedInheritedMember = true;
 		var aliasedInheritanceImplementations = aliasedInheritanceService.implementations("aliased/base/Base.hx",
 			aliasedInheritanceBase.indexOf("Base") + 1),
 			aliasedInheritanceMethodImplementations = aliasedInheritanceService.implementations("aliased/base/Base.hx",
 				aliasedInheritanceBase.indexOf("run") + 1);
-		if (aliasedInheritanceImplementations.length != 1
+		if (!foundAliasedInheritedMember
+			|| aliasedInheritanceImplementations.length != 1
 			|| aliasedInheritanceImplementations[0].path != "aliased/child/Child.hx"
 			|| aliasedInheritanceMethodImplementations.length != 1
 			|| aliasedInheritanceMethodImplementations[0].path != "aliased/child/Child.hx")
