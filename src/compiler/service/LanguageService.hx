@@ -638,6 +638,12 @@ class LanguageService {
 			forceNoReuse = changedProgram != null && changed.previousEditorSemanticModel != null
 				&& SemanticSignature.recoveryContext(changed.previousEditorSemanticModel.program)
 					!= SemanticSignature.recoveryContext(changedProgram);
+		// A body-only edit cannot change the declarations visible to another
+		// recovered module. Keep its current snapshot intact and avoid walking the
+		// entire same-package recovery graph; the changed module has already been
+		// rebuilt above, and body reuse handles its local dependents.
+		if (changedProgram != null && changed.previousEditorSemanticModel != null && !forceNoReuse)
+			return;
 		if (changedProgram != null)
 			changedBodies = changedRecoveredFunctionBodies(changed.previousEditorSemanticModel, changedProgram);
 		var pending:Array<ModuleState> = [changed],
