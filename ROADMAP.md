@@ -173,9 +173,12 @@ source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
   small-workspace editor recovery and interactive queries, 500 ms p95 for
   background analysis and scaled 64-module recovery/queries, 32 MiB maximum
   small-workspace RSS growth, and 128 MiB maximum RSS growth across 250 edits
-  on one long-lived 64-module service. Use `--scale-modules` and
-  `--endurance-edits` to reproduce or enlarge the workload; broader
-  production-workspace validation remains.
+  on one long-lived 64-module service. It also exercises the six-module
+  `tests/fixtures/pragtical` workspace through package-qualified imports,
+  cross-module definition, and a malformed plugin edit. Use
+  `--project-iterations`, `--scale-modules`, and `--endurance-edits` to
+  reproduce or enlarge the workload; broader production-workspace validation
+  remains.
 - [x] Representative multi-module plugin workload with an editor facade,
 	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
 	class-layout reload classification (`tests/hxml/plugin-test.hxml`).

@@ -32,6 +32,14 @@ private typedef ScaledSample = {
 	final completionMs:Float;
 }
 
+private typedef ProjectSample = {
+	final updateMs:Float;
+	final completionMs:Float;
+	final definitionMs:Float;
+	final malformedUpdateMs:Float;
+	final malformedCompletionMs:Float;
+}
+
 /** Measures editor recovery latency and memory growth under rapid edits. */
 class LanguageServiceBenchmarkMain {
 	static final prefix = "class Foo { public function bar(value:Int):Int return value; }\n" + "function main():Void { var foo:Foo = new Foo(); ";
@@ -51,18 +59,22 @@ class LanguageServiceBenchmarkMain {
 		var args = Sys.args(),
 			iterations = intArg(args, "--iterations", 100),
 			warmup = intArg(args, "--warmup", 10),
+			projectIterations = intArg(args, "--project-iterations", 5),
 			scaleIterations = intArg(args, "--scale-iterations", 3),
 			scaleModules = intArg(args, "--scale-modules", 64),
 			enduranceEdits = intArg(args, "--endurance-edits", 250),
 			output = stringArg(args, "--json", "out/editor-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
-		if (iterations < 1 || warmup < 0 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
+		if (iterations < 1 || warmup < 0 || projectIterations < 1 || scaleIterations < 1 || scaleModules < 1 || enduranceEdits < 1)
 			throw "iterations and scale parameters must be positive; warmup cannot be negative";
 
 		for (_ in 0...warmup)
 			runIteration();
+		for (_ in 0...warmup)
+			runPragticalProjectScenario();
 		var before = processMemory(),
 			samples = [for (_ in 0...iterations) runIteration()],
+			projectSamples = [for (_ in 0...projectIterations) runPragticalProjectScenario()],
 			after = processMemory(),
 			scaleSamples = [for (_ in 0...scaleIterations) runScaledWorkspaceScenario(scaleModules)],
 			longLivedMemoryGrowth = runLongLivedScenario(scaleModules, enduranceEdits);
@@ -70,6 +82,7 @@ class LanguageServiceBenchmarkMain {
 			version: 4,
 			iterations: iterations,
 			warmup: warmup,
+			projectIterations: projectIterations,
 			platform: Sys.systemName(),
 			memoryBeforeBytes: before,
 			memoryAfterBytes: after,
@@ -84,6 +97,11 @@ class LanguageServiceBenchmarkMain {
 			workspaceCompletionMs: percentiles([for (sample in samples) sample.workspaceCompletionMs]),
 			malformedUpdateMs: percentiles([for (sample in samples) sample.malformedUpdateMs]),
 			malformedCompletionMs: percentiles([for (sample in samples) sample.malformedCompletionMs]),
+			pragticalProjectUpdateMs: percentiles([for (sample in projectSamples) sample.updateMs]),
+			pragticalProjectCompletionMs: percentiles([for (sample in projectSamples) sample.completionMs]),
+			pragticalProjectDefinitionMs: percentiles([for (sample in projectSamples) sample.definitionMs]),
+			pragticalProjectMalformedUpdateMs: percentiles([for (sample in projectSamples) sample.malformedUpdateMs]),
+			pragticalProjectMalformedCompletionMs: percentiles([for (sample in projectSamples) sample.malformedCompletionMs]),
 			scaleModules: scaleModules,
 			scaleIterations: scaleIterations,
 			scaledWorkspaceUpdateMs: percentiles([for (sample in scaleSamples) sample.updateMs]),
@@ -114,6 +132,11 @@ class LanguageServiceBenchmarkMain {
 		Sys.println('Workspace completion median/p95/p99: ${format(report.workspaceCompletionMs.median)}/${format(report.workspaceCompletionMs.p95)}/${format(report.workspaceCompletionMs.p99)} ms');
 		Sys.println('Malformed update median/p95/p99: ${format(report.malformedUpdateMs.median)}/${format(report.malformedUpdateMs.p95)}/${format(report.malformedUpdateMs.p99)} ms');
 		Sys.println('Malformed completion median/p95/p99: ${format(report.malformedCompletionMs.median)}/${format(report.malformedCompletionMs.p95)}/${format(report.malformedCompletionMs.p99)} ms');
+		Sys.println('Pragtical fixture update median/p95/p99: ${format(report.pragticalProjectUpdateMs.median)}/${format(report.pragticalProjectUpdateMs.p95)}/${format(report.pragticalProjectUpdateMs.p99)} ms');
+		Sys.println('Pragtical fixture completion median/p95/p99: ${format(report.pragticalProjectCompletionMs.median)}/${format(report.pragticalProjectCompletionMs.p95)}/${format(report.pragticalProjectCompletionMs.p99)} ms');
+		Sys.println('Pragtical fixture definition median/p95/p99: ${format(report.pragticalProjectDefinitionMs.median)}/${format(report.pragticalProjectDefinitionMs.p95)}/${format(report.pragticalProjectDefinitionMs.p99)} ms');
+		Sys.println('Pragtical fixture malformed update median/p95/p99: ${format(report.pragticalProjectMalformedUpdateMs.median)}/${format(report.pragticalProjectMalformedUpdateMs.p95)}/${format(report.pragticalProjectMalformedUpdateMs.p99)} ms');
+		Sys.println('Pragtical fixture malformed completion median/p95/p99: ${format(report.pragticalProjectMalformedCompletionMs.median)}/${format(report.pragticalProjectMalformedCompletionMs.p95)}/${format(report.pragticalProjectMalformedCompletionMs.p99)} ms');
 		Sys.println('Scaled workspace (${scaleModules} modules) update median/p95/p99: ${format(report.scaledWorkspaceUpdateMs.median)}/${format(report.scaledWorkspaceUpdateMs.p95)}/${format(report.scaledWorkspaceUpdateMs.p99)} ms');
 		Sys.println('Scaled workspace completion median/p95/p99: ${format(report.scaledWorkspaceCompletionMs.median)}/${format(report.scaledWorkspaceCompletionMs.p95)}/${format(report.scaledWorkspaceCompletionMs.p99)} ms');
 		Sys.println('Long-lived memory growth after ${enduranceEdits} edits: ${report.longLivedMemoryGrowthBytes} bytes');
@@ -141,6 +164,11 @@ class LanguageServiceBenchmarkMain {
 		checkBudget("workspace-completion", report.workspaceCompletionMs.p95, 100.0);
 		checkBudget("malformed-edit-to-recovery", report.malformedUpdateMs.p95, 100.0);
 		checkBudget("malformed-completion", report.malformedCompletionMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-edit-to-recovery", report.pragticalProjectUpdateMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-completion", report.pragticalProjectCompletionMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-definition", report.pragticalProjectDefinitionMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-malformed-edit-to-recovery", report.pragticalProjectMalformedUpdateMs.p95, 100.0);
+		checkBudget("Pragtical-fixture-malformed-completion", report.pragticalProjectMalformedCompletionMs.p95, 100.0);
 		checkBudget("scaled-workspace-edit-to-recovery", report.scaledWorkspaceUpdateMs.p95, 500.0);
 		checkBudget("scaled-workspace-completion", report.scaledWorkspaceCompletionMs.p95, 500.0);
 		var memoryGrowth:Float = report.memoryGrowthBytes;
@@ -232,6 +260,57 @@ class LanguageServiceBenchmarkMain {
 		return {
 			workspaceUpdateMs: workspaceUpdateMs,
 			workspaceCompletionMs: workspaceCompletionMs,
+			malformedUpdateMs: malformedUpdateMs,
+			malformedCompletionMs: malformedCompletionMs
+		};
+	}
+
+	static function runPragticalProjectScenario():ProjectSample {
+		var service = new LanguageService(),
+			fixtureRoot = "tests/fixtures/pragtical/",
+			paths = [
+				"pragtical/api/Plugin.hx",
+				"pragtical/api/Document.hx",
+				"pragtical/api/Editor.hx",
+				"pragtical/plugins/PluginState.hx",
+				"pragtical/plugins/SearchPlugin.hx",
+				"pragtical/app/Main.hx"
+			],
+			pluginPath = "pragtical/plugins/SearchPlugin.hx",
+			plugin = File.getContent(fixtureRoot + pluginPath);
+		for (path in paths)
+			service.update(path, File.getContent(fixtureRoot + path));
+		service.compile("pragtical.app.Main");
+		var mainPath = "pragtical/app/Main.hx",
+			mainSource = File.getContent(fixtureRoot + mainPath),
+			mainPosition = mainSource.indexOf("searchPlugin.activate") + "searchPlugin.".length + 1,
+			started = Sys.time();
+		service.update(mainPath, mainSource + " ");
+		var updateMs = (Sys.time() - started) * 1000.0;
+		started = Sys.time();
+		var completion = service.completeResult(mainPath, mainSource.length);
+		var completionMs = (Sys.time() - started) * 1000.0;
+		if (!hasLabel(completion.items, "runCommand"))
+			throw "Pragtical fixture completion lost current host symbols";
+		started = Sys.time();
+		var definition = service.definition(mainPath, mainPosition);
+		var definitionMs = (Sys.time() - started) * 1000.0;
+		if (definition == null)
+			throw "Pragtical fixture definition query lost SearchPlugin identity";
+		var malformed = StringTools.replace(plugin, "return state.cursor;", "return state.");
+		started = Sys.time();
+		service.update(pluginPath, malformed);
+		var malformedUpdateMs = (Sys.time() - started) * 1000.0,
+			malformedPosition = malformed.lastIndexOf("state.") + "state.".length;
+		started = Sys.time();
+		var malformedCompletion = service.completeResult(pluginPath, malformedPosition);
+		var malformedCompletionMs = (Sys.time() - started) * 1000.0;
+		if (!malformedCompletion.isIncomplete || !hasLabel(malformedCompletion.items, "cursor"))
+			throw "Pragtical fixture malformed completion lost current state members";
+		return {
+			updateMs: updateMs,
+			completionMs: completionMs,
+			definitionMs: definitionMs,
 			malformedUpdateMs: malformedUpdateMs,
 			malformedCompletionMs: malformedCompletionMs
 		};
