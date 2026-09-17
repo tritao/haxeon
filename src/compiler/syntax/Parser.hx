@@ -21,6 +21,7 @@ import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTreeBuilder;
+import compiler.syntax.AstLowerer;
 import compiler.Diagnostic.CompileError;
 import haxe.Int64;
 import compiler.Diagnostic.DiagnosticOrigin;
@@ -127,6 +128,8 @@ class Parser {
 					var interfaceDeclaration = parseInterface();
 					interfaces.push(interfaceDeclaration);
 					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span);
+					for (method in interfaceDeclaration.methods)
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
 					classes.push(classDeclaration);
@@ -143,6 +146,8 @@ class Parser {
 					var abstractDeclaration = parseAbstract(start, externDeclaration, metadata);
 					abstracts.push(abstractDeclaration);
 					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span);
+					for (method in abstractDeclaration.methods)
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
 				} else {
 					var functionDeclaration = parseFunction(false, externDeclaration, metadata);
 					functions.push(functionDeclaration);
@@ -171,6 +176,8 @@ class Parser {
 			currentCst = currentCst.withSyntheticTokens(cstMissingTokens);
 		if (currentCst != null && cstBuilder != null)
 			currentCst = currentCst.withGrammarRoots(cstBuilder.finish());
+		if (currentCst != null)
+			program = AstLowerer.lower(currentCst, program);
 		return program;
 	}
 

@@ -83,6 +83,14 @@ class SyntaxScannerMain {
 			|| !grammarKinds.exists(SyntaxKind.ObjectLiteral))
 			throw "CST parser mode did not retain grammar-level structure";
 
+		var declarationSource = new SourceFile("Declarations.hx",
+			"class Holder { public var value:Int; public function read():Int return value; }\n"
+			+ "interface Reader { function read():Int; }\n"),
+			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
+		declarationParser.parseProgram();
+		if (declarationParser.cst == null)
+			throw "CST declaration parser did not retain a tree";
+
 		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
 			malformedParser = new Parser(new Lexer(malformed).tokenize(), null, ParserMode.Cst(malformed));
 		malformedParser.parseProgramRecovering();
