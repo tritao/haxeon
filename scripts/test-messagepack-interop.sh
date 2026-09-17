@@ -18,11 +18,15 @@ fi
 mkdir -p "$root_dir/out"
 "$haxe" --cwd "$root_dir" -cp src --run Main tests/programs/messagepack-interop.hx "$output" >/dev/null
 
-runtime_path="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+	export DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+else
+	export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
 
 run_haxe_fixture() {
 	local status
-	if LD_LIBRARY_PATH="$runtime_path" "$hl" "$output" "$@" >/dev/null; then
+	if "$hl" "$output" "$@" >/dev/null; then
 		status=0
 	else
 		status=$?
