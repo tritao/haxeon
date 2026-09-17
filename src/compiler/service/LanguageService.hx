@@ -2417,8 +2417,17 @@ class LanguageService {
 		var id = context.symbol;
 		if (id == null)
 			return null;
-		var result:Array<SymbolLocation> = [
-			for (location in compiler.semanticWorkspace.editorLocations(context.state, id, token))
+		var result = symbolLocations(context.state, id, token);
+		result.sort(function(left, right) {
+			var path = Reflect.compare(left.path, right.path);
+			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;
+		});
+		return result.length > MAX_REFERENCE_RESULTS ? result.slice(0, MAX_REFERENCE_RESULTS) : result;
+	}
+
+	function symbolLocations(state:ModuleState, id:SemanticSymbolId, ?token:CancellationToken):Array<SymbolLocation> {
+		return [
+			for (location in compiler.semanticWorkspace.editorLocations(state, id, token))
 				{
 					path: location.span.file.path,
 					span: location.span,
@@ -2426,11 +2435,13 @@ class LanguageService {
 					stale: snapshotRevision(location.state) != location.state.revision
 				}
 		];
-		result.sort(function(left, right) {
-			var path = Reflect.compare(left.path, right.path);
-			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;
-		});
-		return result.length > MAX_REFERENCE_RESULTS ? result.slice(0, MAX_REFERENCE_RESULTS) : result;
+	}
+
+	static function addUniqueLocation(result:Array<SymbolLocation>, location:SymbolLocation):Void {
+		for (existing in result)
+			if (existing.path == location.path && existing.span.start == location.span.start && existing.span.end == location.span.end)
+				return;
+		result.push(location);
 	}
 
 	public function rename(path:String, position:Int, replacement:String, ?token:CancellationToken):Array<TextEdit> {
@@ -2446,7 +2457,27 @@ class LanguageService {
 			|| !isIdentifier(replacement)
 			|| replacement == name)
 			return result;
-		var targetReferences = references(path, position, token);
+		var family:Array<SemanticSymbolId> = indexedId == null ? [] : [indexedId];
+		var indexedSymbol = indexedId == null ? null : compiler.semanticWorkspace.indexedSymbol(indexedId);
+		if (indexedId != null && indexedSymbol != null && indexedSymbol.symbol.kind == DeclarationKind.Member) {
+			for (implementation in compiler.semanticWorkspace.editorImplementations(indexedId, token)) {
+				if (EditorWorkspaceView.currentExact(implementation.state) == null)
+					return result;
+				var implementationId = compiler.semanticWorkspace.editorDeclarationSymbolId(implementation.state, implementation.span);
+				if (implementationId == null)
+					return result;
+				if (family.indexOf(implementationId) < 0)
+					family.push(implementationId);
+			}
+		}
+		var targetReferences:Array<SymbolLocation> = [];
+		for (id in family)
+			for (reference in symbolLocations(context.state, id, token))
+				addUniqueLocation(targetReferences, reference);
+		targetReferences.sort(function(left, right) {
+			var referencePath = Reflect.compare(left.path, right.path);
+			return referencePath == 0 ? Reflect.compare(left.span.start, right.span.start) : referencePath;
+		});
 		for (reference in targetReferences) {
 			if (token != null)
 				token.check();
@@ -2454,8 +2485,9 @@ class LanguageService {
 			if (reference.stale || referenceState == null || EditorWorkspaceView.currentExact(referenceState) == null)
 				return result;
 		}
-		if (indexedRenameCollides(indexedId, replacement, targetReferences, token))
-			return result;
+		for (id in family)
+			if (indexedRenameCollides(id, replacement, targetReferences, token))
+				return result;
 		for (reference in targetReferences)
 			result.push({
 				path: reference.path,

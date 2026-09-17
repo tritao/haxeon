@@ -903,6 +903,13 @@ class LanguageServiceMain {
 			|| leafImplementations.length != 0
 			|| !implementationCancelled)
 			throw 'language service implementation navigation failed: interface=${interfaceImplementations.length}, method=${methodImplementations.length}, base=${baseImplementations.length}, override=${baseMethodImplementations.length}, leaf=${leafImplementations.length}';
+		var baseMethodRename = implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute");
+		if (baseMethodRename.length != 3)
+			throw 'rename did not include the authoritative override family: ${baseMethodRename.length}';
+		implementationService.update("impl/Derived.hx",
+			"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; function unfinished(");
+		if (implementationService.rename("base/Base.hx", baseSource.indexOf("run") + 1, "execute").length != 0)
+			throw "rename crossed into a recovered override family";
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",

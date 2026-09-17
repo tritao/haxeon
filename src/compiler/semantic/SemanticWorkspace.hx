@@ -527,6 +527,17 @@ class SemanticWorkspace {
 		return null;
 	}
 
+	/** Return the editor identity owned by one current declaration span. */
+	public function editorDeclarationSymbolId(state:ModuleState, span:SourceSpan):Null<SemanticSymbolId> {
+		var model = editorModel(state);
+		if (model == null)
+			return null;
+		for (symbol in model.index.symbols)
+			if (sameSpan(symbol.declaration, span))
+				return symbol.id;
+		return null;
+	}
+
 	/**
 	 * Return the canonical package-qualified name for an authoritative type.
 	 *
