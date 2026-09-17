@@ -2,6 +2,7 @@ import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.CancellationToken;
 import compiler.service.SourceFormatter;
+import compiler.modules.ModulePath;
 import compiler.modules.EditorSnapshot.EditorSnapshotConfidence;
 import compiler.Diagnostic.CompileError;
 import compiler.syntax.Ast.AstExpression;
@@ -3478,6 +3479,15 @@ class LanguageServiceMain {
 		}
 		if (!hasDeclaration || !hasConsumerUse)
 			throw 'global references did not cross the analyzed lazy source-root identity: definition=${targetDefinition == null ? "null" : targetDefinition.path}, id=${service.compiler.modules.get("lazy.Helper").semanticModel.index.symbolIdAt(targetPosition)}, refs=${[for (reference in references) reference.path].join(",")}';
+		var helperState = service.compiler.modules.get("lazy.Helper"),
+			oldRevision = helperState.revision;
+		service.update(packageRoot + "/Helper.hx", "package lazy; class Helper { public function new() {} public function answer():Int return 2; }");
+		if (service.compiler.modules.get("lazy.Helper") != helperState
+			|| service.compiler.modules.exists(ModulePath.fromFile(packageRoot + "/Helper.hx"))
+			|| helperState.revision != oldRevision + 1)
+			throw "an external source-root edit created a duplicate module identity";
+		if (!service.remove(packageRoot + "/Helper.hx") || service.compiler.modules.exists("lazy.Helper"))
+			throw "removing an external source-root module did not use its logical identity";
 		if (sys.FileSystem.exists(packageRoot + "/Helper.hx"))
 			sys.FileSystem.deleteFile(packageRoot + "/Helper.hx");
 		if (sys.FileSystem.exists(packageRoot + "/Other.hx"))

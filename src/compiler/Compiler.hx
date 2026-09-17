@@ -543,7 +543,7 @@ class Compiler {
 	}
 
 	function updateSource(path:String, source:String):ModuleState {
-		var name = ModulePath.fromFile(path);
+		var name = moduleNameForPath(path);
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
 			if (current.source.path == path && current.source.text == source)
@@ -565,7 +565,7 @@ class Compiler {
 	/** Remove a source module and invalidate graph/cached compilation state. */
 	public function remove(path:String):Bool {
 		return withSourceLock(function():Bool {
-			var name = ModulePath.fromFile(path);
+			var name = moduleNameForPath(path);
 			if (!modules.exists(name))
 				return false;
 			modules.remove(name);
@@ -573,6 +573,17 @@ class Compiler {
 			sourceGeneration++;
 			return true;
 		});
+	}
+
+	/** Prefer a materialized logical module over a disk-path-derived name. */
+	function moduleNameForPath(path:String):String {
+		var direct = ModulePath.fromFile(path);
+		if (modules.exists(direct))
+			return direct;
+		for (state in modules)
+			if (state.source.path == path)
+				return state.name;
+		return direct;
 	}
 
 	/** Change semantic build context and invalidate every source-derived cache. */

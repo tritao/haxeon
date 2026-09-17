@@ -286,8 +286,7 @@ class LanguageService {
 	}
 
 	public function update(path:String, source:String):ModuleState {
-		var moduleName = ModulePath.fromFile(path),
-			previous = compiler.modules.get(moduleName),
+		var previous = stateFor(path),
 			previousRevision = previous == null ? 0 : previous.revision,
 			state = compiler.update(path, source),
 			changed = state.revision != previousRevision;
@@ -303,7 +302,9 @@ class LanguageService {
 	}
 
 	public function remove(path:String):Bool {
-		var name = ModulePath.fromFile(path), removed = compiler.remove(path);
+		var existing = stateFor(path),
+			name = existing == null ? ModulePath.fromFile(path) : existing.name,
+			removed = compiler.remove(path);
 		if (!removed)
 			return false;
 		workspaceIndex.remove(name);
