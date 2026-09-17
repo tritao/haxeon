@@ -2,6 +2,7 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.ffi.CHeaderImporter;
 import compiler.ffi.HxiAbi;
+import compiler.ffi.HxiNativeRecordEmitter;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiValidator;
@@ -533,6 +534,39 @@ class HashlinkTypeMetadataMain {
 					'${pair.haxeName}.${fieldPair.haxeName} must match the module-header offset for ${pair.nativeName}.${fieldPair.nativeName}');
 			}
 		}
+		var moduleNativeTypeNames:Map<String, String> = [];
+		for (binding in [
+			{native: "hl_alloc", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlAlloc"},
+			{native: "hl_code", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlCode"},
+			{native: "hl_constant", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlConstant"},
+			{native: "hl_debug_section", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlDebugSection"},
+			{native: "hl_function", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction"},
+			{native: "hl_function_field", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunctionField"},
+			{native: "hl_native", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative"},
+			{native: "hl_opcode", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlOpcode"},
+			{native: "hl_patch_debug", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchDebug"},
+			{native: "hl_patch_function", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchFunction"},
+			{native: "hl_patch_input", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInput"},
+			{native: "hl_patch_instruction", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInstruction"},
+			{native: "hl_patch_pools", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchPools"},
+			{native: "hl_source_snapshot", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlSourceSnapshot"},
+			{native: "hl_source_span", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlSourceSpan"},
+			{native: "hl_type", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlType"},
+			{native: "hl_type_obj", haxe: "runtime.hashlink.HashLinkModuleBindings.NativeModuleHlTypeObj"}
+		])
+			moduleNativeTypeNames.set(binding.native, binding.haxe);
+		var moduleBindingSource = HxiNativeRecordEmitter.emit(parsedModule, "runtime.hashlink.modulebound", "Native", null, moduleNativeTypeNames),
+			moduleBindingCompiler = new Compiler();
+		CompilerIntrinsics.register(moduleBindingCompiler);
+		moduleBindingCompiler.addSourceRoot("stdlib");
+		moduleBindingCompiler.update("runtime/hashlink/modulebound/HashLinkModuleBindings.hx",
+			moduleBindingSource +
+			'function main():Int { var arena = new runtime.memory.Arena(); var functionPointer:runtime.memory.RawPtr<NativeHlFunction> = arena.alloc(); var nativePointer:runtime.memory.RawPtr<NativeHlNative> = arena.alloc(); functionPointer.ref.findex = 7; nativePointer.ref.findex = 7; return functionPointer.ref.findex == nativePointer.ref.findex ? 42 : 1; }');
+		moduleBindingCompiler.compile("runtime.hashlink.modulebound.HashLinkModuleBindings");
+		expect(moduleBindingSource.indexOf("typedef NativeHlFunction = runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction;") >= 0
+			&& moduleBindingSource.indexOf("typedef NativeHlNative = runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative;") >= 0
+			&& moduleBindingSource.indexOf("class NativeHlFunction {") < 0,
+			"HashLink module HXI records should bind to the canonical descriptor aliases without duplication");
 		expect(moduleSource == checkedInModuleSource
 			&& moduleSource.indexOf("struct hl_function @layout(80, 8)") >= 0
 			&& moduleSource.indexOf("ref: c_int @offset(12)") >= 0
