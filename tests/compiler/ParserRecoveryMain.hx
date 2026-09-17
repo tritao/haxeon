@@ -106,6 +106,7 @@ class ParserRecoveryMain {
 		assertTolerantTruncationTyping();
 		assertRecoveredTypeNavigation();
 		assertQualifiedIdentityClosure();
+		assertGenericExternalEnumDetails();
 		assertPackageVisibilityClosure();
 		assertRecoveredAuxiliaryExpressions();
 		Sys.println("PASS: incomplete member and type recovery support completion");
@@ -198,6 +199,30 @@ class ParserRecoveryMain {
 			|| recoveredDefinition.span.end < memberDeclaration
 			|| recoveredReferences.length < 2)
 			throw 'recovered package-qualified member identity diverged from exact analysis: definition=${recoveredDefinition == null ? "null" : recoveredDefinition.path + ":" + recoveredDefinition.span.start}, references=${recoveredReferences.length}';
+	}
+
+	static function assertGenericExternalEnumDetails():Void {
+		var service = new LanguageService(),
+			target = "package generic.enums; enum Result<T> { Value(value:T); } function main():Void return;",
+			exactConsumer = "package generic.app; import generic.enums.Result; function main():Void { var result:Result<Int> = Result.Value(1); }";
+		service.update("generic/enums/Result.hx", target);
+		service.analyze("generic.enums.Result");
+		service.update("generic/app/Main.hx", exactConsumer);
+		service.analyze("generic.app.Main");
+		var exactPosition = exactConsumer.indexOf("Result.Value") + "Result.".length + 1,
+			exactHover = service.hover("generic/app/Main.hx", exactPosition),
+			exactSignature = service.signatureHelp("generic/app/Main.hx", exactConsumer.lastIndexOf("Result.Value(") + "Result.Value(".length);
+		if (exactHover != "Result.Value(value:Int)"
+			|| exactSignature == null || exactSignature.label != "Result.Value(value:Int)")
+			throw 'exact generic enum metadata was not substituted: hover=$exactHover, signature=${exactSignature == null ? "null" : exactSignature.label}';
+		var recoveredConsumer = exactConsumer + " function unfinished(";
+		service.update("generic/app/Main.hx", recoveredConsumer);
+		var recoveredPosition = recoveredConsumer.indexOf("Result.Value") + "Result.".length + 1,
+			recoveredHover = service.hover("generic/app/Main.hx", recoveredPosition),
+			recoveredSignature = service.signatureHelp("generic/app/Main.hx", recoveredConsumer.lastIndexOf("Result.Value(") + "Result.Value(".length);
+		if (recoveredHover != "Result.Value(value:Int)"
+			|| recoveredSignature == null || recoveredSignature.label != "Result.Value(value:Int)")
+			throw 'recovered generic enum metadata was not substituted: hover=$recoveredHover, signature=${recoveredSignature == null ? "null" : recoveredSignature.label}';
 	}
 
 	static function assertPackageVisibilityClosure():Void {

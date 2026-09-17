@@ -725,7 +725,7 @@ class SemanticWorkspace {
 	 * than functions, so editorSignature() intentionally has no entry for them.
 	 */
 	public function editorSymbolDetail(state:ModuleState, id:SemanticSymbolId,
-		?token:CancellationToken):Null<String> {
+		?type:CompilerType, ?token:CancellationToken):Null<String> {
 		var resolved = editorSymbol(state, id),
 			model = resolved == null ? null : editorModel(resolved.state);
 		if (resolved == null || model == null)
@@ -738,8 +738,11 @@ class SemanticWorkspace {
 					token.check();
 				if (!sameSpan(enumCase.span, resolved.symbol.declaration))
 					continue;
+				var substitutions = editorTypeSubstitutions(enumDecl.typeParameters,
+					enumTypeArguments(type, enumDecl.name));
 				return '${enumDecl.name}.${enumCase.name}(${[for (parameter in enumCase.params)
-					(parameter.optional ? "?" : "") + editorAstTypeName(parameter.type, [])].join(",")})';
+					(parameter.optional ? "?" : "") + (parameter.name == null ? "" : parameter.name + ":")
+						+ editorAstTypeName(parameter.type, substitutions)].join(",")})';
 			}
 		}
 		for (enumDecl in model.program.enumAbstracts) {
@@ -753,6 +756,49 @@ class SemanticWorkspace {
 			}
 		}
 		return null;
+	}
+
+	/** Render an authoritative enum constructor with call-site generic arguments. */
+	public function editorEnumConstructorSignature(state:ModuleState, id:SemanticSymbolId,
+		type:Null<CompilerType>, ?token:CancellationToken):Null<SemanticSignatureInfo> {
+		var resolved = editorSymbol(state, id),
+			model = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || model == null)
+			return null;
+		for (enumDecl in model.program.enums) {
+			if (token != null)
+				token.check();
+			for (enumCase in enumDecl.cases) {
+				if (token != null)
+					token.check();
+				if (!sameSpan(enumCase.span, resolved.symbol.declaration))
+					continue;
+				var substitutions = editorTypeSubstitutions(enumDecl.typeParameters,
+					enumTypeArguments(type, enumDecl.name)),
+					parameters:Array<String> = [];
+				for (index in 0...enumCase.params.length) {
+					if (token != null)
+						token.check();
+					var parameter = enumCase.params[index];
+					parameters.push((parameter.name == null ? "arg" + index : parameter.name)
+						+ ":" + editorAstTypeName(parameter.type, substitutions));
+				}
+				return {
+					label: enumDecl.name + "." + enumCase.name + "(" + parameters.join(",") + ")",
+					parameters: parameters,
+					result: enumDecl.name
+				};
+			}
+		}
+		return null;
+	}
+
+	static function enumTypeArguments(type:Null<CompilerType>, name:String):Array<CompilerType> {
+		return switch type {
+			case TNullable(element): enumTypeArguments(element, name);
+			case TInstance(_, declaration, arguments) if (moduleSourceName(Std.string(declaration)) == moduleSourceName(name)): arguments;
+			default: [];
+		};
 	}
 
 	/**

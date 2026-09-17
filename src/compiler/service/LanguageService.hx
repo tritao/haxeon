@@ -2196,6 +2196,8 @@ class LanguageService {
 			indexedId = semantic == null ? model == null ? null : model.index.symbolIdAt(position, token) : semantic.symbol,
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId),
 			indexed = indexedId == null || model == null ? null : model.index.symbol(indexedId),
+			indexedType = indexedId == null || model == null ? null : model.index.typeAt(position, token),
+			indexedDetail = indexedId == null ? null : compiler.semanticWorkspace.editorSymbolDetail(state, indexedId, indexedType, token),
 			name = indexed == null ? identifierTokenName(snapshot.tokens, position) : sourceName(indexed.name),
 			qualifier = memberQualifier(snapshot.source, position);
 		if (name.length == 0)
@@ -2207,13 +2209,11 @@ class LanguageService {
 			if (recoveredSignature != null)
 				return recoveredSignature.label;
 		}
-		if (indexedSignature != null)
-			return indexedSignature.label;
-		var indexedDetail = indexedId == null ? null : compiler.semanticWorkspace.editorSymbolDetail(state, indexedId, token);
 		if (indexedDetail != null)
 			return indexedDetail;
+		if (indexedSignature != null)
+			return indexedSignature.label;
 		if (indexedId != null && model != null) {
-			var indexedType = model.index.typeAt(position, token);
 			if (indexed != null && indexedType != null)
 				return indexed.name + ":" + compilerTypeName(indexedType);
 		}
@@ -2316,6 +2316,11 @@ class LanguageService {
 		}
 		if (signature == null && snapshot.recovered && id != null)
 			signature = compiler.semanticWorkspace.editorConstructorSignature(state, id, calleeType, token);
+		if (id != null) {
+			var enumSignature = compiler.semanticWorkspace.editorEnumConstructorSignature(state, id, calleeType, token);
+			if (enumSignature != null)
+				signature = enumSignature;
+		}
 		// Recovery may bind a current-source call directly to an authoritative
 		// external enum constructor or other callable declaration whose compact
 		// recovery index has no local signature entry. Preserve that identity-bound
