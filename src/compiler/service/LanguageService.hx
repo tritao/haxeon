@@ -1821,7 +1821,7 @@ class LanguageService {
 				if (token != null)
 					token.check();
 				var label = sourceName(symbol.name),
-					signature = compiler.semanticWorkspace.indexedSignature(symbol.id),
+					signature = compiler.semanticWorkspace.editorSignature(state, symbol.id),
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}

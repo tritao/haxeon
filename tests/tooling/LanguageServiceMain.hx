@@ -2901,12 +2901,17 @@ class LanguageServiceMain {
 		recoveredPatternService.update("RecoveredPattern.hx", recoveredPatternSource);
 		var recoveredPatternContext = recoveredPatternService.completionContext("RecoveredPattern.hx", recoveredPatternSource.length),
 			recoveredPatternCompletion = recoveredPatternService.completeResult("RecoveredPattern.hx", recoveredPatternSource.length),
-			foundRecoveredPatternCase = false;
+			foundRecoveredPatternCase = false,
+			foundRecoveredPatternPayloadCase = false;
 		for (item in recoveredPatternCompletion.items)
-			if (item.label == "One" && item.kind == "enumCase")
-				foundRecoveredPatternCase = true;
+			if (item.kind == "enumCase") {
+				if (item.label == "One")
+					foundRecoveredPatternCase = true;
+				if (item.label == "Two" && item.insertText == "Two(")
+					foundRecoveredPatternPayloadCase = true;
+			}
 		if (recoveredPatternContext == null || recoveredPatternContext.context.kind != SemanticCompletionContextKind.Pattern
-			|| !foundRecoveredPatternCase || !recoveredPatternCompletion.isIncomplete)
+			|| !foundRecoveredPatternCase || !foundRecoveredPatternPayloadCase || !recoveredPatternCompletion.isIncomplete)
 			throw 'recovered enum pattern completion did not use current enum cases: context=${recoveredPatternContext == null ? "null" : Std.string(recoveredPatternContext.context.kind)}, items=${[for (item in recoveredPatternCompletion.items) item.label].join(",")}';
 		var recoveredTypeSyntaxService = new LanguageService(),
 			recoveredTypeSyntaxTarget = "package typeaudit; class Leaf {} function main():Void return;",
