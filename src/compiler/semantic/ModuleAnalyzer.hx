@@ -242,7 +242,7 @@ class ModuleAnalyzer {
 			case AnonymousType(fields):
 				for (field in fields)
 					addModuleTypeDependency(field.type, state, dependencies);
-			default:
+			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_):
 		}
 
 	function addNamedTypeDependency(name:String, state:ModuleState, dependencies:Map<String, Bool>):Void {

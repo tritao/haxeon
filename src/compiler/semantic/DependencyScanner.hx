@@ -185,7 +185,7 @@ class DependencyScanner {
 				}
 				for (statement in statements)
 					scanStatement(statement, dependencies);
-			default:
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_):
 		}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
