@@ -1135,11 +1135,13 @@ class ParserRecoveryMain {
 		exactGenericInheritanceService.analyze("ExactGenericInheritance");
 		var exactGenericInheritancePosition = exactGenericInheritanceSource.indexOf("child.get") + "child.".length + 1,
 			exactGenericInheritanceHover = exactGenericInheritanceService.hover("ExactGenericInheritance.hx", exactGenericInheritancePosition),
+			exactGenericInheritanceReferences = exactGenericInheritanceService.references("ExactGenericInheritance.hx", exactGenericInheritancePosition),
 			exactGenericInheritanceSignature = exactGenericInheritanceService.signatureHelp("ExactGenericInheritance.hx",
 				exactGenericInheritanceSource.lastIndexOf("child.get(") + "child.get(".length);
 		if (exactGenericInheritanceHover != "get():Int"
-			|| exactGenericInheritanceSignature == null || exactGenericInheritanceSignature.label != "get():Int")
-			throw 'exact inherited generic member metadata was not substituted: hover=$exactGenericInheritanceHover, signature=${exactGenericInheritanceSignature == null ? "null" : exactGenericInheritanceSignature.label}';
+			|| exactGenericInheritanceSignature == null || exactGenericInheritanceSignature.label != "get():Int"
+			|| exactGenericInheritanceReferences.length < 2)
+			throw 'exact inherited generic member metadata or identity was not preserved: hover=$exactGenericInheritanceHover, signature=${exactGenericInheritanceSignature == null ? "null" : exactGenericInheritanceSignature.label}, references=${exactGenericInheritanceReferences.length}';
 		var genericInheritanceCallSource = genericInheritanceSource.substring(0, genericInheritanceSource.length - "child.".length) + "child.get(",
 			genericInheritanceCallPosition = genericInheritanceCallSource.length;
 		genericInheritanceService.update("GenericInheritance.hx", genericInheritanceCallSource);
