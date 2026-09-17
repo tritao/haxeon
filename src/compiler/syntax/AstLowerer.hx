@@ -2,7 +2,12 @@ package compiler.syntax;
 
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstField;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
@@ -44,6 +49,8 @@ class AstLowerer {
 					if (alias != null)
 						importAliases.set(alias, path);
 				case SyntaxNodePayload.ClassHeader(_, _, _, _, _, _):
+				case SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _):
+				case SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _):
 				case null:
 			}
 		if (packageName == null && direct.packageName != null)
@@ -72,13 +79,41 @@ class AstLowerer {
 			enums: direct.enums,
 			enumAbstracts: direct.enumAbstracts,
 			abstracts: direct.abstracts,
-			interfaces: direct.interfaces,
+			interfaces: lowerInterfaces(tree, direct.interfaces),
 			classes: lowerClasses(tree, direct.classes),
-			functions: direct.functions
+			functions: lowerFunctions(tree, direct.functions)
 		};
 	}
 
+	static function lowerInterfaces(tree:SyntaxTree, direct:Array<AstInterface>):Array<AstInterface> {
+		var nodePayloads = collectPayloads(tree), result:Array<AstInterface> = [];
+		for (interfaceDeclaration in direct) {
+			result.push({
+				name: interfaceDeclaration.name,
+				typeParameters: interfaceDeclaration.typeParameters,
+				typeConstraints: interfaceDeclaration.typeConstraints,
+				bases: interfaceDeclaration.bases,
+				methods: lowerFunctionsFromPayloads(interfaceDeclaration.methods, nodePayloads),
+				span: interfaceDeclaration.span
+			});
+		}
+		return result;
+	}
+
+	static function lowerFunctions(tree:SyntaxTree, direct:Array<AstFunction>):Array<AstFunction>
+		return lowerFunctionsFromPayloads(direct, collectPayloads(tree));
+
+	static function lowerFunctionsFromPayloads(direct:Array<AstFunction>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstFunction> {
+		var result:Array<AstFunction> = [];
+		for (functionDeclaration in direct) {
+			var lowered = lowerFunction(functionDeclaration, nodePayloads.get(functionDeclaration.span.start));
+			result.push(lowered == null ? functionDeclaration : lowered);
+		}
+		return result;
+	}
+
 	static function lowerClasses(tree:SyntaxTree, direct:Array<AstClass>):Array<AstClass> {
+		var nodePayloads = collectPayloads(tree);
 		var headers:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}> = [];
 		for (node in tree.grammarNodes())
 			switch node.payload {
@@ -91,39 +126,51 @@ class AstLowerer {
 						baseName: baseName,
 						interfaceNames: interfaceNames
 					});
-				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), null:
+				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _),
+					SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _), null:
 			}
 		var result:Array<AstClass> = [];
 		for (classDeclaration in direct) {
 			var header = headers.get(classDeclaration.span.start);
-			if (header == null || !isLowerableClass(classDeclaration, header)) {
-				result.push(classDeclaration);
-				continue;
+			var fields = lowerFields(classDeclaration.fields, nodePayloads),
+				methods = lowerFunctionsFromPayloads(classDeclaration.methods, nodePayloads),
+				name = classDeclaration.name,
+				isExtern = classDeclaration.isExtern,
+				typeParameters = classDeclaration.typeParameters,
+				typeConstraints = classDeclaration.typeConstraints,
+				isPrivate = classDeclaration.isPrivate,
+				base = classDeclaration.base,
+				interfaces = classDeclaration.interfaces;
+			if (header != null && isLowerableClassHeader(classDeclaration, header)) {
+				name = header.name;
+				isExtern = header.isExtern;
+				typeParameters = header.typeParameters;
+				typeConstraints = [];
+				isPrivate = header.isPrivate;
+				base = header.baseName == null ? null : NamedType(header.baseName);
+				interfaces = [for (interfaceName in header.interfaceNames) NamedType(interfaceName)];
 			}
 			result.push({
-				name: header.name,
-				isExtern: header.isExtern,
-				typeParameters: header.typeParameters,
-				typeConstraints: [],
-				isPrivate: header.isPrivate,
-				metadata: [],
-				base: header.baseName == null ? null : NamedType(header.baseName),
-				interfaces: [for (interfaceName in header.interfaceNames) NamedType(interfaceName)],
-				fields: [],
-				methods: [],
+				name: name,
+				isExtern: isExtern,
+				typeParameters: typeParameters,
+				typeConstraints: typeConstraints,
+				isPrivate: isPrivate,
+				metadata: classDeclaration.metadata,
+				base: base,
+				interfaces: interfaces,
+				fields: fields,
+				methods: methods,
 				span: classDeclaration.span
 			});
 		}
 		return result;
 	}
 
-	static function isLowerableClass(classDeclaration:AstClass,
+	static function isLowerableClassHeader(classDeclaration:AstClass,
 			header:{name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}):Bool {
 		if (classDeclaration.typeParameters.length != header.typeParameters.length
 			|| (classDeclaration.typeConstraints != null && classDeclaration.typeConstraints.length > 0)
-			|| classDeclaration.metadata.length > 0
-			|| classDeclaration.fields.length > 0
-			|| classDeclaration.methods.length > 0
 			|| !simpleTypeMatches(classDeclaration.base, header.baseName)
 			|| classDeclaration.interfaces.length != header.interfaceNames.length)
 			return false;
@@ -137,6 +184,136 @@ class AstLowerer {
 		}
 		return true;
 	}
+
+	static function collectPayloads(tree:SyntaxTree):Map<Int, SyntaxNodePayload> {
+		var result:Map<Int, SyntaxNodePayload> = [];
+		for (node in tree.grammarNodes())
+			switch node.payload {
+				case null:
+				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.ClassHeader(_, _, _, _, _, _),
+					SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _), SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _):
+					result.set(node.span.start, node.payload);
+			}
+		return result;
+	}
+
+	static function lowerFields(direct:Array<AstField>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstField> {
+		var result:Array<AstField> = [];
+		for (field in direct) {
+			var lowered:Null<AstField> = switch nodePayloads.get(field.span.start) {
+				case SyntaxNodePayload.FieldHeader(name, typeName, isStatic, isInline, isFinal, readAccess, writeAccess):
+					lowerField(field, name, typeName, isStatic, isInline, isFinal, readAccess, writeAccess);
+				default: null;
+			};
+			result.push(lowered == null ? field : lowered);
+		}
+		return result;
+	}
+
+	static function lowerField(field:AstField, name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool,
+			readAccess:Null<String>, writeAccess:Null<String>):Null<AstField> {
+		if (field.initializer != null || typeName == null || !simpleTypeMatches(field.type, typeName)
+			|| field.isStatic != isStatic || field.isInline != isInline || field.isFinal != isFinal
+			|| fieldAccessName(field.readAccess) != readAccess || fieldAccessName(field.writeAccess) != writeAccess)
+			return null;
+		return {
+			name: name,
+			type: lowerSimpleType(typeName),
+			initializer: null,
+			readAccess: lowerFieldAccess(readAccess),
+			writeAccess: lowerFieldAccess(writeAccess),
+			isStatic: isStatic,
+			isInline: isInline,
+			isFinal: isFinal,
+			span: field.span
+		};
+	}
+
+	static function lowerFunction(functionDeclaration:AstFunction, payload:Null<SyntaxNodePayload>):Null<AstFunction> {
+		return switch payload {
+			case SyntaxNodePayload.FunctionHeader(name, isStatic, isExtern, typeParameters, parameters, resultTypeName):
+				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters;
+				if (functionDeclaration.statements.length > 0 || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
+					|| functionDeclaration.typeConstraints != null && functionDeclaration.typeConstraints.length > 0
+					|| resultTypeName == null || !simpleTypeMatches(functionDeclaration.result, resultTypeName)
+					|| functionDeclaration.arguments.length != parameters.length
+					|| functionDeclaration.name != name || functionDeclaration.isStatic != isStatic
+					|| (functionDeclaration.isExtern == true) != isExtern
+					|| directTypeParameters.length != typeParameters.length)
+					null;
+				else {
+					var loweredArguments:Array<AstArgument> = [];
+					var valid = true;
+					for (index in 0...directTypeParameters.length)
+						if (directTypeParameters[index] != typeParameters[index])
+							valid = false;
+					for (index in 0...parameters.length) {
+						var sourceArgument = functionDeclaration.arguments[index], parameter = parameters[index];
+						if (sourceArgument.defaultValue != null || parameter.typeName == null
+							|| sourceArgument.name != parameter.name || sourceArgument.optional != parameter.optional
+							|| !simpleTypeMatches(sourceArgument.type, parameter.typeName)) {
+							valid = false;
+							break;
+						}
+						loweredArguments.push({
+							name: parameter.name,
+							type: lowerSimpleType(parameter.typeName),
+							span: sourceArgument.span,
+							optional: parameter.optional,
+							defaultValue: null
+						});
+					}
+					if (!valid)
+						null;
+					else
+						{
+							name: name,
+							isStatic: isStatic,
+							isExtern: isExtern,
+							metadata: [],
+							typeParameters: typeParameters,
+							typeConstraints: [],
+							arguments: loweredArguments,
+							result: lowerSimpleType(resultTypeName),
+							statements: [],
+							span: functionDeclaration.span
+						};
+				}
+			default: null;
+		};
+	}
+
+	static function lowerSimpleType(name:Null<String>):Null<AstType>
+		return name == null ? null : switch name {
+			case "Int": IntType;
+			case "Bool": BoolType;
+			case "Float": FloatType;
+			case "String": StringType;
+			case "Void": VoidType;
+			case "?": InferredType;
+			default: NamedType(name);
+		};
+
+	static function fieldAccessName(access:Null<AstFieldAccess>):Null<String>
+		return access == null ? null : switch access {
+			case DefaultAccess: "default";
+			case NullAccess: "null";
+			case NeverAccess: "never";
+			case GetAccess: "get";
+			case SetAccess: "set";
+			case DynamicAccess: "dynamic";
+		};
+
+	static function lowerFieldAccess(name:Null<String>):Null<AstFieldAccess>
+		return name == null ? null : switch name {
+			case "default": DefaultAccess;
+			case "null": NullAccess;
+			case "never": NeverAccess;
+			case "get": GetAccess;
+			case "set": SetAccess;
+			case "dynamic": DynamicAccess;
+			default: null;
+		};
 
 	static function simpleTypeMatches(type:Null<AstType>, name:Null<String>):Bool
 		return switch type {

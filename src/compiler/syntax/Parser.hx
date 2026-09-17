@@ -5,6 +5,7 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstTypeAlias;
 import compiler.syntax.Ast.AstEnum;
@@ -21,6 +22,7 @@ import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
+import compiler.syntax.SyntaxTree.SyntaxFunctionParameter;
 import compiler.syntax.SyntaxTreeBuilder;
 import compiler.syntax.AstLowerer;
 import compiler.Diagnostic.CompileError;
@@ -131,7 +133,7 @@ class Parser {
 					interfaces.push(interfaceDeclaration);
 					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span);
 					for (method in interfaceDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
 					var interfaceNames:Array<Null<String>> = [];
@@ -143,9 +145,9 @@ class Parser {
 							classDeclaration.typeParameters, simpleTypeName(classDeclaration.base),
 							interfaceNames));
 					for (field in classDeclaration.fields)
-						recordCstNode(SyntaxKind.FieldDeclaration, field.span);
+						recordCstNode(SyntaxKind.FieldDeclaration, field.span, fieldHeader(field));
 					for (method in classDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
 				}
 				else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
@@ -155,11 +157,11 @@ class Parser {
 					abstracts.push(abstractDeclaration);
 					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span);
 					for (method in abstractDeclaration.methods)
-						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
+						recordCstNode(SyntaxKind.FunctionDeclaration, method.span, functionHeader(method));
 				} else {
 					var functionDeclaration = parseFunction(false, externDeclaration, metadata);
 					functions.push(functionDeclaration);
-					recordCstNode(SyntaxKind.FunctionDeclaration, functionDeclaration.span);
+					recordCstNode(SyntaxKind.FunctionDeclaration, functionDeclaration.span, functionHeader(functionDeclaration));
 				}
 			} catch (error:CompileError) {
 				if (!recovering)
@@ -963,10 +965,39 @@ class Parser {
 
 	static function simpleTypeName(type:Null<AstType>):Null<String> {
 		return type == null ? null : switch type {
+			case IntType: "Int";
+			case BoolType: "Bool";
+			case FloatType: "Float";
+			case StringType: "String";
+			case VoidType: "Void";
+			case InferredType: "?";
 			case NamedType(name): name;
 			default: null;
 		};
 	}
+
+	static function fieldHeader(field:AstField):SyntaxNodePayload
+		return SyntaxNodePayload.FieldHeader(field.name, simpleTypeName(field.type), field.isStatic, field.isInline, field.isFinal,
+			fieldAccessName(field.readAccess), fieldAccessName(field.writeAccess));
+
+	static function functionHeader(functionDeclaration:AstFunction):SyntaxNodePayload {
+		var parameters:Array<SyntaxFunctionParameter> = [];
+		for (argument in functionDeclaration.arguments)
+			parameters.push({name: argument.name, typeName: simpleTypeName(argument.type), optional: argument.optional == true});
+		return SyntaxNodePayload.FunctionHeader(functionDeclaration.name, functionDeclaration.isStatic,
+			functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
+			parameters, simpleTypeName(functionDeclaration.result));
+	}
+
+	static function fieldAccessName(access:Null<AstFieldAccess>):Null<String>
+		return access == null ? null : switch access {
+			case DefaultAccess: "default";
+			case NullAccess: "null";
+			case NeverAccess: "never";
+			case GetAccess: "get";
+			case SetAccess: "set";
+			case DynamicAccess: "dynamic";
+		};
 
 	inline function isMacroModifier():Bool
 		return check(TokenKind.Identifier) && current().text == "macro";

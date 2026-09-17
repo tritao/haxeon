@@ -1,5 +1,6 @@
 import compiler.Source.SourceFile;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstType;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
@@ -107,12 +108,25 @@ class SyntaxScannerMain {
 			throw "CST lowerer did not preserve generic class inheritance";
 
 		var declarationSource = new SourceFile("Declarations.hx",
-			"class Holder { public var value:Int; public function read():Int return value; }\n"
-			+ "interface Reader { function read():Int; }\n"),
+			"class Holder { public var value:Int; public function empty():Int {} public function read():Int return value; }\n"
+			+ "interface Reader { function read(value:Int):String; }\n"),
 			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
-		declarationParser.parseProgram();
+		var declarationProgram = declarationParser.parseProgram();
 		if (declarationParser.cst == null)
 			throw "CST declaration parser did not retain a tree";
+		var holder = declarationProgram.classes[0], reader = declarationProgram.interfaces[0];
+		if (holder.fields.length != 1 || holder.fields[0].name != "value" || holder.fields[0].initializer != null
+			|| holder.methods.length != 2 || holder.methods[0].name != "empty" || holder.methods[0].statements.length != 0
+			|| reader.methods.length != 1 || reader.methods[0].arguments.length != 1 || reader.methods[0].arguments[0].name != "value")
+			throw "CST lowerer did not preserve field and function signatures";
+		switch holder.fields[0].type {
+			case IntType:
+			default: throw "CST lowerer changed a simple field type";
+		}
+		switch reader.methods[0].result {
+			case StringType:
+			default: throw "CST lowerer changed an interface method result type";
+		}
 
 		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
 			malformedParser = new Parser(new Lexer(malformed).tokenize(), null, ParserMode.Cst(malformed));

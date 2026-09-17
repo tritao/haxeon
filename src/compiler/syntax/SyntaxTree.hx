@@ -42,11 +42,19 @@ enum SyntaxKind {
 	Missing;
 }
 
+typedef SyntaxFunctionParameter = {
+	final name:String;
+	final typeName:Null<String>;
+	final optional:Bool;
+}
+
 /** Source-only payload attached to grammar nodes that can already lower independently. */
 enum SyntaxNodePayload {
 	PackageName(value:String);
 	Import(path:String, alias:Null<String>);
 	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>);
+	FieldHeader(name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
+	FunctionHeader(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxFunctionParameter>, resultTypeName:Null<String>);
 }
 
 /** Trivia categories retained by tooling mode. */
