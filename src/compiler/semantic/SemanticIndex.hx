@@ -3853,6 +3853,22 @@ class SemanticIndexBuilder {
 		return separator < 0 ? name : name.substr(separator + 1);
 	}
 
+	/** Check dependency evidence without materializing the published list. */
+	public function dependsOnAny(ids:Map<String, Bool>):Bool {
+		for (reference in resolvedReferences)
+			if (ids.exists(Std.string(reference.targetId)))
+				return true;
+		return false;
+	}
+
+	/** Check unresolved names without copying the published recovery facts. */
+	public function hasUnresolvedName(names:Map<String, Bool>):Bool {
+		for (symbol in unresolved)
+			if (names.exists(sourceName(symbol.name)))
+				return true;
+		return false;
+	}
+
 	static function displayType(type:CompilerType):String
 		return switch type {
 			case TInt: "Int";
@@ -3980,6 +3996,12 @@ class SemanticIndex {
 			targetId: reference.targetId,
 			kind: reference.kind
 		}] : queryState.resolvedDependencies();
+
+	public function dependsOnAny(ids:Map<String, Bool>):Bool
+		return queryState == null ? activeConstruction().dependsOnAny(ids) : queryState.dependsOnAny(ids);
+
+	public function hasUnresolvedName(names:Map<String, Bool>):Bool
+		return queryState == null ? activeConstruction().hasUnresolvedName(names) : queryState.hasUnresolvedName(names);
 
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		if (queryState != null)

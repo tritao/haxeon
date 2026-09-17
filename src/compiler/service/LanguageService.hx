@@ -911,13 +911,11 @@ class LanguageService {
 		}
 		var model = effectiveSemanticModel(candidate);
 		if (model != null) {
-			for (reference in model.index.resolvedDependencies())
-				if (changedSymbols.exists(Std.string(reference.targetId)))
-					return true;
+			if (model.index.dependsOnAny(changedSymbols))
+				return true;
 			var names = recoveryExportedNames(dependencyProgram);
-			for (unresolved in model.index.unresolvedSymbols())
-				if (names.exists(sourceName(unresolved.name)))
-					return true;
+			if (model.index.hasUnresolvedName(names))
+				return true;
 		}
 		return contextChanged
 			&& program.packageName != null

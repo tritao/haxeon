@@ -136,6 +136,23 @@ class SemanticIndexQueryState {
 			kind: reference.kind
 		}];
 
+	public function dependsOnAny(ids:Map<String, Bool>):Bool {
+		for (reference in resolvedReferences)
+			if (ids.exists(Std.string(reference.targetId)))
+				return true;
+		return false;
+	}
+
+	public function hasUnresolvedName(names:Map<String, Bool>):Bool {
+		for (symbol in unresolved) {
+			var separator = symbol.name.lastIndexOf("."),
+				shortName = separator < 0 ? symbol.name : symbol.name.substr(separator + 1);
+			if (names.exists(shortName))
+				return true;
+		}
+		return false;
+	}
+
 	public function locations(id:SemanticSymbolId):Array<SourceSpan> {
 		var result = references.get(id);
 		return result == null ? [] : result.copy();
