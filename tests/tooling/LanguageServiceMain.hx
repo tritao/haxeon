@@ -2895,6 +2895,27 @@ class LanguageServiceMain {
 		if (recoveredPatternContext == null || recoveredPatternContext.context.kind != SemanticCompletionContextKind.Pattern
 			|| !foundRecoveredPatternCase || !recoveredPatternCompletion.isIncomplete)
 			throw 'recovered enum pattern completion did not use current enum cases: context=${recoveredPatternContext == null ? "null" : Std.string(recoveredPatternContext.context.kind)}, items=${[for (item in recoveredPatternCompletion.items) item.label].join(",")}';
+		var recoveredTypeSyntaxService = new LanguageService(),
+			recoveredTypeSyntaxTarget = "package typeaudit; class Leaf {} function main():Void return;",
+			recoveredTypeSyntaxBox = "package typeaudit; class Box<T> { public var value:T; } function main():Void return;",
+			recoveredTypeSyntaxSource = "package typeaudit.use; import typeaudit.Box; import typeaudit.Leaf; function main():Void { var boxed:Box<Leaf>; var record:{value:Leaf}; broken.unresolved().thing; var later:Leaf; }";
+		recoveredTypeSyntaxService.update("typeaudit/Leaf.hx", recoveredTypeSyntaxTarget);
+		recoveredTypeSyntaxService.update("typeaudit/Box.hx", recoveredTypeSyntaxBox);
+		recoveredTypeSyntaxService.compile("typeaudit.Leaf");
+		recoveredTypeSyntaxService.compile("typeaudit.Box");
+		recoveredTypeSyntaxService.update("typeaudit/use/Main.hx", recoveredTypeSyntaxSource);
+		var genericTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("Box<Leaf>") + "Box<".length + 1,
+			anonymousTypeSyntaxPosition = recoveredTypeSyntaxSource.indexOf("value:Leaf") + "value:".length + 1,
+			laterTypeSyntaxPosition = recoveredTypeSyntaxSource.lastIndexOf(":Leaf") + 2,
+			genericTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", genericTypeSyntaxPosition),
+			anonymousTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", anonymousTypeSyntaxPosition),
+			laterTypeSyntaxDefinition = recoveredTypeSyntaxService.typeDefinition("typeaudit/use/Main.hx", laterTypeSyntaxPosition),
+			genericTypeSyntaxReferences = recoveredTypeSyntaxService.references("typeaudit/use/Main.hx", genericTypeSyntaxPosition);
+		if (genericTypeSyntaxDefinition == null || genericTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
+			|| anonymousTypeSyntaxDefinition == null || anonymousTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
+			|| laterTypeSyntaxDefinition == null || laterTypeSyntaxDefinition.path != "typeaudit/Leaf.hx"
+			|| genericTypeSyntaxReferences.length < 3)
+			throw 'recovered type-bearing syntax lost authoritative identity: generic=${genericTypeSyntaxDefinition == null ? "null" : genericTypeSyntaxDefinition.path}, anonymous=${anonymousTypeSyntaxDefinition == null ? "null" : anonymousTypeSyntaxDefinition.path}, later=${laterTypeSyntaxDefinition == null ? "null" : laterTypeSyntaxDefinition.path}, references=${genericTypeSyntaxReferences.length}';
 		var inferredObjectService = new LanguageService(),
 			inferredObjectSource = "function main():Void { var point = {value: 1}; point.";
 		inferredObjectService.update("InferredObject.hx", inferredObjectSource);
