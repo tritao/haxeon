@@ -34,7 +34,9 @@ class Formatter {
 			var parser = new Parser(new Lexer(file, conditional.text).tokenize(), null, ParserMode.Cst(file));
 			parser.parseProgram();
 			var syntaxTree:Null<SyntaxTree> = parser.cst;
-			var tokens = new FormatScanner(file).scan(),
+			if (syntaxTree == null)
+				return null;
+			var tokens = CstFormatterAdapter.tokens(syntaxTree),
 				comments = CommentAttachmentTools.attach(tokens),
 				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),

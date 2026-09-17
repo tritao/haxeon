@@ -54,7 +54,7 @@ class UnwrappedLineBuilder {
 				case FormatTokenKind.Newline:
 					pendingNewlines++;
 				case FormatTokenKind.Directive:
-					var name = FormatScanner.directiveName(token.text);
+					var name = CstFormatterAdapter.directiveName(token.text);
 					if (name == "else" || name == "elseif" || name == "end")
 						if (conditionalBases.length > 0)
 							depth = conditionalBases[conditionalBases.length - 1];

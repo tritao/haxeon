@@ -3,8 +3,11 @@ import compiler.formatter.FormatScanner;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.CstFormatterAdapter;
 import compiler.service.SourceFormatter;
 import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.Token.TokenKind;
 
 class FormatterMain {
@@ -21,6 +24,19 @@ class FormatterMain {
 			tokens = scanner.scan();
 		if (scanner.roundTrip(tokens) != file.text)
 			throw "lossless formatter scanner did not round-trip source bytes";
+		var cstParser = new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file));
+		cstParser.parseProgram();
+		var cst = cstParser.cst;
+		if (cst == null)
+			throw "formatter parser did not produce a tooling CST";
+		var cstTokens = CstFormatterAdapter.tokens(cst);
+		if (CstFormatterAdapter.roundTrip(cstTokens) != file.text)
+			throw "CST formatter adapter did not round-trip source bytes";
+		if (cstTokens.length != tokens.length)
+			throw "CST formatter adapter changed the lossless token stream";
+		for (index in 0...tokens.length)
+			if (Std.string(cstTokens[index].kind) != Std.string(tokens[index].kind) || cstTokens[index].text != tokens[index].text)
+				throw "CST formatter adapter changed token spelling or trivia";
 		var lexical = new Lexer(file).tokenize(),
 			syntaxCount = 0,
 			lexicalIndex = 0;

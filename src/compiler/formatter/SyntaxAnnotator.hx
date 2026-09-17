@@ -53,10 +53,71 @@ class SyntaxAnnotator {
 		grammar constructs that have not yet received parser events.
 	*/
 	public static function annotate(tokens:Array<FormatToken>, ?tree:SyntaxTree):SyntaxInfo {
-		var result = annotateTokens(tokens);
-		if (tree != null)
-			applyGrammarNodes(tokens, result, tree);
+		return tree == null ? annotateTokens(tokens) : annotateCst(tokens, tree);
+	}
+
+	/**
+		Builds layout structure from parser-reported CST nodes. Token heuristics
+		remain only for expression categories that are not yet grammar nodes; all
+		delimiter and block ownership comes from the CST in tooling mode.
+	*/
+	static function annotateCst(tokens:Array<FormatToken>, tree:SyntaxTree):SyntaxInfo {
+		var result:SyntaxInfo = {
+			nodes: [],
+			nodeKinds: [],
+			matching: [],
+			blockOpens: [],
+			blockCloses: [],
+			blockDepth: []
+		};
+		applyGrammarNodes(tokens, result, tree);
+		mergeUnparsedSourceRegions(tokens, result);
+		// Binary/conditional/member layout constraints are not represented by
+		// grammar nodes yet. Keep this narrow pass until those parser events are
+		// available; it cannot classify delimiters or braces.
+		var syntaxIndexes:Array<Int> = [];
+		for (index in 0...tokens.length)
+			if (FormatTokenTools.isSyntax(tokens[index]))
+				syntaxIndexes.push(index);
+		annotateExpressionNodes(tokens, syntaxIndexes, result.nodes);
+		annotateParents(result.nodes);
+		for (index in 0...tokens.length) {
+			if (!FormatTokenTools.isSyntax(tokens[index]))
+				continue;
+			var depth = 0;
+			for (node in result.nodes)
+				if (node.kind == FormatNodeKind.Block
+					&& tokens[node.start].start <= tokens[index].start
+					&& tokens[node.end].end > tokens[index].start)
+					depth++;
+			result.blockDepth.set(tokens[index].start, depth);
+		}
 		return result;
+	}
+
+	/**
+		Conditional compilation intentionally hides inactive source from the
+		compiler parser. Preserve the formatter's view of those regions without
+		overriding any delimiter or block ownership the active CST established.
+	*/
+	static function mergeUnparsedSourceRegions(tokens:Array<FormatToken>, syntax:SyntaxInfo):Void {
+		var fallback = annotateTokens(tokens);
+		for (key in fallback.blockOpens.keys())
+			if (!syntax.blockOpens.exists(key))
+				syntax.blockOpens.set(key, fallback.blockOpens.get(key));
+		for (key in fallback.blockCloses.keys())
+			if (!syntax.blockCloses.exists(key))
+				syntax.blockCloses.set(key, fallback.blockCloses.get(key));
+		for (key in fallback.matching.keys())
+			if (!syntax.matching.exists(key))
+				syntax.matching.set(key, fallback.matching.get(key));
+		for (node in fallback.nodes) {
+			var key = tokens[node.start].start + ":" + tokens[node.end].start;
+			if (!syntax.nodeKinds.exists(key)) {
+				syntax.nodeKinds.set(key, node.kind);
+				syntax.nodes.push({kind: node.kind, start: node.start, end: node.end, parent: null});
+			}
+		}
 	}
 
 	static function annotateTokens(tokens:Array<FormatToken>):SyntaxInfo {
@@ -166,6 +227,7 @@ class SyntaxAnnotator {
 		syntax.blockOpens.set(tokens[open].start, true);
 		syntax.blockCloses.set(tokens[close].start, true);
 		syntax.nodeKinds.set(open + ":" + close, FormatNodeKind.Block);
+		syntax.nodes.push({kind: FormatNodeKind.Block, start: open, end: close, parent: null});
 	}
 
 	static function applyCallNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
@@ -177,6 +239,7 @@ class SyntaxAnnotator {
 			syntax.matching.set(open, end);
 			syntax.matching.set(end, open);
 			syntax.nodeKinds.set(tokens[open].start + ":" + tokens[end].start, FormatNodeKind.Call);
+			syntax.nodes.push({kind: FormatNodeKind.Call, start: open, end: end, parent: null});
 		}
 	}
 
@@ -196,6 +259,9 @@ class SyntaxAnnotator {
 		syntax.matching.set(open, close);
 		syntax.matching.set(close, open);
 		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, kind);
+		if (kind == FormatNodeKind.ObjectLiteral)
+			syntax.blockOpens.set(tokens[open].start, false);
+		syntax.nodes.push({kind: kind, start: open, end: close, parent: null});
 	}
 
 	static function matchingLeftParen(tokens:Array<FormatToken>, start:Int, close:Int):Int {
