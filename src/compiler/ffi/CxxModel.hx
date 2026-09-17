@@ -11,6 +11,10 @@ enum CxxType {
 	CxxPointer(element:CxxType);
 	CxxReference(element:CxxType);
 	CxxRValueReference(element:CxxType);
+
+	/** std::string_view; lowered through a generated (const char *, size_t) adapter. */
+	CxxStringView;
+
 	CxxUnsupported(raw:String, reason:String);
 }
 

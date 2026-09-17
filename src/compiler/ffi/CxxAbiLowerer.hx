@@ -149,19 +149,31 @@ class CxxAbiLowerer {
 
 	static function parameters(parameters:Array<CxxModel.CxxParameter>, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>):Array<HxiModel.HxiParameter> {
-		return [
-			for (parameter in parameters)
-				{
-					name: parameter.name,
-					type: lowerType(parameter.type, records, enums, aliases, false),
+		var result:Array<HxiModel.HxiParameter> = [];
+		for (parameter in parameters) {
+			result.push({
+				name: parameter.name,
+				type: lowerType(parameter.type, records, enums, aliases, false),
+				direction: In,
+				ownership: Unspecified,
+				handleDisposition: Unspecified,
+				retained: false,
+				metadata: [],
+				span: parameter.span
+			});
+			if (CxxTypeTools.isStringView(parameter.type))
+				result.push({
+					name: parameter.name + "__length",
+					type: Primitive("usize"),
 					direction: In,
 					ownership: Unspecified,
 					handleDisposition: Unspecified,
 					retained: false,
 					metadata: [],
 					span: parameter.span
-				}
-		];
+				});
+		}
+		return result;
 	}
 
 	static function lowerType(type:CxxType, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>, allowVoid:Bool):HxiType {
@@ -171,6 +183,7 @@ class CxxAbiLowerer {
 			case CxxConst(element): Const(lowerType(element, records, enums, aliases, allowVoid));
 			case CxxPointer(element): Pointer(lowerType(element, records, enums, aliases, false));
 			case CxxReference(element): Pointer(lowerType(element, records, enums, aliases, false));
+			case CxxStringView: Primitive("utf8");
 			case CxxNamed(name):
 				if (!records.exists(name) && !enums.exists(name) && !aliases.exists(name))
 					throw 'CXX012 unknown type "$name"';

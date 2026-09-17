@@ -52,12 +52,13 @@ class CxxSubsetValidator {
 					message: '${functionModel.qualifiedName} may throw; direct C++ calls require noexcept',
 					span: functionModel.span
 				});
-			validateType(functionModel.result, true, functionModel.span, records, enums, aliases, diagnostics, trivialValues);
+			validateResultType(functionModel.result, functionModel.span, diagnostics, cxxThunks);
+			validateType(functionModel.result, true, functionModel.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			for (parameter in functionModel.parameters)
-				validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues);
+				validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		}
 		for (alias in model.aliases)
-			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues);
+			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		return diagnostics;
 	}
 
@@ -123,6 +124,13 @@ class CxxSubsetValidator {
 					});
 			}
 		}
+		if ((method.isConstructor || method.isDestructor)
+			&& CxxTypeTools.hasStringView([for (parameter in method.parameters) parameter.type]))
+			diagnostics.push({
+				code: "CXX017",
+				message: 'std::string_view adapters are unsupported for constructors and destructors (${method.qualifiedName})',
+				span: method.span
+			});
 		if (method.symbol.length == 0)
 			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
 		if (!method.isNoexcept && !cxxThunks)
@@ -157,21 +165,35 @@ class CxxSubsetValidator {
 			diagnostics.push({code: "CXX010", message: 'member ${method.qualifiedName} is ${method.access} and cannot be projected', span: method.span});
 		if (StringTools.startsWith(method.name, "operator"))
 			diagnostics.push({code: "CXX009", message: 'member-function operator ${method.qualifiedName} is unsupported', span: method.span});
-		validateType(method.result, true, method.span, records, enums, aliases, diagnostics, trivialValues);
+		validateResultType(method.result, method.span, diagnostics, cxxThunks);
+		validateType(method.result, true, method.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		for (parameter in method.parameters)
-			validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues);
+			validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 	}
 
 	static function validateType(type:CxxType, byValue:Bool, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool):Void {
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
 		switch type {
 			case CxxType.CxxVoid | CxxType.CxxPrimitive(_):
 			case CxxType.CxxConst(element):
-				validateType(element, byValue, span, records, enums, aliases, diagnostics, trivialValues);
+				validateType(element, byValue, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			case CxxType.CxxPointer(element) | CxxType.CxxReference(element):
-				validateType(element, false, span, records, enums, aliases, diagnostics, trivialValues);
+				validateType(element, false, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			case CxxType.CxxRValueReference(_):
 				diagnostics.push({code: "CXX001", message: "rvalue references are unsupported by CXX_ABI_V1", span: span});
+			case CxxType.CxxStringView:
+				if (!cxxThunks)
+					diagnostics.push({
+						code: "CXX017",
+						message: 'std::string_view requires a generated C++ adapter; pass --cxx-thunks=<file>',
+						span: span
+					});
+				else if (!byValue)
+					diagnostics.push({
+						code: "CXX017",
+						message: "std::string_view is supported only as a by-value input parameter",
+						span: span
+					});
 			case CxxType.CxxUnsupported(raw, reason):
 				diagnostics.push({code: "CXX009", message: 'unsupported C++ type "$raw": $reason', span: span});
 			case CxxType.CxxNamed(name):
@@ -189,5 +211,14 @@ class CxxSubsetValidator {
 						diagnostics.push({code: "CXX002", message: 'record "$name" is not a validated trivial C++ value', span: record.span});
 				}
 		}
+	}
+
+	static function validateResultType(type:CxxType, span:SourceSpan, diagnostics:Array<CxxDiagnostic>, cxxThunks:Bool):Void {
+		if (cxxThunks && CxxTypeTools.isStringView(type))
+			diagnostics.push({
+				code: "CXX017",
+				message: "std::string_view results are unsupported; return an owning std::string or a pointer/length pair",
+				span: span
+			});
 	}
 }

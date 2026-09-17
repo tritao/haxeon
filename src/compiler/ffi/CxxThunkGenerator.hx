@@ -7,16 +7,23 @@ import compiler.ffi.CxxModel.CxxRecord;
 import compiler.ffi.CxxModel.CxxType;
 import haxe.crypto.Sha256;
 
-/** Emits C-ABI entry points which contain C++ exceptions before they reach Haxeon. */
+/** Emits C-ABI entry points which adapt supported C++ calls before they reach Haxeon. */
 class CxxThunkGenerator {
 	public static function prepare(model:CxxModel):Void {
 		for (functionModel in model.functions)
-			if (!functionModel.isNoexcept)
+			if (!functionModel.isNoexcept || needsAdapter(functionModel.parameters))
 				functionModel.thunkSymbol = thunkSymbol("function", functionModel.qualifiedName, functionModel.symbol);
 		for (record in model.records)
 			for (method in record.methods)
-				if (!method.isNoexcept && !method.isConstructor && !method.isDestructor)
+				if ((!method.isNoexcept || needsAdapter(method.parameters)) && !method.isConstructor && !method.isDestructor)
 					method.thunkSymbol = thunkSymbol("method", method.qualifiedName, method.symbol);
+	}
+
+	static function needsAdapter(parameters:Array<CxxModel.CxxParameter>):Bool {
+		for (parameter in parameters)
+			if (CxxTypeTools.isStringView(parameter.type))
+				return true;
+		return false;
 	}
 
 	public static function source(model:CxxModel):String {
@@ -27,6 +34,7 @@ class CxxThunkGenerator {
 		output.add("#include <cstdint>\n");
 		output.add("#include <cstring>\n");
 		output.add("#include <exception>\n\n");
+		output.add("#include <string_view>\n\n");
 		output.add("namespace {\n");
 		output.add("thread_local char haxeon_cxx_thunk_error[512] = {};\n");
 		output.add("void haxeon_cxx_thunk_clear() noexcept { haxeon_cxx_thunk_error[0] = 0; }\n");
@@ -58,12 +66,9 @@ class CxxThunkGenerator {
 	}
 
 	static function emitFunction(output:StringBuf, functionModel:CxxFunction):Void {
-		var arguments = [
-			for (index in 0...functionModel.parameters.length)
-				'${cppType(functionModel.parameters[index].type)} arg$index'
-		];
+		var arguments = thunkParameterDeclarations(functionModel.parameters);
 		output.add('extern "C" ${cppType(functionModel.result)} ${functionModel.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
-		emitTry(output, '${functionModel.qualifiedName}(${callArguments(functionModel.parameters.length)})', functionModel.result);
+		emitTry(output, '${functionModel.qualifiedName}(${callArguments(functionModel.parameters)})', functionModel.result);
 		output.add("}\n\n");
 	}
 
@@ -71,11 +76,10 @@ class CxxThunkGenerator {
 		var arguments:Array<String> = [];
 		if (!method.isStatic)
 			arguments.push('${method.isConst ? "const " : ""}${record.qualifiedName} *__this');
-		for (index in 0...method.parameters.length)
-			arguments.push('${cppType(method.parameters[index].type)} arg$index');
+		arguments = arguments.concat(thunkParameterDeclarations(method.parameters));
 		var receiver = method.isStatic ? '${record.qualifiedName}::${method.name}' : '__this->${method.name}';
 		output.add('extern "C" ${cppType(method.result)} ${method.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
-		emitTry(output, '$receiver(${callArguments(method.parameters.length)})', method.result);
+		emitTry(output, '$receiver(${callArguments(method.parameters)})', method.result);
 		output.add("}\n\n");
 	}
 
@@ -97,8 +101,25 @@ class CxxThunkGenerator {
 		output.add("\t}\n");
 	}
 
-	static function callArguments(count:Int):String
-		return [for (index in 0...count) 'arg$index'].join(", ");
+	static function thunkParameterDeclarations(parameters:Array<CxxModel.CxxParameter>):Array<String> {
+		var result:Array<String> = [];
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			if (CxxTypeTools.isStringView(parameter.type)) {
+				result.push('const char *arg$index');
+				result.push('std::size_t arg${index}__length');
+			} else
+				result.push('${cppType(parameter.type)} arg$index');
+		}
+		return result;
+	}
+
+	static function callArguments(parameters:Array<CxxModel.CxxParameter>):String {
+		var result:Array<String> = [];
+		for (index in 0...parameters.length)
+			result.push(CxxTypeTools.isStringView(parameters[index].type) ? 'std::string_view(arg$index, arg${index}__length)' : 'arg$index');
+		return result.join(", ");
+	}
 
 	static function cppType(type:CxxType):String {
 		return switch type {
@@ -109,6 +130,7 @@ class CxxThunkGenerator {
 			case CxxPointer(element): cppType(element) + " *";
 			case CxxReference(element): cppType(element) + " &";
 			case CxxRValueReference(_): throw "CXX016 cannot generate a thunk for an rvalue reference";
+			case CxxStringView: throw "CXX016 std::string_view is emitted through the adapter parameter expansion";
 			case CxxUnsupported(raw, reason): throw 'CXX016 cannot generate a thunk for "$raw": $reason';
 		};
 	}

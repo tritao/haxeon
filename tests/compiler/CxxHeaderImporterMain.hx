@@ -3,6 +3,7 @@ import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxSubsetValidator;
 import compiler.ffi.CxxThunkGenerator;
+import compiler.ffi.CxxTypeTools;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -247,6 +248,52 @@ class CxxHeaderImporterMain {
 		if (thunkFailPlan != null)
 			expect(thunkFailPlan.symbol == thunkMethod.thunkSymbol && thunkFailPlan.dispatch == DirectSymbol,
 				"throwing methods should use a direct call to their generated thunk");
+		var stringViewDisabled = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+		} catch (error:Dynamic)
+			stringViewDisabled = Std.string(error);
+		expect(stringViewDisabled.indexOf("CXX017") >= 0, "std::string_view should require an explicit generated adapter");
+		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_view",
+			"CxxStringViewFixture", null, null, "c++20", null, null, false, false, false, true),
+			stringViewText = HxiWriter.write(stringView.hxi, "// test"),
+			stringViewSource = CxxThunkGenerator.source(stringView.model),
+			stringViewProjection = Lambda.find(CxxProjection.sources(stringView.model, stringView.hxi, null, stringView.plans),
+				source -> source.file == "Text.hx")
+				.source,
+			stringViewFunctions = Lambda.find(CxxProjection.sources(stringView.model, stringView.hxi, null, stringView.plans),
+				source -> source.file == "CxxStringViewFixtureFunctions.hx")
+				.source,
+			viewMethod = Lambda.find(stringView.model.records[0].methods, method -> method.name == "count"),
+			viewFunction = Lambda.find(stringView.model.functions, functionModel -> functionModel.name == "count"),
+			viewMethodPlan = viewMethod == null
+				|| viewMethod.loweredName == null ? null : Lambda.find(stringView.plans, plan -> plan.name == viewMethod.loweredName),
+			viewFunctionPlan = viewFunction == null
+				|| viewFunction.loweredName == null ? null : Lambda.find(stringView.plans, plan -> plan.name == viewFunction.loweredName);
+		expect(viewMethod != null
+			&& viewFunction != null
+			&& CxxTypeTools.isStringView(viewMethod.parameters[0].type)
+			&& CxxTypeTools.isStringView(viewFunction.parameters[0].type)
+			&& viewMethod.thunkSymbol != null
+			&& viewFunction.thunkSymbol != null
+			&& stringViewText.indexOf("value: utf8, value__length: usize") >= 0
+			&& stringViewSource.indexOf("std::string_view(arg0, arg0__length)") >= 0
+			&& stringViewProjection.indexOf("public function count(value:String):Int") >= 0
+			&& stringViewProjection.indexOf("haxe.Int64.ofInt(__cxx_value_bytes_0.length)") >= 0
+			&& stringViewFunctions.indexOf("public static function count(value:String):Int") >= 0,
+			"std::string_view should lower to a thunked pointer/length ABI and a String projection");
+		if (viewMethodPlan != null)
+			switch viewMethodPlan.arguments {
+				case [PointerValue(_, _, _, _), Utf8Value(false), IntegerValue(64, Unsigned)]:
+				case _:
+					throw "std::string_view method should use UTF-8 and target-sized length arguments";
+			}
+		if (viewFunctionPlan != null)
+			switch viewFunctionPlan.arguments {
+				case [Utf8Value(false), IntegerValue(64, Unsigned)]:
+				case _:
+					throw "std::string_view function should use UTF-8 and target-sized length arguments";
+			}
 	}
 
 	static function expect(value:Bool, message:String):Void {

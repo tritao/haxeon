@@ -53,9 +53,15 @@ exceptions, stores a bounded thread-local diagnostic, and returns the
 zero/null fallback for the declared result. Generated Haxe projections read
 that diagnostic immediately after the call and throw a Haxe exception. This
 mode currently excludes throwing constructors/destructors, references as
-results, and non-trivial/STL conversions; those remain explicit future adapter
-work. Without `--cxx-thunks`, throwing declarations continue to report
-`CXX003`.
+results, and non-trivial/STL conversions other than the explicitly supported
+`std::string_view` input adapter. A `std::string_view` parameter is lowered to
+`const char*` plus a target-sized byte length inside the generated thunk; the
+Haxe projection accepts a `String` and computes its UTF-8 byte length. The
+string is borrowed for the duration of the synchronous call, so the C++ API
+must not retain the view. Embedded NUL bytes are not supported by the current
+UTF-8 bridge. Unsupported string-view positions, such as results, pointers,
+and references, report `CXX017`. Without `--cxx-thunks`, throwing declarations
+continue to report `CXX003`, and string-view declarations report `CXX017`.
 
 With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
 class module per imported record. The generated class stores the raw opaque

@@ -298,6 +298,8 @@ private class CxxAstBuilder {
 			return CxxType.CxxConst(parseType(StringTools.trim(value.substring(6)), namespaces, owner));
 		if (StringTools.startsWith(value, "class ") || StringTools.startsWith(value, "struct ") || StringTools.startsWith(value, "enum "))
 			value = StringTools.trim(value.substring(value.indexOf(" ") + 1));
+		if (isStringViewName(value))
+			return CxxType.CxxStringView;
 		if (value.indexOf("<") >= 0 || value.indexOf(">") >= 0)
 			return CxxType.CxxUnsupported(value, "dependent or template types are not supported");
 		var primitive = primitiveType(value);
@@ -334,6 +336,13 @@ private class CxxAstBuilder {
 			case "wchar_t": "c_wchar";
 			case _: null;
 		};
+	}
+
+	static function isStringViewName(value:String):Bool {
+		value = StringTools.replace(StringTools.trim(value), " ", "");
+		return value == "std::string_view"
+			|| value == "std::basic_string_view<char>"
+			|| value == "std::basic_string_view<char,std::char_traits<char>>";
 	}
 
 	static function typeName(node:Dynamic):String
