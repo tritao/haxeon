@@ -1641,6 +1641,24 @@ class LanguageServiceMain {
 				genericTypedefAliasMember = item;
 		if (genericTypedefAliasMember == null || genericTypedefAliasMember.detail != "member:String")
 			throw "recovered generic aliased typedef did not preserve type-parameter substitution";
+		var exactTypedefAliasNavigationService = new LanguageService(),
+			exactTypedefAliasNavigationSource = "package alias.app; import alias.types.Alias as A; function getValue():A<String> return null; function main():Void { var value = getValue(); value.member; }";
+		exactTypedefAliasNavigationService.update("alias/types/Box.hx",
+			"package alias.types; class Box<T> { public var member:T; } function main():Void return;");
+		exactTypedefAliasNavigationService.update("alias/types/Alias.hx",
+			"package alias.types; import alias.types.Box; typedef Alias<T> = Box<T>; function main():Void return;");
+		exactTypedefAliasNavigationService.compile("alias.types.Alias");
+		exactTypedefAliasNavigationService.update("alias/app/ExactTypedefAliasNavigation.hx", exactTypedefAliasNavigationSource);
+		exactTypedefAliasNavigationService.compile("alias.app.ExactTypedefAliasNavigation");
+		var exactTypedefAliasMemberPosition = exactTypedefAliasNavigationSource.indexOf("value.member") + "value.".length + 1,
+			exactTypedefAliasMemberDefinition = exactTypedefAliasNavigationService.definition("alias/app/ExactTypedefAliasNavigation.hx",
+				exactTypedefAliasMemberPosition),
+			exactTypedefAliasMemberReferences = exactTypedefAliasNavigationService.references("alias/app/ExactTypedefAliasNavigation.hx",
+				exactTypedefAliasMemberPosition);
+		if (exactTypedefAliasMemberDefinition == null
+			|| exactTypedefAliasMemberDefinition.path != "alias/types/Box.hx"
+			|| exactTypedefAliasMemberReferences.length < 2)
+			throw 'exact typedef alias member navigation lost the underlying identity: definition=${exactTypedefAliasMemberDefinition == null ? "null" : exactTypedefAliasMemberDefinition.path}, references=${exactTypedefAliasMemberReferences.length}';
 		var staticTypedefAliasService = new LanguageService(),
 			staticTypedefAliasSource = "package alias.app; import alias.types.Alias as A; function main():Void { A.";
 		staticTypedefAliasService.update("alias/types/Foo.hx", "package alias.types; class Foo { public static function create():Int return 1; } function main():Void return;");

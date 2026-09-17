@@ -1041,8 +1041,9 @@ class SemanticWorkspace {
 			typeId = editorImportedTypeSymbolId(from, qualifier, sourceProgram, token);
 		if (typeId == null)
 			return null;
-		var resolved = editorSymbolById(typeId),
-			canonical = editorTypeName(typeId);
+		var nominalId = editorNominalTypeIdentityById(typeId, [], token),
+			resolved = nominalId == null ? null : editorSymbolById(nominalId),
+			canonical = nominalId == null ? null : editorTypeName(nominalId);
 		if (resolved == null || canonical == null)
 			return null;
 		return memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
@@ -1058,8 +1059,9 @@ class SemanticWorkspace {
 				memberName = name.substring(separator + 1),
 				typeId = editorQualifiedTypeSymbolId(receiverName, token);
 			if (typeId != null) {
-				var resolved = editorSymbolById(typeId),
-					canonical = editorTypeName(typeId);
+				var nominalId = editorNominalTypeIdentityById(typeId, [], token),
+					resolved = nominalId == null ? null : editorSymbolById(nominalId),
+					canonical = nominalId == null ? null : editorTypeName(nominalId);
 				if (resolved != null && canonical != null) {
 					var member = memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
 					if (member != null)
