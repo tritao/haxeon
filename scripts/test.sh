@@ -15,6 +15,7 @@ if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
 fi
 
 "$root_dir/scripts/build-native.sh" >/dev/null
+bash "$root_dir/scripts/test-haxeon-runtime-boundary.sh"
 mkdir -p "$root_dir/out"
 
 "$root_dir/tests/differential/run.sh"
