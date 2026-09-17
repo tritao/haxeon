@@ -49,6 +49,8 @@ class WasmModuleSupport {
 						switch located.value {
 							case Call(_, name, _):
 								result.set(name, true);
+							case StaticClosure(_, name):
+								result.set(name, true);
 							default:
 						}
 		return result;
