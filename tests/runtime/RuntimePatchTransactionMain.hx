@@ -251,6 +251,13 @@ class RuntimePatchTransactionMain {
 		var retainedStatus = Runtime.retirementStatus(loaded);
 		if (retainedStatus.haxeBorrowers != 1 || !retainedStatus.hasKnownBorrowers())
 			throw "retained runtime values were missing from Haxe retirement diagnostics";
+		var retainedSecond = Runtime.retainClosure(loaded, makeId),
+			multipleRetainedStatus = Runtime.retirementStatus(loaded);
+		if (multipleRetainedStatus.haxeBorrowers != 2)
+			throw "Haxe retirement diagnostics did not count multiple retained values";
+		retainedSecond.release();
+		if (Runtime.retirementStatus(loaded).haxeBorrowers != 1)
+			throw "Haxe retirement diagnostics did not update after releasing one retained value";
 		try {
 			committed.commit();
 			throw "committed host patch transaction committed twice";
