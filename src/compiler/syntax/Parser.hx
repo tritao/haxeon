@@ -134,9 +134,14 @@ class Parser {
 						recordCstNode(SyntaxKind.FunctionDeclaration, method.span);
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
+					var interfaceNames:Array<Null<String>> = [];
+					for (interfaceType in classDeclaration.interfaces)
+						interfaceNames.push(simpleTypeName(interfaceType));
 					classes.push(classDeclaration);
 					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span,
-						SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true));
+						SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
+							classDeclaration.typeParameters, simpleTypeName(classDeclaration.base),
+							interfaceNames));
 					for (field in classDeclaration.fields)
 						recordCstNode(SyntaxKind.FieldDeclaration, field.span);
 					for (method in classDeclaration.methods)
@@ -953,6 +958,13 @@ class Parser {
 			fields: fields,
 			methods: methods,
 			span: start.merge(end)
+		};
+	}
+
+	static function simpleTypeName(type:Null<AstType>):Null<String> {
+		return type == null ? null : switch type {
+			case NamedType(name): name;
+			default: null;
 		};
 	}
 

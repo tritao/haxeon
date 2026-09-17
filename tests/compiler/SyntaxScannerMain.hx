@@ -98,6 +98,14 @@ class SyntaxScannerMain {
 			|| emptyClassProgram.classes[0].fields.length != 0 || emptyClassProgram.classes[0].methods.length != 0)
 			throw "CST lowerer did not preserve an empty class declaration";
 
+		var genericClassSource = new SourceFile("GenericClass.hx", "class Generic<T> extends Base implements Readable, Writable {}\n"),
+			genericClassParser = new Parser(new Lexer(genericClassSource).tokenize(), null, ParserMode.Cst(genericClassSource)),
+			genericClassProgram = genericClassParser.parseProgram(),
+			genericClass = genericClassProgram.classes[0];
+		if (genericClass.typeParameters.length != 1 || genericClass.typeParameters[0] != "T"
+			|| genericClass.base == null || genericClass.interfaces.length != 2)
+			throw "CST lowerer did not preserve generic class inheritance";
+
 		var declarationSource = new SourceFile("Declarations.hx",
 			"class Holder { public var value:Int; public function read():Int return value; }\n"
 			+ "interface Reader { function read():Int; }\n"),

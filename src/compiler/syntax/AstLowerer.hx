@@ -2,6 +2,7 @@ package compiler.syntax;
 
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstType;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
@@ -42,7 +43,7 @@ class AstLowerer {
 					imports.push(path);
 					if (alias != null)
 						importAliases.set(alias, path);
-				case SyntaxNodePayload.ClassHeader(_, _, _):
+				case SyntaxNodePayload.ClassHeader(_, _, _, _, _, _):
 				case null:
 			}
 		if (packageName == null && direct.packageName != null)
@@ -78,29 +79,36 @@ class AstLowerer {
 	}
 
 	static function lowerClasses(tree:SyntaxTree, direct:Array<AstClass>):Array<AstClass> {
-		var headers:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool}> = [];
+		var headers:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}> = [];
 		for (node in tree.grammarNodes())
 			switch node.payload {
-				case SyntaxNodePayload.ClassHeader(name, isPrivate, isExtern):
-					headers.set(node.span.start, {name: name, isPrivate: isPrivate, isExtern: isExtern});
+				case SyntaxNodePayload.ClassHeader(name, isPrivate, isExtern, typeParameters, baseName, interfaceNames):
+					headers.set(node.span.start, {
+						name: name,
+						isPrivate: isPrivate,
+						isExtern: isExtern,
+						typeParameters: typeParameters,
+						baseName: baseName,
+						interfaceNames: interfaceNames
+					});
 				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), null:
 			}
 		var result:Array<AstClass> = [];
 		for (classDeclaration in direct) {
 			var header = headers.get(classDeclaration.span.start);
-			if (header == null || !isEmptyClass(classDeclaration)) {
+			if (header == null || !isLowerableClass(classDeclaration, header)) {
 				result.push(classDeclaration);
 				continue;
 			}
 			result.push({
 				name: header.name,
 				isExtern: header.isExtern,
-				typeParameters: [],
+				typeParameters: header.typeParameters,
 				typeConstraints: [],
 				isPrivate: header.isPrivate,
 				metadata: [],
-				base: null,
-				interfaces: [],
+				base: header.baseName == null ? null : NamedType(header.baseName),
+				interfaces: [for (interfaceName in header.interfaceNames) NamedType(interfaceName)],
 				fields: [],
 				methods: [],
 				span: classDeclaration.span
@@ -109,14 +117,33 @@ class AstLowerer {
 		return result;
 	}
 
-	static function isEmptyClass(classDeclaration:AstClass):Bool
-		return classDeclaration.typeParameters.length == 0
-			&& (classDeclaration.typeConstraints == null || classDeclaration.typeConstraints.length == 0)
-			&& classDeclaration.metadata.length == 0
-			&& classDeclaration.base == null
-			&& classDeclaration.interfaces.length == 0
-			&& classDeclaration.fields.length == 0
-			&& classDeclaration.methods.length == 0;
+	static function isLowerableClass(classDeclaration:AstClass,
+			header:{name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}):Bool {
+		if (classDeclaration.typeParameters.length != header.typeParameters.length
+			|| (classDeclaration.typeConstraints != null && classDeclaration.typeConstraints.length > 0)
+			|| classDeclaration.metadata.length > 0
+			|| classDeclaration.fields.length > 0
+			|| classDeclaration.methods.length > 0
+			|| !simpleTypeMatches(classDeclaration.base, header.baseName)
+			|| classDeclaration.interfaces.length != header.interfaceNames.length)
+			return false;
+		for (index in 0...classDeclaration.typeParameters.length)
+			if (classDeclaration.typeParameters[index] != header.typeParameters[index])
+				return false;
+		for (index in 0...classDeclaration.interfaces.length) {
+			var interfaceName = header.interfaceNames[index];
+			if (interfaceName == null || !simpleTypeMatches(classDeclaration.interfaces[index], interfaceName))
+				return false;
+		}
+		return true;
+	}
+
+	static function simpleTypeMatches(type:Null<AstType>, name:Null<String>):Bool
+		return switch type {
+			case null: name == null;
+			case NamedType(value): name == value;
+			default: false;
+		};
 
 	static function validateSpans(tree:SyntaxTree):Void {
 		for (node in tree.grammarNodes()) {
