@@ -1,9 +1,13 @@
 package runtime.hashlink;
 
 import runtime.memory.RawPtr;
-import runtime.hashlink.HlFunction;
-import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug;
-import runtime.hashlink.HlPatchInput.HlRuntimePatchInput;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlCode;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchDebug;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchInput;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlPatchPools;
+import runtime.hashlink.HashLinkTypeBindings.NativeHlModuleContext;
+import runtime.hashlink.HashLinkTypeBindings.NativeHlType;
 
 /** Small native boundary for handing Haxe-owned type metadata to HashLink. */
 @:hlNative("haxeon_runtime")
@@ -12,12 +16,12 @@ class HlTypeBridge {
 		return 0;
 
 	/** Publish one object prototype through HashLink's executable-pointer machinery. */
-	public static function native_metadata_publish_object_prototype(type:RawPtr<HlType>):Void {}
+	public static function native_metadata_publish_object_prototype(type:RawPtr<NativeHlType>):Void {}
 
-	public static function native_module_context_dispose(context:RawPtr<HlModuleContext>):Void {}
+	public static function native_module_context_dispose(context:RawPtr<NativeHlModuleContext>):Void {}
 
 	/** Allocate the native HashLink module wrapper for an arena-owned code record. */
-	public static function native_metadata_module_alloc(code:RawPtr<HlNativeCode>):RawPtr<UInt8>
+	public static function native_metadata_module_alloc(code:RawPtr<NativeModuleHlCode>):RawPtr<UInt8>
 		return RawPtr.nullPtr();
 
 	/** Initialize the native JIT/module machinery for an arena-owned code record. */
@@ -48,7 +52,7 @@ class HlTypeBridge {
 		return 0;
 
 	/** Load a runtime wrapper from a Haxe-owned code record and external identity bytes. */
-	public static function native_runtime_module_load_code(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, identity:haxe.io.Bytes,
+	public static function native_runtime_module_load_code(code:RawPtr<NativeModuleHlCode>, bytes:haxe.io.Bytes, length:Int, identity:haxe.io.Bytes,
 		identityLength:Int):hl.Abstract<"realtime_module">
 		return null;
 
@@ -57,7 +61,7 @@ class HlTypeBridge {
 		return null;
 
 	/** Load a runtime wrapper from a Haxe-owned code record and decoded identity tables. */
-	public static function native_runtime_module_load_code_manifest(code:RawPtr<HlNativeCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
+	public static function native_runtime_module_load_code_manifest(code:RawPtr<NativeModuleHlCode>, bytes:haxe.io.Bytes, length:Int, moduleId:haxe.io.Bytes,
 		revision:Int, stableIds:RawPtr<Int32>, slots:RawPtr<Int32>, identityCount:Int, initializerSlot:Int):hl.Abstract<"realtime_module">
 		return null;
 
@@ -165,8 +169,8 @@ class HlTypeBridge {
 		return null;
 
 	/** Apply one Haxe-decoded patch model using Haxe-owned metadata. */
-	public static function native_runtime_module_patch_code_haxe_metadata(module:hl.Abstract<"realtime_module">, input:RawPtr<HlRuntimePatchInput>, typeCount:Int,
-		functions:RawPtr<HlFunction>, functionCount:Int, pools:RawPtr<HlPatchPools>, debug:RawPtr<HlRuntimePatchDebug>, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
+	public static function native_runtime_module_patch_code_haxe_metadata(module:hl.Abstract<"realtime_module">, input:RawPtr<NativeModuleHlPatchInput>, typeCount:Int,
+		functions:RawPtr<NativeModuleHlFunction>, functionCount:Int, pools:RawPtr<NativeModuleHlPatchPools>, debug:RawPtr<NativeModuleHlPatchDebug>, status:hl.Bytes):hl.Abstract<"realtime_jit_code">
 		return null;
 
 	/** Release one Haxe-owned external reference to a published code allocation. */
