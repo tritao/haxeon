@@ -1785,12 +1785,42 @@ class SemanticIndexBuilder {
 				receiver == null ? TUnknown : receiver;
 			case Variable(name, span):
 				var id = bindRecoveredLocal(name, span);
-				if (id != null && declarationTypes.exists(id)) declarationTypes.get(id); else if (declarations.classes.exists(name))
-					TInstance(compiler.types.Type.NominalKind.Class, name,
-					[]); else if (declarations.interfaces.exists(name)) TInstance(compiler.types.Type.NominalKind.Interface, name, []);
+				if (id != null && declarationTypes.exists(id))
+					declarationTypes.get(id);
 				else {
-					var functionType = recoveredFunctionType(name);
-					functionType == null ? TUnknown : functionType;
+					// A qualified static access such as `Flags.Ready` starts with a
+					// source variable node even though the receiver is a type. Prefer
+					// the visibility-aware nominal resolver here; DeclarationIndex
+					// intentionally lowers enum-abstract names to their underlying
+					// representation, which would otherwise erase the static member
+					// owner during recovery.
+					var enumAbstract = declarations.enumAbstracts.get(name);
+					if (enumAbstract != null)
+						TAbstract(name, [], recoveredType(enumAbstract.underlying));
+					else {
+						var typeIdentity = recoveryResolveTypeSymbol == null ? null : recoveryResolveTypeSymbol(name),
+							identity = typeIdentity == null ? "" : Std.string(typeIdentity);
+						if (identity.indexOf(":abstract:") >= 0)
+							TAbstract(name, [], TUnknown);
+						else if (identity.indexOf(":class:") >= 0)
+							TInstance(compiler.types.Type.NominalKind.Class, name, []);
+						else if (identity.indexOf(":interface:") >= 0)
+							TInstance(compiler.types.Type.NominalKind.Interface, name, []);
+						else {
+							var resolved = recoveryResolveType == null ? null : recoveryResolveType(name, []);
+							if (resolved != null && isUsableRecoveredBindingType(resolved))
+								resolved;
+							else {
+								var recovered = recoveredType(NamedType(name));
+								if (isUsableRecoveredBindingType(recovered))
+									recovered;
+								else {
+									var functionType = recoveredFunctionType(name);
+									functionType == null ? TUnknown : functionType;
+								}
+							}
+						}
+				}
 				}
 			case New(name, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			case NewGeneric(name, typeArguments, _, _): recoveredType(AppliedType(name, typeArguments));
@@ -2196,6 +2226,18 @@ class SemanticIndexBuilder {
 			var recovered = recoveryResolveType(name, arguments);
 			if (recovered != null && !isRecoveryType(recovered))
 				return recovered;
+		}
+		if (recoveryResolveTypeSymbol != null) {
+			var typeIdentity = recoveryResolveTypeSymbol(name),
+				identity = typeIdentity == null ? "" : Std.string(typeIdentity);
+			if (identity.indexOf(":abstract:") >= 0)
+				return TAbstract(name, arguments, TUnknown);
+			if (identity.indexOf(":class:") >= 0)
+				return TInstance(compiler.types.Type.NominalKind.Class, name, arguments);
+			if (identity.indexOf(":interface:") >= 0)
+				return TInstance(compiler.types.Type.NominalKind.Interface, name, arguments);
+			if (identity.indexOf(":enum:") >= 0)
+				return TInstance(compiler.types.Type.NominalKind.Enum, name, arguments);
 		}
 		if (recoveryResolve != null) {
 			var id = recoveryResolve(name);
@@ -3139,6 +3181,14 @@ class SemanticIndexBuilder {
 
 	static function isRecoveryType(type:CompilerType):Bool
 		return TypeRelations.containsRecovery(type);
+
+	/** A nominal editor type remains useful even when its representation or
+	 * generic arguments are still unknown during recovery. */
+	static function isUsableRecoveredBindingType(type:CompilerType):Bool
+		return switch type {
+			case TInstance(_, _, _), TAbstract(_, _, _): true;
+			default: !isRecoveryType(type);
+		};
 
 	function indexCompletionLocals(statements:Array<TypedStatement>, scope:SourceSpan, depth:Int):Void {
 		for (statement in statements) {

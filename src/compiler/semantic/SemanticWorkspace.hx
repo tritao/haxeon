@@ -1148,7 +1148,7 @@ class SemanticWorkspace {
 			canonical = nominalId == null ? null : editorTypeName(nominalId);
 		if (resolved == null || canonical == null)
 			return null;
-		return memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
+		return editorMemberSymbolForType(nominalId, resolved.symbol.kind, canonical, memberName, token);
 	}
 
 	function editorQualifiedMemberSymbolId(from:ModuleState, name:String, ?sourceProgram:AstProgram,
@@ -1167,7 +1167,7 @@ class SemanticWorkspace {
 					resolved = nominalId == null ? null : editorSymbolById(nominalId),
 					canonical = nominalId == null ? null : editorTypeName(nominalId);
 				if (resolved != null && canonical != null) {
-					var member = memberSymbolForType(resolved.symbol.kind, canonical, memberName, token);
+					var member = editorMemberSymbolForType(nominalId, resolved.symbol.kind, canonical, memberName, token);
 					if (member != null)
 						return member;
 				}
@@ -1225,7 +1225,19 @@ class SemanticWorkspace {
 		return null;
 	}
 
-	function memberSymbolForType(kind:DeclarationKind, canonical:String, memberName:String, ?token:CancellationToken):Null<SemanticSymbolId> {
+	/** Resolve a member from the current editor models, including recovered-only owners. */
+	function editorMemberSymbolForType(identity:Null<SemanticSymbolId>, kind:DeclarationKind, canonical:String,
+		memberName:String, ?token:CancellationToken):Null<SemanticSymbolId> {
+		if (identity == null)
+			return null;
+		var recovered = editorMemberSymbolForIdentity(identity, memberName, [], token);
+		if (recovered != null)
+			return recovered;
+		// Keep the authoritative path as a compatibility fallback for symbols
+		// whose declaration is not represented by an editor AST (for example a
+		// pre-indexed workspace artifact).
+		if (indexedSymbol(identity) == null)
+			return null;
 		return switch kind {
 			case DeclarationKind.Class: memberSymbolId(TInstance(NominalKind.Class, canonical, []), memberName);
 			case DeclarationKind.Interface: memberSymbolId(TInstance(NominalKind.Interface, canonical, []), memberName);
@@ -1233,6 +1245,79 @@ class SemanticWorkspace {
 			case DeclarationKind.Abstract: memberSymbolId(TAbstract(canonical, [], TUnknown), memberName);
 			default: null;
 		};
+	}
+
+	function editorMemberSymbolForIdentity(identity:SemanticSymbolId, memberName:String,
+		visited:Array<SemanticSymbolId>, ?token:CancellationToken):Null<SemanticSymbolId> {
+		if (token != null)
+			token.check();
+		if (visited.indexOf(identity) >= 0)
+			return null;
+		var resolved = editorSymbolById(identity),
+			model = resolved == null ? null : editorModel(resolved.state);
+		if (resolved == null || model == null)
+			return null;
+		var nextVisited = visited.copy();
+		nextVisited.push(identity);
+		var declarationSymbol = function(span:SourceSpan):Null<SemanticSymbolId> {
+			return editorDeclarationSymbolId(resolved.state, span);
+		};
+		switch resolved.symbol.kind {
+			case DeclarationKind.Class:
+				for (decl in model.program.classes)
+					if (sameSpan(decl.span, resolved.symbol.declaration)) {
+						for (field in decl.fields)
+							if (field.name == memberName)
+								return declarationSymbol(field.span);
+						for (method in decl.methods)
+							if (method.name == memberName)
+								return declarationSymbol(method.span);
+						if (decl.base != null) {
+							var base = editorNominalTypeIdentity(resolved.state, decl.base, model.program, [], token),
+								member = base == null ? null : editorMemberSymbolForIdentity(base, memberName, nextVisited, token);
+							if (member != null)
+								return member;
+						}
+						for (interfaceType in decl.interfaces) {
+							var implemented = editorNominalTypeIdentity(resolved.state, interfaceType, model.program, [], token),
+								member = implemented == null ? null : editorMemberSymbolForIdentity(implemented, memberName, nextVisited, token);
+							if (member != null)
+								return member;
+						}
+					}
+			case DeclarationKind.Interface:
+				for (decl in model.program.interfaces)
+					if (sameSpan(decl.span, resolved.symbol.declaration)) {
+						for (method in decl.methods)
+							if (method.name == memberName)
+								return declarationSymbol(method.span);
+						for (baseType in decl.bases) {
+							var base = editorNominalTypeIdentity(resolved.state, baseType, model.program, [], token),
+								member = base == null ? null : editorMemberSymbolForIdentity(base, memberName, nextVisited, token);
+							if (member != null)
+								return member;
+						}
+					}
+			case DeclarationKind.Abstract:
+				for (decl in model.program.abstracts)
+					if (sameSpan(decl.span, resolved.symbol.declaration))
+						for (method in decl.methods)
+							if (method.name == memberName)
+								return declarationSymbol(method.span);
+				for (decl in model.program.enumAbstracts)
+					if (sameSpan(decl.span, resolved.symbol.declaration))
+						for (value in decl.values)
+							if (value.name == memberName)
+								return declarationSymbol(value.span);
+			case DeclarationKind.Enum:
+				for (decl in model.program.enums)
+					if (sameSpan(decl.span, resolved.symbol.declaration))
+						for (value in decl.cases)
+							if (value.name == memberName)
+								return declarationSymbol(value.span);
+			default:
+		}
+		return null;
 	}
 
 	function editorEnumCaseSymbolId(canonical:String, memberName:String, ?token:CancellationToken):Null<SemanticSymbolId> {

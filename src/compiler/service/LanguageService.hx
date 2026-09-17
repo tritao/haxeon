@@ -939,7 +939,7 @@ class LanguageService {
 						return recoveredAliasType(resolvedSymbol.state, resolvedProgram, alias, arguments, token, nextTrail);
 					}
 			var resolved = recoveredTypeForIdentity(direct, name, arguments);
-			if (!isRecoveryType(resolved))
+			if (isUsableRecoveredNominal(resolved))
 				return resolved;
 		}
 		for (importPath in program.imports) {
@@ -1219,6 +1219,14 @@ class LanguageService {
 
 	static function isRecoveryType(type:CompilerType):Bool
 		return TypeRelations.containsRecovery(type);
+
+	/** Keep nominal identity useful for editor queries even when the
+	 * representation or generic arguments are not fully known yet. */
+	static function isUsableRecoveredNominal(type:CompilerType):Bool
+		return switch type {
+			case TInstance(_, _, _), TAbstract(_, _, _): true;
+			default: !isRecoveryType(type);
+		};
 
 	public function prepareCallHierarchy(path:String, position:Int, ?token:CancellationToken):Null<CallHierarchyItem> {
 		if (token != null)

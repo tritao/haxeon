@@ -3085,6 +3085,19 @@ class LanguageServiceMain {
 			|| recoveredEnumAbstractInitializerDefinition.path != "RecoveredEnumAbstractInitializer.hx"
 			|| recoveredEnumAbstractInitializerReferences.length < 2)
 			throw 'recovered enum-abstract initializer did not retain value identity: definition=${recoveredEnumAbstractInitializerDefinition == null ? "null" : recoveredEnumAbstractInitializerDefinition.path}, references=${recoveredEnumAbstractInitializerReferences.length}';
+		var malformedEnumAbstractTargetService = new LanguageService(),
+			malformedEnumAbstractTargetSource = "package flags; enum abstract Flags(Int) { var Ready = 1; function unfinished(",
+			malformedEnumAbstractUseSource = "package flags.use; import flags.Flags; function main():Void { Flags.";
+		malformedEnumAbstractTargetService.update("flags/Flags.hx", malformedEnumAbstractTargetSource);
+		malformedEnumAbstractTargetService.update("flags/use/Main.hx", malformedEnumAbstractUseSource);
+		var malformedEnumAbstractCompletion = malformedEnumAbstractTargetService.completeResult("flags/use/Main.hx", malformedEnumAbstractUseSource.length),
+			foundMalformedEnumAbstractValue = false;
+		for (item in malformedEnumAbstractCompletion.items)
+			if (item.label == "Ready")
+				foundMalformedEnumAbstractValue = true;
+		if (!foundMalformedEnumAbstractValue || !malformedEnumAbstractCompletion.isIncomplete
+			|| malformedEnumAbstractTargetService.definition("flags/use/Main.hx", malformedEnumAbstractUseSource.length) != null)
+			throw "recovered external enum-abstract completion lost its current value or trusted-navigation guard";
 		var nominalSignatureService = new LanguageService();
 		nominalSignatureService.update("nominal/a/Action.hx", "package nominal.a; class Action { public function run(value:Int):Int return value; }");
 		nominalSignatureService.update("nominal/b/Action.hx", "package nominal.b; class Action { public function run(value:String):String return value; }");
