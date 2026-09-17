@@ -91,6 +91,13 @@ class SyntaxScannerMain {
 		if (programShape(headerCstAst) != programShape(headerAst))
 			throw "CST lowerer changed the source header AST shape";
 
+		var emptyClassSource = new SourceFile("EmptyClass.hx", "class Empty {}\n"),
+			emptyClassParser = new Parser(new Lexer(emptyClassSource).tokenize(), null, ParserMode.Cst(emptyClassSource)),
+			emptyClassProgram = emptyClassParser.parseProgram();
+		if (emptyClassProgram.classes.length != 1 || emptyClassProgram.classes[0].name != "Empty"
+			|| emptyClassProgram.classes[0].fields.length != 0 || emptyClassProgram.classes[0].methods.length != 0)
+			throw "CST lowerer did not preserve an empty class declaration";
+
 		var declarationSource = new SourceFile("Declarations.hx",
 			"class Holder { public var value:Int; public function read():Int return value; }\n"
 			+ "interface Reader { function read():Int; }\n"),

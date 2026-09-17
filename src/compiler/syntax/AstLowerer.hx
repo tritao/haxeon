@@ -1,6 +1,7 @@
 package compiler.syntax;
 
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
@@ -41,6 +42,7 @@ class AstLowerer {
 					imports.push(path);
 					if (alias != null)
 						importAliases.set(alias, path);
+				case SyntaxNodePayload.ClassHeader(_, _, _):
 				case null:
 			}
 		if (packageName == null && direct.packageName != null)
@@ -70,10 +72,51 @@ class AstLowerer {
 			enumAbstracts: direct.enumAbstracts,
 			abstracts: direct.abstracts,
 			interfaces: direct.interfaces,
-			classes: direct.classes,
+			classes: lowerClasses(tree, direct.classes),
 			functions: direct.functions
 		};
 	}
+
+	static function lowerClasses(tree:SyntaxTree, direct:Array<AstClass>):Array<AstClass> {
+		var headers:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool}> = [];
+		for (node in tree.grammarNodes())
+			switch node.payload {
+				case SyntaxNodePayload.ClassHeader(name, isPrivate, isExtern):
+					headers.set(node.span.start, {name: name, isPrivate: isPrivate, isExtern: isExtern});
+				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), null:
+			}
+		var result:Array<AstClass> = [];
+		for (classDeclaration in direct) {
+			var header = headers.get(classDeclaration.span.start);
+			if (header == null || !isEmptyClass(classDeclaration)) {
+				result.push(classDeclaration);
+				continue;
+			}
+			result.push({
+				name: header.name,
+				isExtern: header.isExtern,
+				typeParameters: [],
+				typeConstraints: [],
+				isPrivate: header.isPrivate,
+				metadata: [],
+				base: null,
+				interfaces: [],
+				fields: [],
+				methods: [],
+				span: classDeclaration.span
+			});
+		}
+		return result;
+	}
+
+	static function isEmptyClass(classDeclaration:AstClass):Bool
+		return classDeclaration.typeParameters.length == 0
+			&& (classDeclaration.typeConstraints == null || classDeclaration.typeConstraints.length == 0)
+			&& classDeclaration.metadata.length == 0
+			&& classDeclaration.base == null
+			&& classDeclaration.interfaces.length == 0
+			&& classDeclaration.fields.length == 0
+			&& classDeclaration.methods.length == 0;
 
 	static function validateSpans(tree:SyntaxTree):Void {
 		for (node in tree.grammarNodes()) {

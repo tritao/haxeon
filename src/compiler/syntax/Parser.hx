@@ -135,7 +135,8 @@ class Parser {
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
 					classes.push(classDeclaration);
-					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span);
+					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span,
+						SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true));
 					for (field in classDeclaration.fields)
 						recordCstNode(SyntaxKind.FieldDeclaration, field.span);
 					for (method in classDeclaration.methods)

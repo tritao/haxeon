@@ -46,6 +46,7 @@ enum SyntaxKind {
 enum SyntaxNodePayload {
 	PackageName(value:String);
 	Import(path:String, alias:Null<String>);
+	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool);
 }
 
 /** Trivia categories retained by tooling mode. */
