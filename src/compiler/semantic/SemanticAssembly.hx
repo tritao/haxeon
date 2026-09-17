@@ -162,6 +162,33 @@ class SemanticAssembly {
 					}
 				}
 			}
+			// Unqualified functions declared in the current package are visible
+			// without an import. Give that namespace precedence over wildcard
+			// imports, while leaving local declarations and explicit imports in
+			// control of their normal higher-priority rules.
+			var samePackageFunctions:Map<String, Bool> = [];
+			if (ast.packageName != null)
+				for (moduleName => functionsInModule in sourceFunctions) {
+					if (moduleName == name)
+						continue;
+					var functionState = modules.get(moduleName),
+						functionProgram = functionState == null ? null : functionState.parsedAst();
+					if (functionProgram == null || functionProgram.packageName != ast.packageName)
+						continue;
+					for (fn in functionsInModule) {
+						var localName = fn.name;
+						if (explicitImportNames.exists(localName) || explicitFunctionNames.exists(localName))
+							continue;
+						var target = moduleName + "." + localName;
+						if (!aliases.exists(localName)) {
+							aliases.set(localName, target);
+							samePackageFunctions.set(localName, true);
+						} else if (aliases.get(localName) != target) {
+							aliases.remove(localName);
+							samePackageFunctions.set(localName, true);
+						}
+					}
+				}
 			var ambiguousWildcardTypes:Map<String, Bool> = [];
 			var ambiguousWildcardFunctions:Map<String, Bool> = [];
 			for (importPath in ast.imports)
@@ -190,7 +217,7 @@ class SemanticAssembly {
 						for (fn in functionsInModule) {
 							var localName = fn.name;
 							if (explicitImportNames.exists(localName) || explicitFunctionNames.exists(localName)
-								|| ambiguousWildcardFunctions.exists(localName))
+								|| samePackageFunctions.exists(localName) || ambiguousWildcardFunctions.exists(localName))
 								continue;
 							var target = moduleName + "." + fn.name;
 							if (!aliases.exists(localName))

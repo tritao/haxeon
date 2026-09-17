@@ -94,6 +94,25 @@ class ModuleAnalyzer {
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);
+		var unqualifiedCalls:Map<String, Bool> = [];
+		for (fn in ast.functions)
+			for (statement in fn.statements)
+				SemanticDependencyCollector.scanCalls(statement, unqualifiedCalls, []);
+		for (classDecl in ast.classes) {
+			for (field in classDecl.fields)
+				if (field.initializer != null)
+					SemanticDependencyCollector.scanCallExpression(field.initializer, unqualifiedCalls, []);
+			for (method in classDecl.methods)
+				for (statement in method.statements)
+					SemanticDependencyCollector.scanCalls(statement, unqualifiedCalls, []);
+		}
+		for (abstractDecl in ast.abstracts)
+			for (method in abstractDecl.methods)
+				for (statement in method.statements)
+					SemanticDependencyCollector.scanCalls(statement, unqualifiedCalls, []);
+		for (abstractDecl in ast.enumAbstracts)
+			for (value in abstractDecl.values)
+				SemanticDependencyCollector.scanCallExpression(value.value, unqualifiedCalls, []);
 		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
 			for (field in classDecl.fields)
@@ -116,6 +135,11 @@ class ModuleAnalyzer {
 			if (natives.hasChild(dependency) && sourceModuleForDependency(dependency) == null)
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
+		if (packageName != null)
+			for (functionName in unqualifiedCalls.keys())
+				if (functionName.indexOf(".") < 0)
+					for (functionModule in sourceModulesForFunction(packageName, functionName))
+						dependencies.set(functionModule, true);
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
 			var sourceModule = sourceModuleForDependency(dependency);
 			if (sourceModule == null
@@ -260,6 +284,24 @@ class ModuleAnalyzer {
 		if (module != null)
 			return module;
 		return declarationOwners.get(qualified);
+	}
+
+	/** Find source modules that contribute an unqualified same-package function. */
+	function sourceModulesForFunction(packageName:String, functionName:String):Array<String> {
+		var result:Array<String> = [];
+		for (state in sourceLoader.loadPackage(packageName, modules)) {
+			var program = sourceProgram(state);
+			if (program == null || program.packageName != packageName)
+				continue;
+			for (fn in program.functions)
+				if (fn.name == functionName) {
+					if (result.indexOf(state.name) < 0)
+						result.push(state.name);
+					break;
+				}
+		}
+		result.sort(Reflect.compare);
+		return result;
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {

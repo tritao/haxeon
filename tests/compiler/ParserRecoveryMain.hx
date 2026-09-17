@@ -105,6 +105,8 @@ class ParserRecoveryMain {
 		assertTruncationRecovery();
 		assertTolerantTruncationTyping();
 		assertRecoveredTypeNavigation();
+		assertQualifiedIdentityClosure();
+		assertPackageVisibilityClosure();
 		assertRecoveredAuxiliaryExpressions();
 		Sys.println("PASS: incomplete member and type recovery support completion");
 	}
@@ -152,6 +154,99 @@ class ParserRecoveryMain {
 			|| definition.path != "types/Foo.hx"
 			|| currentReferences < 3)
 			throw 'recovered type navigation did not bind the authoritative identity: definition=${definition == null ? "null" : definition.path}, references=${references.length}, current=${currentReferences}';
+	}
+
+	static function assertQualifiedIdentityClosure():Void {
+		var service = new LanguageService(),
+			targetSource = "package identity.lib; class Types { public static function answer():Int return 1; } class Nested {} function main():Void return;",
+			consumerSource = "package identity.app; import identity.lib.Types as T; import identity.lib.Types.Nested as N; function main():Int { var value:N = new N(); return T.answer(); }";
+		service.update("identity/lib/Types.hx", targetSource);
+		service.analyze("identity.lib.Types");
+		service.update("identity/app/Main.hx", consumerSource);
+		service.analyze("identity.app.Main");
+
+		var memberPosition = consumerSource.indexOf("T.answer") + "T.".length + 1,
+			memberDefinition = service.definition("identity/app/Main.hx", memberPosition),
+			memberReferences = service.references("identity/app/Main.hx", memberPosition),
+			memberDeclaration = targetSource.indexOf("function answer");
+		if (memberDefinition == null || memberDefinition.stale
+			|| memberDefinition.path != "identity/lib/Types.hx"
+			|| memberDefinition.span.start > memberDeclaration
+			|| memberDefinition.span.end < memberDeclaration
+			|| memberReferences.length < 2)
+			throw 'package-qualified module alias did not preserve the static member identity: definition=${memberDefinition == null ? "null" : memberDefinition.path + ":" + memberDefinition.span.start}, references=${memberReferences.length}';
+
+		var typePosition = consumerSource.indexOf("value:N") + "value:".length,
+			typeDefinition = service.definition("identity/app/Main.hx", typePosition),
+			typeReferences = service.references("identity/app/Main.hx", typePosition),
+			typeDeclaration = targetSource.indexOf("class Nested");
+		if (typeDefinition == null || typeDefinition.stale
+			|| typeDefinition.path != "identity/lib/Types.hx"
+			|| typeDefinition.span.start > typeDeclaration
+			|| typeDefinition.span.end < typeDeclaration
+			|| typeReferences.length < 2)
+			throw 'secondary package type identity was not canonicalized: definition=${typeDefinition == null ? "null" : typeDefinition.path + ":" + typeDefinition.span.start}, references=${typeReferences.length}';
+
+		var recoveredConsumer = StringTools.replace(consumerSource, "return T.answer();", "return T.answer(");
+		service.update("identity/app/Main.hx", recoveredConsumer);
+		var recoveredPosition = recoveredConsumer.indexOf("T.answer") + "T.".length + 1,
+			recoveredDefinition = service.definition("identity/app/Main.hx", recoveredPosition),
+			recoveredReferences = service.references("identity/app/Main.hx", recoveredPosition);
+		if (recoveredDefinition == null || recoveredDefinition.stale
+			|| recoveredDefinition.path != "identity/lib/Types.hx"
+			|| recoveredDefinition.span.start > memberDeclaration
+			|| recoveredDefinition.span.end < memberDeclaration
+			|| recoveredReferences.length < 2)
+			throw 'recovered package-qualified member identity diverged from exact analysis: definition=${recoveredDefinition == null ? "null" : recoveredDefinition.path + ":" + recoveredDefinition.span.start}, references=${recoveredReferences.length}';
+	}
+
+	static function assertPackageVisibilityClosure():Void {
+		var service = new LanguageService(),
+			oneSource = "package visibility.one; function answer():Int return 1; class Choice {} function main():Void return;",
+			twoSource = "package visibility.two; function answer():Int return 2; class Choice {} function main():Void return;",
+			consumerSource = "package visibility.app; import visibility.one.*; function main():Int return answer();";
+		service.update("visibility/one/One.hx", oneSource);
+		service.analyze("visibility.one.One");
+		service.update("visibility/two/Two.hx", twoSource);
+		service.analyze("visibility.two.Two");
+		service.update("visibility/app/Main.hx", consumerSource);
+		service.analyze("visibility.app.Main");
+		var position = consumerSource.indexOf("answer()") + 1,
+			definition = service.definition("visibility/app/Main.hx", position),
+			references = service.references("visibility/app/Main.hx", position);
+		if (definition == null || definition.stale || definition.path != "visibility/one/One.hx"
+			|| references.length < 2)
+			throw 'wildcard package visibility did not select the imported identity: definition=${definition == null ? "null" : definition.path}, references=${references.length}';
+
+		var ambiguousSource = "package visibility.app; import visibility.one.*; import visibility.two.*; function main():Int return answer();";
+		service.update("visibility/app/Main.hx", ambiguousSource);
+		if (service.definition("visibility/app/Main.hx", ambiguousSource.indexOf("answer()") + 1) != null
+			|| service.references("visibility/app/Main.hx", ambiguousSource.indexOf("answer()") + 1).length != 0)
+			throw "ambiguous wildcard package imports guessed a semantic identity";
+
+		var samePackageService = new LanguageService(),
+			samePackageTarget = "package visibility.same; function peer():Int return 1; function main():Void return;",
+			samePackageConsumer = "package visibility.same; function main():Int return peer();";
+		samePackageService.update("visibility/same/Peer.hx", samePackageTarget);
+		samePackageService.analyze("visibility.same.Peer");
+		samePackageService.update("visibility/same/Main.hx", samePackageConsumer);
+		samePackageService.analyze("visibility.same.Main");
+		var samePackagePosition = samePackageConsumer.indexOf("peer()") + 1,
+			samePackageDefinition = samePackageService.definition("visibility/same/Main.hx", samePackagePosition),
+			samePackageReferences = samePackageService.references("visibility/same/Main.hx", samePackagePosition);
+		if (samePackageDefinition == null || samePackageDefinition.stale
+			|| samePackageDefinition.path != "visibility/same/Peer.hx"
+			|| samePackageReferences.length < 2)
+			throw 'same-package function visibility did not preserve its identity: definition=${samePackageDefinition == null ? "null" : samePackageDefinition.path}, references=${samePackageReferences.length}';
+		var samePackageRecovered = StringTools.replace(samePackageConsumer, "return peer();", "return peer(");
+		samePackageService.update("visibility/same/Main.hx", samePackageRecovered);
+		var recoveredPosition = samePackageRecovered.indexOf("peer(") + 1,
+			recoveredDefinition = samePackageService.definition("visibility/same/Main.hx", recoveredPosition),
+			recoveredReferences = samePackageService.references("visibility/same/Main.hx", recoveredPosition);
+		if (recoveredDefinition == null || recoveredDefinition.stale
+			|| recoveredDefinition.path != "visibility/same/Peer.hx"
+			|| recoveredReferences.length < 2)
+			throw 'recovered same-package function visibility lost its identity: definition=${recoveredDefinition == null ? "null" : recoveredDefinition.path}, references=${recoveredReferences.length}';
 	}
 
 	static function assertIncompleteDeclarations():Void {
