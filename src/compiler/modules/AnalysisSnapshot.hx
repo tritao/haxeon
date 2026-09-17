@@ -56,8 +56,13 @@ class AnalysisSnapshot {
 	public static function lastGood(snapshot:AnalysisSnapshot):AnalysisSnapshot
 		return new AnalysisSnapshot(snapshot.source, snapshot.tokens, snapshot.ast, snapshot.semanticModel, snapshot.revision, AnalysisSnapshotKind.LastGood);
 
-	public inline function isCurrent(currentRevision:Int):Bool
-		return revision == currentRevision && !stale;
+	/**
+	 * A snapshot is current only when both publication coordinates match. A
+	 * revision check alone is insufficient when a source object is replaced
+	 * during a transactional candidate build.
+	 */
+	public inline function isCurrent(currentSource:SourceFile, currentRevision:Int):Bool
+		return source == currentSource && revision == currentRevision && !stale;
 
 	/** Return a detached token view so published snapshots cannot be mutated. */
 	function get_tokens():Array<Token>

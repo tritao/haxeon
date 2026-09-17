@@ -11,10 +11,10 @@ import compiler.semantic.SemanticModel;
 */
 class EditorWorkspaceView {
 	public static function currentExact(state:ModuleState):Null<AnalysisSnapshot>
-		return state.currentExact == null || !state.currentExact.isCurrent(state.revision) ? null : state.currentExact;
+		return state.currentExact == null || !state.currentExact.isCurrent(state.source, state.revision) ? null : state.currentExact;
 
 	public static function currentRecovered(state:ModuleState):Null<AnalysisSnapshot>
-		return state.currentRecovered == null || !state.currentRecovered.isCurrent(state.revision) ? null : state.currentRecovered;
+		return state.currentRecovered == null || !state.currentRecovered.isCurrent(state.source, state.revision) ? null : state.currentRecovered;
 
 	public static function lastGood(state:ModuleState):Null<AnalysisSnapshot>
 		return state.lastGood;

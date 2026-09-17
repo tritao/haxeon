@@ -18,6 +18,9 @@ class SemanticModelMain {
 		var snapshot = AnalysisSnapshot.exact(source, tokens, program, model, 7),
 			snapshotTokens = snapshot.tokens,
 			snapshotTokenCount = snapshotTokens.length;
+		expect(snapshot.isCurrent(source, 7), "analysis snapshot should match its source and revision");
+		expect(!snapshot.isCurrent(new SourceFile("Types.hx", source.text), 7),
+			"analysis snapshot should reject a different source object with the same revision");
 		snapshotTokens.pop();
 		expect(snapshot.tokens.length == snapshotTokenCount,
 			"analysis snapshot token access must not expose mutable publication state");
