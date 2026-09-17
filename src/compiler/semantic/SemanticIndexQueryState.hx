@@ -46,7 +46,7 @@ class SemanticIndexQueryState {
 	private function new(builder:SemanticIndexBuilder) {
 		if (!builder.isFrozen)
 			throw "Semantic query state requires a frozen recovery query";
-		recoveryQuery = new SemanticIndexRecoveryQuery(builder);
+		recoveryQuery = SemanticIndexRecoveryQuery.fromBuilder(builder);
 		revision = builder.revision;
 		indexingMs = builder.indexingMs;
 		symbols = builder.symbols.copy();

@@ -9,25 +9,37 @@ import compiler.semantic.SemanticIndex.SemanticIndexBuilder;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
 import compiler.semantic.SemanticCompletionQuery.SemanticCompletionFacts;
 
+private typedef SemanticIndexRecoveryFacts = {
+	final completionFacts:SemanticCompletionFacts;
+	final directSignatures:Map<String, SemanticSignatureInfo>;
+	final receiverSignatures:Map<String, SemanticSignatureInfo>;
+}
+
 /**
 	Read-only recovery queries over a frozen semantic traversal result.
 
-	Completion and signature queries consume copied facts. Receiver-aware
-	recovered signatures are materialized while the frozen builder is still
-	available, so published queries never retain a construction-time resolver.
+	The builder is used only while `fromBuilder()` materializes this state. The
+	published query keeps no construction-time resolver or mutable traversal
+	workspace reference.
 */
 class SemanticIndexRecoveryQuery {
 	final completionFacts:SemanticCompletionFacts;
-	final recoveredFunctions:Map<String, AstFunction>;
+	final directSignatures:Map<String, SemanticSignatureInfo>;
 	final receiverSignatures:Map<String, SemanticSignatureInfo>;
 
-	public function new(builder:SemanticIndexBuilder) {
+	private function new(facts:SemanticIndexRecoveryFacts) {
+		completionFacts = facts.completionFacts;
+		directSignatures = facts.directSignatures;
+		receiverSignatures = facts.receiverSignatures;
+	}
+
+	public static function fromBuilder(builder:SemanticIndexBuilder):SemanticIndexRecoveryQuery {
 		if (!builder.isFrozen)
 			throw "Recovery query requires a frozen semantic index builder";
-		recoveredFunctions = [];
+		var recoveredFunctions:Map<String, AstFunction> = [];
 		for (name => fn in builder.recoveredFunctions)
 			recoveredFunctions.set(name, fn);
-		completionFacts = {
+		var completionFacts:SemanticCompletionFacts = {
 			locals: [for (local in builder.completionLocals) {
 				name: local.name,
 				type: local.type,
@@ -51,7 +63,17 @@ class SemanticIndexRecoveryQuery {
 			classes: [for (name => declaration in builder.declarations.classes) {name: name, span: declaration.span}],
 			tokens: builder.tokens.copy()
 		};
-		receiverSignatures = [];
+		var directSignatures:Map<String, SemanticSignatureInfo> = [];
+		for (name => fn in recoveredFunctions) {
+			var signature = signatureFromFunction(name, fn);
+			directSignatures.set(name, signature);
+			if (StringTools.endsWith(name, ".new")) {
+				var constructorName = name.substr(0, name.length - ".new".length);
+				if (!directSignatures.exists(constructorName))
+					directSignatures.set(constructorName, signature);
+			}
+		}
+		var receiverSignatures:Map<String, SemanticSignatureInfo> = [];
 		var receiverTypes:Array<CompilerType> = [], seenReceiverTypes:Map<String, Bool> = [];
 		for (receiver in completionFacts.receivers)
 			addReceiverType(receiverTypes, seenReceiverTypes, receiver.type);
@@ -79,18 +101,29 @@ class SemanticIndexRecoveryQuery {
 			if (owner == null)
 				continue;
 			for (member in memberNames)
-				if (hasRecoveredMethod(builder, owner, member, [], methodPresence))
-					materializeSignature(builder, owner + "." + member, receiverType);
+				if (hasRecoveredMethod(builder, owner, member, [], methodPresence)) {
+					var signature = builder.recoveredSignature(owner + "." + member, receiverType);
+					if (signature != null)
+						receiverSignatures.set(signatureKey(owner + "." + member, receiverType), copySignature(signature));
+				}
 			for (name in names) {
 				var separator = name.lastIndexOf(".");
 				if (separator < 1)
 					continue;
 				var declarationOwner = name.substring(0, separator),
 					member = name.substr(separator + 1);
-				if (declarationOwner != owner && hasRecoveredMethod(builder, declarationOwner, member, [], methodPresence))
-					materializeSignature(builder, name, receiverType);
+				if (declarationOwner != owner && hasRecoveredMethod(builder, declarationOwner, member, [], methodPresence)) {
+					var signature = builder.recoveredSignature(name, receiverType);
+					if (signature != null)
+						receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
+				}
 			}
 		}
+		return new SemanticIndexRecoveryQuery({
+			completionFacts: completionFacts,
+			directSignatures: directSignatures,
+			receiverSignatures: receiverSignatures
+		});
 	}
 
 	public function completionContext(position:Int, ?qualifier:String, ?token:CancellationToken):SemanticCompletionContext
@@ -100,20 +133,11 @@ class SemanticIndexRecoveryQuery {
 		// Direct function and constructor signatures do not require receiver
 		// materialization and can be rendered directly from copied declarations.
 		if (receiverType == null) {
-			var fn = recoveredFunctions.get(name);
-			if (fn == null)
-				fn = recoveredFunctions.get(name + ".new");
-			if (fn != null) {
-				var parameters = [for (argument in fn.arguments)
-					argument.name + ":" + displayAstType(argument.type)],
-					labelName = name.lastIndexOf(".") < 0 ? name : name.substr(name.lastIndexOf(".") + 1),
-					result = displayAstType(fn.result);
-				return {
-					label: labelName + "(" + parameters.join(",") + "):" + result,
-					parameters: parameters,
-					result: result
-				};
-			}
+			var direct = directSignatures.get(name);
+			if (direct == null)
+				direct = directSignatures.get(name + ".new");
+			if (direct != null)
+				return copySignature(direct);
 		}
 		if (receiverType != null) {
 			var cached = receiverSignatures.get(signatureKey(name, receiverType));
@@ -172,12 +196,6 @@ class SemanticIndexRecoveryQuery {
 			case TInstance(_, name, _), TAbstract(name, _, _): name;
 			default: null;
 		};
-
-	function materializeSignature(builder:SemanticIndexBuilder, name:String, receiverType:CompilerType):Void {
-		var signature = builder.recoveredSignature(name, receiverType);
-		if (signature != null)
-			receiverSignatures.set(signatureKey(name, receiverType), copySignature(signature));
-	}
 
 	static function hasRecoveredMethod(builder:SemanticIndexBuilder, owner:String, member:String, visiting:Array<String>, memo:Map<String, Bool>):Bool {
 		if (visiting.indexOf(owner) >= 0)
@@ -246,6 +264,18 @@ class SemanticIndexRecoveryQuery {
 
 	static function signatureKey(name:String, receiverType:CompilerType):String
 		return name + "\u0000" + Std.string(receiverType);
+
+	static function signatureFromFunction(name:String, fn:AstFunction):SemanticSignatureInfo {
+		var parameters = [for (argument in fn.arguments)
+			argument.name + ":" + displayAstType(argument.type)],
+			labelName = name.lastIndexOf(".") < 0 ? name : name.substr(name.lastIndexOf(".") + 1),
+			result = displayAstType(fn.result);
+		return {
+			label: labelName + "(" + parameters.join(",") + "):" + result,
+			parameters: parameters,
+			result: result
+		};
+	}
 
 	static function copySignature(signature:SemanticSignatureInfo):SemanticSignatureInfo
 		return {
