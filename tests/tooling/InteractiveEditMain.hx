@@ -1,4 +1,5 @@
 import compiler.Source.SourceSpan;
+import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.TextEdit;
 
@@ -106,8 +107,9 @@ class InteractiveEditMain {
 		assertIdentityResolutionClosure();
 		assertNavigationClosure();
 		assertRenameClosure();
+		assertLifecycleStress();
 
-		Sys.println('PASS: ${tails.length + 14} interactive edits retained recovery queries');
+		Sys.println('PASS: ${tails.length + 15} interactive edits retained recovery queries');
 	}
 
 	static function assertRecoveryMatrix():Void {
@@ -422,6 +424,178 @@ class InteractiveEditMain {
 		}
 		if (!foundFirst || !foundSecond)
 			throw 'rename closure omitted an affected file for $label: first=$foundFirst, second=$foundSecond';
+	}
+
+	static function assertLifecycleStress():Void {
+		var rapidService = new LanguageService(),
+			rapidPath = "lifecycle/rapid/Main.hx",
+			rapidModule = "lifecycle.rapid.Main",
+			rapidValid = "package lifecycle.rapid; class Box { public var member:Int; } function main():Int { var box:Box = new Box(); return box.member; }",
+			rapidMalformed = "package lifecycle.rapid; class Box { public var member:Int; } function main():Int { var box:Box = new Box(); return box.;",
+			rapidRepaired = "package lifecycle.rapid; class Box { public var member:Int; } function main():Int { var box:Box = new Box(); return box.member + 1; }",
+			lastRevision = 0;
+
+		for (source in [rapidValid, rapidMalformed, rapidRepaired, rapidMalformed, rapidValid]) {
+			var state = rapidService.update(rapidPath, source);
+			if (state.revision <= lastRevision)
+				throw 'rapid edit sequence did not advance revisions: previous=$lastRevision current=${state.revision}';
+			lastRevision = state.revision;
+			assertSnapshotCoherent(state, "rapid edit");
+			if (state.currentExact != null)
+				throw "editor update exposed an exact snapshot before analysis completed";
+			if (state.currentRecovered == null
+				|| state.currentRecovered.source != state.source
+				|| state.currentRecovered.revision != state.revision)
+				throw "rapid editor update did not publish a current recovered snapshot";
+			if (source == rapidMalformed) {
+				if (state.lastGood == null || state.lastGood.revision >= state.revision)
+					throw "malformed edit lost or replaced the last-good snapshot";
+				continue;
+			}
+
+			rapidService.analyze(rapidModule);
+			state = rapidService.compiler.modules.get(rapidModule);
+			if (state == null || state.currentExact == null
+				|| state.currentExact.source != state.source
+				|| state.currentExact.revision != state.revision)
+				throw "repaired edit did not publish a coherent exact snapshot";
+			assertSnapshotCoherent(state, "repaired rapid edit");
+		}
+
+		var service = new LanguageService(),
+			basePath = "lifecycle/core/Base.hx",
+			childPath = "lifecycle/core/Child.hx",
+			consumerPath = "lifecycle/app/Main.hx",
+			baseV1 = "package lifecycle.core; class Base { public var member:Int; public function new() {} public function value():Int return 1; } function main():Void return;",
+			baseBodyEdit = "package lifecycle.core; class Base { public var member:Int; public function new() {} public function value():Int return 2; } function main():Void return;",
+			baseSignatureEdit = "package lifecycle.core; class Base { public var member:Int; public function new() {} public function value():String return \"changed\"; } function main():Void return;",
+			baseShapeEdit = "package lifecycle.core; class Base { public function new() {} public function value():Int return 3; } function main():Void return;",
+			child = "package lifecycle.core; import lifecycle.core.Base; class Child extends Base { public function new() { super(); } } function main():Void return;",
+			consumer = "package lifecycle.app; import lifecycle.core.Child; function main():Int { var value:Child = new Child(); var inherited:Int = value.member; return value.value() + inherited; }";
+
+		service.update(basePath, baseV1);
+		service.update(childPath, child);
+		service.update(consumerPath, consumer);
+		service.compile("lifecycle.app.Main");
+		var baselineConsumer = service.compiler.modules.get("lifecycle.app.Main"),
+			baselineSnapshot = baselineConsumer == null ? null : baselineConsumer.currentExact,
+			memberPosition = consumer.indexOf("value.member") + "value.".length,
+			baselineDefinition = service.definition(consumerPath, memberPosition);
+		if (baselineConsumer == null || baselineSnapshot == null || baselineSnapshot.semanticModel == null
+			|| baselineDefinition == null || baselineDefinition.path != basePath)
+			throw "lifecycle fixture did not establish an exact inherited dependency snapshot";
+		assertSnapshotCoherent(baselineConsumer, "lifecycle baseline consumer");
+
+		service.update(basePath, baseBodyEdit);
+		var bodyAnalysis = service.analyze("lifecycle.app.Main"),
+			bodyConsumer = service.compiler.modules.get("lifecycle.app.Main"),
+			bodyDefinition = service.definition(consumerPath, memberPosition);
+		if (bodyConsumer == null
+			|| bodyConsumer.currentExact == null
+			|| baselineSnapshot == null
+			|| bodyConsumer.currentExact.semanticModel == null
+			|| baselineSnapshot.semanticModel == null
+			|| bodyConsumer.currentExact.semanticModel.index != baselineSnapshot.semanticModel.index
+			|| bodyAnalysis.invalidatedModules.indexOf("lifecycle.app.Main") >= 0
+			|| bodyDefinition == null || bodyDefinition.path != basePath)
+			throw 'body-only dependency edit rebuilt or disconnected the consumer: invalidated=${bodyAnalysis.invalidatedModules.join(",")}, retyped=${bodyAnalysis.retyped.join(",")}, definition=${bodyDefinition == null ? "null" : bodyDefinition.path}';
+		assertSnapshotCoherent(bodyConsumer, "body-only consumer");
+		var stableConsumerSnapshot = bodyConsumer.currentExact;
+
+		service.update(basePath, baseSignatureEdit);
+		var signatureFailed = false;
+		try {
+			service.analyze("lifecycle.app.Main");
+		} catch (_:compiler.Diagnostic.CompileError) {
+			signatureFailed = true;
+		}
+		if (!signatureFailed)
+			throw "signature edit unexpectedly published a type-correct consumer";
+		var signatureConsumer = service.compiler.modules.get("lifecycle.app.Main");
+		if (signatureConsumer == null)
+			throw "signature edit removed the consumer module";
+		assertSnapshotCoherent(signatureConsumer, "failed signature edit consumer");
+		if (signatureConsumer.currentExact != stableConsumerSnapshot)
+			throw "failed signature analysis replaced the consumer exact snapshot";
+
+		service.update(basePath, baseShapeEdit);
+		var shapeFailed = false;
+		var shapeAnalysis:Null<compiler.Compiler.AnalysisResult> = null;
+		try {
+			shapeAnalysis = service.analyze("lifecycle.app.Main");
+		} catch (_:compiler.Diagnostic.CompileError) {
+			shapeFailed = true;
+		}
+		if (!shapeFailed)
+			throw 'base-shape edit unexpectedly retained a removed inherited member: invalidated=${shapeAnalysis == null ? "null" : shapeAnalysis.invalidatedModules.join(",")}, retyped=${shapeAnalysis == null ? "null" : shapeAnalysis.retyped.join(",")}';
+		var shapeConsumer = service.compiler.modules.get("lifecycle.app.Main");
+		if (shapeConsumer == null)
+			throw "base-shape edit removed the consumer module";
+		assertSnapshotCoherent(shapeConsumer, "failed base-shape edit consumer");
+		if (shapeConsumer.currentExact != stableConsumerSnapshot)
+			throw "failed base-shape analysis replaced the consumer exact snapshot";
+
+		service.update(basePath, baseV1);
+		service.analyze("lifecycle.app.Main");
+		var repairedBase = service.compiler.modules.get("lifecycle.core.Base"),
+			repairedChild = service.compiler.modules.get("lifecycle.core.Child"),
+			repairedConsumer = service.compiler.modules.get("lifecycle.app.Main");
+		if (repairedBase == null || repairedChild == null || repairedConsumer == null
+			|| repairedBase.currentExact == null || repairedChild.currentExact == null
+			|| repairedConsumer.currentExact == null)
+			throw "repair after dependency invalidation did not republish all exact snapshots";
+		assertSnapshotCoherent(repairedBase, "repaired base");
+		assertSnapshotCoherent(repairedChild, "repaired child");
+		assertSnapshotCoherent(repairedConsumer, "repaired consumer");
+		var repairedDefinition = service.definition(consumerPath, memberPosition);
+		if (repairedDefinition == null || repairedDefinition.path != basePath)
+			throw "repair after dependency invalidation did not restore inherited navigation";
+
+		var beforeCancellation = repairedConsumer.currentExact,
+			cancelled = new CancellationToken();
+		cancelled.cancel();
+		var analysisCancelled = false;
+		try {
+			service.analyze("lifecycle.app.Main", cancelled);
+		} catch (_:compiler.service.CancellationError) {
+			analysisCancelled = true;
+		}
+		if (!analysisCancelled)
+			throw "cancelled analysis unexpectedly completed";
+		var afterAnalysisCancellation = service.compiler.modules.get("lifecycle.app.Main");
+		if (afterAnalysisCancellation == null || afterAnalysisCancellation.currentExact != beforeCancellation)
+			throw "cancelled analysis published a replacement snapshot";
+		assertSnapshotCoherent(afterAnalysisCancellation, "cancelled analysis");
+
+		var renameCancelled = false;
+		try {
+			service.rename(consumerPath, memberPosition, "renamed", cancelled);
+		} catch (_:compiler.service.CancellationError) {
+			renameCancelled = true;
+		}
+		if (!renameCancelled)
+			throw "cancelled rename unexpectedly completed";
+		var afterRenameCancellation = service.compiler.modules.get("lifecycle.app.Main");
+		if (afterRenameCancellation == null || afterRenameCancellation.currentExact != beforeCancellation)
+			throw "cancelled rename changed the published snapshot";
+		assertSnapshotCoherent(afterRenameCancellation, "cancelled rename");
+	}
+
+	static function assertSnapshotCoherent(state:compiler.modules.ModuleState, label:String):Void {
+		for (snapshot in [state.currentExact, state.currentRecovered, state.lastGood]) {
+			if (snapshot == null)
+				continue;
+			if (snapshot.semanticModel != null
+				&& (snapshot.semanticModel.source != snapshot.source
+					|| snapshot.semanticModel.revision != snapshot.revision))
+				throw '$label published a mixed source/model revision';
+			if (snapshot.kind == compiler.modules.AnalysisSnapshot.AnalysisSnapshotKind.Exact
+				&& snapshot.stale)
+				throw '$label marked an exact snapshot stale';
+			if (snapshot.kind == compiler.modules.AnalysisSnapshot.AnalysisSnapshotKind.Recovered
+				&& !snapshot.recovered)
+				throw '$label marked a recovered snapshot as exact';
+		}
 	}
 
 	static function assertCompoundRecoveryEquivalence():Void {

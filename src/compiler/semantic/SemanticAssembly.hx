@@ -520,11 +520,18 @@ class SemanticAssembly {
 			for (fn in functions)
 				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
 		} else {
-			for (change in structuralChanged.keys()) {
-				var changedDependency:String = change,
+			var structuralWork:Array<String> = [for (change in structuralChanged.keys()) change],
+				structuralCursor = 0,
+				seenStructuralTargets:Map<String, Bool> = [];
+			while (structuralCursor < structuralWork.length) {
+				var change = structuralWork[structuralCursor++],
+					changedDependency:String = change,
 					separator = changedDependency.indexOf(":"),
 					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length),
 					targetId = context.resolveSemanticType(target);
+				if (seenStructuralTargets.exists(target))
+					continue;
+				seenStructuralTargets.set(target, true);
 				if (targetId == null)
 					targetId = context.resolveSemanticSymbol(target);
 				for (moduleName in names) {
@@ -545,10 +552,18 @@ class SemanticAssembly {
 										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target, targetId, Std.string(dependency.kind));
 										matchedFunction = true;
 									}
+								// A base/interface layout change first invalidates the derived
+								// type. Treat that derived type as a new structural change so
+								// consumers of the derived type are invalidated as well. Without
+								// this second hop, a consumer can retain a stale inherited member
+								// view even though the derived class was retyped.
+								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout
+									&& !seenStructuralTargets.exists(functionOwner))
+									structuralWork.push(functionOwner);
 								if (matchedFunction)
 									break;
 							}
-						}
+					}
 				}
 			}
 		}
