@@ -1260,6 +1260,15 @@ class LanguageServiceMain {
 			staticMethodImplementations = staticMemberService.implementations("staticfamily/Base.hx", staticMemberBase.indexOf("make") + 1);
 		if (staticFieldImplementations.length != 0 || staticMethodImplementations.length != 0)
 			throw 'static member navigation incorrectly crossed a derived shadow: field=${staticFieldImplementations.length}, method=${staticMethodImplementations.length}';
+		staticMemberService.update("staticfamily/Child.hx",
+			"package staticfamily; import staticfamily.Base; class Child extends Base { public static var value:Int; public static function make():Int return value; }");
+		staticMemberService.update("staticapp/Main.hx",
+			"package staticapp; import staticfamily.Base; import staticfamily.Child; function main():Int return Base.value + Base.make() + Child.value + Child.make();");
+		staticMemberService.compile("staticapp.Main");
+		var staticFieldReferences = staticMemberService.references("staticfamily/Base.hx", staticMemberBase.indexOf("value") + 1),
+			staticMethodReferences = staticMemberService.references("staticfamily/Base.hx", staticMemberBase.indexOf("make") + 1);
+		if (staticFieldReferences.length != 3 || staticMethodReferences.length != 2)
+			throw 'static member references crossed a derived shadow: field=${staticFieldReferences.length}, method=${staticMethodReferences.length}';
 		var aliasedInheritanceService = new LanguageService(),
 			aliasedInheritanceBase = "package aliased.base; class Base { public var inherited:Int; public function run():Int return 1; }",
 			aliasedInheritanceAlias = "package aliased.base; typedef Parent = Base; function main():Void return;",
