@@ -2849,8 +2849,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function appendLinearSplitPart(builder:WasmFunctionBuilder, source:WasmLocalRef, result:WasmLocalRef, data:WasmLocalRef,
-			count:WasmLocalRef, start:WasmLocalRef, end:WasmLocalRef, part:WasmLocalRef, substring:Int):Void {
+	static function appendLinearSplitPart(builder:WasmFunctionBuilder, source:WasmLocalRef, result:WasmLocalRef, data:WasmLocalRef, count:WasmLocalRef,
+			start:WasmLocalRef, end:WasmLocalRef, part:WasmLocalRef, substring:Int):Void {
 		builder.localGet(source);
 		builder.localGet(start);
 		builder.localGet(end);
