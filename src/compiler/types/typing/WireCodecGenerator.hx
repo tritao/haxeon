@@ -12,6 +12,7 @@ import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypeRelations;
+import compiler.runtime.RuntimeType;
 import compiler.types.typing.TypingSession.WireCodecRequest;
 
 private typedef WireField = {
@@ -131,10 +132,10 @@ class WireCodecGenerator {
 
 	static function isRequestType(session:TypingSession, type:CompilerType):Bool
 		return switch type {
-			case TInt, TFloat, TBool, TString, TBytes: true;
+			case TInt, TInt64, TFloat, TBool, TString, TBytes: true;
 			case TNullable(element): isRequestType(session, element);
-			case TArray(element): isRequestType(session, element);
-			case TMap(key, value): isMapKeyType(session, key) && isRequestType(session, value);
+			case TArray(element): isRequestType(session, element) && RuntimeType.arrayName(element) != null;
+			case TMap(key, value): isMapKeyType(session, key) && isRequestType(session, value) && RuntimeType.mapName(key, value) != null;
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			case TInstance(NominalKind.Enum, name, arguments): arguments.length == 0 && isWireEnum(session, name);
 			default: false;
@@ -580,6 +581,7 @@ class WireCodecGenerator {
 	static function decoder(type:CompilerType, request:WireCodecRequest):TypedFunction {
 		var readerType = classType(READER),
 			readerName = "__wire_reader",
+			resultName = "__wire_result",
 			bytes = local("bytes", TBytes, request.span),
 			reader = local(readerName, readerType, request.span),
 			statements:Array<TypedStatement> = [
@@ -587,9 +589,14 @@ class WireCodecGenerator {
 					                                      bytes, intLiteral(DEFAULT_MAX_CONTAINER, request.span),
 					intLiteral(DEFAULT_MAX_DEPTH, request.span),     intLiteral(DEFAULT_MAX_BYTES, request.span)
 				],
-					true), readerType,
-					request.span), request.span),
-				TReturn(new TypedExpression(TCall(valueDecodeName(type), [reader]), type, request.span), request.span)
+					true),
+					readerType, request.span),
+					request.span),
+				TVar(resultName, new TypedExpression(TCall(valueDecodeName(type), [reader]), type, request.span), request.span),
+				TIf(new TypedExpression(TNot(method(reader, "atEnd", [], TBool, request.span)), TBool, request.span), [
+					TThrow(stringLiteral("MessagePack value has trailing bytes", request.span), request.span)
+				], [], request.span),
+				TReturn(local(resultName, type, request.span), request.span)
 			];
 		return generatedFunction(decodeName(type), [{name: "bytes", type: TBytes}], type, statements, request);
 	}
@@ -680,6 +687,7 @@ class WireCodecGenerator {
 	static function defaultValue(type:CompilerType, enums:Map<String, TypedEnum>, span:SourceSpan):TypedExpression
 		return switch type {
 			case TInt: intLiteral(0, span);
+			case TInt64: new TypedExpression(TCall("haxe.Int64.ofInt", [intLiteral(0, span)]), TInt64, span);
 			case TFloat: new TypedExpression(TFloatLiteral(0.0), TFloat, span);
 			case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
 			case TString: stringLiteral("", span);
@@ -707,6 +715,7 @@ class WireCodecGenerator {
 	static function primitiveMethod(type:CompilerType):Null<String>
 		return switch type {
 			case TInt: "writeInt";
+			case TInt64: "writeInt64";
 			case TFloat: "writeFloat";
 			case TBool: "writeBool";
 			case TString: "writeString";
@@ -717,6 +726,7 @@ class WireCodecGenerator {
 	static function primitiveReadMethod(type:CompilerType):Null<String>
 		return switch type {
 			case TInt: "readInt";
+			case TInt64: "readInt64";
 			case TFloat: "readFloat";
 			case TBool: "readBool";
 			case TString: "readString";
@@ -774,6 +784,7 @@ class WireCodecGenerator {
 	static function typeKey(type:CompilerType):String
 		return switch type {
 			case TInt: "int";
+			case TInt64: "int64";
 			case TFloat: "float";
 			case TBool: "bool";
 			case TString: "string";

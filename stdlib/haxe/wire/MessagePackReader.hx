@@ -94,7 +94,39 @@ class MessagePackReader {
 			case 0xd2:
 				return input.readInt32();
 			case 0xcf, 0xd3:
-				throw new MessagePackError("MessagePack Int64 requires a typed Int64 codec");
+				throw new MessagePackError("MessagePack Int64 requires readInt64");
+			default:
+				unexpected(marker, "integer");
+		}
+	}
+
+	/** Reads signed MessagePack integers into a Haxe Int64. */
+	public function readInt64():haxe.Int64 {
+		var marker = readByte();
+		if (marker <= 0x7f)
+			return haxe.Int64.ofInt(marker);
+		if (marker >= 0xe0)
+			return haxe.Int64.ofInt(marker - 0x100);
+		switch marker {
+			case 0xcc:
+				return haxe.Int64.ofInt(readUInt8());
+			case 0xcd:
+				return haxe.Int64.ofInt(readUInt16());
+			case 0xce:
+				return haxe.Int64.make(0, input.readInt32());
+			case 0xcf:
+				var high = input.readInt32(), low = input.readInt32();
+				if (high < 0)
+					throw new MessagePackError("MessagePack uint64 does not fit in signed Haxe Int64");
+				return haxe.Int64.make(high, low);
+			case 0xd0:
+				return haxe.Int64.ofInt(signedByte(readByte()));
+			case 0xd1:
+				return haxe.Int64.ofInt(signed16(readUInt16()));
+			case 0xd2:
+				return haxe.Int64.ofInt(input.readInt32());
+			case 0xd3:
+				return haxe.Int64.make(input.readInt32(), input.readInt32());
 			default:
 				unexpected(marker, "integer");
 		}

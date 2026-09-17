@@ -8,7 +8,11 @@ runtime.
 ## Current profile
 
 - `Int` is encoded using MessagePack's compact integer markers and is limited
-  to the Haxe `Int` range. Int64 support belongs in a separate typed codec.
+  to the Haxe `Int` range. `haxe.Int64` uses the same compact markers when the
+  value fits in `Int`, and otherwise uses signed MessagePack `int64`. The
+  compiler-owned collection ABI currently supports `Int64` as a scalar field or
+  value, not as a direct array/map storage element; use a custom codec for a
+  different in-memory representation.
 - `Float` is written as float64. The reader accepts both float32 and float64.
 - `String` is UTF-8 text; `Bytes` is MessagePack binary data.
 - Arrays, maps, and application-defined extension values are available as
@@ -19,6 +23,15 @@ runtime.
 The writer and reader intentionally do not expose a `Dynamic` value API. A
 generated or hand-written codec chooses the wire shape and calls the matching
 primitive methods. `MessagePackCodec<T>` is the boundary for such codecs.
+Values outside the compiler-owned profile can use the explicit escape hatch:
+
+```haxe
+var bytes = MessagePack.encodeWith(value, codec);
+var decoded:CustomType = MessagePack.decodeWith(bytes, codec);
+```
+
+`encodeWith` and `decodeWith` construct bounded writer/reader instances and
+apply the same one-value rule as generated codecs.
 
 The compiler also recognizes `MessagePack.encode(value)` and
 `MessagePack.decode(bytes)` (or their fully-qualified names). Mark a plain
@@ -38,7 +51,7 @@ var decoded:User = MessagePack.decode(bytes);
 ```
 
 The initial compiler profile supports non-generic, non-inheriting records with
-directly stored `Int`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
+directly stored `Int`, `Int64`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
 nullable versions of those types, arrays of supported values, and nested
 `@:wire` records. Every instance field requires one positive, unique
 `@:wireId(n)` annotation. Fields are encoded as an integer-keyed map sorted by
@@ -57,6 +70,28 @@ produce deterministic output, while missing map fields receive an empty map.
 `@:wireId` to an array of constructor arguments. Unknown constructor IDs and
 malformed payloads are rejected. Payload-bearing enums remain unsupported as
 map keys because their values are not unique by constructor index.
+
+## Compatibility rules
+
+Generated records and maps have deterministic output: record fields are sorted
+by positive `@:wireId`, string map keys lexicographically, integer keys
+numerically, and nullary enum keys by their stable constructor ID. The writer
+also selects the shortest legal integer, string, array, and map marker for each
+value. These rules are covered by exact byte-vector tests and are intended to
+remain stable across HashLink and Wasm backends.
+
+Decoding is permissive about field order and unknown record fields. Missing
+fields receive the documented defaults. If a map or record contains a duplicate
+key/field ID, the last occurrence wins. A top-level generated decode and
+`decodeWith` must consume exactly one value; trailing bytes are rejected. The
+low-level reader remains stream-oriented, so callers using it directly may
+decode multiple consecutive values.
+
+`readInt64()` accepts signed integer markers and unsigned `uint64` values only
+when the unsigned value fits in signed `haxe.Int64`; `readInt()` continues to
+reject 64-bit markers instead of silently narrowing them. A transport should
+still add framing when it carries more than one value or needs message
+boundaries independent of the payload.
 
 ## Example shape
 

@@ -62,6 +62,20 @@ class MessagePackWriter {
 		}
 	}
 
+	/** Writes a signed Haxe Int64 using the smallest MessagePack integer shape. */
+	public function writeInt64(value:haxe.Int64):Void {
+		var minimum = haxe.Int64.ofInt(-2147483648),
+			maximum = haxe.Int64.ofInt(2147483647);
+		if (haxe.Int64.compare(value, minimum) >= 0 && haxe.Int64.compare(value, maximum) <= 0) {
+			writeInt(haxe.Int64.toInt(value));
+			return;
+		}
+		writeByte(0xd3);
+		reserve(8);
+		output.writeInt32(haxe.Int64.toInt(haxe.Int64.ushr(value, 32)));
+		output.writeInt32(haxe.Int64.toInt(value));
+	}
+
 	/** Writes a MessagePack float64 value. */
 	public function writeFloat(value:Float):Void {
 		writeByte(0xcb);
