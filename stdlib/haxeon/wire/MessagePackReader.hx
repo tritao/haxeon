@@ -1,8 +1,8 @@
-package haxe.wire;
+package haxeon.wire;
 
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
-import haxe.wire.MessagePackError;
+import haxeon.wire.MessagePackError;
 
 typedef MessagePackExtension = {
 	final type:Int;

@@ -740,14 +740,14 @@ class CallResolver {
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
-		if (name == "MessagePack.encode" || name == "haxe.wire.MessagePack.encode") {
+		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
 			WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(WireCodecGenerator.encodeName(value.type), [value]), TBytes, span);
 		}
-		if (name == "MessagePack.decode" || name == "haxe.wire.MessagePack.decode") {
+		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			if (expectedType == null || expectedType == TNull)

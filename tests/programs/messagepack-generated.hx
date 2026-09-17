@@ -1,6 +1,6 @@
-import haxe.wire.MessagePack;
-import haxe.wire.MessagePackReader;
-import haxe.wire.MessagePackWriter;
+import haxeon.wire.MessagePack;
+import haxeon.wire.MessagePackReader;
+import haxeon.wire.MessagePackWriter;
 
 @:wire
 class WireUser {

@@ -1,6 +1,6 @@
 import haxe.Int64;
-import haxe.wire.MessagePack;
-import haxe.wire.MessagePackWriter;
+import haxeon.wire.MessagePack;
+import haxeon.wire.MessagePackWriter;
 
 @:wire
 class WasmWireNumbers {

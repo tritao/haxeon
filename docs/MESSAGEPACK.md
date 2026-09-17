@@ -1,9 +1,16 @@
 # MessagePack wire layer
 
-The `haxe.wire` package is the low-level wire layer for stable, typed
+The `haxeon.wire` package is the low-level wire layer for stable, typed
 serialization. It is deliberately separate from `haxe.Serializer`: codecs
 should describe the schema of a value instead of walking an object graph at
 runtime.
+
+## Frozen v1 public API
+
+The frozen v1 surface is the `haxeon.wire.*` package, the `@:wire` type
+metadata, and the `@:id(n)` field or enum-constructor metadata. There are no
+compatibility aliases for the pre-v1 names. These names and the canonical byte
+rules below are the public serialization contract.
 
 ## Current profile
 
@@ -38,6 +45,8 @@ The compiler also recognizes `MessagePack.encode(value)` and
 record with `@:wire` to have those calls lowered to type-specific functions:
 
 ```haxe
+import haxeon.wire.MessagePack;
+
 @:wire
 class User {
 	@:id(1)
@@ -113,6 +122,10 @@ boundaries independent of the payload.
 A generated codec for a record uses a map with numeric field IDs:
 
 ```haxe
+import haxeon.wire.MessagePackCodec;
+import haxeon.wire.MessagePackReader;
+import haxeon.wire.MessagePackWriter;
+
 class UserCodec implements MessagePackCodec<User> {
 	public function encode(writer:MessagePackWriter, value:User):Void {
 		writer.writeMapHeader(2);
@@ -139,7 +152,7 @@ class UserCodec implements MessagePackCodec<User> {
 ```
 
 MessagePack is a value encoding, not a stream framing protocol. For a simple
-transport boundary, `haxe.wire.MessagePackFrame` provides a fixed versioned
+transport boundary, `haxeon.wire.MessagePackFrame` provides a fixed versioned
 envelope:
 
 ```text
@@ -153,6 +166,8 @@ MessagePack value but does not replace `MessagePack.decode`'s exact-value
 validation:
 
 ```haxe
+import haxeon.wire.MessagePackFrame;
+
 var frame = MessagePackFrame.pack(MessagePack.encode(user));
 var bytes = MessagePackFrame.unpack(frame);
 var decoded:User = MessagePack.decode(bytes);

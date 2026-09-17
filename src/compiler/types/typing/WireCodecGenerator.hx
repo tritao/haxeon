@@ -35,8 +35,8 @@ class WireCodecGenerator {
 	static inline final INT_COMPARE_NAME:String = "$wire:map-int-compare";
 	static inline final STRING_COMPARE_NAME:String = "$wire:map-string-compare";
 	static inline final ENUM_COMPARE_PREFIX:String = "$wire:map-enum-compare:";
-	static inline final WRITER:String = "haxe.wire.MessagePackWriter";
-	static inline final READER:String = "haxe.wire.MessagePackReader";
+	static inline final WRITER:String = "haxeon.wire.MessagePackWriter";
+	static inline final READER:String = "haxeon.wire.MessagePackReader";
 	static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
 	static inline final DEFAULT_MAX_CONTAINER:Int = 1000000;
 	static inline final DEFAULT_MAX_DEPTH:Int = 64;
@@ -312,7 +312,7 @@ class WireCodecGenerator {
 	static function stringComparator(request:WireCodecRequest):TypedFunction {
 		var left = local("left", TString, request.span),
 			right = local("right", TString, request.span),
-			result = new TypedExpression(TCall("haxe.wire.MessagePackWriter.compareUtf8", [left, right]), TInt, request.span);
+			result = new TypedExpression(TCall("haxeon.wire.MessagePackWriter.compareUtf8", [left, right]), TInt, request.span);
 		return generatedFunction(STRING_COMPARE_NAME, [{name: "left", type: TString}, {name: "right", type: TString}], TInt, [TReturn(result, request.span)],
 			request);
 	}

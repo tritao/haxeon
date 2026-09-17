@@ -1,5 +1,5 @@
-import haxe.wire.MessagePack;
-import haxe.wire.MessagePackWriter;
+import haxeon.wire.MessagePack;
+import haxeon.wire.MessagePackWriter;
 
 @:wire
 enum WasmWireKind {

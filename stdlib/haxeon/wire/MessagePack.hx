@@ -1,9 +1,9 @@
-package haxe.wire;
+package haxeon.wire;
 
 import haxe.io.Bytes;
-import haxe.wire.MessagePackReader;
-import haxe.wire.MessagePackWriter;
-import haxe.wire.MessagePackCodec;
+import haxeon.wire.MessagePackReader;
+import haxeon.wire.MessagePackWriter;
+import haxeon.wire.MessagePackCodec;
 
 /**
 	Compiler-owned entry point for typed MessagePack codecs.

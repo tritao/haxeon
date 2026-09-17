@@ -1,4 +1,4 @@
-package haxe.wire;
+package haxeon.wire;
 
 /** Error raised when a MessagePack value is malformed or exceeds a limit. */
 class MessagePackError extends haxe.Exception {

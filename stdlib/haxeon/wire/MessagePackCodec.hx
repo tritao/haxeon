@@ -1,4 +1,4 @@
-package haxe.wire;
+package haxeon.wire;
 
 /**
 	The contract emitted by a typed MessagePack codec generator.

@@ -1,8 +1,8 @@
 import haxe.Int64;
 import haxe.io.Bytes;
-import haxe.wire.MessagePackFrame;
-import haxe.wire.MessagePackReader;
-import haxe.wire.MessagePackWriter;
+import haxeon.wire.MessagePackFrame;
+import haxeon.wire.MessagePackReader;
+import haxeon.wire.MessagePackWriter;
 import sys.io.File;
 
 typedef MessagePackVector = {

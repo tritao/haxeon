@@ -1,5 +1,5 @@
 import haxe.io.Bytes;
-import haxe.wire.MessagePackReader;
+import haxeon.wire.MessagePackReader;
 
 function main():Int {
 	if (!rejects(function() new MessagePackReader(raw([0xd3, 0x00])).readInt64()))

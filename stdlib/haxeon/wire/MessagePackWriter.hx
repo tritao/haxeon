@@ -1,8 +1,8 @@
-package haxe.wire;
+package haxeon.wire;
 
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
-import haxe.wire.MessagePackError;
+import haxeon.wire.MessagePackError;
 
 /**
 	Small, deterministic MessagePack writer for typed codecs.

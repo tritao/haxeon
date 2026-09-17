@@ -1,10 +1,10 @@
 import haxe.Int64;
 import haxe.io.Bytes;
-import haxe.wire.MessagePack;
-import haxe.wire.MessagePackCodec;
-import haxe.wire.MessagePackFrame;
-import haxe.wire.MessagePackReader;
-import haxe.wire.MessagePackWriter;
+import haxeon.wire.MessagePack;
+import haxeon.wire.MessagePackCodec;
+import haxeon.wire.MessagePackFrame;
+import haxeon.wire.MessagePackReader;
+import haxeon.wire.MessagePackWriter;
 
 @:wire
 class WireNumbers {

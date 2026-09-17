@@ -1,4 +1,4 @@
-package haxe.wire;
+package haxeon.wire;
 
 import haxe.io.Bytes;
 
