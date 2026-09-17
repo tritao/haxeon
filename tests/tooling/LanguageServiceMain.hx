@@ -883,7 +883,7 @@ class LanguageServiceMain {
 			throw 'recovered inherited-member navigation failed in a malformed module: definition=${recoveredInheritedDefinition == null ? "null" : recoveredInheritedDefinition.path}, references=${recoveredInheritedReferences.length}';
 		var recoveredGenericInheritanceService = new LanguageService(),
 			recoveredGenericInheritanceTarget = "package recovered.generic.base; class Base<T> { public var value:T; public function read():T return value; } function main():Void return;",
-			recoveredGenericInheritanceSource = "package recovered.generic.child; import recovered.generic.base.Base; class Child extends Base<String> { public function probe():String return this.value; public function use(value:Child):Void return value.";
+			recoveredGenericInheritanceSource = "package recovered.generic.child; import recovered.generic.base.Base; class Child extends Base<String> { public function probe():String return this.value + this.read(); public function use(value:Child):Void return value.";
 		recoveredGenericInheritanceService.update("recovered/generic/base/Base.hx", recoveredGenericInheritanceTarget);
 		recoveredGenericInheritanceService.compile("recovered.generic.base.Base");
 		recoveredGenericInheritanceService.update("recovered/generic/child/Child.hx", recoveredGenericInheritanceSource);
@@ -891,6 +891,10 @@ class LanguageServiceMain {
 			recoveredGenericMemberDefinition = recoveredGenericInheritanceService.definition("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
 			recoveredGenericMemberReferences = recoveredGenericInheritanceService.references("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
 			recoveredGenericMemberHover = recoveredGenericInheritanceService.hover("recovered/generic/child/Child.hx", recoveredGenericMemberPosition),
+			recoveredGenericMethodPosition = recoveredGenericInheritanceSource.indexOf("this.read") + "this.".length + 1,
+			recoveredGenericMethodDefinition = recoveredGenericInheritanceService.definition("recovered/generic/child/Child.hx", recoveredGenericMethodPosition),
+			recoveredGenericMethodReferences = recoveredGenericInheritanceService.references("recovered/generic/child/Child.hx", recoveredGenericMethodPosition),
+			recoveredGenericMethodHover = recoveredGenericInheritanceService.hover("recovered/generic/child/Child.hx", recoveredGenericMethodPosition),
 			recoveredGenericCompletion = recoveredGenericInheritanceService.completeResult("recovered/generic/child/Child.hx", recoveredGenericInheritanceSource.length).items,
 			foundRecoveredGenericValue = false;
 		for (item in recoveredGenericCompletion)
@@ -900,8 +904,12 @@ class LanguageServiceMain {
 			|| recoveredGenericMemberDefinition.path != "recovered/generic/base/Base.hx"
 			|| recoveredGenericMemberReferences.length < 2
 			|| recoveredGenericMemberHover != "value:String"
+			|| recoveredGenericMethodDefinition == null || recoveredGenericMethodDefinition.stale
+			|| recoveredGenericMethodDefinition.path != "recovered/generic/base/Base.hx"
+			|| recoveredGenericMethodReferences.length < 2
+			|| recoveredGenericMethodHover != "read():String"
 			|| !foundRecoveredGenericValue)
-			throw 'recovered generic inheritance lost substituted member identity: definition=${recoveredGenericMemberDefinition == null ? "null" : recoveredGenericMemberDefinition.path}, references=${recoveredGenericMemberReferences.length}, hover=${recoveredGenericMemberHover == null ? "null" : recoveredGenericMemberHover}, completion=$foundRecoveredGenericValue';
+			throw 'recovered generic inheritance lost substituted member identity: value=${recoveredGenericMemberDefinition == null ? "null" : recoveredGenericMemberDefinition.path}, valueReferences=${recoveredGenericMemberReferences.length}, valueHover=${recoveredGenericMemberHover == null ? "null" : recoveredGenericMemberHover}, read=${recoveredGenericMethodDefinition == null ? "null" : recoveredGenericMethodDefinition.path}, readReferences=${recoveredGenericMethodReferences.length}, readHover=${recoveredGenericMethodHover == null ? "null" : recoveredGenericMethodHover}, completion=$foundRecoveredGenericValue';
 		var recoveredGenericAliasService = new LanguageService(),
 			recoveredGenericAliasTarget = "package recovered.alias.base; class Box<T> { public var value:T; } typedef BoxAlias<T> = Box<T>; function main():Void return;",
 			recoveredGenericAliasSource = "package recovered.alias.use; import recovered.alias.base.Box.BoxAlias; function use(box:BoxAlias<String>):Void return box. ; function unfinished(";

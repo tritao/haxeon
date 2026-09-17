@@ -2147,8 +2147,10 @@ class LanguageService {
 			indexedId = semantic == null ? model == null ? null : model.index.symbolIdAt(position, token) : semantic.symbol,
 			indexedSignature = indexedId == null ? null : compiler.semanticWorkspace.editorSignature(state, indexedId),
 			indexed = indexedId == null || model == null ? null : model.index.symbol(indexedId),
-			name = indexed == null ? identifierPrefix(snapshot.source, position) : sourceName(indexed.name),
+			name = indexed == null ? identifierTokenName(snapshot.tokens, position) : sourceName(indexed.name),
 			qualifier = memberQualifier(snapshot.source, position);
+		if (name.length == 0)
+			name = identifierPrefix(snapshot.source, position);
 		if (snapshot.recovered && model != null && qualifier != null && name.length > 0) {
 			var context = model.index.completionContext(position, qualifier, token),
 				owner = context == null ? null : typeDeclaration(context.receiver),
@@ -3243,6 +3245,13 @@ class LanguageService {
 		while (start > 0 && isIdentifierPart(source.bytes.get(start - 1)))
 			start--;
 		return source.slice(start, end);
+	}
+
+	static function identifierTokenName(tokens:Array<compiler.syntax.Token>, position:Int):String {
+		for (token in tokens)
+			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
+				return token.text;
+		return "";
 	}
 
 	static function memberQualifier(source:SourceFile, position:Int):Null<String> {
