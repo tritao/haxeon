@@ -1592,6 +1592,52 @@ class LspProtocolMain {
 			|| recoveredAddIncoming.result.length != 1
 			|| recoveredAddIncoming.result[0].from.name != "main")
 			throw 'LSP recovered hierarchy queries did not use the editor snapshot: super=${Json.stringify(recoveredBranchSuper.result)}, incoming=${Json.stringify(recoveredAddIncoming.result)}';
+		var moduleAliasHierarchyService = new LanguageService(),
+			moduleAliasHierarchyProtocol = new LspProtocol(moduleAliasHierarchyService),
+			moduleAliasHierarchyTargetUri = "file:///workspace/modulealias/hierarchy/Container.hx",
+			moduleAliasHierarchyChildUri = "file:///workspace/modulealias/child/Child.hx",
+			moduleAliasHierarchyTarget = "package modulealias.hierarchy; class Root { public function run():Int return 1; } function main():Void return;",
+			moduleAliasHierarchyChild = "package modulealias.child; import modulealias.hierarchy.Container as C; class Child extends C.Root { public function run():Int return 2; } function main():Void { var child:Child = new Child(); child.run(); } function unfinished(",
+			moduleAliasHierarchyTargetDocument = new LspDocument(moduleAliasHierarchyTargetUri,
+				"/workspace/modulealias/hierarchy/Container.hx", 1, moduleAliasHierarchyTarget),
+			moduleAliasHierarchyChildDocument = new LspDocument(moduleAliasHierarchyChildUri,
+				"/workspace/modulealias/child/Child.hx", 1, moduleAliasHierarchyChild);
+		moduleAliasHierarchyProtocol.enableDeferredDiagnostics();
+		moduleAliasHierarchyProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: moduleAliasHierarchyTargetUri, languageId: "haxe", version: 1, text: moduleAliasHierarchyTarget}}
+		}));
+		moduleAliasHierarchyProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {textDocument: {uri: moduleAliasHierarchyChildUri, languageId: "haxe", version: 1, text: moduleAliasHierarchyChild}}
+		}));
+		moduleAliasHierarchyService.analyze("workspace.modulealias.hierarchy.Container");
+		var moduleAliasHierarchyPrepared = request(moduleAliasHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 906,
+			method: "textDocument/prepareTypeHierarchy",
+			params: {textDocument: {uri: moduleAliasHierarchyChildUri}, position: moduleAliasHierarchyChildDocument.position(moduleAliasHierarchyChild.indexOf("Child") + 2)}
+		}));
+		if (moduleAliasHierarchyPrepared.result == null)
+			throw "LSP did not prepare a type hierarchy item through a module alias";
+		var moduleAliasHierarchySuper = request(moduleAliasHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 907,
+			method: "typeHierarchy/supertypes",
+			params: {item: moduleAliasHierarchyPrepared.result[0]}
+		})), moduleAliasHierarchyImplementations = request(moduleAliasHierarchyProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 908,
+			method: "textDocument/implementation",
+			params: {textDocument: {uri: moduleAliasHierarchyTargetUri}, position: moduleAliasHierarchyTargetDocument.position(moduleAliasHierarchyTarget.indexOf("Root") + 1)}
+		}));
+		if (moduleAliasHierarchySuper.result.length != 1
+			|| moduleAliasHierarchySuper.result[0].name != "Root"
+			|| moduleAliasHierarchyImplementations.result.length != 1
+			|| !StringTools.endsWith(moduleAliasHierarchyImplementations.result[0].uri, "/modulealias/child/Child.hx"))
+			throw 'LSP module aliases did not preserve hierarchy identity: super=${Json.stringify(moduleAliasHierarchySuper.result)}, implementations=${Json.stringify(moduleAliasHierarchyImplementations.result)}';
 		if (protocol.handle('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":999}}').length != 0)
 			throw "LSP cancellation notification produced a response";
 		var lifecycle = new LspProtocol(),
