@@ -363,7 +363,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		]);
 		body = body.concat(stringLiteral("Object", outputLocal));
 		body = body.concat(dynamicIntegerString(valueLocal, outputLocal));
-		body = body.concat(rejectDynamicFloatString(valueLocal));
+		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
 		for (enumDecl in plan.program.enums)
 			for (index in 0...enumDecl.cases.length) {
@@ -489,13 +489,20 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function rejectDynamicFloatString(valueLocal:Int):Array<WasmInstruction> {
-		var boxType = plan.boxedPrimitiveType(F64);
+	function dynamicFloatString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(F64),
+			formatter = gc.functions.get("runtime.Ryu.format");
+		if (formatter == null)
+			return [];
 		return [
 			LocalGet(valueLocal),
 			RefTest({nullable: false, heap: Type(boxType)}),
 			If(null),
-			Unreachable,
+			LocalGet(valueLocal),
+			RefCast({nullable: false, heap: Type(boxType)}),
+			StructGet(boxType, 0),
+			Call(formatter),
+			LocalSet(outputLocal),
 			End
 		];
 	}

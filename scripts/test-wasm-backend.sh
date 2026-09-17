@@ -40,6 +40,12 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm-gc --output=out/wasm-gc-cli-ryu-source.wasm --entry=wasm-ryu-source \
 	--root=tests/programs tests/programs/wasm-ryu-source.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
+	--root=tests/programs tests/programs/wasm-std-string-fields.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm-gc --output=out/wasm-gc-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
+	--root=tests/programs tests/programs/wasm-std-string-fields.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -163,6 +169,8 @@ const cases = [
   ["out/wasm-backend-string-ops.wasm", 42],
   ["out/wasm-backend-std-string.wasm", 42],
   ["out/wasm-backend-std-string-i64.wasm", 42],
+	["out/wasm-cli-std-string-fields.wasm", 42],
+	["out/wasm-gc-cli-std-string-fields.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],
@@ -459,7 +467,8 @@ const cases = [
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const messagePackWire = relative.endsWith("wasm-gc-cli-messagepack-wire.wasm");
       const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
-        || relative.endsWith("wasm-gc-cli-ryu-source.wasm");
+        || relative.endsWith("wasm-gc-cli-ryu-source.wasm")
+        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
           || (!ffiBytes && !shortStruct && !messagePackWire && !staticDataRuntime && hasMemory)

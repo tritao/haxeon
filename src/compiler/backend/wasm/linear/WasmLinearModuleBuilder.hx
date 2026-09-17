@@ -110,6 +110,8 @@ class WasmLinearModuleBuilder {
 		var roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
+		if (WasmModuleSupport.hasFunction(program, "runtime.Ryu.format"))
+			roots.push("runtime.Ryu.format");
 		reachable = WasmModuleSupport.reachableFunctions(program, preferredEntry, roots);
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
@@ -130,7 +132,7 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false"])
+		for (value in ["null", "true", "false", "Object"])
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value),
 					offset = nextData;
@@ -256,6 +258,7 @@ class WasmLinearModuleBuilder {
 		exceptionTag = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
 		linear.exceptionTag = exceptionTag;
+		WasmLinearRuntime.finalizeDynamicString(linear);
 		WasmLinearGc.wrapRuntimeFunctions(linear, runtimeFunctionCount);
 		module.exportTable = module.tableMin != null;
 	}

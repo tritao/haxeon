@@ -112,7 +112,7 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							functions.set(native.name, addDynamicString(module, native.name, allocator, strings));
+							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, program));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__std_is_of_type", "__exception_matches":
@@ -3199,10 +3199,12 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>):Int {
+	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram,
+			?floatString:Int):Int {
 		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
 			nullString = requiredStringOffset(strings, "null"),
+			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
 			falseString = requiredStringOffset(strings, "false"),
 			dynamicTypes:Array<IrType> = [I64, F64, Bytes, I32];
@@ -3226,12 +3228,27 @@ class WasmLinearRuntime {
 						builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.call(builder.functionRef(int64String));
 					case F64:
-						builder.emit(Unreachable);
+						if (floatString == null)
+							builder.emit(Unreachable);
+						else {
+							builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+							builder.call(builder.functionRef(floatString));
+						}
 					case Bytes:
 					default:
 						builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.call(builder.functionRef(integerString));
 				}
+				builder.return_();
+			});
+		}
+		for (object in program.objects) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.i32Const(objectString);
 				builder.return_();
 			});
 		}
@@ -3249,8 +3266,26 @@ class WasmLinearRuntime {
 			}, I32);
 			builder.return_();
 		});
-		builder.emit(Unreachable);
+		// Keep dynamic object stringification total. Some objects can arrive
+		// through generated/native boundaries without appearing in the program's
+		// concrete object table; they still follow the standard "Object" fallback.
+		builder.i32Const(objectString);
+		builder.return_();
 		return module.addFunction(builder.finish());
+	}
+
+	/**
+	 * Complete dynamic stringification after user functions have been assigned
+	 * Wasm indices, allowing the runtime helper to call the shared Ryu formatter.
+	 */
+	public static function finalizeDynamicString(context:WasmLinearContext):Void {
+		var dynamicString = context.functions.get("__std_string"),
+			floatString = context.functions.get("runtime.Ryu.format");
+		if (dynamicString == null || floatString == null)
+			return;
+		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction,
+			context.strings, context.program, floatString);
+		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
 	}
 
 	static function addStringEqual(module:WasmModule, name:String):Int {
