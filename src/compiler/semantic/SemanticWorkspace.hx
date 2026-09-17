@@ -1934,6 +1934,22 @@ class SemanticWorkspace {
 	}
 
 	/**
+		Enumerate values that can satisfy an expected enum-abstract type. These
+		come from the editor-visible static-member path, so recovered declarations
+		remain queryable without becoming authoritative workspace state.
+	*/
+	public function editorEnumAbstractValues(from:ModuleState, type:CompilerType, sourceProgram:AstProgram,
+		?token:CancellationToken):Array<EditorMember> {
+		return switch type {
+			case TNullable(element): editorEnumAbstractValues(from, element, sourceProgram, token);
+			case TAbstract(name, _, _):
+				[for (member in editorStaticMembersForContext(from, Std.string(name), sourceProgram, token))
+					if (member.kind == "field") member];
+			default: [];
+		};
+	}
+
+	/**
 	 * Enumerate members from the editor-visible type snapshots. This deliberately
 	 * consumes current recovered declarations when available, while keeping all
 	 * type/AST traversal in the semantic workspace instead of the protocol layer.

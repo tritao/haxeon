@@ -3029,6 +3029,20 @@ class LanguageServiceMain {
 			|| enumAbstractValueDefinition.path != "EnumAbstractMembers.hx"
 			|| enumAbstractValueReferences.length < 2)
 			throw "recovered enum-abstract member completion or hover failed";
+		var expectedEnumAbstractService = new LanguageService(),
+			expectedEnumAbstractSource = "enum abstract ExpectedFlags(Int) { var Ready = 1; var Done = 2; } function take(value:ExpectedFlags):Void return; function main():Void { take(";
+		expectedEnumAbstractService.update("ExpectedEnumAbstract.hx", expectedEnumAbstractSource);
+		var expectedEnumAbstractItems = expectedEnumAbstractService.completeResult("ExpectedEnumAbstract.hx", expectedEnumAbstractSource.length).items,
+			foundExpectedReady = false,
+			foundExpectedDone = false;
+		for (item in expectedEnumAbstractItems) {
+			if (item.label == "Ready" && item.detail == "Ready:Int" && item.insertText == "Ready")
+				foundExpectedReady = true;
+			if (item.label == "Done" && item.detail == "Done:Int" && item.insertText == "Done")
+				foundExpectedDone = true;
+		}
+		if (!foundExpectedReady || !foundExpectedDone)
+			throw "expected enum-abstract completion did not expose current values";
 		var importedEnumAbstractService = new LanguageService(),
 			importedEnumAbstractTarget = "package flags; enum abstract Flags(Int) { var Ready = 1; } function main():Void return;",
 			importedEnumAbstractSource = "package flags.use; import flags.Flags; function main():Void { Flags.Ready; broken.unresolved().thing; }";

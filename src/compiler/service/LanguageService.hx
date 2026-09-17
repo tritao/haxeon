@@ -1825,6 +1825,12 @@ class LanguageService {
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
+		if (semanticContext != null && semanticContext.expected != null)
+			for (member in compiler.semanticWorkspace.editorEnumAbstractValues(state, semanticContext.expected, ast, token)) {
+				if (token != null)
+					token.check();
+				addMember(member.name, member.kind, member.detail, prefix, result, 1, member.name);
+			}
 		if (semanticContext != null && semanticContext.kind == SemanticCompletionContextKind.ObjectField
 			&& semanticContext.expected != null)
 			for (field in expectedObjectFields(semanticContext.expected, token))

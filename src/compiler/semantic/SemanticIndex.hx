@@ -2264,6 +2264,21 @@ class SemanticIndexBuilder {
 							}
 					constraint == null ? TUnknown : recoveredExpectedType(constraint, fn, substitutions, active.concat([name]));
 				}
+			case NamedType(name):
+				// DeclarationIndex lowers enum abstracts to their runtime
+				// representation for ordinary typing. Completion needs the
+				// nominal editor type as well, otherwise an expected `Flags`
+				// argument is indistinguishable from `Int` and its named values
+				// cannot be offered.
+				var enumAbstract = declarations.enumAbstracts.get(name);
+				if (enumAbstract == null)
+					for (candidateName => candidate in declarations.enumAbstracts)
+						if (sourceName(candidateName) == sourceName(name)) {
+							enumAbstract = candidate;
+							break;
+						}
+				enumAbstract == null ? recoveredType(type, substitutions)
+					: TAbstract(name, [], recoveredType(enumAbstract.underlying, substitutions));
 			case ArrayType(element): TArray(recoveredExpectedType(element, fn, substitutions, active));
 			case MapType(key, value): TMap(recoveredExpectedType(key, fn, substitutions, active),
 				recoveredExpectedType(value, fn, substitutions, active));
