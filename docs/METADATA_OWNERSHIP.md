@@ -30,6 +30,11 @@ No pointer in the handoff is implicitly transferred. Haxe-owned arenas and
 decoded models stay alive until native retirement succeeds; native executable
 allocations stay alive until their Haxe generation owner releases its handle.
 
+The former manifest/capture aliases are not part of the cutover surface. The
+remaining byte-oriented `hl_runtime_module_load` and `hl_runtime_module_apply_hlp*`
+APIs are legacy HashLink compatibility entrypoints; Haxeon execution does not
+call them.
+
 The dedicated Haxeon runtime facade also enters a thread-local native-decoder
 guard around its cold-load and Haxe-decoded patch publication operations. Any
 accidental call to `hl_code_read` or `hl_patch_read` is rejected immediately;

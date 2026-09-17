@@ -51,11 +51,6 @@ class HlTypeBridge {
 	public static function native_metadata_module_call_i32(module:RawPtr<UInt8>, functionIndex:Int):Int
 		return 0;
 
-	/** Load a runtime wrapper from a Haxe-owned code record and external identity bytes. */
-	public static function native_runtime_module_load_code(code:RawPtr<NativeModuleHlCode>, bytes:haxe.io.Bytes, length:Int, identity:haxe.io.Bytes,
-		identityLength:Int):hl.Abstract<"realtime_module">
-		return null;
-
 	/** Load a legacy HLB/HLI pair through HashLink's native decoder. */
 	public static function native_runtime_module_load_bytes(bytes:haxe.io.Bytes, identity:haxe.io.Bytes):hl.Abstract<"realtime_module">
 		return null;

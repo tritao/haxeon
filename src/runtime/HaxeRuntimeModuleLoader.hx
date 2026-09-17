@@ -53,7 +53,7 @@ class HaxeRuntimeModuleLoader {
 					[for (entry in identity.entries) entry.functionIndex], identity.initializerSlot, metadata.functionCount());
 			// The normal path passes null here. A raw HLB is accepted only by the
 			// explicit debugger variant and is never consulted for execution.
-			module = kernel.loadCodeManifest(publication.nativeCode, identity.moduleId, identity.revision, dispatch, debugBytes);
+			module = kernel.loadHaxeMetadata(publication.nativeCode, identity.moduleId, identity.revision, dispatch, debugBytes);
 			if (module == null)
 				throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the Haxe-owned module metadata");
 			// Register the native handle with the Haxe lifecycle owner before any

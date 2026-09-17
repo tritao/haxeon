@@ -156,9 +156,10 @@ HLP parser for ordinary HashLink compatibility.
 The runtime loader preserves the same compatibility split for module metadata.
 `hl_runtime_module_load` parses a legacy HLB and initializes it without
 `HL_MODULE_HAXE_METADATA`, so HashLink remains responsible for derived metadata
-and eager C-side constants. `hl_runtime_module_load_code` and
-`hl_runtime_module_load_haxe_metadata` is the Haxe-owned load path, and
-`hl_runtime_module_apply_haxe_patch` is the Haxe-owned patch path: they retain
+and eager C-side constants. `hl_runtime_module_load_code` remains a compatibility
+entrypoint for callers that already own code but do not provide a decoded
+manifest. `hl_runtime_module_load_haxe_metadata` is the Haxe-owned load path,
+and `hl_runtime_module_apply_haxe_patch` is the Haxe-owned patch path: they retain
 the Haxe-built metadata records, defer constant materialization, and let the
 Haxe wrapper invoke the narrow native constant kernel after JIT initialization.
 For the decoded-manifest entrypoint, the native wrapper borrows Haxe's stable-ID
