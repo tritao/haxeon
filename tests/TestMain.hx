@@ -52,7 +52,12 @@ import compiler.syntax.Parser;
 import compiler.types.Typer;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedExpressionKind;
+import compiler.types.TypedAst.TypedStatement;
+import compiler.types.typing.TypingSession;
 import compiler.Compiler;
+import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import sys.io.File;
@@ -76,7 +81,8 @@ class TestMain {
 			"src/compiler/ir/IrGenerator.hx",
 			"src/compiler/backend/wasm/WasmFunctionLower.hx",
 			"src/compiler/backend/wasm/WasmRepresentation.hx",
-			"src/compiler/types/typing/BodyTyper.hx"
+			"src/compiler/types/typing/BodyTyper.hx",
+			"src/compiler/types/typing/TypeRepresentation.hx"
 		])
 			try
 				new Parser(new Lexer(new SourceFile(compilerSource, File.getContent(compilerSource))).tokenize()).parseProgram()
@@ -884,16 +890,24 @@ class TestMain {
 			|| metadataProgram.enums[0].metadata[0].name != "wire"
 			|| metadataProgram.enums[0].cases[0].metadata[0].name != "wireId")
 			throw "Class metadata and top-level visibility were not preserved";
+		var wireCollisionCompiler = new Compiler();
+		CompilerIntrinsics.register(wireCollisionCompiler);
+		wireCollisionCompiler.addSourceRoot("stdlib");
+		wireCollisionCompiler.update("foo/Bar.hx", "package foo; @:wire class Bar { @:wireId(1) public var value:Int; }");
+		wireCollisionCompiler.update("foo_Bar.hx", "@:wire class foo_Bar { @:wireId(1) public var value:Int; }");
+		wireCollisionCompiler.update("Main.hx",
+			"import foo.Bar; function main():Int { var left:Bar = new Bar(); var right:foo_Bar = new foo_Bar(); return haxe.wire.MessagePack.encode(left).length + haxe.wire.MessagePack.encode(right).length; }");
+		wireCollisionCompiler.compile("Main");
 		expectCompileError('@:wire class MissingWireId { public var id:Int; } function main():Int { return haxe.wire.MessagePack.encode(new MissingWireId()).length; }',
 			'MessagePack record field "MissingWireId.id" requires @:wireId(n)');
 		expectCompileError('@:wire class DuplicateWireId { @:wireId(1) public var left:Int; @:wireId(1) public var right:Int; } function main():Int { return haxe.wire.MessagePack.encode(new DuplicateWireId()).length; }',
 			'MessagePack record fields "DuplicateWireId.left" and "DuplicateWireId.right" use duplicate @:wireId(1)');
 		expectCompileError('@:wire class RecursiveWire { @:wireId(1) public var child:Null<RecursiveWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_class_RecursiveWire -> class_RecursiveWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)');
 		expectCompileError('@:wire class RecursiveArrayWire { @:wireId(1) public var children:Array<RecursiveArrayWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveArrayWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_class_RecursiveArrayWire -> class_RecursiveArrayWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)');
 		expectCompileError('@:wire class RecursiveMapWire { @:wireId(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxe.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_class_RecursiveMapWire -> class_RecursiveMapWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)');
 		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxe.wire.MessagePack.encode(values).length; }',
 			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
 		expectCompileError('@:wire enum MissingEnumWireId { Value; } function main():Int { return haxe.wire.MessagePack.encode(Value).length; }',
@@ -901,7 +915,7 @@ class TestMain {
 		expectCompileError('@:wire enum DuplicateEnumWireId { @:wireId(1) Left; @:wireId(1) Right; } function main():Int { return haxe.wire.MessagePack.encode(Left).length; }',
 			'MessagePack enum "DuplicateEnumWireId" constructors "Left" and "Right" use duplicate @:wireId(1)');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:wireId(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxe.wire.MessagePack.encode(Node(null)).length; }',
-			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
+			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
 			'This map key/value type has no compiler-owned runtime ABI');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
@@ -1363,6 +1377,121 @@ class TestMain {
 		Frontend.compile('class GenericMethods { public static function identity<T>(value:T):T return value; public static function answer():Int return identity(42); } function main():Int return GenericMethods.answer();');
 		Frontend.compile('class GenericMethodStore {} class GenericMethodBox<T> { public var value:T; public function new(store:GenericMethodStore, value:T) this.value = value; } class GenericMethodFactory { public static function make<T>(store:GenericMethodStore, value:T):GenericMethodBox<T> return new GenericMethodBox<T>(store, value); } function main():Int return GenericMethodFactory.make(new GenericMethodStore(), 42).value;');
 		Frontend.compile('class GenericProperty<T> { var stored:T; public var value(get, never):T; public function new(value:T) this.stored = value; public function update(value:T):Void this.stored = value; function get_value():T return stored; } function main():Int { var box:GenericProperty<Int> = new GenericProperty<Int>(42); box.update(43); return box.value; }');
+		Frontend.compile('class RepresentationBox<T> { var value:T; public var ready(get, never):Bool; public function new(value:T) this.value = value; function get_ready():Bool return true; public function generic():T return value; } function main():Int { var box:RepresentationBox<Int> = new RepresentationBox<Int>(42); return box.ready ? box.generic() : 0; }');
+		Frontend.compile('class RepresentationBase<T> { var value:T; public function new(value:T, label:String, enabled:Bool) { this.value = value; } public function ready():Bool return true; public function generic():T return value; } class RepresentationDerived extends RepresentationBase<Int> { public function new(value:Int) super(value, "ready", true); public function inherited():Int return generic(); } function main():Int { var value = new RepresentationDerived(42); return value.ready() ? value.inherited() : 0; }');
+		Frontend.compile('interface RepresentationReader<T> { function read():T; } class RepresentationReaderImpl implements RepresentationReader<Int> { public function new() {} public function read():Int return 42; } function readValue(reader:RepresentationReader<Int>):Int return reader.read(); function main():Int return readValue(new RepresentationReaderImpl());');
+		Frontend.compile('class NullableRepresentation<T> { var value:Null<T>; public function new(value:Null<T>) this.value = value; public function read():Null<T> return value; } function main():Int { var box:NullableRepresentation<Int> = new NullableRepresentation<Int>(null); var value:Null<Int> = box.read(); return value == null ? 42 : 0; }');
+		Frontend.compile('abstract NestedRepresentation<T>(T) { public function new(value:T) this = value; public function unwrap():T return this; } function makeNested<T>(value:T):NestedRepresentation<T> return new NestedRepresentation<T>(value); function main():Int { var value:NestedRepresentation<Int> = makeNested(42); return 42; }');
+		var representationProgram = new Parser(new Lexer(new SourceFile("representation-service.hx",
+			'interface RepresentationProbeReader<T> { function read():T; } class RepresentationProbeReaderImpl implements RepresentationProbeReader<Int> { public function new() {} public function read():Int return 42; } class RepresentationProbe<T> { var value:T; public var ready(get, never):Bool; public var genericProperty(get, never):T; public var nullable(get, never):Null<T>; public function new(value:T) this.value = value; function get_ready():Bool return true; function get_genericProperty():T return value; function get_nullable():Null<T> return value; public function generic():T return value; } function inspect(value:RepresentationProbe<Int>):Int return value.generic(); function inspectReader(value:RepresentationProbeReader<Int>):Int return value.read(); function main():Int return inspect(new RepresentationProbe<Int>(42));'))
+			.tokenize()).parseProgram(),
+			representationModel = compiler.semantic.SemanticProgram.analyze(representationProgram),
+			representationSession = new TypingSession(null, null);
+		representationSession.bindSemantic(representationModel);
+		representationSession.bindNominalDeclarations();
+		var probeType = representationModel.declarations.resolve(representationProgram.functions[0].arguments[0].type),
+			readerType = representationModel.declarations.resolve(representationProgram.functions[1].arguments[0].type),
+			genericMethod = representationModel.signatures.get("RepresentationProbe.generic"),
+			readyMethod = representationModel.signatures.get("RepresentationProbe.get_ready"),
+			propertyMethod = representationModel.signatures.get("RepresentationProbe.get_genericProperty"),
+			nullableMethod = representationModel.signatures.get("RepresentationProbe.get_nullable"),
+			constructor = representationModel.signatures.get("RepresentationProbe.new"),
+			readerMethod = representationModel.signatures.get("RepresentationProbeReader.read");
+		if (genericMethod == null || readyMethod == null || propertyMethod == null || nullableMethod == null || constructor == null || readerMethod == null)
+			throw "Representation service fixture methods were not indexed";
+		var genericResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", genericMethod),
+			readyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", readyMethod),
+			propertyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", propertyMethod),
+			nullableResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", nullableMethod),
+			readerResult = representationSession.representation.resolveMethodResult(readerType, "RepresentationProbeReader", readerMethod),
+			constructorArgument = representationSession.representation.resolveMethodArgument(probeType, "RepresentationProbe", constructor.arguments[0]),
+			fieldResult = representationSession.representation.resolveField(probeType, "value", representationProgram.classes[0].span);
+		if (genericResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| genericResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| readyResult.semantic != compiler.types.Type.CompilerType.TBool
+			|| readyResult.physical != compiler.types.Type.CompilerType.TBool
+			|| propertyResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| propertyResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| !compiler.types.TypeRelations.equals(nullableResult.semantic, compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TInt))
+			|| !compiler.types.TypeRelations.equals(nullableResult.physical,
+				compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TDynamic))
+			|| readerResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| readerResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| constructorArgument.semantic != compiler.types.Type.CompilerType.TInt
+			|| constructorArgument.physical != compiler.types.Type.CompilerType.TDynamic
+			|| fieldResult.semantic != compiler.types.Type.CompilerType.TInt
+			|| fieldResult.physical != compiler.types.Type.CompilerType.TDynamic)
+			throw "Representation service did not preserve semantic and physical type pairs";
+		Sys.println("PASS: semantic and physical generic representation matrix");
+		var genericAbiSource = 'function identity<T>(value:T):T return value; function main():Int { var text:String = identity("text"); return identity(42); }',
+			genericAbiProgram = new Parser(new Lexer(new SourceFile("generic-abi.hx", genericAbiSource)).tokenize()).parseProgram(),
+			genericAbiTyped = Typer.type(genericAbiProgram),
+			genericAbiMains = [for (fn in genericAbiTyped.functions) if (fn.name == "main") fn];
+		if (genericAbiMains.length != 1)
+			throw "Generic ABI fixture did not produce one main function";
+		var genericAbiExpressions:Array<TypedExpression> = [];
+		for (statement in genericAbiMains[0].statements)
+			switch statement {
+				case TVar(_, initializer, _), TReturn(initializer, _):
+					genericAbiExpressions.push(initializer);
+				default:
+			}
+		if (genericAbiExpressions.length != 2)
+			throw "Generic ABI fixture did not preserve both call expressions";
+		var textPhysical:Null<TypedExpression> = switch genericAbiExpressions[0].expression {
+			case TAbiCast(inner): inner;
+			default: null;
+		};
+		if (textPhysical == null
+			|| genericAbiExpressions[0].type != compiler.types.Type.CompilerType.TString
+			|| textPhysical.type != compiler.types.Type.CompilerType.TDynamic)
+			throw "Typed AST did not preserve the generic call semantic/physical result boundary";
+		switch textPhysical.expression {
+			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TDynamic):
+			default:
+				throw "Typed AST did not adapt the generic call argument to its physical representation";
+		}
+		if (genericAbiExpressions[1].type != compiler.types.Type.CompilerType.TInt)
+			throw "Typed AST changed the concrete generic call result representation";
+		switch genericAbiExpressions[1].expression {
+			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TInt):
+			default:
+				throw "Typed AST did not preserve the concrete generic call argument representation";
+		}
+		var genericAbiCompiler = new Compiler();
+		genericAbiCompiler.update("Main.hx", genericAbiSource);
+		var genericAbiBuild = genericAbiCompiler.compile("Main"),
+			dynamicIdentity:Null<IrFunction> = null,
+			intIdentity:Null<IrFunction> = null,
+			genericAbiMain:Null<IrFunction> = null;
+		for (fn in genericAbiBuild.ir.functions) {
+			if (fn.name == "main")
+				genericAbiMain = fn;
+			if (fn.name.indexOf("$generic:Main.identity") == 0)
+				if (fn.arguments.length == 1 && fn.arguments[0].type == IrType.Dyn && fn.result == IrType.Dyn)
+					dynamicIdentity = fn;
+				else if (fn.arguments.length == 1 && fn.arguments[0].type == IrType.I32 && fn.result == IrType.I32)
+					intIdentity = fn;
+		}
+		if (dynamicIdentity == null || intIdentity == null || genericAbiMain == null)
+			throw "IR did not preserve distinct generic function ABI specializations: " + [
+				for (fn in genericAbiBuild.ir.functions)
+					fn.name + " (" + fn.arguments.length + "," + fn.result + ")"
+			].join("; ");
+		var dynamicCallFound = false, intCallFound = false;
+		for (block in genericAbiMain.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case compiler.ir.Ir.IrInstruction.Call(output, name, arguments) if (name.indexOf("$generic:Main.identity") == 0):
+						if (output.type == IrType.Dyn && arguments.length == 1 && arguments[0].type == IrType.Dyn)
+							dynamicCallFound = true;
+						if (output.type == IrType.I32 && arguments.length == 1 && arguments[0].type == IrType.I32)
+							intCallFound = true;
+					default:
+				}
+		if (!dynamicCallFound || !intCallFound)
+			throw "IR call operands did not match their generic specialization ABI types";
+		Sys.println("PASS: generic function typed AST and IR ABI representations");
 		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
 			.tokenize()).parseProgram(),

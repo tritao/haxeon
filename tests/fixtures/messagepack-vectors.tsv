@@ -10,6 +10,7 @@ uint32-65536	ce00010000
 int8-minus-33	d0df
 int16-minus-129	d1ff7f
 int32-minus-32769	d2ffff7fff
+uint32-max	ceffffffff
 int64-max	d37fffffffffffffff
 int64-min	d38000000000000000
 float64-1.5	cb3ff8000000000000

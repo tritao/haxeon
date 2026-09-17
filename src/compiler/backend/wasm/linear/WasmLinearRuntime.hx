@@ -20,7 +20,8 @@ class WasmLinearRuntime {
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "__math_ceil",
 						"__sys_print", "__sys_args", "__date_now", "__date_get_time", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
-						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_callback_create", "native_callback_close",
+						"native_callback_error_kind", "native_callback_take_error":
 						runtimeImport(module, native);
 					default:
 				}
@@ -76,10 +77,20 @@ class WasmLinearRuntime {
 									[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
-						case "__string_char_at":
-							functions.set(native.name, addStringCharAt(module, native.name, allocator));
 						case "__string_concat":
 							functions.set(native.name, addStringConcat(module, native.name, allocator));
+						case "__string_to_lower_case":
+							functions.set(native.name, addStringCase(module, native.name, allocator, true));
+						case "__string_to_upper_case":
+							functions.set(native.name, addStringCase(module, native.name, allocator, false));
+						case "__string_index_of":
+							functions.set(native.name, addStringIndexOf(module, native.name));
+						case "__string_substring":
+							functions.set(native.name, addStringSubstring(module, native.name, allocator));
+						case "__string_char_at":
+							functions.set(native.name, addStringCharAt(module, native.name, allocator));
+						case "__string_from_char_code":
+							functions.set(native.name, addStringFromCharCode(module, native.name, allocator));
 						case "__string_equal":
 							functions.set(native.name, addStringEqual(module, native.name));
 						case "__string_compare_full":
@@ -192,6 +203,13 @@ class WasmLinearRuntime {
 				}
 				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual));
 			}
+		for (native in program.natives)
+			if (native.symbol == "native_callback_create") {
+				var callbackAllocator = addBytesAlloc(module, "__haxeon_callback_alloc_bytes", allocator);
+				functions.set("__haxeon_callback_alloc_bytes", callbackAllocator);
+				module.exports.push({name: "__haxeon_callback_alloc_bytes", functionIndex: callbackAllocator});
+				break;
+			}
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
@@ -202,7 +220,8 @@ class WasmLinearRuntime {
 				"__sys_args", "__date_now", "__date_get_time":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
-			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit",
+				"native_callback_create", "native_callback_close", "native_callback_error_kind", "native_callback_take_error":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
 			case "__runtime_string_from_ascii": addStringFromAscii(module, native.name, allocator);
@@ -2347,72 +2366,6 @@ class WasmLinearRuntime {
 		]));
 	}
 
-	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
-			value = builder.parameter("value", 0),
-			index = builder.parameter("index", 1),
-			length = builder.local("length", I32),
-			result = builder.local("result", I32);
-		builder.localGet(value);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(length);
-		builder.localGet(index);
-		builder.i32Const(0);
-		builder.emit(I32LtS);
-		builder.ifElse(function(builder) {
-			addEmptyString(builder, allocator, result);
-		}, function(builder) {
-			builder.localGet(index);
-			builder.localGet(length);
-			builder.emit(I32LtS);
-			builder.i32Eqz();
-			builder.ifElse(function(builder) {
-				addEmptyString(builder, allocator, result);
-			}, function(builder) {
-				builder.i32Const(WasmLayout.STRING_DATA_OFFSET + 1);
-				builder.call(builder.functionRef(allocator));
-				builder.localSet(result);
-				builder.localGet(result);
-				builder.i32Const(WasmModuleSupport.typeId(Bytes));
-				builder.emit(I32Store(0));
-				builder.localGet(result);
-				builder.i32Const(1);
-				builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
-				builder.localGet(result);
-				builder.i32Const(1);
-				builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
-				builder.localGet(result);
-				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-				builder.i32Add();
-				builder.localGet(value);
-				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-				builder.i32Add();
-				builder.localGet(index);
-				builder.i32Add();
-				builder.emit(I32Load8U(0));
-				builder.emit(I32Store8(0));
-			});
-		});
-		builder.localGet(result);
-		builder.return_();
-		return module.addFunction(builder.finish());
-	}
-
-	static function addEmptyString(builder:WasmFunctionBuilder, allocator:Int, result:Int):Void {
-		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-		builder.call(builder.functionRef(allocator));
-		builder.localSet(result);
-		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
-		builder.emit(I32Store(0));
-		builder.localGet(result);
-		builder.i32Const(0);
-		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localGet(result);
-		builder.i32Const(0);
-		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
-	}
-
 	static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			LocalGet(0),
@@ -2462,6 +2415,336 @@ class WasmLinearRuntime {
 			LocalGet(4),
 			Return
 		]));
+	}
+
+	/** Copy a linear-memory UTF-8 byte string while folding ASCII letters. */
+	static function addStringCase(module:WasmModule, name:String, allocator:Int, lowercase:Bool):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			source = builder.parameter("source", 0),
+			length = builder.local("length", I32),
+			result = builder.local("result", I32),
+			index = builder.local("index", I32),
+			byte = builder.local("byte", I32);
+		builder.localGet(source);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.localGet(length);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(length);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(source);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(length);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(result);
+				builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(0));
+				builder.localSet(byte);
+				builder.localGet(byte);
+				builder.i32Const(lowercase ? 65 : 97);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.localGet(byte);
+				builder.i32Const(lowercase ? 90 : 122);
+				builder.emit(I32LeS);
+				builder.emit(I32And);
+				builder.if_(function(builder) {
+					builder.localGet(result);
+					builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+					builder.i32Add();
+					builder.localGet(index);
+					builder.i32Add();
+					builder.localGet(byte);
+					builder.i32Const(lowercase ? 32 : -32);
+					builder.i32Add();
+					builder.emit(I32Store8(0));
+				});
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addStringIndexOf(module:WasmModule, name:String):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			needle = builder.parameter("needle", 1),
+			valueLength = builder.local("valueLength", I32),
+			needleLength = builder.local("needleLength", I32),
+			index = builder.local("index", I32),
+			inner = builder.local("inner", I32),
+			result = builder.local("result", I32);
+		builder.localGet(value);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(valueLength);
+		builder.localGet(needle);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(needleLength);
+		builder.i32Const(-1);
+		builder.localSet(result);
+		builder.localGet(needleLength);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.localSet(result);
+		});
+		builder.i32Const(0);
+		builder.localSet(index);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(needleLength);
+				builder.i32Add();
+				builder.localGet(valueLength);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.i32Const(0);
+				builder.localSet(inner);
+				builder.block(function(builder) {
+					builder.loop(function(builder) {
+						builder.localGet(inner);
+						builder.localGet(needleLength);
+						builder.emit(I32Eq);
+						builder.emit(BrIf(1));
+						builder.localGet(value);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(index);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.localGet(needle);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.emit(I32Eq);
+						builder.i32Eqz();
+						builder.emit(BrIf(1));
+						builder.localGet(inner);
+						builder.i32Const(1);
+						builder.i32Add();
+						builder.localSet(inner);
+						builder.emit(Br(0));
+					});
+				});
+				builder.localGet(inner);
+				builder.localGet(needleLength);
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					builder.localGet(index);
+					builder.localSet(result);
+					builder.emit(Br(2));
+				});
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addStringSubstring(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
+			source = builder.parameter("source", 0),
+			startArg = builder.parameter("start", 1),
+			endArg = builder.parameter("end", 2),
+			length = builder.local("length", I32),
+			start = builder.local("startValue", I32),
+			end = builder.local("endValue", I32),
+			result = builder.local("result", I32);
+		builder.localGet(source);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.localGet(startArg);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.i32Const(0), function(builder) builder.localGet(startArg), I32);
+		builder.localSet(start);
+		builder.localGet(endArg);
+		builder.localGet(start);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(endArg), I32);
+		builder.localSet(end);
+		builder.localGet(start);
+		builder.localGet(length);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(length), I32);
+		builder.localSet(start);
+		builder.localGet(end);
+		builder.localGet(length);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.localGet(end), function(builder) builder.localGet(length), I32);
+		builder.localSet(end);
+		builder.localGet(end);
+		builder.localGet(start);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) builder.localGet(start), function(builder) builder.localGet(end), I32);
+		builder.localSet(end);
+		builder.localGet(end);
+		builder.localGet(start);
+		builder.emit(I32Sub);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.localGet(end);
+		builder.localGet(start);
+		builder.emit(I32Sub);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.localGet(end);
+		builder.localGet(start);
+		builder.emit(I32Sub);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(source);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(start);
+		builder.i32Add();
+		builder.localGet(end);
+		builder.localGet(start);
+		builder.emit(I32Sub);
+		builder.emit(MemoryCopy);
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			source = builder.parameter("source", 0),
+			index = builder.parameter("index", 1),
+			result = builder.local("result", I32),
+			length = builder.local("length", I32);
+		builder.localGet(source);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		builder.localGet(index);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.i32Eqz();
+		builder.localGet(index);
+		builder.localGet(length);
+		builder.emit(I32LtS);
+		builder.emit(I32And);
+		builder.ifElse(function(builder) {
+			builder.i32Const(1);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(result);
+			builder.localGet(result);
+			builder.i32Const(WasmModuleSupport.typeId(Bytes));
+			builder.emit(I32Store(0));
+			builder.localGet(result);
+			builder.i32Const(1);
+			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localGet(result);
+			builder.i32Const(1);
+			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+			builder.localGet(result);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(source);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.localGet(index);
+			builder.i32Add();
+			builder.emit(I32Load8U(0));
+			builder.emit(I32Store8(0));
+		}, function(builder) {
+			builder.i32Const(0);
+			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+			builder.i32Add();
+			builder.call(builder.functionRef(allocator));
+			builder.localSet(result);
+			builder.localGet(result);
+			builder.i32Const(WasmModuleSupport.typeId(Bytes));
+			builder.emit(I32Store(0));
+			builder.localGet(result);
+			builder.i32Const(0);
+			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+			builder.localGet(result);
+			builder.i32Const(0);
+			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		});
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addStringFromCharCode(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
+			result = builder.local("result", I32);
+		builder.i32Const(1);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.call(builder.functionRef(allocator));
+		builder.localSet(result);
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.i32Const(1);
+		builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(1);
+		builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
+		builder.localGet(result);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+		builder.i32Add();
+		builder.localGet(0);
+		builder.emit(I32Store8(0));
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
 	}
 
 	static function addIntToString(module:WasmModule, name:String, allocator:Int):Int {

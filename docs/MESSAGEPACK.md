@@ -9,7 +9,8 @@ runtime.
 
 - `Int` is encoded using MessagePack's compact integer markers and is limited
   to the Haxe `Int` range. `haxe.Int64` uses the same compact markers when the
-  value fits in `Int`, and otherwise uses signed MessagePack `int64`. The
+  value fits in `Int`, emits unsigned `uint32` for positive values through
+  `4294967295`, and otherwise uses signed MessagePack `int64`. The
   compiler-owned collection ABI stores `Int64` arrays and map values as native
   64-bit elements.
 - `Float` is written as float64. The reader accepts both float32 and float64.

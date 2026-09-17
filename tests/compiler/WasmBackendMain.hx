@@ -278,7 +278,7 @@ class WasmBackendMain {
 		var arrayOps = compile("function main():Int { var first = [40]; var second = [2]; var combined = first.concat(second); return combined[0] + combined[1]; }");
 		var arrayMutation = compile("function main():Int { var values = [40]; values.push(2); return values.pop() + values[0]; }");
 		var string = compile("function main():Int return \"haxeon\".length;");
-		var stringOps = compile("function main():Int return (\"ha\" + \"xeon\" == \"haxeon\") ? 42 : 0;");
+		var stringOps = compile("function main():Int { var value = \"HaXeOn\"; return value.toLowerCase() == \"haxeon\" && value.toUpperCase() == \"HAXEON\" && value.indexOf(\"Xe\") == 2 && value.indexOf(\"\") == 0 && value.substring(2, 4) == \"Xe\" && value.charAt(2) == \"X\" && String.fromCharCode(65) == \"A\" ? 42 : 0; }");
 		var stdStringProgram = Frontend.compile("function main():Int { var context = \"layoutSession.item(\" + 9001 + \")\"; var minimum = \"\" + (-2147483647 - 1); return (\"\" + 42) == \"42\" && minimum == \"-2147483648\" && (\"\" + true) == \"true\" && (\"\" + false) == \"false\" && (\"\" + null) == \"null\" && context == \"layoutSession.item(9001)\" ? 42 : 0; }");
 		stdStringProgram.natives.push({
 			name: "__std_string",

@@ -74,6 +74,17 @@ function main():Int {
 		return 2;
 	if (!reader.atEnd())
 		return 3;
+	var uint32Maximum = Int64.parseString("4294967295"),
+		uint32Writer = new MessagePackWriter();
+	uint32Writer.writeInt64(Int64.parseString("2147483648"));
+	uint32Writer.writeInt64(uint32Maximum);
+	if (!sameBytes(uint32Writer.getBytes(), [0xce, 0x80, 0x00, 0x00, 0x00, 0xce, 0xff, 0xff, 0xff, 0xff]))
+		return 17;
+	var uint32Reader = new MessagePackReader(uint32Writer.getBytes());
+	if (Int64.compare(uint32Reader.readInt64(), Int64.parseString("2147483648")) != 0
+		|| Int64.compare(uint32Reader.readInt64(), uint32Maximum) != 0
+		|| !uint32Reader.atEnd())
+		return 18;
 
 	var unsigned32 = Bytes.alloc(9);
 	unsigned32.set(0, 0xcf);

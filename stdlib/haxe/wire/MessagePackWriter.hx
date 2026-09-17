@@ -65,9 +65,15 @@ class MessagePackWriter {
 	/** Writes a signed Haxe Int64 using the smallest MessagePack integer shape. */
 	public function writeInt64(value:haxe.Int64):Void {
 		var minimum = haxe.Int64.ofInt(-2147483648),
-			maximum = haxe.Int64.ofInt(2147483647);
+			maximum = haxe.Int64.ofInt(2147483647),
+			uint32Maximum = haxe.Int64.parseString("4294967295");
 		if (haxe.Int64.compare(value, minimum) >= 0 && haxe.Int64.compare(value, maximum) <= 0) {
 			writeInt(haxe.Int64.toInt(value));
+			return;
+		}
+		if (haxe.Int64.compare(value, maximum) > 0 && haxe.Int64.compare(value, uint32Maximum) <= 0) {
+			writeByte(0xce);
+			writeUInt32(haxe.Int64.toInt(value));
 			return;
 		}
 		writeByte(0xd3);

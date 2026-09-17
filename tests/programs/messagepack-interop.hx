@@ -61,6 +61,8 @@ class MessagePackInterop {
 					checkInt(reader, writer, -129);
 				case "int32-minus-32769":
 					checkInt(reader, writer, -32769);
+				case "uint32-max":
+					checkInt64(reader, writer, Int64.parseString("4294967295"));
 				case "int64-max":
 					checkInt64(reader, writer, Int64.parseString("9223372036854775807"));
 				case "int64-min":

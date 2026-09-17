@@ -103,10 +103,18 @@ function main():Int {
 	} catch (_:Dynamic) {
 		limited = true;
 	}
-	if (limited)
+	if (!limited)
 		return 16;
+	var fixedArrayLimited = false;
+	try {
+		new MessagePackReader(raw([0x93, 0x01, 0x02, 0x03]), 2).readArrayHeader();
+	} catch (_:Dynamic) {
+		fixedArrayLimited = true;
+	}
+	if (!fixedArrayLimited)
+		return 17;
 
-	return bytes.length > 0 && writer.byteLength() == bytes.length ? 42 : 17;
+	return bytes.length > 0 && writer.byteLength() == bytes.length ? 42 : 18;
 }
 
 function sameBytes(actual:Bytes, expected:Array<Int>):Bool {
@@ -126,4 +134,11 @@ class IntMessagePackCodec implements MessagePackCodec<Int> {
 
 	public function decode(reader:MessagePackReader):Int
 		return reader.readInt();
+}
+
+function raw(values:Array<Int>):Bytes {
+	var bytes = Bytes.alloc(values.length);
+	for (index in 0...values.length)
+		bytes.set(index, values[index]);
+	return bytes;
 }

@@ -284,7 +284,7 @@ class MessagePackReader {
 
 	function readLength(marker:Int, fixedLimit:Int, fixedBase:Int, smallTag:Int, mediumTag:Int, largeTag:Int, kind:String):Int {
 		if (fixedBase >= 0 && marker >= fixedBase && marker <= fixedBase + fixedLimit)
-			return marker - fixedBase;
+			return checkedLength(marker - fixedBase, kind);
 		if (marker == smallTag)
 			return checkedLength(readUInt8(), kind);
 		if (marker == mediumTag)

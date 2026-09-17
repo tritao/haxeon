@@ -38,8 +38,8 @@ class ConversionResolver {
 				functionAdapter(value, expected, value.span);
 			case AbstractCast:
 				var conversion = abstractFromFunction(value.type, expected);
-				conversion == null ? new TypedExpression(TAbiCast(value), expected,
-					value.span) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
+				conversion == null ? session.representation.boundaryCast(value,
+					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
 			case ToDynamic:
 				new TypedExpression(TToDynamic(value), expected, value.span);
 			case ToInterface(name):
@@ -60,9 +60,7 @@ class ConversionResolver {
 				var declaration = session.declarations.abstracts.get(name);
 				if (declaration == null)
 					return null;
-				var substitutions:Map<String, CompilerType> = [];
-				for (index in 0...declaration.typeParameters.length)
-					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index] : TDynamic);
+				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
 				for (method in declaration.methods) {
 					if (!method.isStatic || method.arguments.length != 1)
 						continue;

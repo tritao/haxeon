@@ -3,7 +3,6 @@ package compiler.types.typing;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
-import compiler.semantic.GenericSpecializationPolicy;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -85,24 +84,15 @@ class GenericInstantiation {
 					"E1009"));
 		}
 		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
-			result = session.declarations.resolve(fn.result, fn.span, substitutions),
-			representationSubstitutions:Map<String, CompilerType> = [];
-		var specializationPolicies:Array<String> = [];
-		for (parameter in parameters) {
-			var decision = GenericSpecializationPolicy.decide(fn, parameter, requiredMapValue(substitutions, parameter));
-			representationSubstitutions.set(parameter, decision.representation);
-			specializationPolicies.push(decision.policy);
-		}
-		var representationExpected = [
-			for (argument in fn.arguments)
-				argumentType(argument, representationSubstitutions)
-		], typed = [
-			for (index in 0...semanticArguments.length)
-				abiBoundaryCast(semanticArguments[index], representationExpected[index])
-			], representationResult = session.declarations.resolve(fn.result, fn.span, representationSubstitutions), representationArguments = [
-			for (parameter in parameters)
-				requiredMapValue(representationSubstitutions, parameter)
-			], specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies);
+			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
+			genericRepresentation = genericCall.representation,
+			representationSubstitutions = genericRepresentation.substitutions,
+			specializationPolicies = genericRepresentation.policies,
+			representationResult = genericCall.result.physical,
+			representationArguments = genericCall.typeArguments,
+			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
+			result = genericCall.result.semantic,
+			typed = genericCall.arguments;
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
@@ -116,10 +106,10 @@ class GenericInstantiation {
 			var receiverType = representationReceiver;
 			if (receiverType == null)
 				throw "Generic receiver representation was not resolved";
-			typed.unshift(abiBoundaryCast(receiver, receiverType));
+			typed.unshift(session.representation.boundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
-		return TypeRelations.equals(representationResult, result) ? call : abiBoundaryCast(call, result);
+		return session.representation.boundaryCast(call, result);
 	}
 
 	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>,
@@ -194,12 +184,9 @@ class GenericInstantiation {
 		var decl = requiredMapValue(session.declarations.abstracts, name), arguments = [
 			for (parameter in decl.typeParameters)
 				requiredMapValue(substitutions, parameter)
-		], representation = session.declarations.resolve(decl.underlying, decl.span, substitutions);
+		], representation = session.representation.semanticType(decl.underlying, decl.span, substitutions);
 		return TAbstract(name, arguments, representation);
 	}
-
-	function abiBoundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
-		return TypeRelations.equals(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span);
 
 	static function anonymousField(fields:Null<Array<compiler.types.Type.AnonymousField>>, name:String):Null<compiler.types.Type.AnonymousField> {
 		if (fields != null)

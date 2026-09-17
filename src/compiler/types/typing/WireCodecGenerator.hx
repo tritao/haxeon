@@ -426,7 +426,7 @@ class WireCodecGenerator {
 							expressionStatement(method(writer, "writeArrayHeader", [intLiteral(wireCase.caseDecl.params.length, span)], TVoid, span), span)
 						];
 					for (fieldIndex in 0...wireCase.caseDecl.params.length) {
-						var parameterType = wireCase.caseDecl.params[fieldIndex],
+						var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex, wireCase.caseDecl.params[fieldIndex]),
 							fieldValue = new TypedExpression(TEnumField(value, wireCase.index, fieldIndex), parameterType, span);
 						branch = branch.concat(encodeNestedValueStatements(writer, fieldValue, parameterType, span));
 					}
@@ -550,7 +550,7 @@ class WireCodecGenerator {
 				];
 			var arguments:Array<TypedExpression> = [];
 			for (fieldIndex in 0...wireCase.caseDecl.params.length) {
-				var parameterType = wireCase.caseDecl.params[fieldIndex],
+				var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex, wireCase.caseDecl.params[fieldIndex]),
 					parameterName = enumParameterLocal(wireCase.index, fieldIndex),
 					parameter = local(parameterName, parameterType, span);
 				arguments.push(parameter);
@@ -712,6 +712,22 @@ class WireCodecGenerator {
 	static function nullValue(type:CompilerType, span:SourceSpan):TypedExpression
 		return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
 
+	static function wireEnumParameterType(session:TypingSession, name:String, constructor:Int, field:Int, storedType:CompilerType):CompilerType {
+		var declaration = session.enumDecls.get(name);
+		if (declaration == null
+			|| constructor < 0
+			|| constructor >= declaration.cases.length
+			|| field < 0
+			|| field >= declaration.cases[constructor].params.length)
+			return storedType;
+		if (!declaration.cases[constructor].params[field].optional)
+			return storedType;
+		return switch storedType {
+			case TNullable(_): storedType;
+			default: TNullable(storedType);
+		};
+	}
+
 	static function primitiveMethod(type:CompilerType):Null<String>
 		return switch type {
 			case TInt: "writeInt";
@@ -789,19 +805,25 @@ class WireCodecGenerator {
 			case TBool: "bool";
 			case TString: "string";
 			case TBytes: "bytes";
-			case TNullable(element): "nullable_" + typeKey(element);
-			case TArray(element): "array_" + typeKey(element);
+			case TNullable(element): "nullable_" + typeSegment(typeKey(element));
+			case TArray(element): "array_" + typeSegment(typeKey(element));
 			case TMap(key, value):
 				(switch key {
 					case TString: "map_string_";
 					case TInt: "map_int_";
-					case TInstance(NominalKind.Enum, _, _): "map_enum_" + typeKey(key) + "_";
+					case TInstance(NominalKind.Enum, _, _): "map_enum_" + typeSegment(typeKey(key));
 					default: throw 'No MessagePack map key for "$key"';
-				}) + typeKey(value);
-			case TInstance(NominalKind.Class, name, _): "class_" + StringTools.replace(name, ".", "_");
-			case TInstance(NominalKind.Enum, name, _): "enum_" + StringTools.replace(name, ".", "_");
+				}) + typeSegment(typeKey(value));
+			case TInstance(NominalKind.Class, name, _): "class_" + nominalKey(name);
+			case TInstance(NominalKind.Enum, name, _): "enum_" + nominalKey(name);
 			default: throw 'No MessagePack codec key for "$type"';
 		};
+
+	static function typeSegment(key:String):String
+		return key.length + ":" + key;
+
+	static function nominalKey(name:String):String
+		return StringTools.replace(StringTools.replace(name, "_", "_u"), ".", "_d");
 
 	static function isWireClass(session:TypingSession, name:String):Bool {
 		var declaration = session.classDecls.get(name);

@@ -239,9 +239,7 @@ class ProgramTyper {
 		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
-			erasedSubstitutions:Map<String, CompilerType> = [];
-		for (parameter in classDecl.typeParameters)
-			erasedSubstitutions.set(parameter, TDynamic);
+			erasedSubstitutions = session.representation.erasedNominalSubstitutions(classDecl.name);
 		for (field in classDecl.fields) {
 			if (fieldNames.exists(field.name))
 				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
@@ -249,7 +247,7 @@ class ProgramTyper {
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-			var type = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
@@ -451,10 +449,7 @@ class ProgramTyper {
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
-		var substitutions:Map<String, CompilerType> = [];
-		for (parameter in declaration.typeParameters)
-			substitutions.set(parameter, TDynamic);
-		return session.declarations.resolve(type, span, substitutions);
+		return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
 	}
 
 	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
@@ -556,7 +551,7 @@ class ProgramTyper {
 		if (!session.interfaceDecls.exists(interfaceName))
 			return;
 		var interfaceDecl = session.interfaceDecls.get(interfaceName),
-			interfaceSubstitutions = bodyTyper.nominalSubstitutions(interfaceInstance);
+			interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceInstance);
 		for (baseType in interfaceDecl.bases) {
 			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = BodyTyper.inheritanceName(baseType);
