@@ -2861,6 +2861,19 @@ class LanguageServiceMain {
 			|| recoveredFunctionValueSignature.label != "callback(arg0:Bound):Bound"
 			|| recoveredFunctionValueSignature.activeParameter != 0)
 			throw 'recovered function values did not provide signature help: ${recoveredFunctionValueSignature == null ? "null" : recoveredFunctionValueSignature.label}';
+		var recoveredLambdaService = new LanguageService(),
+			recoveredLambdaSource = "class LambdaValue { public var member:Int; } function apply(callback:(LambdaValue) -> LambdaValue):Void return; function main():Void { apply((value) -> value.",
+			recoveredLambdaPosition = recoveredLambdaSource.length;
+		recoveredLambdaService.update("RecoveredLambda.hx", recoveredLambdaSource);
+		var recoveredLambdaContext = recoveredLambdaService.completionContext("RecoveredLambda.hx", recoveredLambdaPosition),
+			recoveredLambdaItems = recoveredLambdaService.completeResult("RecoveredLambda.hx", recoveredLambdaPosition).items,
+			foundRecoveredLambdaMember = false;
+		for (item in recoveredLambdaItems)
+			if (item.label == "member" && item.detail == "member:Int")
+				foundRecoveredLambdaMember = true;
+		if (recoveredLambdaContext == null || recoveredLambdaContext.context.receiver == null
+			|| !foundRecoveredLambdaMember || !recoveredLambdaContext.recovered)
+			throw 'recovered lambda expected type did not preserve its receiver: context=${recoveredLambdaContext == null ? "null" : Std.string(recoveredLambdaContext.context.receiver)}, member=$foundRecoveredLambdaMember';
 		var objectFieldService = new LanguageService(),
 			objectFieldSource = "class ObjectValue {} function make():{value:ObjectValue} return {value:";
 		objectFieldService.update("ObjectField.hx", objectFieldSource);
