@@ -203,8 +203,14 @@ class HlTypeLayout {
 		if (kind < cast(HlTypeKind.VoidType, Int) || kind > cast(HlTypeKind.Guid, Int))
 			throw 'HashLink type metadata contains an invalid kind $kind';
 		switch cast(kind, HlTypeKind) {
-			case HlTypeKind.Reference | HlTypeKind.Nullable | HlTypeKind.Packed:
+			case HlTypeKind.Reference | HlTypeKind.Nullable:
 				validateType(type.ref.data.ref.typeParam, visited);
+			case HlTypeKind.Packed:
+				var parameter = type.ref.data.ref.typeParam;
+				validateType(parameter, visited);
+				var parameterKind:Int = cast parameter.ref.kind;
+				if (parameterKind != cast(HlTypeKind.Object, Int) && parameterKind != cast(HlTypeKind.Struct, Int))
+					throw "HashLink packed type parameters must be object or struct types";
 			case HlTypeKind.Function | HlTypeKind.Method:
 				var functionData = type.ref.data.ref.fun;
 				if (functionData.isNull())

@@ -32,6 +32,8 @@ class HlValidator {
 					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
 						throw 'Unsupported parameterized HashLink type $kind';
 					requireType(code, parameter, "parameterized type argument");
+					if (kind == HlType.Packed)
+						validatePackedParameter(code, parameter);
 				case Abstract(name):
 					requireString(code, name, "abstract name");
 				case Enum(name, global, constructors):
@@ -471,6 +473,14 @@ class HlValidator {
 	static function requireType(code:HlCode, type:Int, context:String):Void {
 		if (type < 0 || type >= code.types.length)
 			throw 'Invalid type $type for $context';
+	}
+
+	static function validatePackedParameter(code:HlCode, parameter:Int):Void {
+		switch code.types[parameter] {
+			case Object(_, _, _, _, _, _), Structure(_, _, _, _, _):
+			default:
+				throw 'HashLink packed type parameter $parameter must be an object or structure';
+		}
 	}
 
 	static function requireString(code:HlCode, string:Int, context:String):Void {
