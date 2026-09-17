@@ -134,18 +134,19 @@ class SyntaxScannerMain {
 			throw "CST lowerer did not preserve generic class inheritance";
 
 		var declarationSource = new SourceFile("Declarations.hx",
-			"typedef Alias<T> = Array<T>; enum Choice { None; Some(value:Int); } "
+			"typedef Alias<T:Base> = Array<T>; enum Choice<T:Base> { None; Some(value:T); } "
 			+ "enum abstract Flags(Int) from Int to Int { var Ready = 1; } "
-			+ "abstract Box(Int) { public function get():Int return 1; } "
-			+ "class Holder { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
+			+ "abstract Box<T:Base>(T) { public function get():Int return 1; } "
+			+ "class Holder<T:Base> extends Parent<T> implements Readable<T>, Writable<T> { public var value:Int; public function empty():Int {} public function read():Int return value + 1; "
 			+ "public function choose(flag:Bool):Int if (flag) return value + 1; else return value; "
 			+ "public function loop(flag:Bool):Void while (flag) break; "
 			+ "public function doLoop(flag:Bool):Void do { break; } while (flag); "
 			+ "public function each(values:Int):Void for (value in values) break; "
 			+ "public function control(value:Int):Int { var local = value; local += 1; "
 			+ "try { switch (local) { case 0: return 1; default: return local; } } "
-			+ "catch (error:Error) { return 0; } } }\n"
-			+ "interface Reader { function read(value:Int):String; }\n"),
+			+ "catch (error:Error) { return 0; } } } "
+			+ "function generic<T:Base>(value:T):T return value;\n"
+			+ "interface Reader<T:Base> extends Readable<T> { function read(value:Int):String; }\n"),
 			declarationParser = new Parser(new Lexer(declarationSource).tokenize(), null, ParserMode.Cst(declarationSource));
 		var declarationProgram = declarationParser.parseProgram();
 		if (declarationParser.cst == null)
@@ -153,16 +154,23 @@ class SyntaxScannerMain {
 		if (declarationProgram.aliases.length != 1 || declarationProgram.enums.length != 1 || declarationProgram.enumAbstracts.length != 1
 			|| declarationProgram.abstracts.length != 1 || declarationProgram.aliases[0].name != "Alias"
 			|| declarationProgram.enums[0].cases.length != 2 || declarationProgram.enumAbstracts[0].values.length != 1
-			|| declarationProgram.abstracts[0].methods.length != 1)
+			|| declarationProgram.abstracts[0].methods.length != 1 || declarationProgram.functions.length != 1)
 			throw "CST lowerer did not preserve declaration payloads";
+		if (declarationProgram.aliases[0].typeConstraints.length != 1
+			|| declarationProgram.enums[0].typeConstraints.length != 1
+			|| declarationProgram.abstracts[0].typeConstraints.length != 1
+			|| declarationProgram.classes[0].typeConstraints.length != 1
+			|| declarationProgram.interfaces[0].typeConstraints.length != 1
+			|| declarationProgram.functions[0].typeConstraints.length != 1)
+			throw "CST lowerer did not preserve generic type constraints";
 		var parserOwnedHeaderPayloads = 0;
 		for (node in declarationParser.cst.grammarNodes())
 			switch node.payload {
-				case SyntaxNodePayload.ClassHeaderRich(_, _, _, _, _, _),
-					SyntaxNodePayload.EnumHeader(_, _, _),
+				case SyntaxNodePayload.ClassHeaderRich(_, _, _, _, _, _, _),
+					SyntaxNodePayload.EnumHeader(_, _, _, _),
 					SyntaxNodePayload.EnumAbstractHeader(_, _, _, _, _),
-					SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _),
-					SyntaxNodePayload.InterfaceHeader(_, _, _):
+					SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _, _),
+					SyntaxNodePayload.InterfaceHeader(_, _, _, _):
 					parserOwnedHeaderPayloads++;
 				default:
 			}

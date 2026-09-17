@@ -136,23 +136,27 @@ class Parser {
 						advance();
 						var enumAbstract = parseEnumAbstract(start);
 						enumAbstracts.push(enumAbstract);
-						recordCstNode(SyntaxKind.EnumAbstractDeclaration, enumAbstract.span, enumAbstractHeader(enumAbstract));
+						recordCstNode(SyntaxKind.EnumAbstractDeclaration, enumAbstract.span,
+							parserPayloads.get(enumAbstract.span.start) == null ? enumAbstractHeader(enumAbstract) : parserPayloads.get(enumAbstract.span.start));
 					} else {
 						var enumeration = parseEnum(start, metadata);
 						enums.push(enumeration);
-						recordCstNode(SyntaxKind.EnumDeclaration, enumeration.span, enumHeader(enumeration));
+						recordCstNode(SyntaxKind.EnumDeclaration, enumeration.span,
+							parserPayloads.get(enumeration.span.start) == null ? enumHeader(enumeration) : parserPayloads.get(enumeration.span.start));
 					}
 				} else if (check(TokenKind.Interface)) {
 					var interfaceDeclaration = parseInterface();
 					interfaces.push(interfaceDeclaration);
-					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span, interfaceHeader(interfaceDeclaration));
+					recordCstNode(SyntaxKind.InterfaceDeclaration, interfaceDeclaration.span,
+						parserPayloads.get(interfaceDeclaration.span.start) == null ? interfaceHeader(interfaceDeclaration) : parserPayloads.get(interfaceDeclaration.span.start));
 					for (method in interfaceDeclaration.methods)
 						recordCstNode(SyntaxKind.FunctionDeclaration, method.span,
 							parserPayloads.get(method.span.start) == null ? functionHeader(method) : parserPayloads.get(method.span.start));
 				} else if (check(TokenKind.Class)) {
 					var classDeclaration = parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration);
 					classes.push(classDeclaration);
-					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span, classHeader(classDeclaration));
+					recordCstNode(SyntaxKind.ClassDeclaration, classDeclaration.span,
+						parserPayloads.get(classDeclaration.span.start) == null ? classHeader(classDeclaration) : parserPayloads.get(classDeclaration.span.start));
 					for (field in classDeclaration.fields)
 						recordCstNode(SyntaxKind.FieldDeclaration, field.span,
 							parserPayloads.get(field.span.start) == null ? fieldHeader(field) : parserPayloads.get(field.span.start));
@@ -166,7 +170,8 @@ class Parser {
 					var start = advance().span;
 					var abstractDeclaration = parseAbstract(start, externDeclaration, metadata);
 					abstracts.push(abstractDeclaration);
-					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span, abstractHeader(abstractDeclaration));
+					recordCstNode(SyntaxKind.AbstractDeclaration, abstractDeclaration.span,
+						parserPayloads.get(abstractDeclaration.span.start) == null ? abstractHeader(abstractDeclaration) : parserPayloads.get(abstractDeclaration.span.start));
 					for (method in abstractDeclaration.methods)
 						recordCstNode(SyntaxKind.FunctionDeclaration, method.span,
 							parserPayloads.get(method.span.start) == null ? functionHeader(method) : parserPayloads.get(method.span.start));
@@ -268,7 +273,8 @@ class Parser {
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstAbstract {
 		var name = consumeDeclarationName("abstract"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints);
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads);
 		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current()))) {
 			var underlying = missingType("abstract underlying type");
 			recordExpected("abstract body");
@@ -316,7 +322,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 			parserPayloads.set(recoveredAbstract.span.start, SyntaxNodePayload.AbstractHeader(name, isExtern, typeParameters,
-				underlyingPayload, fromPayloads, toPayloads));
+				typeConstraintPayloads, underlyingPayload, fromPayloads, toPayloads));
 			return recoveredAbstract;
 		}
 		var enumBodyStart = consume(TokenKind.LeftBrace).span;
@@ -357,7 +363,7 @@ class Parser {
 			span: start.merge(end)
 		};
 		parserPayloads.set(abstractDeclaration.span.start, SyntaxNodePayload.AbstractHeader(name, isExtern, typeParameters,
-			underlyingPayload, fromPayloads, toPayloads));
+			typeConstraintPayloads, underlyingPayload, fromPayloads, toPayloads));
 		return abstractDeclaration;
 	}
 
@@ -446,7 +452,8 @@ class Parser {
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
 		var name = consumeDeclarationName("typedef"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints);
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads);
 		consume(TokenKind.Assign);
 		var parsedType = parseTypeResult(), type = parsedType.ast, end = previous().span;
 		switch type {
@@ -464,13 +471,15 @@ class Parser {
 			isPrivate: isPrivate,
 			span: start.merge(end)
 		};
-		parserPayloads.set(alias.span.start, SyntaxNodePayload.TypeAliasHeader(name, isPrivate, typeParameters, parsedType.payload));
+		parserPayloads.set(alias.span.start, SyntaxNodePayload.TypeAliasHeader(name, isPrivate, typeParameters,
+			typeConstraintPayloads, parsedType.payload));
 		return alias;
 	}
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consumeDeclarationName("enum"), typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints), cases = [],
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads), cases = [],
 			casePayloads:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload> = [];
 		if (recovering && isDeclarationBoundary(current())) {
 			recordExpected("enum body");
@@ -481,7 +490,8 @@ class Parser {
 				cases: cases,
 				span: start.merge(previous().span)
 			};
-			parserPayloads.set(recoveredEnum.span.start, SyntaxNodePayload.EnumHeader(name, typeParameters, casePayloads));
+			parserPayloads.set(recoveredEnum.span.start, SyntaxNodePayload.EnumHeader(name, typeParameters,
+				typeConstraintPayloads, casePayloads));
 			return recoveredEnum;
 		}
 		var enumAbstractBodyStart = consume(TokenKind.LeftBrace).span;
@@ -539,7 +549,8 @@ class Parser {
 			cases: cases,
 			span: start.merge(end)
 		};
-		parserPayloads.set(enumeration.span.start, SyntaxNodePayload.EnumHeader(name, typeParameters, casePayloads));
+		parserPayloads.set(enumeration.span.start, SyntaxNodePayload.EnumHeader(name, typeParameters,
+			typeConstraintPayloads, casePayloads));
 		return enumeration;
 	}
 
@@ -573,7 +584,8 @@ class Parser {
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints);
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads);
 		var arguments = [], parameterPayloads:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload> = [], payloadComplete = true;
 		var parameterStart:Null<SourceSpan> = null;
 		if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
@@ -663,7 +675,7 @@ class Parser {
 		if (payloadComplete)
 			{
 				var payload = SyntaxNodePayload.FunctionHeaderRich(name, isStatic, isExtern,
-					typeParameters, parameterPayloads, parsedResult.payload);
+					typeParameters, typeConstraintPayloads, parameterPayloads, parsedResult.payload);
 				parserPayloads.set(start.start, payload);
 				parserPayloads.set(functionDeclaration.span.start, payload);
 			}
@@ -854,7 +866,8 @@ class Parser {
 		}
 	}
 
-	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
+	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>,
+			?constraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
@@ -872,9 +885,12 @@ class Parser {
 			if (match(TokenKind.Colon)) {
 				var grouped = match(TokenKind.LeftParen);
 				do {
-					var constraint = parseDelimitedType(grouped ? TokenKind.RightParen : TokenKind.Greater);
+					var parsedConstraint = parseDelimitedTypeResult(grouped ? TokenKind.RightParen : TokenKind.Greater),
+						constraint = parsedConstraint.ast;
 					if (constraints != null)
 						constraints.push({parameter: parameter.text, type: constraint, span: parameter.span.merge(previous().span)});
+					if (constraintPayloads != null)
+						constraintPayloads.push({parameter: parameter.text, type: parsedConstraint.payload});
 				} while (grouped && match(TokenKind.Comma));
 				if (grouped)
 					consume(TokenKind.RightParen);
@@ -916,7 +932,8 @@ class Parser {
 		var start = consume(TokenKind.Class).span,
 			name = consumeDeclarationName("class"),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints),
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads),
 			base:Null<AstType> = null,
 			basePayload:Null<compiler.syntax.SyntaxTree.SyntaxTypePayload> = null,
 			interfaces = [], interfacePayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
@@ -957,7 +974,7 @@ class Parser {
 				span: start.merge(previous().span)
 			};
 			parserPayloads.set(recoveredClass.span.start, SyntaxNodePayload.ClassHeaderRich(name, isPrivate, isExtern,
-				typeParameters, basePayload, interfacePayloads));
+				typeParameters, typeConstraintPayloads, basePayload, interfacePayloads));
 			return recoveredClass;
 		}
 		var classBodyStart = consume(TokenKind.LeftBrace).span;
@@ -1060,7 +1077,7 @@ class Parser {
 			span: start.merge(end)
 		};
 		parserPayloads.set(classDeclaration.span.start, SyntaxNodePayload.ClassHeaderRich(name, isPrivate, isExtern,
-			typeParameters, basePayload, interfacePayloads));
+			typeParameters, typeConstraintPayloads, basePayload, interfacePayloads));
 		return classDeclaration;
 	}
 
@@ -1078,7 +1095,8 @@ class Parser {
 	}
 
 	static function classHeader(classDeclaration:AstClass):SyntaxNodePayload {
-		var baseType = classDeclaration.base == null ? null : simpleTypePayload(classDeclaration.base), interfaceTypes = [];
+		var baseType = classDeclaration.base == null ? null : simpleTypePayload(classDeclaration.base), interfaceTypes = [],
+			typeConstraints = simpleTypeConstraintPayloads(classDeclaration.typeConstraints);
 		for (interfaceType in classDeclaration.interfaces) {
 			var payload = simpleTypePayload(interfaceType);
 			if (payload == null)
@@ -1086,17 +1104,24 @@ class Parser {
 					classDeclaration.typeParameters, simpleTypeName(classDeclaration.base), [for (type in classDeclaration.interfaces) simpleTypeName(type)]);
 			interfaceTypes.push(payload);
 		}
+		if (typeConstraints == null)
+			return SyntaxNodePayload.ClassHeader(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
+				classDeclaration.typeParameters, simpleTypeName(classDeclaration.base), [for (type in classDeclaration.interfaces) simpleTypeName(type)]);
 		return SyntaxNodePayload.ClassHeaderRich(classDeclaration.name, classDeclaration.isPrivate, classDeclaration.isExtern == true,
-			classDeclaration.typeParameters, baseType, interfaceTypes);
+			classDeclaration.typeParameters, typeConstraints, baseType, interfaceTypes);
 	}
 
 	static function typeAliasHeader(alias:AstTypeAlias):Null<SyntaxNodePayload> {
-		var type = simpleTypePayload(alias.type);
-		return type == null ? null : SyntaxNodePayload.TypeAliasHeader(alias.name, alias.isPrivate, alias.typeParameters, type);
+		var type = simpleTypePayload(alias.type), typeConstraints = simpleTypeConstraintPayloads(alias.typeConstraints);
+		return type == null || typeConstraints == null ? null
+			: SyntaxNodePayload.TypeAliasHeader(alias.name, alias.isPrivate, alias.typeParameters, typeConstraints, type);
 	}
 
 	static function enumHeader(enumeration:AstEnum):Null<SyntaxNodePayload> {
-		var cases:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload> = [];
+		var cases:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload> = [],
+			typeConstraints = simpleTypeConstraintPayloads(enumeration.typeConstraints);
+		if (typeConstraints == null)
+			return null;
 		for (caseDeclaration in enumeration.cases) {
 			var parameters:Array<compiler.syntax.SyntaxTree.SyntaxEnumParameterPayload> = [];
 			for (parameter in caseDeclaration.params) {
@@ -1107,7 +1132,7 @@ class Parser {
 			}
 			cases.push({name: caseDeclaration.name, parameters: parameters});
 		}
-		return SyntaxNodePayload.EnumHeader(enumeration.name, enumeration.typeParameters, cases);
+		return SyntaxNodePayload.EnumHeader(enumeration.name, enumeration.typeParameters, typeConstraints, cases);
 	}
 
 	static function enumAbstractHeader(declaration:AstEnumAbstract):Null<SyntaxNodePayload> {
@@ -1124,14 +1149,17 @@ class Parser {
 	}
 
 	static function abstractHeader(declaration:AstAbstract):Null<SyntaxNodePayload> {
-		var underlying = simpleTypePayload(declaration.underlying), fromTypes = simpleTypePayloads(declaration.fromTypes), toTypes = simpleTypePayloads(declaration.toTypes);
-		return underlying == null || fromTypes == null || toTypes == null ? null
-			: SyntaxNodePayload.AbstractHeader(declaration.name, declaration.isExtern == true, declaration.typeParameters, underlying, fromTypes, toTypes);
+		var underlying = simpleTypePayload(declaration.underlying), fromTypes = simpleTypePayloads(declaration.fromTypes), toTypes = simpleTypePayloads(declaration.toTypes),
+			typeConstraints = simpleTypeConstraintPayloads(declaration.typeConstraints);
+		return underlying == null || fromTypes == null || toTypes == null || typeConstraints == null ? null
+			: SyntaxNodePayload.AbstractHeader(declaration.name, declaration.isExtern == true, declaration.typeParameters,
+				typeConstraints, underlying, fromTypes, toTypes);
 	}
 
 	static function interfaceHeader(declaration:AstInterface):Null<SyntaxNodePayload> {
-		var bases = simpleTypePayloads(declaration.bases);
-		return bases == null ? null : SyntaxNodePayload.InterfaceHeader(declaration.name, declaration.typeParameters, bases);
+		var bases = simpleTypePayloads(declaration.bases), typeConstraints = simpleTypeConstraintPayloads(declaration.typeConstraints);
+		return bases == null || typeConstraints == null ? null
+			: SyntaxNodePayload.InterfaceHeader(declaration.name, declaration.typeParameters, typeConstraints, bases);
 	}
 
 	static function fieldHeader(field:AstField):SyntaxNodePayload {
@@ -1153,9 +1181,13 @@ class Parser {
 				functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
 				simpleParameters, simpleTypeName(functionDeclaration.result));
 		}
-		return SyntaxNodePayload.FunctionHeaderRich(functionDeclaration.name, functionDeclaration.isStatic,
+		var typeConstraints = simpleTypeConstraintPayloads(functionDeclaration.typeConstraints);
+		return typeConstraints == null ? SyntaxNodePayload.FunctionHeader(functionDeclaration.name, functionDeclaration.isStatic,
 			functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
-			parameters, resultType);
+			[for (argument in functionDeclaration.arguments) {name: argument.name, typeName: simpleTypeName(argument.type), optional: argument.optional == true}],
+			simpleTypeName(functionDeclaration.result)) : SyntaxNodePayload.FunctionHeaderRich(functionDeclaration.name, functionDeclaration.isStatic,
+			functionDeclaration.isExtern == true, functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
+			typeConstraints, parameters, resultType);
 	}
 
 	static function fieldAccessName(access:Null<AstFieldAccess>):Null<String>
@@ -1213,6 +1245,19 @@ class Parser {
 			if (payload == null)
 				return null;
 			result.push(payload);
+		}
+		return result;
+	}
+
+	static function simpleTypeConstraintPayloads(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Null<Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload>> {
+		var result:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [];
+		if (constraints == null)
+			return result;
+		for (constraint in constraints) {
+			var type = simpleTypePayload(constraint.type);
+			if (type == null)
+				return null;
+			result.push({parameter: constraint.parameter, type: type});
 		}
 		return result;
 	}
@@ -1866,7 +1911,9 @@ class Parser {
 
 	function parseInterface():AstInterface {
 		var start = consume(TokenKind.Interface).span, name = consumeDeclarationName("interface"),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [], typeParameters = parseTypeParameters(typeConstraints), bases = [],
+			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+			typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads), bases = [],
 			basePayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
 		if (match(TokenKind.Extends)) {
 			var parsedBase = recovering && (check(TokenKind.LeftBrace) || isDeclarationBoundary(current()))
@@ -1892,7 +1939,8 @@ class Parser {
 				methods: [],
 				span: start.merge(previous().span)
 			};
-			parserPayloads.set(recoveredInterface.span.start, SyntaxNodePayload.InterfaceHeader(name, typeParameters, basePayloads));
+			parserPayloads.set(recoveredInterface.span.start, SyntaxNodePayload.InterfaceHeader(name, typeParameters,
+				typeConstraintPayloads, basePayloads));
 			return recoveredInterface;
 		}
 		var interfaceBodyStart = consume(TokenKind.LeftBrace).span;
@@ -1906,8 +1954,9 @@ class Parser {
 				var methodToken = consume(TokenKind.Function),
 					methodName = consumeDeclarationName("interface method");
 				var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-					typeParameters = parseTypeParameters(typeConstraints);
-				var arguments = [];
+					typeConstraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload> = [],
+					typeParameters = parseTypeParameters(typeConstraints, typeConstraintPayloads),
+					arguments = [], parameterPayloads:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload> = [];
 				var parameterStart:Null<SourceSpan> = null;
 				if (recovering && (recoveringAtEnd() || isDeclarationBoundary(current())))
 					recordExpected("left parenthesis");
@@ -1922,13 +1971,16 @@ class Parser {
 						var optional = match(TokenKind.Question),
 							argumentName = consumeDeclarationName("parameter");
 						consume(TokenKind.Colon);
+						var parsedArgumentType = parseTypeResult();
 						arguments.push({
 							name: argumentName,
-							type: parseType(),
+							type: parsedArgumentType.ast,
 							span: previous().span,
 							optional: optional,
 							defaultValue: null
 						});
+						parameterPayloads.push({name: argumentName, type: parsedArgumentType.payload,
+							optional: optional, defaultValue: null});
 						if (!match(TokenKind.Comma))
 							break;
 					}
@@ -1936,9 +1988,13 @@ class Parser {
 					if (parameterStart != null)
 						recordCstNode(SyntaxKind.ParameterList, parameterStart.merge(parameterEnd));
 				}
-				var result = match(TokenKind.Colon) ? parseType() : recovering ? missingType("interface method return type") : failType("Interface methods require a return type"),
+				var parsedResult = match(TokenKind.Colon)
+					? parseTypeResult()
+					: recovering ? parsedType(missingType("interface method return type"), compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType)
+						: parsedType(failType("Interface methods require a return type"), compiler.syntax.SyntaxTree.SyntaxTypePayload.ErrorType),
+					result = parsedResult.ast,
 					end = consume(TokenKind.Semicolon).span;
-				methods.push({
+				var method:compiler.syntax.Ast.AstFunction = {
 					name: methodName,
 					isStatic: false,
 					isExtern: false,
@@ -1949,7 +2005,13 @@ class Parser {
 					result: result,
 					statements: [],
 					span: methodToken.span.merge(end)
-				});
+				};
+				methods.push(method);
+				if (methodMetadata == null || methodMetadata.length == 0) {
+					var payload = SyntaxNodePayload.FunctionHeaderRich(methodName, false, false, typeParameters,
+						typeConstraintPayloads, parameterPayloads, parsedResult.payload);
+					parserPayloads.set(method.span.start, payload);
+				}
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -1967,7 +2029,8 @@ class Parser {
 			methods: methods,
 			span: start.merge(end)
 		};
-		parserPayloads.set(interfaceDeclaration.span.start, SyntaxNodePayload.InterfaceHeader(name, typeParameters, basePayloads));
+		parserPayloads.set(interfaceDeclaration.span.start, SyntaxNodePayload.InterfaceHeader(name, typeParameters,
+			typeConstraintPayloads, basePayloads));
 		return interfaceDeclaration;
 	}
 

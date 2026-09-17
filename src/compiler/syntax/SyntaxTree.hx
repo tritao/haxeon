@@ -130,6 +130,11 @@ typedef SyntaxArgumentPayload = {
 	final defaultValue:Null<SyntaxExpressionPayload>;
 }
 
+typedef SyntaxTypeConstraintPayload = {
+	final parameter:String;
+	final type:SyntaxTypePayload;
+}
+
 typedef SyntaxObjectFieldPayload = {
 	final name:String;
 	final value:SyntaxExpressionPayload;
@@ -240,17 +245,17 @@ enum SyntaxNodePayload {
 	PackageName(value:String);
 	Import(path:String, alias:Null<String>);
 	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>);
-	ClassHeaderRich(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>);
+	ClassHeaderRich(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>);
 	FieldHeader(name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
 	FieldHeaderRich(name:String, type:Null<SyntaxTypePayload>, initializer:Null<SyntaxExpressionPayload>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
 	FunctionHeader(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxFunctionParameter>, resultTypeName:Null<String>);
-	FunctionHeaderRich(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, parameters:Array<SyntaxArgumentPayload>, resultType:SyntaxTypePayload);
+	FunctionHeaderRich(name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, parameters:Array<SyntaxArgumentPayload>, resultType:SyntaxTypePayload);
 	Statement(value:SyntaxStatementPayload);
-	TypeAliasHeader(name:String, isPrivate:Bool, typeParameters:Array<String>, type:SyntaxTypePayload);
-	EnumHeader(name:String, typeParameters:Array<String>, cases:Array<SyntaxEnumCasePayload>);
+	TypeAliasHeader(name:String, isPrivate:Bool, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, type:SyntaxTypePayload);
+	EnumHeader(name:String, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, cases:Array<SyntaxEnumCasePayload>);
 	EnumAbstractHeader(name:String, underlying:SyntaxTypePayload, fromTypes:Array<SyntaxTypePayload>, toTypes:Array<SyntaxTypePayload>, values:Array<SyntaxEnumValuePayload>);
-	AbstractHeader(name:String, isExtern:Bool, typeParameters:Array<String>, underlying:SyntaxTypePayload, fromTypes:Array<SyntaxTypePayload>, toTypes:Array<SyntaxTypePayload>);
-	InterfaceHeader(name:String, typeParameters:Array<String>, bases:Array<SyntaxTypePayload>);
+	AbstractHeader(name:String, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, underlying:SyntaxTypePayload, fromTypes:Array<SyntaxTypePayload>, toTypes:Array<SyntaxTypePayload>);
+	InterfaceHeader(name:String, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, bases:Array<SyntaxTypePayload>);
 }
 
 /** Trivia categories retained by tooling mode. */
