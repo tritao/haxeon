@@ -57,6 +57,9 @@ The next module-metadata ring is checked in as
 non-GC `hl_function` and `hl_native` descriptors from `hlmodule.h`, including
 the named union used by a function's field reference. The corresponding Haxe
 records are `runtime.hashlink.HlFunction` and `runtime.hashlink.HlNative`.
+`runtime.hashlink.HashLinkModuleBindings` exposes the matching
+`NativeModuleHl*` aliases, and the descriptor tables use those aliases
+directly.
 
 `compiler.hl.HlReader` now decodes the HLB module header, scalar pools, byte
 pool, type/global/native tables, functions, legacy source locations, constants,

@@ -17,8 +17,10 @@ import runtime.hashlink.HlModuleContext;
 import runtime.hashlink.HlRuntimeObject;
 import runtime.hashlink.HlRuntimeObject.HlFieldLookup;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction;
 import runtime.hashlink.HlOpcode;
 import runtime.hashlink.HlNative;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative;
 import runtime.hashlink.HlConstant;
 import runtime.hashlink.HlDebugSection;
 import runtime.hashlink.HlNativeCode;
@@ -93,13 +95,13 @@ class HlTypeArena {
 	public inline function allocTypeFunction():RawPtr<HlTypeFunction>
 		return storage.alloc();
 
-	public inline function allocFunctionArray(count:Int):RawPtr<HlFunction>
+	public inline function allocFunctionArray(count:Int):RawPtr<NativeModuleHlFunction>
 		return storage.alloc(count);
 
 	public inline function allocOpcodeArray(count:Int):RawPtr<HlOpcode>
 		return storage.alloc(count);
 
-	public inline function allocNativeDescriptorArray(count:Int):RawPtr<HlNative>
+	public inline function allocNativeDescriptorArray(count:Int):RawPtr<NativeModuleHlNative>
 		return storage.alloc(count);
 
 	public inline function allocConstantArray(count:Int):RawPtr<HlConstant>

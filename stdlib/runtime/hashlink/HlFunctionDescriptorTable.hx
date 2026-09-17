@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlFunction;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction;
 import runtime.hashlink.HlOpcode;
 
 /** Input used to construct one Haxe-owned HashLink function descriptor. */
@@ -24,7 +25,7 @@ typedef HlFunctionDescriptorSpec = {
 /** Owns a contiguous, stable array of HashLink bytecode function descriptors. */
 class HlFunctionDescriptorTable {
 	public final arena:HlTypeArena;
-	final entries:RawPtr<HlFunction>;
+	final entries:RawPtr<NativeModuleHlFunction>;
 	final capacity:Int;
 	var count:Int = 0;
 
@@ -63,7 +64,7 @@ class HlFunctionDescriptorTable {
 		return descriptor;
 	}
 
-	public inline function pointer():RawPtr<HlFunction>
+	public inline function pointer():RawPtr<NativeModuleHlFunction>
 		return entries;
 
 	public inline function length():Int
@@ -132,7 +133,7 @@ class HlFunctionDescriptorTable {
 		return nassigns;
 	}
 
-	public function get(index:Int):RawPtr<HlFunction> {
+	public function get(index:Int):RawPtr<NativeModuleHlFunction> {
 		if (index < 0 || index >= count)
 			throw 'HashLink function descriptor index $index is outside 0...$count';
 		return entries.offset(index);

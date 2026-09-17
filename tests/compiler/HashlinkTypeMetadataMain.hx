@@ -30,6 +30,7 @@ class HashlinkTypeMetadataMain {
 			+
 			'import runtime.hashlink.HlFunction; import runtime.hashlink.HlFunction.HlFunctionField; import runtime.hashlink.HlNative; import runtime.hashlink.HlConstant; '
 			+ 'import runtime.hashlink.HlDebugSection; import runtime.hashlink.HlNativeCode; '
+			+ 'import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlFunction; import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative; '
 			+
 			'import runtime.hashlink.HlPatchDebug.HlSourceSpan; import runtime.hashlink.HlPatchDebug.HlSourceSnapshot; import runtime.hashlink.HlPatchDebug.HlRuntimePatchDebug; '
 			+
@@ -58,9 +59,11 @@ class HashlinkTypeMetadataMain {
 			+ 'function runtimeObjectInterfacesOffset():Int return offsetof<HlRuntimeObject>("interfaces"); '
 			+ 'function runtimeBindingSize():Int return sizeof<HlRuntimeBinding>(); '
 			+ 'function functionDescriptorSize():Int return sizeof<HlFunction>(); '
+			+ 'function boundFunctionDescriptorSize():Int return sizeof<NativeModuleHlFunction>(); '
 			+ 'function functionDescriptorFieldOffset():Int return offsetof<HlFunction>("field"); '
 			+ 'function functionFieldSize():Int return sizeof<HlFunctionField>(); '
 			+ 'function nativeDescriptorSize():Int return sizeof<HlNative>(); '
+			+ 'function boundNativeDescriptorSize():Int return sizeof<NativeModuleHlNative>(); '
 			+ 'function constantSize():Int return sizeof<HlConstant>(); '
 			+ 'function debugSectionSize():Int return sizeof<HlDebugSection>(); '
 			+ 'function nativeCodeSize():Int return sizeof<HlNativeCode>(); '
@@ -288,9 +291,13 @@ class HashlinkTypeMetadataMain {
 			"hl_runtime_obj.interfaces must preserve the trailing pointer slot");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.runtimeBindingSize") == 24, "hl_runtime_binding must preserve tail padding");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.functionDescriptorSize") == 80, "hl_function must preserve descriptor padding");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.boundFunctionDescriptorSize") == 80,
+			"the runtime module binding alias must preserve hl_function layout");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.functionDescriptorFieldOffset") == 72, "hl_function.field must preserve the named union offset");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.functionFieldSize") == 8, "hl_function.field must remain pointer-sized");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.nativeDescriptorSize") == 32, "hl_native must preserve descriptor alignment");
+		expect(constantReturn(functions, "HashlinkTypeMetadata.boundNativeDescriptorSize") == 32,
+			"the runtime module binding alias must preserve hl_native layout");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.constantSize") == 16, "hl_constant must preserve descriptor alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.debugSectionSize") == 24, "hl_debug_section must preserve payload pointer alignment");
 		expect(constantReturn(functions, "HashlinkTypeMetadata.nativeCodeSize") == 224, "hl_code must preserve the complete module-record layout");

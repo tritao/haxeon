@@ -197,7 +197,7 @@ class CHeaderImporterMain {
 			"HXI structures should project into source-declared native records with RawPtr fields");
 		var nativeTypeNames:Map<String, String> = [];
 		for (binding in [
-			{native: "hl_alloc", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlAllocation"},
+			{native: "hl_alloc", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlAlloc"},
 			{native: "hl_field_lookup", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlFieldLookup"},
 			{native: "vvirtual", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeVvirtual"},
 			{native: "hl_module_context", haxe: "runtime.hashlink.HashLinkTypeBindings.NativeHlModuleContext"},

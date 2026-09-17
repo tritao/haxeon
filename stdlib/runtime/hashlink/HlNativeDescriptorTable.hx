@@ -2,6 +2,7 @@ package runtime.hashlink;
 
 import runtime.memory.RawPtr;
 import runtime.hashlink.HlNative;
+import runtime.hashlink.HashLinkModuleBindings.NativeModuleHlNative;
 import runtime.hashlink.HlFunctionTable;
 
 /** Input used to construct one Haxe-owned HashLink native binding descriptor. */
@@ -15,7 +16,7 @@ typedef HlNativeDescriptorSpec = {
 /** Owns a contiguous, stable array of HashLink native binding descriptors. */
 class HlNativeDescriptorTable {
 	public final arena:HlTypeArena;
-	final entries:RawPtr<HlNative>;
+	final entries:RawPtr<NativeModuleHlNative>;
 	final capacity:Int;
 	var count:Int = 0;
 
@@ -43,7 +44,7 @@ class HlNativeDescriptorTable {
 		return descriptor;
 	}
 
-	public inline function pointer():RawPtr<HlNative>
+	public inline function pointer():RawPtr<NativeModuleHlNative>
 		return entries;
 
 	public inline function length():Int
@@ -72,7 +73,7 @@ class HlNativeDescriptorTable {
 		}
 	}
 
-	public function get(index:Int):RawPtr<HlNative> {
+	public function get(index:Int):RawPtr<NativeModuleHlNative> {
 		if (index < 0 || index >= count)
 			throw 'HashLink native descriptor index $index is outside 0...$count';
 		return entries.offset(index);
