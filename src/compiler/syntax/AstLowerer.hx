@@ -33,6 +33,27 @@ typedef LoweredFunctionHeader = {
 	final result:AstType;
 }
 
+typedef LoweredClassHeader = {
+	final name:String;
+	final isPrivate:Bool;
+	final isExtern:Bool;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final base:Null<AstType>;
+	final interfaces:Array<AstType>;
+}
+
+typedef LoweredFieldHeader = {
+	final name:String;
+	final type:Null<AstType>;
+	final initializer:Null<AstExpression>;
+	final readAccess:Null<AstFieldAccess>;
+	final writeAccess:Null<AstFieldAccess>;
+	final isStatic:Bool;
+	final isInline:Bool;
+	final isFinal:Bool;
+}
+
 /**
 	Transition boundary from parser syntax to the compiler AST.
 
@@ -281,63 +302,18 @@ class AstLowerer {
 
 	static function lowerClasses(tree:SyntaxTree, direct:Array<AstClass>):Array<AstClass> {
 		var nodePayloads = collectPayloads(tree);
-		var headers:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}> = [];
-		var richHeaders:Map<Int, {name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>}> = [];
-		for (node in tree.grammarNodes())
-			switch node.payload {
-				case SyntaxNodePayload.ClassHeader(name, isPrivate, isExtern, typeParameters, baseName, interfaceNames):
-					headers.set(node.span.start, {
-						name: name,
-						isPrivate: isPrivate,
-						isExtern: isExtern,
-						typeParameters: typeParameters,
-						baseName: baseName,
-						interfaceNames: interfaceNames
-					});
-			case SyntaxNodePayload.ClassHeaderRich(name, isPrivate, isExtern, typeParameters, typeConstraints, baseType, interfaceTypes):
-					richHeaders.set(node.span.start, {
-						name: name,
-						isPrivate: isPrivate,
-						isExtern: isExtern,
-					typeParameters: typeParameters,
-					typeConstraints: typeConstraints,
-					baseType: baseType,
-						interfaceTypes: interfaceTypes
-					});
-				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _),
-					SyntaxNodePayload.FieldHeaderRich(_, _, _, _, _, _, _, _), SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _),
-				SyntaxNodePayload.FunctionHeaderRich(_, _, _, _, _, _, _), SyntaxNodePayload.Statement(_), SyntaxNodePayload.TypeAliasHeader(_, _, _, _, _),
-				SyntaxNodePayload.EnumHeader(_, _, _, _), SyntaxNodePayload.EnumAbstractHeader(_, _, _, _, _),
-				SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _, _), SyntaxNodePayload.InterfaceHeader(_, _, _, _), null:
-			}
 		var result:Array<AstClass> = [];
 		for (classDeclaration in direct) {
-			var header = headers.get(classDeclaration.span.start);
-			var richHeader = richHeaders.get(classDeclaration.span.start);
+			var header = lowerClassHeader(classDeclaration, nodePayloads.get(classDeclaration.span.start));
 			var fields = lowerFields(classDeclaration.fields, nodePayloads),
 				methods = lowerFunctionsFromPayloads(classDeclaration.methods, nodePayloads),
-				name = classDeclaration.name,
-				isExtern = classDeclaration.isExtern,
-				typeParameters = classDeclaration.typeParameters,
-				typeConstraints = classDeclaration.typeConstraints,
-				isPrivate = classDeclaration.isPrivate,
-				base = classDeclaration.base,
-				interfaces = classDeclaration.interfaces;
-			if (header != null && isLowerableClassHeader(classDeclaration, header)) {
-				name = header.name;
-				isExtern = header.isExtern;
-				typeParameters = header.typeParameters;
-				typeConstraints = [];
-				isPrivate = header.isPrivate;
-				base = header.baseName == null ? null : NamedType(header.baseName);
-				interfaces = [for (interfaceName in header.interfaceNames) NamedType(interfaceName)];
-			}
-			if (richHeader != null && isLowerableRichClassHeader(classDeclaration, richHeader)) {
-				var loweredConstraints = lowerTypeConstraints(classDeclaration.typeConstraints, richHeader.typeConstraints);
-				base = richHeader.baseType == null ? null : lowerType(classDeclaration.base, richHeader.baseType);
-				interfaces = lowerTypeList(classDeclaration.interfaces, richHeader.interfaceTypes);
-				typeConstraints = loweredConstraints;
-			}
+				name = header == null ? classDeclaration.name : header.name,
+				isExtern = header == null ? classDeclaration.isExtern : header.isExtern,
+				typeParameters = header == null ? classDeclaration.typeParameters : header.typeParameters,
+				typeConstraints = header == null ? classDeclaration.typeConstraints : header.typeConstraints,
+				isPrivate = header == null ? classDeclaration.isPrivate : header.isPrivate,
+				base = header == null ? classDeclaration.base : header.base,
+				interfaces = header == null ? classDeclaration.interfaces : header.interfaces;
 			result.push({
 				name: name,
 				isExtern: isExtern,
@@ -355,36 +331,61 @@ class AstLowerer {
 		return result;
 	}
 
-	static function isLowerableClassHeader(classDeclaration:AstClass,
-			header:{name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>}):Bool {
-		if (classDeclaration.typeParameters.length != header.typeParameters.length
-			|| (classDeclaration.typeConstraints != null && classDeclaration.typeConstraints.length > 0)
-			|| !simpleTypeMatches(classDeclaration.base, header.baseName)
-			|| classDeclaration.interfaces.length != header.interfaceNames.length)
-			return false;
-		for (index in 0...classDeclaration.typeParameters.length)
-			if (classDeclaration.typeParameters[index] != header.typeParameters[index])
-				return false;
-		for (index in 0...classDeclaration.interfaces.length) {
-			var interfaceName = header.interfaceNames[index];
-			if (interfaceName == null || !simpleTypeMatches(classDeclaration.interfaces[index], interfaceName))
-				return false;
-		}
-		return true;
-	}
-
-	static function isLowerableRichClassHeader(classDeclaration:AstClass,
-			header:{name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>}):Bool {
-		if (classDeclaration.name != header.name || classDeclaration.isPrivate != header.isPrivate || (classDeclaration.isExtern == true) != header.isExtern
-			|| classDeclaration.typeParameters.length != header.typeParameters.length || lowerTypeConstraints(classDeclaration.typeConstraints, header.typeConstraints) == null
-			|| classDeclaration.interfaces.length != header.interfaceTypes.length || classDeclaration.base != null != (header.baseType != null))
-			return false;
-		for (index in 0...classDeclaration.typeParameters.length)
-			if (classDeclaration.typeParameters[index] != header.typeParameters[index])
-				return false;
-		if (classDeclaration.base != null && header.baseType != null && lowerType(classDeclaration.base, header.baseType) == null)
-			return false;
-		return lowerTypeList(classDeclaration.interfaces, header.interfaceTypes) != null;
+	static function lowerClassHeader(classDeclaration:AstClass, payload:Null<SyntaxNodePayload>):Null<LoweredClassHeader> {
+		return switch payload {
+			case SyntaxNodePayload.ClassHeader(name, isPrivate, isExtern, typeParameters, baseName, interfaceNames):
+				if (classDeclaration.typeParameters.length != typeParameters.length
+					|| classDeclaration.typeConstraints != null && classDeclaration.typeConstraints.length > 0
+					|| !simpleTypeMatches(classDeclaration.base, baseName)
+					|| classDeclaration.interfaces.length != interfaceNames.length)
+					null;
+				else {
+					for (index in 0...classDeclaration.typeParameters.length)
+						if (classDeclaration.typeParameters[index] != typeParameters[index])
+							return null;
+					for (index in 0...classDeclaration.interfaces.length) {
+						var interfaceName = interfaceNames[index];
+						if (interfaceName == null || !simpleTypeMatches(classDeclaration.interfaces[index], interfaceName))
+							return null;
+					}
+					{
+						name: name,
+						isPrivate: isPrivate,
+						isExtern: isExtern,
+						typeParameters: typeParameters,
+						typeConstraints: [],
+						base: baseName == null ? null : NamedType(baseName),
+						interfaces: [for (interfaceName in interfaceNames) NamedType(interfaceName)]
+					};
+				}
+			case SyntaxNodePayload.ClassHeaderRich(name, isPrivate, isExtern, typeParameters, constraintPayloads, baseType, interfaceTypes):
+				if (classDeclaration.name != name || classDeclaration.isPrivate != isPrivate || (classDeclaration.isExtern == true) != isExtern
+					|| classDeclaration.typeParameters.length != typeParameters.length
+					|| classDeclaration.interfaces.length != interfaceTypes.length
+					|| classDeclaration.base != null != (baseType != null))
+					null;
+				else {
+					for (index in 0...classDeclaration.typeParameters.length)
+						if (classDeclaration.typeParameters[index] != typeParameters[index])
+							return null;
+					var loweredConstraints = lowerTypeConstraints(classDeclaration.typeConstraints, constraintPayloads),
+						loweredBase = baseType == null ? null : lowerType(classDeclaration.base, baseType),
+						loweredInterfaces = lowerTypeList(classDeclaration.interfaces, interfaceTypes);
+					if (loweredConstraints == null || baseType != null && loweredBase == null || loweredInterfaces == null)
+						null;
+					else
+						{
+							name: name,
+							isPrivate: isPrivate,
+							isExtern: isExtern,
+							typeParameters: typeParameters,
+							typeConstraints: loweredConstraints,
+							base: loweredBase,
+							interfaces: loweredInterfaces
+						};
+				}
+			default: null;
+		};
 	}
 
 	static function collectPayloads(tree:SyntaxTree):Map<Int, SyntaxNodePayload> {
@@ -394,56 +395,63 @@ class AstLowerer {
 	static function lowerFields(direct:Array<AstField>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstField> {
 		var result:Array<AstField> = [];
 		for (field in direct) {
-			var lowered:Null<AstField> = switch nodePayloads.get(field.span.start) {
-				case SyntaxNodePayload.FieldHeader(name, typeName, isStatic, isInline, isFinal, readAccess, writeAccess):
-					lowerField(field, name, typeName, isStatic, isInline, isFinal, readAccess, writeAccess);
-				case SyntaxNodePayload.FieldHeaderRich(name, typePayload, initializerPayload, isStatic, isInline, isFinal, readAccess, writeAccess):
-					lowerRichField(field, name, typePayload, initializerPayload, isStatic, isInline, isFinal, readAccess, writeAccess);
-				default: null;
-			};
+			var header = lowerFieldHeader(field, nodePayloads.get(field.span.start)),
+				lowered:Null<AstField> = header == null ? null : {
+					name: header.name,
+					metadata: field.metadata,
+					type: header.type,
+					initializer: header.initializer,
+					readAccess: header.readAccess,
+					writeAccess: header.writeAccess,
+					isStatic: header.isStatic,
+					isInline: header.isInline,
+					isFinal: header.isFinal,
+					span: field.span
+				};
 			result.push(keepOrFallback(lowered, field, 'field ${field.name}'));
 		}
 		return result;
 	}
 
-	static function lowerField(field:AstField, name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool,
-			readAccess:Null<String>, writeAccess:Null<String>):Null<AstField> {
-		if (field.initializer != null || typeName == null || !simpleTypeMatches(field.type, typeName)
-			|| field.isStatic != isStatic || field.isInline != isInline || field.isFinal != isFinal
-			|| fieldAccessName(field.readAccess) != readAccess || fieldAccessName(field.writeAccess) != writeAccess)
-			return null;
-		return {
-			name: name,
-			type: lowerSimpleType(typeName),
-			initializer: null,
-			readAccess: lowerFieldAccess(readAccess),
-			writeAccess: lowerFieldAccess(writeAccess),
-			isStatic: isStatic,
-			isInline: isInline,
-			isFinal: isFinal,
-			span: field.span
-		};
-	}
 
-	static function lowerRichField(field:AstField, name:String, typePayload:Null<SyntaxTypePayload>, initializerPayload:Null<SyntaxExpressionPayload>,
-			isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>):Null<AstField> {
-		var loweredType = field.type == null ? null : typePayload == null ? null : lowerType(field.type, typePayload),
-			loweredInitializer = field.initializer == null ? null : initializerPayload == null ? null : lowerExpression(field.initializer, initializerPayload);
-		if (field.type != null && loweredType == null || field.initializer != null && loweredInitializer == null
-			|| field.type == null && typePayload != null || field.initializer == null && initializerPayload != null
-			|| field.name != name || field.isStatic != isStatic || field.isInline != isInline || field.isFinal != isFinal
-			|| fieldAccessName(field.readAccess) != readAccess || fieldAccessName(field.writeAccess) != writeAccess)
-			return null;
-		return {
-			name: name,
-			type: loweredType,
-			initializer: loweredInitializer,
-			readAccess: lowerFieldAccess(readAccess),
-			writeAccess: lowerFieldAccess(writeAccess),
-			isStatic: isStatic,
-			isInline: isInline,
-			isFinal: isFinal,
-			span: field.span
+	static function lowerFieldHeader(field:AstField, payload:Null<SyntaxNodePayload>):Null<LoweredFieldHeader> {
+		return switch payload {
+			case SyntaxNodePayload.FieldHeader(name, typeName, isStatic, isInline, isFinal, readAccess, writeAccess):
+				if (field.initializer != null || typeName == null || !simpleTypeMatches(field.type, typeName)
+					|| field.isStatic != isStatic || field.isInline != isInline || field.isFinal != isFinal
+					|| fieldAccessName(field.readAccess) != readAccess || fieldAccessName(field.writeAccess) != writeAccess)
+					null;
+				else
+					{
+						name: name,
+						type: lowerSimpleType(typeName),
+						initializer: null,
+						readAccess: lowerFieldAccess(readAccess),
+						writeAccess: lowerFieldAccess(writeAccess),
+						isStatic: isStatic,
+						isInline: isInline,
+						isFinal: isFinal
+					};
+			case SyntaxNodePayload.FieldHeaderRich(name, typePayload, initializerPayload, isStatic, isInline, isFinal, readAccess, writeAccess):
+				var loweredType = field.type == null ? null : typePayload == null ? null : lowerType(field.type, typePayload),
+					loweredInitializer = field.initializer == null ? null : initializerPayload == null ? null : lowerExpression(field.initializer, initializerPayload);
+				if (field.type != null && loweredType == null || field.initializer != null && loweredInitializer == null
+					|| field.type == null && typePayload != null || field.initializer == null && initializerPayload != null
+					|| field.name != name || field.isStatic != isStatic || field.isInline != isInline || field.isFinal != isFinal
+					|| fieldAccessName(field.readAccess) != readAccess || fieldAccessName(field.writeAccess) != writeAccess)
+					null;
+				else
+					{
+						name: name,
+						type: loweredType,
+						initializer: loweredInitializer,
+						readAccess: lowerFieldAccess(readAccess),
+						writeAccess: lowerFieldAccess(writeAccess),
+						isStatic: isStatic,
+						isInline: isInline,
+						isFinal: isFinal
+					};
+			default: null;
 		};
 	}
 
