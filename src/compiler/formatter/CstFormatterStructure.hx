@@ -34,6 +34,7 @@ typedef SyntaxInfo = {
 	final nodes:Array<FormatNode>;
 	final nodeKinds:Map<String, FormatNodeKind>;
 	final matching:Map<Int, Int>;
+	final matchingByOffset:Map<Int, Int>;
 	final blockOpens:Map<Int, Bool>;
 	final blockCloses:Map<Int, Bool>;
 	final blockDepth:Map<Int, Int>;
@@ -55,6 +56,7 @@ class CstFormatterStructure {
 			nodes: [],
 			nodeKinds: [],
 			matching: [],
+			matchingByOffset: [],
 			blockOpens: [],
 			blockCloses: [],
 			blockDepth: []
@@ -165,8 +167,7 @@ class CstFormatterStructure {
 		if (FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftBrace
 			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightBrace)
 			return;
-		syntax.matching.set(open, close);
-		syntax.matching.set(close, open);
+		setMatching(syntax, tokens, open, close);
 		syntax.blockOpens.set(tokens[open].start, true);
 		syntax.blockCloses.set(tokens[close].start, true);
 		syntax.nodeKinds.set(open + ":" + close, FormatNodeKind.Block);
@@ -187,8 +188,7 @@ class CstFormatterStructure {
 			|| FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftParen
 			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightParen)
 			return;
-		syntax.matching.set(open, close);
-		syntax.matching.set(close, open);
+		setMatching(syntax, tokens, open, close);
 		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, FormatNodeKind.Call);
 		syntax.nodes.push({kind: FormatNodeKind.Call, start: open, end: close, parent: null});
 	}
@@ -206,12 +206,18 @@ class CstFormatterStructure {
 		};
 		if (!valid)
 			return;
-		syntax.matching.set(open, close);
-		syntax.matching.set(close, open);
+		setMatching(syntax, tokens, open, close);
 		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, kind);
 		if (kind == FormatNodeKind.ObjectLiteral)
 			syntax.blockOpens.set(tokens[open].start, false);
 		syntax.nodes.push({kind: kind, start: open, end: close, parent: null});
+	}
+
+	static function setMatching(syntax:SyntaxInfo, tokens:Array<FormatToken>, open:Int, close:Int):Void {
+		syntax.matching.set(open, close);
+		syntax.matching.set(close, open);
+		syntax.matchingByOffset.set(tokens[open].start, tokens[close].start);
+		syntax.matchingByOffset.set(tokens[close].start, tokens[open].start);
 	}
 
 	static function tokenIndexAt(tokens:Array<FormatToken>, offset:Int):Int {

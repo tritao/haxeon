@@ -146,6 +146,11 @@ class FormatterMain {
 			expectedGeneric = "function main():Int {\n  var value:Map<\n    FirstArgument,\n    SecondArgument\n  > = [];\n  return 0;\n}\n";
 		if (generic != expectedGeneric)
 			throw "generic argument list did not use a break opportunity";
+		var comparison = Formatter.format("function main():Bool { return first<second && third>fourth; }\n", config);
+		if (comparison == null
+			|| comparison.indexOf("return first < second && third > fourth;") < 0
+			|| Formatter.format(comparison, config) != comparison)
+			throw "comparison operators were confused with generic delimiters";
 
 		var switchSource = "function main():Int { switch value { case First: return firstValue; case Second: return secondValue; default: return 0; } return 0; }\n",
 			switchFormatted = Formatter.format(switchSource, config),

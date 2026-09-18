@@ -42,7 +42,7 @@ class BreakAnalyzer {
 				penalty = 20;
 			} else if (rightKind != null
 				&& isComparisonOperator(rightKind)
-				&& !(rightKind == TokenKind.Less && isGenericOpen(tokens, index + 1))) {
+				&& !(rightKind == TokenKind.Less && isGenericOpen(tokens, index + 1, syntax))) {
 				canBreak = true;
 				penalty = 25;
 			} else if (rightKind == TokenKind.Question && isTernaryQuestion(tokens, index + 1)) {
@@ -107,41 +107,35 @@ class BreakAnalyzer {
 	}
 
 	static function findGroups(tokens:Array<FormatToken>, syntax:SyntaxInfo):Array<DelimiterGroup> {
-		var result:Array<DelimiterGroup> = [],
-			stack:Array<{open:Int, closeKind:TokenKind, commas:Array<Int>}> = [];
-		for (index in 0...tokens.length) {
-			var kind = FormatTokenTools.syntaxKind(tokens[index]);
-			if (kind == null)
+		var result:Array<DelimiterGroup> = [], indexByStart:Map<Int, Int> = [];
+		for (index in 0...tokens.length)
+			indexByStart.set(tokens[index].start, index);
+		for (open in 0...tokens.length) {
+			if (!isOpeningDelimiter(FormatTokenTools.syntaxKind(tokens[open])))
 				continue;
-			switch kind {
-				case TokenKind.LeftParen:
-					stack.push({open: index, closeKind: TokenKind.RightParen, commas: []});
-				case TokenKind.LeftBracket:
-					stack.push({open: index, closeKind: TokenKind.RightBracket, commas: []});
-				case TokenKind.LeftBrace:
-					stack.push({open: index, closeKind: TokenKind.RightBrace, commas: []});
-				case TokenKind.Less:
-					if (isGenericOpen(tokens, index))
-						stack.push({open: index, closeKind: TokenKind.Greater, commas: []});
-				case TokenKind.Comma:
-					if (stack.length > 0)
-						stack[stack.length - 1].commas.push(index);
-				case TokenKind.Greater, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace:
-					if (stack.length > 0 && stack[stack.length - 1].closeKind == kind) {
-						var group = stack.pop();
-						result.push({
-							open: group.open,
-							close: index,
-							commas: group.commas,
-							kind: syntax.nodeKinds.get(tokens[group.open].start + ":" + tokens[index].start),
-							expanded: false
-						});
-					}
-				default:
-			}
+			var closeStart = syntax.matchingByOffset.get(tokens[open].start);
+			if (closeStart == null)
+				continue;
+			var close = indexByStart.get(closeStart);
+			if (close == null || close <= open)
+				continue;
+			var commas:Array<Int> = [];
+			for (index in open + 1...close)
+				if (FormatTokenTools.syntaxKind(tokens[index]) == TokenKind.Comma)
+					commas.push(index);
+			result.push({
+				open: open,
+				close: close,
+				commas: commas,
+				kind: syntax.nodeKinds.get(tokens[open].start + ":" + tokens[close].start),
+				expanded: false
+			});
 		}
 		return result;
 	}
+
+	static function isOpeningDelimiter(kind:Null<TokenKind>):Bool
+		return kind == TokenKind.LeftParen || kind == TokenKind.LeftBracket || kind == TokenKind.LeftBrace || kind == TokenKind.Less;
 
 	static function spacing(tokens:Array<FormatToken>, index:Int, left:Null<TokenKind>, right:Null<TokenKind>, syntax:SyntaxInfo):Int {
 		if (tokens[index + 1].kind == FormatTokenKind.LineComment
@@ -157,14 +151,14 @@ class BreakAnalyzer {
 			return 0;
 		if (right == TokenKind.LeftParen)
 			return left == TokenKind.If || left == TokenKind.While || left == TokenKind.For || left == TokenKind.Switch || left == TokenKind.Catch ? 1 : 0;
-		if (right == TokenKind.Less && isGenericOpen(tokens, index + 1))
+		if (right == TokenKind.Less && isGenericOpen(tokens, index + 1, syntax))
 			return 0;
-		if (left == TokenKind.Less && isGenericOpen(tokens, index))
+		if (left == TokenKind.Less && isGenericOpen(tokens, index, syntax))
 			return 0;
-		if (right == TokenKind.Greater && isGenericClose(tokens, index + 1))
+		if (right == TokenKind.Greater && isGenericClose(tokens, index + 1, syntax))
 			return 0;
 		if (left == TokenKind.Greater
-			&& isGenericClose(tokens, index)
+			&& isGenericClose(tokens, index, syntax)
 			&& (right == TokenKind.LeftParen || right == TokenKind.LeftBracket || right == TokenKind.Dot || right == TokenKind.Comma
 				|| right == TokenKind.Semicolon || right == TokenKind.RightParen || right == TokenKind.RightBracket || right == TokenKind.RightBrace
 				|| right == TokenKind.Greater))
@@ -206,58 +200,15 @@ class BreakAnalyzer {
 		return previous != TokenKind.LeftParen && previous != TokenKind.Comma && previous != TokenKind.Assign && previous != TokenKind.Colon;
 	}
 
-	static function isGenericOpen(tokens:Array<FormatToken>, index:Int):Bool {
-		if (index <= 0 || FormatTokenTools.syntaxKind(tokens[index]) != TokenKind.Less)
-			return false;
-		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
-		if (!isTypeName(previous))
-			return false;
-		var depth = 0, hasContent = false;
-		for (cursor in index...tokens.length) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == null)
-				continue;
-			switch kind {
-				case TokenKind.Less:
-					depth++;
-				case TokenKind.Greater:
-					depth--;
-					if (depth == 0) {
-						if (!hasContent)
-							return false;
-						var after = cursor + 1 < tokens.length ? FormatTokenTools.syntaxKind(tokens[cursor + 1]) : null;
-						return after == null || after == TokenKind.LeftParen || after == TokenKind.LeftBracket || after == TokenKind.Dot
-							|| after == TokenKind.Comma || after == TokenKind.RightParen || after == TokenKind.RightBracket || after == TokenKind.RightBrace
-							|| after == TokenKind.Assign || after == TokenKind.Colon || after == TokenKind.Semicolon || after == TokenKind.Arrow;
-					}
-				case TokenKind.Comma:
-					hasContent = true;
-				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void:
-					hasContent = true;
-				case TokenKind.LeftBracket, TokenKind.RightBracket, TokenKind.Dot:
-				default:
-					return false;
-			}
-		}
-		return false;
-	}
+	static function isGenericOpen(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length
+			&& FormatTokenTools.syntaxKind(tokens[index]) == TokenKind.Less
+			&& syntax.matchingByOffset.exists(tokens[index].start);
 
-	static function isGenericClose(tokens:Array<FormatToken>, index:Int):Bool {
-		var cursor = index - 1;
-		while (cursor >= 0) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == TokenKind.Less && isGenericOpen(tokens, cursor))
-				return true;
-			if (kind == TokenKind.Semicolon || kind == TokenKind.Assign || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
-				break;
-			cursor--;
-		}
-		return false;
-	}
-
-	static function isTypeName(kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Identifier || kind == TokenKind.TypeInt || kind == TokenKind.TypeBool || kind == TokenKind.TypeFloat
-			|| kind == TokenKind.TypeString || kind == TokenKind.Void || kind == TokenKind.RightBracket || kind == TokenKind.Greater;
+	static function isGenericClose(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length
+			&& FormatTokenTools.syntaxKind(tokens[index]) == TokenKind.Greater
+			&& syntax.matchingByOffset.exists(tokens[index].start);
 
 	static function colonNeedsSpace(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool {
 		var objectDepth = 0;
