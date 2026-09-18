@@ -2317,7 +2317,7 @@ class BodyTyper {
 
 	function resolveType(type:AstType, ?substitutions:Map<String, CompilerType>):CompilerType {
 		try {
-			return substitutions == null ? lowerType(type) : session.declarations.resolve(type, null, substitutions);
+			return substitutions == null ? lowerType(type) : session.representation.semanticType(type, null, substitutions);
 		} catch (error:CompileError) {
 			if (!session.tolerant)
 				throw error;

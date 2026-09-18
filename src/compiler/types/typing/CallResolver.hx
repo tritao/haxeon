@@ -371,7 +371,10 @@ class CallResolver {
 		var parameters = functionTypeParameters(fn),
 			substitutions:Map<String, CompilerType> = [],
 			typed:Array<TypedExpression> = [];
-		if (expectedResult != null && !isRecoveryType(expectedResult))
+		// A discarded call is typed with the enclosing statement's TVoid result;
+		// that is not an expected generic return type and must not bind a type
+		// parameter before argument inference supplies the real value type.
+		if (expectedResult != null && !isRecoveryType(expectedResult) && !sameType(expectedResult, TVoid))
 			inferTypeParameters(fn.result, expectedResult, parameters, substitutions, span);
 		for (index in 0...arguments.length) {
 			var expected:Null<CompilerType> = null;

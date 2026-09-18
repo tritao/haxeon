@@ -40,20 +40,16 @@ class AbstractConversionGraph {
 				var metadata = method.metadata;
 				if (metadata == null)
 					continue;
-				var fromType = method.arguments.length == 1 ? resolveConversionType(method.arguments[0].type, method.span, substitutions) : null,
-					toType = method.arguments.length == 0 ? resolveConversionType(method.result, method.span, substitutions) : null;
 				for (entry in metadata)
 					switch entry.name {
-						case "from" if (method.isStatic && fromType != null):
-							fromEdges.push({
-								source: node(fromType, decl.name, decl.typeParameters),
-								target: owner
-							});
-						case "to" if (!method.isStatic && toType != null):
-							toEdges.push({
-								source: owner,
-								target: node(toType, decl.name, decl.typeParameters)
-							});
+						case "from" if (method.isStatic && method.arguments.length == 1):
+							var resolved = resolveConversionType(method.arguments[0].type, method.span, substitutions);
+							if (resolved != null)
+								fromEdges.push({source: node(resolved, decl.name, decl.typeParameters), target: owner});
+						case "to" if (!method.isStatic && method.arguments.length == 0):
+							var resolved = resolveConversionType(method.result, method.span, substitutions);
+							if (resolved != null)
+								toEdges.push({source: owner, target: node(resolved, decl.name, decl.typeParameters)});
 						default:
 					}
 			}
