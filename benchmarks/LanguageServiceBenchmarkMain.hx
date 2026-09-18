@@ -574,18 +574,23 @@ class LanguageServiceBenchmarkMain {
 	}
 
 	static function runGeneratedEditMatrix(moduleCount:Int, topology:String):Array<GeneratedEditMeasurement> {
-		var service = prepareGeneratedWorkspace(moduleCount, topology),
-			validSource = generatedSource(moduleCount, topology, 0, false),
+		var validSource = generatedSource(moduleCount, topology, 0, false),
 			mainPath = "generated/Main.hx";
-		service.update(mainPath, validSource);
-		service.compile("generated.Main");
 		var measurements:Array<GeneratedEditMeasurement> = [];
 		for (kind in generatedEditKinds()) {
-			resetGeneratedEditorState(service, moduleCount, topology, validSource);
+			// Every edit class starts from an identical clean publication. Reusing
+			// one service here would let an earlier import/base/interface edit
+			// change reachability for the next case and make its invalidation oracle
+			// depend on matrix ordering.
+			var service = prepareGeneratedWorkspace(moduleCount, topology);
+			service.update(mainPath, validSource);
+			service.compile("generated.Main");
 			measurements.push(measureGeneratedEdit(service, moduleCount, topology, kind, validSource));
 		}
 
-		resetGeneratedEditorState(service, moduleCount, topology, validSource);
+		var service = prepareGeneratedWorkspace(moduleCount, topology);
+		service.update(mainPath, validSource);
+		service.compile("generated.Main");
 		var recoveredBefore = service.recoveredSnapshotBuilds,
 			malformed = generatedSource(moduleCount, topology, 2, true),
 			started = Sys.time();
@@ -632,14 +637,6 @@ class LanguageServiceBenchmarkMain {
 		return [BodyOnly, PublicSignature, FieldType, ImportChange, BaseClassChange, InterfaceChange, AddDeclaration, RemoveDeclaration];
 	}
 
-	static function resetGeneratedEditorState(service:LanguageService, moduleCount:Int, topology:String, validSource:String):Void {
-		service.update("generated/Type0.hx", generatedTypeSource(0, topology));
-		if (moduleCount > 1)
-			service.update("generated/Type1.hx", generatedTypeSource(1, topology));
-		service.update("generated/Main.hx", validSource);
-		service.analyze("generated.Main");
-	}
-
 	static function measureGeneratedEdit(service:LanguageService, moduleCount:Int, topology:String, kind:GeneratedEditKind,
 		validSource:String):GeneratedEditMeasurement {
 		var input = generatedEditInput(moduleCount, topology, kind, validSource),
@@ -678,9 +675,18 @@ class LanguageServiceBenchmarkMain {
 		return switch (kind) {
 			case BodyOnly: ["generated.Main"];
 			case ImportChange: ["generated.Base", 'generated.Type$typeIndex'];
-			case InterfaceChange: ["generated.Contract", 'generated.Type$typeIndex'];
+			case BaseClassChange: withDependency("generated.Base", expectedTypeInvalidations(typeIndex, moduleCount, topology));
+			case InterfaceChange: withDependency("generated.Contract", expectedTypeInvalidations(typeIndex, moduleCount, topology));
 			default: expectedTypeInvalidations(typeIndex, moduleCount, topology);
 		};
+	}
+
+	static function withDependency(dependency:String, modules:Array<String>):Array<String> {
+		var result = [dependency];
+		for (module in modules)
+			if (result.indexOf(module) < 0)
+				result.push(module);
+		return result;
 	}
 
 	static function generatedEditName(kind:GeneratedEditKind):String {
@@ -791,12 +797,41 @@ class LanguageServiceBenchmarkMain {
 	}
 
 	static function expectedTypeInvalidations(typeIndex:Int, moduleCount:Int, topology:String):Array<String> {
-		var result = ['generated.Type$typeIndex'];
-		for (index in 0...moduleCount)
-			if (generatedDependencies(index, topology).contains(typeIndex))
-				result.push('generated.Type$index');
-		if (topology == "fanout" && typeIndex == generatedTarget(moduleCount, topology))
+		var result:Array<String> = [],
+			pending = [typeIndex],
+			seen:Map<Int, Bool> = [],
+			reachable = generatedReachableTypes(moduleCount, topology);
+		while (pending.length > 0) {
+			var current = pending.shift();
+			if (seen.exists(current) || !reachable.exists(current))
+				continue;
+			seen.set(current, true);
+			result.push('generated.Type$current');
+			for (index in 0...moduleCount)
+				if (generatedDependencies(index, topology).contains(current))
+					pending.push(index);
+		}
+		if (seen.exists(generatedTarget(moduleCount, topology)))
 			result.push("generated.Main");
+		return result;
+	}
+
+	static function generatedReachableTypes(moduleCount:Int, topology:String):Map<Int, Bool> {
+		var result:Map<Int, Bool> = [];
+		if (topology == "fanout") {
+			for (index in 0...moduleCount)
+				result.set(index, true);
+			return result;
+		}
+		var pending = [generatedTarget(moduleCount, topology)];
+		while (pending.length > 0) {
+			var current = pending.shift();
+			if (result.exists(current))
+				continue;
+			result.set(current, true);
+			for (dependency in generatedDependencies(current, topology))
+				pending.push(dependency);
+		}
 		return result;
 	}
 

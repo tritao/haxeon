@@ -42,8 +42,10 @@ can reuse these scenario and probe conventions without changing the core
 report.
 
 Generated scenarios assert the invalidation closure as well as recording its
-size: body-only edits must invalidate only the entry module, while a Type0
-signature edit follows the topology-specific direct declaration closure.
+size: body-only edits must invalidate only the entry module, while declaration,
+field, base-class, and interface edits follow the topology-specific transitive
+closure among modules reachable from the entry point. Each edit class starts
+from a fresh baseline so the result is independent of matrix ordering.
 
 Example:
 
