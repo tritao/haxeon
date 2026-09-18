@@ -23,20 +23,11 @@ enum FormatNodeKind {
 	Condition;
 }
 
-typedef FormatNode = {
-	final kind:FormatNodeKind;
-	final start:Int;
-	final end:Int;
-	final parent:Null<Int>;
-}
-
 typedef SyntaxInfo = {
-	final nodes:Array<FormatNode>;
 	final nodeKinds:Map<String, FormatNodeKind>;
 	final matchingByOffset:Map<Int, Int>;
 	final blockOpens:Map<Int, Bool>;
 	final blockCloses:Map<Int, Bool>;
-	final blockDepth:Map<Int, Int>;
 }
 
 /** Converts authoritative CST structure into layout-engine constraints. */
@@ -52,27 +43,19 @@ class CstFormatterStructure {
 
 	static function annotateCst(tokens:Array<FormatToken>, tree:SyntaxTree, conditionalText:Null<String>):SyntaxInfo {
 		var result:SyntaxInfo = {
-			nodes: [],
 			nodeKinds: [],
 			matchingByOffset: [],
 			blockOpens: [],
-			blockCloses: [],
-			blockDepth: []
+			blockCloses: []
 		};
-		applyGrammarNodes(tokens, result, tree);
+		var tokenAtStart:Map<Int, Int> = [], tokenAtEnd:Map<Int, Int> = [];
+		for (index in 0...tokens.length)
+			if (FormatTokenTools.isSyntax(tokens[index])) {
+				tokenAtStart.set(tokens[index].start, index);
+				tokenAtEnd.set(tokens[index].end, index);
+			}
+		applyGrammarNodes(tokens, result, tree, tokenAtStart, tokenAtEnd);
 		mergeInactiveBlockDelimiters(tokens, result, conditionalText);
-		annotateParents(result.nodes);
-		for (index in 0...tokens.length) {
-			if (!FormatTokenTools.isSyntax(tokens[index]))
-				continue;
-			var depth = 0;
-			for (node in result.nodes)
-				if (node.kind == FormatNodeKind.Block
-					&& tokens[node.start].start <= tokens[index].start
-					&& tokens[node.end].end > tokens[index].start)
-					depth++;
-			result.blockDepth.set(tokens[index].start, depth);
-		}
 		return result;
 	}
 
@@ -107,33 +90,34 @@ class CstFormatterStructure {
 	}
 
 	/** Applies authoritative delimiter information already known by the parser. */
-	static function applyGrammarNodes(tokens:Array<FormatToken>, syntax:SyntaxInfo, tree:SyntaxTree):Void {
+	static function applyGrammarNodes(tokens:Array<FormatToken>, syntax:SyntaxInfo, tree:SyntaxTree, tokenAtStart:Map<Int, Int>,
+			tokenAtEnd:Map<Int, Int>):Void {
 		for (node in tree.grammarNodes())
 			switch node.kind {
 				case SyntaxKind.Block:
-					applyBlockNode(tokens, syntax, node);
+					applyBlockNode(tokens, syntax, node, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.CallExpression:
-					applyCallNode(tokens, syntax, node);
+					applyCallNode(tokens, syntax, node, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.BinaryExpression:
-					applyExpressionNode(tokens, syntax, node, FormatNodeKind.BinaryExpression);
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.BinaryExpression, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ConditionalExpression:
-					applyExpressionNode(tokens, syntax, node, FormatNodeKind.ConditionalExpression);
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.ConditionalExpression, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.AssignmentExpression, SyntaxKind.AssignmentStatement:
-					applyExpressionNode(tokens, syntax, node, FormatNodeKind.Assignment);
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.Assignment, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.MemberExpression:
-					applyExpressionNode(tokens, syntax, node, FormatNodeKind.MemberChain);
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.MemberChain, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.TypeArgumentList, SyntaxKind.TypeParameterList:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ParameterList:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ParameterList);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ParameterList, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ArgumentList:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArgumentList);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArgumentList, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ParenthesizedExpression:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.Parenthesized);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.Parenthesized, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ArrayLiteral:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArrayLiteral);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArrayLiteral, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.ObjectLiteral, SyntaxKind.MapLiteral, SyntaxKind.AnonymousType:
-					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ObjectLiteral);
+					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ObjectLiteral, tokenAtStart, tokenAtEnd);
 				case SyntaxKind.SourceFile, SyntaxKind.PackageDeclaration, SyntaxKind.ImportDeclaration,
 					SyntaxKind.TypeAliasDeclaration, SyntaxKind.EnumDeclaration, SyntaxKind.EnumAbstractDeclaration,
 					SyntaxKind.AbstractDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.ClassDeclaration,
@@ -148,19 +132,20 @@ class CstFormatterStructure {
 			}
 	}
 
-	static function applyExpressionNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind):Void {
-		var start = tokenIndexAt(tokens, node.span.start), end = tokenIndexEndingAt(tokens, node.span.end);
-		if (start < 0 || end < start)
+	static function applyExpressionNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind,
+		 tokenAtStart:Map<Int, Int>, tokenAtEnd:Map<Int, Int>):Void {
+		var start = tokenAtStart.get(node.span.start), end = tokenAtEnd.get(node.span.end);
+		if (start == null || end == null || end < start)
 			return;
 		var key = tokens[start].start + ":" + tokens[end].start;
 		if (!syntax.nodeKinds.exists(key) || !isDelimiterNode(syntax.nodeKinds.get(key)))
 			syntax.nodeKinds.set(key, kind);
-		syntax.nodes.push({kind: kind, start: start, end: end, parent: null});
 	}
 
-	static function applyBlockNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
-		var open = tokenIndexAt(tokens, node.span.start), close = tokenIndexEndingAt(tokens, node.span.end);
-		if (open < 0 || close < 0 || open >= close)
+	static function applyBlockNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, tokenAtStart:Map<Int, Int>,
+			tokenAtEnd:Map<Int, Int>):Void {
+		var open = tokenAtStart.get(node.span.start), close = tokenAtEnd.get(node.span.end);
+		if (open == null || close == null || open >= close)
 			return;
 		if (FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftBrace
 			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightBrace)
@@ -169,10 +154,10 @@ class CstFormatterStructure {
 		syntax.blockOpens.set(tokens[open].start, true);
 		syntax.blockCloses.set(tokens[close].start, true);
 		syntax.nodeKinds.set(open + ":" + close, FormatNodeKind.Block);
-		syntax.nodes.push({kind: FormatNodeKind.Block, start: open, end: close, parent: null});
 	}
 
-	static function applyCallNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
+	static function applyCallNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, tokenAtStart:Map<Int, Int>,
+			tokenAtEnd:Map<Int, Int>):Void {
 		var argumentList:Null<SyntaxNode> = null;
 		for (child in node.grammarChildren)
 			if (child.kind == SyntaxKind.ArgumentList && child.span.end == node.span.end) {
@@ -181,19 +166,19 @@ class CstFormatterStructure {
 			}
 		if (argumentList == null)
 			return;
-		var open = tokenIndexAt(tokens, argumentList.span.start), close = tokenIndexEndingAt(tokens, argumentList.span.end);
-		if (open < 0 || close < open
+		var open = tokenAtStart.get(argumentList.span.start), close = tokenAtEnd.get(argumentList.span.end);
+		if (open == null || close == null || close < open
 			|| FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftParen
 			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightParen)
 			return;
 		setMatching(syntax, tokens, open, close);
 		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, FormatNodeKind.Call);
-		syntax.nodes.push({kind: FormatNodeKind.Call, start: open, end: close, parent: null});
 	}
 
-	static function applyDelimitedNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind):Void {
-		var open = tokenIndexAt(tokens, node.span.start), close = tokenIndexEndingAt(tokens, node.span.end);
-		if (open < 0 || close < open)
+	static function applyDelimitedNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind,
+			tokenAtStart:Map<Int, Int>, tokenAtEnd:Map<Int, Int>):Void {
+		var open = tokenAtStart.get(node.span.start), close = tokenAtEnd.get(node.span.end);
+		if (open == null || close == null || close < open)
 			return;
 		var openKind = FormatTokenTools.syntaxKind(tokens[open]), closeKind = FormatTokenTools.syntaxKind(tokens[close]), valid = switch kind {
 			case FormatNodeKind.TypeArgumentList: openKind == TokenKind.Less && closeKind == TokenKind.Greater;
@@ -208,49 +193,11 @@ class CstFormatterStructure {
 		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, kind);
 		if (kind == FormatNodeKind.ObjectLiteral)
 			syntax.blockOpens.set(tokens[open].start, false);
-		syntax.nodes.push({kind: kind, start: open, end: close, parent: null});
 	}
 
 	static function setMatching(syntax:SyntaxInfo, tokens:Array<FormatToken>, open:Int, close:Int):Void {
 		syntax.matchingByOffset.set(tokens[open].start, tokens[close].start);
 		syntax.matchingByOffset.set(tokens[close].start, tokens[open].start);
-	}
-
-	static function tokenIndexAt(tokens:Array<FormatToken>, offset:Int):Int {
-		for (index in 0...tokens.length)
-			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].start == offset)
-				return index;
-		return -1;
-	}
-
-	static function tokenIndexEndingAt(tokens:Array<FormatToken>, offset:Int):Int {
-		for (index in 0...tokens.length)
-			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].end == offset)
-				return index;
-		return -1;
-	}
-
-	static function annotateParents(nodes:Array<FormatNode>):Void {
-		for (index in 0...nodes.length) {
-			var node = nodes[index], parent:Null<FormatNode> = null;
-			for (candidateIndex in 0...nodes.length) {
-				if (candidateIndex == index)
-					continue;
-				var candidate = nodes[candidateIndex],
-					contains = candidate.start <= node.start && candidate.end >= node.end,
-					strict = candidate.start < node.start || candidate.end > node.end;
-				if (!contains || !strict || (parent != null && candidate.end - candidate.start >= parent.end - parent.start))
-					continue;
-				parent = candidate;
-			}
-			if (parent != null)
-				nodes[index] = {
-					kind: node.kind,
-					start: node.start,
-					end: node.end,
-					parent: parent.start
-				};
-		}
 	}
 
 	static function isDelimiterNode(kind:FormatNodeKind):Bool

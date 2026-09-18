@@ -605,9 +605,10 @@ layout engine. The benchmark compares complete AST-only and CST frontends
 (lex/parse versus scan/adapt/parse/lower) and records latency distributions,
 memory growth, and token/trivia/node counts in
 `out/syntax-scanner-benchmark.json`. The report also records CST overhead over
-the AST-only frontend and runs an explicit endurance case; `--check-budgets`
-enforces the normal frontend latency budgets and the configured CST-overhead
-ceiling.
+the AST-only frontend, separates scan/parse from lowering, measures the
+end-to-end formatter path, and runs an explicit endurance case;
+`--check-budgets` enforces the normal frontend and formatter latency budgets
+plus the configured CST-overhead ceiling.
 
 ## 🧪 Development
 

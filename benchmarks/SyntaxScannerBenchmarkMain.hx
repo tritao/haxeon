@@ -1,6 +1,8 @@
 package;
 
 import compiler.Source.SourceFile;
+import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.Formatter;
 import compiler.syntax.AstLowerer;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -22,7 +24,9 @@ private typedef Iteration = {
 	final compilerLexMs:Float;
 	final losslessScanMs:Float;
 	final astFrontendMs:Float;
+	final cstSyntaxMs:Float;
 	final cstFrontendMs:Float;
+	final formatterMs:Float;
 	final cstOverheadMs:Float;
 	final cstOverheadPercent:Float;
 	final explicitLowerMs:Float;
@@ -48,7 +52,9 @@ private typedef CaseReport = {
 	final compilerLexMs:Percentiles;
 	final losslessScanMs:Percentiles;
 	final astFrontendMs:Percentiles;
+	final cstSyntaxMs:Percentiles;
 	final cstFrontendMs:Percentiles;
+	final formatterMs:Percentiles;
 	final cstOverheadMs:Percentiles;
 	final cstOverheadPercent:Percentiles;
 	final explicitLowerMs:Percentiles;
@@ -85,7 +91,7 @@ class SyntaxScannerBenchmarkMain {
 		var endurance = runCase(enduranceFile, enduranceModules, enduranceIterations);
 
 		var report = {
-			version: 4,
+			version: 5,
 			iterations: iterations,
 			warmup: warmup,
 			cases: reports,
@@ -108,7 +114,9 @@ class SyntaxScannerBenchmarkMain {
 			compilerLex:Array<Float> = [],
 			losslessScan:Array<Float> = [],
 			astFrontend:Array<Float> = [],
+			cstSyntax:Array<Float> = [],
 			cstFrontend:Array<Float> = [],
+			formatter:Array<Float> = [],
 			cstOverhead:Array<Float> = [],
 			cstOverheadPercent:Array<Float> = [],
 			explicitLower:Array<Float> = [],
@@ -124,7 +132,9 @@ class SyntaxScannerBenchmarkMain {
 			compilerLex.push(sample.compilerLexMs);
 			losslessScan.push(sample.losslessScanMs);
 			astFrontend.push(sample.astFrontendMs);
+			cstSyntax.push(sample.cstSyntaxMs);
 			cstFrontend.push(sample.cstFrontendMs);
+			formatter.push(sample.formatterMs);
 			cstOverhead.push(sample.cstOverheadMs);
 			cstOverheadPercent.push(sample.cstOverheadPercent);
 			explicitLower.push(sample.explicitLowerMs);
@@ -150,7 +160,9 @@ class SyntaxScannerBenchmarkMain {
 			compilerLexMs: percentiles(compilerLex),
 			losslessScanMs: percentiles(losslessScan),
 			astFrontendMs: percentiles(astFrontend),
+			cstSyntaxMs: percentiles(cstSyntax),
 			cstFrontendMs: percentiles(cstFrontend),
+			formatterMs: percentiles(formatter),
 			cstOverheadMs: percentiles(cstOverhead),
 			cstOverheadPercent: percentiles(cstOverheadPercent),
 			explicitLowerMs: percentiles(explicitLower),
@@ -175,13 +187,18 @@ class SyntaxScannerBenchmarkMain {
 		var cstTokensInput = Lexer.tokenizeLossless(file, lossless),
 			cstParser = new Parser(cstTokensInput, null, ParserMode.Cst(file), lossless),
 			cstProgram = cstParser.parseProgram(),
-			cstFrontendMs = (Sys.time() - cstStarted) * 1000.0,
+			cstSyntaxMs = (Sys.time() - cstStarted) * 1000.0,
 			tree = cstParser.cst;
 		if (tree == null)
 			throw "CST parser did not publish a syntax tree";
 		started = Sys.time();
 		AstLowerer.lower(tree, cstProgram, false);
 		var explicitLowerMs = (Sys.time() - started) * 1000.0;
+		var cstFrontendMs = (Sys.time() - cstStarted) * 1000.0;
+		started = Sys.time();
+		if (Formatter.format(file.text, FormatConfigTools.defaults(2, true)) == null)
+			throw "formatter benchmark could not format its valid sample";
+		var formatterMs = (Sys.time() - started) * 1000.0;
 		var cstOverheadMs = cstFrontendMs - astFrontendMs,
 			cstOverheadPercent = astFrontendMs <= 0 ? -1 : cstOverheadMs * 100.0 / astFrontendMs;
 		var losslessTrivia = 0;
@@ -194,7 +211,9 @@ class SyntaxScannerBenchmarkMain {
 			compilerLexMs: compilerLexMs,
 			losslessScanMs: losslessScanMs,
 			astFrontendMs: astFrontendMs,
+			cstSyntaxMs: cstSyntaxMs,
 			cstFrontendMs: cstFrontendMs,
+			formatterMs: formatterMs,
 			cstOverheadMs: cstOverheadMs,
 			cstOverheadPercent: cstOverheadPercent,
 			explicitLowerMs: explicitLowerMs,
@@ -228,7 +247,9 @@ class SyntaxScannerBenchmarkMain {
 		Sys.println('  compiler lex median/p95/p99: ${format(report.compilerLexMs.median)}/${format(report.compilerLexMs.p95)}/${format(report.compilerLexMs.p99)} ms');
 		Sys.println('  lossless scan median/p95/p99: ${format(report.losslessScanMs.median)}/${format(report.losslessScanMs.p95)}/${format(report.losslessScanMs.p99)} ms');
 		Sys.println('  AST-only frontend (lex+parse) median/p95/p99: ${format(report.astFrontendMs.median)}/${format(report.astFrontendMs.p95)}/${format(report.astFrontendMs.p99)} ms');
+		Sys.println('  CST syntax (scan+adapt+parse) median/p95/p99: ${format(report.cstSyntaxMs.median)}/${format(report.cstSyntaxMs.p95)}/${format(report.cstSyntaxMs.p99)} ms');
 		Sys.println('  CST frontend (scan+adapt+parse+lower) median/p95/p99: ${format(report.cstFrontendMs.median)}/${format(report.cstFrontendMs.p95)}/${format(report.cstFrontendMs.p99)} ms');
+		Sys.println('  formatter end-to-end (CST+layout) median/p95/p99: ${format(report.formatterMs.median)}/${format(report.formatterMs.p95)}/${format(report.formatterMs.p99)} ms');
 		Sys.println('  CST overhead median/p95/p99: ${format(report.cstOverheadMs.median)}/${format(report.cstOverheadMs.p95)}/${format(report.cstOverheadMs.p99)} ms '
 			+ '(${format(report.cstOverheadPercent.median)}/${format(report.cstOverheadPercent.p95)}/${format(report.cstOverheadPercent.p99)}%)');
 		Sys.println('  explicit lower/validate median/p95/p99: ${format(report.explicitLowerMs.median)}/${format(report.explicitLowerMs.p95)}/${format(report.explicitLowerMs.p99)} ms');
@@ -244,6 +265,8 @@ class SyntaxScannerBenchmarkMain {
 				throw 'AST-only frontend budget exceeded for ${report.modules} modules: ${format(report.astFrontendMs.p95)} ms > $budget ms';
 			if (report.cstFrontendMs.p95 > budget)
 				throw 'CST frontend budget exceeded for ${report.modules} modules: ${format(report.cstFrontendMs.p95)} ms > $budget ms';
+			if (report.formatterMs.p95 > budget)
+				throw 'Formatter CST budget exceeded for ${report.modules} modules: ${format(report.formatterMs.p95)} ms > $budget ms';
 			if (report.cstOverheadPercent.p95 > maxCstOverheadPercent)
 				throw 'CST overhead budget exceeded for ${report.modules} modules: ${format(report.cstOverheadPercent.p95)}% > ${format(maxCstOverheadPercent)}%';
 		}
