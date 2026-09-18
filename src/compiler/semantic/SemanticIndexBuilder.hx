@@ -1548,7 +1548,7 @@ class SemanticIndexBuilder {
 				}
 				if (fallback != null)
 					indexRecoveredExpression(fallback, expected, activeFunctionKey);
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_):
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_):
 		}
 	}
 
@@ -2635,7 +2635,7 @@ class SemanticIndexBuilder {
 					if (index < recovered.params.length)
 						indexRecoveredPatternBinding(functionKey, arguments[index], recoveredType(recovered.params[index].type,
 							recovered.substitutions), scope, depth);
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), ErrorExpression(_),
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_), ErrorExpression(_),
 				Variable(_, _), Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Negate(_, _), Less(_, _, _), LessEqual(_, _, _),
 				Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _), Or(_, _, _), Conditional(_, _, _, _),
@@ -2658,7 +2658,7 @@ class SemanticIndexBuilder {
 							indexRecoveredPatternBinding(functionKey, value, element, scope, depth);
 					default:
 				}
-			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_),
+			case Variable(_, _), IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Member(_, _, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Negate(_, _), Less(_, _, _), LessEqual(_, _, _),
 				Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _), Or(_, _, _), Conditional(_, _, _, _),

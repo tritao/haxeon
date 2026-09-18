@@ -159,7 +159,7 @@ class TypedAstChildren {
 						case CaptureExpression(child): expression(child, onStatement, onExpression);
 						default:
 					}
-			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral,
+			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral, TVoidLiteral,
 				TUnreachable, TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_), TStaticField(_, _), TFunctionRef(_),
 				TPostfixLocal(_, _), TPostfixCellLocal(_, _, _), TPostfixCellCaptured(_, _, _), TPostfixStaticField(_, _, _), TNewMap(_, _):
 			}

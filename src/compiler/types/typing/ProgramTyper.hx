@@ -665,8 +665,9 @@ class ProgramTyper {
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
-		try
+		try {
 			return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
+		}
 		catch (error:Dynamic) {
 			if (!session.tolerant)
 				throw error;

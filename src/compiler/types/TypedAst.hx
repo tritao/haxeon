@@ -133,7 +133,6 @@ typedef TypedSwitchExpressionCase = {
 	final span:SourceSpan;
 	final subjectBinding:Null<String>;
 	final arrayPattern:Null<TypedSwitchArrayPattern>;
-	final span:SourceSpan;
 
 	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
 	final isCatchAll:Bool;
@@ -497,6 +496,7 @@ class TypedAstTools {
 					[for (item in cases) {
 						value: rebaseExpression(item.value, source, delta),
 						subjectBinding: item.subjectBinding,
+						arrayPattern: item.arrayPattern,
 						isCatchAll: item.isCatchAll,
 						guard: item.guard == null ? null : rebaseExpression(item.guard, source, delta),
 						statements: [for (nested in item.statements) rebaseStatement(nested, source, delta)],
@@ -519,6 +519,8 @@ class TypedAstTools {
 	static function rebaseExpression(expression:TypedExpression, source:SourceFile, delta:Int):TypedExpression {
 		var rebased:TypedExpressionKind = switch expression.expression {
 			case TEnumConstruct(name, index, arguments): TEnumConstruct(name, index, rebaseExpressions(arguments, source, delta));
+			case TEnumIndex(value): TEnumIndex(rebaseExpression(value, source, delta));
+			case TEnumField(value, constructor, field): TEnumField(rebaseExpression(value, source, delta), constructor, field);
 			case TNullableWrap(value): TNullableWrap(rebaseExpression(value, source, delta));
 			case TIntToFloat(value): TIntToFloat(rebaseExpression(value, source, delta));
 			case TIntToInt64(value): TIntToInt64(rebaseExpression(value, source, delta));
@@ -578,6 +580,7 @@ class TypedAstTools {
 					value: rebaseExpression(item.value, source, delta),
 					span: rebaseSpan(item.span, source, delta),
 					subjectBinding: item.subjectBinding,
+					arrayPattern: item.arrayPattern,
 						isCatchAll: item.isCatchAll,
 						guard: item.guard == null ? null : rebaseExpression(item.guard, source, delta),
 						result: rebaseExpression(item.result, source, delta),
@@ -613,7 +616,7 @@ class TypedAstTools {
 			case TArrayPop(array): TArrayPop(rebaseExpression(array, source, delta));
 			case TArraySort(array, comparator): TArraySort(rebaseExpression(array, source, delta), rebaseExpression(comparator, source, delta));
 			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral,
-				TUnreachable, TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_),
+				TUnreachable, TVoidLiteral, TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_), TClassRef(_),
 				TLambda(_, _, _), TNewMap(_, _), TPostfixLocal(_, _), TPostfixCellLocal(_, _, _), TPostfixCellCaptured(_, _, _):
 				expression.expression;
 		};
@@ -659,6 +662,7 @@ class TypedAstTools {
 			case TLambda(_, _, _): true;
 			case TEnumConstruct(_, _, arguments), TCall(_, arguments), TCNativeCall(_, arguments), TArrayLiteral(arguments),
 				TClosureCall(_, arguments): [for (argument in arguments) containsLambdaExpression(argument)].indexOf(true) >= 0;
+			case TEnumIndex(value), TEnumField(value, _, _): containsLambdaExpression(value);
 			case TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value), TNot(value),
 				TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TArrayLength(value), TStringLength(value),
 				TStringFromCharCode(value), TArrayPop(value): containsLambdaExpression(value);
@@ -697,7 +701,7 @@ class TypedAstTools {
 			case TArraySort(array, comparator): containsLambdaExpression(array) || containsLambdaExpression(comparator);
 			case TFunctionRef(_), TClassRef(_), TStaticField(_, _), TPostfixStaticField(_, _, _), TLocal(_), TCellLocal(_, _), TCaptured(_),
 				TCellCaptured(_, _), TPostfixLocal(_, _), TPostfixCellLocal(_, _, _), TPostfixCellCaptured(_, _, _), TIntLiteral(_), TFloatLiteral(_),
-				TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral, TUnreachable, TNewMap(_, _): false;
+				TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral, TUnreachable, TVoidLiteral, TNewMap(_, _): false;
 		};
 	}
 }

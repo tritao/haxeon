@@ -656,6 +656,7 @@ class BodyTyper {
 					typedCases.push({
 						value: typedValue,
 						subjectBinding: subjectBinding,
+						arrayPattern: null,
 						isCatchAll: isCatchAll,
 						guard: typedGuard,
 						statements: typeStatements(switchCase.statements, caseScope, result),
@@ -2133,7 +2134,6 @@ class BodyTyper {
 		};
 		return parameter.optional ? TNullable(type) : type;
 	}
-	}
 
 	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
 		return session.representation.erasedEnumParameter(declaration, parameter);
@@ -2426,7 +2426,7 @@ class BodyTyper {
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
-			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
+			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span), EmptyExpression(span),
 				ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span), Sub(_, _, span), Mul(_, _, span), Div(_, _, span),
 				Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),

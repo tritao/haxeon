@@ -487,6 +487,7 @@ class Parser {
 				name: name,
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,
+				metadata: metadata,
 				cases: cases,
 				span: start.merge(previous().span)
 			};
