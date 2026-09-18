@@ -578,8 +578,11 @@ Generate scaling results and compare two runs:
 ```
 
 Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
-`--scale-iterations` to tune a run. Benchmark comparisons are informational and
-do not enforce thresholds.
+`--scale-iterations` to tune a run. Benchmark comparisons fail on regressions by
+default: latency, memory growth, and reuse use configurable relative tolerances,
+while invalidated/analyzed/retyped work is strict by default. Use
+`--report-only` for an informational comparison, or `--format=json` for CI
+consumers.
 
 The shared lexical/CST baseline compares the compiler-token adapter with the
 lossless tooling stream and optional CST parser:

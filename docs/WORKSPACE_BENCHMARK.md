@@ -66,3 +66,17 @@ LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/editor-benchmark.hl
 The 256-module fan-out currently exceeds the 500 ms generated-workspace
 budget, so adding `--check-budgets` to this larger probe intentionally exposes
 the next scaling target rather than masking it.
+
+Compare two reports and fail when the candidate does unnecessary work:
+
+```sh
+./scripts/benchmark-compare.sh baseline.json out/editor-benchmark.json
+```
+
+The comparator checks p95/p99 and scalar measurements for latency, memory
+growth, invalidated/analyzed modules, retyped functions, recovered snapshots,
+and reused classes. Work-scope changes are strict by default; tune noisy
+measurements with `--latency-tolerance-pct`, `--memory-tolerance-pct`, and
+`--reuse-tolerance-pct`. Use `--work-tolerance` for an explicitly accepted
+increase in work, `--report-only` to suppress the failing exit status, or
+`--format=json` for CI artifacts.
