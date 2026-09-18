@@ -69,6 +69,31 @@ typedef LoweredInterfaceHeader = {
 	final bases:Array<AstType>;
 }
 
+typedef LoweredEnumHeader = {
+	final name:String;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final cases:Array<compiler.syntax.Ast.AstEnumCase>;
+}
+
+typedef LoweredEnumAbstractHeader = {
+	final name:String;
+	final underlying:AstType;
+	final fromTypes:Array<AstType>;
+	final toTypes:Array<AstType>;
+	final values:Array<compiler.syntax.Ast.AstEnumAbstractValue>;
+}
+
+typedef LoweredAbstractHeader = {
+	final name:String;
+	final isExtern:Bool;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final underlying:AstType;
+	final fromTypes:Array<AstType>;
+	final toTypes:Array<AstType>;
+}
+
 /**
 	Transition boundary from parser syntax to the compiler AST.
 
@@ -200,21 +225,41 @@ class AstLowerer {
 	static function lowerEnums(tree:SyntaxTree, direct:Array<AstEnum>):Array<AstEnum> {
 		var payloads = collectPayloads(tree), result:Array<AstEnum> = [];
 		for (enumeration in direct) {
-			var lowered:Null<AstEnum> = switch payloads.get(enumeration.span.start) {
-				case SyntaxNodePayload.EnumHeader(name, typeParameters, constraintPayloads, casePayloads):
-					var cases = lowerEnumCases(enumeration.cases, casePayloads), valid = cases != null && enumeration.name == name
-						&& enumeration.typeParameters.length == typeParameters.length
-						&& lowerTypeConstraints(enumeration.typeConstraints, constraintPayloads) != null;
-					var loweredConstraints = lowerTypeConstraints(enumeration.typeConstraints, constraintPayloads);
-					for (index in 0...enumeration.typeParameters.length)
-						if (enumeration.typeParameters[index] != typeParameters[index])
-							valid = false;
-					valid ? {name: name, typeParameters: typeParameters, typeConstraints: loweredConstraints, cases: cases, span: enumeration.span} : null;
-				default: null;
-			};
+			var header = lowerEnumHeader(enumeration, payloads.get(enumeration.span.start)),
+				lowered:Null<AstEnum> = header == null ? null : {
+					name: header.name,
+					typeParameters: header.typeParameters,
+					typeConstraints: header.typeConstraints,
+					metadata: enumeration.metadata,
+					cases: header.cases,
+					span: enumeration.span
+				};
 			result.push(keepOrFallback(lowered, enumeration, 'enum ${enumeration.name}'));
 		}
 		return result;
+	}
+
+	static function lowerEnumHeader(enumeration:AstEnum, payload:Null<SyntaxNodePayload>):Null<LoweredEnumHeader> {
+		return switch payload {
+			case SyntaxNodePayload.EnumHeader(name, typeParameters, constraintPayloads, casePayloads):
+				var loweredCases = lowerEnumCases(enumeration.cases, casePayloads),
+					loweredConstraints = lowerTypeConstraints(enumeration.typeConstraints, constraintPayloads);
+				if (loweredCases == null || loweredConstraints == null || enumeration.name != name
+					|| enumeration.typeParameters.length != typeParameters.length)
+					null;
+				else {
+					for (index in 0...enumeration.typeParameters.length)
+						if (enumeration.typeParameters[index] != typeParameters[index])
+							return null;
+					{
+						name: name,
+						typeParameters: typeParameters,
+						typeConstraints: loweredConstraints,
+						cases: loweredCases
+					};
+				}
+			default: null;
+		};
 	}
 
 	static function lowerEnumCases(direct:Array<compiler.syntax.Ast.AstEnumCase>, payload:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload>):Null<Array<compiler.syntax.Ast.AstEnumCase>> {
@@ -240,16 +285,36 @@ class AstLowerer {
 	static function lowerEnumAbstracts(tree:SyntaxTree, direct:Array<AstEnumAbstract>):Array<AstEnumAbstract> {
 		var payloads = collectPayloads(tree), result:Array<AstEnumAbstract> = [];
 		for (declaration in direct) {
-			var lowered:Null<AstEnumAbstract> = switch payloads.get(declaration.span.start) {
-				case SyntaxNodePayload.EnumAbstractHeader(name, underlyingPayload, fromPayloads, toPayloads, valuePayloads):
-					var underlying = lowerType(declaration.underlying, underlyingPayload), fromTypes = lowerTypeList(declaration.fromTypes, fromPayloads), toTypes = lowerTypeList(declaration.toTypes, toPayloads), values = lowerEnumValues(declaration.values, valuePayloads);
-					underlying == null || fromTypes == null || toTypes == null || values == null || declaration.name != name ? null
-						: {name: name, underlying: underlying, fromTypes: fromTypes, toTypes: toTypes, values: values, span: declaration.span};
-				default: null;
-			};
+			var header = lowerEnumAbstractHeader(declaration, payloads.get(declaration.span.start)),
+				lowered:Null<AstEnumAbstract> = header == null ? null : {
+					name: header.name,
+					underlying: header.underlying,
+					fromTypes: header.fromTypes,
+					toTypes: header.toTypes,
+					values: header.values,
+					span: declaration.span
+				};
 			result.push(keepOrFallback(lowered, declaration, 'enum abstract ${declaration.name}'));
 		}
 		return result;
+	}
+
+	static function lowerEnumAbstractHeader(declaration:AstEnumAbstract, payload:Null<SyntaxNodePayload>):Null<LoweredEnumAbstractHeader> {
+		return switch payload {
+			case SyntaxNodePayload.EnumAbstractHeader(name, underlyingPayload, fromPayloads, toPayloads, valuePayloads):
+				var underlying = lowerType(declaration.underlying, underlyingPayload),
+					fromTypes = lowerTypeList(declaration.fromTypes, fromPayloads),
+					toTypes = lowerTypeList(declaration.toTypes, toPayloads),
+					values = lowerEnumValues(declaration.values, valuePayloads);
+				underlying == null || fromTypes == null || toTypes == null || values == null || declaration.name != name ? null : {
+					name: name,
+					underlying: underlying,
+					fromTypes: fromTypes,
+					toTypes: toTypes,
+					values: values
+				};
+			default: null;
+		};
 	}
 
 	static function lowerEnumValues(direct:Array<compiler.syntax.Ast.AstEnumAbstractValue>, payload:Array<compiler.syntax.SyntaxTree.SyntaxEnumValuePayload>):Null<Array<compiler.syntax.Ast.AstEnumAbstractValue>> {
@@ -268,22 +333,52 @@ class AstLowerer {
 	static function lowerAbstracts(tree:SyntaxTree, direct:Array<AstAbstract>):Array<AstAbstract> {
 		var payloads = collectPayloads(tree), result:Array<AstAbstract> = [];
 		for (declaration in direct) {
-			var lowered:Null<AstAbstract> = switch payloads.get(declaration.span.start) {
-				case SyntaxNodePayload.AbstractHeader(name, isExtern, typeParameters, constraintPayloads, underlyingPayload, fromPayloads, toPayloads):
-					var underlying = lowerType(declaration.underlying, underlyingPayload), fromTypes = lowerTypeList(declaration.fromTypes, fromPayloads), toTypes = lowerTypeList(declaration.toTypes, toPayloads);
-					var loweredConstraints = lowerTypeConstraints(declaration.typeConstraints, constraintPayloads);
-					var methods = lowerFunctionsFromPayloads(declaration.methods, payloads), valid = underlying != null && fromTypes != null && toTypes != null
-						&& declaration.name == name && (declaration.isExtern == true) == isExtern && declaration.typeParameters.length == typeParameters.length
-						&& loweredConstraints != null;
-					for (index in 0...declaration.typeParameters.length)
-						if (declaration.typeParameters[index] != typeParameters[index])
-							valid = false;
-					valid ? {name: name, isExtern: isExtern, metadata: declaration.metadata, typeParameters: typeParameters, typeConstraints: loweredConstraints, underlying: underlying, fromTypes: fromTypes, toTypes: toTypes, methods: methods, span: declaration.span} : null;
-				default: null;
-			};
+			var header = lowerAbstractHeader(declaration, payloads.get(declaration.span.start)),
+				methods = lowerFunctionsFromPayloads(declaration.methods, payloads),
+				lowered:Null<AstAbstract> = header == null ? null : {
+					name: header.name,
+					isExtern: header.isExtern,
+					metadata: declaration.metadata,
+					typeParameters: header.typeParameters,
+					typeConstraints: header.typeConstraints,
+					underlying: header.underlying,
+					fromTypes: header.fromTypes,
+					toTypes: header.toTypes,
+					methods: methods,
+					span: declaration.span
+				};
 			result.push(keepOrFallback(lowered, declaration, 'abstract ${declaration.name}'));
 		}
 		return result;
+	}
+
+	static function lowerAbstractHeader(declaration:AstAbstract, payload:Null<SyntaxNodePayload>):Null<LoweredAbstractHeader> {
+		return switch payload {
+			case SyntaxNodePayload.AbstractHeader(name, isExtern, typeParameters, constraintPayloads, underlyingPayload, fromPayloads, toPayloads):
+				var underlying = lowerType(declaration.underlying, underlyingPayload),
+					fromTypes = lowerTypeList(declaration.fromTypes, fromPayloads),
+					toTypes = lowerTypeList(declaration.toTypes, toPayloads),
+					loweredConstraints = lowerTypeConstraints(declaration.typeConstraints, constraintPayloads);
+				if (underlying == null || fromTypes == null || toTypes == null || loweredConstraints == null
+					|| declaration.name != name || (declaration.isExtern == true) != isExtern
+					|| declaration.typeParameters.length != typeParameters.length)
+					null;
+				else {
+					for (index in 0...declaration.typeParameters.length)
+						if (declaration.typeParameters[index] != typeParameters[index])
+							return null;
+					{
+						name: name,
+						isExtern: isExtern,
+						typeParameters: typeParameters,
+						typeConstraints: loweredConstraints,
+						underlying: underlying,
+						fromTypes: fromTypes,
+						toTypes: toTypes
+					};
+				}
+			default: null;
+		};
 	}
 
 	static function lowerInterfaces(tree:SyntaxTree, direct:Array<AstInterface>):Array<AstInterface> {
