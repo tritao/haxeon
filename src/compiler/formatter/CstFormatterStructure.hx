@@ -39,22 +39,17 @@ typedef SyntaxInfo = {
 	final blockDepth:Map<Int, Int>;
 }
 
-/** Translates parser structure into the formatter's layout-oriented view. */
-class SyntaxAnnotator {
-	/**
-		Annotates formatter tokens with the parser's syntax tree. The formatter
-		always runs the parser in tooling mode, so there is deliberately no second
-		token-only grammar here.
-	*/
-	public static function annotate(tokens:Array<FormatToken>, tree:SyntaxTree, ?conditionalText:String):SyntaxInfo
-		return annotateCst(tokens, tree, conditionalText);
-
+/** Converts authoritative CST structure into layout-engine constraints. */
+class CstFormatterStructure {
 	/**
 		Builds layout structure from parser-reported CST nodes. Expression and
 		delimiter ownership comes from the CST; only inactive conditional source,
 		which the compiler parser intentionally does not visit, gets a narrow
 		brace-preservation pass.
 	*/
+	public static function annotate(tokens:Array<FormatToken>, tree:SyntaxTree, ?conditionalText:String):SyntaxInfo
+		return annotateCst(tokens, tree, conditionalText);
+
 	static function annotateCst(tokens:Array<FormatToken>, tree:SyntaxTree, conditionalText:Null<String>):SyntaxInfo {
 		var result:SyntaxInfo = {
 			nodes: [],
@@ -114,19 +109,19 @@ class SyntaxAnnotator {
 	/** Applies authoritative delimiter information already known by the parser. */
 	static function applyGrammarNodes(tokens:Array<FormatToken>, syntax:SyntaxInfo, tree:SyntaxTree):Void {
 		for (node in tree.grammarNodes())
-				switch node.kind {
-					case SyntaxKind.Block:
-						applyBlockNode(tokens, syntax, node);
-					case SyntaxKind.CallExpression:
-						applyCallNode(tokens, syntax, node);
-					case SyntaxKind.BinaryExpression:
-						applyExpressionNode(tokens, syntax, node, FormatNodeKind.BinaryExpression);
-					case SyntaxKind.ConditionalExpression:
-						applyExpressionNode(tokens, syntax, node, FormatNodeKind.ConditionalExpression);
-					case SyntaxKind.AssignmentExpression, SyntaxKind.AssignmentStatement:
-						applyExpressionNode(tokens, syntax, node, FormatNodeKind.Assignment);
-					case SyntaxKind.MemberExpression:
-						applyExpressionNode(tokens, syntax, node, FormatNodeKind.MemberChain);
+			switch node.kind {
+				case SyntaxKind.Block:
+					applyBlockNode(tokens, syntax, node);
+				case SyntaxKind.CallExpression:
+					applyCallNode(tokens, syntax, node);
+				case SyntaxKind.BinaryExpression:
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.BinaryExpression);
+				case SyntaxKind.ConditionalExpression:
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.ConditionalExpression);
+				case SyntaxKind.AssignmentExpression, SyntaxKind.AssignmentStatement:
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.Assignment);
+				case SyntaxKind.MemberExpression:
+					applyExpressionNode(tokens, syntax, node, FormatNodeKind.MemberChain);
 				case SyntaxKind.TypeArgumentList, SyntaxKind.TypeParameterList:
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.TypeArgumentList);
 				case SyntaxKind.ParameterList:
@@ -140,8 +135,7 @@ class SyntaxAnnotator {
 				case SyntaxKind.ObjectLiteral, SyntaxKind.MapLiteral, SyntaxKind.AnonymousType:
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ObjectLiteral);
 				default:
-					// Declaration and recovery nodes are consumed by structural tooling;
-					// they do not affect layout decisions yet.
+					// Declaration and recovery nodes do not affect layout decisions.
 			}
 	}
 
@@ -265,5 +259,4 @@ class SyntaxAnnotator {
 				FormatNodeKind.ArrayLiteral, FormatNodeKind.ObjectLiteral, FormatNodeKind.TypeArgumentList, FormatNodeKind.Condition: true;
 			default: false;
 		};
-
 }

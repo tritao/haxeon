@@ -3,10 +3,12 @@ import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.CstFormatterAdapter;
+import compiler.formatter.CstFormatterStructure;
 import compiler.service.SourceFormatter;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.SyntaxTree.ParserMode;
+import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.Token.TokenKind;
 
@@ -17,6 +19,30 @@ class FormatterMain {
 			formatted = SourceFormatter.format(source, 2, true);
 		if (formatted != expected || SourceFormatter.format(formatted, 2, true) != expected)
 			throw "canonical formatter output was not stable";
+
+		var metadataSource = new SourceFile("metadata.hx",
+			"@:tag(\"demo\") class Main { @:field(\"value\") public var value:Int; }\n"),
+			metadataParser = new Parser(new Lexer(metadataSource).tokenize(), null, ParserMode.Cst(metadataSource));
+		metadataParser.parseProgram();
+		var metadataTree = metadataParser.cst,
+			metadataNodes = 0;
+		for (node in metadataTree.grammarNodes())
+			if (node.kind == SyntaxKind.Metadata)
+				metadataNodes++;
+		if (metadataNodes != 2)
+			throw "formatter CST did not retain metadata structure";
+		var metadataTokens = CstFormatterAdapter.tokens(metadataTree),
+			metadataSyntax = CstFormatterStructure.annotate(metadataTokens, metadataTree),
+			metadataOpen = metadataSource.text.indexOf("{");
+		if (!metadataSyntax.blockOpens.exists(metadataOpen)
+			|| !metadataSyntax.blockOpens.get(metadataOpen))
+			throw "CST formatter structure did not retain declaration block ownership";
+		var metadataFormatted = Formatter.format(metadataSource.text, FormatConfigTools.defaults(2, true));
+		if (metadataFormatted == null
+			|| metadataFormatted.indexOf("@:tag(\"demo\")") < 0
+			|| metadataFormatted.indexOf("@:field(\"value\")") < 0
+			|| Formatter.format(metadataFormatted, FormatConfigTools.defaults(2, true)) != metadataFormatted)
+			throw "formatter did not preserve CST-backed metadata";
 
 		var file = new SourceFile("round-trip.hx",
 			"function main():String { var values:Array<Int> = [1,2]; var pattern=~/a[//]b/gi; var text='value ${1 + 2}'; // comment\nreturn text; }\n"),

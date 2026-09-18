@@ -1,8 +1,8 @@
 package compiler.formatter;
 
 import compiler.syntax.Token.TokenKind;
-import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
-import compiler.formatter.SyntaxAnnotator.FormatNodeKind;
+import compiler.formatter.CstFormatterStructure.SyntaxInfo;
+import compiler.formatter.CstFormatterStructure.FormatNodeKind;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
 import compiler.formatter.FormatConfig.FormatConfigTools;

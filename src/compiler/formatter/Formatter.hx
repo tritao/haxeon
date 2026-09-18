@@ -8,7 +8,7 @@ import compiler.syntax.Parser;
 import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxTree;
-import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
+import compiler.formatter.CstFormatterStructure.SyntaxInfo;
 import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
 import compiler.formatter.CommentAttachment.CommentAttachmentTools;
 import compiler.formatter.FormatToken.FormatTokenTools;
@@ -41,7 +41,7 @@ class Formatter {
 				return null;
 			var tokens = CstFormatterAdapter.tokens(syntaxTree),
 				comments = CommentAttachmentTools.attach(tokens, syntaxTree),
-				syntax = SyntaxAnnotator.annotate(tokens, syntaxTree, conditional.text),
+				syntax = CstFormatterStructure.annotate(tokens, syntaxTree, conditional.text),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
 				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
 				newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
