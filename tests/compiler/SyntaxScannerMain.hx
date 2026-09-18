@@ -257,6 +257,36 @@ class SyntaxScannerMain {
 			default: throw "CST lowerer changed an interface method result type";
 		}
 
+		var metadataSource = new SourceFile("Metadata.hx",
+			"@:module(\"demo\") class Annotated {\n"
+			+ "  @:field(\"value\") public var value:Int;\n"
+			+ "  @:method(1 + 2) public function run(value:Int):Int return value;\n"
+			+ "}\n"
+			+ "@:tag(\"none\") enum Choice { @:caseTag(\"none\") None; }\n"
+			+ "@:top(\"yes\") function main():Void return;\n");
+		assertCstAstParity("Metadata.hx", metadataSource.text, false);
+		var metadataParser = new Parser(new Lexer(metadataSource).tokenize(), null, ParserMode.Cst(metadataSource));
+		var metadataProgram = metadataParser.parseProgram(), metadataNodes = 0, metadataPayloads = 0;
+		for (node in metadataParser.cst.grammarNodes())
+			switch node.payload {
+				case SyntaxNodePayload.Metadata(_, arguments):
+					metadataNodes++;
+					if (arguments.length > 0)
+						metadataPayloads++;
+				default:
+			}
+		if (metadataProgram.classes[0].metadata.length != 1
+			|| metadataProgram.classes[0].fields[0].metadata.length != 1
+			|| metadataProgram.classes[0].methods[0].metadata.length != 1
+			|| metadataProgram.enums[0].metadata.length != 1
+			|| metadataProgram.enums[0].cases[0].metadata.length != 1
+			|| metadataProgram.functions[0].metadata.length != 1
+			|| metadataNodes != 6 || metadataPayloads != 6)
+			throw "CST metadata payloads were not retained across declaration sites";
+		assertCstAstParity("MetadataRecovery.hx",
+			"@:tag(\"ok\") class Broken { public function unfinished(a:Int { return 1; }\n",
+			true);
+
 		var malformed = new SourceFile("MalformedSyntax.hx", "function unfinished(a:Int {\n  // keep this\n  return 1;\n"),
 			malformedParser = new Parser(new Lexer(malformed).tokenize(), null, ParserMode.Cst(malformed));
 		malformedParser.parseProgramRecovering();

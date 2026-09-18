@@ -251,14 +251,21 @@ class Parser {
 			var start = previous().span;
 			consume(TokenKind.Colon);
 			var name = parseQualifiedName(), arguments = [];
+			var end:SourceSpan;
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
 					do
 						arguments.push(parseDelimitedExpression(TokenKind.RightParen, false)) while (match(TokenKind.Comma));
-				var end = consume(TokenKind.RightParen).span;
-				result.push({name: name, arguments: arguments, span: start.merge(end)});
+				end = consume(TokenKind.RightParen).span;
 			} else
-				result.push({name: name, arguments: arguments, span: start.merge(previous().span)});
+				end = previous().span;
+			var metadata:compiler.syntax.Ast.AstMetadata = {name: name, arguments: arguments, span: start.merge(end)};
+			result.push(metadata);
+			var argumentPayloads = expressionPayloads(arguments);
+			if (argumentPayloads != null)
+				recordCstNode(SyntaxKind.Metadata, metadata.span, SyntaxNodePayload.Metadata(name, argumentPayloads));
+			else if (cstRecorder != null)
+				recordCstNode(SyntaxKind.Metadata, metadata.span);
 		}
 		return result;
 	}

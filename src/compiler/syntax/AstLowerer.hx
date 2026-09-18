@@ -11,6 +11,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
@@ -135,19 +136,20 @@ class AstLowerer {
 			importAliases:Map<String, String> = [];
 		for (node in tree.grammarNodes())
 			switch node.payload {
-				case SyntaxNodePayload.PackageName(value):
-					packageName = value;
-				case SyntaxNodePayload.Import(path, alias):
-					imports.push(path);
-					if (alias != null)
-						importAliases.set(alias, path);
+			case SyntaxNodePayload.PackageName(value):
+				packageName = value;
+			case SyntaxNodePayload.Import(path, alias):
+				imports.push(path);
+				if (alias != null)
+					importAliases.set(alias, path);
+			case SyntaxNodePayload.Metadata(_, _):
 			case SyntaxNodePayload.ClassHeader(_, _, _, _, _, _), SyntaxNodePayload.ClassHeaderRich(_, _, _, _, _, _, _):
-				case SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _), SyntaxNodePayload.FieldHeaderRich(_, _, _, _, _, _, _, _):
+			case SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _), SyntaxNodePayload.FieldHeaderRich(_, _, _, _, _, _, _, _):
 			case SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _), SyntaxNodePayload.FunctionHeaderRich(_, _, _, _, _, _, _):
-				case SyntaxNodePayload.Statement(_):
+			case SyntaxNodePayload.Statement(_):
 			case SyntaxNodePayload.TypeAliasHeader(_, _, _, _, _), SyntaxNodePayload.EnumHeader(_, _, _, _), SyntaxNodePayload.EnumAbstractHeader(_, _, _, _, _),
 				SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _, _), SyntaxNodePayload.InterfaceHeader(_, _, _, _):
-				case null:
+			case null:
 			}
 		if (packageName == null && direct.packageName != null)
 			throw "CST/AST lowering lost the package declaration";
@@ -225,12 +227,13 @@ class AstLowerer {
 	static function lowerEnums(tree:SyntaxTree, direct:Array<AstEnum>):Array<AstEnum> {
 		var payloads = collectPayloads(tree), result:Array<AstEnum> = [];
 		for (enumeration in direct) {
-			var header = lowerEnumHeader(enumeration, payloads.get(enumeration.span.start)),
-				lowered:Null<AstEnum> = header == null ? null : {
+			var header = lowerEnumHeader(enumeration, payloads.get(enumeration.span.start), payloads),
+				metadata = lowerMetadata(enumeration.metadata, payloads),
+				lowered:Null<AstEnum> = header == null || metadata == null ? null : {
 					name: header.name,
 					typeParameters: header.typeParameters,
 					typeConstraints: header.typeConstraints,
-					metadata: enumeration.metadata,
+					metadata: metadata,
 					cases: header.cases,
 					span: enumeration.span
 				};
@@ -239,10 +242,10 @@ class AstLowerer {
 		return result;
 	}
 
-	static function lowerEnumHeader(enumeration:AstEnum, payload:Null<SyntaxNodePayload>):Null<LoweredEnumHeader> {
+	static function lowerEnumHeader(enumeration:AstEnum, payload:Null<SyntaxNodePayload>, nodePayloads:Map<Int, SyntaxNodePayload>):Null<LoweredEnumHeader> {
 		return switch payload {
 			case SyntaxNodePayload.EnumHeader(name, typeParameters, constraintPayloads, casePayloads):
-				var loweredCases = lowerEnumCases(enumeration.cases, casePayloads),
+				var loweredCases = lowerEnumCases(enumeration.cases, casePayloads, nodePayloads),
 					loweredConstraints = lowerTypeConstraints(enumeration.typeConstraints, constraintPayloads);
 				if (loweredCases == null || loweredConstraints == null || enumeration.name != name
 					|| enumeration.typeParameters.length != typeParameters.length)
@@ -262,13 +265,13 @@ class AstLowerer {
 		};
 	}
 
-	static function lowerEnumCases(direct:Array<compiler.syntax.Ast.AstEnumCase>, payload:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload>):Null<Array<compiler.syntax.Ast.AstEnumCase>> {
+	static function lowerEnumCases(direct:Array<compiler.syntax.Ast.AstEnumCase>, payload:Array<compiler.syntax.SyntaxTree.SyntaxEnumCasePayload>, nodePayloads:Map<Int, SyntaxNodePayload>):Null<Array<compiler.syntax.Ast.AstEnumCase>> {
 		if (direct.length != payload.length)
 			return null;
 		var result:Array<compiler.syntax.Ast.AstEnumCase> = [];
 		for (index in 0...direct.length) {
-			var source = direct[index], target = payload[index];
-			if (source.name != target.name || source.params.length != target.parameters.length)
+			var source = direct[index], target = payload[index], metadata = lowerMetadata(source.metadata, nodePayloads);
+			if (metadata == null || source.name != target.name || source.params.length != target.parameters.length)
 				return null;
 			var parameters:Array<compiler.syntax.Ast.AstEnumParameter> = [];
 			for (parameterIndex in 0...source.params.length) {
@@ -277,7 +280,7 @@ class AstLowerer {
 					return null;
 				parameters.push({name: targetParameter.name, type: loweredType, optional: targetParameter.optional, span: sourceParameter.span});
 			}
-			result.push({name: target.name, params: parameters, span: source.span});
+			result.push({name: target.name, metadata: metadata, params: parameters, span: source.span});
 		}
 		return result;
 	}
@@ -334,11 +337,12 @@ class AstLowerer {
 		var payloads = collectPayloads(tree), result:Array<AstAbstract> = [];
 		for (declaration in direct) {
 			var header = lowerAbstractHeader(declaration, payloads.get(declaration.span.start)),
+				metadata = lowerMetadata(declaration.metadata, payloads),
 				methods = lowerFunctionsFromPayloads(declaration.methods, payloads),
-				lowered:Null<AstAbstract> = header == null ? null : {
+				lowered:Null<AstAbstract> = header == null || metadata == null ? null : {
 					name: header.name,
 					isExtern: header.isExtern,
-					metadata: declaration.metadata,
+					metadata: metadata,
 					typeParameters: header.typeParameters,
 					typeConstraints: header.typeConstraints,
 					underlying: header.underlying,
@@ -440,7 +444,8 @@ class AstLowerer {
 			var header = lowerClassHeader(classDeclaration, nodePayloads.get(classDeclaration.span.start));
 			if (header == null && requireComplete)
 				throw 'CST lowering could not independently reconstruct class ${classDeclaration.name}';
-			var fields = lowerFields(classDeclaration.fields, nodePayloads),
+			var metadata = lowerMetadata(classDeclaration.metadata, nodePayloads),
+				fields = lowerFields(classDeclaration.fields, nodePayloads),
 				methods = lowerFunctionsFromPayloads(classDeclaration.methods, nodePayloads),
 				name = header == null ? classDeclaration.name : header.name,
 				isExtern = header == null ? classDeclaration.isExtern : header.isExtern,
@@ -449,13 +454,15 @@ class AstLowerer {
 				isPrivate = header == null ? classDeclaration.isPrivate : header.isPrivate,
 				base = header == null ? classDeclaration.base : header.base,
 				interfaces = header == null ? classDeclaration.interfaces : header.interfaces;
+			if (metadata == null && requireComplete)
+				throw 'CST lowering could not independently reconstruct metadata for class ${classDeclaration.name}';
 			result.push({
 				name: name,
 				isExtern: isExtern,
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,
 				isPrivate: isPrivate,
-				metadata: classDeclaration.metadata,
+				metadata: metadata == null ? classDeclaration.metadata : metadata,
 				base: base,
 				interfaces: interfaces,
 				fields: fields,
@@ -527,13 +534,32 @@ class AstLowerer {
 		return tree.payloadsByStart();
 	}
 
+	static function lowerMetadata(direct:Null<Array<AstMetadata>>,
+		nodePayloads:Map<Int, SyntaxNodePayload>):Null<Array<AstMetadata>> {
+		if (direct == null)
+			return [];
+		var result:Array<AstMetadata> = [];
+		for (metadata in direct) {
+			var lowered = switch nodePayloads.get(metadata.span.start) {
+				case SyntaxNodePayload.Metadata(name, argumentPayloads):
+					name != metadata.name ? null : lowerExpressionList(metadata.arguments, argumentPayloads);
+				default: null;
+			};
+			if (lowered == null)
+				return null;
+			result.push({name: metadata.name, arguments: lowered, span: metadata.span});
+		}
+		return result;
+	}
+
 	static function lowerFields(direct:Array<AstField>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstField> {
 		var result:Array<AstField> = [];
 		for (field in direct) {
 			var header = lowerFieldHeader(field, nodePayloads.get(field.span.start)),
-				lowered:Null<AstField> = header == null ? null : {
+				metadata = lowerMetadata(field.metadata, nodePayloads),
+				lowered:Null<AstField> = header == null || metadata == null ? null : {
 					name: header.name,
-					metadata: field.metadata,
+					metadata: metadata,
 					type: header.type,
 					initializer: header.initializer,
 					readAccess: header.readAccess,
@@ -595,12 +621,13 @@ class AstLowerer {
 		var header = lowerFunctionHeader(functionDeclaration, payload);
 		if (header == null)
 			return null;
-		var statements = lowerStatements(functionDeclaration.statements, nodePayloads);
-		return statements == null ? null : {
+		var metadata = lowerMetadata(functionDeclaration.metadata, nodePayloads),
+			statements = lowerStatements(functionDeclaration.statements, nodePayloads);
+		return metadata == null || statements == null ? null : {
 			name: header.name,
 			isStatic: header.isStatic,
 			isExtern: header.isExtern,
-			metadata: [],
+			metadata: metadata,
 			typeParameters: header.typeParameters,
 			typeConstraints: header.typeConstraints,
 			arguments: header.arguments,
@@ -617,7 +644,7 @@ class AstLowerer {
 					loweredResult = lowerType(functionDeclaration.result, resultType),
 					loweredArguments = lowerArguments(functionDeclaration.arguments, parameters),
 					loweredConstraints = lowerTypeConstraints(functionDeclaration.typeConstraints, constraintPayloads);
-				if (loweredResult == null || loweredArguments == null || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
+				if (loweredResult == null || loweredArguments == null
 					|| loweredConstraints == null || functionDeclaration.name != name
 					|| functionDeclaration.isStatic != isStatic || (functionDeclaration.isExtern == true) != isExtern
 					|| directTypeParameters.length != typeParameters.length)
@@ -638,8 +665,7 @@ class AstLowerer {
 				}
 			case SyntaxNodePayload.FunctionHeader(name, isStatic, isExtern, typeParameters, parameters, resultTypeName):
 				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters;
-				if (functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
-					|| functionDeclaration.typeConstraints != null && functionDeclaration.typeConstraints.length > 0
+				if (functionDeclaration.typeConstraints != null && functionDeclaration.typeConstraints.length > 0
 					|| resultTypeName == null || !simpleTypeMatches(functionDeclaration.result, resultTypeName)
 					|| functionDeclaration.arguments.length != parameters.length
 					|| functionDeclaration.name != name || functionDeclaration.isStatic != isStatic

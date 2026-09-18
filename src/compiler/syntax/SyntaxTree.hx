@@ -25,6 +25,7 @@ enum SyntaxKind {
 	ClassDeclaration;
 	FunctionDeclaration;
 	FieldDeclaration;
+	Metadata;
 	Block;
 	ParameterList;
 	ArgumentList;
@@ -244,6 +245,7 @@ enum SyntaxStatementPayload {
 enum SyntaxNodePayload {
 	PackageName(value:String);
 	Import(path:String, alias:Null<String>);
+	Metadata(name:String, arguments:Array<SyntaxExpressionPayload>);
 	ClassHeader(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, baseName:Null<String>, interfaceNames:Array<Null<String>>);
 	ClassHeaderRich(name:String, isPrivate:Bool, isExtern:Bool, typeParameters:Array<String>, typeConstraints:Array<SyntaxTypeConstraintPayload>, baseType:Null<SyntaxTypePayload>, interfaceTypes:Array<SyntaxTypePayload>);
 	FieldHeader(name:String, typeName:Null<String>, isStatic:Bool, isInline:Bool, isFinal:Bool, readAccess:Null<String>, writeAccess:Null<String>);
