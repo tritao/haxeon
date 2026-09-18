@@ -76,21 +76,23 @@ class ModuleAnalyzer {
 			}
 		for (fn in ast.functions)
 			for (statement in fn.statements)
-				DependencyScanner.scanStatement(statement, dependencies);
+				DependencyScanner.scanStatement(statement, dependencies, fn.typeParameters);
 		for (classDecl in ast.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (initializer != null)
-					DependencyScanner.scanExpression(initializer, dependencies);
+					DependencyScanner.scanExpression(initializer, dependencies, classDecl.typeParameters);
 			}
 		for (classDecl in ast.classes)
 			for (method in classDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies,
+						classDecl.typeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		for (abstractDecl in ast.abstracts)
 			for (method in abstractDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies,
+						abstractDecl.typeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);
@@ -118,8 +120,12 @@ class ModuleAnalyzer {
 			for (field in classDecl.fields)
 				dependencies.remove(field.name);
 		}
+		for (alias in ast.aliases)
+			dependencies.remove(alias.name);
 		for (enumDecl in ast.enums)
 			dependencies.remove(enumDecl.name);
+		for (interfaceDecl in ast.interfaces)
+			dependencies.remove(interfaceDecl.name);
 		for (abstractDecl in ast.enumAbstracts)
 			dependencies.remove(abstractDecl.name);
 		for (abstractDecl in ast.abstracts)
@@ -196,26 +202,27 @@ class ModuleAnalyzer {
 			dependencies.set(name, true);
 		var ast = state.parsedAst();
 		for (alias in ast.aliases)
-			addModuleTypeDependency(alias.type, state, dependencies);
+			addModuleTypeDependency(alias.type, state, dependencies, alias.typeParameters);
 		for (enumDecl in ast.enums)
 			for (caseDecl in enumDecl.cases)
 				for (parameter in caseDecl.params)
-					addModuleTypeDependency(parameter.type, state, dependencies);
+					addModuleTypeDependency(parameter.type, state, dependencies, enumDecl.typeParameters);
 		for (interfaceDecl in ast.interfaces)
 			for (method in interfaceDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
+				addFunctionTypeDependencies(method, state, dependencies, interfaceDecl.typeParameters);
 		for (classDecl in ast.classes) {
 			if (classDecl.base != null)
-				addModuleTypeDependency(classDecl.base, state, dependencies);
+				addModuleTypeDependency(classDecl.base, state, dependencies, classDecl.typeParameters);
 			for (interfaceType in classDecl.interfaces)
-				addModuleTypeDependency(interfaceType, state, dependencies);
+				addModuleTypeDependency(interfaceType, state, dependencies, classDecl.typeParameters);
 			for (field in classDecl.fields)
-				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
+				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies, classDecl.typeParameters);
 			for (method in classDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
+				addFunctionTypeDependencies(method, state, dependencies,
+					classDecl.typeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		}
 		for (fn in ast.functions)
-			addFunctionTypeDependencies(fn, state, dependencies);
+			addFunctionTypeDependencies(fn, state, dependencies, fn.typeParameters == null ? [] : fn.typeParameters);
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 	}
@@ -238,34 +245,38 @@ class ModuleAnalyzer {
 		return aliases;
 	}
 
-	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
+	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void {
 		for (argument in fn.arguments)
-			addModuleTypeDependency(argument.type, state, dependencies);
-		addModuleTypeDependency(fn.result, state, dependencies);
+			addModuleTypeDependency(argument.type, state, dependencies, typeParameters);
+		addModuleTypeDependency(fn.result, state, dependencies, typeParameters);
 	}
 
-	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
+	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>,
+		?typeParameters:Array<String>):Void
 		switch type {
 			case NamedType(name):
-				addNamedTypeDependency(name, state, dependencies);
+				if (typeParameters == null || typeParameters.indexOf(name) < 0)
+					addNamedTypeDependency(name, state, dependencies);
 			case AppliedType(name, arguments):
-				addNamedTypeDependency(name, state, dependencies);
+				if (typeParameters == null || typeParameters.indexOf(name) < 0)
+					addNamedTypeDependency(name, state, dependencies);
 				for (argument in arguments)
-					addModuleTypeDependency(argument, state, dependencies);
+					addModuleTypeDependency(argument, state, dependencies, typeParameters);
 			case NativeAbstractType(declaration, _):
-				addNamedTypeDependency(declaration, state, dependencies);
+				if (typeParameters == null || typeParameters.indexOf(declaration) < 0)
+					addNamedTypeDependency(declaration, state, dependencies);
 			case ArrayType(element), NullableType(element):
-				addModuleTypeDependency(element, state, dependencies);
+				addModuleTypeDependency(element, state, dependencies, typeParameters);
 			case MapType(key, value):
-				addModuleTypeDependency(key, state, dependencies);
-				addModuleTypeDependency(value, state, dependencies);
+				addModuleTypeDependency(key, state, dependencies, typeParameters);
+				addModuleTypeDependency(value, state, dependencies, typeParameters);
 			case FunctionType(arguments, result):
 				for (argument in arguments)
-					addModuleTypeDependency(argument, state, dependencies);
-				addModuleTypeDependency(result, state, dependencies);
+					addModuleTypeDependency(argument, state, dependencies, typeParameters);
+				addModuleTypeDependency(result, state, dependencies, typeParameters);
 			case AnonymousType(fields):
 				for (field in fields)
-					addModuleTypeDependency(field.type, state, dependencies);
+					addModuleTypeDependency(field.type, state, dependencies, typeParameters);
 			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_):
 		}
 
