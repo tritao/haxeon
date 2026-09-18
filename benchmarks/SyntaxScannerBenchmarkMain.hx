@@ -23,6 +23,8 @@ private typedef Iteration = {
 	final losslessScanMs:Float;
 	final astFrontendMs:Float;
 	final cstFrontendMs:Float;
+	final cstOverheadMs:Float;
+	final cstOverheadPercent:Float;
 	final explicitLowerMs:Float;
 	final compilerTokens:Int;
 	final losslessSlices:Int;
@@ -47,6 +49,8 @@ private typedef CaseReport = {
 	final losslessScanMs:Percentiles;
 	final astFrontendMs:Percentiles;
 	final cstFrontendMs:Percentiles;
+	final cstOverheadMs:Percentiles;
+	final cstOverheadPercent:Percentiles;
 	final explicitLowerMs:Percentiles;
 	final memoryBeforeBytes:Float;
 	final memoryAfterBytes:Float;
@@ -60,10 +64,13 @@ class SyntaxScannerBenchmarkMain {
 			iterations = intArg(args, "--iterations", 20),
 			warmup = intArg(args, "--warmup", 3),
 			sizes = intListArg(args, "--sizes", [8, 64, 256]),
+			enduranceModules = intArg(args, "--endurance-modules", 64),
+			enduranceIterations = intArg(args, "--endurance-iterations", 200),
+			maxCstOverheadPercent = floatArg(args, "--max-cst-overhead-pct", 400.0),
 			output = stringArg(args, "--json", "out/syntax-scanner-benchmark.json"),
 			checkBudgets = hasFlag(args, "--check-budgets");
-		if (iterations < 1 || warmup < 0 || sizes.length == 0)
-			throw "iterations must be positive, warmup cannot be negative, and sizes cannot be empty";
+		if (iterations < 1 || warmup < 0 || sizes.length == 0 || enduranceModules < 1 || enduranceIterations < 1 || maxCstOverheadPercent < 0)
+			throw "iterations must be positive, warmup cannot be negative, sizes cannot be empty, and endurance settings must be positive";
 
 		var reports:Array<CaseReport> = [];
 		for (modules in sizes) {
@@ -72,19 +79,27 @@ class SyntaxScannerBenchmarkMain {
 				measure(file);
 			reports.push(runCase(file, modules, iterations));
 		}
+		var enduranceFile = new SourceFile('SyntaxScannerEndurance${enduranceModules}.hx', sampleSource(enduranceModules));
+		for (_ in 0...warmup)
+			measure(enduranceFile);
+		var endurance = runCase(enduranceFile, enduranceModules, enduranceIterations);
 
 		var report = {
-			version: 3,
+			version: 4,
 			iterations: iterations,
 			warmup: warmup,
-			cases: reports
+			cases: reports,
+			endurance: endurance,
+			enduranceIterations: enduranceIterations,
+			maxCstOverheadPercent: maxCstOverheadPercent
 		};
 		ensureParent(output);
 		File.saveContent(output, Json.stringify(report, null, "  ") + "\n");
 		for (entry in reports)
-			printCase(entry);
+			printCase('size-${entry.modules}', entry);
+		printCase("endurance", endurance);
 		if (checkBudgets)
-			checkCaseBudgets(reports);
+			checkCaseBudgets(reports.concat([endurance]), maxCstOverheadPercent);
 		Sys.println('JSON: $output');
 	}
 
@@ -94,6 +109,8 @@ class SyntaxScannerBenchmarkMain {
 			losslessScan:Array<Float> = [],
 			astFrontend:Array<Float> = [],
 			cstFrontend:Array<Float> = [],
+			cstOverhead:Array<Float> = [],
+			cstOverheadPercent:Array<Float> = [],
 			explicitLower:Array<Float> = [],
 			compilerTokens = 0,
 			losslessSlices = 0,
@@ -108,6 +125,8 @@ class SyntaxScannerBenchmarkMain {
 			losslessScan.push(sample.losslessScanMs);
 			astFrontend.push(sample.astFrontendMs);
 			cstFrontend.push(sample.cstFrontendMs);
+			cstOverhead.push(sample.cstOverheadMs);
+			cstOverheadPercent.push(sample.cstOverheadPercent);
 			explicitLower.push(sample.explicitLowerMs);
 			compilerTokens = sample.compilerTokens;
 			losslessSlices = sample.losslessSlices;
@@ -132,6 +151,8 @@ class SyntaxScannerBenchmarkMain {
 			losslessScanMs: percentiles(losslessScan),
 			astFrontendMs: percentiles(astFrontend),
 			cstFrontendMs: percentiles(cstFrontend),
+			cstOverheadMs: percentiles(cstOverhead),
+			cstOverheadPercent: percentiles(cstOverheadPercent),
 			explicitLowerMs: percentiles(explicitLower),
 			memoryBeforeBytes: before,
 			memoryAfterBytes: after,
@@ -161,6 +182,8 @@ class SyntaxScannerBenchmarkMain {
 		started = Sys.time();
 		AstLowerer.lower(tree, cstProgram, false);
 		var explicitLowerMs = (Sys.time() - started) * 1000.0;
+		var cstOverheadMs = cstFrontendMs - astFrontendMs,
+			cstOverheadPercent = astFrontendMs <= 0 ? -1 : cstOverheadMs * 100.0 / astFrontendMs;
 		var losslessTrivia = 0;
 		for (slice in lossless)
 			switch slice.kind {
@@ -172,6 +195,8 @@ class SyntaxScannerBenchmarkMain {
 			losslessScanMs: losslessScanMs,
 			astFrontendMs: astFrontendMs,
 			cstFrontendMs: cstFrontendMs,
+			cstOverheadMs: cstOverheadMs,
+			cstOverheadPercent: cstOverheadPercent,
 			explicitLowerMs: explicitLowerMs,
 			compilerTokens: compilerTokens.length,
 			losslessSlices: lossless.length,
@@ -197,18 +222,20 @@ class SyntaxScannerBenchmarkMain {
 		return output.toString();
 	}
 
-	static function printCase(report:CaseReport):Void {
-		Sys.println('Size ${report.modules}: ${report.sourceBytes} bytes, compiler tokens ${report.compilerTokens}, lossless slices ${report.losslessSlices}, '
+	static function printCase(label:String, report:CaseReport):Void {
+		Sys.println('${label}: ${report.modules} modules, ${report.sourceBytes} bytes, compiler tokens ${report.compilerTokens}, lossless slices ${report.losslessSlices}, '
 			+ 'lossless trivia ${report.losslessTrivia}, CST tokens ${report.cstTokens}, CST trivia ${report.cstTrivia}, CST nodes ${report.cstNodes}');
 		Sys.println('  compiler lex median/p95/p99: ${format(report.compilerLexMs.median)}/${format(report.compilerLexMs.p95)}/${format(report.compilerLexMs.p99)} ms');
 		Sys.println('  lossless scan median/p95/p99: ${format(report.losslessScanMs.median)}/${format(report.losslessScanMs.p95)}/${format(report.losslessScanMs.p99)} ms');
 		Sys.println('  AST-only frontend (lex+parse) median/p95/p99: ${format(report.astFrontendMs.median)}/${format(report.astFrontendMs.p95)}/${format(report.astFrontendMs.p99)} ms');
 		Sys.println('  CST frontend (scan+adapt+parse+lower) median/p95/p99: ${format(report.cstFrontendMs.median)}/${format(report.cstFrontendMs.p95)}/${format(report.cstFrontendMs.p99)} ms');
+		Sys.println('  CST overhead median/p95/p99: ${format(report.cstOverheadMs.median)}/${format(report.cstOverheadMs.p95)}/${format(report.cstOverheadMs.p99)} ms '
+			+ '(${format(report.cstOverheadPercent.median)}/${format(report.cstOverheadPercent.p95)}/${format(report.cstOverheadPercent.p99)}%)');
 		Sys.println('  explicit lower/validate median/p95/p99: ${format(report.explicitLowerMs.median)}/${format(report.explicitLowerMs.p95)}/${format(report.explicitLowerMs.p99)} ms');
 		Sys.println('  memory before/after/growth: ${formatBytes(report.memoryBeforeBytes)}/${formatBytes(report.memoryAfterBytes)}/${formatBytes(report.memoryGrowthBytes)} bytes');
 	}
 
-	static function checkCaseBudgets(reports:Array<CaseReport>):Void {
+	static function checkCaseBudgets(reports:Array<CaseReport>, maxCstOverheadPercent:Float):Void {
 		for (report in reports) {
 			var budget = report.modules <= 64 ? 100.0 : 500.0;
 			if (report.compilerLexMs.p95 > budget)
@@ -217,6 +244,8 @@ class SyntaxScannerBenchmarkMain {
 				throw 'AST-only frontend budget exceeded for ${report.modules} modules: ${format(report.astFrontendMs.p95)} ms > $budget ms';
 			if (report.cstFrontendMs.p95 > budget)
 				throw 'CST frontend budget exceeded for ${report.modules} modules: ${format(report.cstFrontendMs.p95)} ms > $budget ms';
+			if (report.cstOverheadPercent.p95 > maxCstOverheadPercent)
+				throw 'CST overhead budget exceeded for ${report.modules} modules: ${format(report.cstOverheadPercent.p95)}% > ${format(maxCstOverheadPercent)}%';
 		}
 		Sys.println("CST benchmark budget check: passed");
 	}
@@ -266,6 +295,11 @@ class SyntaxScannerBenchmarkMain {
 	static function intArg(args:Array<String>, name:String, fallback:Int):Int {
 		var value = stringArg(args, name, null);
 		return value == null ? fallback : Std.parseInt(value);
+	}
+
+	static function floatArg(args:Array<String>, name:String, fallback:Float):Float {
+		var value = stringArg(args, name, null);
+		return value == null ? fallback : Std.parseFloat(value);
 	}
 
 	static function stringArg(args:Array<String>, name:String, fallback:Null<String>):Null<String> {
