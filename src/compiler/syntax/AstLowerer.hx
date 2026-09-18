@@ -23,6 +23,16 @@ import compiler.syntax.SyntaxTree.SyntaxStatementPayload;
 import compiler.syntax.SyntaxTree.SyntaxTypePayload;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 
+typedef LoweredFunctionHeader = {
+	final name:String;
+	final isStatic:Bool;
+	final isExtern:Bool;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final arguments:Array<AstArgument>;
+	final result:AstType;
+}
+
 /**
 	Transition boundary from parser syntax to the compiler AST.
 
@@ -439,13 +449,53 @@ class AstLowerer {
 
 	static function lowerFunction(functionDeclaration:AstFunction, payload:Null<SyntaxNodePayload>,
 			nodePayloads:Map<Int, SyntaxNodePayload>):Null<AstFunction> {
+		var header = lowerFunctionHeader(functionDeclaration, payload);
+		if (header == null)
+			return null;
+		var statements = lowerStatements(functionDeclaration.statements, nodePayloads);
+		return statements == null ? null : {
+			name: header.name,
+			isStatic: header.isStatic,
+			isExtern: header.isExtern,
+			metadata: [],
+			typeParameters: header.typeParameters,
+			typeConstraints: header.typeConstraints,
+			arguments: header.arguments,
+			result: header.result,
+			statements: statements,
+			span: functionDeclaration.span
+		};
+	}
+
+	static function lowerFunctionHeader(functionDeclaration:AstFunction, payload:Null<SyntaxNodePayload>):Null<LoweredFunctionHeader> {
 		return switch payload {
 			case SyntaxNodePayload.FunctionHeaderRich(name, isStatic, isExtern, typeParameters, constraintPayloads, parameters, resultType):
-				lowerRichFunction(functionDeclaration, name, isStatic, isExtern, typeParameters, constraintPayloads, parameters, resultType, nodePayloads);
-			case SyntaxNodePayload.FunctionHeader(name, isStatic, isExtern, typeParameters, parameters, resultTypeName):
 				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
-					loweredStatements = lowerStatements(functionDeclaration.statements, nodePayloads);
-				if (loweredStatements == null || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
+					loweredResult = lowerType(functionDeclaration.result, resultType),
+					loweredArguments = lowerArguments(functionDeclaration.arguments, parameters),
+					loweredConstraints = lowerTypeConstraints(functionDeclaration.typeConstraints, constraintPayloads);
+				if (loweredResult == null || loweredArguments == null || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
+					|| loweredConstraints == null || functionDeclaration.name != name
+					|| functionDeclaration.isStatic != isStatic || (functionDeclaration.isExtern == true) != isExtern
+					|| directTypeParameters.length != typeParameters.length)
+					null;
+				else {
+					for (index in 0...directTypeParameters.length)
+						if (directTypeParameters[index] != typeParameters[index])
+							return null;
+					{
+						name: name,
+						isStatic: isStatic,
+						isExtern: isExtern,
+						typeParameters: typeParameters,
+						typeConstraints: loweredConstraints,
+						arguments: loweredArguments,
+						result: loweredResult
+					};
+				}
+			case SyntaxNodePayload.FunctionHeader(name, isStatic, isExtern, typeParameters, parameters, resultTypeName):
+				var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters;
+				if (functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
 					|| functionDeclaration.typeConstraints != null && functionDeclaration.typeConstraints.length > 0
 					|| resultTypeName == null || !simpleTypeMatches(functionDeclaration.result, resultTypeName)
 					|| functionDeclaration.arguments.length != parameters.length
@@ -455,18 +505,15 @@ class AstLowerer {
 					null;
 				else {
 					var loweredArguments:Array<AstArgument> = [];
-					var valid = true;
 					for (index in 0...directTypeParameters.length)
 						if (directTypeParameters[index] != typeParameters[index])
-							valid = false;
+							return null;
 					for (index in 0...parameters.length) {
 						var sourceArgument = functionDeclaration.arguments[index], parameter = parameters[index];
 						if (sourceArgument.defaultValue != null || parameter.typeName == null
 							|| sourceArgument.name != parameter.name || sourceArgument.optional != parameter.optional
-							|| !simpleTypeMatches(sourceArgument.type, parameter.typeName)) {
-							valid = false;
-							break;
-						}
+							|| !simpleTypeMatches(sourceArgument.type, parameter.typeName))
+							return null;
 						loweredArguments.push({
 							name: parameter.name,
 							type: lowerSimpleType(parameter.typeName),
@@ -475,53 +522,17 @@ class AstLowerer {
 							defaultValue: null
 						});
 					}
-					if (!valid)
-						null;
-					else
-						{
-							name: name,
-							isStatic: isStatic,
-							isExtern: isExtern,
-							metadata: [],
-							typeParameters: typeParameters,
-							typeConstraints: [],
-							arguments: loweredArguments,
-							result: lowerSimpleType(resultTypeName),
-							statements: loweredStatements,
-							span: functionDeclaration.span
-						};
+					{
+						name: name,
+						isStatic: isStatic,
+						isExtern: isExtern,
+						typeParameters: typeParameters,
+						typeConstraints: [],
+						arguments: loweredArguments,
+						result: lowerSimpleType(resultTypeName)
+					};
 				}
 			default: null;
-		};
-	}
-
-	static function lowerRichFunction(functionDeclaration:AstFunction, name:String, isStatic:Bool, isExtern:Bool, typeParameters:Array<String>,
-			constraintPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypeConstraintPayload>,
-			parameters:Array<compiler.syntax.SyntaxTree.SyntaxArgumentPayload>, resultType:SyntaxTypePayload,
-			nodePayloads:Map<Int, SyntaxNodePayload>):Null<AstFunction> {
-		var directTypeParameters = functionDeclaration.typeParameters == null ? [] : functionDeclaration.typeParameters,
-			loweredResult = lowerType(functionDeclaration.result, resultType), loweredArguments = lowerArguments(functionDeclaration.arguments, parameters),
-			loweredStatements = lowerStatements(functionDeclaration.statements, nodePayloads),
-			loweredConstraints = lowerTypeConstraints(functionDeclaration.typeConstraints, constraintPayloads);
-		if (loweredResult == null || loweredArguments == null || loweredStatements == null || functionDeclaration.metadata != null && functionDeclaration.metadata.length > 0
-			|| loweredConstraints == null || functionDeclaration.name != name
-			|| functionDeclaration.isStatic != isStatic || (functionDeclaration.isExtern == true) != isExtern
-			|| directTypeParameters.length != typeParameters.length)
-			return null;
-		for (index in 0...directTypeParameters.length)
-			if (directTypeParameters[index] != typeParameters[index])
-				return null;
-		return {
-			name: name,
-			isStatic: isStatic,
-			isExtern: isExtern,
-			metadata: [],
-			typeParameters: typeParameters,
-			typeConstraints: loweredConstraints,
-			arguments: loweredArguments,
-			result: loweredResult,
-			statements: loweredStatements,
-			span: functionDeclaration.span
 		};
 	}
 
