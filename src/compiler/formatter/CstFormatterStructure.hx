@@ -134,8 +134,17 @@ class CstFormatterStructure {
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ArrayLiteral);
 				case SyntaxKind.ObjectLiteral, SyntaxKind.MapLiteral, SyntaxKind.AnonymousType:
 					applyDelimitedNode(tokens, syntax, node, FormatNodeKind.ObjectLiteral);
-				default:
-					// Declaration and recovery nodes do not affect layout decisions.
+				case SyntaxKind.SourceFile, SyntaxKind.PackageDeclaration, SyntaxKind.ImportDeclaration,
+					SyntaxKind.TypeAliasDeclaration, SyntaxKind.EnumDeclaration, SyntaxKind.EnumAbstractDeclaration,
+					SyntaxKind.AbstractDeclaration, SyntaxKind.InterfaceDeclaration, SyntaxKind.ClassDeclaration,
+					SyntaxKind.FunctionDeclaration, SyntaxKind.FieldDeclaration, SyntaxKind.Metadata,
+					SyntaxKind.IndexExpression, SyntaxKind.VariableDeclaration, SyntaxKind.ThrowStatement,
+					SyntaxKind.TryStatement, SyntaxKind.SwitchStatement, SyntaxKind.IncrementStatement,
+					SyntaxKind.ExpressionStatement, SyntaxKind.ReturnStatement, SyntaxKind.BreakStatement,
+					SyntaxKind.ContinueStatement, SyntaxKind.IfStatement, SyntaxKind.WhileStatement,
+					SyntaxKind.DoWhileStatement, SyntaxKind.ForStatement, SyntaxKind.Error, SyntaxKind.Missing:
+					// These nodes are structurally useful to other tooling, but do not
+					// change formatter layout constraints yet.
 			}
 	}
 
@@ -165,16 +174,23 @@ class CstFormatterStructure {
 	}
 
 	static function applyCallNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode):Void {
-		var start = tokenIndexAt(tokens, node.span.start), end = tokenIndexEndingAt(tokens, node.span.end);
-		if (start < 0 || end < start || FormatTokenTools.syntaxKind(tokens[end]) != TokenKind.RightParen)
+		var argumentList:Null<SyntaxNode> = null;
+		for (child in node.grammarChildren)
+			if (child.kind == SyntaxKind.ArgumentList && child.span.end == node.span.end) {
+				argumentList = child;
+				break;
+			}
+		if (argumentList == null)
 			return;
-		var open = matchingLeftParen(tokens, start, end);
-		if (open >= 0) {
-			syntax.matching.set(open, end);
-			syntax.matching.set(end, open);
-			syntax.nodeKinds.set(tokens[open].start + ":" + tokens[end].start, FormatNodeKind.Call);
-			syntax.nodes.push({kind: FormatNodeKind.Call, start: open, end: end, parent: null});
-		}
+		var open = tokenIndexAt(tokens, argumentList.span.start), close = tokenIndexEndingAt(tokens, argumentList.span.end);
+		if (open < 0 || close < open
+			|| FormatTokenTools.syntaxKind(tokens[open]) != TokenKind.LeftParen
+			|| FormatTokenTools.syntaxKind(tokens[close]) != TokenKind.RightParen)
+			return;
+		syntax.matching.set(open, close);
+		syntax.matching.set(close, open);
+		syntax.nodeKinds.set(tokens[open].start + ":" + tokens[close].start, FormatNodeKind.Call);
+		syntax.nodes.push({kind: FormatNodeKind.Call, start: open, end: close, parent: null});
 	}
 
 	static function applyDelimitedNode(tokens:Array<FormatToken>, syntax:SyntaxInfo, node:SyntaxNode, kind:FormatNodeKind):Void {
@@ -196,24 +212,6 @@ class CstFormatterStructure {
 		if (kind == FormatNodeKind.ObjectLiteral)
 			syntax.blockOpens.set(tokens[open].start, false);
 		syntax.nodes.push({kind: kind, start: open, end: close, parent: null});
-	}
-
-	static function matchingLeftParen(tokens:Array<FormatToken>, start:Int, close:Int):Int {
-		var depth = 0, index = close;
-		while (index >= start) {
-			var kind = FormatTokenTools.syntaxKind(tokens[index]);
-			switch kind {
-				case TokenKind.RightParen:
-					depth++;
-				case TokenKind.LeftParen:
-					if (depth == 0)
-						return index;
-					depth--;
-				default:
-			}
-			index--;
-		}
-		return -1;
 	}
 
 	static function tokenIndexAt(tokens:Array<FormatToken>, offset:Int):Int {

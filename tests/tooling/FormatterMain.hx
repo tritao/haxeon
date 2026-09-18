@@ -44,6 +44,32 @@ class FormatterMain {
 			|| Formatter.format(metadataFormatted, FormatConfigTools.defaults(2, true)) != metadataFormatted)
 			throw "formatter did not preserve CST-backed metadata";
 
+		var nestedCallSource = new SourceFile("nested-calls.hx",
+			"function main():Int { return compute(transform(value)); }\n"),
+			nestedCallParser = new Parser(new Lexer(nestedCallSource).tokenize(), null, ParserMode.Cst(nestedCallSource));
+		nestedCallParser.parseProgram();
+		var nestedCallTree = nestedCallParser.cst,
+			nestedCallTokens = CstFormatterAdapter.tokens(nestedCallTree),
+			nestedCallSyntax = CstFormatterStructure.annotate(nestedCallTokens, nestedCallTree),
+			outerOpenOffset = nestedCallSource.text.indexOf("(", nestedCallSource.text.indexOf("compute")),
+			innerOpenOffset = nestedCallSource.text.indexOf("(", nestedCallSource.text.indexOf("transform")),
+			outerCloseOffset = nestedCallSource.text.lastIndexOf(")"),
+			innerCloseOffset = nestedCallSource.text.indexOf(")", innerOpenOffset),
+			outerOpen = -1, innerOpen = -1, outerClose = -1, innerClose = -1;
+		for (index in 0...nestedCallTokens.length)
+			switch nestedCallTokens[index].kind {
+				case FormatTokenKind.Syntax(_):
+					if (nestedCallTokens[index].start == outerOpenOffset) outerOpen = index;
+					if (nestedCallTokens[index].start == innerOpenOffset) innerOpen = index;
+					if (nestedCallTokens[index].end == outerCloseOffset + 1) outerClose = index;
+					if (nestedCallTokens[index].end == innerCloseOffset + 1) innerClose = index;
+				default:
+			}
+		if (outerOpen < 0 || innerOpen < 0 || outerClose < 0 || innerClose < 0
+			|| !nestedCallSyntax.matching.exists(outerOpen) || nestedCallSyntax.matching.get(outerOpen) != outerClose
+			|| !nestedCallSyntax.matching.exists(innerOpen) || nestedCallSyntax.matching.get(innerOpen) != innerClose)
+			throw "formatter did not derive nested call delimiters from CST argument lists";
+
 		var file = new SourceFile("round-trip.hx",
 			"function main():String { var values:Array<Int> = [1,2]; var pattern=~/a[//]b/gi; var text='value ${1 + 2}'; // comment\nreturn text; }\n"),
 			losslessTree = SyntaxTree.fromSource(file),
