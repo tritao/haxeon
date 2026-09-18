@@ -50,8 +50,11 @@ class SyntaxTreeBuilder {
 
 	/** Nests completed source ranges so grammar parents contain their children. */
 	public function finish():Array<SyntaxNode> {
-		var ordered:Array<SyntaxTreeDraft> = [for (draft in drafts) draft];
-		ordered = [for (draft in ordered) if (draft.end >= draft.start) draft];
+		var ordered:Array<SyntaxTreeDraft> = drafts.copy(), orderedLength = 0;
+		for (draft in drafts)
+			if (draft.end >= draft.start)
+				ordered[orderedLength++] = draft;
+		ordered.resize(orderedLength);
 		ordered.sort(function(left, right) {
 			if (left.start != right.start)
 				return left.start - right.start;
@@ -81,7 +84,11 @@ class SyntaxTreeBuilder {
 	}
 
 	function materialize(draft:SyntaxTreeDraft):SyntaxNode {
+		var children:Array<SyntaxNode> = [];
+		children.resize(draft.children.length);
+		for (index in 0...draft.children.length)
+			children[index] = materialize(draft.children[index]);
 		return SyntaxNode.fromOwned(draft.kind, source.span(draft.start, draft.end), [],
-			[for (child in draft.children) materialize(child)], draft.payload);
+			children, draft.payload);
 	}
 }

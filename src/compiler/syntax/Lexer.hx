@@ -31,10 +31,12 @@ class Lexer {
 	/** Adapts an already scanned strict lossless stream without rescanning it. */
 	public static function tokenizeLossless(file:SourceFile, losslessTokens:Array<LosslessToken>, ?sourceLength:Int):Array<Token> {
 		var result:Array<Token> = [];
+		result.resize(losslessTokens.length + 1);
+		var resultLength = 0;
 		for (token in losslessTokens)
 			switch token.kind {
 				case SyntaxTokenKind.Syntax(kind):
-					result.push(new Token(kind, token.text, token.span));
+					result[resultLength++] = token.sourceBacked ? Token.fromSource(kind, token.span) : new Token(kind, token.text, token.span);
 				case SyntaxTokenKind.Whitespace, SyntaxTokenKind.Newline,
 					SyntaxTokenKind.LineComment, SyntaxTokenKind.BlockComment, SyntaxTokenKind.DocComment:
 					// Compiler trivia remains outside the parser token stream.
@@ -42,7 +44,8 @@ class Lexer {
 					throw 'Lossless compiler-token adaptation received non-syntax input at ${token.span.start}';
 			}
 		var end = sourceLength == null ? file.bytes.length : sourceLength;
-		result.push(new Token(TokenKind.Eof, "", file.span(end, end)));
+		result[resultLength++] = new Token(TokenKind.Eof, "", file.span(end, end));
+		result.resize(resultLength);
 		return result;
 	}
 }

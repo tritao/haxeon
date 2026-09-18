@@ -367,28 +367,33 @@ class SyntaxTree {
 
 	/** Builds the source leaves from an already completed lossless scan. */
 	public static function fromLossless(source:SourceFile, losslessTokens:Array<LosslessToken>):SyntaxTree {
-		var children:Array<SyntaxElement> = [], tokens:Array<SyntaxToken> = [], trivia:Array<SyntaxTrivia> = [];
+		var children:Array<SyntaxElement> = [], tokens:Array<SyntaxToken> = [], trivia:Array<SyntaxTrivia> = [],
+			childLength = 0, tokenLength = 0;
+		children.resize(losslessTokens.length);
+		tokens.resize(losslessTokens.length);
 		for (lossless in losslessTokens)
 			switch lossless.kind {
 				case SyntaxTokenKind.Syntax(kind):
 					var token = new SyntaxToken(kind, lossless.span);
-					tokens.push(token);
-					children.push(SyntaxElement.Token(token));
+					tokens[tokenLength++] = token;
+					children[childLength++] = SyntaxElement.Token(token);
 				case SyntaxTokenKind.Whitespace:
-					appendTrivia(children, trivia, SyntaxTriviaKind.Whitespace, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.Whitespace, lossless);
 				case SyntaxTokenKind.Newline:
-					appendTrivia(children, trivia, SyntaxTriviaKind.Newline, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.Newline, lossless);
 				case SyntaxTokenKind.LineComment:
-					appendTrivia(children, trivia, SyntaxTriviaKind.LineComment, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.LineComment, lossless);
 				case SyntaxTokenKind.BlockComment:
-					appendTrivia(children, trivia, SyntaxTriviaKind.BlockComment, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.BlockComment, lossless);
 				case SyntaxTokenKind.DocComment:
-					appendTrivia(children, trivia, SyntaxTriviaKind.DocComment, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.DocComment, lossless);
 				case SyntaxTokenKind.Directive:
-					appendTrivia(children, trivia, SyntaxTriviaKind.Directive, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.Directive, lossless);
 				case SyntaxTokenKind.Unknown:
-					appendTrivia(children, trivia, SyntaxTriviaKind.Unknown, lossless);
+					children[childLength++] = appendTrivia(trivia, SyntaxTriviaKind.Unknown, lossless);
 			}
+		children.resize(childLength);
+		tokens.resize(tokenLength);
 		var span = source.span(0, source.bytes.length),
 			root = new SyntaxNode(SyntaxKind.SourceFile, span, children);
 		return new SyntaxTree(source, root, tokens, trivia, []);
@@ -448,10 +453,10 @@ class SyntaxTree {
 		return output.toString();
 	}
 
-	static function appendTrivia(children:Array<SyntaxElement>, trivia:Array<SyntaxTrivia>, kind:SyntaxTriviaKind, lossless:LosslessToken):Void {
+	static function appendTrivia(trivia:Array<SyntaxTrivia>, kind:SyntaxTriviaKind, lossless:LosslessToken):SyntaxElement {
 		var value = new SyntaxTrivia(kind, lossless.span);
 		trivia.push(value);
-		children.push(SyntaxElement.Trivia(value));
+		return SyntaxElement.Trivia(value);
 	}
 
 	static function elementOffset(element:SyntaxElement):Int

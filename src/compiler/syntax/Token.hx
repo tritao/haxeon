@@ -98,15 +98,29 @@ enum TokenKind {
 /** One lexical token retaining its original spelling and source location. */
 class Token {
 	public final kind:TokenKind;
-	public final text:String;
 	public final span:SourceSpan;
+	final literalText:Null<String>;
+
+	/**
+		Token spelling is lazy for source-backed tokens. Punctuation is consumed
+		by kind and should not force a substring allocation during lexing; names
+		and literals still materialize their spelling when the parser asks for it.
+	*/
+	public var text(get, never):String;
 	public var offset(get, never):Int;
 
-	public function new(kind:TokenKind, text:String, span:SourceSpan) {
+	public function new(kind:TokenKind, text:Null<String>, span:SourceSpan) {
 		this.kind = kind;
-		this.text = text;
 		this.span = span;
+		this.literalText = text;
 	}
+
+	/** Creates a token whose spelling is read from its source span on demand. */
+	public static function fromSource(kind:TokenKind, span:SourceSpan):Token
+		return new Token(kind, null, span);
+
+	function get_text():String
+		return literalText == null ? span.file.slice(span.start, span.end) : literalText;
 
 	inline function get_offset():Int
 		return span.start;

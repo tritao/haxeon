@@ -33,9 +33,13 @@ class LosslessToken {
 	}
 
 	public var text(get, never):String;
+	public var sourceBacked(get, never):Bool;
 
 	function get_text():String
 		return replacementText == null ? span.file.slice(span.start, span.end) : replacementText;
+
+	function get_sourceBacked():Bool
+		return replacementText == null;
 }
 
 /**
