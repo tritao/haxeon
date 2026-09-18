@@ -378,20 +378,7 @@ class AstLowerer {
 	}
 
 	static function collectPayloads(tree:SyntaxTree):Map<Int, SyntaxNodePayload> {
-		var result:Map<Int, SyntaxNodePayload> = [];
-		for (node in tree.grammarNodes())
-			switch node.payload {
-				case null:
-				case SyntaxNodePayload.PackageName(_), SyntaxNodePayload.Import(_, _), SyntaxNodePayload.ClassHeader(_, _, _, _, _, _),
-					SyntaxNodePayload.ClassHeaderRich(_, _, _, _, _, _, _), SyntaxNodePayload.FieldHeader(_, _, _, _, _, _, _),
-					SyntaxNodePayload.FieldHeaderRich(_, _, _, _, _, _, _, _), SyntaxNodePayload.FunctionHeader(_, _, _, _, _, _),
-					SyntaxNodePayload.FunctionHeaderRich(_, _, _, _, _, _, _),
-					SyntaxNodePayload.TypeAliasHeader(_, _, _, _, _), SyntaxNodePayload.EnumHeader(_, _, _, _), SyntaxNodePayload.EnumAbstractHeader(_, _, _, _, _),
-					SyntaxNodePayload.AbstractHeader(_, _, _, _, _, _, _), SyntaxNodePayload.InterfaceHeader(_, _, _, _),
-					SyntaxNodePayload.Statement(_):
-					result.set(node.span.start, node.payload);
-			}
-		return result;
+		return tree.payloadsByStart();
 	}
 
 	static function lowerFields(direct:Array<AstField>, nodePayloads:Map<Int, SyntaxNodePayload>):Array<AstField> {

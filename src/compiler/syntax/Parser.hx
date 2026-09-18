@@ -24,6 +24,7 @@ import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTree.SyntaxFunctionParameter;
 import compiler.syntax.SyntaxTreeBuilder;
+import compiler.syntax.SyntaxScanner.LosslessToken;
 import compiler.syntax.AstLowerer;
 import compiler.Diagnostic.CompileError;
 import haxe.Int64;
@@ -56,14 +57,14 @@ class Parser {
 	var recovering:Bool = false;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
-	public function new(tokens:Array<Token>, ?checkpoint:Void->Void, ?mode:ParserMode) {
+	public function new(tokens:Array<Token>, ?checkpoint:Void->Void, ?mode:ParserMode, ?losslessTokens:Array<LosslessToken>) {
 		this.tokens = tokens;
 		this.checkpointCallback = checkpoint;
 		this.currentCst = mode == null ? null : switch mode {
 			case ParserMode.AstOnly: null;
 			case ParserMode.Cst(source):
 				cstBuilder = new SyntaxTreeBuilder(source);
-				SyntaxTree.fromSource(source);
+				losslessTokens == null ? SyntaxTree.fromSource(source) : SyntaxTree.fromLossless(source, losslessTokens);
 		};
 	}
 
@@ -200,10 +201,8 @@ class Parser {
 			classes: classes,
 			functions: functions
 		};
-		if (currentCst != null && cstMissingTokens.length > 0)
-			currentCst = currentCst.withSyntheticTokens(cstMissingTokens);
 		if (currentCst != null && cstBuilder != null)
-			currentCst = currentCst.withGrammarRoots(cstBuilder.finish());
+			currentCst = currentCst.withGrammarRootsAndSynthetic(cstBuilder.finish(), cstMissingTokens);
 		if (currentCst != null)
 			program = AstLowerer.lower(currentCst, program, !recovering);
 		return program;

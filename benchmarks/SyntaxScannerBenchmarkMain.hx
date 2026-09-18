@@ -21,8 +21,8 @@ private typedef Percentiles = {
 private typedef Iteration = {
 	final compilerLexMs:Float;
 	final losslessScanMs:Float;
-	final astParseMs:Float;
-	final cstParseLowerMs:Float;
+	final astFrontendMs:Float;
+	final cstFrontendMs:Float;
 	final explicitLowerMs:Float;
 	final compilerTokens:Int;
 	final losslessSlices:Int;
@@ -45,8 +45,8 @@ private typedef CaseReport = {
 	final cstSyntheticTokens:Int;
 	final compilerLexMs:Percentiles;
 	final losslessScanMs:Percentiles;
-	final astParseMs:Percentiles;
-	final cstParseLowerMs:Percentiles;
+	final astFrontendMs:Percentiles;
+	final cstFrontendMs:Percentiles;
 	final explicitLowerMs:Percentiles;
 	final memoryBeforeBytes:Float;
 	final memoryAfterBytes:Float;
@@ -74,7 +74,7 @@ class SyntaxScannerBenchmarkMain {
 		}
 
 		var report = {
-			version: 2,
+			version: 3,
 			iterations: iterations,
 			warmup: warmup,
 			cases: reports
@@ -92,8 +92,8 @@ class SyntaxScannerBenchmarkMain {
 		var before = processMemory(),
 			compilerLex:Array<Float> = [],
 			losslessScan:Array<Float> = [],
-			astParse:Array<Float> = [],
-			cstParseLower:Array<Float> = [],
+			astFrontend:Array<Float> = [],
+			cstFrontend:Array<Float> = [],
 			explicitLower:Array<Float> = [],
 			compilerTokens = 0,
 			losslessSlices = 0,
@@ -106,8 +106,8 @@ class SyntaxScannerBenchmarkMain {
 			var sample = measure(file);
 			compilerLex.push(sample.compilerLexMs);
 			losslessScan.push(sample.losslessScanMs);
-			astParse.push(sample.astParseMs);
-			cstParseLower.push(sample.cstParseLowerMs);
+			astFrontend.push(sample.astFrontendMs);
+			cstFrontend.push(sample.cstFrontendMs);
 			explicitLower.push(sample.explicitLowerMs);
 			compilerTokens = sample.compilerTokens;
 			losslessSlices = sample.losslessSlices;
@@ -130,8 +130,8 @@ class SyntaxScannerBenchmarkMain {
 			cstSyntheticTokens: cstSyntheticTokens,
 			compilerLexMs: percentiles(compilerLex),
 			losslessScanMs: percentiles(losslessScan),
-			astParseMs: percentiles(astParse),
-			cstParseLowerMs: percentiles(cstParseLower),
+			astFrontendMs: percentiles(astFrontend),
+			cstFrontendMs: percentiles(cstFrontend),
 			explicitLowerMs: percentiles(explicitLower),
 			memoryBeforeBytes: before,
 			memoryAfterBytes: after,
@@ -144,15 +144,17 @@ class SyntaxScannerBenchmarkMain {
 			compilerTokens = new Lexer(file).tokenize(),
 			compilerLexMs = (Sys.time() - started) * 1000.0;
 		started = Sys.time();
-		var lossless = new SyntaxScanner(file).scan(),
+		var astTokens = new Lexer(file).tokenize();
+		new Parser(astTokens, null, ParserMode.AstOnly).parseProgram();
+		var astFrontendMs = (Sys.time() - started) * 1000.0;
+		var cstStarted = Sys.time();
+		started = Sys.time();
+		var lossless = new SyntaxScanner(file, null, null, true).scan(),
 			losslessScanMs = (Sys.time() - started) * 1000.0;
-		started = Sys.time();
-		new Parser(compilerTokens, null, ParserMode.AstOnly).parseProgram();
-		var astParseMs = (Sys.time() - started) * 1000.0;
-		started = Sys.time();
-		var cstParser = new Parser(new Lexer(file).tokenize(), null, ParserMode.Cst(file)),
+		var cstTokensInput = Lexer.tokenizeLossless(file, lossless),
+			cstParser = new Parser(cstTokensInput, null, ParserMode.Cst(file), lossless),
 			cstProgram = cstParser.parseProgram(),
-			cstParseLowerMs = (Sys.time() - started) * 1000.0,
+			cstFrontendMs = (Sys.time() - cstStarted) * 1000.0,
 			tree = cstParser.cst;
 		if (tree == null)
 			throw "CST parser did not publish a syntax tree";
@@ -168,8 +170,8 @@ class SyntaxScannerBenchmarkMain {
 		return {
 			compilerLexMs: compilerLexMs,
 			losslessScanMs: losslessScanMs,
-			astParseMs: astParseMs,
-			cstParseLowerMs: cstParseLowerMs,
+			astFrontendMs: astFrontendMs,
+			cstFrontendMs: cstFrontendMs,
 			explicitLowerMs: explicitLowerMs,
 			compilerTokens: compilerTokens.length,
 			losslessSlices: lossless.length,
@@ -200,8 +202,8 @@ class SyntaxScannerBenchmarkMain {
 			+ 'lossless trivia ${report.losslessTrivia}, CST tokens ${report.cstTokens}, CST trivia ${report.cstTrivia}, CST nodes ${report.cstNodes}');
 		Sys.println('  compiler lex median/p95/p99: ${format(report.compilerLexMs.median)}/${format(report.compilerLexMs.p95)}/${format(report.compilerLexMs.p99)} ms');
 		Sys.println('  lossless scan median/p95/p99: ${format(report.losslessScanMs.median)}/${format(report.losslessScanMs.p95)}/${format(report.losslessScanMs.p99)} ms');
-		Sys.println('  AST-only parse median/p95/p99: ${format(report.astParseMs.median)}/${format(report.astParseMs.p95)}/${format(report.astParseMs.p99)} ms');
-		Sys.println('  CST parse+lower median/p95/p99: ${format(report.cstParseLowerMs.median)}/${format(report.cstParseLowerMs.p95)}/${format(report.cstParseLowerMs.p99)} ms');
+		Sys.println('  AST-only frontend (lex+parse) median/p95/p99: ${format(report.astFrontendMs.median)}/${format(report.astFrontendMs.p95)}/${format(report.astFrontendMs.p99)} ms');
+		Sys.println('  CST frontend (scan+adapt+parse+lower) median/p95/p99: ${format(report.cstFrontendMs.median)}/${format(report.cstFrontendMs.p95)}/${format(report.cstFrontendMs.p99)} ms');
 		Sys.println('  explicit lower/validate median/p95/p99: ${format(report.explicitLowerMs.median)}/${format(report.explicitLowerMs.p95)}/${format(report.explicitLowerMs.p99)} ms');
 		Sys.println('  memory before/after/growth: ${formatBytes(report.memoryBeforeBytes)}/${formatBytes(report.memoryAfterBytes)}/${formatBytes(report.memoryGrowthBytes)} bytes');
 	}
@@ -211,10 +213,10 @@ class SyntaxScannerBenchmarkMain {
 			var budget = report.modules <= 64 ? 100.0 : 500.0;
 			if (report.compilerLexMs.p95 > budget)
 				throw 'Compiler lexer budget exceeded for ${report.modules} modules: ${format(report.compilerLexMs.p95)} ms > $budget ms';
-			if (report.astParseMs.p95 > budget)
-				throw 'AST-only parse budget exceeded for ${report.modules} modules: ${format(report.astParseMs.p95)} ms > $budget ms';
-			if (report.cstParseLowerMs.p95 > budget)
-				throw 'CST parse/lower budget exceeded for ${report.modules} modules: ${format(report.cstParseLowerMs.p95)} ms > $budget ms';
+			if (report.astFrontendMs.p95 > budget)
+				throw 'AST-only frontend budget exceeded for ${report.modules} modules: ${format(report.astFrontendMs.p95)} ms > $budget ms';
+			if (report.cstFrontendMs.p95 > budget)
+				throw 'CST frontend budget exceeded for ${report.modules} modules: ${format(report.cstFrontendMs.p95)} ms > $budget ms';
 		}
 		Sys.println("CST benchmark budget check: passed");
 	}

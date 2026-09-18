@@ -1,6 +1,7 @@
 package compiler.syntax;
 
 import compiler.Source.SourceFile;
+import compiler.syntax.SyntaxScanner.LosslessToken;
 import compiler.syntax.SyntaxScanner.SyntaxTokenKind;
 import compiler.syntax.Token.TokenKind;
 
@@ -23,8 +24,14 @@ class Lexer {
 
 	public function tokenize():Array<Token> {
 		var scanner = new SyntaxScanner(file, source, checkpointCallback, true, false),
-			result:Array<Token> = [];
-		for (token in scanner.scan())
+			result = tokenizeLossless(file, scanner.scan(), scanner.sourceLength);
+		return result;
+	}
+
+	/** Adapts an already scanned strict lossless stream without rescanning it. */
+	public static function tokenizeLossless(file:SourceFile, losslessTokens:Array<LosslessToken>, ?sourceLength:Int):Array<Token> {
+		var result:Array<Token> = [];
+		for (token in losslessTokens)
 			switch token.kind {
 				case SyntaxTokenKind.Syntax(kind):
 					result.push(new Token(kind, token.text, token.span));
@@ -32,9 +39,10 @@ class Lexer {
 					SyntaxTokenKind.LineComment, SyntaxTokenKind.BlockComment, SyntaxTokenKind.DocComment:
 					// Compiler trivia remains outside the parser token stream.
 				case SyntaxTokenKind.Directive, SyntaxTokenKind.Unknown:
-					// Strict scanning rejects both before they can reach this adapter.
+					throw 'Lossless compiler-token adaptation received non-syntax input at ${token.span.start}';
 			}
-		result.push(new Token(TokenKind.Eof, "", file.span(scanner.sourceLength, scanner.sourceLength)));
+		var end = sourceLength == null ? file.bytes.length : sourceLength;
+		result.push(new Token(TokenKind.Eof, "", file.span(end, end)));
 		return result;
 	}
 }

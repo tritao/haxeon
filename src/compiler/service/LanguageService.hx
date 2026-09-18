@@ -42,6 +42,7 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.ConditionalCompilation.ConditionalSource;
+import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNode;
@@ -3516,7 +3517,13 @@ class LanguageService {
 		try {
 			var conditional = ConditionalCompilation.process(snapshot.source, editorDefines),
 				checkpoint:Null<Void->Void> = token == null ? null : function() token.check(),
-				parser = new Parser(new Lexer(snapshot.source, conditional.text, checkpoint).tokenize(), checkpoint, ParserMode.Cst(snapshot.source));
+				lossless = conditional.text == snapshot.source.text
+					? new SyntaxScanner(snapshot.source, null, checkpoint, true).scan()
+					: null,
+				compilerTokens = lossless == null
+					? new Lexer(snapshot.source, conditional.text, checkpoint).tokenize()
+					: Lexer.tokenizeLossless(snapshot.source, lossless),
+				parser = new Parser(compilerTokens, checkpoint, ParserMode.Cst(snapshot.source), lossless);
 			parser.parseProgramRecovering();
 			return parser.cst;
 		} catch (error:CompileError) {

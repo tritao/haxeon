@@ -5,6 +5,7 @@ import compiler.Source.SourceFile;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.syntax.SyntaxScanner;
 import compiler.syntax.SyntaxTree.ParserMode;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
@@ -31,7 +32,9 @@ class Formatter {
 		var file = new SourceFile("<format>", source);
 		try {
 			var conditional = ConditionalCompilation.process(file, []);
-			var parser = new Parser(new Lexer(file, conditional.text).tokenize(), null, ParserMode.Cst(file));
+			var lossless = conditional.text == file.text ? new SyntaxScanner(file, null, null, true).scan() : null,
+				tokens = lossless == null ? new Lexer(file, conditional.text).tokenize() : Lexer.tokenizeLossless(file, lossless),
+				parser = new Parser(tokens, null, ParserMode.Cst(file), lossless);
 			parser.parseProgram();
 			var syntaxTree:Null<SyntaxTree> = parser.cst;
 			if (syntaxTree == null)

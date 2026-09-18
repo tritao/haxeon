@@ -345,6 +345,8 @@ class SyntaxTree {
 	public final tokens:Array<SyntaxToken>;
 	public final trivia:Array<SyntaxTrivia>;
 	public final syntheticTokens:Array<SyntaxToken>;
+	var cachedGrammarNodes:Null<Array<SyntaxNode>>;
+	var cachedPayloads:Null<Map<Int, SyntaxNodePayload>>;
 
 	function new(source:SourceFile, root:SyntaxNode, tokens:Array<SyntaxToken>, trivia:Array<SyntaxTrivia>, syntheticTokens:Array<SyntaxToken>) {
 		this.source = source;
@@ -355,8 +357,13 @@ class SyntaxTree {
 	}
 
 	public static function fromSource(source:SourceFile):SyntaxTree {
+		return fromLossless(source, new SyntaxScanner(source).scan());
+	}
+
+	/** Builds the source leaves from an already completed lossless scan. */
+	public static function fromLossless(source:SourceFile, losslessTokens:Array<LosslessToken>):SyntaxTree {
 		var children:Array<SyntaxElement> = [], tokens:Array<SyntaxToken> = [], trivia:Array<SyntaxTrivia> = [];
-		for (lossless in new SyntaxScanner(source).scan())
+		for (lossless in losslessTokens)
 			switch lossless.kind {
 				case SyntaxTokenKind.Syntax(kind):
 					var token = new SyntaxToken(kind, lossless.span);
@@ -386,18 +393,23 @@ class SyntaxTree {
 	public function withSyntheticTokens(values:Array<SyntaxToken>):SyntaxTree {
 		if (values.length == 0)
 			return this;
+		return withGrammarRootsAndSynthetic(root.grammarChildren, values);
+	}
+
+	/** Publishes grammar roots and synthetic recovery tokens in one immutable copy. */
+	public function withGrammarRootsAndSynthetic(roots:Array<SyntaxNode>, values:Array<SyntaxToken>):SyntaxTree {
 		var children = root.children.copy(),
 			ordered = values.copy();
-		ordered.sort(function(left, right) return left.span.start - right.span.start);
-		for (value in ordered) {
-			var insertion = 0;
-			while (insertion < children.length && elementOffset(children[insertion]) < value.span.start)
-				insertion++;
-			children.insert(insertion, SyntaxElement.Token(value));
+		if (ordered.length > 0) {
+			ordered.sort(function(left, right) return left.span.start - right.span.start);
+			for (value in ordered) {
+				var insertion = 0;
+				while (insertion < children.length && elementOffset(children[insertion]) < value.span.start)
+					insertion++;
+				children.insert(insertion, SyntaxElement.Token(value));
+			}
 		}
-		var synthetic = syntheticTokens.copy();
-		synthetic = synthetic.concat(ordered);
-		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, children, root.grammarChildren), tokens, trivia, synthetic);
+		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, children, roots), tokens, trivia, syntheticTokens.concat(ordered));
 	}
 
 	/** Attaches parser-reported grammar nodes while retaining the source leaves. */
@@ -407,9 +419,24 @@ class SyntaxTree {
 
 	/** Returns parser-reported grammar nodes in source order. */
 	public function grammarNodes():Array<SyntaxNode> {
+		if (cachedGrammarNodes != null)
+			return cachedGrammarNodes;
 		var result:Array<SyntaxNode> = [];
 		for (node in root.grammarChildren)
 			appendGrammarNodes(node, result);
+		cachedGrammarNodes = result;
+		return result;
+	}
+
+	/** Returns the cached source-payload lookup used by AST lowering. */
+	public function payloadsByStart():Map<Int, SyntaxNodePayload> {
+		if (cachedPayloads != null)
+			return cachedPayloads;
+		var result:Map<Int, SyntaxNodePayload> = [];
+		for (node in grammarNodes())
+			if (node.payload != null)
+				result.set(node.span.start, node.payload);
+		cachedPayloads = result;
 		return result;
 	}
 

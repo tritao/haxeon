@@ -65,7 +65,8 @@ class SyntaxScannerMain {
 			astOnlyProgram = astOnlyParser.parseProgram();
 		if (astOnlyParser.cst != null)
 			throw "default parser mode retained a CST";
-		var cstParser = new Parser(compilerTokens, null, ParserMode.Cst(file)),
+		var sharedTokens = Lexer.tokenizeLossless(file, lossless),
+			cstParser = new Parser(sharedTokens, null, ParserMode.Cst(file), lossless),
 			cstProgram = cstParser.parseProgram(),
 			cst = cstParser.cst;
 		if (cst == null || cst.roundTrip() != source)

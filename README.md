@@ -590,7 +590,7 @@ lossless tooling stream and optional CST parser:
 ```sh
 ./.tools/haxe/haxe benchmarks/syntax-scanner-benchmark.hxml
 LD_LIBRARY_PATH=.tools/hashlink:out ./.tools/hashlink/hl out/syntax-scanner-benchmark.hl \
-  --iterations 100 --warmup 10 --check-budgets
+  --iterations 20 --warmup 3 --sizes 8,64,256 --check-budgets
 ```
 
 Compiler mode filters trivia and does not retain lossless tokens; tooling mode
@@ -599,8 +599,9 @@ retains source spans and trivia for formatter/CST consumers. The opt-in
 declaration, block, parameter/argument list, call, member, literal, generic,
 anonymous-type, error, and missing-syntax nodes without changing the compiler
 AST. The formatter consumes that CST structure while retaining its existing
-layout engine. The benchmark compares AST-only
-and CST parsing and records latency distributions and token counts in
+layout engine. The benchmark compares complete AST-only and CST frontends
+(lex/parse versus scan/adapt/parse/lower) and records latency distributions,
+memory growth, and token/trivia/node counts in
 `out/syntax-scanner-benchmark.json`.
 
 ## 🧪 Development
