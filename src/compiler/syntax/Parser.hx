@@ -18,12 +18,10 @@ import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.syntax.SyntaxTree.ParserMode;
-import compiler.syntax.SyntaxTree.SyntaxToken;
 import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.syntax.SyntaxTree.SyntaxKind;
 import compiler.syntax.SyntaxTree.SyntaxNodePayload;
 import compiler.syntax.SyntaxTree.SyntaxFunctionParameter;
-import compiler.syntax.SyntaxTreeBuilder;
 import compiler.syntax.SyntaxScanner.LosslessToken;
 import compiler.syntax.AstLowerer;
 import compiler.Diagnostic.CompileError;
@@ -47,9 +45,7 @@ class Parser {
 	final tokens:Array<Token>;
 	final checkpointCallback:Null<Void->Void>;
 	public var cst(get, never):Null<SyntaxTree>;
-	var currentCst:Null<SyntaxTree>;
-	var cstBuilder:Null<SyntaxTreeBuilder>;
-	var cstMissingTokens:Array<SyntaxToken> = [];
+	final cstRecorder:Null<ParserCstRecorder>;
 	var parserPayloads:Map<Int, SyntaxNodePayload> = [];
 	var parserExpressionPayloads:Map<Int, compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
 	var lastTypeArgumentPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
@@ -60,20 +56,18 @@ class Parser {
 	public function new(tokens:Array<Token>, ?checkpoint:Void->Void, ?mode:ParserMode, ?losslessTokens:Array<LosslessToken>) {
 		this.tokens = tokens;
 		this.checkpointCallback = checkpoint;
-		this.currentCst = mode == null ? null : switch mode {
+		this.cstRecorder = mode == null ? null : switch mode {
 			case ParserMode.AstOnly: null;
-			case ParserMode.Cst(source):
-				cstBuilder = new SyntaxTreeBuilder(source);
-				losslessTokens == null ? SyntaxTree.fromSource(source) : SyntaxTree.fromLossless(source, losslessTokens);
+			case ParserMode.Cst(source): new ParserCstRecorder(source, losslessTokens);
 		};
 	}
 
 	function get_cst():Null<SyntaxTree>
-		return currentCst;
+		return cstRecorder == null ? null : cstRecorder.tree;
 
 	inline function recordCstNode(kind:SyntaxKind, span:SourceSpan, ?payload:SyntaxNodePayload):Void {
-		if (cstBuilder != null)
-			cstBuilder.node(kind, span, payload);
+		if (cstRecorder != null)
+			cstRecorder.node(kind, span, payload);
 	}
 
 	inline function recordStatementCst(kind:SyntaxKind, statement:AstStatement, span:SourceSpan):Void {
@@ -201,10 +195,10 @@ class Parser {
 			classes: classes,
 			functions: functions
 		};
-		if (currentCst != null && cstBuilder != null)
-			currentCst = currentCst.withGrammarRootsAndSynthetic(cstBuilder.finish(), cstMissingTokens);
-		if (currentCst != null)
-			program = AstLowerer.lower(currentCst, program, !recovering);
+		if (cstRecorder != null) {
+			cstRecorder.finish();
+			program = AstLowerer.lower(cstRecorder.tree, program, !recovering);
+		}
 		return program;
 	}
 
@@ -3909,10 +3903,9 @@ class Parser {
 	function insertMissing(kind:TokenKind):Token {
 		var replacement = tokenText(kind),
 			span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		if (currentCst != null) {
-			cstMissingTokens.push(SyntaxToken.missing(kind, span.file, span.start, replacement));
-			if (cstBuilder != null)
-				cstBuilder.missing(span);
+		if (cstRecorder != null) {
+			cstRecorder.addMissingToken(kind, span, replacement);
+			cstRecorder.missing(span);
 		}
 		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span, compiler.Diagnostic.DiagnosticSeverity.Error,
 			[
@@ -3939,8 +3932,8 @@ class Parser {
 
 	function recordRecoveryDiagnostic(diagnostic:compiler.Diagnostic):Void {
 		diagnostic.origin = DiagnosticOrigin.ParserRecovery;
-		if (cstBuilder != null)
-			cstBuilder.error(diagnostic.span);
+		if (cstRecorder != null)
+			cstRecorder.error(diagnostic.span);
 		if (recoveryDiagnostics.length < MAX_RECOVERY_DIAGNOSTICS)
 			recoveryDiagnostics.push(diagnostic);
 	}
@@ -3978,10 +3971,9 @@ class Parser {
 		if (!recovering)
 			return consume(TokenKind.Identifier);
 		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		if (currentCst != null) {
-			cstMissingTokens.push(SyntaxToken.missing(TokenKind.Identifier, span.file, span.start, "<missing>"));
-			if (cstBuilder != null)
-				cstBuilder.missing(span);
+		if (cstRecorder != null) {
+			cstRecorder.addMissingToken(TokenKind.Identifier, span, "<missing>");
+			cstRecorder.missing(span);
 		}
 		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected Identifier, got ${current().kind}', span));
 		return new Token(TokenKind.Identifier, "<missing>", new SourceSpan(current().span.file, current().span.start, current().span.start));
