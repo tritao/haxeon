@@ -105,6 +105,7 @@ class InteractiveEditMain {
 		assertCompoundRecoveryEquivalence();
 		assertRecoveryMatrix();
 		assertIdentityResolutionClosure();
+		assertCanonicalIdentityTransitions();
 		assertNavigationClosure();
 		assertRenameClosure();
 		assertLifecycleStress();
@@ -323,6 +324,68 @@ class InteractiveEditMain {
 			|| repairedMemberId == null
 			|| Std.string(repairedMemberId) != Std.string(exactMemberId))
 			throw "repair did not restore imported type and member identities";
+	}
+
+	static function assertCanonicalIdentityTransitions():Void {
+		var service = new LanguageService(),
+			targetPath = "identity/matrix/a/Shared.hx",
+			otherTargetPath = "identity/matrix/b/Shared.hx",
+			target = "package identity.matrix.a; class Shared { public var fromA:Int; } function main():Void return;",
+			otherTarget = "package identity.matrix.b; class Shared { public var fromB:Int; } function main():Void return;",
+			valid = "package identity.matrix.app; import identity.matrix.a.Shared as Alias; function main():Void { var value:Alias = new Alias(); value.fromA; }";
+		service.update(targetPath, target);
+		service.update(otherTargetPath, otherTarget);
+		service.compile("identity.matrix.a.Shared");
+		service.compile("identity.matrix.b.Shared");
+		service.update("identity/matrix/app/Main.hx", valid);
+		service.compile("identity.matrix.app.Main");
+		var validMemberPosition = valid.indexOf("value.fromA") + "value.".length + 1,
+			validTypePosition = valid.indexOf(":Alias") + ":".length + 1,
+			validMemberDefinition = service.definition("identity/matrix/app/Main.hx", validMemberPosition),
+			validTypeDefinition = service.typeDefinition("identity/matrix/app/Main.hx", validTypePosition),
+			validState = service.compiler.modules.get("identity.matrix.app.Main"),
+			validModel = validState == null ? null : validState.semanticModel,
+			validMemberId = validModel == null ? null : validModel.index.symbolIdAt(validMemberPosition);
+		if (validMemberDefinition == null || validMemberDefinition.path != targetPath
+			|| validTypeDefinition == null || validTypeDefinition.path != targetPath
+			|| validMemberId == null)
+			throw 'canonical alias identity was not established: member=${validMemberDefinition == null ? "null" : validMemberDefinition.path}, type=${validTypeDefinition == null ? "null" : validTypeDefinition.path}';
+
+		var malformed = "package identity.matrix.app; import identity.matrix.a.Shared as Alias; function main():Void { var value:Alias = new Alias(); broken.unresolved().thing; value.fromA; }";
+		service.update("identity/matrix/app/Main.hx", malformed);
+		var malformedMemberPosition = malformed.lastIndexOf("value.fromA") + "value.".length + 1,
+			malformedMemberDefinition = service.definition("identity/matrix/app/Main.hx", malformedMemberPosition),
+			malformedState = service.compiler.modules.get("identity.matrix.app.Main"),
+			malformedModel = malformedState == null ? null : malformedState.recoveredSemanticModel,
+			malformedMemberId = malformedModel == null ? null : malformedModel.index.symbolIdAt(malformedMemberPosition);
+		if (malformedMemberDefinition == null || malformedMemberDefinition.stale || malformedMemberDefinition.path != targetPath
+			|| malformedMemberId == null || Std.string(malformedMemberId) != Std.string(validMemberId))
+			throw 'malformed alias identity was not recovered authoritatively: definition=${malformedMemberDefinition == null ? "null" : malformedMemberDefinition.path}, stale=${malformedMemberDefinition == null ? "null" : Std.string(malformedMemberDefinition.stale)}';
+
+		var ambiguous = "package identity.matrix.app; import identity.matrix.a.Shared; import identity.matrix.b.Shared; function main():Void { var value:Shared = new Shared(); value.";
+		service.update("identity/matrix/app/Main.hx", ambiguous);
+		var ambiguousPosition = ambiguous.length,
+			ambiguousDefinition = service.definition("identity/matrix/app/Main.hx", ambiguousPosition),
+			ambiguousTypePosition = ambiguous.indexOf(":Shared") + ":".length + 1,
+			ambiguousTypeDefinition = service.typeDefinition("identity/matrix/app/Main.hx", ambiguousTypePosition),
+			ambiguousItems = service.completeResult("identity/matrix/app/Main.hx", ambiguousPosition).items;
+		if (ambiguousDefinition != null || ambiguousTypeDefinition != null)
+			throw "ambiguous explicit imports guessed a canonical identity";
+		for (item in ambiguousItems)
+			if (item.label == "fromA" || item.label == "fromB")
+				throw "ambiguous explicit imports leaked a member candidate";
+
+		var repaired = "package identity.matrix.app; import identity.matrix.a.Shared; function main():Void { var value:Shared = new Shared(); value.fromA; }";
+		service.update("identity/matrix/app/Main.hx", repaired);
+		service.compile("identity.matrix.app.Main");
+		var repairedPosition = repaired.indexOf("value.fromA") + "value.".length + 1,
+			repairedDefinition = service.definition("identity/matrix/app/Main.hx", repairedPosition),
+			repairedState = service.compiler.modules.get("identity.matrix.app.Main"),
+			repairedModel = repairedState == null ? null : repairedState.semanticModel,
+			repairedMemberId = repairedModel == null ? null : repairedModel.index.symbolIdAt(repairedPosition);
+		if (repairedDefinition == null || repairedDefinition.stale || repairedDefinition.path != targetPath
+			|| repairedMemberId == null || Std.string(repairedMemberId) != Std.string(validMemberId))
+			throw "repair did not restore the unambiguous canonical identity";
 	}
 
 	static function assertNavigationClosure():Void {
