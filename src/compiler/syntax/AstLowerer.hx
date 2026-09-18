@@ -438,6 +438,8 @@ class AstLowerer {
 		var result:Array<AstClass> = [];
 		for (classDeclaration in direct) {
 			var header = lowerClassHeader(classDeclaration, nodePayloads.get(classDeclaration.span.start));
+			if (header == null && requireComplete)
+				throw 'CST lowering could not independently reconstruct class ${classDeclaration.name}';
 			var fields = lowerFields(classDeclaration.fields, nodePayloads),
 				methods = lowerFunctionsFromPayloads(classDeclaration.methods, nodePayloads),
 				name = header == null ? classDeclaration.name : header.name,
@@ -684,8 +686,11 @@ class AstLowerer {
 				case SyntaxNodePayload.Statement(value): lowerStatement(statement, value);
 				default: null;
 			};
-			if (lowered == null)
+			if (lowered == null) {
+				if (requireComplete)
+					throw 'CST lowering could not independently reconstruct statement at ${statementSpan(statement).start}';
 				return null;
+			}
 			result.push(lowered);
 		}
 		return result;

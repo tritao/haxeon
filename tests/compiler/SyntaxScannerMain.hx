@@ -277,6 +277,7 @@ class SyntaxScannerMain {
 		assertCstAstParity("MalformedTail.hx",
 			"class Broken { public function before():Int return 1; public function unfinished(a:Int { return 2; } public function after():Int return 3; }",
 			true);
+		assertBodyLoweringCoverage();
 
 		var directiveSource = new SourceFile("Directives.hx", "#if debug\nfunction main():Void return;\n#end\n"),
 			directiveTokens = new SyntaxScanner(directiveSource).scan(),
@@ -288,6 +289,70 @@ class SyntaxScannerMain {
 			throw "lossless scanner did not retain directives";
 
 		Sys.println("PASS: shared lossless scanner, CST, and AST parity");
+	}
+
+	static function assertBodyLoweringCoverage():Void {
+		var source = new SourceFile("BodyPayloadCoverage.hx",
+			"function body(value:Int):Int {\n"
+			+ "  var uninitialized:Int;\n"
+			+ "  var local = value;\n"
+			+ "  local = value;\n"
+			+ "  local[0] = value;\n"
+			+ "  local.field = value;\n"
+			+ "  return;\n"
+			+ "  throw value;\n"
+			+ "  if (value) return value; else return value;\n"
+			+ "  while (value) break;\n"
+			+ "  do { continue; } while (value);\n"
+			+ "  for (index in value) continue;\n"
+			+ "  switch (value) { case 0: break; default: continue; }\n"
+			+ "  local++;\n"
+			+ "  value + 1;\n"
+			+ "  var integer = 1;\n"
+			+ "  var decimal = 1.5;\n"
+			+ "  var text = 'text';\n"
+			+ "  var truth = true;\n"
+			+ "  var nothing = null;\n"
+			+ "  var unary = -value;\n"
+			+ "  var inverted = !value;\n"
+			+ "  var conditional = value ? integer : 0;\n"
+			+ "  var object = {field: value};\n"
+			+ "  var array = [value, integer];\n"
+			+ "  var map = [value => integer];\n"
+			+ "  var comprehension = [for (item in value) item];\n"
+			+ "  var mapComprehension = [for (key => item in value) key => item];\n"
+			+ "  var range = 0...value;\n"
+			+ "  var called = invoke(value);\n"
+			+ "  var nativeSize = sizeof<Int>();\n"
+			+ "  var closure = (function(x:Int) { return x; })(value);\n"
+			+ "  var method = object.get(value);\n"
+			+ "  var constructed = new Box(value);\n"
+			+ "  var generic = new Box<Int>(value);\n"
+			+ "  var typedArray = new Array<Int>(value);\n"
+			+ "  var typedMap = new Map<String, Int>();\n"
+			+ "  var indexed = array[0];\n"
+			+ "  var postfix = value++;\n"
+			+ "  var casted = cast(value, Int);\n"
+			+ "  var lambda = function(x:Int) { return x; };\n"
+			+ "  var arrow = (x:Int) -> x;\n"
+			+ "  var switched = switch (value) { case 0: integer; default: decimal; };\n"
+			+ "  var caught = try { value } catch (error:Error) { 0 };\n"
+			+ "  return value;\n"
+			+ "}\n"),
+			parser = new Parser(new Lexer(source).tokenize(), null, ParserMode.Cst(source));
+		var program:AstProgram;
+		try {
+			program = parser.parseProgram();
+		} catch (error:compiler.Diagnostic.CompileError) {
+			throw 'CST body payload coverage parse failed at ${error.diagnostic.span.start}: ${error.diagnostic.message}';
+		}
+		var directProgram = new Parser(new Lexer(source).tokenize()).parseProgram();
+		if (parser.cst == null || parser.cst.roundTrip() != source.text)
+			throw "CST body payload coverage did not round-trip";
+		if (haxe.Serializer.run(program) != haxe.Serializer.run(directProgram))
+			throw "CST body payload coverage changed the complete AST";
+		if (program.functions.length != 1 || program.functions[0].statements.length < 30)
+			throw "CST body payload coverage lost statements";
 	}
 
 	static function assertCstAstParity(path:String, source:String, recovering:Bool):Void {

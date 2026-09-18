@@ -47,7 +47,7 @@ class Parser {
 	public var cst(get, never):Null<SyntaxTree>;
 	final cstRecorder:Null<ParserCstRecorder>;
 	var parserPayloads:Map<Int, SyntaxNodePayload> = [];
-	var parserExpressionPayloads:Map<Int, compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
+	var parserExpressionPayloads:Map<String, compiler.syntax.SyntaxTree.SyntaxExpressionPayload> = [];
 	var lastTypeArgumentPayloads:Array<compiler.syntax.SyntaxTree.SyntaxTypePayload> = [];
 	var position:Int = 0;
 	var recovering:Bool = false;
@@ -1258,13 +1258,18 @@ class Parser {
 	function rememberExpression(expression:AstExpression,
 			payload:Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>):AstExpression {
 		if (payload != null)
-			parserExpressionPayloads.set(expressionSpan(expression).start, payload);
+			parserExpressionPayloads.set(expressionPayloadKey(expression), payload);
 		return expression;
 	}
 
 	function expressionPayload(expression:AstExpression):Null<compiler.syntax.SyntaxTree.SyntaxExpressionPayload> {
-		var payload = parserExpressionPayloads.get(expressionSpan(expression).start);
+		var payload = parserExpressionPayloads.get(expressionPayloadKey(expression));
 		return payload == null ? simpleExpressionPayload(expression) : payload;
+	}
+
+	static inline function expressionPayloadKey(expression:AstExpression):String {
+		var span = expressionSpan(expression);
+		return '${span.start}:${span.end}';
 	}
 
 	function expressionPayloads(expressions:Array<AstExpression>):Null<Array<compiler.syntax.SyntaxTree.SyntaxExpressionPayload>> {
