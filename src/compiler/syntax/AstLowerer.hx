@@ -54,6 +54,21 @@ typedef LoweredFieldHeader = {
 	final isFinal:Bool;
 }
 
+typedef LoweredTypeAliasHeader = {
+	final name:String;
+	final isPrivate:Bool;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final type:AstType;
+}
+
+typedef LoweredInterfaceHeader = {
+	final name:String;
+	final typeParameters:Array<String>;
+	final typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint>;
+	final bases:Array<AstType>;
+}
+
 /**
 	Transition boundary from parser syntax to the compiler AST.
 
@@ -144,24 +159,42 @@ class AstLowerer {
 	static function lowerAliases(tree:SyntaxTree, direct:Array<AstTypeAlias>):Array<AstTypeAlias> {
 		var payloads = collectPayloads(tree), result:Array<AstTypeAlias> = [];
 		for (alias in direct) {
-			var lowered:Null<AstTypeAlias> = switch payloads.get(alias.span.start) {
-				case SyntaxNodePayload.TypeAliasHeader(name, isPrivate, typeParameters, constraintPayloads, typePayload):
-					var loweredType = lowerType(alias.type, typePayload), loweredConstraints = lowerTypeConstraints(alias.typeConstraints, constraintPayloads);
-					if (loweredType == null || alias.name != name || alias.isPrivate != isPrivate || alias.typeParameters.length != typeParameters.length
-						|| loweredConstraints == null)
-						null;
-					else {
-						var valid = true;
-						for (index in 0...alias.typeParameters.length)
-							if (alias.typeParameters[index] != typeParameters[index])
-								valid = false;
-					valid ? {name: name, typeParameters: typeParameters, typeConstraints: loweredConstraints, type: loweredType, isPrivate: isPrivate, span: alias.span} : null;
-					}
-				default: null;
-			};
+			var header = lowerTypeAliasHeader(alias, payloads.get(alias.span.start)),
+				lowered:Null<AstTypeAlias> = header == null ? null : {
+					name: header.name,
+					typeParameters: header.typeParameters,
+					typeConstraints: header.typeConstraints,
+					type: header.type,
+					isPrivate: header.isPrivate,
+					span: alias.span
+				};
 			result.push(keepOrFallback(lowered, alias, 'type alias ${alias.name}'));
 		}
 		return result;
+	}
+
+	static function lowerTypeAliasHeader(alias:AstTypeAlias, payload:Null<SyntaxNodePayload>):Null<LoweredTypeAliasHeader> {
+		return switch payload {
+			case SyntaxNodePayload.TypeAliasHeader(name, isPrivate, typeParameters, constraintPayloads, typePayload):
+				var loweredType = lowerType(alias.type, typePayload),
+					loweredConstraints = lowerTypeConstraints(alias.typeConstraints, constraintPayloads);
+				if (loweredType == null || alias.name != name || alias.isPrivate != isPrivate || alias.typeParameters.length != typeParameters.length
+					|| loweredConstraints == null)
+					null;
+				else {
+					for (index in 0...alias.typeParameters.length)
+						if (alias.typeParameters[index] != typeParameters[index])
+							return null;
+					{
+						name: name,
+						isPrivate: isPrivate,
+						typeParameters: typeParameters,
+						typeConstraints: loweredConstraints,
+						type: loweredType
+					};
+				}
+			default: null;
+		};
 	}
 
 	static function lowerEnums(tree:SyntaxTree, direct:Array<AstEnum>):Array<AstEnum> {
@@ -254,38 +287,43 @@ class AstLowerer {
 	}
 
 	static function lowerInterfaces(tree:SyntaxTree, direct:Array<AstInterface>):Array<AstInterface> {
-		var nodePayloads = collectPayloads(tree), headers:Map<Int, SyntaxNodePayload> = [], result:Array<AstInterface> = [];
-		for (node in tree.grammarNodes())
-			switch node.payload {
-				case SyntaxNodePayload.InterfaceHeader(_, _, _, _): headers.set(node.span.start, node.payload);
-				default:
-			}
+		var nodePayloads = collectPayloads(tree), result:Array<AstInterface> = [];
 		for (interfaceDeclaration in direct) {
-			var lowered:Null<AstInterface> = null;
-			switch headers.get(interfaceDeclaration.span.start) {
-				case SyntaxNodePayload.InterfaceHeader(payloadName, payloadTypeParameters, constraintPayloads, basePayloads):
-					var loweredBases = lowerTypeList(interfaceDeclaration.bases, basePayloads),
-						loweredConstraints = lowerTypeConstraints(interfaceDeclaration.typeConstraints, constraintPayloads),
-						valid = loweredBases != null && loweredConstraints != null && payloadName == interfaceDeclaration.name
-						&& payloadTypeParameters.length == interfaceDeclaration.typeParameters.length;
-					for (index in 0...interfaceDeclaration.typeParameters.length)
-						if (interfaceDeclaration.typeParameters[index] != payloadTypeParameters[index])
-							valid = false;
-					if (valid) {
-						lowered = {
-							name: payloadName,
-							typeParameters: payloadTypeParameters,
-							typeConstraints: loweredConstraints,
-							bases: loweredBases,
-							methods: lowerFunctionsFromPayloads(interfaceDeclaration.methods, nodePayloads),
-							span: interfaceDeclaration.span
-						};
-					}
-				default:
-			}
+			var header = lowerInterfaceHeader(interfaceDeclaration, nodePayloads.get(interfaceDeclaration.span.start)),
+				lowered:Null<AstInterface> = header == null ? null : {
+					name: header.name,
+					typeParameters: header.typeParameters,
+					typeConstraints: header.typeConstraints,
+					bases: header.bases,
+					methods: lowerFunctionsFromPayloads(interfaceDeclaration.methods, nodePayloads),
+					span: interfaceDeclaration.span
+				};
 			result.push(keepOrFallback(lowered, interfaceDeclaration, 'interface ${interfaceDeclaration.name}'));
 		}
 		return result;
+	}
+
+	static function lowerInterfaceHeader(interfaceDeclaration:AstInterface, payload:Null<SyntaxNodePayload>):Null<LoweredInterfaceHeader> {
+		return switch payload {
+			case SyntaxNodePayload.InterfaceHeader(name, typeParameters, constraintPayloads, basePayloads):
+				var loweredBases = lowerTypeList(interfaceDeclaration.bases, basePayloads),
+					loweredConstraints = lowerTypeConstraints(interfaceDeclaration.typeConstraints, constraintPayloads);
+				if (loweredBases == null || loweredConstraints == null || name != interfaceDeclaration.name
+					|| typeParameters.length != interfaceDeclaration.typeParameters.length)
+					null;
+				else {
+					for (index in 0...interfaceDeclaration.typeParameters.length)
+						if (interfaceDeclaration.typeParameters[index] != typeParameters[index])
+							return null;
+					{
+						name: name,
+						typeParameters: typeParameters,
+						typeConstraints: loweredConstraints,
+						bases: loweredBases
+					};
+				}
+			default: null;
+		};
 	}
 
 	static function lowerFunctions(tree:SyntaxTree, direct:Array<AstFunction>):Array<AstFunction>
