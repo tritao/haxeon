@@ -165,6 +165,25 @@ class InteractiveEditMain {
 					{validMarker: "after():Int", validOffset: 0, malformedMarker: "after():Int", malformedOffset: 0}
 				],
 				symbols: ["Holder", "before", "after", "main"]
+			},
+			{
+				name: "declaration families",
+				path: "matrix/RecoveryDeclarations.hx",
+				module: "matrix.RecoveryDeclarations",
+				valid: "package matrix; typedef Alias<T> = Array<T>; interface Contract<T> { function get(value:T):T; } enum State { Idle; Ready(value:Int); } enum abstract Code(Int) from Int to Int { var Ok = 0; } abstract Wrapper<T>(T) { public function new(value:T) { this = value; } public function get():T return this; } function use(value:Alias<Int>):Alias<Int> return value; function main():Void { var before:Int = 1; var after:Int = before; return; }",
+				malformed: "package matrix; typedef Alias<T> = Array<T>; interface Contract<T> { function get(value:T):T; } enum State { Idle; Ready(value:Int); } enum abstract Code(Int) from Int to Int { var Ok = 0; } abstract Wrapper<T>(T) { public function new(value:T) { this = value; } public function get():T return this; } function use(value:Alias<Int>):Alias<Int> return value; function main():Void { var before:Int = 1; broken.unresolved().thing; var after:Int = before; return; }",
+				probes: [
+					{validMarker: "Alias", validOffset: 1, malformedMarker: "Alias", malformedOffset: 1},
+					{validMarker: "Contract", validOffset: 1, malformedMarker: "Contract", malformedOffset: 1},
+					{validMarker: "State", validOffset: 1, malformedMarker: "State", malformedOffset: 1},
+					{validMarker: "Ready", validOffset: 1, malformedMarker: "Ready", malformedOffset: 1},
+					{validMarker: "Code", validOffset: 1, malformedMarker: "Code", malformedOffset: 1},
+					{validMarker: "Ok", validOffset: 1, malformedMarker: "Ok", malformedOffset: 1},
+					{validMarker: "Wrapper", validOffset: 1, malformedMarker: "Wrapper", malformedOffset: 1},
+					{validMarker: "before", validOffset: 1, malformedMarker: "before", malformedOffset: 1},
+					{validMarker: "after", validOffset: 1, malformedMarker: "after", malformedOffset: 1}
+				],
+				symbols: ["Alias", "Contract", "State", "Code", "Wrapper", "use", "main"]
 			}
 		];
 
@@ -176,6 +195,7 @@ class InteractiveEditMain {
 				validModel = validState == null ? null : validState.semanticModel;
 			if (validModel == null)
 				throw 'recovery matrix case "${testCase.name}" did not produce an exact semantic model';
+			assertRecoverySnapshot(service, testCase.path, testCase.valid, '${testCase.name} valid');
 
 			var validIds:Array<String> = [];
 			for (probe in testCase.probes) {
@@ -194,6 +214,7 @@ class InteractiveEditMain {
 				|| malformedState.currentRecovered.source != malformedState.source
 				|| malformedState.currentRecovered.revision != malformedState.revision)
 				throw 'recovery matrix case "${testCase.name}" did not publish a coherent current-source snapshot';
+			assertRecoverySnapshot(service, testCase.path, testCase.malformed, '${testCase.name} malformed');
 
 			for (symbol in testCase.symbols)
 				assertSymbol(service.documentSymbols(testCase.path), symbol, testCase.name);
@@ -211,6 +232,7 @@ class InteractiveEditMain {
 				repairedModel = repairedState == null ? null : repairedState.semanticModel;
 			if (repairedState == null || repairedState.currentExact == null || repairedModel == null)
 				throw 'recovery matrix case "${testCase.name}" did not repair to an exact semantic model';
+			assertRecoverySnapshot(service, testCase.path, testCase.valid, '${testCase.name} repaired');
 			for (index in 0...testCase.probes.length) {
 				var probe = testCase.probes[index],
 					repairedPosition = markerPosition(testCase.valid, probe.validMarker, probe.validOffset),
@@ -226,6 +248,17 @@ class InteractiveEditMain {
 		if (position < 0)
 			throw 'recovery matrix could not locate marker "$marker"';
 		return position + offset;
+	}
+
+	static function assertRecoverySnapshot(service:LanguageService, path:String, source:String, label:String):Void {
+		for (symbol in service.documentSymbols(path))
+			assertSpan(symbol.span, source.length, 'recovery $label symbol', label);
+		for (diagnostic in service.diagnostics(path))
+			assertSpan(diagnostic.span, source.length, 'recovery $label diagnostic', label);
+		for (token in service.semanticTokens(path))
+			assertSpan(token.span, source.length, 'recovery $label semantic token', label);
+		for (fold in service.foldingRanges(path))
+			assertSpan(fold.span, source.length, 'recovery $label fold', label);
 	}
 
 	static function assertIdentityResolutionClosure():Void {
