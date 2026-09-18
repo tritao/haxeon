@@ -11,7 +11,6 @@ import compiler.syntax.SyntaxTree.SyntaxTree;
 import compiler.formatter.CstFormatterStructure.SyntaxInfo;
 import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
 import compiler.formatter.CommentAttachment.CommentAttachmentTools;
-import compiler.formatter.FormatToken.FormatTokenTools;
 
 private typedef RenderedUnit = {
 	final sourceStart:Int;
@@ -49,7 +48,7 @@ class Formatter {
 				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
 			if (rangeStart <= 0 && rangeEnd >= source.length)
 				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
-			return formatRange(file, syntaxTree, tokens, syntax, units, rendered, newline, rangeStart, rangeEnd);
+			return formatRange(file, syntaxTree, tokens, units, rendered, newline, rangeStart, rangeEnd);
 		} catch (_:CompileError) {
 			return null;
 		} catch (_:Dynamic) {
@@ -88,7 +87,7 @@ class Formatter {
 		return trailingNewline ? result + newline : result;
 	}
 
-	static function formatRange(file:SourceFile, syntaxTree:SyntaxTree, tokens:Array<FormatToken>, syntax:SyntaxInfo, units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
+	static function formatRange(file:SourceFile, syntaxTree:SyntaxTree, tokens:Array<FormatToken>, units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
 			newline:String, rangeStart:Int, rangeEnd:Int):String {
 		var start = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeStart)))),
 			end = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeEnd)))),
@@ -101,7 +100,7 @@ class Formatter {
 			}
 		var region = intersectingUnits == 1
 			&& selectedUnit != null ? (CstFormatterAdapter.smallestEnclosing(syntaxTree, tokens, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd)
-				?? expandRange(tokens, syntax, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd)) : {
+				?? {start: start, end: end}) : {
 				start: start,
 				end: end
 			},
@@ -180,40 +179,6 @@ class Formatter {
 		}
 		output.add(file.slice(cursor, file.bytes.length));
 		return output.toString();
-	}
-
-	/** Expands a partial range to the smallest annotated syntax region containing it. */
-	static function expandRange(tokens:Array<FormatToken>, syntax:SyntaxInfo, start:Int, end:Int, safeStart:Int, safeEnd:Int):{start:Int, end:Int} {
-		var firstSyntax = -1, lastSyntax = -1;
-		for (index in 0...tokens.length)
-			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].end > start && tokens[index].start < end) {
-				if (firstSyntax < 0)
-					firstSyntax = index;
-				lastSyntax = index;
-			}
-		if (firstSyntax < 0)
-			return {start: start, end: end};
-		var selectedStart = safeStart,
-			selectedEnd = safeEnd,
-			selectedWidth = safeEnd - safeStart;
-		for (node in syntax.nodes) {
-			if (node.start < 0 || node.end >= tokens.length)
-				continue;
-			var nodeStart = tokens[node.start].start,
-				nodeEnd = tokens[node.end].end;
-			if (nodeStart >= safeStart
-				&& nodeEnd <= safeEnd
-				&& nodeStart <= tokens[firstSyntax].start
-				&& nodeEnd >= tokens[lastSyntax].end) {
-				var width = nodeEnd - nodeStart;
-				if (width < selectedWidth) {
-					selectedStart = nodeStart;
-					selectedEnd = nodeEnd;
-					selectedWidth = width;
-				}
-			}
-		}
-		return {start: selectedStart, end: selectedEnd};
 	}
 
 	static function lineCount(file:SourceFile):Int {

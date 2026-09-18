@@ -33,7 +33,6 @@ typedef FormatNode = {
 typedef SyntaxInfo = {
 	final nodes:Array<FormatNode>;
 	final nodeKinds:Map<String, FormatNodeKind>;
-	final matching:Map<Int, Int>;
 	final matchingByOffset:Map<Int, Int>;
 	final blockOpens:Map<Int, Bool>;
 	final blockCloses:Map<Int, Bool>;
@@ -55,7 +54,6 @@ class CstFormatterStructure {
 		var result:SyntaxInfo = {
 			nodes: [],
 			nodeKinds: [],
-			matching: [],
 			matchingByOffset: [],
 			blockOpens: [],
 			blockCloses: [],
@@ -214,8 +212,6 @@ class CstFormatterStructure {
 	}
 
 	static function setMatching(syntax:SyntaxInfo, tokens:Array<FormatToken>, open:Int, close:Int):Void {
-		syntax.matching.set(open, close);
-		syntax.matching.set(close, open);
 		syntax.matchingByOffset.set(tokens[open].start, tokens[close].start);
 		syntax.matchingByOffset.set(tokens[close].start, tokens[open].start);
 	}

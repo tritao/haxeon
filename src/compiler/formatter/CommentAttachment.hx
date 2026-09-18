@@ -19,9 +19,8 @@ typedef CommentAttachments = Map<Int, CommentAttachmentKind>;
 
 /** Attaches comments before physical layout, without rewriting their contents. */
 class CommentAttachmentTools {
-	public static function attach(tokens:Array<FormatToken>, ?tree:SyntaxTree):CommentAttachments {
-		return tree == null ? attachTokenStream(tokens) : attachCst(tokens, tree);
-	}
+	public static function attach(tokens:Array<FormatToken>, tree:SyntaxTree):CommentAttachments
+		return attachCst(tokens, tree);
 
 	/** Uses CST trivia and source spans as the authoritative comment stream. */
 	static function attachCst(tokens:Array<FormatToken>, tree:SyntaxTree):CommentAttachments {
@@ -29,15 +28,16 @@ class CommentAttachmentTools {
 		for (trivia in tree.trivia)
 			if (isComment(trivia.kind))
 				comments.set(trivia.span.start, true);
-		return attachWithNewlineSource(tokens, tree.source, comments);
+		var tokenAtStart:Map<Int, Int> = [], tokenAtEnd:Map<Int, Int> = [];
+		for (index in 0...tokens.length) {
+			tokenAtStart.set(tokens[index].start, index);
+			tokenAtEnd.set(tokens[index].end, index);
+		}
+		return attachWithCst(tokens, tree, comments, tokenAtStart, tokenAtEnd);
 	}
 
-	/** Compatibility path for callers that only have formatter tokens. */
-	static function attachTokenStream(tokens:Array<FormatToken>):CommentAttachments {
-		return attachWithNewlineSource(tokens, null, null);
-	}
-
-	static function attachWithNewlineSource(tokens:Array<FormatToken>, source:Null<SourceFile>, cstComments:Null<Map<Int, Bool>>):CommentAttachments {
+	static function attachWithCst(tokens:Array<FormatToken>, tree:SyntaxTree, comments:Map<Int, Bool>, tokenAtStart:Map<Int, Int>,
+			tokenAtEnd:Map<Int, Int>):CommentAttachments {
 		var result:CommentAttachments = [],
 			previousSyntax:Null<Int> = null,
 			nextSyntax:Array<Null<Int>> = [];
@@ -52,13 +52,15 @@ class CommentAttachmentTools {
 			var token = tokens[index];
 			switch token.kind {
 				case FormatTokenKind.LineComment, FormatTokenKind.BlockComment, FormatTokenKind.DocComment:
-					if (cstComments != null && !cstComments.exists(token.start))
+					if (!comments.exists(token.start))
 						continue;
 					var previous = previousSyntax,
 						nextToken = nextSyntax[index],
-						lineBreakBefore = hasNewline(tokens, source, previous, index),
-						lineBreakAfter = hasNewline(tokens, source, index, nextToken);
-					if (token.kind == FormatTokenKind.DocComment && nextToken != null)
+						lineBreakBefore = hasNewline(tokens, tree.source, previous, index),
+						lineBreakAfter = hasNewline(tokens, tree.source, index, nextToken);
+					if (isDangling(tree, token, previous, nextToken, tokenAtStart, tokenAtEnd))
+						result.set(index, CommentAttachmentKind.Standalone);
+					else if (token.kind == FormatTokenKind.DocComment && nextToken != null)
 						result.set(index, CommentAttachmentKind.Leading(nextToken));
 					else if (previous != null && !lineBreakBefore)
 						result.set(index, CommentAttachmentKind.Trailing(previous));
@@ -72,6 +74,21 @@ class CommentAttachmentTools {
 				previousSyntax = index;
 		}
 		return result;
+	}
+
+	/** A comment between a CST node's real delimiters is dangling, not leading. */
+	static function isDangling(tree:SyntaxTree, token:FormatToken, previous:Null<Int>, next:Null<Int>, tokenAtStart:Map<Int, Int>,
+			tokenAtEnd:Map<Int, Int>):Bool {
+		if (previous == null || next == null)
+			return false;
+		for (node in tree.grammarNodes()) {
+			if (node.span.start > token.start || node.span.end < token.end)
+				continue;
+			var open = tokenAtStart.get(node.span.start), close = tokenAtEnd.get(node.span.end);
+			if (open == previous && close == next)
+				return true;
+		}
+		return false;
 	}
 
 	static function isComment(kind:SyntaxTriviaKind):Bool

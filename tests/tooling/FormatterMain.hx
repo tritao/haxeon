@@ -66,8 +66,8 @@ class FormatterMain {
 				default:
 			}
 		if (outerOpen < 0 || innerOpen < 0 || outerClose < 0 || innerClose < 0
-			|| !nestedCallSyntax.matching.exists(outerOpen) || nestedCallSyntax.matching.get(outerOpen) != outerClose
-			|| !nestedCallSyntax.matching.exists(innerOpen) || nestedCallSyntax.matching.get(innerOpen) != innerClose)
+			|| nestedCallSyntax.matchingByOffset.get(outerOpenOffset) != outerCloseOffset
+			|| nestedCallSyntax.matchingByOffset.get(innerOpenOffset) != innerCloseOffset)
 			throw "formatter did not derive nested call delimiters from CST argument lists";
 
 		var file = new SourceFile("round-trip.hx",
@@ -191,6 +191,10 @@ class FormatterMain {
 			expectedCallRange = "function main():Int {\n  var result = compute(\n    firstArgument,\n    secondArgument,\n    thirdArgument\n  );\nreturn result;\n}\n";
 		if (callRangeFormatted != expectedCallRange)
 			throw "range formatting did not expand a partial call to its safe logical unit";
+		var danglingComment = Formatter.format("function main():Void { /* keep inside */ }\n", FormatConfigTools.defaults(2, true));
+		if (danglingComment != "function main():Void {\n  /* keep inside */\n}\n"
+			|| Formatter.format(danglingComment, FormatConfigTools.defaults(2, true)) != danglingComment)
+			throw "CST comment attachment did not preserve a dangling block comment";
 
 		var conditional = SourceFormatter.format("#if missing\nfunction first():Int {\nreturn 1;\n}\n#else\nfunction second():Int {\nreturn 2;\n}\n#end\n", 2,
 			true),
