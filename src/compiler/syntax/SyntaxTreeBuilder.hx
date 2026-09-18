@@ -81,7 +81,7 @@ class SyntaxTreeBuilder {
 	}
 
 	function materialize(draft:SyntaxTreeDraft):SyntaxNode {
-		return new SyntaxNode(draft.kind, source.span(draft.start, draft.end), [],
+		return SyntaxNode.fromOwned(draft.kind, source.span(draft.start, draft.end), [],
 			[for (child in draft.children) materialize(child)], draft.payload);
 	}
 }

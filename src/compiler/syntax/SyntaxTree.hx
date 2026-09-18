@@ -323,13 +323,18 @@ class SyntaxNode {
 	public final payload:Null<SyntaxNodePayload>;
 
 	public function new(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>, ?grammarChildren:Array<SyntaxNode>,
-			?payload:SyntaxNodePayload) {
+			?payload:SyntaxNodePayload, copyArrays:Bool = true) {
 		this.kind = kind;
 		this.span = span;
-		this.children = children.copy();
-		this.grammarChildren = grammarChildren == null ? [] : grammarChildren.copy();
+		this.children = copyArrays ? children.copy() : children;
+		this.grammarChildren = grammarChildren == null ? [] : copyArrays ? grammarChildren.copy() : grammarChildren;
 		this.payload = payload;
 	}
+
+	/** Constructs a node from arrays owned exclusively by the syntax tree. */
+	public static function fromOwned(kind:SyntaxKind, span:SourceSpan, children:Array<SyntaxElement>,
+			grammarChildren:Array<SyntaxNode>, ?payload:SyntaxNodePayload):SyntaxNode
+		return new SyntaxNode(kind, span, children, grammarChildren, payload, false);
 }
 
 /**
@@ -419,25 +424,14 @@ class SyntaxTree {
 
 	/** Returns parser-reported grammar nodes in source order. */
 	public function grammarNodes():Array<SyntaxNode> {
-		if (cachedGrammarNodes != null)
-			return cachedGrammarNodes;
-		var result:Array<SyntaxNode> = [];
-		for (node in root.grammarChildren)
-			appendGrammarNodes(node, result);
-		cachedGrammarNodes = result;
-		return result;
+		ensureGrammarIndexes();
+		return cachedGrammarNodes;
 	}
 
 	/** Returns the cached source-payload lookup used by AST lowering. */
 	public function payloadsByStart():Map<Int, SyntaxNodePayload> {
-		if (cachedPayloads != null)
-			return cachedPayloads;
-		var result:Map<Int, SyntaxNodePayload> = [];
-		for (node in grammarNodes())
-			if (node.payload != null)
-				result.set(node.span.start, node.payload);
-		cachedPayloads = result;
-		return result;
+		ensureGrammarIndexes();
+		return cachedPayloads;
 	}
 
 	/** Reconstructs the original source, excluding only future synthetic nodes. */
@@ -484,5 +478,23 @@ class SyntaxTree {
 		result.push(node);
 		for (child in node.grammarChildren)
 			appendGrammarNodes(child, result);
+	}
+
+	function ensureGrammarIndexes():Void {
+		if (cachedGrammarNodes != null && cachedPayloads != null)
+			return;
+		var nodes:Array<SyntaxNode> = [], payloads:Map<Int, SyntaxNodePayload> = [];
+		for (node in root.grammarChildren)
+			appendGrammarIndexes(node, nodes, payloads);
+		cachedGrammarNodes = nodes;
+		cachedPayloads = payloads;
+	}
+
+	static function appendGrammarIndexes(node:SyntaxNode, nodes:Array<SyntaxNode>, payloads:Map<Int, SyntaxNodePayload>):Void {
+		nodes.push(node);
+		if (node.payload != null)
+			payloads.set(node.span.start, node.payload);
+		for (child in node.grammarChildren)
+			appendGrammarIndexes(child, nodes, payloads);
 	}
 }
