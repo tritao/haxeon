@@ -353,13 +353,16 @@ class SyntaxTree {
 	var cachedGrammarNodes:Null<Array<SyntaxNode>>;
 	var cachedPayloads:Null<Map<Int, SyntaxNodePayload>>;
 
-	function new(source:SourceFile, root:SyntaxNode, tokens:Array<SyntaxToken>, trivia:Array<SyntaxTrivia>, syntheticTokens:Array<SyntaxToken>) {
+	function new(source:SourceFile, root:SyntaxNode, tokens:Array<SyntaxToken>, trivia:Array<SyntaxTrivia>, syntheticTokens:Array<SyntaxToken>, copyArrays:Bool = true) {
 		this.source = source;
 		this.root = root;
-		this.tokens = tokens.copy();
-		this.trivia = trivia.copy();
-		this.syntheticTokens = syntheticTokens.copy();
+		this.tokens = copyArrays ? tokens.copy() : tokens;
+		this.trivia = copyArrays ? trivia.copy() : trivia;
+		this.syntheticTokens = copyArrays ? syntheticTokens.copy() : syntheticTokens;
 	}
+
+	static function fromOwned(source:SourceFile, root:SyntaxNode, tokens:Array<SyntaxToken>, trivia:Array<SyntaxTrivia>, syntheticTokens:Array<SyntaxToken>):SyntaxTree
+		return new SyntaxTree(source, root, tokens, trivia, syntheticTokens, false);
 
 	public static function fromSource(source:SourceFile):SyntaxTree {
 		return fromLossless(source, new SyntaxScanner(source).scan());
@@ -395,8 +398,8 @@ class SyntaxTree {
 		children.resize(childLength);
 		tokens.resize(tokenLength);
 		var span = source.span(0, source.bytes.length),
-			root = new SyntaxNode(SyntaxKind.SourceFile, span, children);
-		return new SyntaxTree(source, root, tokens, trivia, []);
+			root = SyntaxNode.fromOwned(SyntaxKind.SourceFile, span, children, []);
+		return fromOwned(source, root, tokens, trivia, []);
 	}
 
 	/** Adds zero-width recovery tokens without changing source round-tripping. */
@@ -406,8 +409,10 @@ class SyntaxTree {
 		return withGrammarRootsAndSynthetic(root.grammarChildren, values);
 	}
 
-	/** Publishes grammar roots and synthetic recovery tokens in one immutable copy. */
+	/** Publishes grammar roots and synthetic recovery tokens in one owned tree view. */
 	public function withGrammarRootsAndSynthetic(roots:Array<SyntaxNode>, values:Array<SyntaxToken>):SyntaxTree {
+		if (values.length == 0)
+			return fromOwned(source, SyntaxNode.fromOwned(root.kind, root.span, root.children, roots), tokens, trivia, syntheticTokens);
 		var children = root.children.copy(),
 			ordered = values.copy();
 		if (ordered.length > 0) {
@@ -419,12 +424,12 @@ class SyntaxTree {
 				children.insert(insertion, SyntaxElement.Token(value));
 			}
 		}
-		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, children, roots), tokens, trivia, syntheticTokens.concat(ordered));
+		return fromOwned(source, SyntaxNode.fromOwned(root.kind, root.span, children, roots), tokens, trivia, syntheticTokens.concat(ordered));
 	}
 
 	/** Attaches parser-reported grammar nodes while retaining the source leaves. */
 	public function withGrammarRoots(roots:Array<SyntaxNode>):SyntaxTree {
-		return new SyntaxTree(source, new SyntaxNode(root.kind, root.span, root.children, roots), tokens, trivia, syntheticTokens);
+		return fromOwned(source, SyntaxNode.fromOwned(root.kind, root.span, root.children, roots), tokens, trivia, syntheticTokens);
 	}
 
 	/** Returns parser-reported grammar nodes in source order. */
