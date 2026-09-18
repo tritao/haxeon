@@ -1710,6 +1710,21 @@ class TestMain {
 		} catch (error:CompileError) {
 			if (error.diagnostic.code != "E0001" || error.diagnostic.span.file.path != "broken.hx" || error.diagnostic.span.start != 29)
 				throw "structured source diagnostic has the wrong code or span";
+			if (error.diagnostic.displayMessage().indexOf("broken.hx:1:30: E0001: ") != 0)
+				throw 'diagnostic did not resolve its offset to a position: ${error.diagnostic.displayMessage()}';
+		}
+		/*
+		 * Spans carry byte offsets. Printing one where a line belongs sends a
+		 * reader to a position that cannot be opened, so a diagnostic on a later
+		 * line must resolve through the source text.
+		 */
+		try {
+			Frontend.compileFile(new SourceFile("broken.hx", "function main():Int {\n\tvar value = 1;\n\treturn #;\n}"));
+			throw "compiler accepted invalid character on a later line";
+		} catch (error:CompileError) {
+			final rendered = error.diagnostic.displayMessage();
+			if (rendered.indexOf("broken.hx:3:") != 0)
+				throw 'multi-line diagnostic did not resolve to line 3: $rendered';
 		}
 		Sys.println("PASS: syntax diagnostics retain file-aware source spans");
 	}
