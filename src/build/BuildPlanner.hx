@@ -79,8 +79,10 @@ class BuildPlanner {
 					if (thunkObject == null)
 						throw 'Missing generated thunk object for FFI import ${ffi.config.name}';
 					var ffiLibraryId = new ArtifactId(resolvedPackage.name, FfiNativeSharedLibrary, target, ffi.config.name),
-						ffiObjects = baseObjects.concat([thunkObject]);
-					artifacts.push(new Artifact(ffiLibraryId, ffiObjects, ["library" => resolvedPackage.name, "ffi" => ffi.config.name]));
+						ffiDependencies = baseObjects.concat([thunkObject]);
+					if (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)
+						ffiDependencies.push(new ArtifactId(resolvedPackage.name, NativeSharedLibrary, target));
+					artifacts.push(new Artifact(ffiLibraryId, ffiDependencies, ["library" => resolvedPackage.name, "ffi" => ffi.config.name]));
 					ffiNativeLibraries.push(ffiLibraryId);
 				}
 			if (resolvedPackage.nativeSources.length > 0 && NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {

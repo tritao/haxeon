@@ -49,12 +49,17 @@ class NativeToolchain {
 	public function sharedCommand():String
 		return environment.toolchain.linker;
 
-	public function sharedArguments(output:String, objects:Array<String>):Array<String> {
+	public function sharedArguments(output:String, objects:Array<String>, ?linkInputs:Array<String>, ?runtimeSearchPaths:Array<String>):Array<String> {
+		var inputs = linkInputs == null ? [] : linkInputs,
+			searchPaths = runtimeSearchPaths == null ? [] : runtimeSearchPaths;
 		var arguments = switch environment.target.os {
-			case TargetOs.Windows: ["/nologo", "/LD", "/Fe:" + output].concat(objects);
-			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects);
-			case _: ["-shared", "-o", output].concat(objects);
+			case TargetOs.Windows: ["/nologo", "/LD", "/Fe:" + output].concat(objects).concat(inputs);
+			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects).concat(inputs);
+			case _: ["-shared", "-o", output].concat(objects).concat(inputs);
 		};
+		if (environment.target.os != TargetOs.Windows)
+			for (searchPath in searchPaths)
+				arguments.push("-Wl,-rpath," + searchPath);
 		return environment.toolchain.linkFlags.concat(arguments);
 	}
 }
