@@ -178,10 +178,10 @@ class HxiValidator {
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
 							if (field.ownership != Borrowed
-								|| (!bytePointerLike(field.type, declarationsByName)
+								|| (!bufferPointerLike(field.type, declarationsByName)
 									&& structurePointerType(field.type, declarationsByName) == null
 									&& !utf8ArrayPointer(field.type)))
-								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer', field.span);
+								fail('@length_field on "${field.name}" requires a borrowed buffer or structure pointer', field.span);
 							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (length == null)
 								fail('@length_field on "${field.name}" references missing field "${field.lengthField}"', field.span);
@@ -647,10 +647,29 @@ class HxiValidator {
 		complete.set(name, true);
 	}
 
+	static function bufferPointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Nullable(element) | Const(element): bufferPointerLike(element, names);
+			case Pointer(element): bufferElement(element, names);
+			case _: false;
+		};
+
 	static function bytePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
 		return switch type {
 			case Nullable(element) | Const(element): bytePointerLike(element, names);
 			case Pointer(element): byteElement(element, names);
+			case _: false;
+		};
+
+	static function bufferElement(type:HxiType, names:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Const(element): bufferElement(element, names);
+			case Primitive("void" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "f32" | "f64" | "c_char" | "c_schar" | "c_uchar" | "short" | "unsigned short" | "int" | "unsigned int" | "long" | "unsigned long" | "long long" | "unsigned long long"): true;
+			case Named(name):
+				switch names.get(name) {
+					case Alias(_, target, _): bufferElement(target, names);
+					case _: false;
+				}
 			case _: false;
 		};
 

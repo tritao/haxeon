@@ -661,6 +661,19 @@ class HxiHaxeEmitter {
 								output.add('\tpublic function set_$fieldName(values:Array<String>):Void { var storage = ${model.name}.__hxi_struct_alloc(values.length * $pointerSize); var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...values.length + 1) roots.push(null); roots[0] = storage; var bytes:haxe.io.Bytes = ${model.name}.__hxi_struct_with_roots(storage, roots); for (index in 0...values.length) { var __text = ${model.name}.__hxi_struct_utf8_copy(values[index]); ${model.name}.__hxi_struct_set_borrowed_bytes(bytes, index * $pointerSize, __text); roots[index + 1] = __text; } ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, bytes); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set$lengthAccess(this, ${requiredFieldOffset(lengthField)}, $lengthExpression); }\n');
 								continue;
 							}
+							var scalarLayout = scalarPointerLayout(field.type, abi);
+							if (scalarLayout != null && scalarLayout.size > 1) {
+								usesBorrowedBuffers = true;
+								usesPointerFields = true;
+								var lengthAccess = lengthBytes == 8 ? "I64" : "I32",
+									rootSlot = Std.int(fieldOffset / pointerSize) + 1,
+									elementSize = scalarLayout.size,
+									lengthExpression = lengthAccess == "I64" ? 'haxe.Int64.ofInt(Std.int(value.length / $elementSize))' : 'Std.int(value.length / $elementSize)';
+								emitDocumentation(output, model, '$name.${field.name}', "\t");
+								output.add('\tpublic inline function get_${fieldName}_bytes():haxe.io.Bytes return ${model.name}.__hxi_struct_get_roots(this)[$rootSlot];\n');
+								output.add('\tpublic function set_${fieldName}_bytes(value:haxe.io.Bytes):Void { if (value.length % $elementSize != 0) throw "Borrowed scalar buffer length must be aligned to its element size"; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, value); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = value; ${model.name}.__hxi_struct_set$lengthAccess(this, ${requiredFieldOffset(lengthField)}, $lengthExpression); }\n');
+								continue;
+							}
 							usesBorrowedBuffers = true;
 							usesPointerFields = true;
 							var lengthAccess = lengthBytes == 8 ? "I64" : "I32",
@@ -2078,6 +2091,22 @@ class HxiHaxeEmitter {
 					case _: null;
 				}
 			case _: null;
+		};
+
+	static function scalarPointerLayout(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):Null<{size:Int, align:Int}> {
+		var pointee = switch type {
+			case Const(element) | Nullable(element): scalarPointerLayout(element, abi);
+			case Pointer(element): scalarPointeeLayout(element, abi);
+			case _: null;
+		};
+		return pointee;
+	}
+
+	static function scalarPointeeLayout(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):Null<{size:Int, align:Int}>
+		return switch type {
+			case Const(element): scalarPointeeLayout(element, abi);
+			case Primitive("void" | "utf8"): null;
+			case _: abi.layout(type);
 		};
 
 	static function utf8ArrayPointer(type:compiler.ffi.HxiModel.HxiType):Bool

@@ -247,10 +247,13 @@ managed-byte structure cannot retain their destructor safely. A borrowed
 `ptr<struct>` field paired with an unsigned count through `@length_field`
 projects as an `Array<T>` setter. It packs contiguous element storage, writes the
 paired count, and retains the packed storage in the containing generated struct.
-Borrowed byte buffers and UTF-8 pointer tables use the same explicit relationship
-to retain their packed storage. Nested structure copies and generated struct arrays
-carry these retained references forward. Native pointers derived from the structure
-remain call-scoped; unannotated pointer fields receive no inferred retention.
+Borrowed byte buffers, typed scalar buffers, and UTF-8 pointer tables use the same
+explicit relationship to retain their packed storage. Typed scalar buffer lengths
+are element counts, while the managed Haxe backing remains `haxe.io.Bytes` and
+must be aligned to the native element size. Nested structure copies and generated
+struct arrays carry these retained references forward. Native pointers derived from
+the structure remain call-scoped; unannotated pointer fields receive no inferred
+retention.
 Unannotated pointer fields remain in the ABI model but receive no unsafe
 generated accessors. Naturally laid-out structures can also be passed and returned by
 value. Their recursive field layout is encoded in the native call descriptor,

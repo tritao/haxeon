@@ -393,6 +393,13 @@ class HxiParserMain {
 			&& Type.enumEq(restoredBufferNative.argumentModes[1], BytesOutput(2))
 			&& restoredBufferNative.argumentModes[2] == BytesSize,
 			"output buffer and size-pointer ABI modes should round-trip through canonical IR");
+		var scalarBuffers = parseValidated("scalar-buffers.hxi",
+			'interface scalar_buffers @target("x86_64-linux-gnu") @library("scalar_buffers") { struct target @layout(32, 8) { struct_size: u32 @offset(0) @struct_size; samples: ptr<f32> @offset(8) @borrowed @length_field("sample_count"); sample_count: u64 @offset(16); frame_count: u32 @offset(24); } }'),
+			scalarBufferSource = HxiProjection.source(scalarBuffers);
+		expect(scalarBufferSource.indexOf("get_samples_bytes") >= 0
+			&& scalarBufferSource.indexOf("value.length % 4") >= 0
+			&& scalarBufferSource.indexOf("Std.int(value.length / 4)") >= 0,
+			"typed scalar borrowed buffers should project byte storage with element-count lengths");
 		var fixedOutputs = parseValidated("fixed-outputs.hxi",
 			'interface fixed_outputs @target("x86_64-linux-gnu") @library("fixed_outputs") { struct position @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); } extern fn write(value: ptr<position> @out) -> void; extern fn update(value: ptr<position> @inout) -> void; }'),
 			fixedOutputNatives = HxiProjection.cNatives(fixedOutputs),
@@ -804,7 +811,7 @@ class HxiParserMain {
 			&& inputArraySource.indexOf("items.length") >= 0,
 			"input arrays should hide count parameters and project managed Haxe arrays");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',
-			"requires a borrowed byte, void, or structure pointer");
+			"requires a borrowed buffer or structure pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @borrowed @length_field("missing"); size: u64 @offset(8); } }',
 			"references missing field");
 		compiler.update("Main.hx",
