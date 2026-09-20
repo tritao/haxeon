@@ -33,6 +33,7 @@ esac
 
 "$repo_dir/scripts/haxeon-ffi-import" \
 	--language=c++ \
+	--cxx-profile=direct \
 	--std=c++20 \
 	--target="$target" \
 	--library="$fixture_path" \

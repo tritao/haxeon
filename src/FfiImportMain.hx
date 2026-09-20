@@ -19,9 +19,10 @@ class FfiImportMain {
 		var manifest:Null<ResolvedFfiImport> = manifestPath == null ? null : FfiImportManifest.resolve(manifestPath, Path.directory(manifestPath)),
 			config = manifest == null ? null : manifest.config, target = config == null
 				|| config.target == null ? "" : config.target, output = "",
-			language = config == null ? "c" : config.language, standard = config == null ? "c11" : config.standard,
-			clang = config == null ? "clang" : config.clang, compileCommands:Null<String> = manifest == null ? null : manifest.compileCommands,
-			library:Null<String> = config == null ? null : config.library, interfaceName:Null<String> = config == null ? null : config.interfaceName,
+			language = config == null ? "c" : config.language, profile = config == null ? "default" : config.profile,
+			standard = config == null ? "c11" : config.standard, clang = config == null ? "clang" : config.clang,
+			compileCommands:Null<String> = manifest == null ? null : manifest.compileCommands, library:Null<String> = config == null ? null : config.library,
+			interfaceName:Null<String> = config == null ? null : config.interfaceName,
 			includes:Array<String> = manifest == null ? [] : manifest.includes.copy(), defines:Array<String> = config == null ? [] : config.defines.copy(),
 			dependencies:Array<String> = config == null ? [] : config.dependencies.copy(),
 			sourceLabel:Null<String> = config == null ? null : config.sourceLabel,
@@ -37,6 +38,8 @@ class FfiImportMain {
 				target = arg.substring(9);
 			else if (StringTools.startsWith(arg, "--language="))
 				language = arg.substring(11);
+			else if (StringTools.startsWith(arg, "--cxx-profile="))
+				profile = arg.substring(arg.indexOf("=") + 1);
 			else if (StringTools.startsWith(arg, "--std="))
 				standard = arg.substring(6);
 			else if (StringTools.startsWith(arg, "--clang="))
@@ -92,6 +95,14 @@ class FfiImportMain {
 		}
 		if (language != "c" && language != "c++")
 			throw 'Unsupported FFI language "$language"';
+		if (profile != "default" && profile != "direct" && profile != "virtual")
+			throw 'Unsupported C++ FFI profile "$profile"';
+		if (language != "c++" && profile != "default")
+			throw "--cxx-profile requires --language=c++";
+		if (profile == "direct" && (cxxVirtual || cxxThunksPath != null))
+			throw 'C++ profile "direct" forbids virtual dispatch and generated C++ thunks';
+		if (profile == "virtual")
+			cxxVirtual = true;
 		if (cxxSelections.length != 0 && language != "c++")
 			throw "--cxx-select requires --language=c++";
 		if (cxxOwnership.keys().hasNext() && language != "c++")
@@ -109,7 +120,7 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null,
 			cxxSelections.length == 0 ? null : cxxSelections, cxxOwnership) : null,

@@ -10,6 +10,10 @@ class FfiImportManifest {
 	public final version:Int;
 	public final name:String;
 	public final language:String;
+
+	/** C++ dispatch profile: default preserves legacy flags, direct forbids adapters, virtual opts into vtable dispatch. */
+	public final profile:String;
+
 	public final header:String;
 	public final target:Null<String>;
 	public final standard:String;
@@ -33,13 +37,14 @@ class FfiImportManifest {
 
 	public final projection:Bool;
 
-	function new(version:Int, name:String, language:String, header:String, target:Null<String>, standard:String, clang:String, includes:Array<String>,
-			defines:Array<String>, compileCommands:Null<String>, library:Null<String>, interfaceName:Null<String>, dependencies:Array<String>,
-			excludedHeaders:Array<String>, sourceLabel:Null<String>, cxxSelections:Array<String>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool,
-			cxxThunks:Bool, cxxOwnership:Map<String, String>, projection:Bool) {
+	function new(version:Int, name:String, language:String, profile:String, header:String, target:Null<String>, standard:String, clang:String,
+			includes:Array<String>, defines:Array<String>, compileCommands:Null<String>, library:Null<String>, interfaceName:Null<String>,
+			dependencies:Array<String>, excludedHeaders:Array<String>, sourceLabel:Null<String>, cxxSelections:Array<String>, trivialValues:Bool,
+			lifetimes:Bool, virtualDispatch:Bool, cxxThunks:Bool, cxxOwnership:Map<String, String>, projection:Bool) {
 		this.version = version;
 		this.name = name;
 		this.language = language;
+		this.profile = profile;
 		this.header = header;
 		this.target = target;
 		this.standard = standard;
@@ -76,6 +81,7 @@ class FfiImportManifest {
 			throw 'Unsupported FFI manifest version "$rawVersion" in $path';
 		var name = requiredString(raw, "name", path),
 			language = optionalString(raw, "language", "c", path),
+			profile = optionalString(raw, "profile", "default", path),
 			header = requiredString(raw, "header", path),
 			target = nullableString(raw, "target", path),
 			standard = optionalString(raw, "std", language == "c++" ? "c++20" : "c11", path),
@@ -97,17 +103,23 @@ class FfiImportManifest {
 			projection = optionalBool(raw, "projection", false, path);
 		if (language != "c" && language != "c++")
 			throw '$path has unsupported FFI language "$language"';
+		if (profile != "default" && profile != "direct" && profile != "virtual")
+			throw '$path has unsupported C++ FFI profile "$profile"';
 		if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
 			throw '$path "name" must be a single path-safe artifact name';
 		if (language != "c++"
-			&& (cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks || cxxOwnership.keys().hasNext()))
+			&& (profile != "default" || cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks
+				|| cxxOwnership.keys().hasNext()))
 			throw '$path uses C++ options but language is "$language"';
+		if (profile == "direct" && (virtualDispatch || cxxThunks))
+			throw '$path C++ profile "direct" cannot enable "cxxVirtual" or "cxxThunks"';
 		if (projection && library == null)
 			throw '$path enables "projection" but has no "library"';
 		if (cxxThunks && library == null)
 			throw '$path enables "cxxThunks" but has no "library"';
-		return new FfiImportManifest(version, name, language, header, target, standard, clang, includes, defines, compileCommands, library, interfaceName,
-			dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership, projection);
+		return new FfiImportManifest(version, name, language, profile, header, target, standard, clang, includes, defines, compileCommands, library,
+			interfaceName, dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership,
+			projection);
 	}
 
 	public static function resolve(path:String, packageRoot:String):ResolvedFfiImport {

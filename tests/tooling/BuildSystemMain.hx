@@ -24,6 +24,7 @@ import build.native.NativeToolchain;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
+import project.FfiManifest.FfiImportManifest;
 import project.PackageSourceTools;
 import project.PackageResolver;
 import project.PackageLockfile;
@@ -407,12 +408,16 @@ class BuildSystemMain {
 		ensureDirectory(Path.directory(headerPath));
 		File.saveContent(headerPath, "namespace fixture { class Widget { public: void reset() noexcept; }; }\n");
 		File.saveContent(manifestPath,
-			'{"version":1,"name":"fixture","language":"c++","header":"../headers/fixture.hpp","std":"c++20","library":"fixture","interface":"Fixture","select":["fixture::Widget::reset"],"projection":true}\n');
+			'{"version":1,"name":"fixture","language":"c++","profile":"direct","header":"../headers/fixture.hpp","std":"c++20","library":"fixture","interface":"Fixture","select":["fixture::Widget::reset"],"projection":true}\n');
 		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
 		expect(project.rootPackage.ffiImports.length == 1
 			&& project.rootPackage.ffiImports[0].config.name == "fixture"
+			&& project.rootPackage.ffiImports[0].config.profile == "direct"
 			&& project.rootPackage.ffiImports[0].header == FileSystem.fullPath(headerPath),
 			"project resolution should load FFI recipes relative to the package");
+		expectThrows(() -> FfiImportManifest.parse("/tmp/direct.ffi.json",
+			'{"version":1,"name":"direct","language":"c++","profile":"direct","header":"fixture.hpp","library":"fixture","cxxThunks":true}'),
+			"direct C++ FFI profiles should reject generated thunks");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,

@@ -16,12 +16,23 @@ scripts/haxeon-ffi-import \
   /path/to/library/include/library.hpp
 ```
 
-The current direct profile imports namespaces, aliases, enum classes, opaque
+Project recipes may make the dispatch contract explicit with
+`"profile": "direct"`. Direct is the strict no-adapter profile: it forbids
+generated C++ thunks and virtual dispatch, so every imported call must use a
+Clang-selected mangled symbol with the ordinary HXI ABI. It still permits
+ABI-safe `noexcept` constructors, destructors, and explicit ownership release
+functions. The default profile preserves the individual legacy opt-in flags;
+`"profile": "virtual"` is a named opt-in for the existing Itanium vtable
+dispatch path. The standalone equivalent is `--cxx-profile=direct` or
+`--cxx-profile=virtual`.
+
+The direct profile imports namespaces, aliases, enum classes, opaque
 records, free functions, static methods, and public non-virtual `noexcept`
 methods. A member method is lowered to an HXI function with a synthetic
 `__this` pointer, while the `@symbol` value is exactly Clang's mangled name.
 References are represented as non-null pointer ABI values. Virtual methods and
-inheritance require the separate opt-in `--cxx-virtual` profile; that profile
+inheritance require the separate opt-in `--cxx-profile=virtual` profile; the
+legacy `--cxx-virtual` flag remains accepted for compatibility. That profile
 currently supports only Clang's Itanium ABI on 64-bit Linux/macOS and a single
 non-virtual base. The generated Haxe method reads the object's vtable and calls
 the selected function pointer, preserving dynamic dispatch. MSVC virtual

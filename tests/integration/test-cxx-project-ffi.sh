@@ -46,6 +46,7 @@ cat > "$project_dir/ffi/cxx_project.ffi.json" <<JSON
 	"version": 1,
 	"name": "cxx-project",
 	"language": "c++",
+	"profile": "direct",
 	"header": "cxx_runtime_fixture.hpp",
 	"includes": ["."],
 	"std": "c++20",
@@ -80,6 +81,7 @@ first_output=$(run_cli build --project "$project_dir/haxeon.json")
 test -s "$project_dir/build/host/native/app/ffi/cxx-project/cxx-project.hxi"
 test -s "$project_dir/build/host/native/app/ffi/cxx-project/projection/DisplayList.hx"
 test -s "$project_dir/build/host/native/app/ffi/cxx-project/projection.sources"
+test ! -e "$project_dir/build/host/native/app/ffi/cxx-project/cxx-project-thunks.cpp"
 
 test -s "$project_dir/build/host/main.hl"
 set +e

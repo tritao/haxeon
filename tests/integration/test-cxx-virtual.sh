@@ -31,7 +31,7 @@ esac
 "$repo_dir/scripts/haxeon-ffi-import" \
 	--language=c++ \
 	--std=c++20 \
-	--cxx-virtual \
+	--cxx-profile=virtual \
 	--target="$target" \
 	--library="$fixture_path" \
 	--interface=CxxVirtual \
