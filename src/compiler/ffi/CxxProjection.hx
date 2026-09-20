@@ -116,17 +116,19 @@ class CxxProjection {
 		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
 			hasThunks = Lambda.exists(record.methods, method -> method.thunkSymbol != null),
 			helperName = "__CxxThunk_" + typeName,
+			memoryHelper = "__CxxNativeMemory_" + typeName,
+			virtualHelper = "__CxxVirtual_" + typeName,
 			output = new StringBuf();
 		output.add('// Generated C++ object projection for ${record.qualifiedName}. Do not edit.\n');
 		output.add('import ${hxi.name};\n');
-		output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class __CxxNativeMemory {\n');
+		output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class $memoryHelper {\n');
 		output.add('\tpublic static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer"> return null;\n');
 		output.add('\tpublic static function native_pointer_close(pointer:hl.Abstract<"native_pointer">):Bool return false;\n');
 		output.add('}\n\n');
 		if (hasThunks)
 			emitThunkErrorHelper(output, helperName);
 		if ([for (arity in virtualArities.keys()) arity].length > 0) {
-			output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class __CxxVirtual {\n');
+			output.add('@:noCompletion\n@:hlNative("haxeon_runtime")\nprivate class $virtualHelper {\n');
 			var arities = [for (arity in virtualArities.keys()) arity];
 			arities.sort(Reflect.compare);
 			for (arity in arities) {
@@ -210,7 +212,7 @@ class CxxProjection {
 				}
 			} else {
 				var signature = HxiHaxeEmitter.nativeSignature(hxi, plan),
-					virtualCall = '__CxxVirtual.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
+					virtualCall = '$virtualHelper.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
 				if (result.haxeType == "Void")
 					output.add('\t\t$virtualCall;\n');
 				else
@@ -238,7 +240,7 @@ class CxxProjection {
 			output.add('\t\tif (!__owned) throw "Cannot close a borrowed C++ object";\n');
 			output.add('\t\tif (!__closed) {\n');
 			output.add('\t\t\t${hxi.name}.$destructorFunction(__native);\n');
-			output.add('\t\t\t__CxxNativeMemory.native_pointer_close(cast __native);\n');
+			output.add('\t\t\t$memoryHelper.native_pointer_close(cast __native);\n');
 			output.add('\t\t\t__closed = true;\n');
 			output.add('\t\t}\n');
 			output.add('\t}\n');
@@ -267,7 +269,7 @@ class CxxProjection {
 			var constructorName = constructors.length == 1 ? "create" : "create_" + index,
 				constructorFunction = HxiHaxeEmitter.projectedFunctionName(constructor.loweredName, profile);
 			output.add('\tpublic static function $constructorName(${constructorArguments.join(", ")}):$typeName {\n');
-			output.add('\t\tvar native:$nativeType = cast __CxxNativeMemory.native_pointer_alloc(${record.size});\n');
+			output.add('\t\tvar native:$nativeType = cast $memoryHelper.native_pointer_alloc(${record.size});\n');
 			output.add('\t\tvar result = new $typeName(native, true);\n');
 			output.add('\t\t${hxi.name}.$constructorFunction(native${constructorCalls.length == 0 ? "" : ", " + constructorCalls.join(", ")});\n');
 			output.add('\t\treturn result;\n');

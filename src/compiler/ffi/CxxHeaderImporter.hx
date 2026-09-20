@@ -221,8 +221,18 @@ private class CxxAstBuilder {
 		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), selectedRecords, selectedEnums, selectedAliases, selectedFunctions);
 	}
 
-	function explicitlySelected(name:String):Bool
-		return selectedDeclarations != null && selectedDeclarations.indexOf(name) >= 0;
+	function explicitlySelected(name:String):Bool {
+		if (selectedDeclarations != null && selectedDeclarations.indexOf(name) >= 0)
+			return true;
+		if (cxxOwnership != null) {
+			if (cxxOwnership.exists(name))
+				return true;
+			for (ownerName in cxxOwnership.keys())
+				if (cxxOwnership.get(ownerName) == name)
+					return true;
+		}
+		return false;
+	}
 
 	function selectedRecord(name:String):Bool {
 		if (selectedDeclarations == null)

@@ -182,14 +182,15 @@ class CxxHeaderImporterMain {
 			&& lifetimeText.indexOf("@symbol(\"_ZN7cxxlife6WidgetD1Ev\")") >= 0,
 			"opted-in C++ lifetimes should lower constructor and destructor symbols into HXI");
 		expect(lifetimeProjection.indexOf('@:hlNative("haxeon_runtime")') >= 0
-			&& lifetimeProjection.indexOf("__CxxNativeMemory.native_pointer_alloc") >= 0
+			&& lifetimeProjection.indexOf("__CxxNativeMemory_Widget.native_pointer_alloc") >= 0
 			&& lifetimeProjection.indexOf("public static function create(value:Int):Widget") >= 0
 			&& lifetimeProjection.indexOf("public function close():Void") >= 0
 			&& lifetimeProjection.indexOf("C++ object is closed") >= 0
 			&& lifetimeProjection.indexOf("public function ~Widget") < 0,
 			"C++ lifetime projection should allocate owned objects and hide ABI destructor names");
 		var owned = CxxHeaderImporter.importHeader("tests/ffi/cxx_owned_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_owned",
-			"CxxOwnedFixture", null, null, "c++20", null, null, false, false, false, true, null, ["cxxown::acquire" => "cxxown::release"]),
+			"CxxOwnedFixture", null, null, "c++20", null, null, false, false, false, true, ["cxxown::Widget::value", "cxxown::acquire"],
+			["cxxown::acquire" => "cxxown::release"]),
 			ownedText = HxiWriter.write(owned.hxi, "// test"),
 			ownedSources = CxxProjection.sources(owned.model, owned.hxi, null, owned.plans),
 			ownedFunctions = Lambda.find(ownedSources, source -> source.file == "CxxOwnedFixtureFunctions.hx"),
