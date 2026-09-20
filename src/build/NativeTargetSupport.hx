@@ -6,6 +6,8 @@ import project.ResolvedProject;
 class NativeTargetSupport {
 	public static function validate(project:ResolvedProject, target:Target):Void {
 		for (resolvedPackage in project.packages.packages) {
+			if (resolvedPackage.ffiImports.length > 0 && !target.isNative())
+				throw 'Package ${resolvedPackage.name} declares FFI imports, but target "${target.toString()}" is not a native target';
 			var native = resolvedPackage.manifest.native;
 			if (native == null)
 				continue;

@@ -4,6 +4,8 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import project.PackageLockfile.PackageLockEntry;
+import project.FfiManifest.ResolvedFfiImport;
+import project.FfiManifest.FfiImportManifest;
 import build.Target;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
@@ -69,7 +71,7 @@ class PackageResolver {
 			],
 				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
 					manifest.packageName, "source"),
-				nativeSources:Array<String> = [], includeDirs:Array<String> = [];
+				nativeSources:Array<String> = [], includeDirs:Array<String> = [], ffiImports:Array<ResolvedFfiImport> = [];
 			if (manifest.native != null) {
 				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName, "native source");
 				includeDirs = [
@@ -79,6 +81,13 @@ class PackageResolver {
 				if (manifest.native.cmake != null)
 					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
 			}
+			for (ffiPath in manifest.ffi) {
+				var ffiManifestPath = Path.normalize(Path.isAbsolute(ffiPath) ? ffiPath : Path.join([resolvedRoot, ffiPath]));
+				if (!FileSystem.exists(ffiManifestPath) || FileSystem.isDirectory(ffiManifestPath))
+					throw 'Package "${manifest.packageName}" FFI manifest does not exist: $ffiManifestPath';
+				ffiImports.push(FfiImportManifest.resolve(ffiManifestPath, resolvedRoot));
+			}
+			ffiImports.sort((left, right) -> Reflect.compare(left.config.name, right.config.name));
 
 			var dependencyNames = [for (name in manifest.dependencies.keys()) name];
 			dependencyNames.sort(Reflect.compare);
@@ -114,7 +123,7 @@ class PackageResolver {
 			}
 			active.remove(resolvedRoot);
 			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs, acquired.source);
+				includeDirs, ffiImports, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,

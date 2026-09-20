@@ -1,5 +1,7 @@
 package project;
 
+import project.FfiManifest.ResolvedFfiImport;
+
 /** Paths in a resolved package have already been canonicalized. */
 class ResolvedPackage {
 	public final id:PackageId;
@@ -12,9 +14,10 @@ class ResolvedPackage {
 	public final dependencies:Array<String>;
 	public final nativeSources:Array<String>;
 	public final includeDirs:Array<String>;
+	public final ffiImports:Array<ResolvedFfiImport>;
 
 	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, sources:Array<String>, dependencies:Array<String>,
-			nativeSources:Array<String>, includeDirs:Array<String>, ?source:PackageSource) {
+			nativeSources:Array<String>, includeDirs:Array<String>, ?ffiImports:Array<ResolvedFfiImport>, ?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;
@@ -25,5 +28,6 @@ class ResolvedPackage {
 		this.dependencies = dependencies.copy();
 		this.nativeSources = nativeSources.copy();
 		this.includeDirs = includeDirs.copy();
+		this.ffiImports = ffiImports == null ? [] : ffiImports.copy();
 	}
 }

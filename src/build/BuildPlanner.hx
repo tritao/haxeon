@@ -6,6 +6,7 @@ import build.Artifact.ArtifactKind.Executable;
 import build.Artifact.ArtifactKind.HashLinkModule;
 import build.Artifact.ArtifactKind.NativeObject;
 import build.Artifact.ArtifactKind.NativeSharedLibrary;
+import build.Artifact.ArtifactKind.FfiInterface;
 import build.Artifact.ArtifactKind.NativeStaticLibrary;
 import build.Artifact.ArtifactKind.WasmModule;
 import build.NativeArtifactDemand.NativeArtifactDemand;
@@ -28,7 +29,17 @@ class BuildPlanner {
 		NativeTargetSupport.validate(project, target);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
-			nativeStatic = new Map<String, ArtifactId>();
+			nativeStatic = new Map<String, ArtifactId>(),
+			ffiArtifacts:Array<ArtifactId> = [];
+		for (resolvedPackage in project.packages.packages)
+			for (ffi in resolvedPackage.ffiImports) {
+				var ffiId = new ArtifactId(resolvedPackage.name, FfiInterface, target, ffi.config.name);
+				artifacts.push(new Artifact(ffiId, [], [
+					"manifest" => relativePath(resolvedPackage.root, ffi.manifestPath),
+					"name" => ffi.config.name
+				]));
+				ffiArtifacts.push(ffiId);
+			}
 		for (resolvedPackage in project.packages.packages)
 			if (resolvedPackage.nativeSources.length > 0
 				|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
@@ -74,7 +85,8 @@ class BuildPlanner {
 		if (intent == Check)
 			kind = Diagnostics;
 		var moduleId = new ArtifactId(project.rootPackage.name, kind, target);
-		artifacts.push(new Artifact(moduleId, libraryRequirements, ["entry" => project.manifest.entry == null ? "" : project.manifest.entry]));
+		artifacts.push(new Artifact(moduleId, libraryRequirements.concat(ffiArtifacts),
+			["entry" => project.manifest.entry == null ? "" : project.manifest.entry]));
 		return new BuildPlan([moduleId], artifacts);
 	}
 

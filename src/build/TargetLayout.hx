@@ -62,6 +62,18 @@ class TargetLayout {
 		return Path.join([packageRoot(packageName), packageName + ".hdll"]);
 	}
 
+	public function ffiRoot(packageName:String, name:String):String
+		return Path.join([packageRoot(packageName), "ffi", safeFfiName(name)]);
+
+	public function ffiInterfacePath(packageName:String, name:String):String
+		return Path.join([ffiRoot(packageName, name), safeFfiName(name) + ".hxi"]);
+
+	public function ffiProjectionPath(packageName:String, name:String):String
+		return Path.join([ffiRoot(packageName, name), "projection"]);
+
+	public function ffiProjectionManifestPath(packageName:String, name:String):String
+		return Path.join([ffiRoot(packageName, name), "projection.sources"]);
+
 	public function targetDirectory():String {
 		if (environment.target.equals(Target.detectHost()))
 			return "host";
@@ -78,4 +90,7 @@ class TargetLayout {
 			case _: throw 'Android does not support target architecture ${Target.archName(environment.target.arch)}';
 		};
 	}
+
+	static function safeFfiName(name:String):String
+		return StringTools.replace(StringTools.replace(name, "/", "_"), "\\", "_");
 }

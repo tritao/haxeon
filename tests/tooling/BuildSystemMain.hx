@@ -52,6 +52,7 @@ class BuildSystemMain {
 		testArtifactCache();
 		testTargetsAndToolchains();
 		testProjectDiscovery();
+		testFfiProjectIntegration();
 		testPackageSourceModel();
 		testPackageCompatibility();
 		testHaxelibAdapter();
@@ -380,6 +381,37 @@ class BuildSystemMain {
 		var dependencies = NativeDependencyScanner.dependencies(source, [includeDirectory]);
 		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0 && dependencies[1].indexOf("second.h") >= 0,
 			"native dependency scanning should follow recursive local includes");
+		removeTree(root);
+	}
+
+	static function testFfiProjectIntegration():Void {
+		var root = temporaryDirectory("ffi-project"),
+			app = Path.join([root, "app"]),
+			manifestPath = Path.join([app, "ffi", "fixture.ffi.json"]),
+			headerPath = Path.join([app, "headers", "fixture.hpp"]);
+		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"ffi":{"imports":["ffi/fixture.ffi.json"]}}',
+			["src/Main.hx"]);
+		ensureDirectory(Path.directory(manifestPath));
+		ensureDirectory(Path.directory(headerPath));
+		File.saveContent(headerPath, "namespace fixture { class Widget { public: void reset() noexcept; }; }\n");
+		File.saveContent(manifestPath,
+			'{"version":1,"name":"fixture","language":"c++","header":"../headers/fixture.hpp","std":"c++20","library":"fixture","interface":"Fixture","select":["fixture::Widget::reset"],"projection":true}\n');
+		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
+		expect(project.rootPackage.ffiImports.length == 1
+			&& project.rootPackage.ffiImports[0].config.name == "fixture"
+			&& project.rootPackage.ffiImports[0].header == FileSystem.fullPath(headerPath),
+			"project resolution should load FFI recipes relative to the package");
+		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
+			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
+			execution = PlanLowerer.lower(plan,
+				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+			planText = plan.toDebugString(),
+			executionText = execution.toDebugString();
+		expect(planText.indexOf("app:FfiInterface") >= 0
+			&& executionText.indexOf("Import c++ FFI fixture") >= 0
+			&& executionText.indexOf("projection.sources") >= 0
+			&& executionText.indexOf("Compile Haxe package") >= 0,
+			"project FFI recipes should become build artifacts before Haxe compilation");
 		removeTree(root);
 	}
 

@@ -42,13 +42,14 @@ class PackageManifest {
 	public final outputDir:String;
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
+	public final ffi:Array<String>;
 	public final androidApplicationId:String;
 	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, workspace:Array<String>,
 			target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>,
-			androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
+			ffi:Array<String>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -61,6 +62,7 @@ class PackageManifest {
 		this.outputDir = outputDir;
 		this.dependencies = dependencies;
 		this.native = native;
+		this.ffi = ffi.copy();
 		this.androidApplicationId = androidApplicationId;
 		this.androidAppLabel = androidAppLabel;
 		this.compatibility = compatibility;
@@ -147,7 +149,14 @@ class PackageManifest {
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
-		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, workspace, target, defines, outputDir, dependencies, native,
+		var ffiData:Dynamic = Reflect.field(raw, "ffi"),
+			ffi:Array<String> = [];
+		if (ffiData != null) {
+			if (!isObject(ffiData))
+				throw '$path "ffi" must be an object';
+			ffi = stringArray(ffiData, "imports", path, []);
+		}
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, workspace, target, defines, outputDir, dependencies, native, ffi,
 			androidApplicationId, androidAppLabel, compatibility);
 	}
 

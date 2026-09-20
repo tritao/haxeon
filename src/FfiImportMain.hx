@@ -4,19 +4,35 @@ import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxThunkGenerator;
 import compiler.ffi.HxiWriter;
 import haxe.io.Path;
+import project.FfiManifest.FfiImportManifest;
+import project.FfiManifest.ResolvedFfiImport;
 import sys.io.File;
 import sys.FileSystem;
 
 /** Standalone C/C++ header to raw-HXI importer. */
 class FfiImportMain {
 	static function main():Void {
-		var args = Sys.args(), target = "", output = "", language = "c", standard = "c11", clang = "clang", compileCommands:Null<String> = null,
-			library:Null<String> = null, interfaceName:Null<String> = null, includes:Array<String> = [], defines:Array<String> = [],
-			dependencies:Array<String> = [], sourceLabel:Null<String> = null, excludedHeaders:Array<String> = [], paths:Array<String> = [],
-			cxxSelections:Array<String> = [], trivialValues = false, cxxLifetimes = false, cxxVirtual = false, cxxThunksPath:Null<String> = null,
-			haxeOutputDir:Null<String> = null;
+		var args = Sys.args(), manifestPath:Null<String> = null;
 		for (arg in args)
-			if (StringTools.startsWith(arg, "--target="))
+			if (StringTools.startsWith(arg, "--manifest="))
+				manifestPath = arg.substring(arg.indexOf("=") + 1);
+		var manifest:Null<ResolvedFfiImport> = manifestPath == null ? null : FfiImportManifest.resolve(manifestPath, Path.directory(manifestPath)),
+			config = manifest == null ? null : manifest.config, target = config == null
+				|| config.target == null ? "" : config.target, output = "",
+			language = config == null ? "c" : config.language, standard = config == null ? "c11" : config.standard,
+			clang = config == null ? "clang" : config.clang, compileCommands:Null<String> = manifest == null ? null : manifest.compileCommands,
+			library:Null<String> = config == null ? null : config.library, interfaceName:Null<String> = config == null ? null : config.interfaceName,
+			includes:Array<String> = manifest == null ? [] : manifest.includes.copy(), defines:Array<String> = config == null ? [] : config.defines.copy(),
+			dependencies:Array<String> = config == null ? [] : config.dependencies.copy(),
+			sourceLabel:Null<String> = config == null ? null : config.sourceLabel,
+			excludedHeaders:Array<String> = manifest == null ? [] : manifest.excludedHeaders.copy(), paths:Array<String> = [],
+			cxxSelections:Array<String> = config == null ? [] : config.cxxSelections.copy(), trivialValues = config == null ? false : config.trivialValues,
+			cxxLifetimes = config == null ? false : config.lifetimes, cxxVirtual = config == null ? false : config.virtualDispatch,
+			cxxThunksPath:Null<String> = null, haxeOutputDir:Null<String> = null, haxeSourceManifestPath:Null<String> = null;
+		for (arg in args)
+			if (StringTools.startsWith(arg, "--manifest="))
+				continue;
+			else if (StringTools.startsWith(arg, "--target="))
 				target = arg.substring(9);
 			else if (StringTools.startsWith(arg, "--language="))
 				language = arg.substring(11);
@@ -50,6 +66,8 @@ class FfiImportMain {
 				sourceLabel = arg.substring(15);
 			else if (StringTools.startsWith(arg, "--haxe-output-dir="))
 				haxeOutputDir = arg.substring(arg.indexOf("=") + 1);
+			else if (StringTools.startsWith(arg, "--haxe-source-manifest="))
+				haxeSourceManifestPath = arg.substring(arg.indexOf("=") + 1);
 			else if (StringTools.startsWith(arg, "--cxx-select="))
 				cxxSelections.push(arg.substring(arg.indexOf("=") + 1));
 			else if (StringTools.startsWith(arg, "--exclude-header="))
@@ -58,6 +76,8 @@ class FfiImportMain {
 				throw 'Unknown FFI import option "$arg"';
 			else
 				paths.push(arg);
+		if (paths.length == 0 && manifest != null)
+			paths.push(manifest.header);
 		if (language != "c" && language != "c++")
 			throw 'Unsupported FFI language "$language"';
 		if (cxxSelections.length != 0 && language != "c++")
@@ -68,10 +88,14 @@ class FfiImportMain {
 			throw "--cxx-thunks requires --language=c++";
 		if (haxeOutputDir != null && library == null)
 			throw "--haxe-output-dir requires --library so generated wrappers can call the HXI interface";
+		if (manifest != null && manifest.config.projection && haxeOutputDir == null)
+			throw "FFI manifest projection requires --haxe-output-dir";
+		if (haxeSourceManifestPath != null && haxeOutputDir == null)
+			throw "--haxe-source-manifest requires --haxe-output-dir";
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import --language=c|c++ --target=<triple> --output=<file> [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null,
 			cxxSelections.length == 0 ? null : cxxSelections) : null,
@@ -87,11 +111,29 @@ class FfiImportMain {
 			File.saveContent(cxxThunksPath, CxxThunkGenerator.source(cxxResult.model));
 		}
 		if (haxeOutputDir != null) {
-			if (!FileSystem.exists(haxeOutputDir))
-				FileSystem.createDirectory(haxeOutputDir);
-			for (projection in CxxProjection.sources(cxxResult.model, cxxResult.hxi, null, cxxResult.plans))
-				File.saveContent(Path.join([haxeOutputDir, projection.file]), projection.source);
+			ensureDirectory(haxeOutputDir);
+			var projectionFiles:Array<String> = [];
+			for (projection in CxxProjection.sources(cxxResult.model, cxxResult.hxi, null, cxxResult.plans)) {
+				var projectionPath = Path.join([haxeOutputDir, projection.file]);
+				File.saveContent(projectionPath, projection.source);
+				projectionFiles.push(projectionPath);
+			}
+			if (haxeSourceManifestPath != null) {
+				projectionFiles.sort(Reflect.compare);
+				ensureDirectory(Path.directory(haxeSourceManifestPath));
+				File.saveContent(haxeSourceManifestPath, projectionFiles.join("\n") + "\n");
+			}
 		}
-		Sys.println('imported ${paths[0]} -> $output');
+		Sys.println("imported " + paths[0] + " -> " + output);
+	}
+
+	static function ensureDirectory(path:String):Void {
+		if (path == "" || path == "." || FileSystem.exists(path))
+			return;
+		var parent = Path.directory(path);
+		if (parent != path && parent != "")
+			ensureDirectory(parent);
+		if (!FileSystem.exists(path))
+			FileSystem.createDirectory(path);
 	}
 }

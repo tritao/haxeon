@@ -43,6 +43,19 @@ class CompilerProvider {
 				inputs.push(source);
 			}
 		}
+		for (resolvedPackage in project.packages.packages)
+			for (ffi in resolvedPackage.ffiImports) {
+				var interfacePath = context.layout.ffiInterfacePath(resolvedPackage.name, ffi.config.name);
+				arguments.push("--ffi-interface=" + interfacePath);
+				inputs.push(interfacePath);
+				if (ffi.config.projection) {
+					var projectionPath = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
+						projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name);
+					arguments.push("--root=" + projectionPath);
+					arguments.push("--sources-file=" + projectionManifest);
+					inputs.push(projectionManifest);
+				}
+			}
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		return new ExecutionAction(actionId, dependencies, inputs, [output], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
