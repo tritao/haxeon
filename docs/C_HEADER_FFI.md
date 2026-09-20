@@ -156,6 +156,13 @@ the recipe and its header inputs, and makes Haxe compilation depend on the
 generated interface. Standalone generation also accepts
 haxeon-ffi-import --manifest=<file>.
 
+For project-owned C++ implementations, `"cxxThunks": true` makes the build
+generate the thunk `.cpp`, compile it with the package's `native.sources`, and
+link a separate ordinary shared library for the HXI calls. The package must
+declare `native.sources`; CMake and external-library thunk linking are not yet
+automatic. The generated FFI library is distinct from the package's `.hdll`
+because HXI `@:cNative` calls use the platform shared-library ABI.
+
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:
 its methods are not `noexcept`, and the shared UI library hides its C++ symbols.

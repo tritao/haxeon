@@ -68,7 +68,8 @@ class PlanLowerer {
 						if (artifact.id.kind != ArtifactKind.NativeRuntime
 							&& artifact.id.kind != ArtifactKind.NativeObject
 							&& artifact.id.kind != ArtifactKind.NativeStaticLibrary
-							&& artifact.id.kind != ArtifactKind.NativeSharedLibrary)
+							&& artifact.id.kind != ArtifactKind.NativeSharedLibrary
+							&& artifact.id.kind != ArtifactKind.FfiNativeSharedLibrary)
 							throw 'No build provider is registered for artifact ${artifact.id}';
 				}
 		} else if (actions.length == 0)

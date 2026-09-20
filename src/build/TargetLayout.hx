@@ -74,6 +74,15 @@ class TargetLayout {
 	public function ffiProjectionManifestPath(packageName:String, name:String):String
 		return Path.join([ffiRoot(packageName, name), "projection.sources"]);
 
+	public function ffiThunkSourcePath(packageName:String, name:String):String
+		return Path.join([ffiRoot(packageName, name), safeFfiName(name) + "-thunks.cpp"]);
+
+	public function ffiNativeLibraryPath(packageName:String, name:String):String
+		return Path.join([
+			packageRoot(packageName),
+			"lib" + safeFfiName(name) + environment.toolchain.sharedLibrarySuffix
+		]);
+
 	public function targetDirectory():String {
 		if (environment.target.equals(Target.detectHost()))
 			return "host";

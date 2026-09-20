@@ -26,12 +26,13 @@ class FfiImportManifest {
 	public final trivialValues:Bool;
 	public final lifetimes:Bool;
 	public final virtualDispatch:Bool;
+	public final cxxThunks:Bool;
 	public final projection:Bool;
 
 	function new(version:Int, name:String, language:String, header:String, target:Null<String>, standard:String, clang:String, includes:Array<String>,
 			defines:Array<String>, compileCommands:Null<String>, library:Null<String>, interfaceName:Null<String>, dependencies:Array<String>,
 			excludedHeaders:Array<String>, sourceLabel:Null<String>, cxxSelections:Array<String>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool,
-			projection:Bool) {
+			cxxThunks:Bool, projection:Bool) {
 		this.version = version;
 		this.name = name;
 		this.language = language;
@@ -51,6 +52,7 @@ class FfiImportManifest {
 		this.trivialValues = trivialValues;
 		this.lifetimes = lifetimes;
 		this.virtualDispatch = virtualDispatch;
+		this.cxxThunks = cxxThunks;
 		this.projection = projection;
 	}
 
@@ -85,17 +87,20 @@ class FfiImportManifest {
 			trivialValues = optionalBool(raw, "cxxTrivialValues", false, path),
 			lifetimes = optionalBool(raw, "cxxLifetimes", false, path),
 			virtualDispatch = optionalBool(raw, "cxxVirtual", false, path),
+			cxxThunks = optionalBool(raw, "cxxThunks", false, path),
 			projection = optionalBool(raw, "projection", false, path);
 		if (language != "c" && language != "c++")
 			throw '$path has unsupported FFI language "$language"';
 		if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
 			throw '$path "name" must be a single path-safe artifact name';
-		if (language != "c++" && (cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch))
+		if (language != "c++" && (cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks))
 			throw '$path uses C++ options but language is "$language"';
 		if (projection && library == null)
 			throw '$path enables "projection" but has no "library"';
+		if (cxxThunks && library == null)
+			throw '$path enables "cxxThunks" but has no "library"';
 		return new FfiImportManifest(version, name, language, header, target, standard, clang, includes, defines, compileCommands, library, interfaceName,
-			dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, projection);
+			dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, projection);
 	}
 
 	public static function resolve(path:String, packageRoot:String):ResolvedFfiImport {

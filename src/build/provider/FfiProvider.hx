@@ -23,7 +23,7 @@ class FfiProvider {
 				"--manifest=" + ffi.manifestPath,
 				"--target=" + clangTarget(context.environment.target),
 				"--output=" + output
-			], inputs = ffi.inputs(), outputs = [output];
+			], inputs = ffi.inputs(), outputs = [output], thunkSource = context.layout.ffiThunkSourcePath(resolvedPackage.name, ffi.config.name);
 		if (!useWrapper) {
 			arguments.unshift("FfiImportMain");
 			arguments.unshift("--run");
@@ -33,6 +33,11 @@ class FfiProvider {
 		if (useWrapper)
 			inputs.push(Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]));
 		inputs.push(Path.join([context.compilerHome, "src"]));
+		if (ffi.config.cxxThunks) {
+			arguments.push("--library=" + context.layout.ffiNativeLibraryPath(resolvedPackage.name, ffi.config.name));
+			arguments.push("--cxx-thunks=" + thunkSource);
+			outputs.push(thunkSource);
+		}
 		if (ffi.config.projection) {
 			arguments.push("--haxe-output-dir=" + projectionDirectory);
 			arguments.push("--haxe-source-manifest=" + projectionManifest);

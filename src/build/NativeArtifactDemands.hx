@@ -7,7 +7,7 @@ class NativeArtifactDemands {
 		return switch demand {
 			case None: false;
 			case Static: kind == ArtifactKind.NativeStaticLibrary;
-			case Shared: kind == ArtifactKind.NativeSharedLibrary;
-			case Both: kind == ArtifactKind.NativeStaticLibrary || kind == ArtifactKind.NativeSharedLibrary;
+			case Shared: kind == ArtifactKind.NativeSharedLibrary || kind == ArtifactKind.FfiNativeSharedLibrary;
+			case Both: kind == ArtifactKind.NativeStaticLibrary || kind == ArtifactKind.NativeSharedLibrary || kind == ArtifactKind.FfiNativeSharedLibrary;
 		};
 }

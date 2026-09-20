@@ -8,6 +8,12 @@ class NativeTargetSupport {
 		for (resolvedPackage in project.packages.packages) {
 			if (resolvedPackage.ffiImports.length > 0 && !target.isNative())
 				throw 'Package ${resolvedPackage.name} declares FFI imports, but target "${target.toString()}" is not a native target';
+			for (ffi in resolvedPackage.ffiImports)
+				if (ffi.config.cxxThunks
+					&& (resolvedPackage.manifest.native == null
+						|| resolvedPackage.manifest.native.cmake != null
+						|| resolvedPackage.nativeSources.length == 0))
+					throw 'Package ${resolvedPackage.name} FFI import "${ffi.config.name}" enables cxxThunks, but generated C++ thunks require native.sources';
 			var native = resolvedPackage.manifest.native;
 			if (native == null)
 				continue;

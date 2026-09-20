@@ -78,6 +78,11 @@ class FfiImportMain {
 				paths.push(arg);
 		if (paths.length == 0 && manifest != null)
 			paths.push(manifest.header);
+		if (manifest != null && manifest.config.cxxThunks && cxxThunksPath == null) {
+			if (output.length == 0)
+				throw "FFI manifest cxxThunks requires --output so the generated source path can be derived";
+			cxxThunksPath = Path.withoutExtension(output) + "-thunks.cpp";
+		}
 		if (language != "c" && language != "c++")
 			throw 'Unsupported FFI language "$language"';
 		if (cxxSelections.length != 0 && language != "c++")
