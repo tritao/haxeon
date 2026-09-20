@@ -78,7 +78,7 @@ output="$generated_dir/nativekit-scene.hx.hl"
 
 set +e
 LD_LIBRARY_PATH="$haxeon_runtime_dir:$repo_dir/.tools/hashlink:$nativekit_build/modules/scene_render:$nativekit_build/modules/scene:$nativekit_build/modules/gpu:$nativekit_build:${LD_LIBRARY_PATH:-}" \
-	"$hashlink_bin" "$output"
+	xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 "$hashlink_bin" "$output"
 status=$?
 set -e
 if [[ $status -ne 42 ]]; then
