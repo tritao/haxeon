@@ -21,7 +21,8 @@ class HxiNativeKitSceneMain {
 		compiler.update("NativeKitWindow.hx", File.getContent(nativekitRoot + "/bindings/haxe/NativeKitWindow.hx"));
 		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(nativekitRoot + "/bindings/haxe/nativekit.hxmap"));
 		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(nativekitRoot + "/modules/gpu/bindings/nativekit-gpu.hxmap"));
-		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot + "/modules/scene_render/bindings/nativekit-scene-render.hxmap"));
+		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot
+			+ "/modules/scene_render/bindings/nativekit-scene-render.hxmap"));
 		compiler.addFfiInterface("NativeKit.hxi", nativekitHxi);
 		compiler.addFfiInterface("NativeKitGpu.hxi", gpuHxi);
 		compiler.addFfiInterface("NativeKitScene.hxi", sceneHxi);
@@ -30,7 +31,8 @@ class HxiNativeKitSceneMain {
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
 	}
 
-	static function source():String return '
+	static function source():String
+		return '
 import NativeKitScene;
 import NativeKitSceneRender;
 import NativeKitGpu;
