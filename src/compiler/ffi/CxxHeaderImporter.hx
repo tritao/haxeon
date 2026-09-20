@@ -29,6 +29,12 @@ typedef CxxImportResult = {
 	final plans:Array<HxiFunctionAbi>;
 }
 
+private typedef CxxSelectionClosure = {
+	final declarations:Map<String, Bool>;
+	final types:Map<String, Bool>;
+	final byValue:Map<String, Bool>;
+}
+
 /** Imports the supported C++ source semantics and immediately lowers them to HXI. */
 class CxxHeaderImporter {
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
@@ -113,8 +119,7 @@ private class CxxAstBuilder {
 				if (name != null
 					&& name.length != 0
 					&& ClangAstTools.field(node, "isImplicit") != true
-					&& (user || selectedRecord(qualify(name, namespaces)))
-					&& selectedRecordOrAll(qualify(name, namespaces))) {
+					&& (user || selectedRecord(qualify(name, namespaces)))) {
 					var qualified = qualify(name, namespaces),
 						record = makeRecord(node, qualified, namespaces);
 					if (!recordNames.exists(qualified)) {
@@ -131,8 +136,7 @@ private class CxxAstBuilder {
 				if (name != null
 					&& name.length != 0
 					&& ClangAstTools.field(node, "isImplicit") != true
-					&& (user || explicitlySelected(qualify(name, namespaces)))
-					&& selectedDeclaration(qualify(name, namespaces))) {
+					&& (user || explicitlySelected(qualify(name, namespaces)))) {
 					var enumModel = makeEnum(node, qualify(name, namespaces));
 					if (!enumNames.exists(enumModel.qualifiedName)) {
 						enumNames.set(enumModel.qualifiedName, true);
@@ -143,8 +147,7 @@ private class CxxAstBuilder {
 				if (name != null
 					&& name.length != 0
 					&& ClangAstTools.field(node, "isImplicit") != true
-					&& (user || explicitlySelected(qualify(name, namespaces)))
-					&& selectedDeclaration(qualify(name, namespaces))) {
+					&& (user || explicitlySelected(qualify(name, namespaces)))) {
 					var alias = makeAlias(node, qualify(name, namespaces), namespaces, owner);
 					if (!aliasNames.exists(alias.qualifiedName)) {
 						aliasNames.set(alias.qualifiedName, true);
@@ -155,8 +158,7 @@ private class CxxAstBuilder {
 				if (owner == null
 					&& name != null
 					&& ClangAstTools.field(node, "isImplicit") != true
-					&& (user || explicitlySelected(qualify(name, namespaces)))
-					&& selectedDeclaration(qualify(name, namespaces))) {
+					&& (user || explicitlySelected(qualify(name, namespaces)))) {
 					var functionModel = makeFunction(node, qualify(name, namespaces));
 					if (!functionSymbols.exists(functionModel.symbol)) {
 						functionSymbols.set(functionModel.symbol, true);
@@ -170,19 +172,55 @@ private class CxxAstBuilder {
 	}
 
 	public function finish(target:String):CxxModel {
-		records.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		enums.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		aliases.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
-		functions.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
+		var selectedRecords = records.copy(),
+			selectedEnums = enums.copy(),
+			selectedAliases = aliases.copy(),
+			selectedFunctions = functions.copy();
+		if (selectedDeclarations != null) {
+			var closure = selectionClosure(), missing:Array<String> = [];
+			for (name in closure.types.keys())
+				if (!recordNames.exists(name) && !enumNames.exists(name) && !aliasNames.exists(name))
+					missing.push(name);
+			if (missing.length > 0) {
+				missing.sort(Reflect.compare);
+				throw "CXX019 " + sourcePath + ": selected C++ declarations require unavailable type dependencies: " + missing.join(", ");
+			}
+			selectedRecords = [];
+			for (record in records)
+				if (closure.declarations.exists(record.qualifiedName)) {
+					if (!selectedRecordExactly(record.qualifiedName)) {
+						var index = record.methods.length - 1;
+						while (index >= 0) {
+							if (!selectedMethodExactly(record.methods[index].qualifiedName))
+								record.methods.splice(index, 1);
+							index--;
+						}
+					}
+					selectedRecords.push(record);
+				}
+			selectedEnums = [
+				for (enumModel in enums)
+					if (closure.declarations.exists(enumModel.qualifiedName)) enumModel
+			];
+			selectedAliases = [
+				for (alias in aliases)
+					if (closure.declarations.exists(alias.qualifiedName)) alias
+			];
+			selectedFunctions = [
+				for (functionModel in functions)
+					if (closure.declarations.exists(functionModel.qualifiedName)) functionModel
+			];
+		}
+		selectedRecords.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedEnums.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedAliases.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
+		selectedFunctions.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
 		var source = new SourceFile(sourcePath, FileSystem.exists(sourcePath) ? sys.io.File.getContent(sourcePath) : "");
-		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), records, enums, aliases, functions);
+		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), selectedRecords, selectedEnums, selectedAliases, selectedFunctions);
 	}
 
-	function selectedDeclaration(name:String):Bool
-		return selectedDeclarations == null || selectedDeclarations.indexOf(name) >= 0;
-
 	function explicitlySelected(name:String):Bool
-		return selectedDeclarations != null && selectedDeclaration(name);
+		return selectedDeclarations != null && selectedDeclarations.indexOf(name) >= 0;
 
 	function selectedRecord(name:String):Bool {
 		if (selectedDeclarations == null)
@@ -193,13 +231,82 @@ private class CxxAstBuilder {
 		return false;
 	}
 
-	function selectedRecordOrAll(name:String):Bool
-		return selectedDeclarations == null || selectedRecord(name);
+	function selectedRecordExactly(name:String):Bool
+		return selectedDeclarations != null && selectedDeclarations.indexOf(name) >= 0;
 
-	function selectedMethod(name:String, owner:String):Bool {
-		if (selectedDeclarations == null)
-			return true;
-		return selectedDeclarations.indexOf(owner) >= 0 || selectedDeclarations.indexOf(name) >= 0;
+	function selectedMethodExactly(name:String):Bool
+		return selectedDeclarations != null && selectedDeclarations.indexOf(name) >= 0;
+
+	function selectionClosure():CxxSelectionClosure {
+		var declarations:Map<String, Bool> = [],
+			types:Map<String, Bool> = [],
+			byValue:Map<String, Bool> = [];
+		for (selection in selectedDeclarations) {
+			declarations.set(selection, true);
+			for (record in records)
+				if (selection == record.qualifiedName || StringTools.startsWith(selection, record.qualifiedName + "::"))
+					declarations.set(record.qualifiedName, true);
+		}
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (alias in aliases)
+				if (declarations.exists(alias.qualifiedName))
+					changed = markType(alias.target, byValue.exists(alias.qualifiedName), declarations, types, byValue) || changed;
+			for (enumModel in enums)
+				if (declarations.exists(enumModel.qualifiedName))
+					changed = markType(enumModel.underlying, true, declarations, types, byValue) || changed;
+			for (record in records)
+				if (declarations.exists(record.qualifiedName)) {
+					if (byValue.exists(record.qualifiedName)) {
+						for (base in record.bases)
+							changed = markName(base.name, true, declarations, types, byValue) || changed;
+						for (field in record.fields)
+							changed = markType(field.type, true, declarations, types, byValue) || changed;
+					}
+					var allMethods = selectedRecordExactly(record.qualifiedName);
+					for (method in record.methods)
+						if (allMethods || selectedMethodExactly(method.qualifiedName)) {
+							changed = markType(method.result, true, declarations, types, byValue) || changed;
+							for (parameter in method.parameters)
+								changed = markType(parameter.type, true, declarations, types, byValue) || changed;
+						}
+				}
+			for (functionModel in functions)
+				if (declarations.exists(functionModel.qualifiedName)) {
+					changed = markType(functionModel.result, true, declarations, types, byValue) || changed;
+					for (parameter in functionModel.parameters)
+						changed = markType(parameter.type, true, declarations, types, byValue) || changed;
+				}
+		}
+		return {declarations: declarations, types: types, byValue: byValue};
+	}
+
+	function markName(name:String, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>, byValue:Map<String, Bool>):Bool {
+		var changed = false;
+		if (!declarations.exists(name)) {
+			declarations.set(name, true);
+			changed = true;
+		}
+		if (!types.exists(name)) {
+			types.set(name, true);
+			changed = true;
+		}
+		if (byValueRequired && !byValue.exists(name)) {
+			byValue.set(name, true);
+			changed = true;
+		}
+		return changed;
+	}
+
+	function markType(type:CxxType, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>, byValue:Map<String, Bool>):Bool {
+		return switch type {
+			case CxxType.CxxConst(element): markType(element, byValueRequired, declarations, types, byValue);
+			case CxxType.CxxPointer(element) | CxxType.CxxReference(element) | CxxType.CxxRValueReference(element):
+				markType(element, false, declarations, types, byValue);
+			case CxxType.CxxNamed(name): markName(name, byValueRequired, declarations, types, byValue);
+			case _: false;
+		};
 	}
 
 	function makeRecord(node:Dynamic, qualified:String, namespaces:Array<String>):CxxRecord {
@@ -245,10 +352,8 @@ private class CxxAstBuilder {
 				if (ClangAstTools.field(child, "isImplicit") == true)
 					continue;
 				var method = makeMethod(child, qualified, access, namespaces);
-				if (selectedMethod(method.qualifiedName, qualified)) {
-					methods.push(method);
-					hasVirtual = hasVirtual || method.isVirtual;
-				}
+				methods.push(method);
+				hasVirtual = hasVirtual || method.isVirtual;
 			}
 		}
 		var vtable = vtableLayouts.get(qualified);

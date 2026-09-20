@@ -53,19 +53,33 @@ class CxxHeaderImporterMain {
 			"const C++ methods should retain const semantics and their mangled symbol");
 		expect(make != null && make.isStatic, "static C++ methods should not require a synthetic this parameter");
 		var selected = CxxHeaderImporter.importHeader("tests/ffi/cxx_import_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_selected", null,
-			null, null, "c++20", null, null, false, false, false, false, [
-				"nkui::DisplayList::reset",
-				"nkui::DisplayList::size",
-				"nkui::Count",
-				"nkui::acquire"
-			]);
+			null, null, "c++20", null, null, false, false, false, false, ["nkui::DisplayList::reset", "nkui::DisplayList::size", "nkui::acquire"]);
 		expect(selected.model.records.length == 1
 			&& selected.model.records[0].methods.length == 2
 			&& Lambda.exists(selected.model.records[0].methods, method -> method.name == "reset")
 			&& Lambda.exists(selected.model.records[0].methods, method -> method.name == "size")
+			&& selected.model.enums.length == 0
+			&& selected.model.aliases.length == 1
+			&& selected.model.aliases[0].qualifiedName == "nkui::Count"
 			&& selected.model.functions.length == 1
 			&& selected.model.functions[0].name == "acquire",
-			"C++ declaration selection should retain only explicitly selected records, methods, and functions");
+			"C++ declaration selection should retain selected declarations and close named signature dependencies");
+		var transitive = CxxHeaderImporter.importHeader("tests/ffi/cxx_selection_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_transitive",
+			null, null, null, "c++20", null, null, false, false, false, false, ["cxxselect::read"]);
+		expect(transitive.model.records.length == 0
+			&& transitive.model.aliases.length == 2
+			&& transitive.model.functions.length == 1
+			&& transitive.model.functions[0].qualifiedName == "cxxselect::read",
+			"selection should retain transitive alias dependencies");
+		var missingDependency = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_missing_dependency_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_missing", null,
+				null, ["tests/ffi/cxx_missing_dependency_types.hpp"], "c++20", null, null, false, false, false, false, ["cxxmissing::acquire"]);
+		} catch (error:Dynamic) {
+			missingDependency = Std.string(error);
+		}
+		expect(missingDependency.indexOf("CXX019") >= 0 && missingDependency.indexOf("cxxmissing::Hidden") >= 0,
+			"missing selected C++ type dependencies should have an explicit diagnostic");
 		var generated = HxiWriter.write(imported.hxi, "// test");
 		expect(imported.plans.length == 5, "C++ lowering should expose one direct native call plan per imported function or method");
 		for (plan in imported.plans)

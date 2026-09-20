@@ -113,8 +113,10 @@ runtime.
 Large C++ headers can be narrowed with repeatable `--cxx-select=<qualified-name>`
 options. Select a record to retain all of its supported members, or select
 individual methods, free functions, enums, and aliases. Selecting a method
-implicitly retains its owning record; named type declarations used by selected
-signatures should be selected as well. This is useful for headers that expose a
+implicitly retains its owning record. Named records, enums, and aliases used by
+selected signatures are retained transitively, including alias chains; a
+dependency hidden by the import roots or excluded headers reports CXX019
+instead of being silently dropped. This is useful for headers that expose a
 small supported facade alongside internal constructors, virtual classes, or
 template-heavy declarations.
 
