@@ -8,9 +8,22 @@ project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cxx-project-cmake.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
 case "$(uname -s)" in
-	Darwin) ffi_suffix=".dylib" ;;
-	MINGW*|MSYS*|CYGWIN*) ffi_suffix=".dll" ;;
-	*) ffi_suffix=".so" ;;
+	Darwin)
+		ffi_suffix=".dylib"
+		cmake_import_archive=""
+		;;
+	MINGW*|MSYS*|CYGWIN*)
+		ffi_suffix=".dll"
+		if command -v cl.exe >/dev/null 2>&1 || command -v cl >/dev/null 2>&1; then
+			cmake_import_archive="$project_dir/app/build/host/native/foo/foo.lib"
+		else
+			cmake_import_archive="$project_dir/app/build/host/native/foo/libfoo.dll.a"
+		fi
+		;;
+	*)
+		ffi_suffix=".so"
+		cmake_import_archive=""
+		;;
 esac
 
 if [[ ! -x "$haxe" ]]; then
@@ -101,6 +114,9 @@ first_output=$(run_cli build --project "$project_dir/app/haxeon.json")
 [[ "$first_output" == *"Compile C++"* ]]
 [[ "$first_output" == *"Link shared library foo FFI cxx-cmake-thunk-project"* ]]
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
+if [[ -n "$cmake_import_archive" ]]; then
+	test -s "$cmake_import_archive"
+fi
 test -s "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks.o"
 

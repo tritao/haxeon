@@ -99,6 +99,11 @@ jobs:
       - name: Run core tests with the MSVC Debug CRT
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+      - name: C++ CMake FFI integration
+        shell: bash
+        env:
+          HAXEON_HAXE: ./.tools/haxe/haxe.exe
+        run: bash tests/integration/test-cxx-project-ffi-cmake.sh
       - name: Project CLI smoke test
         shell: pwsh
         run: ./tests/integration/test-haxeon-cli.ps1
