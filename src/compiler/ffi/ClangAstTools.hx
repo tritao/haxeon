@@ -71,6 +71,33 @@ class ClangAstTools {
 		return span.file.slice(span.start, span.end);
 	}
 
+	/** Returns whether Clang attached the requested source annotation to a declaration. */
+	public static function hasAnnotation(node:Dynamic, expected:String, ?fallbackFile:String):Bool {
+		var file:String = field(node, "_hxiFile");
+		if (file == null)
+			file = locationPath(node);
+		if (file == null)
+			file = fallbackFile;
+		if (file == null || !FileSystem.exists(file))
+			return false;
+		for (child in children(node)) {
+			if (field(child, "kind") != "AnnotateAttr")
+				continue;
+			var range:Dynamic = field(child, "range"),
+				begin:Dynamic = field(range, "begin"),
+				end:Dynamic = field(range, "end"),
+				spellingBegin:Dynamic = field(begin, "spellingLoc"),
+				spellingEnd:Dynamic = field(end, "spellingLoc");
+			if (spellingBegin == null)
+				spellingBegin = begin;
+			if (spellingEnd == null)
+				spellingEnd = end;
+			if (sourceRange(file, spellingBegin, spellingEnd).indexOf(expected) >= 0)
+				return true;
+		}
+		return false;
+	}
+
 	public static function isUserDeclaration(node:Dynamic, roots:Array<String>, currentFile:String):Bool {
 		var location:Dynamic = field(node, "loc");
 		if (location == null)
@@ -106,5 +133,16 @@ class ClangAstTools {
 		var source = new SourceFile(path, FileSystem.exists(path) ? File.getContent(path) : "");
 		sourceFiles.set(path, source);
 		return source;
+	}
+
+	static function sourceRange(defaultFile:String, begin:Dynamic, end:Dynamic):String {
+		var start:Dynamic = field(begin, "offset"),
+			finish:Dynamic = field(end, "offset"),
+			tokenLength:Dynamic = field(end, "tokLen");
+		if (start == null || finish == null)
+			return "";
+		var sourcePath:String = field(begin, "file"),
+			source = File.getContent(sourcePath == null ? defaultFile : sourcePath);
+		return source.substring(start, finish + (tokenLength == null ? 1 : tokenLength));
 	}
 }

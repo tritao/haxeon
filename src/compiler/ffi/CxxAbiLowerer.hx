@@ -201,8 +201,8 @@ class CxxAbiLowerer {
 				direction: In,
 				ownership: Unspecified,
 				handleDisposition: Unspecified,
-				retained: false,
-				metadata: [],
+				retained: parameter.retained,
+				metadata: parameter.retained ? ["retained" => []] : [],
 				span: parameter.span
 			});
 			if (CxxTypeTools.isStringView(parameter.type) || CxxTypeTools.isByteSpan(parameter.type))

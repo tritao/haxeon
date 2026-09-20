@@ -1,6 +1,8 @@
 #include "cxx_runtime_fixture.hpp"
 
 namespace nkui {
+    static BinaryCallback retained_handler = nullptr;
+
     void DisplayList::reset() noexcept {
         count = 0;
     }
@@ -24,6 +26,18 @@ namespace nkui {
 
     int apply_raw(int (*callback)(int), int value) noexcept {
         return callback == nullptr ? 0 : callback(value);
+    }
+
+    void set_handler(BinaryCallback callback) noexcept {
+        retained_handler = callback;
+    }
+
+    void clear_handler() noexcept {
+        retained_handler = nullptr;
+    }
+
+    int fire_handler(int value) noexcept {
+        return retained_handler == nullptr ? 0 : retained_handler(value, value);
     }
 
     void mark(DisplayList &value) noexcept {

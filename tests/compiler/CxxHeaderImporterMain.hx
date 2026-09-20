@@ -124,6 +124,7 @@ class CxxHeaderImporterMain {
 		var callbackAlias = Lambda.find(callbackImport.model.aliases, alias -> alias.qualifiedName == "nkui::BinaryCallback"),
 			applyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply"),
 			rawApplyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply_raw"),
+			setHandlerFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::set_handler"),
 			callbackHxi = HxiWriter.write(callbackImport.hxi, "// test");
 		var callbackAliasValid = callbackAlias != null && switch callbackAlias.target {
 			case CxxType.CxxFunctionPointer([CxxType.CxxPrimitive("c_int"), CxxType.CxxPrimitive("c_int")], CxxType.CxxPrimitive("c_int"), true): true;
@@ -140,9 +141,13 @@ class CxxHeaderImporterMain {
 		expect(callbackAliasValid
 			&& callbackParameterValid
 			&& rawCallbackParameterValid
+			&& setHandlerFunction != null
+			&& setHandlerFunction.parameters.length == 1
+			&& setHandlerFunction.parameters[0].retained
 			&& callbackHxi.indexOf("callback __cxx_nkui__BinaryCallback = fn(arg0: c_int, arg1: c_int) -> c_int;") >= 0
 			&& callbackHxi.indexOf("callback __cxx_callback_") >= 0
-			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(callback: __cxx_nkui__BinaryCallback") >= 0,
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(callback: __cxx_nkui__BinaryCallback") >= 0
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__set_handler(callback: __cxx_nkui__BinaryCallback @retained)") >= 0,
 			"C++ function-pointer aliases should lower to typed HXI callbacks without a thunk");
 		var callbackPlan = Lambda.find(callbackImport.plans, plan -> plan.name == "__cxx_nkui__apply");
 		var callbackArgumentValid = callbackPlan != null && switch callbackPlan.arguments[0] {
@@ -171,7 +176,8 @@ class CxxHeaderImporterMain {
 			CxxHeaderImporter.importHeader("tests/ffi/cxx_unsupported_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
 		} catch (error:Dynamic)
 			diagnostics = Std.string(error);
-		expect(diagnostics.indexOf("CXX003") >= 0 && diagnostics.indexOf("CXX004") >= 0 && diagnostics.indexOf("CXX001") >= 0,
+		expect(diagnostics.indexOf("CXX003") >= 0 && diagnostics.indexOf("CXX004") >= 0 && diagnostics.indexOf("CXX001") >= 0
+			&& diagnostics.indexOf("CXX022") >= 0,
 			"unsupported C++ constructs should produce first-class diagnostics");
 		var trivialDiagnostics = "";
 		try {

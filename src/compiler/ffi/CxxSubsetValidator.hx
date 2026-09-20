@@ -55,13 +55,24 @@ class CxxSubsetValidator {
 			validateResultType(functionModel.result, functionModel.span, diagnostics, cxxThunks);
 			validateType(functionModel.result, true, functionModel.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			for (parameter in functionModel.parameters)
-				validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+				validateParameter(parameter, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		}
 		for (alias in model.aliases)
 			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		if (cxxOwnership != null)
 			validateOwnership(model, cxxOwnership, diagnostics, cxxThunks);
 		return diagnostics;
+	}
+
+	static function validateParameter(parameter:CxxModel.CxxParameter, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
+		if (parameter.retained && !isCallbackType(parameter.type, aliases, []))
+			diagnostics.push({
+				code: "CXX022",
+				message: 'parameter "${parameter.name}" uses hxi:retained but is not a function-pointer callback',
+				span: parameter.span
+			});
+		validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 	}
 
 	static function validateTarget(model:CxxModel, diagnostics:Array<CxxDiagnostic>):Void {
@@ -242,7 +253,7 @@ class CxxSubsetValidator {
 		validateResultType(method.result, method.span, diagnostics, cxxThunks);
 		validateType(method.result, true, method.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		for (parameter in method.parameters)
-			validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+			validateParameter(parameter, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 	}
 
 	static function validateType(type:CxxType, byValue:Bool, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
@@ -346,6 +357,18 @@ class CxxSubsetValidator {
 		return switch type {
 			case CxxType.CxxFunctionPointer(_, _, _): true;
 			case CxxType.CxxConst(element): isFunctionPointer(element);
+			case _: false;
+		};
+
+	static function isCallbackType(type:CxxType, aliases:Map<String, CxxAlias>, visiting:Array<String>):Bool
+		return switch type {
+			case CxxType.CxxFunctionPointer(_, _, _): true;
+			case CxxType.CxxConst(element): isCallbackType(element, aliases, visiting);
+			case CxxType.CxxNamed(name):
+				if (visiting.indexOf(name) >= 0) false; else {
+					var alias = aliases.get(name);
+					alias == null ? false : isCallbackType(alias.target, aliases, visiting.concat([name]));
+				}
 			case _: false;
 		};
 }

@@ -191,6 +191,8 @@ class CxxProjection {
 			var publicFunction = HxiHaxeEmitter.projectedFunctionName(method.loweredName, profile),
 				callArguments = (method.isStatic ? [] : ["nativeHandle()"]).concat(calls),
 				staticModifier = method.isStatic ? " static" : "";
+			if (Lambda.exists(method.parameters, parameter -> parameter.retained))
+				output.add('\t/** Native C++ retains one or more callback arguments; unregister them before closing their callback handles. */\n');
 			output.add('\tpublic$staticModifier function $methodName(${arguments.join(", ")}):${result.haxeType} {\n');
 			for (line in setup)
 				output.add('\t\t$line\n');

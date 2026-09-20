@@ -77,6 +77,9 @@ cat > "$project_dir/foo/ffi/cxx_thunk_project.ffi.json" <<'JSON'
     "cxxthunk::Counter::fail",
     "cxxthunk::acquire",
     "cxxthunk::apply",
+    "cxxthunk::set_handler",
+    "cxxthunk::clear_handler",
+    "cxxthunk::fire_handler",
     "cxxthunk::BinaryCallback",
     "cxxthunk::add",
     "cxxcmakeown::ManagedWidget::value",
@@ -113,6 +116,9 @@ function main():Int {
 	try CxxCmakeThunkProjectFunctions.add(1, 0) catch (error:Dynamic) functionFailed = Std.string(error).indexOf("division-like failure") >= 0;
 	var callback = new __cxx_cxxthunk__BinaryCallbackCallback(function(left:Int, right:Int) return left + right),
 		callbackWorked = CxxCmakeThunkProject.__cxx_cxxthunk__apply(callback, 20, 22) == 42;
+	CxxCmakeThunkProject.__cxx_cxxthunk__set_handler(callback);
+	var retainedWorked = CxxCmakeThunkProject.__cxx_cxxthunk__fire_handler(21) == 42;
+	CxxCmakeThunkProject.__cxx_cxxthunk__clear_handler();
 	callback.close();
 	var owner = CxxCmakeThunkProjectFunctions.acquire_managed(),
 		managed = owner.borrow(),
@@ -121,7 +127,7 @@ function main():Int {
 		secondClose = owner.close(),
 		ownershipWorked = managedWorked && firstClose && !secondClose && owner.isClosed()
 			&& CxxCmakeThunkProject.__cxx_cxxcmakeown__released_managed() == 1;
-	return counter.value() == 42 && methodFailed && functionWorked && functionFailed && callbackWorked && ownershipWorked ? 42 : 1;
+	return counter.value() == 42 && methodFailed && functionWorked && functionFailed && callbackWorked && retainedWorked && ownershipWorked ? 42 : 1;
 }
 HX
 
@@ -142,6 +148,7 @@ test -s "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_s
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks.o"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/OwnedManagedWidget.hx"
 grep -q '@owned("haxeon_cxx_thunk_' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
+grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @retained)' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q 'return OwnedManagedWidget.adopt' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/CxxCmakeThunkProjectFunctions.hx"
 
 set +e

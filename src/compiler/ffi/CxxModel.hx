@@ -32,6 +32,10 @@ enum CxxSpanElement {
 typedef CxxParameter = {
 	final name:String;
 	final type:CxxType;
+
+	/** The native API retains this callback after the call returns. */
+	final retained:Bool;
+
 	final span:SourceSpan;
 }
 

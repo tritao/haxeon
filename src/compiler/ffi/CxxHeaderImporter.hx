@@ -444,6 +444,7 @@ private class CxxAstBuilder {
 				result.push({
 					name: name == null ? 'arg$index' : name,
 					type: parseType(typeName(child), namespaces, owner),
+					retained: ClangAstTools.hasAnnotation(child, "hxi:retained", sourcePath),
 					span: ClangAstTools.sourceSpan(child, sourcePath)
 				});
 				index++;

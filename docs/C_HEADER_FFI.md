@@ -693,6 +693,23 @@ Applications must unregister a callback and only then call `close()`; closing a
 function pointer that native code may still invoke remains a caller lifetime
 error.
 
+C++ APIs that retain a callback beyond the importing call must say so explicitly
+with the same Clang annotation used by HXI:
+
+```cpp
+#define HXI_RETAINED __attribute__((annotate("hxi:retained")))
+using Handler = void (*)(int) noexcept;
+
+void set_handler(Handler callback HXI_RETAINED) noexcept;
+void clear_handler() noexcept;
+```
+
+The importer accepts `hxi:retained` only on callback input parameters and emits
+the existing HXI `@retained` contract. The generated callback handle remains
+owned by Haxe, so callers must keep it alive until `clear_handler()` (or the
+API's equivalent) has detached it, and only then call `close()`. Retention is
+never inferred from a method name or callback typedef.
+
 Functions and callbacks accept `@callconv("cdecl")`, `@callconv("stdcall")`, or
 `@callconv("system")`; omitted metadata means `cdecl`. The convention is encoded
 in the executable ABI signature, so call-cache entries with different
