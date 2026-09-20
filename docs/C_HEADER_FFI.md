@@ -165,7 +165,9 @@ database and asserts the expected actionable diagnostics. It also builds the
 actual `display_list.cpp` beside a test-only factory and Haxeon's generated
 thunks, then executes `reset()` and `size()` through the generated projection.
 That positive path verifies the importer and thunk ABI against NativeKit's real
-C++ implementation without changing NativeKit's production exports:
+C++ implementation without changing NativeKit's production exports. It is kept
+out of the default test suite because NativeKit is an external, optional
+dependency:
 
 ```sh
 NATIVEKIT_ROOT=/path/to/nativekit \
