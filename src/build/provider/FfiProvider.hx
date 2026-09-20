@@ -16,28 +16,30 @@ import project.ResolvedPackage;
 class FfiProvider {
 	public static function action(resolvedPackage:ResolvedPackage, ffi:ResolvedFfiImport, context:LoweringContext, actionId:ActionId,
 			output:String):ExecutionAction {
-		var compiler = Path.join([
-			context.compilerHome,
-			".tools",
-			"haxe",
-			"haxe" + (Sys.systemName() == "Windows" ? ".exe" : "")
-		]), projectionDirectory = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
+		var useWrapper = Sys.systemName() != "Windows",
+			compiler = useWrapper ? Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]) : Path.join([context.compilerHome, ".tools", "haxe", "haxe.exe"]),
+			projectionDirectory = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
 			projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name), arguments = [
-				"-cp",
-				Path.join([context.compilerHome, "src"]),
-				"--run",
-				"FfiImportMain",
 				"--manifest=" + ffi.manifestPath,
 				"--target=" + clangTarget(context.environment.target),
 				"--output=" + output
-			], outputs = [output];
+			], inputs = ffi.inputs(), outputs = [output];
+		if (!useWrapper) {
+			arguments.unshift("FfiImportMain");
+			arguments.unshift("--run");
+			arguments.unshift(Path.join([context.compilerHome, "src"]));
+			arguments.unshift("-cp");
+		}
+		if (useWrapper)
+			inputs.push(Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]));
+		inputs.push(Path.join([context.compilerHome, "src"]));
 		if (ffi.config.projection) {
 			arguments.push("--haxe-output-dir=" + projectionDirectory);
 			arguments.push("--haxe-source-manifest=" + projectionManifest);
 			outputs.push(projectionDirectory);
 			outputs.push(projectionManifest);
 		}
-		return new ExecutionAction(actionId, [], ffi.inputs(), outputs, 'Import ${ffi.config.language} FFI ${ffi.config.name} -> $output',
+		return new ExecutionAction(actionId, [], inputs, outputs, 'Import ${ffi.config.language} FFI ${ffi.config.name} -> $output',
 			Process(compiler, arguments, context.compilerHome, new Map()));
 	}
 
