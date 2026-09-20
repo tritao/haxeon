@@ -16,6 +16,7 @@ class HxiNativeKitSceneMain {
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addSourceRoot(nativekitRoot + "/bindings/haxe");
 		compiler.addSourceRoot(nativekitRoot + "/modules/gpu/bindings/haxe");
+		compiler.addSourceRoot(nativekitRoot + "/modules/scene/bindings/haxe");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene_render/bindings/haxe");
 		compiler.update("NativeKitWindow.hx", File.getContent(nativekitRoot + "/bindings/haxe/NativeKitWindow.hx"));
 		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(nativekitRoot + "/bindings/haxe/nativekit.hxmap"));
@@ -39,6 +40,8 @@ import NativeKit.WindowKind;
 import NativeKit.WindowOptions;
 import NativeKitEventValue;
 import NativeKitRuntime;
+import nativekit.scene.Scene;
+import nativekit.scene.SceneView;
 import nativekit.scene.SceneRenderer;
 import nativekit.gpu.Renderer;
 import nativekit.gpu.Surface;
@@ -46,15 +49,9 @@ import haxe.io.Bytes;
 
 class Main {
 	static function main():Int {
-		var sceneResult = NativeKitScene.nkscene_scene_create();
-		if (sceneResult.status != NativeKitSceneConstants.NKS_OK) return 1;
-		var sceneOwner = sceneResult.out_scene,
-			scene = sceneOwner.borrow();
-
-		var geometryResult = NativeKitScene.nkscene_geometry_create(scene);
-		if (geometryResult.status != NativeKitSceneConstants.NKS_OK) return 2;
-		var materialResult = NativeKitScene.nkscene_material_create(scene);
-		if (materialResult.status != NativeKitSceneConstants.NKS_OK) return 3;
+		var scene = Scene.create(),
+			geometry = scene.createGeometry(),
+			material = scene.createMaterial();
 
 		var vertex0 = new nkscene_geometry_vertex();
 		vertex0.set_position(0, -0.6);
@@ -90,8 +87,7 @@ class Main {
 		subelement.set_primitive_count(1);
 		subelement.set_subelement(42);
 		geometryData.set_subelements([subelement]);
-		if (NativeKitScene.nkscene_geometry_set_data(scene, geometryResult.out_geometry, geometryData)
-			!= NativeKitSceneConstants.NKS_OK) return 4;
+		scene.setGeometryData(geometry, geometryData);
 		var materialData = new nkscene_material_data();
 		materialData.set_base_color(0, 0.2);
 		materialData.set_base_color(1, 0.7);
@@ -99,63 +95,55 @@ class Main {
 		materialData.set_base_color(3, 1.0);
 		materialData.set_opacity(1.0);
 		materialData.set_flags(NativeKitSceneConstants.NKS_MATERIAL_OPAQUE);
-		if (NativeKitScene.nkscene_material_set_data(scene, materialResult.out_material, materialData)
-			!= NativeKitSceneConstants.NKS_OK) return 4;
+		scene.setMaterialData(material, materialData);
 
-		var transactionResult = NativeKitScene.nkscene_transaction_begin(scene);
-		if (transactionResult.status != NativeKitSceneConstants.NKS_OK) return 5;
-		var transactionOwner = transactionResult.out_transaction,
-			transaction = transactionOwner.borrow(),
-			occurrence = new nkscene_occurrence_id();
-		if (NativeKitScene.nkscene_tx_create_occurrence(transaction, occurrence) != NativeKitSceneConstants.NKS_OK) return 6;
-		if (NativeKitScene.nkscene_tx_set_geometry(transaction, occurrence, geometryResult.out_geometry) != NativeKitSceneConstants.NKS_OK) return 7;
-		if (NativeKitScene.nkscene_tx_set_material(transaction, occurrence, materialResult.out_material) != NativeKitSceneConstants.NKS_OK) return 8;
-		var changesResult = NativeKitScene.nkscene_transaction_commit_with_changes(transaction);
-		if (changesResult.status != NativeKitSceneConstants.NKS_OK) return 9;
-		transactionOwner.close();
-		var changesOwner = changesResult.out_changes,
-			changes = changesOwner.borrow(),
-			snapshotResult = NativeKitScene.nkscene_scene_snapshot(scene);
-		if (snapshotResult.status != NativeKitSceneConstants.NKS_OK) return 10;
-		var snapshotOwner = snapshotResult.out_snapshot,
-			snapshot = snapshotOwner.borrow(),
-			view = new nkscene_render_view();
-		view.set_struct_size(nkscene_render_view.size());
+		var transaction = scene.beginTransaction(),
+			occurrence = transaction.createOccurrence();
+		transaction.setGeometry(occurrence, geometry);
+		transaction.setMaterial(occurrence, material);
+		var changes = transaction.commitWithChanges(),
+			snapshot = scene.snapshot(),
+			view = new SceneView();
 
 		var sceneRenderer = SceneRenderer.createHeadless(),
 			execution = sceneRenderer.render(snapshot, view);
 		if (haxe.Int64.toInt(execution.get_commands()) != 1
 			|| haxe.Int64.toInt(execution.get_draw_calls()) != 1
 			|| haxe.Int64.toInt(execution.get_geometry_resources_created()) != 1) return 11;
-		var refreshView = new nkscene_render_view();
-		refreshView.set_struct_size(nkscene_render_view.size());
-		refreshView.set_include_invisible(1);
+		var hiddenView = new SceneView();
+		hiddenView.setVisibility(occurrence, false);
+		var hiddenExecution = sceneRenderer.render(snapshot, hiddenView),
+			hiddenUpdate = sceneRenderer.lastUpdate();
+		if (hiddenView.visibilityOverrideCount() != 1
+			|| hiddenUpdate == null
+			|| hiddenUpdate.get_plan_rebuilt() != 1
+			|| haxe.Int64.toInt(hiddenExecution.get_commands()) != 0) return 12;
+		var materialView = new SceneView();
+		materialView.setMaterial(occurrence, material);
+		var materialExecution = sceneRenderer.render(snapshot, materialView),
+			materialUpdate = sceneRenderer.lastUpdate();
+		if (materialView.materialOverrideCount() != 1
+			|| materialUpdate == null
+			|| materialUpdate.get_plan_rebuilt() != 1
+			|| haxe.Int64.toInt(materialExecution.get_commands()) != 1) return 13;
+		var refreshView = new SceneView();
+		refreshView.setIncludeInvisible(true);
 		var refreshedExecution = sceneRenderer.render(snapshot, refreshView),
 			refreshed = sceneRenderer.lastUpdate();
 		if (refreshed == null || refreshed.get_plan_rebuilt() != 1
-			|| haxe.Int64.toInt(refreshedExecution.get_commands()) != 1) return 12;
-		view.set_include_invisible(1);
+			|| haxe.Int64.toInt(refreshedExecution.get_commands()) != 1) return 14;
+		view.setIncludeInvisible(true);
 
-		var movedTransactionResult = NativeKitScene.nkscene_transaction_begin(scene);
-		if (movedTransactionResult.status != NativeKitSceneConstants.NKS_OK) return 13;
-		var movedTransactionOwner = movedTransactionResult.out_transaction,
-			movedTransaction = movedTransactionOwner.borrow(),
+		var movedTransaction = scene.beginTransaction(),
 			transform = new nkscene_transform();
 		transform.set_matrix(0, 1.0);
 		transform.set_matrix(5, 1.0);
 		transform.set_matrix(10, 1.0);
 		transform.set_matrix(15, 1.0);
 		transform.set_matrix(12, 0.1);
-		if (NativeKitScene.nkscene_tx_set_transform(movedTransaction, occurrence, transform) != NativeKitSceneConstants.NKS_OK) return 14;
-		var movedChangesResult = NativeKitScene.nkscene_transaction_commit_with_changes(movedTransaction);
-		if (movedChangesResult.status != NativeKitSceneConstants.NKS_OK) return 15;
-		movedTransactionOwner.close();
-		var movedChangesOwner = movedChangesResult.out_changes,
-			movedChanges = movedChangesOwner.borrow(),
-			movedSnapshotResult = NativeKitScene.nkscene_scene_snapshot(scene);
-		if (movedSnapshotResult.status != NativeKitSceneConstants.NKS_OK) return 16;
-		var movedSnapshotOwner = movedSnapshotResult.out_snapshot,
-			movedSnapshot = movedSnapshotOwner.borrow(),
+		movedTransaction.setTransform(occurrence, transform);
+		var movedChanges = movedTransaction.commitWithChanges(),
+			movedSnapshot = scene.snapshot(),
 			movedExecution = sceneRenderer.render(movedSnapshot, view, movedChanges),
 			update = sceneRenderer.lastUpdate();
 		if (update == null
@@ -210,11 +198,11 @@ class Main {
 		realRuntime.dispose();
 
 		sceneRenderer.dispose();
-		movedSnapshotOwner.close();
-		movedChangesOwner.close();
-		snapshotOwner.close();
-		changesOwner.close();
-		sceneOwner.close();
+		movedSnapshot.dispose();
+		movedChanges.dispose();
+		snapshot.dispose();
+		changes.dispose();
+		scene.dispose();
 		return 42;
 	}
 }
