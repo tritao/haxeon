@@ -105,6 +105,31 @@ storage through the runtime and invokes the Clang-selected constructor symbol;
 wrappers cannot be closed. Overloaded methods receive stable numeric suffixes
 until a richer Haxe overload policy is added.
 
+Factory ownership is explicit and configured separately from C++ syntax. Map a
+free function returning `T*` to a free function accepting `T*` and returning
+`void` with `cxxOwnership` in a project recipe:
+
+    {
+      "cxxOwnership": {
+        "nkui::create_display_list": "nkui::release_display_list"
+      },
+      "cxxThunks": true,
+      "projection": true
+    }
+
+The equivalent standalone option is repeatable:
+
+    --cxx-owned=nkui::create_display_list=nkui::release_display_list
+
+The importer lowers the factory result to HXI `@owned("release_symbol")`
+metadata and emits `OwnedDisplayList.hx` plus an owned factory projection. The
+owner exposes `borrow()`, `nativeHandle()`, `isClosed()`, and idempotent
+`close()`. The release function must be explicit; C++ names and method names
+are never guessed. With `cxxThunks`, both the factory and release call use
+generated C-ABI entry points, which also keeps hidden C++ symbols and exception
+boundaries out of the Haxe runtime. `std::unique_ptr<T>` remains unsupported as
+a direct ABI value; adapt it through an explicit factory/release pair instead.
+
 The MSVC x64 profile is covered as a cross-target import (`x86_64-pc-windows-msvc`)
 even on non-Windows hosts. It uses Clang's MSVC mangled names and LLP64 layout
 rules; executing the resulting library still requires a Windows build and

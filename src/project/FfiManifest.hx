@@ -27,12 +27,16 @@ class FfiImportManifest {
 	public final lifetimes:Bool;
 	public final virtualDispatch:Bool;
 	public final cxxThunks:Bool;
+
+	/** Maps an owned C++ factory function to its explicit free-function release function. */
+	public final cxxOwnership:Map<String, String>;
+
 	public final projection:Bool;
 
 	function new(version:Int, name:String, language:String, header:String, target:Null<String>, standard:String, clang:String, includes:Array<String>,
 			defines:Array<String>, compileCommands:Null<String>, library:Null<String>, interfaceName:Null<String>, dependencies:Array<String>,
 			excludedHeaders:Array<String>, sourceLabel:Null<String>, cxxSelections:Array<String>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool,
-			cxxThunks:Bool, projection:Bool) {
+			cxxThunks:Bool, cxxOwnership:Map<String, String>, projection:Bool) {
 		this.version = version;
 		this.name = name;
 		this.language = language;
@@ -53,6 +57,7 @@ class FfiImportManifest {
 		this.lifetimes = lifetimes;
 		this.virtualDispatch = virtualDispatch;
 		this.cxxThunks = cxxThunks;
+		this.cxxOwnership = cxxOwnership;
 		this.projection = projection;
 	}
 
@@ -88,19 +93,21 @@ class FfiImportManifest {
 			lifetimes = optionalBool(raw, "cxxLifetimes", false, path),
 			virtualDispatch = optionalBool(raw, "cxxVirtual", false, path),
 			cxxThunks = optionalBool(raw, "cxxThunks", false, path),
+			cxxOwnership = stringMap(raw, "cxxOwnership", path),
 			projection = optionalBool(raw, "projection", false, path);
 		if (language != "c" && language != "c++")
 			throw '$path has unsupported FFI language "$language"';
 		if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
 			throw '$path "name" must be a single path-safe artifact name';
-		if (language != "c++" && (cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks))
+		if (language != "c++"
+			&& (cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks || cxxOwnership.keys().hasNext()))
 			throw '$path uses C++ options but language is "$language"';
 		if (projection && library == null)
 			throw '$path enables "projection" but has no "library"';
 		if (cxxThunks && library == null)
 			throw '$path enables "cxxThunks" but has no "library"';
 		return new FfiImportManifest(version, name, language, header, target, standard, clang, includes, defines, compileCommands, library, interfaceName,
-			dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, projection);
+			dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership, projection);
 	}
 
 	public static function resolve(path:String, packageRoot:String):ResolvedFfiImport {
@@ -175,6 +182,22 @@ class FfiImportManifest {
 			if (!Std.isOfType(item, String) || (cast item : String).length == 0)
 				throw '$path "$field" must contain non-empty strings';
 			result.push(cast item);
+		}
+		return result;
+	}
+
+	static function stringMap(raw:Dynamic, field:String, path:String):Map<String, String> {
+		var result:Map<String, String> = [];
+		if (!Reflect.hasField(raw, field) || Reflect.field(raw, field) == null)
+			return result;
+		var value:Dynamic = Reflect.field(raw, field);
+		if (!isObject(value))
+			throw '$path "$field" must be an object mapping C++ declarations to release functions';
+		for (key in Reflect.fields(value)) {
+			var release:Dynamic = Reflect.field(value, key);
+			if (key.length == 0 || !Std.isOfType(release, String) || (cast release : String).length == 0)
+				throw '$path "$field" must map non-empty declaration names to non-empty release function names';
+			result.set(key, cast release);
 		}
 		return result;
 	}

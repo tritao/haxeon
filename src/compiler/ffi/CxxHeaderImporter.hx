@@ -40,7 +40,7 @@ class CxxHeaderImporter {
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
 			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, standard:String = "c++20", ?defines:Array<String>,
 			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
-			?selectedDeclarations:Array<String>):CxxImportResult {
+			?selectedDeclarations:Array<String>, ?cxxOwnership:Map<String, String>):CxxImportResult {
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,
@@ -59,11 +59,11 @@ class CxxHeaderImporter {
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
 				excluded.push(ClangAstTools.pathKey(FileSystem.fullPath(excludedHeader)));
-		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts, selectedDeclarations);
+		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts, selectedDeclarations, cxxOwnership);
 		builder.visit(frontend.ast, [], null, sourcePath);
 		var model = builder.finish(target);
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
-		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
+		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
 		return {
 			model: model,
 			hxi: hxi,
@@ -87,15 +87,17 @@ private class CxxAstBuilder {
 	final aliasNames:Map<String, Bool> = [];
 	final functionSymbols:Map<String, Bool> = [];
 	final selectedDeclarations:Null<Array<String>>;
+	final cxxOwnership:Null<Map<String, String>>;
 
 	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>, layouts:Map<String, RecordLayout>,
-			vtableLayouts:Map<String, VtableLayout>, selectedDeclarations:Null<Array<String>>) {
+			vtableLayouts:Map<String, VtableLayout>, selectedDeclarations:Null<Array<String>>, ?cxxOwnership:Map<String, String>) {
 		this.sourcePath = sourcePath;
 		this.roots = roots;
 		this.excluded = excluded;
 		this.layouts = layouts;
 		this.vtableLayouts = vtableLayouts;
 		this.selectedDeclarations = selectedDeclarations;
+		this.cxxOwnership = cxxOwnership;
 	}
 
 	public function visit(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String):Void {
@@ -247,6 +249,11 @@ private class CxxAstBuilder {
 				if (selection == record.qualifiedName || StringTools.startsWith(selection, record.qualifiedName + "::"))
 					declarations.set(record.qualifiedName, true);
 		}
+		if (cxxOwnership != null)
+			for (ownerName => releaseName in cxxOwnership) {
+				declarations.set(ownerName, true);
+				declarations.set(releaseName, true);
+			}
 		var changed = true;
 		while (changed) {
 			changed = false;

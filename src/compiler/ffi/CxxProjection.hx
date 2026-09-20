@@ -5,11 +5,13 @@ import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxParameter;
 import compiler.ffi.CxxModel.CxxRecord;
+import compiler.ffi.CxxModel.CxxType;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 import compiler.ffi.HxiProjectionProfile.HxiProjectionProfile;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.NativeCallPlan.NativeDispatch;
 
 typedef CxxProjectionSource = {
@@ -25,7 +27,26 @@ class CxxProjection {
 		if (hxi.library == null)
 			throw "CXX200 C++ Haxe projection requires an HXI library";
 		var classNames = projectedClassNames(model),
+			abi = HxiAbi.forInterface(hxi),
+			availablePlans = nativePlans == null ? abi.functions() : nativePlans,
+			plans:Map<String, HxiFunctionAbi> = [],
+			ownedRecords:Map<String, String> = [],
 			result:Array<CxxProjectionSource> = [];
+		for (plan in availablePlans)
+			plans.set(plan.name, plan);
+		for (functionModel in model.functions) {
+			var plan = functionModel.loweredName == null ? null : plans.get(functionModel.loweredName);
+			if (plan != null)
+				switch plan.resultPolicy.ownership {
+					case HxiOwnership.Owned(_) if (pointerRecord(functionModel.result) != null):
+						var recordName = pointerRecord(functionModel.result),
+							typeName = classNames.get(recordName);
+						if (typeName == null)
+							throw 'CXX205 owned C++ result ${functionModel.qualifiedName} refers to an unprojected record $recordName';
+						ownedRecords.set(functionModel.qualifiedName, typeName);
+					case _:
+				}
+		}
 		for (record in model.records) {
 			var typeName = classNames.get(record.qualifiedName);
 			result.push({
@@ -33,15 +54,46 @@ class CxxProjection {
 				typeName: typeName,
 				source: emit(model, hxi, record, typeName, profile, nativePlans)
 			});
+			var owned = false;
+			for (ownedType in ownedRecords)
+				if (ownedType == typeName)
+					owned = true;
+			if (owned)
+				result.push({
+					file: "Owned" + typeName + ".hx",
+					typeName: "Owned" + typeName,
+					source: emitOwnedRecord(hxi, record, typeName, profile)
+				});
 		}
-		if (Lambda.exists(model.functions, functionModel -> functionModel.thunkSymbol != null))
+		if (Lambda.exists(model.functions, functionModel -> functionModel.thunkSymbol != null
+			|| ownedRecords.exists(functionModel.qualifiedName)))
 			result.push({
 				file: hxi.name + "Functions.hx",
 				typeName: hxi.name + "Functions",
-				source: emitFunctions(model, hxi, profile, nativePlans)
+				source: emitFunctions(model, hxi, profile, nativePlans, ownedRecords)
 			});
 		result.sort((left, right) -> Reflect.compare(left.file, right.file));
 		return result;
+	}
+
+	static function emitOwnedRecord(hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>):String {
+		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
+			rawOwnedType = HxiHaxeEmitter.ownedTypeName(nativeType, profile),
+			ownerType = "Owned" + typeName,
+			output = new StringBuf();
+		output.add('// Generated owned C++ object projection for ${record.qualifiedName}. Do not edit.\n');
+		output.add('import ${hxi.name};\n');
+		output.add('import $typeName;\n\n');
+		output.add('class $ownerType {\n');
+		output.add('\tfinal __owner:$rawOwnedType;\n\n');
+		output.add('\tprivate function new(owner:$rawOwnedType) this.__owner = owner;\n');
+		output.add('\tpublic static function adopt(owner:$rawOwnedType):$ownerType return new $ownerType(owner);\n');
+		output.add('\tpublic function borrow():$typeName { if (isClosed()) throw "C++ owned object is closed"; return $typeName.fromNative(__owner.borrow()); }\n');
+		output.add('\tpublic function nativeHandle():$typeName return borrow();\n');
+		output.add('\tpublic function isClosed():Bool return __owner.isClosed();\n');
+		output.add('\tpublic function close():Bool return __owner.close();\n');
+		output.add('}\n');
+		return output.toString();
 	}
 
 	static function emit(model:CxxModel, hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>,
@@ -225,7 +277,8 @@ class CxxProjection {
 		return output.toString();
 	}
 
-	static function emitFunctions(model:CxxModel, hxi:HxiInterface, profile:Null<HxiProjectionProfile>, nativePlans:Null<Array<HxiFunctionAbi>>):String {
+	static function emitFunctions(model:CxxModel, hxi:HxiInterface, profile:Null<HxiProjectionProfile>, nativePlans:Null<Array<HxiFunctionAbi>>,
+			ownedRecords:Map<String, String>):String {
 		var abi = HxiAbi.forInterface(hxi),
 			plans:Map<String, HxiFunctionAbi> = [],
 			availablePlans = nativePlans == null ? abi.functions() : nativePlans,
@@ -235,7 +288,9 @@ class CxxProjection {
 		output.add('// Generated C++ free-function projection for ${hxi.name}. Do not edit.\n');
 		output.add('import ${hxi.name};\n');
 		var helperName = "__CxxThunk_" + hxi.name + "Functions";
-		emitThunkErrorHelper(output, helperName);
+		var hasThunk = Lambda.exists(model.functions, functionModel -> functionModel.thunkSymbol != null);
+		if (hasThunk)
+			emitThunkErrorHelper(output, helperName);
 		output.add('class ${hxi.name}Functions {\n');
 		var functions = model.functions.copy();
 		functions.sort((left, right) -> {
@@ -244,10 +299,10 @@ class CxxProjection {
 		});
 		var counts:Map<String, Int> = [], indices:Map<String, Int> = [];
 		for (functionModel in functions)
-			if (functionModel.thunkSymbol != null)
+			if (functionModel.thunkSymbol != null || ownedRecords.exists(functionModel.qualifiedName))
 				counts.set(functionModel.name, (counts.get(functionModel.name) == null ? 0 : counts.get(functionModel.name)) + 1);
 		for (functionModel in functions) {
-			if (functionModel.thunkSymbol == null)
+			if (functionModel.thunkSymbol == null && !ownedRecords.exists(functionModel.qualifiedName))
 				continue;
 			var plan = functionModel.loweredName == null ? null : plans.get(functionModel.loweredName);
 			if (plan == null)
@@ -268,19 +323,28 @@ class CxxProjection {
 			}
 			if (argumentCursor != plan.arguments.length)
 				throw 'CXX201 native parameter expansion mismatch for ${functionModel.qualifiedName}';
-			var result = HxiHaxeEmitter.project(plan.result, true, profile);
-			if (result == null)
+			var ownedRecordType = ownedRecords.get(functionModel.qualifiedName),
+				result = ownedRecordType == null ? HxiHaxeEmitter.project(plan.result, true, profile) : null,
+				resultType = ownedRecordType == null ? result == null ? null : result.haxeType : "Owned" + ownedRecordType;
+			if (resultType == null)
 				throw 'CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} result';
 			var nativeName = HxiHaxeEmitter.projectedFunctionName(functionModel.loweredName, profile);
-			output.add('\tpublic static function $functionName(${arguments.join(", ")}):${result.haxeType} {\n');
+			output.add('\tpublic static function $functionName(${arguments.join(", ")}):$resultType {\n');
 			for (line in setup)
 				output.add('\t\t$line\n');
-			if (result.haxeType == "Void") {
+			if (ownedRecordType != null) {
+				output.add('\t\tvar __owner = ${hxi.name}.$nativeName(${calls.join(", ")});\n');
+				if (functionModel.thunkSymbol != null)
+					output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+				output.add('\t\treturn Owned$ownedRecordType.adopt(__owner);\n');
+			} else if (resultType == "Void") {
 				output.add('\t\t${hxi.name}.$nativeName(${calls.join(", ")});\n');
-				output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+				if (functionModel.thunkSymbol != null)
+					output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
 			} else {
 				output.add('\t\tvar __result = ${hxi.name}.$nativeName(${calls.join(", ")});\n');
-				output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
+				if (functionModel.thunkSymbol != null)
+					output.add('\t\t$helperName.throwIfFailed("${escape(hxi.library == null ? "" : hxi.library)}");\n');
 				output.add('\t\treturn __result;\n');
 			}
 			output.add('\t}\n');
@@ -288,6 +352,20 @@ class CxxProjection {
 		output.add('}\n');
 		return output.toString();
 	}
+
+	static function pointerRecord(type:CxxType):Null<String>
+		return switch type {
+			case CxxType.CxxPointer(element): namedRecord(element);
+			case CxxType.CxxConst(element): pointerRecord(element);
+			case _: null;
+		};
+
+	static function namedRecord(type:CxxType):Null<String>
+		return switch type {
+			case CxxType.CxxNamed(name): name;
+			case CxxType.CxxConst(element): namedRecord(element);
+			case _: null;
+		};
 
 	static function appendProjectedParameter(arguments:Array<String>, calls:Array<String>, setup:Array<String>, parameter:CxxParameter,
 			nativeArguments:Array<HxiAbiValue>, cursor:Int, profile:Null<HxiProjectionProfile>, index:Int, owner:String):Int {

@@ -188,6 +188,31 @@ class CxxHeaderImporterMain {
 			&& lifetimeProjection.indexOf("C++ object is closed") >= 0
 			&& lifetimeProjection.indexOf("public function ~Widget") < 0,
 			"C++ lifetime projection should allocate owned objects and hide ABI destructor names");
+		var owned = CxxHeaderImporter.importHeader("tests/ffi/cxx_owned_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_owned",
+			"CxxOwnedFixture", null, null, "c++20", null, null, false, false, false, true, null, ["cxxown::acquire" => "cxxown::release"]),
+			ownedText = HxiWriter.write(owned.hxi, "// test"),
+			ownedSources = CxxProjection.sources(owned.model, owned.hxi, null, owned.plans),
+			ownedFunctions = Lambda.find(ownedSources, source -> source.file == "CxxOwnedFixtureFunctions.hx"),
+			ownedWidget = Lambda.find(ownedSources, source -> source.file == "OwnedWidget.hx"),
+			ownedAcquire = Lambda.find(owned.model.functions, functionModel -> functionModel.name == "acquire"),
+			ownedRelease = Lambda.find(owned.model.functions, functionModel -> functionModel.name == "release");
+		expect(ownedAcquire != null
+			&& ownedRelease != null
+			&& ownedAcquire.thunkSymbol != null
+			&& ownedRelease.thunkSymbol != null
+			&& ownedText.indexOf('@owned("' + ownedRelease.thunkSymbol + '")') >= 0
+			&& ownedFunctions != null
+			&& ownedFunctions.source.indexOf("return OwnedWidget.adopt") >= 0
+			&& ownedWidget != null
+			&& ownedWidget.source.indexOf("public function close():Bool") >= 0,
+			"explicit C++ factory ownership should lower through release thunks and closeable object projections");
+		var invalidOwnership = "";
+		try {
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_owned_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_owned_invalid",
+				"CxxOwnedFixture", null, null, "c++20", null, null, false, false, false, false, null, ["cxxown::acquire" => "cxxown::released"]);
+		} catch (error:Dynamic)
+			invalidOwnership = Std.string(error);
+		expect(invalidOwnership.indexOf("CXX020") >= 0, "invalid C++ release contracts should produce an explicit ownership diagnostic");
 		var msvc = CxxHeaderImporter.importHeader("tests/ffi/cxx_lifetime_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++",
 			"cxx_lifetime_msvc", null, null, null, "c++20", null, null, false, true),
 			msvcText = HxiWriter.write(msvc.hxi, "// test"),

@@ -28,7 +28,8 @@ class FfiImportMain {
 			excludedHeaders:Array<String> = manifest == null ? [] : manifest.excludedHeaders.copy(), paths:Array<String> = [],
 			cxxSelections:Array<String> = config == null ? [] : config.cxxSelections.copy(), trivialValues = config == null ? false : config.trivialValues,
 			cxxLifetimes = config == null ? false : config.lifetimes, cxxVirtual = config == null ? false : config.virtualDispatch,
-			cxxThunksPath:Null<String> = null, haxeOutputDir:Null<String> = null, haxeSourceManifestPath:Null<String> = null;
+			cxxOwnership:Map<String, String> = config == null ? [] : config.cxxOwnership.copy(), cxxThunksPath:Null<String> = null,
+			haxeOutputDir:Null<String> = null, haxeSourceManifestPath:Null<String> = null;
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--manifest="))
 				continue;
@@ -54,7 +55,13 @@ class FfiImportMain {
 				cxxLifetimes = true;
 			else if (arg == "--cxx-virtual")
 				cxxVirtual = true;
-			else if (StringTools.startsWith(arg, "--cxx-thunks="))
+			else if (StringTools.startsWith(arg, "--cxx-owned=")) {
+				var mapping = arg.substring(arg.indexOf("=") + 1),
+					separator = mapping.indexOf("=");
+				if (separator <= 0 || separator == mapping.length - 1)
+					throw 'Invalid --cxx-owned mapping "$mapping"; expected <factory>=<release>';
+				cxxOwnership.set(mapping.substring(0, separator), mapping.substr(separator + 1));
+			} else if (StringTools.startsWith(arg, "--cxx-thunks="))
 				cxxThunksPath = arg.substring(arg.indexOf("=") + 1);
 			else if (StringTools.startsWith(arg, "--library="))
 				library = arg.substring(10);
@@ -87,6 +94,8 @@ class FfiImportMain {
 			throw 'Unsupported FFI language "$language"';
 		if (cxxSelections.length != 0 && language != "c++")
 			throw "--cxx-select requires --language=c++";
+		if (cxxOwnership.keys().hasNext() && language != "c++")
+			throw "--cxx-owned requires --language=c++";
 		if (haxeOutputDir != null && language != "c++")
 			throw "--haxe-output-dir requires --language=c++";
 		if (cxxThunksPath != null && language != "c++")
@@ -100,10 +109,10 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null,
-			cxxSelections.length == 0 ? null : cxxSelections) : null,
+			cxxSelections.length == 0 ? null : cxxSelections, cxxOwnership) : null,
 			model = cxxResult == null ? CHeaderImporter.importHeaderWithOptions(paths[0], target, includes, clang, library, interfaceName, dependencies,
 				excludedHeaders, defines, compileCommands) : cxxResult.hxi,
 			label = sourceLabel == null ? paths[0] : sourceLabel,

@@ -19,8 +19,8 @@ typedef CxxDiagnostic = {
 class CxxSubsetValidator {
 	public static inline final PROFILE = "CXX_ABI_V1";
 
-	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
-			cxxThunks:Bool = false):Array<CxxDiagnostic> {
+	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
+			?cxxOwnership:Map<String, String>):Array<CxxDiagnostic> {
 		var diagnostics:Array<CxxDiagnostic> = [],
 			records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
@@ -59,6 +59,8 @@ class CxxSubsetValidator {
 		}
 		for (alias in model.aliases)
 			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+		if (cxxOwnership != null)
+			validateOwnership(model, cxxOwnership, diagnostics, cxxThunks);
 		return diagnostics;
 	}
 
@@ -77,8 +79,8 @@ class CxxSubsetValidator {
 	}
 
 	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
-			cxxThunks:Bool = false):Void {
-		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+			cxxThunks:Bool = false, ?cxxOwnership:Map<String, String>):Void {
+		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
 		if (diagnostics.length == 0)
 			return;
 		var lines = [
@@ -89,6 +91,71 @@ class CxxSubsetValidator {
 		];
 		throw lines.join("\n");
 	}
+
+	static function validateOwnership(model:CxxModel, ownership:Map<String, String>, diagnostics:Array<CxxDiagnostic>, cxxThunks:Bool):Void {
+		var functions:Map<String, CxxFunction> = [];
+		for (functionModel in model.functions)
+			functions.set(functionModel.qualifiedName, functionModel);
+		for (ownerName => releaseName in ownership) {
+			var owner = functions.get(ownerName),
+				release = functions.get(releaseName);
+			if (owner == null) {
+				diagnostics.push({code: "CXX020", message: 'owned C++ result "$ownerName" must name a free function in the imported header', span: model.span});
+				continue;
+			}
+			if (release == null) {
+				diagnostics.push({
+					code: "CXX020",
+					message: 'owned C++ result "$ownerName" refers to missing release function "$releaseName"',
+					span: owner.span
+				});
+				continue;
+			}
+			var ownerType = pointerRecord(owner.result);
+			if (ownerType == null) {
+				diagnostics.push({code: "CXX020", message: 'owned C++ result "$ownerName" must return a pointer to an imported record', span: owner.span});
+				continue;
+			}
+			if (!release.isNoexcept && !cxxThunks)
+				diagnostics.push({code: "CXX020", message: 'release function "$releaseName" must be noexcept or use generated C++ thunks', span: release.span});
+			var releaseType = release.parameters.length == 1 ? pointerRecord(release.parameters[0].type) : null,
+				releaseIsVoid = release.parameters.length == 1 && isVoidPointer(release.parameters[0].type);
+			if (release.parameters.length != 1 || (releaseType != ownerType && !releaseIsVoid) || !isVoid(release.result))
+				diagnostics.push({
+					code: "CXX020",
+					message: 'release function "$releaseName" must accept one pointer to "$ownerType" (or void*) and return void',
+					span: release.span
+				});
+		}
+	}
+
+	static function pointerRecord(type:CxxType):Null<String>
+		return switch type {
+			case CxxType.CxxPointer(element): namedRecord(element);
+			case CxxType.CxxConst(element): pointerRecord(element);
+			case _: null;
+		};
+
+	static function namedRecord(type:CxxType):Null<String>
+		return switch type {
+			case CxxType.CxxNamed(name): name;
+			case CxxType.CxxConst(element): namedRecord(element);
+			case _: null;
+		};
+
+	static function isVoidPointer(type:CxxType):Bool
+		return switch type {
+			case CxxType.CxxPointer(element): isVoid(element);
+			case CxxType.CxxConst(element): isVoidPointer(element);
+			case _: false;
+		};
+
+	static function isVoid(type:CxxType):Bool
+		return switch type {
+			case CxxType.CxxPrimitive("void") | CxxType.CxxVoid: true;
+			case CxxType.CxxConst(element): isVoid(element);
+			case _: false;
+		};
 
 	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool, cxxThunks:Bool):Void {

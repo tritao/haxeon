@@ -22,10 +22,11 @@ import sys.FileSystem;
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
 class CxxAbiLowerer {
 	public static function lower(model:CxxModel, target:String, ?library:String, ?interfaceName:String, ?dependencies:Array<String>,
-			trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false):HxiInterface {
-		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+			trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
+			?cxxOwnership:Map<String, String>):HxiInterface {
+		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
 		if (cxxThunks)
-			CxxThunkGenerator.prepare(model);
+			CxxThunkGenerator.prepare(model, cxxOwnership);
 		var records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
 			aliases:Map<String, CxxAlias> = [];
@@ -55,11 +56,18 @@ class CxxAbiLowerer {
 		for (alias in model.aliases)
 			declarations.push(Alias(hxiName(alias.qualifiedName), lowerType(alias.target, records, enums, aliases, true), alias.span));
 		var used:Map<String, Bool> = [];
-		for (functionModel in model.functions) {
-			var name = uniqueName("__cxx_" + sanitize(functionModel.qualifiedName), functionModel.symbol, used);
-			functionModel.loweredName = name;
-			declarations.push(lowerFunction(functionModel, name, records, enums, aliases));
-		}
+		for (functionModel in model.functions)
+			functionModel.loweredName = uniqueName("__cxx_" + sanitize(functionModel.qualifiedName), functionModel.symbol, used);
+		var releaseSymbols:Map<String, String> = [];
+		if (cxxOwnership != null)
+			for (ownerName => releaseName in cxxOwnership) {
+				var release = Lambda.find(model.functions, functionModel -> functionModel.qualifiedName == releaseName);
+				if (release != null)
+					releaseSymbols.set(ownerName, release.thunkSymbol == null ? release.symbol : release.thunkSymbol);
+			}
+		for (functionModel in model.functions)
+			declarations.push(lowerFunction(functionModel, functionModel.loweredName, records, enums, aliases,
+				releaseSymbols.get(functionModel.qualifiedName)));
 		for (record in model.records)
 			for (method in record.methods) {
 				var name = uniqueName("__cxx_" + sanitize(method.qualifiedName), method.symbol, used);
@@ -121,10 +129,10 @@ class CxxAbiLowerer {
 	}
 
 	static function lowerFunction(functionModel:CxxFunction, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>):HxiDeclaration {
+			aliases:Map<String, CxxAlias>, ownedRelease:Null<String>):HxiDeclaration {
 		return Function(name, parameters(functionModel.parameters, records, enums, aliases), lowerType(functionModel.result, records, enums, aliases, true),
-			functionModel.thunkSymbol == null ? functionModel.symbol : functionModel.thunkSymbol, false, "cdecl", resultPolicy(functionModel.result),
-			functionModel.span);
+			functionModel.thunkSymbol == null ? functionModel.symbol : functionModel.thunkSymbol, false, "cdecl",
+			resultPolicy(functionModel.result, ownedRelease), functionModel.span);
 	}
 
 	static function lowerMethod(method:CxxMethod, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
@@ -194,9 +202,18 @@ class CxxAbiLowerer {
 		};
 	}
 
-	static function resultPolicy(type:CxxType):HxiResultPolicy {
+	static function resultPolicy(type:CxxType, ?ownedRelease:String):HxiResultPolicy {
 		var borrowed = pointerResult(type),
 			metadata:Map<String, Array<String>> = [];
+		if (ownedRelease != null) {
+			metadata.set("owned", ['"' + ownedRelease + '"']);
+			return {
+				ownership: Owned(ownedRelease),
+				handleDisposition: Unspecified,
+				length: null,
+				metadata: metadata
+			};
+		}
 		if (borrowed)
 			metadata.set("borrowed", []);
 		return {
