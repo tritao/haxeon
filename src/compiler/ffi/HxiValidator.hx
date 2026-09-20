@@ -303,8 +303,9 @@ class HxiValidator {
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
-									&& !bytePointerLike(parameter.type, declarationsByName))
-									fail('Input array "${parameter.name}" requires a byte, structure, or UTF-8 pointer array', parameter.span);
+									&& !bytePointerLike(parameter.type, declarationsByName)
+									&& !scalarPointerLike(parameter.type, abi))
+									fail('Input array "${parameter.name}" requires a byte, scalar, structure, or UTF-8 pointer array', parameter.span);
 								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
 								if (count == null)
 									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
@@ -659,6 +660,22 @@ class HxiValidator {
 			case Nullable(element) | Const(element): bytePointerLike(element, names);
 			case Pointer(element): byteElement(element, names);
 			case _: false;
+		};
+
+	static function scalarPointerLike(type:HxiType, abi:HxiAbi):Bool
+		return switch type {
+			case Nullable(element) | Const(element): scalarPointerLike(element, abi);
+			case Pointer(element): scalarElement(element, abi);
+			case _: false;
+		};
+
+	static function scalarElement(type:HxiType, abi:HxiAbi):Bool
+		return switch type {
+			case Const(element): scalarElement(element, abi);
+			case _: switch abi.classify(type) {
+					case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_): true;
+					case _: false;
+				};
 		};
 
 	static function bufferElement(type:HxiType, names:Map<String, HxiDeclaration>):Bool

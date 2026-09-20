@@ -801,13 +801,16 @@ class HxiParserMain {
 			&& borrowedStringsSource.indexOf("roots[index + 1] = __text") >= 0,
 			"borrowed UTF-8 pointer tables should expose managed string arrays with retained backing storage");
 		var inputArrays = parseValidated("input-arrays.hxi",
-			'interface inputs @target("x86_64-linux-gnu") @library("inputs") { struct item @layout(8, 8) { name: utf8 @offset(0); } extern fn send(items: ptr<const<item>> @in_array("count"), count: u32) -> i32; extern fn paths(items: ptr<utf8> @in_array("count"), count: u32) -> i32; extern fn bytes(data: ptr<const<u8>> @in_array("size"), size: u32) -> i32; }');
+			'interface inputs @target("x86_64-linux-gnu") @library("inputs") { struct item @layout(8, 8) { name: utf8 @offset(0); } extern fn send(items: ptr<const<item>> @in_array("count"), count: u32) -> i32; extern fn paths(items: ptr<utf8> @in_array("count"), count: u32) -> i32; extern fn bytes(data: ptr<const<u8>> @in_array("size"), size: u32) -> i32; extern fn floats(data: ptr<const<f32>> @in_array("count"), count: u32) -> i32; }');
 		var inputArraySource = HxiProjection.source(inputArrays);
 		expect(inputArraySource.indexOf("function send(items:Array<item>):Int") >= 0
 			&& inputArraySource.indexOf("function paths(items:Array<String>):Int") >= 0
 			&& inputArraySource.indexOf("function bytes(data:haxe.io.Bytes):Int") >= 0
 			&& inputArraySource.indexOf("function bytes_slice(data:haxe.io.Bytes, offset:Int, length:Int):Int") >= 0
 			&& inputArraySource.indexOf("haxe.io.Bytes.view(data, offset, length)") >= 0
+			&& inputArraySource.indexOf("function floats(data:haxe.io.Bytes):Int") >= 0
+			&& inputArraySource.indexOf("Std.int(data.length / 4)") >= 0
+			&& inputArraySource.indexOf("Input scalar array byte length must be aligned") >= 0
 			&& inputArraySource.indexOf("items.length") >= 0,
 			"input arrays should hide count parameters and project managed Haxe arrays");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',

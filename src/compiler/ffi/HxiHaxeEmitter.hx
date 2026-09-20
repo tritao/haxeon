@@ -1288,10 +1288,14 @@ class HxiHaxeEmitter {
 			setup:Array<String> = [],
 			values:Array<{name:String, type:String, expression:String}> = [];
 		var arrayCounts:Map<String, String> = [];
+		var scalarArrayElementSizes:Map<String, Int> = [];
 		for (parameter in parameters)
 			switch parameter.direction {
 				case InArray(count):
 					arrayCounts.set(count, parameter.name);
+					if (rawArgumentTypes[parameters.indexOf(parameter)] == "haxe.io.Bytes" && !utf8ArrayPointer(parameter.type))
+						scalarArrayElementSizes.set(count,
+							scalarPointerLayout(parameter.type, abi) == null ? 1 : scalarPointerLayout(parameter.type, abi).size);
 				case _:
 			}
 		for (index in 0...parameters.length) {
@@ -1302,13 +1306,19 @@ class HxiHaxeEmitter {
 					if (arrayName == null) {
 						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 						callArguments.push(parameter.name);
-					} else
-						callArguments.push('$arrayName.length');
+					} else {
+						var elementSize = scalarArrayElementSizes.get(parameter.name);
+						callArguments.push(elementSize == null
+							|| elementSize == 1 ? '$arrayName.length' : 'Std.int($arrayName.length / $elementSize)');
+					}
 				case InArray(_):
 					var utf8 = utf8ArrayPointer(parameter.type),
 						elementType = rawArgumentTypes[index];
 					if (elementType == "haxe.io.Bytes" && !utf8) {
 						arguments.push('${parameter.name}:haxe.io.Bytes');
+						var scalarLayout = scalarPointerLayout(parameter.type, abi);
+						if (scalarLayout != null && scalarLayout.size > 1)
+							setup.push('if (${parameter.name}.length % ${scalarLayout.size} != 0) throw "Input scalar array byte length must be aligned to its element size";');
 						callArguments.push(parameter.name);
 					} else {
 						arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
