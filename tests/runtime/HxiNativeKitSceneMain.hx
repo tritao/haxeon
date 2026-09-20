@@ -8,9 +8,21 @@ class HxiNativeKitSceneMain {
 		var output = Sys.args()[0],
 			sceneHxi = File.getContent(Sys.args()[1]),
 			renderHxi = File.getContent(Sys.args()[2]),
+			nativekitRoot = Sys.args()[3],
+			nativekitHxi = File.getContent(Sys.args()[4]),
+			gpuHxi = File.getContent(Sys.args()[5]),
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addSourceRoot(nativekitRoot + "/bindings/haxe");
+		compiler.addSourceRoot(nativekitRoot + "/modules/gpu/bindings/haxe");
+		compiler.addSourceRoot(nativekitRoot + "/modules/scene_render/bindings/haxe");
+		compiler.update("NativeKitWindow.hx", File.getContent(nativekitRoot + "/bindings/haxe/NativeKitWindow.hx"));
+		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(nativekitRoot + "/bindings/haxe/nativekit.hxmap"));
+		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(nativekitRoot + "/modules/gpu/bindings/nativekit-gpu.hxmap"));
+		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot + "/modules/scene_render/bindings/nativekit-scene-render.hxmap"));
+		compiler.addFfiInterface("NativeKit.hxi", nativekitHxi);
+		compiler.addFfiInterface("NativeKitGpu.hxi", gpuHxi);
 		compiler.addFfiInterface("NativeKitScene.hxi", sceneHxi);
 		compiler.addFfiInterface("NativeKitSceneRender.hxi", renderHxi);
 		compiler.update("Main.hx", source());
@@ -20,6 +32,7 @@ class HxiNativeKitSceneMain {
 	static function source():String return '
 import NativeKitScene;
 import NativeKitSceneRender;
+import nativekit.scene.SceneRenderer;
 
 class Main {
 	static function main():Int {
@@ -53,12 +66,11 @@ class Main {
 			view = new nkscene_render_view();
 		view.set_struct_size(nkscene_render_view.size());
 
-		var planResult = NativeKitSceneRender.nkscene_render_plan_compile(snapshot, view);
-		if (planResult.status != NativeKitSceneConstants.NKS_OK) return 10;
-		var planOwner = planResult.out_plan,
-			plan = planOwner.borrow(),
-			countResult = NativeKitSceneRender.nkscene_render_plan_get_item_count(plan);
-		if (countResult.status != NativeKitSceneConstants.NKS_OK || haxe.Int64.toInt(countResult.out_count) != 1) return 11;
+		var sceneRenderer = SceneRenderer.createHeadless(),
+			execution = sceneRenderer.render(snapshot, view);
+		if (haxe.Int64.toInt(execution.get_commands()) != 1
+			|| haxe.Int64.toInt(execution.get_draw_calls()) != 1
+			|| haxe.Int64.toInt(execution.get_geometry_resources_created()) != 1) return 10;
 
 		var movedTransactionResult = NativeKitScene.nkscene_transaction_begin(scene);
 		if (movedTransactionResult.status != NativeKitSceneConstants.NKS_OK) return 12;
@@ -75,18 +87,17 @@ class Main {
 		if (movedSnapshotResult.status != NativeKitSceneConstants.NKS_OK) return 15;
 		var movedSnapshotOwner = movedSnapshotResult.out_snapshot,
 			movedSnapshot = movedSnapshotOwner.borrow(),
-			update = new nkscene_render_update();
-		update.set_struct_size(nkscene_render_update.size());
-		var updateResult = NativeKitSceneRender.nkscene_render_plan_update(
-			plan, movedSnapshot, movedChanges, view, update);
-		if (updateResult.status != NativeKitSceneConstants.NKS_OK
-			|| updateResult.out_update.get_plan_rebuilt() != 0
-			|| haxe.Int64.toInt(updateResult.out_update.get_patched_instances()) != 1
-			|| haxe.Int64.toInt(updateResult.out_update.get_updated_geometry_resources()) != 0) return 16;
+			movedExecution = sceneRenderer.render(movedSnapshot, view, movedChanges),
+			update = sceneRenderer.lastUpdate();
+		if (update == null
+			|| update.get_plan_rebuilt() != 0
+			|| haxe.Int64.toInt(update.get_patched_instances()) != 1
+			|| haxe.Int64.toInt(update.get_updated_geometry_resources()) != 0
+			|| haxe.Int64.toInt(movedExecution.get_commands()) != 1) return 16;
 
+		sceneRenderer.dispose();
 		movedSnapshotOwner.close();
 		movedChangesOwner.close();
-		planOwner.close();
 		snapshotOwner.close();
 		changesOwner.close();
 		sceneOwner.close();
