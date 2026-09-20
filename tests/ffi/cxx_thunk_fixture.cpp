@@ -14,6 +14,10 @@ namespace cxxthunk {
         return &counter;
     }
 
+    int apply(BinaryCallback callback, int left, int right) noexcept {
+        return callback == nullptr ? 0 : callback(left, right);
+    }
+
     int add(int left, int right) {
         if (right == 0)
             throw std::runtime_error("division-like failure");

@@ -126,7 +126,9 @@ class CxxThunkGenerator {
 			} else if (CxxTypeTools.isByteSpan(parameter.type)) {
 				result.push('const ${spanElementType(parameter.type)} *arg$index');
 				result.push('std::size_t arg${index}__length');
-			} else
+			} else if (isFunctionPointer(parameter.type))
+				result.push(functionPointerParameter(parameter.type, 'arg$index'));
+			else
 				result.push('${cppType(parameter.type)} arg$index');
 		}
 		return result;
@@ -160,11 +162,28 @@ class CxxThunkGenerator {
 			case CxxPointer(element): cppType(element) + " *";
 			case CxxReference(element): cppType(element) + " &";
 			case CxxRValueReference(_): throw "CXX016 cannot generate a thunk for an rvalue reference";
+			case CxxFunctionPointer(parameters, result, isNoexcept):
+				cppType(result) + " (*) (" + [for (parameter in parameters) cppType(parameter)].join(", ") + ")" + (isNoexcept ? " noexcept" : "");
 			case CxxStringView: throw "CXX016 std::string_view is emitted through the adapter parameter expansion";
 			case CxxByteSpan(_): throw "CXX016 byte std::span is emitted through the adapter parameter expansion";
 			case CxxUnsupported(raw, reason): throw 'CXX016 cannot generate a thunk for "$raw": $reason';
 		};
 	}
+
+	static function functionPointerParameter(type:CxxType, name:String):String
+		return switch type {
+			case CxxFunctionPointer(parameters, result, isNoexcept):
+				'${cppType(result)} (*$name)(${[for (parameter in parameters) cppType(parameter)].join(", ")})${isNoexcept ? " noexcept" : ""}';
+			case CxxConst(element): functionPointerParameter(element, name);
+			case _: throw "CXX016 expected a C++ function pointer parameter";
+		};
+
+	static function isFunctionPointer(type:CxxType):Bool
+		return switch type {
+			case CxxFunctionPointer(_, _, _): true;
+			case CxxConst(element): isFunctionPointer(element);
+			case _: false;
+		};
 
 	static function primitiveType(name:String):String {
 		return switch name {

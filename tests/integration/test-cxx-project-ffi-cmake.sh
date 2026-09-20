@@ -76,6 +76,8 @@ cat > "$project_dir/foo/ffi/cxx_thunk_project.ffi.json" <<'JSON'
     "cxxthunk::Counter::value",
     "cxxthunk::Counter::fail",
     "cxxthunk::acquire",
+    "cxxthunk::apply",
+    "cxxthunk::BinaryCallback",
     "cxxthunk::add",
     "cxxcmakeown::ManagedWidget::value",
     "cxxcmakeown::acquire_managed",
@@ -109,6 +111,9 @@ function main():Int {
 	var functionWorked = CxxCmakeThunkProjectFunctions.add(20, 22) == 42,
 		functionFailed = false;
 	try CxxCmakeThunkProjectFunctions.add(1, 0) catch (error:Dynamic) functionFailed = Std.string(error).indexOf("division-like failure") >= 0;
+	var callback = new __cxx_cxxthunk__BinaryCallbackCallback(function(left:Int, right:Int) return left + right),
+		callbackWorked = CxxCmakeThunkProject.__cxx_cxxthunk__apply(callback, 20, 22) == 42;
+	callback.close();
 	var owner = CxxCmakeThunkProjectFunctions.acquire_managed(),
 		managed = owner.borrow(),
 		managedWorked = managed.value() == 7,
@@ -116,7 +121,7 @@ function main():Int {
 		secondClose = owner.close(),
 		ownershipWorked = managedWorked && firstClose && !secondClose && owner.isClosed()
 			&& CxxCmakeThunkProject.__cxx_cxxcmakeown__released_managed() == 1;
-	return counter.value() == 42 && methodFailed && functionWorked && functionFailed && ownershipWorked ? 42 : 1;
+	return counter.value() == 42 && methodFailed && functionWorked && functionFailed && callbackWorked && ownershipWorked ? 42 : 1;
 }
 HX
 

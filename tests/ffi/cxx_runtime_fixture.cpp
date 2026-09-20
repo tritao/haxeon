@@ -18,6 +18,14 @@ namespace nkui {
         return &value;
     }
 
+    int apply(BinaryCallback callback, int left, int right) noexcept {
+        return callback == nullptr ? 0 : callback(left, right);
+    }
+
+    int apply_raw(int (*callback)(int), int value) noexcept {
+        return callback == nullptr ? 0 : callback(value);
+    }
+
     void mark(DisplayList &value) noexcept {
         value.count = 1;
     }

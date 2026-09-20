@@ -12,6 +12,9 @@ enum CxxType {
 	CxxReference(element:CxxType);
 	CxxRValueReference(element:CxxType);
 
+	/** A free-function pointer with the platform's default C++ calling convention. */
+	CxxFunctionPointer(parameters:Array<CxxType>, result:CxxType, isNoexcept:Bool);
+
 	/** std::string_view; lowered through a generated (const char *, size_t) adapter. */
 	CxxStringView;
 

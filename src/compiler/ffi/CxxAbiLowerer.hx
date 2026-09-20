@@ -11,6 +11,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameter;
+import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiModel.HxiHandleDisposition;
@@ -18,6 +19,12 @@ import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.NativeCallPlan.NativeDispatch;
 import haxe.Int64;
 import sys.FileSystem;
+
+private typedef CxxCallbackType = {
+	final name:String;
+	final type:CxxType;
+	final span:compiler.Source.SourceSpan;
+}
 
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
 class CxxAbiLowerer {
@@ -36,6 +43,27 @@ class CxxAbiLowerer {
 			enums.set(enumModel.qualifiedName, enumModel);
 		for (alias in model.aliases)
 			aliases.set(alias.qualifiedName, alias);
+		var callbackNames:Map<String, String> = [],
+			callbackTypes:Map<String, CxxCallbackType> = [];
+		for (alias in model.aliases)
+			if (isFunctionPointer(alias.target)) {
+				var key = typeKey(alias.target),
+					name = hxiName(alias.qualifiedName);
+				if (!callbackNames.exists(key))
+					callbackNames.set(key, name);
+				callbackTypes.set("alias:" + alias.qualifiedName, {name: name, type: alias.target, span: alias.span});
+			}
+		for (functionModel in model.functions) {
+			collectCallbackTypes(functionModel.result, functionModel.span, callbackNames, callbackTypes);
+			for (parameter in functionModel.parameters)
+				collectCallbackTypes(parameter.type, parameter.span, callbackNames, callbackTypes);
+		}
+		for (record in model.records)
+			for (method in record.methods) {
+				collectCallbackTypes(method.result, method.span, callbackNames, callbackTypes);
+				for (parameter in method.parameters)
+					collectCallbackTypes(parameter.type, parameter.span, callbackNames, callbackTypes);
+			}
 		var valueRecords:Map<String, Bool> = [];
 		for (functionModel in model.functions) {
 			markValueType(functionModel.result, true, records, aliases, valueRecords, []);
@@ -50,11 +78,16 @@ class CxxAbiLowerer {
 			}
 		var declarations:Array<HxiDeclaration> = [];
 		for (record in model.records)
-			declarations.push(lowerRecord(record, trivialValues, valueRecords, records, enums, aliases));
+			declarations.push(lowerRecord(record, trivialValues, valueRecords, records, enums, aliases, callbackNames));
 		for (enumModel in model.enums)
-			declarations.push(lowerEnum(enumModel, enums, records, aliases));
+			declarations.push(lowerEnum(enumModel, enums, records, aliases, callbackNames));
+		var orderedCallbacks:Array<CxxCallbackType> = [for (callback in callbackTypes) callback];
+		orderedCallbacks.sort((left, right) -> Reflect.compare(left.name, right.name));
+		for (callback in orderedCallbacks)
+			declarations.push(lowerCallback(callback, records, enums, aliases, callbackNames));
 		for (alias in model.aliases)
-			declarations.push(Alias(hxiName(alias.qualifiedName), lowerType(alias.target, records, enums, aliases, true), alias.span));
+			if (!isFunctionPointer(alias.target))
+				declarations.push(Alias(hxiName(alias.qualifiedName), lowerType(alias.target, records, enums, aliases, true, callbackNames), alias.span));
 		var used:Map<String, Bool> = [];
 		for (functionModel in model.functions)
 			functionModel.loweredName = uniqueName("__cxx_" + sanitize(functionModel.qualifiedName), functionModel.symbol, used);
@@ -66,13 +99,13 @@ class CxxAbiLowerer {
 					releaseSymbols.set(ownerName, release.thunkSymbol == null ? release.symbol : release.thunkSymbol);
 			}
 		for (functionModel in model.functions)
-			declarations.push(lowerFunction(functionModel, functionModel.loweredName, records, enums, aliases,
+			declarations.push(lowerFunction(functionModel, functionModel.loweredName, records, enums, aliases, callbackNames,
 				releaseSymbols.get(functionModel.qualifiedName)));
 		for (record in model.records)
 			for (method in record.methods) {
 				var name = uniqueName("__cxx_" + sanitize(method.qualifiedName), method.symbol, used);
 				method.loweredName = name;
-				declarations.push(lowerMethod(method, name, records, enums, aliases));
+				declarations.push(lowerMethod(method, name, records, enums, aliases, callbackNames));
 			}
 		declarations.sort(function(left, right) return Reflect.compare(declarationName(left), declarationName(right)));
 		var source = model.span.file;
@@ -96,7 +129,7 @@ class CxxAbiLowerer {
 	}
 
 	static function lowerRecord(record:CxxRecord, trivialValues:Bool, valueRecords:Map<String, Bool>, records:Map<String, CxxRecord>,
-			enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>):HxiDeclaration {
+			enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>, callbackNames:Map<String, String>):HxiDeclaration {
 		if (!valueRecords.exists(record.qualifiedName)
 			|| !trivialValues
 			|| !record.isStandardLayout
@@ -108,7 +141,7 @@ class CxxAbiLowerer {
 		for (field in record.fields)
 			fields.push({
 				name: field.name,
-				type: lowerType(field.type, records, enums, aliases, false),
+				type: lowerType(field.type, records, enums, aliases, false, callbackNames),
 				offset: field.offset,
 				ownership: HxiOwnership.Unspecified,
 				handleDisposition: HxiHandleDisposition.Unspecified,
@@ -120,24 +153,27 @@ class CxxAbiLowerer {
 		return Structure(hxiName(record.qualifiedName), record.size, record.align, fields, record.span);
 	}
 
-	static function lowerEnum(enumModel:CxxEnum, enums:Map<String, CxxEnum>, records:Map<String, CxxRecord>, aliases:Map<String, CxxAlias>):HxiDeclaration {
+	static function lowerEnum(enumModel:CxxEnum, enums:Map<String, CxxEnum>, records:Map<String, CxxRecord>, aliases:Map<String, CxxAlias>,
+			callbackNames:Map<String, String>):HxiDeclaration {
 		var values = [
 			for (value in enumModel.values)
 				{name: value.name, value: Int64.parseString(value.value), span: value.span}
 		];
-		return Enumeration(hxiName(enumModel.qualifiedName), lowerType(enumModel.underlying, records, enums, aliases, true), false, values, enumModel.span);
+		return Enumeration(hxiName(enumModel.qualifiedName), lowerType(enumModel.underlying, records, enums, aliases, true, callbackNames), false, values,
+			enumModel.span);
 	}
 
 	static function lowerFunction(functionModel:CxxFunction, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>, ownedRelease:Null<String>):HxiDeclaration {
-		return Function(name, parameters(functionModel.parameters, records, enums, aliases), lowerType(functionModel.result, records, enums, aliases, true),
+			aliases:Map<String, CxxAlias>, callbackNames:Map<String, String>, ownedRelease:Null<String>):HxiDeclaration {
+		return Function(name, parameters(functionModel.parameters, records, enums, aliases, callbackNames),
+			lowerType(functionModel.result, records, enums, aliases, true, callbackNames),
 			functionModel.thunkSymbol == null ? functionModel.symbol : functionModel.thunkSymbol, false, "cdecl",
 			resultPolicy(functionModel.result, ownedRelease), functionModel.span);
 	}
 
-	static function lowerMethod(method:CxxMethod, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>):HxiDeclaration {
-		var parameters = parameters(method.parameters, records, enums, aliases);
+	static function lowerMethod(method:CxxMethod, name:String, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>,
+			callbackNames:Map<String, String>):HxiDeclaration {
+		var parameters = parameters(method.parameters, records, enums, aliases, callbackNames);
 		if (!method.isStatic) {
 			var ownerType:HxiType = Named(hxiName(method.owner));
 			parameters.unshift({
@@ -151,17 +187,17 @@ class CxxAbiLowerer {
 				span: method.span
 			});
 		}
-		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true),
+		return Function(name, parameters, lowerType(method.result, records, enums, aliases, true, callbackNames),
 			method.thunkSymbol == null ? method.symbol : method.thunkSymbol, false, "cdecl", resultPolicy(method.result), method.span);
 	}
 
 	static function parameters(parameters:Array<CxxModel.CxxParameter>, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>):Array<HxiModel.HxiParameter> {
+			aliases:Map<String, CxxAlias>, callbackNames:Map<String, String>):Array<HxiModel.HxiParameter> {
 		var result:Array<HxiModel.HxiParameter> = [];
 		for (parameter in parameters) {
 			result.push({
 				name: parameter.name,
-				type: lowerType(parameter.type, records, enums, aliases, false),
+				type: lowerType(parameter.type, records, enums, aliases, false, callbackNames),
 				direction: In,
 				ownership: Unspecified,
 				handleDisposition: Unspecified,
@@ -184,13 +220,19 @@ class CxxAbiLowerer {
 		return result;
 	}
 
-	static function lowerType(type:CxxType, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>, allowVoid:Bool):HxiType {
+	static function lowerType(type:CxxType, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>, allowVoid:Bool,
+			callbackNames:Map<String, String>):HxiType {
 		return switch type {
 			case CxxVoid: Primitive("void");
 			case CxxPrimitive(name): Primitive(name);
-			case CxxConst(element): Const(lowerType(element, records, enums, aliases, allowVoid));
-			case CxxPointer(element): Pointer(lowerType(element, records, enums, aliases, false));
-			case CxxReference(element): Pointer(lowerType(element, records, enums, aliases, false));
+			case CxxConst(element): Const(lowerType(element, records, enums, aliases, allowVoid, callbackNames));
+			case CxxPointer(element): Pointer(lowerType(element, records, enums, aliases, false, callbackNames));
+			case CxxReference(element): Pointer(lowerType(element, records, enums, aliases, false, callbackNames));
+			case CxxFunctionPointer(_, _, _):
+				var callbackName = callbackNames.get(typeKey(type));
+				if (callbackName == null)
+					throw "CXX021 missing lowered callback declaration";
+				Named(callbackName);
 			case CxxStringView: Primitive("utf8");
 			case CxxByteSpan(_): Pointer(Primitive("u8"));
 			case CxxNamed(name):
@@ -201,6 +243,73 @@ class CxxAbiLowerer {
 			case CxxUnsupported(raw, reason): throw 'CXX009 unsupported C++ type "$raw": $reason';
 		};
 	}
+
+	static function lowerCallback(callback:CxxCallbackType, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>, aliases:Map<String, CxxAlias>,
+			callbackNames:Map<String, String>):HxiDeclaration {
+		var functionPointer = switch callback.type {
+			case CxxFunctionPointer(parameters, result, _): {parameters: parameters, result: result};
+			case _: throw "CXX021 expected a C++ function pointer callback";
+		};
+		var parameters:Array<HxiModel.HxiParameter> = [];
+		for (index in 0...functionPointer.parameters.length)
+			parameters.push({
+				name: 'arg$index',
+				type: lowerType(functionPointer.parameters[index], records, enums, aliases, false, callbackNames),
+				direction: HxiParameterDirection.In,
+				ownership: HxiOwnership.Unspecified,
+				handleDisposition: HxiHandleDisposition.Unspecified,
+				retained: false,
+				metadata: [],
+				span: callback.span
+			});
+		return HxiDeclaration.Callback(callback.name, parameters, lowerType(functionPointer.result, records, enums, aliases, true, callbackNames), "cdecl",
+			callback.span);
+	}
+
+	static function collectCallbackTypes(type:CxxType, span:compiler.Source.SourceSpan, callbackNames:Map<String, String>,
+			callbackTypes:Map<String, CxxCallbackType>):Void {
+		switch type {
+			case CxxConst(element) | CxxPointer(element) | CxxReference(element):
+				collectCallbackTypes(element, span, callbackNames, callbackTypes);
+			case CxxFunctionPointer(parameters, result, _):
+				var key = typeKey(type);
+				if (!callbackNames.exists(key)) {
+					var name = "__cxx_callback_" + StringTools.hex(hash(key), 8).toLowerCase();
+					callbackNames.set(key, name);
+					callbackTypes.set(key, {name: name, type: type, span: span});
+				}
+				for (parameter in parameters)
+					collectCallbackTypes(parameter, span, callbackNames, callbackTypes);
+				collectCallbackTypes(result, span, callbackNames, callbackTypes);
+			case _:
+		}
+	}
+
+	static function isFunctionPointer(type:CxxType):Bool
+		return switch type {
+			case CxxFunctionPointer(_, _, _): true;
+			case CxxConst(element): isFunctionPointer(element);
+			case _: false;
+		};
+
+	static function typeKey(type:CxxType):String
+		return switch type {
+			case CxxVoid: "void";
+			case CxxPrimitive(name): "primitive:" + name;
+			case CxxNamed(name): "named:" + name;
+			case CxxConst(element): "const<" + typeKey(element) + ">";
+			case CxxPointer(element): "pointer<" + typeKey(element) + ">";
+			case CxxReference(element): "reference<" + typeKey(element) + ">";
+			case CxxRValueReference(element): "rvalue-reference<" + typeKey(element) + ">";
+			case CxxFunctionPointer(parameters, result, isNoexcept):
+				"function<" + [for (parameter in parameters) typeKey(parameter)].join(",")
+					+ ">"
+					+ typeKey(result)
+					+ (isNoexcept ? "!" : "?");
+			case CxxStringView: "string-view";
+			case CxxByteSpan(element): "byte-span:" + Std.string(element);
+			case CxxUnsupported(raw, reason): "unsupported:" + raw + ":" + reason;
+		};
 
 	static function resultPolicy(type:CxxType, ?ownedRelease:String):HxiResultPolicy {
 		var borrowed = pointerResult(type),

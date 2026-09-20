@@ -3,6 +3,8 @@
 #include <stdexcept>
 
 namespace cxxthunk {
+    using BinaryCallback = int (*)(int, int) noexcept;
+
     class Counter {
     public:
         int value() const;
@@ -10,5 +12,6 @@ namespace cxxthunk {
     };
 
     Counter *acquire() noexcept;
+    int apply(BinaryCallback callback, int left, int right) noexcept;
     int add(int left, int right);
 }

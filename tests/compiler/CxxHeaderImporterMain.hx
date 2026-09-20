@@ -1,5 +1,6 @@
 import compiler.ffi.CxxHeaderImporter;
 import compiler.ffi.CxxModel.CxxMethod;
+import compiler.ffi.CxxModel.CxxType;
 import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxSubsetValidator;
 import compiler.ffi.CxxThunkGenerator;
@@ -119,6 +120,40 @@ class CxxHeaderImporterMain {
 			&& projection.indexOf("public function size():haxe.Int64") >= 0
 			&& projection.indexOf("public static function make(value:Int):Int") >= 0,
 			"C++ records should produce Haxe object wrappers over their lowered HXI methods");
+		var callbackImport = CxxHeaderImporter.importHeader("tests/ffi/cxx_runtime_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_callback");
+		var callbackAlias = Lambda.find(callbackImport.model.aliases, alias -> alias.qualifiedName == "nkui::BinaryCallback"),
+			applyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply"),
+			rawApplyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply_raw"),
+			callbackHxi = HxiWriter.write(callbackImport.hxi, "// test");
+		var callbackAliasValid = callbackAlias != null && switch callbackAlias.target {
+			case CxxType.CxxFunctionPointer([CxxType.CxxPrimitive("c_int"), CxxType.CxxPrimitive("c_int")], CxxType.CxxPrimitive("c_int"), true): true;
+			case _: false;
+		};
+		var callbackParameterValid = applyFunction != null && switch applyFunction.parameters[0].type {
+			case CxxType.CxxNamed("nkui::BinaryCallback"): true;
+			case _: false;
+		};
+		var rawCallbackParameterValid = rawApplyFunction != null && switch rawApplyFunction.parameters[0].type {
+			case CxxType.CxxFunctionPointer([CxxType.CxxPrimitive("c_int")], CxxType.CxxPrimitive("c_int"), false): true;
+			case _: false;
+		};
+		expect(callbackAliasValid
+			&& callbackParameterValid
+			&& rawCallbackParameterValid
+			&& callbackHxi.indexOf("callback __cxx_nkui__BinaryCallback = fn(arg0: c_int, arg1: c_int) -> c_int;") >= 0
+			&& callbackHxi.indexOf("callback __cxx_callback_") >= 0
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(callback: __cxx_nkui__BinaryCallback") >= 0,
+			"C++ function-pointer aliases should lower to typed HXI callbacks without a thunk");
+		var callbackPlan = Lambda.find(callbackImport.plans, plan -> plan.name == "__cxx_nkui__apply");
+		var callbackArgumentValid = callbackPlan != null && switch callbackPlan.arguments[0] {
+			case HxiAbiValue.CallbackValue("__cxx_nkui__BinaryCallback", _, _, false): true;
+			case _: false;
+		};
+		var callbackDispatchValid = callbackPlan != null && switch callbackPlan.dispatch {
+			case NativeDispatch.DirectSymbol: true;
+			case _: false;
+		};
+		expect(callbackArgumentValid && callbackDispatchValid, "C++ callback parameters should use the existing direct native call plan");
 		var compileDatabase = "/tmp/haxeon-cxx-compile-commands.json",
 			headerPath = FileSystem.fullPath("tests/ffi/cxx_import_fixture.hpp");
 		File.saveContent(compileDatabase, Json.stringify([

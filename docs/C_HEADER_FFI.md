@@ -644,7 +644,15 @@ Semantic projections name snake-case enums in concise PascalCase, such as
 `Result.Ok` and `EventKind.WindowClose`. The C/HXI spellings remain unchanged
 at the native interface boundary.
 
-C function-pointer typedefs import as HXI `callback` declarations. Scalar and
+C and C++ free-function-pointer typedefs import as HXI `callback` declarations.
+For C++, `using Callback = result (*)(args...)` and equivalent typedefs are
+supported for input callback parameters. The importer preserves the named
+callback type, lowers the native argument as the function-pointer ABI value,
+and invokes the exact Clang-selected C++ symbol directly; no C++ adapter thunk
+is generated. C++ callback results, member-function pointers, overloaded
+function-pointer types, and `std::function` remain unsupported.
+
+Scalar and
 by-value structure arguments and results use the same recursive ABI descriptors
 as ordinary calls, with `void` also accepted as a result.
 Projection generates a typed Haxe function alias and a distinct managed callback

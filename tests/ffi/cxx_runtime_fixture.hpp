@@ -1,6 +1,8 @@
 #pragma once
 
 namespace nkui {
+    using BinaryCallback = int (*)(int, int) noexcept;
+
     class DisplayList {
     public:
         int count;
@@ -11,6 +13,8 @@ namespace nkui {
     };
 
     DisplayList *acquire() noexcept;
+    int apply(BinaryCallback callback, int left, int right) noexcept;
+    int apply_raw(int (*callback)(int), int value) noexcept;
     void mark(DisplayList &value) noexcept;
     int score(const DisplayList &value) noexcept;
 }

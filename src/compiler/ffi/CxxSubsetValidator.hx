@@ -253,6 +253,15 @@ class CxxSubsetValidator {
 				validateType(element, byValue, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			case CxxType.CxxPointer(element) | CxxType.CxxReference(element):
 				validateType(element, false, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+			case CxxType.CxxFunctionPointer(parameters, result, _):
+				if (isFunctionPointer(result))
+					diagnostics.push({code: "CXX021", message: "nested function-pointer callback results are unsupported", span: span});
+				validateCallbackResult(result, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+				for (parameter in parameters) {
+					if (isFunctionPointer(parameter))
+						diagnostics.push({code: "CXX021", message: "nested function-pointer callback parameters are unsupported", span: span});
+					validateType(parameter, false, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+				}
 			case CxxType.CxxRValueReference(_):
 				diagnostics.push({code: "CXX001", message: "rvalue references are unsupported by CXX_ABI_V1", span: span});
 			case CxxType.CxxStringView:
@@ -313,5 +322,30 @@ class CxxSubsetValidator {
 				message: "std::span byte results are unsupported; return an owning byte container or a pointer/length pair",
 				span: span
 			});
+		if (isFunctionPointer(type))
+			diagnostics.push({
+				code: "CXX021",
+				message: "function-pointer results are unsupported; pass callbacks as input parameters",
+				span: span
+			});
 	}
+
+	static function validateCallbackResult(type:CxxType, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
+		switch type {
+			case CxxType.CxxPointer(_) | CxxType.CxxReference(_) | CxxType.CxxRValueReference(_) | CxxType.CxxStringView | CxxType.CxxByteSpan(_):
+				diagnostics.push({code: "CXX021", message: "callback results must be scalar, enum, validated aggregate, or void", span: span});
+			case CxxType.CxxFunctionPointer(_, _, _):
+				diagnostics.push({code: "CXX021", message: "nested function-pointer callback results are unsupported", span: span});
+			case _:
+				validateType(type, true, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+		}
+	}
+
+	static function isFunctionPointer(type:CxxType):Bool
+		return switch type {
+			case CxxType.CxxFunctionPointer(_, _, _): true;
+			case CxxType.CxxConst(element): isFunctionPointer(element);
+			case _: false;
+		};
 }

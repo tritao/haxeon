@@ -321,6 +321,11 @@ private class CxxAstBuilder {
 			case CxxType.CxxConst(element): markType(element, byValueRequired, declarations, types, byValue);
 			case CxxType.CxxPointer(element) | CxxType.CxxReference(element) | CxxType.CxxRValueReference(element):
 				markType(element, false, declarations, types, byValue);
+			case CxxType.CxxFunctionPointer(parameters, result, _):
+				var changed = markType(result, true, declarations, types, byValue);
+				for (parameter in parameters)
+					changed = markType(parameter, false, declarations, types, byValue) || changed;
+				changed;
 			case CxxType.CxxNamed(name): markName(name, byValueRequired, declarations, types, byValue);
 			case _: false;
 		};
@@ -452,6 +457,14 @@ private class CxxAstBuilder {
 			return CxxType.CxxUnsupported(raw, "empty type");
 		if (value.indexOf("volatile") >= 0)
 			return CxxType.CxxUnsupported(value, "volatile-qualified types are not supported");
+		var functionPointer = parseFunctionPointer(value);
+		if (functionPointer != null) {
+			var parameters = functionPointer.arguments.length == 1 && functionPointer.arguments[0] == "void" ? [] : [
+				for (argument in functionPointer.arguments)
+					parseType(argument, namespaces, owner)
+			];
+			return CxxType.CxxFunctionPointer(parameters, parseType(functionPointer.result, namespaces, owner), functionPointer.isNoexcept);
+		}
 		if (StringTools.endsWith(value, "&&"))
 			return CxxType.CxxRValueReference(parseType(StringTools.trim(value.substring(0, value.length - 2)), namespaces, owner));
 		if (StringTools.endsWith(value, "&"))
@@ -539,9 +552,57 @@ private class CxxAstBuilder {
 	static function compactType(value:String):String
 		return StringTools.replace(StringTools.trim(value), " ", "");
 
-	static function typeName(node:Dynamic):String
-		return stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "desugaredQualType"),
-			stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "qualType"), ""));
+	static function typeName(node:Dynamic):String {
+		var type:Dynamic = ClangAstTools.field(node, "type"),
+			qualified:String = ClangAstTools.field(type, "qualType"),
+			desugared:String = ClangAstTools.field(type, "desugaredQualType");
+		// Preserve a named function-pointer alias such as `Callback` while still
+		// using Clang's desugared spelling for ordinary aliases and platform types.
+		if (qualified != null && (parseFunctionPointer(qualified) != null || desugared != null && parseFunctionPointer(desugared) != null))
+			return qualified;
+		return stringOr(desugared, stringOr(qualified, ""));
+	}
+
+	static function parseFunctionPointer(value:String):Null<{result:String, arguments:Array<String>, isNoexcept:Bool}> {
+		value = StringTools.trim(value);
+		var pattern = ~/^(.+)\(\s*\*\s*\)\s*\((.*)\)(?:\s+noexcept)?$/;
+		if (!pattern.match(value))
+			return null;
+		return {
+			result: StringTools.trim(pattern.matched(1)),
+			arguments: splitTypeList(pattern.matched(2)),
+			isNoexcept: StringTools.endsWith(value, "noexcept")
+		};
+	}
+
+	static function splitTypeList(value:String):Array<String> {
+		value = StringTools.trim(value);
+		if (value.length == 0)
+			return [];
+		var result:Array<String> = [], start = 0, angle = 0, parentheses = 0, brackets = 0;
+		for (index in 0...value.length) {
+			switch value.charAt(index) {
+				case "<":
+					angle++;
+				case ">":
+					angle--;
+				case "(":
+					parentheses++;
+				case ")":
+					parentheses--;
+				case "[":
+					brackets++;
+				case "]":
+					brackets--;
+				case "," if (angle == 0 && parentheses == 0 && brackets == 0):
+					result.push(StringTools.trim(value.substring(start, index)));
+					start = index + 1;
+				case _:
+			}
+		}
+		result.push(StringTools.trim(value.substring(start)));
+		return result;
+	}
 
 	static function resultType(signature:String):String {
 		var open = signature.indexOf("(");
