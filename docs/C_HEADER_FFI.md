@@ -165,6 +165,12 @@ needs no Haxeon-specific hook. The generated FFI library is distinct from the
 package's `.hdll` because HXI `@:cNative` calls use the platform shared-library
 ABI.
 
+On Windows, the CMake provider requests configuration-specific native output
+directories and links the target's import archive (`.lib` for MSVC or `.dll.a`
+for MinGW) into the generated thunk library. The CMake target should therefore
+produce the package's declared `<package>.hdll` output and its matching import
+archive in the same native output directory.
+
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:
 its methods are not `noexcept`, and the shared UI library hides its C++ symbols.

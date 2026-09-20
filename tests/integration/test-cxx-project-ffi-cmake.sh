@@ -43,6 +43,7 @@ set_target_properties(foo PROPERTIES
   SUFFIX ".hdll"
   LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
   RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
+  ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
 )
 CMAKE
 cat > "$project_dir/foo/ffi/cxx_thunk_project.ffi.json" <<'JSON'

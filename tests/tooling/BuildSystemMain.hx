@@ -20,6 +20,7 @@ import build.execution.Executor;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
+import build.native.NativeToolchain;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
@@ -88,6 +89,17 @@ class BuildSystemMain {
 			layout = new TargetLayout(environment);
 		expect(layout.targetDirectory() == "android-arm64" && layout.packageRoot("foo").indexOf("android-arm64") >= 0,
 			"non-host artifacts should be isolated by target");
+		var msvcToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-msvc"]), BuildProfile.Debug, windows)),
+			gnuWindows = Target.parse("windows-x86_64-gnu"),
+			gnuToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-gnu"]), BuildProfile.Debug, gnuWindows)),
+			msvcCompile = msvcToolchain.compileArguments("fixture.cpp", "fixture.obj", [], "c++20"),
+			gnuCompile = gnuToolchain.compileArguments("fixture.cpp", "fixture.o", [], "c++20"),
+			msvcLink = msvcToolchain.sharedArguments("fixture.dll", ["fixture.obj"], ["foo.lib"]),
+			gnuLink = gnuToolchain.sharedArguments("fixture.dll", ["fixture.o"], ["libfoo.dll.a"]);
+		expect(msvcCompile.indexOf("/std:c++20") >= 0 && msvcLink.indexOf("/LD") >= 0 && msvcLink.indexOf("foo.lib") >= 0,
+			"MSVC C++ toolchains should use cl standard, DLL, and import-library arguments");
+		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0 && gnuLink.indexOf("libfoo.dll.a") >= 0,
+			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
 		removeTree(root);
 	}
 
