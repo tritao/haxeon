@@ -788,7 +788,7 @@ class CHeaderImporter {
 			// A top-level record marker has one space after the separator. Field
 			// lines are indented further; otherwise a by-value nested record field
 			// would replace the layout currently being collected.
-			var record = ~/^\s*[0-9]+\s*\|\s(?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
+			var record = ~/^\s*[0-9]+\s*\| (?:struct|class|union)\s+([A-Za-z_][A-Za-z0-9_]*)/;
 			if (record.match(line)) {
 				current = record.matched(1);
 				offsets = [];
@@ -798,7 +798,7 @@ class CHeaderImporter {
 			}
 			if (current == null)
 				continue;
-			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
+			var fieldLine = ~/^\s*([0-9]+) \| {3}\S.* ([A-Za-z_][A-Za-z0-9_]*)$/;
 			if (fieldLine.match(line))
 				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
 			var sizeValue = ~/sizeof=([0-9]+)/;

@@ -23,9 +23,11 @@ class CHeaderImporterMain {
 		expect(labeledLayout != null && labeledLayout.size == 32 && labeledLayout.align == 8 && labeledLayout.offsets.get("value") == 0,
 			"record layout parser should accept labeled Clang size and alignment trailers");
 		var nestedLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\n" + "         0 | struct sample_parent\n"
-			+ "         0 |   struct sample_child child\n" + "         8 |   uint32_t value\n" + "           | [sizeof=16, align=8]\n");
+			+ "         0 |   uint32_t struct_size\n" + "         8 |   struct sample_child child\n"
+			+ "        16 |   uint32_t value\n" + "           | [sizeof=24, align=8]\n");
 		expect(nestedLayout.get("sample_parent") != null
-			&& nestedLayout.get("sample_parent").size == 16
+			&& nestedLayout.get("sample_parent").size == 24
+			&& nestedLayout.get("sample_parent").offsets.get("struct_size") == 0
 			&& nestedLayout.get("sample_child") == null,
 			"record layout parser should not treat indented nested records as top-level layouts");
 		expect(CHeaderImporter.isUserDeclaration({loc: {}}, ["D:/project/include"], "D:\\project\\include\\fixture.h"),
