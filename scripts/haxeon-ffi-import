@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-exec "$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src --run FfiImportMain "$@"
+haxe_bin=${HAXEON_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
+exec "$haxe_bin" --cwd "$root_dir" -cp src --run FfiImportMain "$@"
