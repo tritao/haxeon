@@ -236,7 +236,7 @@ class HxiParserMain {
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
 		layoutCompiler.update("LayoutMain.hx",
-			"import nativekit.ffi.style; import nativekit.ffi.Types; function main():Int { var point:Point = new Point(); point.set_textValue(42); return point.get_textValue(); }");
+			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); point.set_textValue(42); return point.get_textValue(); }");
 		layoutCompiler.analyze("LayoutMain");
 		var mappedDependencyCompiler = new Compiler();
 		mappedDependencyCompiler.addFfiInterface("base.hxi", 'interface base @target("x86_64-linux-gnu") @library("base") { handle nk_handle : u32; }');

@@ -53,7 +53,7 @@ function main():Int {
 	var command = systemName == "Windows" ? "cmd /C \"echo xé>nul\"" : "test xé = xé";
 	if (Sys.command(command) != 0)
 		return 7;
-	var argumentCommand = systemName == "Windows" ? "tests/programs/sys-command-args.cmd" : "test";
+	var argumentCommand = systemName == "Windows" ? "cmd /C call tests\\programs\\sys-command-args.cmd" : "test";
 	var argumentValues = systemName == "Windows" ? ["value with spaces", "==", "value with spaces"] : ["value with spaces; 'quoted'", "=", "value with spaces; 'quoted'"];
 	if (Sys.command(argumentCommand, argumentValues) != 0)
 		return 13;

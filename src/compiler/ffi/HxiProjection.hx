@@ -27,7 +27,8 @@ class HxiProjection {
 			return "";
 		var path = model.name + ".hxmap",
 			planned = HxiProjectionPlanner.plan(path, model, omitted, visibleDeclarations, providedAbi, profile);
-		return HxiHaxeEmitter.emit(planned);
+		var generated = HxiHaxeEmitter.emitModules(planned);
+		return generated.length == 0 ? "" : generated[0].source;
 	}
 
 	/** Emit the projection as one or more Haxe modules according to its profile. */
