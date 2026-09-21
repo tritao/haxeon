@@ -343,7 +343,8 @@ class CxxHeaderImporterMain {
 			"CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
 			thunkSource = CxxThunkGenerator.source(thunked.model),
 			thunkFunction = Lambda.find(thunked.model.functions, functionModel -> functionModel.name == "add"),
-			thunkMethod = Lambda.find(thunked.model.records[0].methods, method -> method.name == "fail"),
+			thunkRecord = Lambda.find(thunked.model.records, record -> record.qualifiedName == "cxxthunk::Counter"),
+			thunkMethod = thunkRecord == null ? null : Lambda.find(thunkRecord.methods, method -> method.name == "fail"),
 			thunkAddPlan = thunkFunction == null
 				|| thunkFunction.loweredName == null ? null : Lambda.find(thunked.plans, plan -> plan.name == thunkFunction.loweredName),
 			thunkFailPlan = thunkMethod == null
@@ -378,7 +379,8 @@ class CxxHeaderImporterMain {
 			stringViewFunctions = Lambda.find(CxxProjection.sources(stringView.model, stringView.hxi, null, stringView.plans),
 				source -> source.file == "CxxStringViewFixtureFunctions.hx")
 				.source,
-			viewMethod = Lambda.find(stringView.model.records[0].methods, method -> method.name == "count"),
+			viewRecord = Lambda.find(stringView.model.records, record -> record.qualifiedName == "cxxview::Text"),
+			viewMethod = viewRecord == null ? null : Lambda.find(viewRecord.methods, method -> method.name == "count"),
 			viewFunction = Lambda.find(stringView.model.functions, functionModel -> functionModel.name == "count"),
 			viewMethodPlan = viewMethod == null
 				|| viewMethod.loweredName == null ? null : Lambda.find(stringView.plans, plan -> plan.name == viewMethod.loweredName),
@@ -421,7 +423,8 @@ class CxxHeaderImporterMain {
 			spanSources = CxxProjection.sources(span.model, span.hxi, null, span.plans),
 			spanProjection = Lambda.find(spanSources, source -> source.file == "Buffer.hx").source,
 			spanFunctions = Lambda.find(spanSources, source -> source.file == "CxxSpanFixtureFunctions.hx").source,
-			spanMethod = Lambda.find(span.model.records[0].methods, method -> method.name == "byteCount"),
+			spanRecord = Lambda.find(span.model.records, record -> record.qualifiedName == "cxxspan::Buffer"),
+			spanMethod = spanRecord == null ? null : Lambda.find(spanRecord.methods, method -> method.name == "byteCount"),
 			spanFunction = Lambda.find(span.model.functions, functionModel -> functionModel.name == "byteCount"),
 			spanMethodPlan = spanMethod == null
 				|| spanMethod.loweredName == null ? null : Lambda.find(span.plans, plan -> plan.name == spanMethod.loweredName),
