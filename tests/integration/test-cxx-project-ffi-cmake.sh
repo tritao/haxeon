@@ -176,6 +176,12 @@ fi
 test -s "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks$ffi_object_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/OwnedManagedWidget.hx"
+if command -v dumpbin.exe >/dev/null 2>&1 || command -v dumpbin >/dev/null 2>&1; then
+	dumpbin_command=$(command -v dumpbin.exe || command -v dumpbin)
+	echo "CMake fixture DLL dependencies:"
+"$dumpbin_command" /DEPENDENTS "$project_dir/app/build/host/native/foo/foo.hdll" || true
+"$dumpbin_command" /DEPENDENTS "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix" || true
+fi
 grep -q '@owned("haxeon_cxx_thunk_' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @retained)' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q 'return OwnedManagedWidget.adopt' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/CxxCmakeThunkProjectFunctions.hx"
