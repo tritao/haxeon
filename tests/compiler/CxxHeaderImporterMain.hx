@@ -15,6 +15,7 @@ import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiWriter;
 import compiler.ffi.NativeCallPlan.NativeDispatch;
 import haxe.Json;
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -167,7 +168,14 @@ class CxxHeaderImporterMain {
 			case _: false;
 		};
 		expect(callbackArgumentValid && callbackDispatchValid, "C++ callback parameters should use the existing direct native call plan");
-		var compileDatabase = "/tmp/haxeon-cxx-compile-commands.json",
+		var temporaryRoot = Sys.getEnv("TMPDIR");
+		if (temporaryRoot == null || temporaryRoot.length == 0)
+			temporaryRoot = Sys.getEnv("TEMP");
+		if (temporaryRoot == null || temporaryRoot.length == 0)
+			temporaryRoot = Sys.getEnv("TMP");
+		if (temporaryRoot == null || temporaryRoot.length == 0)
+			temporaryRoot = ".";
+		var compileDatabase = Path.join([temporaryRoot, 'haxeon-cxx-compile-commands-${Std.int(Date.now().getTime())}.json']),
 			headerPath = FileSystem.fullPath("tests/ffi/cxx_import_fixture.hpp");
 		File.saveContent(compileDatabase, Json.stringify([
 			{
@@ -178,6 +186,7 @@ class CxxHeaderImporterMain {
 		]));
 		var fromDatabase = CxxHeaderImporter.importHeader(headerPath, "x86_64-linux-gnu", ["tests/ffi"], "clang++", null, null, null, null, "c++20", null,
 			compileDatabase);
+		FileSystem.deleteFile(compileDatabase);
 		expect(fromDatabase.model.functions.length == model.functions.length, "compile_commands.json flags should be accepted by the shared Clang frontend");
 		var diagnostics = "";
 		try {
@@ -328,7 +337,7 @@ class CxxHeaderImporterMain {
 		} catch (error:Dynamic)
 			msvcVirtualDiagnostics = Std.string(error);
 		expect(msvcVirtualDiagnostics.indexOf("CXX015") >= 0, "MSVC virtual dispatch should remain rejected until its ABI profile is implemented");
-		var thunked = CxxHeaderImporter.importHeader("tests/ffi/cxx_thunk_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_thunk",
+		var thunked = CxxHeaderImporter.importHeader("tests/ffi/cxx_thunk_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++", "cxx_thunk",
 			"CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
 			thunkSource = CxxThunkGenerator.source(thunked.model),
 			thunkFunction = Lambda.find(thunked.model.functions, functionModel -> functionModel.name == "add"),
@@ -353,11 +362,11 @@ class CxxHeaderImporterMain {
 				"throwing methods should use a direct call to their generated thunk");
 		var stringViewDisabled = "";
 		try {
-			CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"]);
 		} catch (error:Dynamic)
 			stringViewDisabled = Std.string(error);
 		expect(stringViewDisabled.indexOf("CXX017") >= 0, "std::string_view should require an explicit generated adapter");
-		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_view",
+		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++", "cxx_view",
 			"CxxStringViewFixture", null, null, "c++20", null, null, false, false, false, true),
 			stringViewText = HxiWriter.write(stringView.hxi, "// test"),
 			stringViewSource = CxxThunkGenerator.source(stringView.model),
@@ -399,11 +408,11 @@ class CxxHeaderImporterMain {
 			}
 		var spanDisabled = "";
 		try {
-			CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"]);
+			CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"]);
 		} catch (error:Dynamic)
 			spanDisabled = Std.string(error);
 		expect(spanDisabled.indexOf("CXX018") >= 0, "std::span byte adapters should require an explicit generated adapter");
-		var span = CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_span",
+		var span = CxxHeaderImporter.importHeader("tests/ffi/cxx_span_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++", "cxx_span",
 			"CxxSpanFixture", null, null, "c++20", null, null, false, false, false, true),
 			spanText = HxiWriter.write(span.hxi, "// test"),
 			spanSource = CxxThunkGenerator.source(span.model),
