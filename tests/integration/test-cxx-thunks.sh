@@ -8,15 +8,19 @@ mkdir -p "$repo_dir/out/cxx_thunk_projection"
 case "$(uname -s):$(uname -m)" in
 	Linux:x86_64)
 		target="x86_64-linux-gnu"
+		library_path="$repo_dir/out/libcxx_thunk_fixture.so"
 		;;
 	Linux:aarch64|Linux:arm64)
 		target="aarch64-linux-gnu"
+		library_path="$repo_dir/out/libcxx_thunk_fixture.so"
 		;;
 	Darwin:x86_64)
 		target="x86_64-apple-darwin"
+		library_path="$repo_dir/out/libcxx_thunk_fixture.dylib"
 		;;
 	Darwin:arm64)
 		target="arm64-apple-darwin"
+		library_path="$repo_dir/out/libcxx_thunk_fixture.dylib"
 		;;
 	*)
 		echo "unsupported host for C++ thunk integration test" >&2
@@ -29,14 +33,14 @@ esac
 	--std=c++20 \
 	--target="$target" \
 	--cxx-thunks="$repo_dir/out/cxx_thunk_generated.cpp" \
-	--library="$repo_dir/out/libcxx_thunk_fixture.so" \
+	--library="$library_path" \
 	--interface=CxxThunkFixture \
 	--haxe-output-dir="$repo_dir/out/cxx_thunk_projection" \
 	--output="$repo_dir/out/cxx_thunk_fixture.hxi" \
 	"$repo_dir/tests/ffi/cxx_thunk_fixture.hpp"
 
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-thunk-fixture.sh")
-"$repo_dir/scripts/replace-in-file.sh" "s#${repo_dir}/out/libcxx_thunk_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_thunk_fixture.hxi"
+test "$fixture_path" = "$library_path"
 grep -q 'haxeon_cxx_thunk_last_error' "$repo_dir/out/cxx_thunk_generated.cpp"
 grep -q 'C++ exception' "$repo_dir/out/cxx_thunk_projection/Counter.hx"
 grep -q 'class CxxThunkFixtureFunctions' "$repo_dir/out/cxx_thunk_projection/CxxThunkFixtureFunctions.hx"
