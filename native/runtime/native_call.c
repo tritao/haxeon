@@ -1499,6 +1499,5 @@ HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
 	vbyte *result = NULL;
 	if( message != NULL && message[0] != 0 )
 		result = haxeon_native_utf8_size(message) < 0 ? realtime_string_from_utf8("C++ thunk returned an invalid diagnostic") : realtime_string_from_utf8(message);
-	haxeon_native_unload(handle);
 	return result;
 }
