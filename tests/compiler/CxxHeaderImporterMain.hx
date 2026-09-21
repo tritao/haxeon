@@ -123,6 +123,7 @@ class CxxHeaderImporterMain {
 		var callbackImport = CxxHeaderImporter.importHeader("tests/ffi/cxx_runtime_fixture.hpp", "x86_64-linux-gnu", ["tests/ffi"], "clang++", "cxx_callback");
 		var callbackAlias = Lambda.find(callbackImport.model.aliases, alias -> alias.qualifiedName == "nkui::BinaryCallback"),
 			applyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply"),
+			acquireHandlerFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::acquire_handler"),
 			rawApplyFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::apply_raw"),
 			setHandlerFunction = Lambda.find(callbackImport.model.functions, functionModel -> functionModel.qualifiedName == "nkui::set_handler"),
 			callbackHxi = HxiWriter.write(callbackImport.hxi, "// test");
@@ -138,14 +139,20 @@ class CxxHeaderImporterMain {
 			case CxxType.CxxFunctionPointer([CxxType.CxxPrimitive("c_int")], CxxType.CxxPrimitive("c_int"), false): true;
 			case _: false;
 		};
+		var acquireHandlerResultValid = acquireHandlerFunction != null && switch acquireHandlerFunction.result {
+			case CxxType.CxxNamed("nkui::BinaryCallback"): true;
+			case _: false;
+		};
 		expect(callbackAliasValid
 			&& callbackParameterValid
+			&& acquireHandlerResultValid
 			&& rawCallbackParameterValid
 			&& setHandlerFunction != null
 			&& setHandlerFunction.parameters.length == 1
 			&& setHandlerFunction.parameters[0].retained
 			&& callbackHxi.indexOf("callback __cxx_nkui__BinaryCallback = fn(arg0: c_int, arg1: c_int) -> c_int;") >= 0
 			&& callbackHxi.indexOf("callback __cxx_callback_") >= 0
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__acquire_handler() -> __cxx_nkui__BinaryCallback") >= 0
 			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(callback: __cxx_nkui__BinaryCallback") >= 0
 			&& callbackHxi.indexOf("extern fn __cxx_nkui__set_handler(callback: __cxx_nkui__BinaryCallback @retained)") >= 0,
 			"C++ function-pointer aliases should lower to typed HXI callbacks without a thunk");

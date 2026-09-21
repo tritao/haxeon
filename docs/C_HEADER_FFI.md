@@ -646,11 +646,12 @@ at the native interface boundary.
 
 C and C++ free-function-pointer typedefs import as HXI `callback` declarations.
 For C++, `using Callback = result (*)(args...)` and equivalent typedefs are
-supported for input callback parameters. The importer preserves the named
-callback type, lowers the native argument as the function-pointer ABI value,
-and invokes the exact Clang-selected C++ symbol directly; no C++ adapter thunk
-is generated. C++ callback results, member-function pointers, overloaded
-function-pointer types, and `std::function` remain unsupported.
+supported for callback parameters and results. The importer preserves the named
+callback type, lowers the native value directly, and invokes the exact
+Clang-selected C++ symbol; no C++ adapter thunk is generated. A callback result
+projects as a managed callable handle with `call(...)` and `close()` methods.
+Member-function pointers, overloaded function-pointer types, and `std::function`
+remain unsupported.
 
 Scalar and
 by-value structure arguments and results use the same recursive ABI descriptors
@@ -672,7 +673,10 @@ after the callback returns, including exceptional returns, so retaining one does
 not extend the native address lifetime. A null address passed for a non-null HXI
 parameter causes the callback to return zero without entering Haxe. Pointer
 callback results, variadic callbacks, and callbacks with more than sixteen
-arguments are rejected for now.
+arguments are rejected for now. A returned callback is only valid while the
+originating native library remains loaded; Haxeon keeps the ordinary imported
+library cache alive and the returned handle must still be closed when no longer
+needed.
 
 Callback failures never unwind through the C stack. Each callback handle keeps
 the first unread failure in a small synchronized record and returns the ABI zero

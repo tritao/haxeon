@@ -74,9 +74,10 @@ cat > "$project_dir/foo/ffi/cxx_thunk_project.ffi.json" <<'JSON'
   "interface": "CxxCmakeThunkProject",
   "select": [
     "cxxthunk::Counter::value",
-    "cxxthunk::Counter::fail",
-    "cxxthunk::acquire",
-    "cxxthunk::apply",
+		"cxxthunk::Counter::fail",
+		"cxxthunk::acquire",
+		"cxxthunk::acquire_handler",
+		"cxxthunk::apply",
     "cxxthunk::set_handler",
     "cxxthunk::clear_handler",
     "cxxthunk::fire_handler",
@@ -115,11 +116,14 @@ function main():Int {
 		functionFailed = false;
 	try CxxCmakeThunkProjectFunctions.add(1, 0) catch (error:Dynamic) functionFailed = Std.string(error).indexOf("division-like failure") >= 0;
 	var callback = new __cxx_cxxthunk__BinaryCallbackCallback(function(left:Int, right:Int) return left + right),
-		callbackWorked = CxxCmakeThunkProject.__cxx_cxxthunk__apply(callback, 20, 22) == 42;
+		callbackWorked = CxxCmakeThunkProject.__cxx_cxxthunk__apply(callback, 20, 22) == 42,
+		returnedCallback = CxxCmakeThunkProject.__cxx_cxxthunk__acquire_handler(),
+		returnedCallbackWorked = returnedCallback.call(20, 22) == 42;
 	CxxCmakeThunkProject.__cxx_cxxthunk__set_handler(callback);
 	var retainedWorked = CxxCmakeThunkProject.__cxx_cxxthunk__fire_handler(21) == 42;
 	CxxCmakeThunkProject.__cxx_cxxthunk__clear_handler();
 	callback.close();
+	returnedCallback.close();
 	var owner = CxxCmakeThunkProjectFunctions.acquire_managed(),
 		managed = owner.borrow(),
 		managedWorked = managed.value() == 7,

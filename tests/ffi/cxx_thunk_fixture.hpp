@@ -18,6 +18,7 @@ namespace cxxthunk {
     };
 
     Counter *acquire() noexcept;
+    BinaryCallback acquire_handler() noexcept;
     int apply(BinaryCallback callback, int left, int right) noexcept;
     void set_handler(BinaryCallback callback HXI_RETAINED) noexcept;
     void clear_handler() noexcept;

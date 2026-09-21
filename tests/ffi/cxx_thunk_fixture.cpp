@@ -16,6 +16,14 @@ namespace cxxthunk {
         return &counter;
     }
 
+    static int add_handler(int left, int right) noexcept {
+        return left + right;
+    }
+
+    BinaryCallback acquire_handler() noexcept {
+        return &add_handler;
+    }
+
     int apply(BinaryCallback callback, int left, int right) noexcept {
         return callback == nullptr ? 0 : callback(left, right);
     }

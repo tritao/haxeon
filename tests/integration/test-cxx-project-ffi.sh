@@ -55,6 +55,7 @@ cat > "$project_dir/ffi/cxx_project.ffi.json" <<JSON
 	"select": [
 		"nkui::DisplayList::reset",
 		"nkui::DisplayList::size",
+		"nkui::acquire_handler",
 		"nkui::acquire"
 	],
 	"projection": true
@@ -67,7 +68,10 @@ import DisplayList;
 function main():Int {
 	var list = DisplayList.fromNative(CxxProject.__cxx_nkui__acquire());
 	list.reset();
-	return list.size() == 0 ? 42 : 1;
+	var callback = CxxProject.__cxx_nkui__acquire_handler(),
+		callbackWorked = callback.call(20, 22) == 42;
+	callback.close();
+	return list.size() == 0 && callbackWorked ? 42 : 1;
 }
 HX
 

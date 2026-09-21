@@ -158,6 +158,10 @@ class HxiProjectionPlanner {
 			case OwnedHandle(name, destroy): ownedHandle(name, destroy, profile);
 			case _: null;
 		},
+			callbackResult = switch signature.result {
+				case CallbackValue(_, _, _, _): true;
+				case _: false;
+			},
 			outputStrategy = outputStrategy(signature),
 			resultType = projectedResultType(signature, profile),
 			hasOutputParameters = outputStrategy != NoOutputWrapper,
@@ -165,7 +169,10 @@ class HxiProjectionPlanner {
 				case AggregateValue(name, _, _): HxiHaxeEmitter.projectedTypeName(name, profile);
 				case _: null;
 			},
-			rawName = hasOutputParameters || ownedResult != null || aggregateResult != null ? '__hxi_raw_$nativeName' : publicName,
+			rawName = hasOutputParameters
+				|| ownedResult != null
+				|| aggregateResult != null
+				|| callbackResult ? '__hxi_raw_$nativeName' : publicName,
 			policy = HxiHaxeEmitter.resultErrorProjection(result, profile),
 			checked:Null<ProjectedCheckedFunction> = null,
 			byteSlice:Null<String> = null;

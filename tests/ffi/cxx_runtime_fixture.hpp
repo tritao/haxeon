@@ -19,6 +19,7 @@ namespace nkui {
     };
 
     DisplayList *acquire() noexcept;
+    BinaryCallback acquire_handler() noexcept;
     int apply(BinaryCallback callback, int left, int right) noexcept;
     int apply_raw(int (*callback)(int), int value) noexcept;
     void set_handler(BinaryCallback callback HXI_RETAINED) noexcept;

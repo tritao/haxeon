@@ -333,12 +333,6 @@ class CxxSubsetValidator {
 				message: "std::span byte results are unsupported; return an owning byte container or a pointer/length pair",
 				span: span
 			});
-		if (isFunctionPointer(type))
-			diagnostics.push({
-				code: "CXX021",
-				message: "function-pointer results are unsupported; pass callbacks as input parameters",
-				span: span
-			});
 	}
 
 	static function validateCallbackResult(type:CxxType, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
