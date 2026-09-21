@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstEnum;
+import compiler.syntax.AstPredicates;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
@@ -1623,7 +1624,8 @@ class BodyTyper {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
-		return argument.optional == true && argument.defaultValue == null ? CompilerType.TNullable(type) : type;
+		return argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue)
+			&& !isNullable(type) ? CompilerType.TNullable(type) : type;
 	}
 
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
@@ -1776,6 +1778,8 @@ class BodyTyper {
 			var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
 			return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
 		}
+		if (session.classDecls.exists(name))
+			return new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
 		return null;
 	}
 

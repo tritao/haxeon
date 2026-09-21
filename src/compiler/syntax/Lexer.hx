@@ -114,33 +114,25 @@ class Lexer {
 					&& position < source.length
 					&& (source.get(position) == "x".code || source.get(position) == "X".code)) {
 					position++;
-					var digitsStart = position;
-					while (position < source.length && isHexDigit(source.get(position)))
-						position++;
-					if (position == digitsStart)
-						throw new CompileError(new Diagnostic("E0001", "Hexadecimal literal requires at least one digit", file.span(start, position)));
+					scanNumericDigits(start, true, false, true);
 					tokens.push(new Token(TokenKind.Integer, text(start, position), file.span(start, position)));
 					continue;
 				}
-				while (position < source.length && isDigit(source.get(position)))
-					position++;
+				scanNumericDigits(start, false, true);
 				var kind = TokenKind.Integer;
 				if (position + 1 < source.length && source.get(position) == ".".code && isDigit(source.get(position + 1))) {
 					kind = TokenKind.Float;
 					position++;
-					while (position < source.length && isDigit(source.get(position)))
-						position++;
+					scanNumericDigits(start, false, false);
+				} else if (position + 1 < source.length && source.get(position) == ".".code && source.get(position + 1) == "_".code) {
+					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits", file.span(start, position + 2)));
 				}
 				if (position < source.length && (source.get(position) == "e".code || source.get(position) == "E".code)) {
 					kind = TokenKind.Float;
 					position++;
 					if (position < source.length && (source.get(position) == "+".code || source.get(position) == "-".code))
 						position++;
-					var exponentStart = position;
-					while (position < source.length && isDigit(source.get(position)))
-						position++;
-					if (position == exponentStart)
-						throw new CompileError(new Diagnostic("E0001", "Exponent requires at least one digit", file.span(start, position)));
+					scanNumericDigits(start, false, false, true);
 				}
 				tokens.push(new Token(kind, text(start, position), file.span(start, position)));
 				continue;
@@ -380,4 +372,29 @@ class Lexer {
 
 	static inline function isHexDigit(code:Int):Bool
 		return isDigit(code) || code >= "A".code && code <= "F".code || code >= "a".code && code <= "f".code;
+
+	/** Scans a numeric digit run, accepting separators only between digits. */
+	function scanNumericDigits(start:Int, hexadecimal:Bool, initialDigit:Bool, requireDigit:Bool = false):Void {
+		var count = initialDigit ? 1 : 0,
+			previousDigit = initialDigit;
+		while (position < source.length) {
+			var code = source.get(position), digit = hexadecimal ? isHexDigit(code) : isDigit(code);
+			if (digit) {
+				count++;
+				previousDigit = true;
+				position++;
+			} else if (code == "_".code) {
+				var nextIsDigit = position + 1 < source.length
+					&& (hexadecimal ? isHexDigit(source.get(position + 1)) : isDigit(source.get(position + 1)));
+				if (!previousDigit || !nextIsDigit)
+					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits", file.span(start, position + 1)));
+				previousDigit = false;
+				position++;
+			} else
+				break;
+		}
+		if (requireDigit && count == 0)
+			throw new CompileError(new Diagnostic("E0001", hexadecimal ? "Hexadecimal literal requires at least one digit" : "Exponent requires at least one digit",
+				file.span(start, position)));
+	}
 }

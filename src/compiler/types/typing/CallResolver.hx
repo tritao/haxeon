@@ -313,6 +313,23 @@ class CallResolver {
 		if (className == null)
 			fail("E1007", 'Cannot call method on non-object "${receiverName == null ? name : receiverName}"', span);
 		var methodInfo = findMethod(className, name);
+		var classReference = switch receiver.expression {
+			case TClassRef(_): true;
+			default: false;
+		};
+		if (classReference && methodInfo != null && methodInfo.isStatic) {
+			var methodKey = methodInfo.owner + "." + name,
+				method = session.signatures.get(methodKey);
+			if (method == null)
+				fail("E1007", 'Missing signature for method "$methodKey"', span);
+			if (functionTypeParameters(method).length > 0) {
+				var prepared = typeGenericCallArguments(method, arguments, scope, span);
+				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, true,
+					prepared.substitutions);
+			}
+			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
+			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey, scope);
+		}
 		if (methodInfo == null || methodInfo.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),

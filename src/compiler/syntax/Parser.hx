@@ -1288,7 +1288,7 @@ class Parser {
 			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
 		}
 		if (match(TokenKind.Float))
-			return parsePostfix(FloatLiteral(Std.parseFloat(previous().text), previous().span));
+			return parsePostfix(FloatLiteral(Std.parseFloat(normalizeNumericLiteral(previous().text)), previous().span));
 		if (match(TokenKind.StringLiteral))
 			return parsePostfix(parseStringExpression(previous()));
 		if (match(TokenKind.RegexLiteral)) {
@@ -2174,10 +2174,11 @@ class Parser {
 	function parseIntegerMagnitude(token:Token):Int64 {
 		if (isHexIntegerToken(token)) {
 			var value = Int64.ofInt(0);
-			for (index in 2...token.text.length) {
+			var normalized = normalizeNumericLiteral(token.text);
+			for (index in 2...normalized.length) {
 				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
 					fail(token, 'Integer literal "${token.text}" is outside the supported range');
-				var code = token.text.charCodeAt(index),
+				var code = normalized.charCodeAt(index),
 					digit = code >= "0".code
 						&& code <= "9".code ? code - "0".code : code >= "A".code
 							&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
@@ -2188,7 +2189,7 @@ class Parser {
 			return value;
 		}
 		try {
-			var value = Int64.parseString(token.text);
+			var value = Int64.parseString(normalizeNumericLiteral(token.text));
 			if (Int64.compare(value, Int64.ofInt(0)) < 0)
 				fail(token, 'Integer literal "${token.text}" is outside the supported range');
 			return value;
@@ -2196,6 +2197,9 @@ class Parser {
 			throw new CompileError(new Diagnostic("E0002", 'Integer literal "${token.text}" is outside the supported range', token.span));
 		}
 	}
+
+	static inline function normalizeNumericLiteral(value:String):String
+		return StringTools.replace(value, "_", "");
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {

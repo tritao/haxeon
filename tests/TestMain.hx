@@ -107,11 +107,29 @@ class TestMain {
 			|| scientificTokens[0].text != "1e3"
 			|| scientificTokens[1].text != "1.5E-2")
 			throw "Scientific-notation literals were not tokenized";
+		var separatedTokens = new Lexer(new SourceFile("numeric-separators.hx", "1_000 0x10_FF 1_5.2_5e+1_0")).tokenize();
+		if (separatedTokens[0].text != "1_000"
+			|| separatedTokens[1].text != "0x10_FF"
+			|| separatedTokens[2].text != "1_5.2_5e+1_0")
+			throw "Numeric separators were not preserved in token spelling";
+		var invalidSeparator = false;
+		try {
+			new Lexer(new SourceFile("invalid-numeric-separator.hx", "1__0")).tokenize();
+		} catch (error:CompileError)
+			invalidSeparator = error.diagnostic.message.indexOf("Numeric separator") >= 0;
+		if (!invalidSeparator)
+			throw "Invalid numeric separators did not produce a lexical diagnostic";
 		var nullCoalesceTokens = new Lexer(new SourceFile("null-coalesce.hx", "value ?? fallback")).tokenize();
 		if (nullCoalesceTokens[1].kind != compiler.syntax.Token.TokenKind.NullCoalesce)
 			throw "Null-coalescing operator was not tokenized";
 		Frontend.compile('function main():Int return "=".code;');
 		Frontend.compile('function main():Int { return 0x2A; }');
+		var separatedInteger = new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
+		if (separatedInteger != 5351)
+			throw "Numeric separators did not preserve integer literal values";
+		var separatedFloat = new IrInterpreter(Frontend.compile('function value():Float return 1_5.2_5e-1_0; function main():Int return value() == 1.525e-9 ? 42 : 0;')).run("main");
+		if (separatedFloat != 42)
+			throw "Numeric separators did not preserve float literal values";
 		var signedMinimumProgram = Frontend.compile('function main():Int return -2147483648;');
 		if (new IrInterpreter(signedMinimumProgram).run("main") != -2147483648)
 			throw "The signed 32-bit minimum integer literal did not preserve its value";
@@ -144,6 +162,9 @@ class TestMain {
 		var optionalMetadataProgram = Frontend.compile('typedef OptionalMetadata = { @:optional value:Int; } function read(item:OptionalMetadata):Int return item.value == null ? 42 : 0; function main():Int return read({});');
 		if (new IrInterpreter(optionalMetadataProgram).run("main") != 42)
 			throw "@:optional metadata did not make an omitted anonymous field nullable";
+		var nullableOptionalDefaultProgram = Frontend.compile('function read(?value:Int = null):Int return value == null ? 42 : value; function main():Int return read();');
+		if (new IrInterpreter(nullableOptionalDefaultProgram).run("main") != 42)
+			throw "Optional parameters with an explicit null default were not nullable";
 		var switchExpressionBlockProgram = Frontend.compile('function main():Int return switch (1) { case 1: { var prefix = 1; { var value = 1; prefix + value + 40; }; } default: 0; };');
 		if (new IrInterpreter(switchExpressionBlockProgram).run("main") != 42)
 			throw "A switch expression block after preceding statements lost its result";
@@ -449,6 +470,7 @@ class TestMain {
 		Frontend.compile('function main():Int { var dynamicValue:Dynamic = "value"; var text:String = dynamicValue; dynamicValue = 42; var integer:Int = dynamicValue; return text.length + integer; }');
 		Frontend.compile('function accept(value:Float):Float return value; function main():Int { var dynamicValue:Dynamic = 40; return Std.int(accept(dynamicValue + 2)); }');
 		Frontend.compile('function wait(?seconds:Float):Float return seconds == null ? 0.0 : seconds; function main():Int return Std.int(wait(10));');
+		Frontend.compile('class NullableDefaults { public var value:Null<Float>; public function new(value:Null<Float> = null) this.value = value; public function optional(?value:Null<Float> = null):Null<Float> return value; } function main():Int return new NullableDefaults().value == null ? 0 : 1;');
 		Frontend.compile('function main():Int return "abcabc".lastIndexOf("abc", 4);');
 		Frontend.compile('function main():Int { var start:Dynamic = 1; return "abc".substring(start).length; }');
 		Frontend.compile('enum Choice { First; Second; } function choose(flag:Bool, other:Choice):Choice return flag ? First : other; function reverse(flag:Bool, other:Choice):Choice return flag ? other : Second; function main():Int return 0;');
@@ -483,6 +505,8 @@ class TestMain {
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
+		Frontend.compile('class InferredCallValue { public static function make():Int return 0; } class InferredCallField { static final count = InferredCallValue.make(); } function main():Int return InferredCallField.count;');
+		Frontend.compile('class InferredCallBase { public static function inherited():Int return 1; } class InferredCallDerived extends InferredCallBase {} class InferredCallInheritedField { static final count = InferredCallDerived.inherited(); } function main():Int return InferredCallInheritedField.count;');
 		Frontend.compile('enum Value { Number(value:Int); Empty; } function main():Int { var bits = 1; bits |= 2; bits &= 3; bits ^= 1; bits *= 4; bits %= 5; var fraction = 8.0; fraction /= 2; var recovered = try 1 catch (_:Dynamic) 2; var input:Value = Number(2); var selected = switch input { case Number(1) | Number(2): 3; case _: 0; }; var flat = [for (left in [1, 2]) for (right in [3, 4]) left + right]; return bits + recovered + selected + flat.length + (flat.contains(6) ? 1 : 0); }');
 		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');

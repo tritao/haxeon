@@ -29,6 +29,7 @@ class FieldInference {
 			case NewArray(element, _, _): ArrayType(element);
 			case ArrayLiteral(values, _): arrayLiteralType(field, values);
 			case NewMap(key, value, _): MapType(key, value);
+			case Call(_, _, _): InferredType;
 			case Member(_, _, _): InferredType;
 			case Variable(name, _) if (name.indexOf(".") > 0): InferredType;
 			default:
@@ -109,8 +110,14 @@ class FieldInference {
 			throw new CompileError(new Diagnostic("E1002", 'Cyclic field type inference through "$key"', field.span));
 		resolving.set(key, true);
 		var reference = staticFieldReference(field.initializer);
-		if (reference == null)
+		if (reference == null) {
+			var callType = staticCallResult(field.initializer, owner, classes, aliases);
+			if (callType != null) {
+				resolving.remove(key);
+				return callType;
+			}
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
+		}
 		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
 			targetClass = classes.get(targetOwner),
 			target:Null<AstField> = null;
@@ -123,6 +130,53 @@ class FieldInference {
 				'Cannot infer type of field "${field.name}" from unknown static field "${reference.owner}.${reference.name}"', field.span));
 		var result = resolveField(target, targetOwner, classes, aliases, resolving);
 		resolving.remove(key);
+		return result;
+	}
+
+	static function staticCallResult(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:Map<String, String>):Null<AstType> {
+		var call = switch expression {
+			case Call(name, _, _): name;
+			default: null;
+		};
+		if (call == null)
+			return null;
+		var separator = call.lastIndexOf("."), targetOwner = separator < 0 ? currentOwner : call.substring(0, separator),
+			methodName = separator < 0 ? call : call.substring(separator + 1),
+			resolvedOwner = resolveOwner(targetOwner, currentOwner, classes, aliases),
+			declaration = classes.get(resolvedOwner);
+		if (declaration == null)
+			return null;
+		return staticMethodResult(resolvedOwner, methodName, currentOwner, classes, aliases, []);
+	}
+
+	static function staticMethodResult(owner:String, methodName:String, currentOwner:String,
+			classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>, resolving:Map<String, Bool>):Null<AstType> {
+		if (resolving.exists(owner))
+			return null;
+		resolving.set(owner, true);
+		var declaration = classes.get(owner);
+		if (declaration == null) {
+			resolving.remove(owner);
+			return null;
+		}
+		for (method in declaration.methods)
+			if (method.isStatic && method.name == methodName && method.result != InferredType) {
+				resolving.remove(owner);
+				return method.result;
+			}
+		var base = switch declaration.base {
+			case NamedType(name): name;
+			case AppliedType(name, _): name;
+			default: null;
+		};
+		if (base == null) {
+			resolving.remove(owner);
+			return null;
+		}
+		var baseOwner = resolveOwner(base, currentOwner, classes, aliases), result = staticMethodResult(baseOwner,
+			methodName, currentOwner, classes, aliases, resolving);
+		resolving.remove(owner);
 		return result;
 	}
 

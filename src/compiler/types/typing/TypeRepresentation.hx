@@ -8,8 +8,10 @@ import compiler.semantic.GenericSpecializationPolicy;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.Ast.AstEnumParameter;
+import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstPredicates;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -245,7 +247,12 @@ class TypeRepresentation {
 	function resolveArgument(argument:AstArgument,
 			substitutions:{semantic:Map<String, CompilerType>, physical:Map<String, CompilerType>}):TypeRepresentationResult {
 		var result = resolve(argument.type, argument.span, substitutions);
-		if (argument.optional == true && argument.defaultValue == null) {
+		var alreadyNullable = switch result.semantic {
+			case TNullable(_): true;
+			default: false;
+		};
+		if (argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue)
+			&& !alreadyNullable) {
 			result = {
 				semantic: TNullable(result.semantic),
 				physical: TNullable(result.physical)
