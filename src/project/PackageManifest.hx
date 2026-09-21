@@ -7,8 +7,10 @@ import build.Target;
 class NativeManifest {
 	public final sources:Array<String>;
 	public final includeDirs:Array<String>;
+
 	/** Optional language standard for native C and C++ source compilation. */
 	public final standard:Null<String>;
+
 	public final cmake:Null<NativeCMakeManifest>;
 	public final supportedTargets:Array<String>;
 

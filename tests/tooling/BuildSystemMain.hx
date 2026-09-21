@@ -320,8 +320,7 @@ class BuildSystemMain {
 		expect(project.packages.names().join(",") == "bar,foo,app", "nested packages should be ordered dependency-first");
 		expect(project.packages.get("foo").nativeSources.length == 1 && project.packages.get("foo").includeDirs.length == 1,
 			"native package metadata should be resolved");
-		expect(project.packages.get("foo").manifest.native.standard == "c++20",
-			"native language standards should be resolved from package metadata");
+		expect(project.packages.get("foo").manifest.native.standard == "c++20", "native language standards should be resolved from package metadata");
 		expect(project.rootPackage.sources.length == 1 && project.rootPackage.sources[0].indexOf("Main.hx") >= 0,
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
