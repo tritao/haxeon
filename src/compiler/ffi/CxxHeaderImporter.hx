@@ -529,14 +529,14 @@ private class CxxAstBuilder {
 	}
 
 	static function isStringViewName(value:String):Bool {
-		value = compactType(value);
+		value = normalizeStdlibImplementationNamespace(compactType(value));
 		return value == "std::string_view"
 			|| value == "std::basic_string_view<char>"
 			|| value == "std::basic_string_view<char,std::char_traits<char>>";
 	}
 
 	static function byteSpanElement(value:String):Null<CxxSpanElement> {
-		value = compactType(value);
+		value = normalizeStdlibImplementationNamespace(compactType(value));
 		var prefix = "std::span<const";
 		if (!StringTools.startsWith(value, prefix) || !StringTools.endsWith(value, ">"))
 			return null;
@@ -555,6 +555,13 @@ private class CxxAstBuilder {
 
 	static function compactType(value:String):String
 		return StringTools.replace(StringTools.trim(value), " ", "");
+
+	/** Hide standard-library inline implementation namespaces from source semantics. */
+	static function normalizeStdlibImplementationNamespace(value:String):String {
+		value = StringTools.replace(value, "std::__1::", "std::");
+		value = StringTools.replace(value, "std::__2::", "std::");
+		return StringTools.replace(value, "std::__cxx11::", "std::");
+	}
 
 	static function typeName(node:Dynamic):String {
 		var type:Dynamic = ClangAstTools.field(node, "type"),
