@@ -10,18 +10,22 @@ trap 'rm -rf -- "$project_dir"' EXIT
 case "$(uname -s)" in
 	Darwin)
 		ffi_suffix=".dylib"
+		ffi_object_suffix=".o"
 		cmake_import_archive=""
 		;;
 	MINGW*|MSYS*|CYGWIN*)
 		ffi_suffix=".dll"
+		ffi_object_suffix=".o"
 		if command -v cl.exe >/dev/null 2>&1 || command -v cl >/dev/null 2>&1; then
 			cmake_import_archive="$project_dir/app/build/host/native/foo/foo.lib"
+			ffi_object_suffix=".obj"
 		else
 			cmake_import_archive="$project_dir/app/build/host/native/foo/libfoo.dll.a"
 		fi
 		;;
 	*)
 		ffi_suffix=".so"
+		ffi_object_suffix=".o"
 		cmake_import_archive=""
 		;;
 esac
@@ -159,7 +163,7 @@ if [[ -n "$cmake_import_archive" ]]; then
 	test -s "$cmake_import_archive"
 fi
 test -s "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
-test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks.o"
+test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks$ffi_object_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/OwnedManagedWidget.hx"
 grep -q '@owned("haxeon_cxx_thunk_' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @retained)' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
