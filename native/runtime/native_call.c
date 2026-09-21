@@ -714,6 +714,12 @@ typedef struct haxeon_native_cached_call {
 
 static haxeon_native_cached_call *haxeon_native_call_cache;
 
+static haxeon_native_control *haxeon_native_cached_control( const char *library_name ) {
+	for( haxeon_native_cached_call *entry = haxeon_native_call_cache; entry != NULL; entry = entry->next )
+		if( strcmp(entry->library,library_name) == 0 && entry->function != NULL ) return entry->function->control;
+	return NULL;
+}
+
 static bool haxeon_native_calling_convention( const char *name, ffi_abi *abi ) {
 	if( name == NULL || strcmp(name,"cdecl") == 0 ) { *abi = FFI_DEFAULT_ABI; return true; }
 	if( strcmp(name,"system") == 0 ) {
@@ -1474,26 +1480,10 @@ HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
 	const char *converted = hl_to_utf8((const uchar *)library);
 	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	if( library_name == NULL ) hl_error("Invalid C++ thunk library name");
-	char *path = haxeon_native_library_path(library_name);
+	haxeon_native_control *control = haxeon_native_cached_control(library_name);
 	free(library_name);
-	if( path == NULL ) hl_error("Could not resolve C++ thunk library name");
-	void *handle = NULL;
-#ifdef _WIN32
-	int wide_length = MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,NULL,0);
-	if( wide_length > 0 ) {
-		wchar_t *wide = (wchar_t *)malloc((size_t)wide_length * sizeof(wchar_t));
-		if( wide != NULL ) {
-			MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,wide_length);
-			handle = (void *)LoadLibraryW(wide);
-			free(wide);
-		}
-	}
-#else
-	dlerror();
-	handle = dlopen(path,RTLD_NOW | RTLD_LOCAL);
-#endif
-	free(path);
-	if( handle == NULL ) hl_error("Could not open C++ thunk library");
+	if( control == NULL || control->handle == NULL ) hl_error("Could not find loaded C++ thunk library");
+	void *handle = control->handle;
 	typedef const char *(*haxeon_cxx_last_error_function)( void );
 	haxeon_cxx_last_error_function get_error;
 #ifdef _WIN32
