@@ -129,9 +129,10 @@ class Executor implements ExecutionBackend {
 					try {
 						if (status == 0 && isCacheable(item.action)) {
 							ActionFingerprint.save(environment.buildRoot, item.action, item.fingerprint);
-							artifactCache.publish(item.action,
-								ActionFingerprint.globalKey(item.action, environment.target.toString(),
-									[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
+							if (ArtifactCache.isShareable(item.action))
+								artifactCache.publish(item.action,
+									ActionFingerprint.globalKey(item.action, environment.target.toString(),
+										[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
 						}
 						waveResults.set(item.action.id.key(),
 							new ActionResult(item.action.id, status, false, false, item.fingerprint, status == 0 ? null : 'Action exited with status $status'));
@@ -192,7 +193,8 @@ class Executor implements ExecutionBackend {
 			};
 			if (status == 0 && isCacheable(action)) {
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
-				artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints));
+				if (ArtifactCache.isShareable(action))
+					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints));
 			}
 			return new ActionResult(action.id, status, false, false, fingerprint, status == 0 ? null : 'Action exited with status $status');
 		} catch (error:Dynamic) {
@@ -205,7 +207,8 @@ class Executor implements ExecutionBackend {
 			return false;
 		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint && ActionFingerprint.outputsExist(action))
 			return true;
-		if (artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints))) {
+		if (ArtifactCache.isShareable(action)
+			&& artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints))) {
 			ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 			return true;
 		}

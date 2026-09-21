@@ -2,7 +2,6 @@ package build.execution;
 
 import haxe.Json;
 import haxe.crypto.Sha256;
-import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -11,10 +10,33 @@ private typedef StoredFingerprint = {
 	final fingerprint:String;
 }
 
+private class FingerprintFields {
+	final buffer:StringBuf = new StringBuf();
+
+	public function new() {}
+
+	public function add(value:String):Void {
+		buffer.add(value.length);
+		buffer.add(":");
+		buffer.add(value);
+		buffer.add("\n");
+	}
+
+	public inline function push(value:String):Void
+		add(value);
+
+	public function digest():String
+		return Sha256.encode(buffer.toString());
+}
+
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
 	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>):String {
-		var fields:Array<String> = ["action-v2", action.id.key(), target, action.description];
+		var fields = new FingerprintFields();
+		fields.add("action-v3");
+		fields.add(action.id.key());
+		fields.add(target);
+		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
 				fields.push(command);
@@ -22,7 +44,7 @@ class ActionFingerprint {
 				var executable = resolveTool(command);
 				fields.push('tool:$executable');
 				if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-					fields.push('tool-content:${Sha256.make(File.getBytes(executable)).toHex()}');
+					fields.add('tool-content:${fileIdentity(executable, false)}');
 				for (argument in arguments)
 					fields.push(argument);
 				for (name in [
@@ -54,25 +76,29 @@ class ActionFingerprint {
 				fields.push("non-cacheable-compiler-action");
 		}
 		for (input in action.inputs) {
-			fields.push('input:$input');
-			appendPath(fields, input, new Map());
+			fields.add('input:$input');
+			appendPath(fields, input, new Map(), buildRoot, false);
 		}
 		var orderedDependencies = dependencies.copy();
 		orderedDependencies.sort(Reflect.compare);
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
-		return Sha256.encode(Json.stringify(fields));
+		return fields.digest();
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
 	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>):String {
-		var fields:Array<String> = ["artifact-action-v2", action.id.key(), target, action.description];
+		var fields = new FingerprintFields();
+		fields.add("artifact-action-v3");
+		fields.add(action.id.key());
+		fields.add(target);
+		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
 				fields.push('command:${Path.withoutDirectory(command)}');
 				var executable = resolveTool(command);
 				if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-					fields.push('tool-content:${Sha256.make(File.getBytes(executable)).toHex()}');
+					fields.add('tool-content:${fileIdentity(executable, true)}');
 				for (argument in arguments)
 					fields.push('argument:${portableArgument(argument, action)}');
 				var keys = [for (key in environment.keys()) key];
@@ -85,14 +111,14 @@ class ActionFingerprint {
 		var inputIndex = 0;
 		for (input in action.inputs) {
 			fields.push('input:$inputIndex');
-			appendPortablePath(fields, input, "");
+			appendPortablePath(fields, input, "", new Map());
 			inputIndex++;
 		}
 		var orderedDependencies = dependencies.copy();
 		orderedDependencies.sort(Reflect.compare);
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
-		return Sha256.encode(Json.stringify(fields));
+		return fields.digest();
 	}
 
 	public static function load(buildRoot:String, action:ExecutionAction):Null<String> {
@@ -126,7 +152,7 @@ class ActionFingerprint {
 	static function recordPath(buildRoot:String, action:ExecutionAction):String
 		return Path.join([buildRoot, ".haxeon", "actions", Sha256.encode(action.id.key()) + ".json"]);
 
-	static function appendPath(fields:Array<String>, path:String, visitedDirectories:Map<String, Bool>):Void {
+	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String, strong:Bool):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$path');
 			return;
@@ -139,33 +165,105 @@ class ActionFingerprint {
 				return;
 			}
 			visitedDirectories.set(canonicalDirectory, true);
+			appendGitIdentity(fields, path);
 			var entries = FileSystem.readDirectory(path);
 			entries.sort(Reflect.compare);
 			for (entry in entries) {
 				var child = Path.join([path, entry]);
+				if (ignoredDirectoryEntry(entry, child, buildRoot)) {
+					fields.add('ignored:$entry');
+					continue;
+				}
 				fields.push('entry:$child');
-				appendPath(fields, child, visitedDirectories);
+				appendPath(fields, child, visitedDirectories, buildRoot, strong);
 			}
 			return;
 		}
 		fields.push('file:$path');
-		fields.push(Sha256.make(File.getBytes(path)).toHex());
+		fields.push(fileIdentity(path, strong));
 	}
 
-	static function appendPortablePath(fields:Array<String>, path:String, relative:String):Void {
+	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$relative');
 			return;
 		}
 		if (FileSystem.isDirectory(path)) {
 			fields.push('directory:$relative');
+			var canonicalDirectory = Path.normalize(FileSystem.fullPath(path));
+			if (visitedDirectories.exists(canonicalDirectory)) {
+				fields.add('directory-cycle:$relative');
+				return;
+			}
+			visitedDirectories.set(canonicalDirectory, true);
+			appendGitIdentity(fields, path);
 			var entries = FileSystem.readDirectory(path);
 			entries.sort(Reflect.compare);
-			for (entry in entries)
-				appendPortablePath(fields, Path.join([path, entry]), Path.join([relative, entry]));
+			for (entry in entries) {
+				var child = Path.join([path, entry]);
+				if (ignoredDirectoryEntry(entry, child, "")) {
+					fields.add('ignored:$entry');
+					continue;
+				}
+				appendPortablePath(fields, child, Path.join([relative, entry]), visitedDirectories);
+			}
 			return;
 		}
 		fields.push('file:$relative:${Sha256.make(File.getBytes(path)).toHex()}');
+	}
+
+	static function fileIdentity(path:String, strong:Bool):String {
+		if (strong)
+			return Sha256.make(File.getBytes(path)).toHex();
+		var stat = FileSystem.stat(path);
+		return '${stat.size}:${stat.mtime.getTime()}';
+	}
+
+	static function ignoredDirectoryEntry(name:String, path:String, buildRoot:String):Bool {
+		if (!FileSystem.isDirectory(path))
+			return name == ".git";
+		if (name == ".git" || name == ".tools" || name == "build" || name == "out"
+			|| StringTools.startsWith(name, "cmake-build-"))
+			return true;
+		if (buildRoot == null || buildRoot.length == 0)
+			return false;
+		return Path.normalize(FileSystem.fullPath(path)) == Path.normalize(FileSystem.fullPath(buildRoot));
+	}
+
+	static function appendGitIdentity(fields:FingerprintFields, directory:String):Void {
+		var marker = Path.join([directory, ".git"]);
+		if (!FileSystem.exists(marker))
+			return;
+		try {
+			var gitDirectory = marker;
+			if (!FileSystem.isDirectory(marker)) {
+				var markerContent = StringTools.trim(File.getContent(marker));
+				if (!StringTools.startsWith(markerContent, "gitdir:"))
+					return;
+				var configured = StringTools.trim(markerContent.substr(7));
+				gitDirectory = Path.normalize(Path.isAbsolute(configured) ? configured : Path.join([directory, configured]));
+			}
+			var headPath = Path.join([gitDirectory, "HEAD"]);
+			if (!FileSystem.exists(headPath))
+				return;
+			var head = StringTools.trim(File.getContent(headPath)), revision = head;
+			if (StringTools.startsWith(head, "ref:")) {
+				var reference = StringTools.trim(head.substr(4)), referencePath = Path.join([gitDirectory, reference]);
+				if (FileSystem.exists(referencePath))
+					revision = StringTools.trim(File.getContent(referencePath));
+				else {
+					var packed = Path.join([gitDirectory, "packed-refs"]);
+					if (FileSystem.exists(packed))
+						for (line in File.getContent(packed).split("\n"))
+							if (!StringTools.startsWith(line, "#") && !StringTools.startsWith(line, "^")
+								&& StringTools.endsWith(line, ' $reference')) {
+								revision = line.substr(0, line.indexOf(" "));
+								break;
+							}
+				}
+			}
+			fields.add('git:$revision');
+		} catch (_:Dynamic) {}
 	}
 
 	static function portableArgument(argument:String, action:ExecutionAction):String {

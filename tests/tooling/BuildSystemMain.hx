@@ -233,6 +233,12 @@ class BuildSystemMain {
 		FileSystem.createDirectory(includeDirectory);
 		File.saveContent(source, "int value(void) { return 42; }\n");
 		File.saveContent(header, "#define VALUE 42\n");
+		var generatedDirectory = Path.join([includeDirectory, "build"]),
+			toolsDirectory = Path.join([includeDirectory, ".tools"]);
+		FileSystem.createDirectory(generatedDirectory);
+		FileSystem.createDirectory(toolsDirectory);
+		File.saveContent(Path.join([generatedDirectory, "generated.o"]), "first generated output\n");
+		File.saveContent(Path.join([toolsDirectory, "tool.bin"]), "first installed tool\n");
 		File.saveContent(output, "artifact\n");
 		var environment = new BuildEnvironment(root, buildRoot),
 			actionValue = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory], [output], "compile foo.c",
@@ -248,6 +254,10 @@ class BuildSystemMain {
 			"changed arguments should invalidate the action");
 		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), ["dependency-a"]) != baseline,
 			"changed dependencies should invalidate the action");
+		File.saveContent(Path.join([generatedDirectory, "generated.o"]), "changed generated output\n");
+		File.saveContent(Path.join([toolsDirectory, "tool.bin"]), "changed installed tool\n");
+		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []) == baseline,
+			"generated build and tool directories should not invalidate source inputs");
 		var renamedHeader = Path.join([includeDirectory, "renamed.h"]);
 		FileSystem.rename(header, renamedHeader);
 		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []) != baseline,

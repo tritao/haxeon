@@ -118,7 +118,7 @@ class ArtifactCache {
 		return true;
 	}
 
-	static function isShareable(action:ExecutionAction):Bool {
+	public static function isShareable(action:ExecutionAction):Bool {
 		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0)
 			return false;
 		return switch action.action {
