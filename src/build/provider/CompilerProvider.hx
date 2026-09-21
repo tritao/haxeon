@@ -34,15 +34,23 @@ class CompilerProvider {
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				arguments.push("--root=" + sourceRoot);
-			var shouldScopeRoot = resolvedPackage.name != project.rootPackage.name
+			var shouldScopeRoot = resolvedPackage.manifest.scopeSourceRoots && (resolvedPackage.name != project.rootPackage.name
 				|| project.manifest.entry == resolvedPackage.name
-				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + ".");
+				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + "."));
 			if (shouldScopeRoot)
 				for (sourceRoot in resolvedPackage.sourceRoots)
 					arguments.push('--package-root=${resolvedPackage.name}=$sourceRoot');
 			for (source in resolvedPackage.sources) {
 				arguments.push(source);
 				inputs.push(source);
+			}
+			for (projection in resolvedPackage.ffiProjections) {
+				arguments.push("--ffi-projection=" + projection);
+				inputs.push(projection);
+			}
+			for (interfacePath in resolvedPackage.ffiInterfaces) {
+				arguments.push("--ffi-interface=" + interfacePath);
+				inputs.push(interfacePath);
 			}
 		}
 		for (define in project.manifest.defines.concat(context.extraDefines))

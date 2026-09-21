@@ -19,11 +19,12 @@ class NativeCMakeProvider {
 		if (native == null || native.cmake == null)
 			throw 'Package "${resolvedPackage.name}" has no native.cmake provider';
 		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
+			cmakeInputs = [source].concat(resolvedPackage.nativeCMakeInputs),
 			buildDirectory = Path.join([context.layout.packageRoot(resolvedPackage.name), "cmake"]),
 			output = context.layout.haxeonNativeLibraryPath(resolvedPackage.name), outputDirectory = Path.directory(output),
 			configureId = new ActionId('native-cmake-configure:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:${resolvedPackage.name}:${context.environment.target.toString()}'), actions = [
-				new ExecutionAction(configureId, [], [source], [Path.join([buildDirectory, "CMakeCache.txt"])],
+				new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])],
 					'Configure CMake package ${resolvedPackage.name}',
 					Process("cmake", [
 						"-S",

@@ -69,7 +69,8 @@ class PackageResolver {
 			],
 				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
 					manifest.packageName, "source"),
-				nativeSources:Array<String> = [], includeDirs:Array<String> = [];
+				nativeSources:Array<String> = [], includeDirs:Array<String> = [], nativeCMakeInputs:Array<String> = [], ffiInterfaces:Array<String> = [],
+				ffiProjections:Array<String> = [];
 			if (manifest.native != null) {
 				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName, "native source");
 				includeDirs = [
@@ -77,7 +78,17 @@ class PackageResolver {
 						resolveDirectory(resolvedRoot, includeDir, "native include directory", manifest.packageName)
 				];
 				if (manifest.native.cmake != null)
-					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
+					{
+						resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
+						nativeCMakeInputs = [
+							for (input in manifest.native.cmake.inputs)
+								resolveInput(resolvedRoot, input, "native CMake input", manifest.packageName)
+						];
+					}
+			}
+			if (manifest.ffi != null) {
+				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName, "FFI interface");
+				ffiProjections = resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection");
 			}
 
 			var dependencyNames = [for (name in manifest.dependencies.keys()) name];
@@ -114,7 +125,7 @@ class PackageResolver {
 			}
 			active.remove(resolvedRoot);
 			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs, acquired.source);
+				includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,
@@ -160,6 +171,13 @@ class PackageResolver {
 		}
 		result.sort(Reflect.compare);
 		return result;
+	}
+
+	static function resolveInput(root:String, relative:String, kind:String, packageName:String):String {
+		var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
+		if (!FileSystem.exists(path))
+			throw 'Package "$packageName" $kind does not exist: $path';
+		return FileSystem.fullPath(path);
 	}
 
 	static function collectSources(sourceRoots:Array<String>):Array<String> {

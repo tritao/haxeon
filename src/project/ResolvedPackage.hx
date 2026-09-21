@@ -12,9 +12,13 @@ class ResolvedPackage {
 	public final dependencies:Array<String>;
 	public final nativeSources:Array<String>;
 	public final includeDirs:Array<String>;
+	public final nativeCMakeInputs:Array<String>;
+	public final ffiInterfaces:Array<String>;
+	public final ffiProjections:Array<String>;
 
 	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, sources:Array<String>, dependencies:Array<String>,
-			nativeSources:Array<String>, includeDirs:Array<String>, ?source:PackageSource) {
+		nativeSources:Array<String>, includeDirs:Array<String>, nativeCMakeInputs:Array<String>, ffiInterfaces:Array<String>, ffiProjections:Array<String>,
+			?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;
@@ -25,5 +29,8 @@ class ResolvedPackage {
 		this.dependencies = dependencies.copy();
 		this.nativeSources = nativeSources.copy();
 		this.includeDirs = includeDirs.copy();
+		this.nativeCMakeInputs = nativeCMakeInputs.copy();
+		this.ffiInterfaces = ffiInterfaces.copy();
+		this.ffiProjections = ffiProjections.copy();
 	}
 }

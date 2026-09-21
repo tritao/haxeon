@@ -475,7 +475,9 @@ class HaxeonCli {
 				throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
 			var nativeDirectories = [
 				for (resolvedPackage in project.packages.packages)
-					if (resolvedPackage.nativeSources.length > 0) Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
+					if (resolvedPackage.nativeSources.length > 0
+						|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null))
+						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
 			configureRuntimeLibraryPath(home, nativeDirectories);
 			Sys.println('Launching $output');
