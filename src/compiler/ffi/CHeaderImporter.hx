@@ -52,7 +52,8 @@ class CHeaderImporter {
 			includes: includes,
 			defines: defines == null ? [] : defines,
 			clang: clang,
-			compileCommands: compileCommands
+			compileCommands: compileCommands,
+			useHostTarget: false
 		}), layouts = frontend.layouts, declarations:Array<Dynamic> = [], roots = [FileSystem.fullPath(Path.directory(header))];
 		var excluded = [];
 		if (excludedHeaders != null)

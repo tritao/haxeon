@@ -14,19 +14,27 @@ typedef ClangInvocationOptions = {
 	final defines:Array<String>;
 	final clang:String;
 	final compileCommands:Null<String>;
+	final useHostTarget:Bool;
 }
 
 /** Builds the stable, diagnostic-friendly command line shared by C and C++. */
 class ClangInvocation {
 	final options:ClangInvocationOptions;
 
+	static final hostTargets:Map<String, String> = [];
+
 	/** Returns the target triple selected by the compiler executable itself. */
 	public static function hostTarget(clang:String = "clang++"):String {
+		var cached = hostTargets.get(clang);
+		if (cached != null)
+			return cached;
 		var process = ProcessOutputCapture.capture(clang, ["-dumpmachine"], ProcessOutputCapture.defaultDiagnosticLimit),
 			output = StringTools.trim(process.stdout);
 		if (process.exitCode != 0 || output.length == 0)
 			throw 'Clang "$clang" could not report its host target${output.length == 0 ? "" : ":\n$output"}';
-		return StringTools.trim(output.split("\n")[0]);
+		var target = StringTools.trim(output.split("\n")[0]);
+		hostTargets.set(clang, target);
+		return target;
 	}
 
 	public function new(options:ClangInvocationOptions) {
@@ -38,16 +46,10 @@ class ClangInvocation {
 	}
 
 	public function arguments():Array<String> {
-		var result = [
-			"-x",
-			options.language,
-			'-std=${options.standard}',
-			"-target",
-			options.target,
-			"-w",
-			"-ferror-limit=1",
-			"-fno-caret-diagnostics"
-		];
+		var result = ["-x", options.language, '-std=${options.standard}'];
+		if (!options.useHostTarget)
+			result = result.concat(["-target", options.target]);
+		result = result.concat(["-w", "-ferror-limit=1", "-fno-caret-diagnostics"]);
 		// C++ headers commonly depend on the hosted standard library. Keeping
 		// -ffreestanding for C preserves the existing C ABI import behavior, but
 		// passing it to clang++ makes headers such as <vector> unusable.
