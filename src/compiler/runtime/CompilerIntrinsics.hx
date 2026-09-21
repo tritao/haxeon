@@ -27,6 +27,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__iterator_next", "haxeon_runtime", "__iterator_next", [TNativeAbstract("realtime_iterator")], TDynamic));
 		definitions.push(native("__reflect_is_object", "haxeon_runtime", "__reflect_is_object", [TDynamic], TBool));
 		definitions.push(native("__math_ceil", "haxeon_runtime", "__math_ceil", [TFloat], TInt));
+		definitions.push(native("__math_floor", "haxeon_runtime", "__math_floor", [TFloat], TInt));
 		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));
 
 		// Primitive String methods lowered directly by the typer.

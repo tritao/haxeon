@@ -386,14 +386,7 @@ class HlLower {
 				}
 		}
 		var instructions:Array<HlInstruction> = [],
-			debugLocations:Array<HlDebugLocation> = [],
-			nullValues:Map<Int, Bool> = [];
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ConstNull(value): nullValues.set(value.id, true);
-					default:
-				}
+			debugLocations:Array<HlDebugLocation> = [];
 		for (block in orderedBlocks(fn)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;

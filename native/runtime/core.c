@@ -35,6 +35,10 @@ HL_PRIM int HL_NAME(__math_round)(double value) {
 HL_PRIM int HL_NAME(__math_ceil)(double value) {
 	return (int)ceil(value);
 }
+
+HL_PRIM int HL_NAME(__math_floor)(double value) {
+	return (int)floor(value);
+}
 extern realtime_string_map *hl_hballoc( void );
 extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
 extern bool hl_hbexists( realtime_string_map *map, uchar *key );

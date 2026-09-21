@@ -821,6 +821,12 @@ class CallResolver {
 			var value = coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.ceil value", "E1002");
 			return new TypedExpression(TCall("__math_ceil", [value]), TInt, span);
 		}
+		if (name == "Math.floor") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "Math.floor" expects 1 argument, got ${arguments.length}', span);
+			var value = coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.floor value", "E1002");
+			return new TypedExpression(TCall("__math_floor", [value]), TInt, span);
+		}
 		if (name == "haxe.io.Bytes.ofString") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "haxe.io.Bytes.ofString" expects 1 or 2 arguments, got ${arguments.length}', span);

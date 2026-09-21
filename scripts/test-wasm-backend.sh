@@ -311,7 +311,7 @@ const cases = [
       };
 
     if (relative.endsWith("numeric-promotion.wasm"))
-      imports.haxeon_runtime = {__math_ceil: Math.ceil};
+      imports.haxeon_runtime = {__math_ceil: Math.ceil, __math_floor: Math.floor};
     if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm"))
       imports.gc_bytes = {
         inspect_bytes: (pointer, length) => {

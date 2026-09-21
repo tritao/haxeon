@@ -156,6 +156,7 @@ enum WasmInstruction {
 	F64Mul;
 	F64Div;
 	F64Ceil;
+	F64Floor;
 	F64Eq;
 	F64Lt;
 	F64Le;

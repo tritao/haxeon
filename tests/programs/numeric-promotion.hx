@@ -12,5 +12,7 @@ function main():Int {
 		return 2;
 	if (Math.ceil(2.5) != 3 || Math.ceil(-2.5) != -2)
 		return 3;
+	if (Math.floor(2.5) != 2 || Math.floor(-2.5) != -3)
+		return 4;
 	return 42;
 }

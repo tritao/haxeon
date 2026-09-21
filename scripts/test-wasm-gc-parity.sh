@@ -80,6 +80,7 @@ const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11
       const imports = target === "wasm32"
         ? { haxeon_runtime: {
             __math_ceil: value => Math.ceil(value),
+            __math_floor: value => Math.floor(value),
             __std_int_f64: value => Math.trunc(value)
           } }
         : {};

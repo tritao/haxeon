@@ -276,7 +276,8 @@ class WasmGcModuleBuilder {
 					importModule = native.library == null || native.library == "" ? "env" : native.library,
 					importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 				functions.set(native.name, module.addImport(importModule, importName, {parameters: parameters, results: results}));
-			} else if (used.exists(native.name) && native.name == "__string_compare_full") {
+			} else if (used.exists(native.name) &&
+				(native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
 					nextLocal = native.arguments.length,
@@ -333,7 +334,7 @@ class WasmGcModuleBuilder {
 				"__array_splice_f64", "__array_splice_bytes", "__array_splice_ref", "__array_splice_i64", "__array_remove_i32", "__array_remove_i64",
 				"__array_remove_bool", "__array_remove_f64", "__array_remove_bytes", "__array_remove_ref", "__array_index_of_i32", "__array_index_of_i64",
 				"__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref", "__array_slice_i32", "__array_slice_i64",
-				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_pow",
+				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_floor", "__math_pow",
 				"__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "Math.mathIsFinite", "__math_is_finite", "Math.mathIsNaN",
 				"__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches", "__reflect_is_object",
 				"__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.and",

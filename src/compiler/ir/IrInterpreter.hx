@@ -213,6 +213,7 @@ class IrInterpreter {
 			case "__std_int_f64": Std.int(arguments[0]);
 			case "__std_int_dynamic": Std.int(arguments[0]);
 			case "__math_ceil": Std.int(Math.ceil(arguments[0]));
+			case "__math_floor": Std.int(Math.floor(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
 			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
 			case "__reflect_is_object":
