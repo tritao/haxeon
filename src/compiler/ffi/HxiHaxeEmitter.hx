@@ -869,7 +869,8 @@ class HxiHaxeEmitter {
 					case Function(_, _, value, _, _, _, _, _): value;
 					case _: throw 'Missing HXI function "${fn.name}"';
 				},
-				aggregateResult = structureType(declaredResult, declarations, profile);
+				aggregateResult = structureType(declaredResult, declarations, profile),
+				callbackResult = callbackResultType(fn.result, profile);
 			var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
 				hasOutputs = hasOutput(parameters),
 				rawName = projectedFunction.rawName;
@@ -921,9 +922,9 @@ class HxiHaxeEmitter {
 				}
 			} else if (ownedHandleResult != null) {
 				emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
-			} else if (callbackResultType(fn.result, profile) != null) {
-				var callback = callbackResultType(fn.result, profile);
-				emitCallbackResultWrapper(output, publicName, rawName, argumentTypes, callback.name, callback.nullable, model.documentation.get(fn.name));
+			} else if (callbackResult != null) {
+				emitCallbackResultWrapper(output, publicName, rawName, argumentTypes, callbackResult.name, callbackResult.nullable,
+					model.documentation.get(fn.name));
 			} else if (aggregateResult != null) {
 				emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name, model.documentation.get(fn.name));
 			}
