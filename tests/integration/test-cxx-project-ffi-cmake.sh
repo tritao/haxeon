@@ -57,6 +57,12 @@ cat > "$project_dir/foo/native/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.16)
 project(foo LANGUAGES CXX)
 add_library(foo SHARED cxx_thunk_fixture.cpp cxx_owned_cmake_fixture.cpp)
+if(MSVC)
+  # Keep this isolated fixture self-contained on hosted Windows runners. The
+  # Debug MSVC CRT is not installed on the DLL search path, while the project
+  # itself intentionally uses the dynamic CRT for normal builds.
+  set_property(TARGET foo PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+endif()
 set_target_properties(foo PROPERTIES
   CXX_STANDARD 20
   CXX_STANDARD_REQUIRED YES
