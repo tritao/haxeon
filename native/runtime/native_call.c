@@ -102,9 +102,9 @@ static void haxeon_native_set_windows_load_error( const char *path ) {
 	if( length > 0 ) {
 		while( length > 0 && (system_message[length - 1] == '\r' || system_message[length - 1] == '\n' || system_message[length - 1] == ' ') )
 			system_message[--length] = 0;
-		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryW failed for %s (error %lu): %s",path,(unsigned long)code,system_message);
+		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryExW failed for %s (error %lu): %s",path,(unsigned long)code,system_message);
 	} else
-		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryW failed for %s (error %lu)",path,(unsigned long)code);
+		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryExW failed for %s (error %lu)",path,(unsigned long)code);
 }
 #endif
 
@@ -597,7 +597,14 @@ HL_PRIM haxeon_native_library *HL_NAME(native_open)( vbyte *path_bytes, int path
 		wchar_t *wide = (wchar_t *)malloc((size_t)wide_length * sizeof(wchar_t));
 		if( wide != NULL ) {
 			MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,wide_length);
-			handle = (void *)LoadLibraryW(wide);
+			DWORD flags = 0;
+			/* Native packages commonly place a thunk and its CMake-built
+			   dependency side by side. Opt into the safe DLL-directory search
+			   mode when the caller supplied an absolute Windows path so that
+			   dependent HDLLs resolve relative to the loaded module. */
+			if ((path[0] != 0 && path[1] == ':') || (path[0] == '\\' && path[1] == '\\'))
+				flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+			handle = (void *)LoadLibraryExW(wide,NULL,flags);
 			free(wide);
 		}
 	}
