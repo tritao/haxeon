@@ -403,7 +403,7 @@ class CxxAbiLowerer {
 		};
 
 	static function moduleName(path:String):String {
-		var name = path.split("/").pop();
+		var name = StringTools.replace(path, "\\", "/").split("/").pop();
 		return StringTools.replace(name, ".", "_");
 	}
 }

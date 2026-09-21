@@ -876,7 +876,7 @@ class CHeaderImporter {
 		return Std.string(field(value, "kind")) + ":" + Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
 
 	static function moduleName(path:String):String {
-		var name = path.split("/").pop();
+		var name = StringTools.replace(path, "\\", "/").split("/").pop();
 		return StringTools.replace(name, ".", "_");
 	}
 
