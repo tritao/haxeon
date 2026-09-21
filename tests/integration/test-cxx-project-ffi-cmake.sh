@@ -16,10 +16,15 @@ case "$(uname -s)" in
 	MINGW*|MSYS*|CYGWIN*)
 		ffi_suffix=".dll"
 		ffi_object_suffix=".o"
-		if command -v cl.exe >/dev/null 2>&1 || command -v cl >/dev/null 2>&1; then
-			cmake_import_archive="$project_dir/app/build/host/native/foo/foo.lib"
-			ffi_object_suffix=".obj"
-		else
+	if command -v cl.exe >/dev/null 2>&1 || command -v cl >/dev/null 2>&1; then
+		cmake_import_archive="$project_dir/app/build/host/native/foo/foo.lib"
+		ffi_object_suffix=".obj"
+		# The generated thunk is compiled by Haxeon's direct cl invocation,
+		# outside the CMake target above. Keep its CRT choice aligned with the
+		# self-contained fixture as well.
+		CL="${CL:-} /MT"
+		export CL
+	else
 			cmake_import_archive="$project_dir/app/build/host/native/foo/libfoo.dll.a"
 		fi
 		;;
