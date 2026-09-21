@@ -10,35 +10,18 @@ import haxe.crypto.Sha256;
 
 /** Emits C-ABI entry points which adapt supported C++ calls before they reach Haxeon. */
 class CxxThunkGenerator {
-	public static function prepare(model:CxxModel, ?cxxOwnership:Map<String, String>, forceAll:Bool = false):Void {
+	/**
+		Prepare a complete C ABI boundary when thunk mode is enabled. Keeping every
+		selected declaration in the generated library avoids relying on the host
+		loader to search dependent C++ libraries for direct symbols.
+	 */
+	public static function prepare(model:CxxModel):Void {
 		for (functionModel in model.functions)
-			if (forceAll
-				|| !functionModel.isNoexcept
-				|| needsAdapter(functionModel.parameters)
-				|| ownedFunction(functionModel.qualifiedName, cxxOwnership))
-				functionModel.thunkSymbol = thunkSymbol("function", functionModel.qualifiedName, functionModel.symbol);
+			functionModel.thunkSymbol = thunkSymbol("function", functionModel.qualifiedName, functionModel.symbol);
 		for (record in model.records)
 			for (method in record.methods)
-				if ((forceAll || !method.isNoexcept || needsAdapter(method.parameters)) && !method.isConstructor && !method.isDestructor)
+				if (!method.isConstructor && !method.isDestructor)
 					method.thunkSymbol = thunkSymbol("method", method.qualifiedName, method.symbol);
-	}
-
-	static function ownedFunction(name:String, ownership:Null<Map<String, String>>):Bool {
-		if (ownership == null)
-			return false;
-		if (ownership.exists(name))
-			return true;
-		for (release in ownership)
-			if (release == name)
-				return true;
-		return false;
-	}
-
-	static function needsAdapter(parameters:Array<CxxModel.CxxParameter>):Bool {
-		for (parameter in parameters)
-			if (CxxTypeTools.isStringView(parameter.type) || CxxTypeTools.isByteSpan(parameter.type))
-				return true;
-		return false;
 	}
 
 	public static function source(model:CxxModel):String {

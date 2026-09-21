@@ -344,6 +344,7 @@ class CxxHeaderImporterMain {
 			"CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
 			thunkSource = CxxThunkGenerator.source(thunked.model),
 			thunkFunction = Lambda.find(thunked.model.functions, functionModel -> functionModel.name == "add"),
+			thunkAcquire = Lambda.find(thunked.model.functions, functionModel -> functionModel.name == "acquire"),
 			thunkRecord = Lambda.find(thunked.model.records, record -> record.qualifiedName == "cxxthunk::Counter"),
 			thunkMethod = thunkRecord == null ? null : Lambda.find(thunkRecord.methods, method -> method.name == "fail"),
 			thunkAddPlan = thunkFunction == null
@@ -352,6 +353,8 @@ class CxxHeaderImporterMain {
 				|| thunkMethod.loweredName == null ? null : Lambda.find(thunked.plans, plan -> plan.name == thunkMethod.loweredName);
 		expect(thunkFunction != null
 			&& thunkFunction.thunkSymbol != null
+			&& thunkAcquire != null
+			&& thunkAcquire.thunkSymbol != null
 			&& thunkMethod != null
 			&& thunkMethod.thunkSymbol != null
 			&& thunkSource.indexOf("catch (const std::exception &error)") >= 0
