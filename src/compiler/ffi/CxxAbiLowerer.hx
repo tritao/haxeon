@@ -33,7 +33,7 @@ class CxxAbiLowerer {
 			?cxxOwnership:Map<String, String>):HxiInterface {
 		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
 		if (cxxThunks)
-			CxxThunkGenerator.prepare(model, cxxOwnership);
+			CxxThunkGenerator.prepare(model, cxxOwnership, isMsvcTarget(target));
 		var records:Map<String, CxxRecord> = [],
 			enums:Map<String, CxxEnum> = [],
 			aliases:Map<String, CxxAlias> = [];
@@ -152,6 +152,9 @@ class CxxAbiLowerer {
 			});
 		return Structure(hxiName(record.qualifiedName), record.size, record.align, fields, record.span);
 	}
+
+	static function isMsvcTarget(target:String):Bool
+		return target.indexOf("windows") >= 0 && target.indexOf("msvc") >= 0;
 
 	static function lowerEnum(enumModel:CxxEnum, enums:Map<String, CxxEnum>, records:Map<String, CxxRecord>, aliases:Map<String, CxxAlias>,
 			callbackNames:Map<String, String>):HxiDeclaration {

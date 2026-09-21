@@ -10,15 +10,16 @@ import haxe.crypto.Sha256;
 
 /** Emits C-ABI entry points which adapt supported C++ calls before they reach Haxeon. */
 class CxxThunkGenerator {
-	public static function prepare(model:CxxModel, ?cxxOwnership:Map<String, String>):Void {
+	public static function prepare(model:CxxModel, ?cxxOwnership:Map<String, String>, forceAll:Bool = false):Void {
 		for (functionModel in model.functions)
-			if (!functionModel.isNoexcept
+			if (forceAll
+				|| !functionModel.isNoexcept
 				|| needsAdapter(functionModel.parameters)
 				|| ownedFunction(functionModel.qualifiedName, cxxOwnership))
 				functionModel.thunkSymbol = thunkSymbol("function", functionModel.qualifiedName, functionModel.symbol);
 		for (record in model.records)
 			for (method in record.methods)
-				if ((!method.isNoexcept || needsAdapter(method.parameters)) && !method.isConstructor && !method.isDestructor)
+				if ((forceAll || !method.isNoexcept || needsAdapter(method.parameters)) && !method.isConstructor && !method.isDestructor)
 					method.thunkSymbol = thunkSymbol("method", method.qualifiedName, method.symbol);
 	}
 
