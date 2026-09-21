@@ -364,11 +364,10 @@ class CxxHeaderImporterMain {
 		if (thunkFailPlan != null)
 			expect(thunkFailPlan.symbol == thunkMethod.thunkSymbol && thunkFailPlan.dispatch == DirectSymbol,
 				"throwing methods should use a direct call to their generated thunk");
-		var msvcThunked = CxxHeaderImporter.importHeader("tests/ffi/cxx_thunk_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++",
-			"cxx_thunk", "CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
+		var msvcThunked = CxxHeaderImporter.importHeader("tests/ffi/cxx_thunk_fixture.hpp", "x86_64-pc-windows-msvc", ["tests/ffi"], "clang++", "cxx_thunk",
+			"CxxThunkFixture", null, null, "c++20", null, null, false, false, false, true),
 			msvcAcquire = Lambda.find(msvcThunked.model.functions, functionModel -> functionModel.name == "acquire");
-		expect(msvcAcquire != null && msvcAcquire.thunkSymbol != null,
-			"MSVC C++ thunk imports should adapt direct calls across the Windows DLL boundary");
+		expect(msvcAcquire != null && msvcAcquire.thunkSymbol != null, "MSVC C++ thunk imports should adapt direct calls across the Windows DLL boundary");
 		var stringViewDisabled = "",
 			stringViewImported:Null<CxxImportResult> = null;
 		try {
