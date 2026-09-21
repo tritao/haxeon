@@ -18,9 +18,9 @@ class ClangAstTools {
 	}
 
 	public static function updateFile(node:Dynamic, currentFile:String):String {
-		var path = locationPath(node);
+		var path = resolvedPath(locationPath(node));
 		if (path != null)
-			currentFile = FileSystem.fullPath(path);
+			currentFile = path;
 		Reflect.setField(node, "_hxiFile", currentFile);
 		return currentFile;
 	}
@@ -103,13 +103,15 @@ class ClangAstTools {
 		if (location == null)
 			return false;
 		var spellingFile = spellingLocationPath(node);
-		if (spellingFile != null)
-			currentFile = FileSystem.fullPath(spellingFile);
+		var resolvedSpellingFile = resolvedPath(spellingFile);
+		var resolvedLocationFile = resolvedPath(locationPath(node));
+		if (resolvedSpellingFile != null)
+			currentFile = resolvedSpellingFile;
 		// Clang omits loc.file for declarations from an included file and
 		// records that provenance in includedFrom. In that case the inherited
 		// currentFile is not reliable enough to classify the declaration as user
 		// source; exclude it conservatively instead of importing libstdc++ AST.
-		if (spellingFile == null && locationPath(node) == null && field(location, "includedFrom") != null)
+		if (resolvedSpellingFile == null && resolvedLocationFile == null && field(location, "includedFrom") != null)
 			return false;
 		var key = pathKey(currentFile);
 		for (root in roots)
@@ -123,11 +125,25 @@ class ClangAstTools {
 		var spellingFile = spellingLocationPath(node);
 		if (spellingFile == null)
 			return isUserDeclaration(node, roots, currentFile);
-		var key = pathKey(FileSystem.fullPath(spellingFile));
+		var resolvedSpellingFile = resolvedPath(spellingFile);
+		if (resolvedSpellingFile == null)
+			return false;
+		var key = pathKey(resolvedSpellingFile);
 		for (root in roots)
 			if (key == pathKey(root) || StringTools.startsWith(key, pathKey(root) + "/"))
 				return true;
 		return false;
+	}
+
+	/** Clang uses pseudo-files such as <built-in> and <scratch space> in locations. */
+	static function resolvedPath(path:Null<String>):Null<String> {
+		if (path == null || path.length == 0 || StringTools.startsWith(path, "<") && StringTools.endsWith(path, ">"))
+			return null;
+		try {
+			return FileSystem.fullPath(path);
+		} catch (_:Dynamic) {
+			return null;
+		}
 	}
 
 	static function spellingLocationPath(node:Dynamic):Null<String> {
