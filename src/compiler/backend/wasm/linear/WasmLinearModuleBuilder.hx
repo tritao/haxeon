@@ -246,7 +246,10 @@ class WasmLinearModuleBuilder {
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
 		closureTypes = WasmModuleSupport.collectClosureTypes(module, program);
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator);
+		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
+		if (bytesDataPointer == null)
+			throw "Linear Wasm bytes data pointer helper is missing";
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({

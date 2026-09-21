@@ -19,10 +19,12 @@ import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
 class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation {
 	final layout:WasmLayout;
 	final allocator:Int;
+	final bytesDataPointer:Int;
 
-	public function new(layout:WasmLayout, allocator:Int) {
+	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int) {
 		this.layout = layout;
 		this.allocator = allocator;
+		this.bytesDataPointer = bytesDataPointer;
 	}
 
 	public function valueType(type:IrType):WasmValueType
@@ -103,8 +105,39 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	}
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
-			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult
-		return UseDefault;
+			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
+		var fixed = native.fixedResult;
+		if (fixed == null)
+			return UseDefault;
+		if (native.result != ManagedBytes || outputLocal < 0)
+			throw 'Linear Wasm C native "${native.name}" has an invalid fixed aggregate result contract';
+		var body:Array<WasmInstruction> = [],
+			allocationSize = WasmLayout.STRING_DATA_OFFSET + fixed.size;
+		// Linear Wasm C-native imports return a pointer to the raw aggregate. Materialize
+		// that pointer as a managed Bytes value before the generated HXI wrapper attaches
+		// the projected fixed-layout record to it.
+		body.push(I32Const(allocationSize));
+		body.push(Call(allocator));
+		body.push(LocalSet(outputLocal));
+		for (field in [
+			{offset: 0, value: WasmModuleSupport.typeId(Bytes)},
+			{offset: WasmLayout.STRING_LENGTH_OFFSET, value: fixed.size},
+			{offset: WasmLayout.ARRAY_CAPACITY_OFFSET, value: fixed.size}
+		]) {
+			body.push(LocalGet(outputLocal));
+			body.push(I32Const(field.value));
+			body.push(I32Store(field.offset));
+		}
+		body.push(LocalGet(outputLocal));
+		body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
+		body.push(I32Add);
+		for (index in 0...arguments.length)
+			nativeArgument(body, arguments[index], argumentLocals[index]);
+		body.push(Call(importIndex));
+		body.push(I32Const(fixed.size));
+		body.push(MemoryCopy);
+		return body;
+	}
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult
 		return UseDefault;
@@ -153,4 +186,16 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			case F32 | F64: F64Store(offset);
 			default: I32Store(offset);
 		};
+
+	function nativeArgument(body:Array<WasmInstruction>, argument:IrValue, argumentLocal:Int):Void {
+		body.push(LocalGet(argumentLocal));
+		switch argument.type {
+			case Bytes, ManagedBytes:
+				body.push(Call(bytesDataPointer));
+			case Abstract("realtime_bytes"):
+				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
+				body.push(I32Add);
+			case _:
+		}
+	}
 }

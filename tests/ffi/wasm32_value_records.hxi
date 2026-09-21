@@ -1,0 +1,17 @@
+interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_records") {
+	struct point @layout(8, 4) {
+		x: i32 @offset(0);
+		y: i32 @offset(4);
+	}
+	struct gapped @layout(12, 4) {
+		tag: i8 @offset(0);
+		value: i32 @offset(8);
+	}
+	extern fn read(value: ptr<const<point>>) -> i32 @symbol("read_point");
+	extern fn write(value: ptr<point> @out) -> void @symbol("write_point");
+	extern fn update(value: ptr<point> @inout) -> void @symbol("update_point");
+	extern fn sum(value: point) -> i32 @symbol("sum_point");
+	extern fn make(seed: i32) -> point @symbol("make_point");
+	extern fn sumGapped(value: gapped) -> i32 @symbol("sum_gapped");
+	extern fn makeGapped(seed: i32) -> gapped @symbol("make_gapped");
+}

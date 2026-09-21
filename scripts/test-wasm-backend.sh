@@ -121,6 +121,9 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 	--target=wasm32 --output=out/wasm-cli-hxi-retained-imported.wasm --entry=wasm-hxi-retained \
 	--wasm-import-memory --root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	--target=wasm32 --output=out/wasm-cli-hxi-value-records.wasm --entry=wasm32-value-records \
+	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
+"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
@@ -209,6 +212,7 @@ const cases = [
 	["out/wasm-cli-wasm32-bytes-view.wasm", 42],
 	["out/wasm-cli-hxi-retained.wasm", 42],
 	["out/wasm-cli-hxi-retained-imported.wasm", 42],
+	["out/wasm-cli-hxi-value-records.wasm", 42],
 	["out/wasm-cli-try-catch.wasm", 42],
 	["out/wasm-cli-try-nested.wasm", 42],
 	["out/wasm-cli-try-bounds.wasm", 42],
@@ -257,6 +261,55 @@ const cases = [
         return length === expected.length && expected.every((value, index) => actual[index] === value) ? 42 : 0;
       }};
     }
+    if (relative.endsWith("wasm-cli-hxi-value-records.wasm"))
+      imports.wasm32_value_records = {
+        read_point: pointer => {
+          if (pointer % 4 !== 0)
+            throw new Error("const fixed-layout pointer is not four-byte aligned");
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+        },
+        write_point: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          if (view.getInt32(pointer, true) !== 0 || view.getInt32(pointer + 4, true) !== 0)
+            throw new Error("linear @out aggregate was not zero-initialized");
+          view.setInt32(pointer, 17, true);
+          view.setInt32(pointer + 4, 25, true);
+        },
+        update_point: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          view.setInt32(pointer, view.getInt32(pointer, true) + 1, true);
+          view.setInt32(pointer + 4, view.getInt32(pointer + 4, true) + 2, true);
+        },
+        sum_point: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
+        },
+        make_point: seed => {
+          const pointer = 512;
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          view.setInt32(pointer, seed, true);
+          view.setInt32(pointer + 4, seed + 2, true);
+          return pointer;
+        },
+        sum_gapped: pointer => {
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          const bytes = new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 12);
+          for (let index = 1; index < 8; index++)
+            if (bytes[index] !== 0)
+              return 0;
+          return view.getInt8(pointer) + view.getInt32(pointer + 8, true);
+        },
+        make_gapped: seed => {
+          const pointer = 544;
+          const view = new DataView(moduleInstance.exports.memory.buffer);
+          new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 12).fill(0);
+          view.setInt8(pointer, 3);
+          view.setInt32(pointer + 8, seed, true);
+          return pointer;
+        }
+      };
+
     if (relative.endsWith("numeric-promotion.wasm"))
       imports.haxeon_runtime = {__math_ceil: Math.ceil};
     if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm"))
