@@ -175,8 +175,10 @@ class CxxHeaderImporterMain {
 			temporaryRoot = Sys.getEnv("TMP");
 		if (temporaryRoot == null || temporaryRoot.length == 0)
 			temporaryRoot = ".";
-		var compileDatabase = Path.join([temporaryRoot, 'haxeon-cxx-compile-commands-${Std.int(Date.now().getTime())}.json']),
-			headerPath = FileSystem.fullPath("tests/ffi/cxx_import_fixture.hpp");
+		var compileDatabase = Path.join([
+			temporaryRoot,
+			'haxeon-cxx-compile-commands-${Std.int(Date.now().getTime())}.json'
+		]), headerPath = FileSystem.fullPath("tests/ffi/cxx_import_fixture.hpp");
 		File.saveContent(compileDatabase, Json.stringify([
 			{
 				directory: FileSystem.fullPath("."),
@@ -366,8 +368,8 @@ class CxxHeaderImporterMain {
 		} catch (error:Dynamic)
 			stringViewDisabled = Std.string(error);
 		expect(stringViewDisabled.indexOf("CXX017") >= 0, "std::string_view should require an explicit generated adapter");
-		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++", "cxx_view",
-			"CxxStringViewFixture", null, null, "c++20", null, null, false, false, false, true),
+		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++",
+			"cxx_view", "CxxStringViewFixture", null, null, "c++20", null, null, false, false, false, true),
 			stringViewText = HxiWriter.write(stringView.hxi, "// test"),
 			stringViewSource = CxxThunkGenerator.source(stringView.model),
 			stringViewProjection = Lambda.find(CxxProjection.sources(stringView.model, stringView.hxi, null, stringView.plans),
