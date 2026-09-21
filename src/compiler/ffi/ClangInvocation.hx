@@ -37,6 +37,11 @@ class ClangInvocation {
 		return target;
 	}
 
+	/** Returns whether a requested triple describes this compiler's native ABI. */
+	public static function isHostTarget(target:String, clang:String = "clang++"):Bool {
+		return targetKey(target) == targetKey(hostTarget(clang));
+	}
+
 	public function new(options:ClangInvocationOptions) {
 		if (options.language != "c" && options.language != "c++")
 			throw 'Unsupported Clang language "${options.language}"';
@@ -146,6 +151,26 @@ class ClangInvocation {
 	static function isAbsolute(path:String):Bool
 		return StringTools.startsWith(path, "/")
 			|| (path.length > 2 && path.charAt(1) == ":" && (path.charAt(2) == "/" || path.charAt(2) == "\\"));
+
+	static function targetKey(target:String):String {
+		var value = target.toLowerCase(),
+			parts = value.split("-"),
+			architecture = parts.length == 0 ? value : parts[0];
+		architecture = switch architecture {
+			case "amd64" | "x64": "x86_64";
+			case "arm64": "aarch64";
+			default: architecture;
+		};
+		if (value.indexOf("windows") >= 0 || value.indexOf("mingw") >= 0 || value.indexOf("msvc") >= 0) {
+			var abi = value.indexOf("msvc") >= 0 ? "msvc" : value.indexOf("mingw") >= 0 || value.indexOf("gnu") >= 0 ? "gnu" : "windows";
+			return '$architecture-windows-$abi';
+		}
+		if (value.indexOf("darwin") >= 0 || value.indexOf("apple") >= 0)
+			return '$architecture-darwin';
+		if (value.indexOf("linux") >= 0)
+			return '$architecture-linux';
+		return value;
+	}
 
 	static function splitCommand(command:String):Array<String> {
 		var result:Array<String> = [], current = new StringBuf(), quote = "";

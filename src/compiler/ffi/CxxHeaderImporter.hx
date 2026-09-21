@@ -50,7 +50,7 @@ class CxxHeaderImporter {
 			defines: defines == null ? [] : defines,
 			clang: clang,
 			compileCommands: compileCommands,
-			useHostTarget: target == ClangInvocation.hostTarget(clang)
+			useHostTarget: ClangInvocation.isHostTarget(target, clang)
 		});
 		var sourcePath = FileSystem.fullPath(header),
 			roots = [FileSystem.fullPath(Path.directory(sourcePath))];
