@@ -46,6 +46,7 @@ typedef struct native_fixture_arrays {
 	native_fixture_point points[2];
 } native_fixture_arrays;
 typedef struct native_fixture_padded { int8_t tag; int32_t value; } native_fixture_padded;
+typedef struct native_fixture_gapped { int8_t tag; uint8_t reserved[7]; int32_t value; } native_fixture_gapped;
 
 static int32_t native_fixture_borrowed_value = 42;
 typedef int32_t (*native_fixture_binary_callback)( int32_t, int32_t );
@@ -316,6 +317,11 @@ FIXTURE_API int32_t native_fixture_check_arrays_value( native_fixture_arrays arr
 
 FIXTURE_API native_fixture_padded native_fixture_make_padded( int32_t value ) {
 	native_fixture_padded result = {(int8_t)2, value};
+	return result;
+}
+
+FIXTURE_API native_fixture_gapped native_fixture_make_gapped( int32_t value ) {
+	native_fixture_gapped result = {(int8_t)3, {0}, value};
 	return result;
 }
 

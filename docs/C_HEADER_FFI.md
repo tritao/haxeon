@@ -256,8 +256,10 @@ generated accessors. Naturally laid-out structures can also be passed and return
 value. Their recursive field layout is encoded in the native call descriptor,
 including nested structures and fixed arrays; the runtime asks libffi to apply
 the platform's aggregate calling convention and verifies the resulting size
-and alignment. Packed, over-aligned, or manually gapped layouts remain usable
-through pointers but are rejected when projected into a by-value call.
+and alignment. Explicit byte gaps and trailing padding are encoded as unsigned
+byte elements, so manually gapped records remain ABI-equivalent when passed by
+value. A declared alignment that cannot be represented by libffi's recursive
+aggregate descriptor is rejected at the native-call boundary.
 
 Fixed-size `array<T, N>` fields project indexed getters and setters for integer
 and floating-point elements, with bounds checks against `N` before an address

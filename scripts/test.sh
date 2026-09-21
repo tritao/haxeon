@@ -16,6 +16,7 @@ fi
 
 "$root_dir/scripts/build-native.sh" >/dev/null
 mkdir -p "$root_dir/out"
+bash "$root_dir/scripts/test-hxi-value-records.sh"
 bash "$root_dir/scripts/test-messagepack-interop.sh"
 
 "$root_dir/tests/differential/run.sh"

@@ -1950,23 +1950,35 @@ class HxiHaxeEmitter {
 			case Structure(_, _, _, fields, _):
 				var ordered = fields.copy();
 				ordered.sort(function(left:HxiField, right:HxiField) return fieldOffset(left) - fieldOffset(right));
-				var cursor = 0, naturalAlign = 1;
+				var cursor = 0, naturalAlign = 1, elements:Array<String> = [];
 				for (field in ordered) {
 					var layout = abiLayout(field.type, declarations, abi);
-					cursor = (cursor + layout.align - 1) & -layout.align;
-					if (fieldOffset(field) != cursor)
-						throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
-					cursor += layout.size;
+					var offset = fieldOffset(field);
+					if (offset < cursor)
+						throw 'HXI structure "$name" cannot be passed by value because its fields overlap';
+					appendPadding(elements, offset - cursor);
+					elements = elements.concat(fieldDescriptors(field.type, declarations, abi, aggregateDescriptors));
+					cursor = offset + layout.size;
 					naturalAlign = Std.int(Math.max(naturalAlign, layout.align));
 				}
-				if (naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
-					throw 'HXI structure "$name" cannot be passed by value because its layout is not a natural C struct';
-				'{$size;$align;${[for (field in ordered) for (entry in fieldDescriptors(field.type, declarations, abi, aggregateDescriptors)) entry].join(",")}}';
+				appendPadding(elements, size - cursor);
+				if (cursor > size || naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
+					throw 'HXI structure "$name" cannot be passed by value because its layout is incompatible with the declared alignment';
+				if (elements.length == 0)
+					throw 'HXI structure "$name" cannot be passed by value because it has no ABI elements';
+				'{$size;$align;${elements.join(",")}}';
 			case _: throw 'Missing HXI structure "$name"';
 		};
 		if (aggregateDescriptors != null)
 			aggregateDescriptors.set(name, descriptor);
 		return descriptor;
+	}
+
+	static function appendPadding(elements:Array<String>, length:Int):Void {
+		if (length < 0)
+			return;
+		for (_ in 0...length)
+			elements.push("2");
 	}
 
 	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int} {

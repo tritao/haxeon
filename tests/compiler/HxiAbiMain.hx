@@ -7,12 +7,14 @@ import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
+import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrType;
 
 class HxiAbiMain {
 	static function main():Void {
 		var linux = parse("x86_64-linux-gnu"),
 			windows = parse("x86_64-pc-windows-msvc");
+		verifyValueRecordTargets();
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 64, Signed);
 		expectInteger(windows.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 32, Signed);
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_char")), 8, PlainChar);
@@ -197,6 +199,44 @@ class HxiAbiMain {
 			rejected = true;
 		expect(rejected, "cyclic aliases should be rejected before ABI classification");
 		Sys.println("PASS: HXI types classify for target C ABIs");
+	}
+
+	static function verifyValueRecordTargets():Void {
+		var targets = [
+			{target: "x86_64-linux-gnu", pointerSize: 8},
+			{target: "x86_64-pc-windows-msvc", pointerSize: 8},
+			{target: "aarch64-linux-android21", pointerSize: 8},
+			{target: "wasm32-unknown-unknown", pointerSize: 4}
+		];
+		for (entry in targets) {
+			var model = HxiParser.parse('value-record-${entry.target}.hxi',
+				'interface value_records @target("${entry.target}") @library("value_records") {'
+				+ ' struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }'
+				+ ' struct gapped @layout(12, 4) { tag: i8 @offset(0); value: i32 @offset(8); }'
+				+ ' extern fn read(value: ptr<const<point>>) -> i32;'
+				+ ' extern fn write(value: ptr<point> @out) -> void;'
+				+ ' extern fn update(value: ptr<point> @inout) -> void;'
+				+ ' extern fn sum(value: point) -> i32;'
+				+ ' extern fn make(seed: i32) -> point;'
+				+ ' extern fn makeGapped(seed: i32) -> gapped;'
+				+ ' }');
+			HxiValidator.validate(model, []);
+			var natives = HxiProjection.cNatives(model),
+				source = HxiProjection.source(model);
+			expect(natives.length == 6, '${entry.target}: value-record native count changed');
+			expect(natives[0].pointerSize == entry.pointerSize, '${entry.target}: pointer ABI width changed');
+			expect(Type.enumEq(natives[0].argumentModes[0], FixedInput(8, 4, true)), '${entry.target}: const struct* must lower as a fixed input');
+			expect(Type.enumEq(natives[1].argumentModes[0], FixedOutput(8, 4, true)), '${entry.target}: struct* @out must lower as a fixed output');
+			expect(Type.enumEq(natives[2].argumentModes[0], FixedInputOutput(8, 4, true)), '${entry.target}: struct* @inout must lower as fixed input/output');
+			expect(Type.enumEq(natives[3].argumentModes[0], FixedValue(8, 4, true)), '${entry.target}: by-value struct input must retain aggregate storage');
+			expect(natives[4].fixedResult != null && natives[4].fixedResult.size == 8 && natives[4].fixedResult.alignment == 4,
+				'${entry.target}: by-value struct result lost its layout');
+			expect(natives[5].signature == "5>{12;4;1,2,2,2,2,2,2,2,5}", '${entry.target}: gapped by-value result lost explicit padding');
+			expect(source.indexOf('extern function read(arg0:point):Int;') >= 0
+				&& source.indexOf('function write():point') >= 0
+				&& source.indexOf('function update(value:point):point') >= 0,
+				'${entry.target}: generated const, @out, and @inout Haxe signatures changed');
+		}
 	}
 
 	static function parse(target:String):HxiAbi {
