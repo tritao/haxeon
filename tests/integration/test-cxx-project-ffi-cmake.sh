@@ -178,9 +178,12 @@ test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/OwnedManagedWidget.hx"
 if command -v dumpbin.exe >/dev/null 2>&1 || command -v dumpbin >/dev/null 2>&1; then
 	dumpbin_command=$(command -v dumpbin.exe || command -v dumpbin)
+	dumpbin_dependencies() {
+		MSYS_NO_PATHCONV=1 "$dumpbin_command" /DEPENDENTS "$(cygpath -w "$1")" || true
+	}
 	echo "CMake fixture DLL dependencies:"
-"$dumpbin_command" /DEPENDENTS "$project_dir/app/build/host/native/foo/foo.hdll" || true
-"$dumpbin_command" /DEPENDENTS "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix" || true
+	dumpbin_dependencies "$project_dir/app/build/host/native/foo/foo.hdll"
+	dumpbin_dependencies "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
 fi
 grep -q '@owned("haxeon_cxx_thunk_' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @retained)' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
