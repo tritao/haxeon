@@ -67,8 +67,7 @@ class ParserRecoveryMain {
 			+ "  public function declare() { var local = function() refresh(); var after:Int = 2; }\n"
 			+ "  function refresh():Void {}\n"
 			+ "}";
-		var program = new Parser(new Lexer(new SourceFile("BlocklessClosure.hx", source)).tokenize())
-			.parseProgram();
+		var program = new Parser(new Lexer(new SourceFile("BlocklessClosure.hx", source)).tokenize()).parseProgram();
 		if (program.classes.length != 1 || program.classes[0].methods.length != 3)
 			throw "blockless closure terminators consumed the following declaration";
 	}
