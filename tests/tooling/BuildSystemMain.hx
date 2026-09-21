@@ -265,6 +265,19 @@ class BuildSystemMain {
 		File.saveContent(source, "int value(void) { return 43; }\n");
 		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []) != baseline,
 			"changed source contents should invalidate the action");
+
+		var compilerOutput = Path.join([root, "compiled.hl"]), compilerInvocations = 0,
+			compilerAction = new ExecutionAction(new ActionId("compile-haxe"), [], [source], [compilerOutput], "compile Haxe",
+				Compiler("Haxeon compilation", "target=hl;entry=Main", () -> {
+					compilerInvocations++;
+					File.saveContent(compilerOutput, "compiled\n");
+					return 0;
+				}));
+		var firstCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction])),
+			secondCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction]));
+		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped
+			&& secondCompile.exitCode == 0 && secondCompile.actions[0].skipped && compilerInvocations == 1,
+			"unchanged compiler actions with existing outputs should be skipped");
 		removeTree(root);
 	}
 
@@ -327,7 +340,7 @@ class BuildSystemMain {
 			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
 			"plan explanations should identify requested outputs and provider details");
 		expect(executionText.indexOf("kind: process") >= 0
-			&& executionText.indexOf("kind: compiler (outer cache disabled)") >= 0
+			&& executionText.indexOf("kind: compiler") >= 0
 			&& executionText.indexOf("outputs:") >= 0,
 			"execution plans should expose action kinds and outputs");
 		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0, "the package build plan should require its shared native library");
@@ -522,7 +535,7 @@ class BuildSystemMain {
 	}
 
 	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
-		return new ExecutionAction(new ActionId(id), dependencies, [], [], description, Compiler(description, invoke));
+		return new ExecutionAction(new ActionId(id), dependencies, [], [], description, Compiler(description, description, invoke));
 
 	static function temporaryDirectory(name:String):String {
 		var base = Sys.getEnv("TMPDIR");

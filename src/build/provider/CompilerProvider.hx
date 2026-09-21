@@ -20,15 +20,17 @@ class CompilerProvider {
 			".tools",
 			"haxe",
 			"haxe" + (Sys.systemName() == "Windows" ? ".exe" : "")
-		]), compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"), arguments = [
+		]), compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
+			compilerSourcePath = compilerSource == null || compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
+			arguments = [
 			"-cp",
-			compilerSource == null || compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
+			compilerSourcePath,
 			"--run",
 			"compiler.tools.HaxeonCompiler",
 			"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 			"--output=" + output,
 			"--entry=" + project.manifest.entry
-			], inputs:Array<String> = [];
+			], inputs:Array<String> = [compiler, compilerSourcePath];
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				arguments.push("--root=" + sourceRoot);
@@ -46,6 +48,7 @@ class CompilerProvider {
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		return new ExecutionAction(actionId, dependencies, inputs, [output], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler('Haxeon ${project.manifest.target} compilation', () -> ProcessRunner.run(compiler, arguments, context.compilerHome, new Map())));
+			Compiler('Haxeon ${project.manifest.target} compilation', haxe.Json.stringify(arguments),
+				() -> ProcessRunner.run(compiler, arguments, context.compilerHome, new Map())));
 	}
 }

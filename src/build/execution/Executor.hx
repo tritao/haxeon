@@ -108,7 +108,7 @@ class Executor implements ExecutionBackend {
 						} catch (error:Dynamic) {
 							waveResults.set(action.id.key(), new ActionResult(action.id, 1, false, false, null, Std.string(error)));
 						}
-					case Compiler(_, _):
+					case Compiler(_, _, _):
 						waveResults.set(action.id.key(), executeAction(action, dependencyFingerprints));
 				}
 			}
@@ -188,7 +188,7 @@ class Executor implements ExecutionBackend {
 			var status = switch action.action {
 				case Process(command, arguments, cwd, variables):
 					ProcessRunner.run(command, arguments, cwd, variables);
-				case Compiler(_, invoke):
+				case Compiler(_, _, invoke):
 					invoke();
 			};
 			if (status == 0 && isCacheable(action)) {
@@ -218,7 +218,7 @@ class Executor implements ExecutionBackend {
 	static function isCacheable(action:ExecutionAction):Bool
 		return switch action.action {
 			case Process(_, _, _, _): action.outputs.length > 0;
-			case Compiler(_, _): false;
+			case Compiler(_, _, _): action.outputs.length > 0;
 		};
 
 	static function ensureOutputDirectories(action:ExecutionAction):Void {

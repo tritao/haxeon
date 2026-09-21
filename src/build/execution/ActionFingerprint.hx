@@ -72,8 +72,8 @@ class ActionFingerprint {
 				keys.sort(Reflect.compare);
 				for (key in keys)
 					fields.push('$key=${environment.get(key)}');
-			case Compiler(_, _):
-				fields.push("non-cacheable-compiler-action");
+			case Compiler(_, identity, _):
+				fields.push('compiler:$identity');
 		}
 		for (input in action.inputs) {
 			fields.add('input:$input');
@@ -105,8 +105,8 @@ class ActionFingerprint {
 				keys.sort(Reflect.compare);
 				for (key in keys)
 					fields.push('environment:$key=${portableArgument(environment.get(key), action)}');
-			case Compiler(_, _):
-				fields.push("non-cacheable-compiler-action");
+			case Compiler(_, identity, _):
+				fields.push('compiler:$identity');
 		}
 		var inputIndex = 0;
 		for (input in action.inputs) {
