@@ -266,7 +266,8 @@ class BuildSystemMain {
 		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []) != baseline,
 			"changed source contents should invalidate the action");
 
-		var compilerOutput = Path.join([root, "compiled.hl"]), compilerInvocations = 0,
+		var compilerOutput = Path.join([root, "compiled.hl"]),
+			compilerInvocations = 0,
 			compilerAction = new ExecutionAction(new ActionId("compile-haxe"), [], [source], [compilerOutput], "compile Haxe",
 				Compiler("haxeon-compiler", ["--target=hl", "--entry=Main"], root, new Map(), () -> {
 					compilerInvocations++;
@@ -275,8 +276,8 @@ class BuildSystemMain {
 				}));
 		var firstCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction])),
 			secondCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction]));
-		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped
-			&& secondCompile.exitCode == 0 && secondCompile.actions[0].skipped && compilerInvocations == 1,
+		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0 && secondCompile.actions[0].skipped
+			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
 		removeTree(root);
 	}

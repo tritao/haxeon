@@ -59,8 +59,14 @@ class ModuleAnalyzer {
 			throw error;
 		}
 		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
-		for (dependency in ast.imports)
-			dependencies.set(dependency, true);
+		for (importPath in ast.imports) {
+			var importedModules = importedSourceModules(importPath);
+			if (importedModules.length == 0)
+				dependencies.set(importModulePath(importPath), true);
+			else
+				for (importedModule in importedModules)
+					dependencies.set(importedModule, true);
+		}
 		for (fn in ast.functions)
 			for (statement in fn.statements)
 				DependencyScanner.scanStatement(statement, dependencies);
@@ -93,9 +99,12 @@ class ModuleAnalyzer {
 		for (abstractDecl in ast.abstracts)
 			dependencies.remove(abstractDecl.name);
 		for (importPath in ast.imports) {
-			var alias = QualifiedName.last(importPath);
-			if (alias != importPath)
+			var modulePath = importModulePath(importPath),
+				alias = QualifiedName.last(modulePath);
+			if (alias != modulePath)
 				dependencies.remove(alias);
+			if (isWildcardImport(importPath) && !modules.exists(modulePath))
+				dependencies.remove(modulePath);
 		}
 		for (alias in ast.importAliases.keys())
 			dependencies.remove(alias);
@@ -193,15 +202,71 @@ class ModuleAnalyzer {
 	public function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
 		var aliases:Map<String, String> = [];
 		for (path in imports) {
-			var alias = QualifiedName.last(path);
-			aliases.set(alias, importedDeclarationName(path));
-			aliases.set(path, importedDeclarationName(path));
+			var modulePath = importModulePath(path);
+			if (isWildcardImport(path)) {
+				for (sourceModule in importedSourceModules(path))
+					addModuleAliases(sourceModule, aliases, true);
+				continue;
+			}
+			var alias = QualifiedName.last(path),
+				importedName = importedDeclarationName(path);
+			aliases.set(alias, importedName);
+			aliases.set(path, importedName);
+			if (modules.exists(modulePath))
+				addModuleAliases(modulePath, aliases, false);
 		}
 		for (alias => path in explicit) {
 			aliases.set(alias, importedDeclarationName(path));
 			aliases.set(path, importedDeclarationName(path));
 		}
 		return aliases;
+	}
+
+	/** True for the Haxe package/module wildcard form, such as `foo.bar.*`. */
+	public static inline function isWildcardImport(path:String):Bool
+		return StringTools.endsWith(path, ".*");
+
+	/** Return the module/package portion of an import path. */
+	public static inline function importModulePath(path:String):String
+		return isWildcardImport(path) ? path.substring(0, path.length - 2) : path;
+
+	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool):Void {
+		var ast = moduleAst(moduleName);
+		if (ast == null)
+			return;
+		for (declaration in ast.aliases)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		for (declaration in ast.enums)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		for (declaration in ast.enumAbstracts)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		for (declaration in ast.abstracts)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		for (declaration in ast.interfaces)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		for (declaration in ast.classes)
+			addDeclarationAlias(moduleName, declaration.name, aliases);
+		if (includeFunctions)
+			for (declaration in ast.functions)
+				addDeclarationAlias(moduleName, declaration.name, aliases);
+	}
+
+	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>):Void {
+		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
+			importedName = importedDeclarationName(sourceName);
+		aliases.set(declarationName, importedName);
+		aliases.set(sourceName, importedName);
+	}
+
+	function moduleAst(moduleName:String):Null<compiler.syntax.Ast.AstProgram> {
+		var state = modules.get(moduleName);
+		if (state == null)
+			return null;
+		if (state.ast != null)
+			return state.parsedAst();
+		var conditional = ConditionalCompilation.process(state.source, defines),
+			tokens = new Lexer(state.source, conditional.text).tokenize();
+		return new Parser(tokens).parseProgram();
 	}
 
 	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
@@ -263,22 +328,23 @@ class ModuleAnalyzer {
 
 	function hasSourceModuleImport(imports:Array<String>):Bool {
 		for (importPath in imports)
-			if (sourceModuleForDependency(importPath) != null)
+			if (importedSourceModules(importPath).length > 0)
 				return true;
 		return false;
 	}
 
 	function importedDeclarationName(path:String):String {
-		var sourceModule = sourceModuleForDependency(path);
-		if (sourceModule == null || sourceModule == path)
+		var modulePath = importModulePath(path),
+			sourceModule = sourceModuleForDependency(modulePath);
+		if (sourceModule == null || sourceModule == modulePath)
 			return path;
 		var packageName = QualifiedName.parentOrEmpty(sourceModule),
-			nestedName = path.substring(sourceModule.length + 1, path.length);
+			nestedName = modulePath.substring(sourceModule.length + 1, modulePath.length);
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
 	}
 
 	function sourceModuleForDependency(path:String):Null<String> {
-		var candidate = path;
+		var candidate = importModulePath(path);
 		while (true) {
 			sourceLoader.load(candidate, modules);
 			if (modules.exists(candidate))
@@ -288,6 +354,20 @@ class ModuleAnalyzer {
 				return null;
 			candidate = parent;
 		}
+	}
+
+	function importedSourceModules(path:String):Array<String> {
+		var modulePath = importModulePath(path);
+		if (!isWildcardImport(path)) {
+			var sourceModule = sourceModuleForDependency(modulePath);
+			return sourceModule == null ? [] : [sourceModule];
+		}
+		// A wildcard can target either a module (`Module.*`) or a package
+		// (`package.*`). Prefer the exact module when one exists.
+		sourceLoader.load(modulePath, modules);
+		if (modules.exists(modulePath))
+			return [modulePath];
+		return sourceLoader.loadPackage(modulePath, modules);
 	}
 
 	public function loadSourceModuleDependency(path:String):Null<String>

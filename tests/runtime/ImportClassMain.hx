@@ -6,9 +6,11 @@ class ImportClassMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		compiler.update("editor/widgets/SearchPlugin.hx",
-			"package editor.widgets; class SearchPlugin { public var bias:Int; public function new(bias:Int) { this.bias = bias; } public function score(value:Int):Int { return value + this.bias; } }");
+			"package editor.widgets; class SearchPlugin { public var bias:Int; public function new(bias:Int) { this.bias = bias; } public function score(value:Int):Int { return value + this.bias; } } class SearchPluginOptions { public var bias:Int; public function new() { this.bias = 0; } }");
+		compiler.update("editor/widgets/SearchPalette.hx",
+			"package editor.widgets; class SearchPalette { public var bias:Int; public function new() { this.bias = 0; } }");
 		compiler.update("Main.hx",
-			"import editor.widgets.SearchPlugin; function main():Int { var plugin:SearchPlugin = new SearchPlugin(2); return plugin.score(40); }");
+			"import editor.widgets.SearchPlugin; import editor.widgets.*; function main():Int { var plugin:SearchPlugin = new SearchPlugin(2); var options:SearchPluginOptions = new SearchPluginOptions(); var palette:SearchPalette = new SearchPalette(); return plugin.score(40) + options.bias + palette.bias; }");
 		var result = compiler.compile("Main");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
 	}

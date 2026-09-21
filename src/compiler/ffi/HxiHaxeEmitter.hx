@@ -22,6 +22,7 @@ import compiler.ffi.HaxeProjectionModel.ProjectedEnum;
 import compiler.ffi.HaxeProjectionModel.ProjectedCheckedFunction;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
+import compiler.ffi.HxiProjectedModule;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiHaxeEmitter {
@@ -311,13 +312,31 @@ class HxiHaxeEmitter {
 	public static function emit(plan:HaxeProjectionModel):String
 		return sourceRaw(plan);
 
+	public static function emitModules(plan:HaxeProjectionModel):Array<HxiProjectedModule> {
+		var model = plan.source,
+			profile = plan.profile,
+			packagePrefix = profile == null || profile.packageName == null ? "" : profile.packageName + ".",
+			functionModule = profile == null || profile.functionModule == null ? model.name : profile.functionModule,
+			typeModule = profile == null ? null : profile.typeModule,
+			constantModule = profile == null ? null : profile.constantModule,
+			result:Array<HxiProjectedModule> = [];
+		var splitTypes = typeModule != null && typeModule != functionModule,
+			splitConstants = constantModule != null && constantModule != functionModule;
+		result.push({path: packagePrefix + functionModule, source: sourceRaw(plan, splitTypes ? "functions" : "all")});
+		if (splitTypes)
+			result.push({path: packagePrefix + typeModule, source: sourceRaw(plan, "types")});
+		if (splitConstants)
+			result.push({path: packagePrefix + constantModule, source: sourceRaw(plan, "constants")});
+		return result;
+	}
+
 	static function requiredFieldOffset(field:HxiField):Int {
 		if (field.offset == null)
 			throw 'Missing native offset for HXI field "${field.name}"';
 		return field.offset;
 	}
 
-	static function sourceRaw(plan:HaxeProjectionModel):String {
+	static function sourceRaw(plan:HaxeProjectionModel, ?moduleKind:String):String {
 		var model = plan.source,
 			omitted = plan.omitted,
 			visibleDeclarations = plan.visibleDeclarations,
@@ -326,6 +345,17 @@ class HxiHaxeEmitter {
 		var library = model.library;
 		if (library == null)
 			return "";
+		var splitTypes = profile != null
+			&& profile.typeModule != null
+			&& profile.functionModule != null
+			&& profile.typeModule != profile.functionModule,
+			splitConstants = profile != null
+				&& profile.constantModule != null
+				&& profile.functionModule != null
+				&& profile.constantModule != profile.functionModule,
+			emitFunctions = moduleKind == null || moduleKind == "all" || moduleKind == "functions",
+			emitTypes = moduleKind == null || moduleKind == "all" || moduleKind == "types" || moduleKind == "functions" && !splitTypes,
+			emitConstants = moduleKind == null || moduleKind == "all" || moduleKind == "constants" || moduleKind == "functions" && !splitConstants;
 		var callbackErrorType = profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
 			pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
 			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
@@ -392,10 +422,16 @@ class HxiHaxeEmitter {
 				case _:
 			}
 		}
+		if (profile != null && profile.packageName != null)
+			output.add('package ${profile.packageName};\n\n');
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
 		for (dependency in model.dependencies)
 			output.add('import $dependency;\n');
-		if (constants.length != 0) {
+		if (emitFunctions && splitTypes)
+			output.add('import ${profile.packageName}.${profile.typeModule};\n');
+		if (moduleKind == "types" && splitTypes)
+			output.add('import ${profile.packageName}.${profile.functionModule} as ${model.name};\n');
+		if (emitConstants && constants.length != 0) {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants) {
 				emitDocumentation(output, model, constant.name, "\t");
@@ -403,201 +439,218 @@ class HxiHaxeEmitter {
 			}
 			output.add('}\n');
 		}
-		if (hasCallbacks)
+		if (emitTypes && hasCallbacks)
 			output.add('enum abstract $callbackErrorType(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
-		for (declaration in opaqueDeclarations)
-			switch declaration {
-				case Opaque(name, _):
-					var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == OpaqueHandle);
-					if (projectedHandle == null)
-						throw 'Missing projected opaque handle "$name"';
-					var projectedName = projectedHandle.name;
-					emitDocumentation(output, model, name);
-					output.add('abstract $projectedName(hl.Abstract<"native_pointer">) {\n');
-					output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
-					output.add('}\n');
-					var ownedName = projectedHandle.ownedName;
-					output.add('abstract $ownedName(hl.Abstract<"native_pointer">) {\n');
-					output.add('\tpublic inline function borrow():$projectedName return cast this;\n');
-					output.add('\tpublic inline function close():Bool return ${model.name}.$pointerCloseHelper(cast this);\n');
-					output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
-					output.add('}\n');
-				case _:
-			}
-		if (opaqueDeclarations.length != 0) {
+		if (emitTypes)
+			for (declaration in opaqueDeclarations)
+				switch declaration {
+					case Opaque(name, _):
+						var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == OpaqueHandle);
+						if (projectedHandle == null)
+							throw 'Missing projected opaque handle "$name"';
+						var projectedName = projectedHandle.name;
+						emitDocumentation(output, model, name);
+						output.add('abstract $projectedName(hl.Abstract<"native_pointer">) {\n');
+						output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
+						output.add('}\n');
+						var ownedName = projectedHandle.ownedName;
+						output.add('abstract $ownedName(hl.Abstract<"native_pointer">) {\n');
+						output.add('\tpublic inline function borrow():$projectedName return cast this;\n');
+						output.add('\tpublic inline function close():Bool return ${model.name}.$pointerCloseHelper(cast this);\n');
+						output.add('\tpublic inline function isClosed():Bool return ${model.name}.$pointerIsClosedHelper(cast this);\n');
+						output.add('}\n');
+					case _:
+				}
+		if (emitFunctions && opaqueDeclarations.length != 0) {
 			output.add('@:hlNative("haxeon_runtime", "native_pointer_close") extern function $pointerCloseHelper(pointer:hl.Abstract<"native_pointer">):Bool;\n');
 			output.add('@:hlNative("haxeon_runtime", "native_pointer_is_closed") extern function $pointerIsClosedHelper(pointer:hl.Abstract<"native_pointer">):Bool;\n');
 		}
-		for (callbackDeclaration in callbackDeclarations)
-			switch callbackDeclaration {
-				case Callback(name, parameters, result, callConvention, _):
-					var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
-					if (projectedCallback == null)
-						throw 'Missing projected callback "$name"';
-					var projectedName = projectedCallback.name;
-					var argumentTypes:Array<String> = [],
-						codes:Array<String> = [],
-						pointerSizes:Array<String> = [],
-						pointerNullable:Array<String> = [],
-						supported = true;
-					for (parameter in parameters) {
-						var classified = abi.classify(parameter.type),
-							value = callbackProject(classified, profile);
-						if (value == null) {
-							supported = false;
-							break;
+		if (emitTypes)
+			for (callbackDeclaration in callbackDeclarations)
+				switch callbackDeclaration {
+					case Callback(name, parameters, result, callConvention, _):
+						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
+						if (projectedCallback == null)
+							throw 'Missing projected callback "$name"';
+						var projectedName = projectedCallback.name;
+						var argumentTypes:Array<String> = [],
+							codes:Array<String> = [],
+							pointerSizes:Array<String> = [],
+							pointerNullable:Array<String> = [],
+							supported = true;
+						for (parameter in parameters) {
+							var classified = abi.classify(parameter.type),
+								value = callbackProject(classified, profile);
+							if (value == null) {
+								supported = false;
+								break;
+							}
+							argumentTypes.push('${parameter.name}:${value.haxeType}');
+							codes.push(abiDescriptor(classified, declarations, abi, aggregateDescriptors));
+							switch classified {
+								case PointerValue(_, nullable, _, structure):
+									var structureDeclaration = structure == null ? null : declarations.get(structure),
+										size = switch structureDeclaration {
+											case Structure(_, value, _, _, _): value;
+											case _: 0;
+										};
+									pointerSizes.push(Std.string(size));
+									pointerNullable.push(nullable ? "1" : "0");
+								case Utf8Value(nullable):
+									pointerSizes.push("0");
+									pointerNullable.push(nullable ? "1" : "0");
+								case _:
+									pointerSizes.push("0");
+									pointerNullable.push("0");
+							}
 						}
-						argumentTypes.push('${parameter.name}:${value.haxeType}');
-						codes.push(abiDescriptor(classified, declarations, abi, aggregateDescriptors));
-						switch classified {
-							case PointerValue(_, nullable, _, structure):
-								var structureDeclaration = structure == null ? null : declarations.get(structure),
-									size = switch structureDeclaration {
-										case Structure(_, value, _, _, _): value;
-										case _: 0;
-									};
-								pointerSizes.push(Std.string(size));
-								pointerNullable.push(nullable ? "1" : "0");
-							case Utf8Value(nullable):
-								pointerSizes.push("0");
-								pointerNullable.push(nullable ? "1" : "0");
-							case _:
-								pointerSizes.push("0");
-								pointerNullable.push("0");
-						}
-					}
-					var classifiedResult = abi.classify(result, true),
-						returnValue = project(classifiedResult, true, profile);
-					if (!supported || returnValue == null)
-						continue;
-					var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors),
-						callConvention);
-					emitDocumentation(output, model, name);
-					output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
-					output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
-					output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
-					output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
-					output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
-					output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
-					output.add('}\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${projectedName}Callback):Int;\n');
-					output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${projectedName}Callback):Null<haxe.io.Bytes>;\n');
-				case _:
-			}
-		for (declaration in enumDeclarations)
-			switch declaration {
-				case Enumeration(name, representation, flags, values, _):
-					var projectedEnum = Lambda.find(plan.enums, value -> value.nativeName == name);
-					if (projectedEnum == null)
-						throw 'Missing projected enum "$name"';
-					var underlying = project(abi.classify(representation), false, profile);
-					if (underlying == null)
-						continue;
-					var projectedName = projectedEnum.name,
-						bits = switch abi.classify(representation) {
-							case IntegerValue(valueBits, _): valueBits;
-							case _: 0;
-						};
-					emitDocumentation(output, model, name);
-					if (flags && bits == 64) {
-						output.add('abstract $projectedName(haxe.Int64) from haxe.Int64 to haxe.Int64 {\n');
-						for (value in values) {
-							emitDocumentation(output, model, '$name.${value.name}', "\t");
-							var projectedValue = projectedEnumValueName(projectedEnum, value.name),
-								methodName = lowerFirst(projectedValue),
-								low = haxe.Int64.and(value.value, haxe.Int64.parseString("4294967295")),
-								high = haxe.Int64.ushr(value.value, 32),
-								highLiteral = int64PartAsInt(high),
-								lowLiteral = int64PartAsInt(low);
-							output.add('\tpublic static inline function $methodName():$projectedName return cast haxe.Int64.make($highLiteral, $lowLiteral);\n');
-						}
-						output.add('\tpublic inline function contains(flag:$projectedName):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0;\n');
-						output.add('\tpublic inline function with(flag:$projectedName):$projectedName return cast haxe.Int64.or(this, flag);\n');
-						output.add('\tpublic inline function without(flag:$projectedName):$projectedName return cast haxe.Int64.and(this, haxe.Int64.xor(flag, -1));\n');
-						output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
+						var classifiedResult = abi.classify(result, true),
+							returnValue = project(classifiedResult, true, profile);
+						if (!supported || returnValue == null)
+							continue;
+						var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors),
+							callConvention);
+						emitDocumentation(output, model, name);
+						output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
+						output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
+						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
+						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
+						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
+						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 						output.add('}\n');
-					} else {
-						output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
-						for (value in values) {
-							emitDocumentation(output, model, '$name.${value.name}', "\t");
-							var projectedValue = projectedEnumValueName(projectedEnum, value.name),
-								literalValue = flags
-									&& bits == 32
-									&& haxe.Int64.compare(value.value,
-										haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
-										haxe.Int64.parseString("4294967296")) : value.value,
-								literal = haxe.Int64.toStr(literalValue);
-							output.add('\tvar $projectedValue = $literal;\n');
+					case _:
+				}
+		if (emitFunctions)
+			for (callbackDeclaration in callbackDeclarations)
+				switch callbackDeclaration {
+					case Callback(name, _, _, _, _):
+						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
+						if (projectedCallback != null) {
+							var projectedName = projectedCallback.name;
+							output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${projectedName}Callback):Int;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${projectedName}Callback):Null<haxe.io.Bytes>;\n');
 						}
-						output.add('}\n');
-					}
-				case _:
-			}
-		for (declaration in handleDeclarations)
-			switch declaration {
-				case Handle(name, _, destroySymbol, _):
-					var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == ValueHandle);
-					if (projectedHandle == null)
-						throw 'Missing projected value handle "$name"';
-					var projectedName = projectedHandle.name;
-					emitDocumentation(output, model, name);
-					// Keep handles nominal at the Haxe boundary. Explicit construction and
-					// rawValue() provide deliberate escape hatches without allowing two
-					// unrelated resource handles to flow through their shared Int ABI.
-					output.add('abstract $projectedName(Int) {\n');
-					output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
-					output.add('\tpublic static inline function invalid():$projectedName return new $projectedName();\n');
-					output.add('\tpublic inline function isValid():Bool return cast(this, Int) != 0;\n');
-					output.add('\tpublic inline function rawValue():Int return cast this;\n');
-					output.add('}\n');
-					if (projectedHandle.owned != null) {
-						var ownedName = projectedHandle.owned.name,
-							destroySymbol = projectedHandle.owned.destroy;
-						var destroyFunction = functionDeclarationForSymbol(model.declarations, destroySymbol),
-							destroyName = switch destroyFunction {
-								case Function(value, _, _, _, _, _, _, _): value;
-								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
-							},
-							destroyResult = switch destroyFunction {
-								case Function(_, _, value, _, _, _, _, _): value;
-								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
-							},
-							closeResultValue = switch abi.classify(destroyResult, true) {
-								case VoidValue: null;
-								case value:
-									var projected = project(value, true, profile);
-									if (projected == null)
-										throw 'Unsupported destroy result for handle "$name"';
-									projected.haxeType;
-							},
-							destroyFunctionName = projectedFunctionName(destroyName, profile),
-							closeReturnType = closeResultValue == null ? "Bool" : 'Null<$closeResultValue>';
-						output.add('class $ownedName {\n');
-						output.add('\tprivate var __handle:$projectedName;\n');
-						output.add('\tprivate var __closed:Bool = false;\n');
-						output.add('\tprivate function new(handle:$projectedName) this.__handle = handle;\n');
-						output.add('\tpublic static function adopt(handle:$projectedName):$ownedName return new $ownedName(handle);\n');
-						output.add('\tpublic function borrow():$projectedName return this.__handle;\n');
-						output.add('\tpublic function rawValue():Int return this.__handle.rawValue();\n');
-						output.add('\tpublic function isClosed():Bool return this.__closed;\n');
-						output.add('\tpublic function close():$closeReturnType {\n');
-						output.add('\t\tif (this.__closed) return ${closeResultValue == null ? "false" : "null"};\n');
-						output.add('\t\tthis.__closed = true;\n');
-						output.add('\t\tvar __value = this.__handle;\n');
-						output.add('\t\tthis.__handle = $projectedName.invalid();\n');
-						if (closeResultValue == null) {
-							output.add('\t\tif (__value.isValid()) ${model.name}.$destroyFunctionName(__value);\n');
-							output.add('\t\treturn true;\n');
+					case _:
+				}
+		if (emitTypes)
+			for (declaration in enumDeclarations)
+				switch declaration {
+					case Enumeration(name, representation, flags, values, _):
+						var projectedEnum = Lambda.find(plan.enums, value -> value.nativeName == name);
+						if (projectedEnum == null)
+							throw 'Missing projected enum "$name"';
+						var underlying = project(abi.classify(representation), false, profile);
+						if (underlying == null)
+							continue;
+						var projectedName = projectedEnum.name,
+							bits = switch abi.classify(representation) {
+								case IntegerValue(valueBits, _): valueBits;
+								case _: 0;
+							};
+						emitDocumentation(output, model, name);
+						if (flags && bits == 64) {
+							output.add('abstract $projectedName(haxe.Int64) from haxe.Int64 to haxe.Int64 {\n');
+							for (value in values) {
+								emitDocumentation(output, model, '$name.${value.name}', "\t");
+								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
+									methodName = lowerFirst(projectedValue),
+									low = haxe.Int64.and(value.value, haxe.Int64.parseString("4294967295")),
+									high = haxe.Int64.ushr(value.value, 32),
+									highLiteral = int64PartAsInt(high),
+									lowLiteral = int64PartAsInt(low);
+								output.add('\tpublic static inline function $methodName():$projectedName return cast haxe.Int64.make($highLiteral, $lowLiteral);\n');
+							}
+							output.add('\tpublic inline function contains(flag:$projectedName):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0;\n');
+							output.add('\tpublic inline function with(flag:$projectedName):$projectedName return cast haxe.Int64.or(this, flag);\n');
+							output.add('\tpublic inline function without(flag:$projectedName):$projectedName return cast haxe.Int64.and(this, haxe.Int64.xor(flag, -1));\n');
+							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
+							output.add('}\n');
 						} else {
-							output.add('\t\tif (__value.isValid()) return ${model.name}.$destroyFunctionName(__value);\n');
-							output.add('\t\treturn null;\n');
+							output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+							for (value in values) {
+								emitDocumentation(output, model, '$name.${value.name}', "\t");
+								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
+									literalValue = flags
+										&& bits == 32
+										&& haxe.Int64.compare(value.value,
+											haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
+											haxe.Int64.parseString("4294967296")) : value.value,
+									literal = haxe.Int64.toStr(literalValue);
+								output.add('\tvar $projectedValue = $literal;\n');
+							}
+							output.add('}\n');
 						}
-						output.add('\t}\n');
+					case _:
+				}
+		if (emitTypes)
+			for (declaration in handleDeclarations)
+				switch declaration {
+					case Handle(name, _, destroySymbol, _):
+						var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == ValueHandle);
+						if (projectedHandle == null)
+							throw 'Missing projected value handle "$name"';
+						var projectedName = projectedHandle.name;
+						emitDocumentation(output, model, name);
+						// Keep handles nominal at the Haxe boundary. Explicit construction and
+						// rawValue() provide deliberate escape hatches without allowing two
+						// unrelated resource handles to flow through their shared Int ABI.
+						output.add('abstract $projectedName(Int) {\n');
+						output.add('\tpublic inline function new(value:Int = 0) this = value;\n');
+						output.add('\tpublic static inline function invalid():$projectedName return new $projectedName();\n');
+						output.add('\tpublic inline function isValid():Bool return cast(this, Int) != 0;\n');
+						output.add('\tpublic inline function rawValue():Int return cast this;\n');
 						output.add('}\n');
-					}
-				case _:
-			}
+						if (projectedHandle.owned != null) {
+							var ownedName = projectedHandle.owned.name,
+								destroySymbol = projectedHandle.owned.destroy;
+							var destroyFunction = functionDeclarationForSymbol(model.declarations, destroySymbol),
+								destroyName = switch destroyFunction {
+									case Function(value, _, _, _, _, _, _, _): value;
+									case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+								},
+								destroyResult = switch destroyFunction {
+									case Function(_, _, value, _, _, _, _, _): value;
+									case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+								},
+								closeResultValue = switch abi.classify(destroyResult, true) {
+									case VoidValue: null;
+									case value:
+										var projected = project(value, true, profile);
+										if (projected == null)
+											throw 'Unsupported destroy result for handle "$name"';
+										projected.haxeType;
+								},
+								destroyFunctionName = projectedFunctionName(destroyName, profile),
+								closeReturnType = closeResultValue == null ? "Bool" : 'Null<$closeResultValue>';
+							output.add('class $ownedName {\n');
+							output.add('\tprivate var __handle:$projectedName;\n');
+							output.add('\tprivate var __closed:Bool = false;\n');
+							output.add('\tprivate function new(handle:$projectedName) this.__handle = handle;\n');
+							output.add('\tpublic static function adopt(handle:$projectedName):$ownedName return new $ownedName(handle);\n');
+							output.add('\tpublic function borrow():$projectedName return this.__handle;\n');
+							output.add('\tpublic function rawValue():Int return this.__handle.rawValue();\n');
+							output.add('\tpublic function isClosed():Bool return this.__closed;\n');
+							output.add('\tpublic function close():$closeReturnType {\n');
+							output.add('\t\tif (this.__closed) return ${closeResultValue == null ? "false" : "null"};\n');
+							output.add('\t\tthis.__closed = true;\n');
+							output.add('\t\tvar __value = this.__handle;\n');
+							output.add('\t\tthis.__handle = $projectedName.invalid();\n');
+							if (closeResultValue == null) {
+								output.add('\t\tif (__value.isValid()) ${model.name}.$destroyFunctionName(__value);\n');
+								output.add('\t\treturn true;\n');
+							} else {
+								output.add('\t\tif (__value.isValid()) return ${model.name}.$destroyFunctionName(__value);\n');
+								output.add('\t\treturn null;\n');
+							}
+							output.add('\t}\n');
+							output.add('}\n');
+						}
+					case _:
+				}
+		var structureOutput = output;
+		if (!emitTypes)
+			output = new StringBuf();
 		for (declaration in structureDeclarations)
 			switch declaration {
 				case Structure(name, size, _, fields, _):
@@ -756,6 +809,8 @@ class HxiHaxeEmitter {
 					output.add('}\n');
 				case _:
 			}
+		if (!emitTypes)
+			output = structureOutput;
 		for (declaration in functionDeclarations)
 			switch declaration {
 				case Function(name, parameters, _, _, _, _, _, _):
@@ -783,136 +838,139 @@ class HxiHaxeEmitter {
 						}
 				case _:
 			}
-		if (usesNestedStructures) {
+		if (emitFunctions && usesNestedStructures) {
 			output.add('@:hlNative("haxeon_runtime", "__bytes_alloc") extern function __hxi_struct_alloc(length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSlice") extern function __hxi_struct_slice(bytes:haxe.io.Bytes, offset:Int, length:Int):haxe.io.Bytes;\n');
 			output.add('@:hlNative("haxeon_runtime", "structCopy") extern function __hxi_struct_copy(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes, length:Int):Void;\n');
 		}
-		if (structureDeclarations.length > 0 || usesUtf8StringCopies) {
+		if (emitFunctions && (structureDeclarations.length > 0 || usesUtf8StringCopies)) {
 			output.add('@:hlNative("haxeon_runtime", "structWithRoots") extern function __hxi_struct_with_roots(bytes:haxe.io.Bytes, roots:Array<haxe.io.Bytes>):haxe.io.Bytes;\n');
 			output.add('@:hlNative("haxeon_runtime", "structGetRoots") extern function __hxi_struct_get_roots(bytes:haxe.io.Bytes):Array<haxe.io.Bytes>;\n');
 		}
-		if (usesPointerFields) {
+		if (emitFunctions && usesPointerFields) {
 			output.add('@:hlNative("haxeon_runtime", "structGetPointer") extern function __hxi_struct_get_pointer(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):hl.Abstract<"native_pointer">;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSetPointer") extern function __hxi_struct_set_pointer(bytes:haxe.io.Bytes, offset:Int, value:hl.Abstract<"native_pointer">, nullable:Bool):Void;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSetBorrowedBytes") extern function __hxi_struct_set_borrowed_bytes(bytes:haxe.io.Bytes, offset:Int, value:haxe.io.Bytes):Void;\n');
 		}
-		if (usesOwnedPointerSlots)
+		if (emitFunctions && usesOwnedPointerSlots)
 			output.add('@:hlNative("haxeon_runtime", "native_pointer_owned_from_slot") extern function $pointerOwnedSlotHelper(bytes:haxe.io.Bytes, offset:Int, library:String, symbol:String, signature:String, release:String, nullable:Bool):hl.Abstract<"native_pointer">;\n');
-		if (usesUtf8Fields) {
+		if (emitFunctions && usesUtf8Fields) {
 			output.add('@:hlNative("haxeon_runtime", "structGetUtf8") extern function __hxi_struct_get_utf8(bytes:haxe.io.Bytes, offset:Int, nullable:Bool):Null<String>;\n');
 			output.add('@:hlNative("haxeon_runtime", "structSetUtf8") extern function __hxi_struct_set_utf8(bytes:haxe.io.Bytes, offset:Int, value:Null<String>, nullable:Bool):Void;\n');
 		}
-		if (usesUtf8StringCopies)
+		if (emitFunctions && usesUtf8StringCopies)
 			output.add('@:hlNative("haxeon_runtime", "structUtf8Copy") extern function __hxi_struct_utf8_copy(value:String):haxe.io.Bytes;\n');
-		if (usesBorrowedBuffers)
+		if (emitFunctions && usesBorrowedBuffers)
 			output.add('@:hlNative("haxeon_runtime", "structCopyPointer") extern function __hxi_struct_copy_pointer(bytes:haxe.io.Bytes, pointerOffset:Int, lengthOffset:Int, lengthBytes:Int):haxe.io.Bytes;\n');
-		if (hasCallbacks) {
+		if (emitFunctions && hasCallbacks) {
 			output.add('@:hlNative("haxeon_runtime", "native_callback_create") extern function __hxi_callback_create(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, callback:Dynamic):hl.Abstract<"native_callback">;\n');
 		}
-		for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
-			var types = structAccesses.get(access);
-			if (types == null)
-				continue;
-			output.add('@:hlNative("haxeon_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
-			output.add('@:hlNative("haxeon_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
-		}
-		for (projectedFunction in plan.functions) {
-			var fn = projectedFunction.nativeSignature;
-			var publicName = projectedFunction.name;
-			var parameters = switch functions.get(fn.name) {
-				case Function(_, value, _, _, _, _, _, _): value;
-				case _: throw 'Missing HXI function "${fn.name}"';
-			};
-			var argumentTypes:Array<String> = [],
-				codes:Array<String> = [],
-				supported = true;
-			for (index in 0...fn.arguments.length) {
-				var argument = fn.arguments[index];
-				var projected = project(argument, false, profile);
-				if (projected == null) {
-					supported = false;
-					break;
-				}
-				var outputValue = switch parameters[index].direction {
-					case Out | InOut: outputInfo(parameters[index], abi, profile);
-					case In | InArray(_) | OutArray(_) | OutBuffer(_): null;
-				};
-				argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
-				codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
+		if (emitFunctions)
+			for (access in ["I8", "U8", "I16", "U16", "I32", "I64", "F32", "F64"]) {
+				var types = structAccesses.get(access);
+				if (types == null)
+					continue;
+				output.add('@:hlNative("haxeon_runtime", "get$access") extern function __hxi_struct_get$access(bytes:haxe.io.Bytes, offset:Int):${types.type};\n');
+				output.add('@:hlNative("haxeon_runtime", "set$access") extern function __hxi_struct_set$access(bytes:haxe.io.Bytes, offset:Int, value:${types.setterType}):Void;\n');
 			}
-			var result = project(fn.result, true, profile);
-			if (!supported || result == null)
-				continue;
-			var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
-				declaredResult = switch functions.get(fn.name) {
-					case Function(_, _, value, _, _, _, _, _): value;
+		if (emitFunctions)
+			for (projectedFunction in plan.functions) {
+				var fn = projectedFunction.nativeSignature;
+				var publicName = projectedFunction.name;
+				var parameters = switch functions.get(fn.name) {
+					case Function(_, value, _, _, _, _, _, _): value;
 					case _: throw 'Missing HXI function "${fn.name}"';
-				},
-				aggregateResult = structureType(declaredResult, declarations, profile);
-			var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
-				hasOutputs = hasOutput(parameters),
-				rawName = projectedFunction.rawName;
-			if (projectedFunction.rawName == publicName)
-				emitDocumentation(output, model, fn.name);
-			for (parameter in parameters)
-				if (parameter.retained)
-					output.add('/** Native retains this callback beyond the call; follow the API-specific detach or release contract. */\n');
-			output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
-			output.add('extern function $rawName(');
-			output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-			var resultType = result.haxeType;
-			if (result.code == 11)
-				if (fn.resultPolicy.length != null)
-					resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
-				else
-					switch fn.result {
-						case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
-							resultType = switch fn.resultPolicy.ownership {
-								case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
-								case Borrowed | Unspecified: result.haxeType;
-							};
-						case _:
-							resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
-					}
-			output.add('):$resultType;\n');
-			if (projectedFunction.hasOutputParameters) {
-				var nativeSymbol = switch functions.get(fn.name) {
-					case Function(_, _, _, symbol, _, _, _, _): symbol == null ? fn.name : symbol;
-					case _: fn.name;
 				};
-				var array = outputArray(parameters),
-					buffer = outputBuffer(parameters);
-				switch projectedFunction.outputStrategy {
-					case OutputArray if (array != null):
-						emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile,
-							model.documentation.get(fn.name));
-					case OutputBuffer if (buffer != null):
-						emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
-					case OutputValues:
-						emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol, signature,
-							pointerOwnedSlotHelper, model.documentation.get(fn.name), ownedHandleResult, aggregateResult == null ? null : aggregateResult.name);
-					case OutputArray:
-						throw 'Planned output array metadata is missing for "${fn.name}"';
-					case OutputBuffer:
-						throw 'Planned output buffer metadata is missing for "${fn.name}"';
-					case NoOutputWrapper:
-						throw 'Output parameters were not normalized for "${fn.name}"';
+				var argumentTypes:Array<String> = [],
+					codes:Array<String> = [],
+					supported = true;
+				for (index in 0...fn.arguments.length) {
+					var argument = fn.arguments[index];
+					var projected = project(argument, false, profile);
+					if (projected == null) {
+						supported = false;
+						break;
+					}
+					var outputValue = switch parameters[index].direction {
+						case Out | InOut: outputInfo(parameters[index], abi, profile);
+						case In | InArray(_) | OutArray(_) | OutBuffer(_): null;
+					};
+					argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
+					codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 				}
-			} else if (ownedHandleResult != null) {
-				emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
-			} else if (aggregateResult != null) {
-				emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name, model.documentation.get(fn.name));
+				var result = project(fn.result, true, profile);
+				if (!supported || result == null)
+					continue;
+				var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
+					declaredResult = switch functions.get(fn.name) {
+						case Function(_, _, value, _, _, _, _, _): value;
+						case _: throw 'Missing HXI function "${fn.name}"';
+					},
+					aggregateResult = structureType(declaredResult, declarations, profile);
+				var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
+					hasOutputs = hasOutput(parameters),
+					rawName = projectedFunction.rawName;
+				if (projectedFunction.rawName == publicName)
+					emitDocumentation(output, model, fn.name);
+				for (parameter in parameters)
+					if (parameter.retained)
+						output.add('/** Native retains this callback beyond the call; follow the API-specific detach or release contract. */\n');
+				output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
+				output.add('extern function $rawName(');
+				output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
+				var resultType = result.haxeType;
+				if (result.code == 11)
+					if (fn.resultPolicy.length != null)
+						resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
+					else
+						switch fn.result {
+							case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
+								resultType = switch fn.resultPolicy.ownership {
+									case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
+									case Borrowed | Unspecified: result.haxeType;
+								};
+							case _:
+								resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
+						}
+				output.add('):$resultType;\n');
+				if (projectedFunction.hasOutputParameters) {
+					var nativeSymbol = switch functions.get(fn.name) {
+						case Function(_, _, _, symbol, _, _, _, _): symbol == null ? fn.name : symbol;
+						case _: fn.name;
+					};
+					var array = outputArray(parameters),
+						buffer = outputBuffer(parameters);
+					switch projectedFunction.outputStrategy {
+						case OutputArray if (array != null):
+							emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile,
+								model.documentation.get(fn.name));
+						case OutputBuffer if (buffer != null):
+							emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
+						case OutputValues:
+							emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol,
+								signature, pointerOwnedSlotHelper, model.documentation.get(fn.name), ownedHandleResult,
+								aggregateResult == null ? null : aggregateResult.name);
+						case OutputArray:
+							throw 'Planned output array metadata is missing for "${fn.name}"';
+						case OutputBuffer:
+							throw 'Planned output buffer metadata is missing for "${fn.name}"';
+						case NoOutputWrapper:
+							throw 'Output parameters were not normalized for "${fn.name}"';
+					}
+				} else if (ownedHandleResult != null) {
+					emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
+				} else if (aggregateResult != null) {
+					emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name, model.documentation.get(fn.name));
+				}
+				var byteIndex = projectedFunction.byteSliceName == null ? null : byteArrayParameter(parameters);
+				if (byteIndex != null) {
+					var byteWrapperResult = hasOutputs ? outputWrapperResult(publicName, parameters, resultType, abi,
+						profile) : ownedHandleResult == null ? aggregateResult == null ? resultType : aggregateResult.name : ownedHandleResult;
+					emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, byteWrapperResult, abi, byteIndex, profile);
+				}
+				if (projectedFunction.checked != null)
+					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
 			}
-			var byteIndex = projectedFunction.byteSliceName == null ? null : byteArrayParameter(parameters);
-			if (byteIndex != null) {
-				var byteWrapperResult = hasOutputs ? outputWrapperResult(publicName, parameters, resultType, abi,
-					profile) : ownedHandleResult == null ? aggregateResult == null ? resultType : aggregateResult.name : ownedHandleResult;
-				emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, byteWrapperResult, abi, byteIndex, profile);
-			}
-			if (projectedFunction.checked != null)
-				emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
-		}
 		return output.toString();
 	}
 

@@ -149,12 +149,20 @@ class HxiProjectionProfileValidator {
 			}
 		}
 
-		var moduleNames:Map<String, String> = [],
+		var functionModuleNames:Map<String, String> = [],
+			typeModuleNames:Map<String, String> = [],
+			constantModuleNames:Map<String, String> = [],
 			constantMembers:Map<String, String> = [],
 			hasCallbacks = false,
 			hasOpaqueTypes = false,
 			hasOwnedPointerOutputs = false,
 			hasConstants = false;
+		var splitTypes = profile.typeModule != null && profile.functionModule != null && profile.typeModule != profile.functionModule,
+			splitConstants = profile.constantModule != null
+				&& profile.functionModule != null
+				&& profile.constantModule != profile.functionModule,
+			typeNames = splitTypes ? typeModuleNames : functionModuleNames,
+			constantNames = splitConstants ? constantModuleNames : functionModuleNames;
 		for (declaration in model.declarations)
 			if (!HxiHaxeEmitter.isOmitted(omitted, HxiHaxeEmitter.declarationName(declaration)))
 				switch declaration {
@@ -176,15 +184,16 @@ class HxiProjectionProfileValidator {
 			HxiHaxeEmitter.addProjectedName(path,
 				"module", profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
 				"generated callback error type",
-				moduleNames);
+				typeNames);
 		if (hasOpaqueTypes) {
-			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", moduleNames);
-			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", moduleNames);
+			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_close', "opaque handle close helper", functionModuleNames);
+			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_is_closed', "opaque handle state helper", functionModuleNames);
 		}
 		if (hasOwnedPointerOutputs)
-			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_owned_from_slot', "owned opaque output helper", moduleNames);
+			HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_${model.name}_native_pointer_owned_from_slot', "owned opaque output helper",
+				functionModuleNames);
 		if (hasConstants)
-			HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.upperFirst(model.name) + "Constants", "generated constants type", moduleNames);
+			HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.upperFirst(model.name) + "Constants", "generated constants type", constantNames);
 
 		for (declaration in model.declarations) {
 			var declarationName = HxiHaxeEmitter.declarationName(declaration);
@@ -193,46 +202,46 @@ class HxiProjectionProfileValidator {
 			switch declaration {
 				case Callback(name, _, _, _, _):
 					var projected = HxiHaxeEmitter.projectedTypeName(name, profile);
-					HxiHaxeEmitter.addProjectedName(path, "module", projected, 'callback "$name"', moduleNames);
-					HxiHaxeEmitter.addProjectedName(path, "module", projected + "Callback", 'callback wrapper for "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", projected, 'callback "$name"', typeNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", projected + "Callback", 'callback wrapper for "$name"', typeNames);
 				case Enumeration(name, _, _, values, _):
-					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.enumTypeName(name, profile), 'enum "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.enumTypeName(name, profile), 'enum "$name"', typeNames);
 					var members:Map<String, String> = [],
 						prefix = HxiHaxeEmitter.enumValuePrefix(values, profile);
 					for (value in values)
 						HxiHaxeEmitter.addProjectedName(path, 'enum "$name"', HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
 							'enum value "$name.${value.name}"', members, true);
 				case Opaque(name, _):
-					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'opaque type "$name"', moduleNames);
-					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.ownedTypeName(name, profile), 'owned opaque type "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'opaque type "$name"', typeNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.ownedTypeName(name, profile), 'owned opaque type "$name"', typeNames);
 				case Handle(name, _, destroySymbol, _):
-					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'type "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'type "$name"', typeNames);
 					if (destroySymbol != null) {
-						HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.ownedTypeName(name, profile), 'owned value handle "$name"', moduleNames);
+						HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.ownedTypeName(name, profile), 'owned value handle "$name"', typeNames);
 						var destroyName = HxiHaxeEmitter.functionNameForSymbol(model.declarations, destroySymbol);
 						if (HxiHaxeEmitter.isOmitted(omitted, destroyName))
 							HxiHaxeEmitter.profileError(path, 'cannot omit destroy function "$destroyName" while projecting owned value handle "$name"');
 					}
 				case Structure(name, _, _, fields, _):
-					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'type "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.projectedTypeName(name, profile), 'type "$name"', typeNames);
 					var members:Map<String, String> = [];
 					for (field in fields)
 						HxiHaxeEmitter.addProjectedName(path, 'structure "$name"', HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
 							'structure field "$name.${field.name}"', members);
 				case Function(name, parameters, result, _, _, _, _, _):
 					var publicName = HxiHaxeEmitter.projectedFunctionName(name, profile);
-					HxiHaxeEmitter.addProjectedName(path, "module", publicName, 'function "$name"', moduleNames);
+					HxiHaxeEmitter.addProjectedName(path, "module", publicName, 'function "$name"', functionModuleNames);
 					var resultPolicy = HxiHaxeEmitter.resultErrorProjection(result, profile);
 					if (resultPolicy != null)
 						HxiHaxeEmitter.addProjectedName(path, "module", publicName + resultPolicy.checkedSuffix, 'checked result wrapper for "$name"',
-							moduleNames);
+							functionModuleNames);
 					if (HxiHaxeEmitter.hasOutput(parameters))
-						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_raw_$name', 'raw wrapper for "$name"', moduleNames);
+						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_raw_$name', 'raw wrapper for "$name"', functionModuleNames);
 					if (HxiHaxeEmitter.hasGeneratedOutputResult(parameters, result))
 						HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.upperFirst(publicName) + "OutResult", 'output result type for "$name"',
-							moduleNames);
+							functionModuleNames);
 					if (HxiHaxeEmitter.byteArrayParameter(parameters) != null)
-						HxiHaxeEmitter.addProjectedName(path, "module", publicName + "_slice", 'byte-slice wrapper for "$name"', moduleNames);
+						HxiHaxeEmitter.addProjectedName(path, "module", publicName + "_slice", 'byte-slice wrapper for "$name"', functionModuleNames);
 				case Constant(name, _, _):
 					HxiHaxeEmitter.addProjectedName(path, "constants", HxiHaxeEmitter.projectedConstantName(name, profile), 'constant "$name"',
 						constantMembers);

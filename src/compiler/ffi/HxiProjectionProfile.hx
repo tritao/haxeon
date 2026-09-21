@@ -17,6 +17,10 @@ typedef HxiResultErrorProjection = {
  */
 class HxiProjectionProfile {
 	public final interfaceName:Null<String>;
+	public final packageName:Null<String>;
+	public final functionModule:Null<String>;
+	public final typeModule:Null<String>;
+	public final constantModule:Null<String>;
 	public final typePrefix:Null<String>;
 	public final functionPrefix:Null<String>;
 	public final functionCase:String;
@@ -37,8 +41,13 @@ class HxiProjectionProfile {
 			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
 			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
 			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve",
-			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>) {
+			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>, ?packageName:Null<String>, ?functionModule:Null<String>,
+			?typeModule:Null<String>, ?constantModule:Null<String>) {
 		this.interfaceName = interfaceName;
+		this.packageName = packageName;
+		this.functionModule = functionModule == null ? interfaceName : functionModule;
+		this.typeModule = typeModule;
+		this.constantModule = constantModule;
 		this.typePrefix = typePrefix;
 		this.functionPrefix = functionPrefix;
 		this.functionCase = validateCase(functionCase);
@@ -72,6 +81,7 @@ class HxiProjectionProfile {
 			throw 'Invalid Haxe projection profile "$path": expected a JSON object';
 
 		var interfaceName = requiredString(value, "interface", path),
+			packageName = optionalString(value, "package", path),
 			typePrefix = optionalString(value, "typePrefix", path),
 			functionPrefix = optionalString(value, "functionPrefix", path),
 			functionCase = optionalCase(value, "functionCase", path),
@@ -86,10 +96,38 @@ class HxiProjectionProfile {
 			functionNames = stringMap(value, "functionNames", path),
 			fieldNames = nestedStringMap(value, "fieldNames", path),
 			constantNames = stringMap(value, "constantNames", path),
-			resultPolicies = resultPolicyMap(value, "resultPolicies", path);
+			resultPolicies = resultPolicyMap(value, "resultPolicies", path),
+			functionModule = optionalString(value, "functionModule", path),
+			typeModule = optionalString(value, "typeModule", path),
+			constantModule = optionalString(value, "constantModule", path);
+		if (Reflect.hasField(value, "modules")) {
+			var modules = Reflect.field(value, "modules");
+			if (modules == null || !Reflect.isObject(modules) || Std.isOfType(modules, Array))
+				throw 'Invalid Haxe projection profile "$path": "modules" must be an object';
+			var configuredFunctions = moduleString(modules, "functions", path),
+				configuredTypes = moduleString(modules, "types", path),
+				configuredConstants = moduleString(modules, "constants", path);
+			if (configuredFunctions != null)
+				functionModule = configuredFunctions;
+			if (configuredTypes != null)
+				typeModule = configuredTypes;
+			if (configuredConstants != null)
+				constantModule = configuredConstants;
+		}
+		if (functionModule == null)
+			functionModule = interfaceName;
 		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
 			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies,
-			callbackErrorType);
+			callbackErrorType, packageName, functionModule, typeModule, constantModule);
+	}
+
+	static function moduleString(value:Dynamic, field:String, path:String):Null<String> {
+		if (!Reflect.hasField(value, field) || Reflect.field(value, field) == null)
+			return null;
+		var result = Reflect.field(value, field);
+		if (!Std.isOfType(result, String) || result.length == 0)
+			throw 'Invalid Haxe projection profile "$path": "modules.$field" must be a non-empty string';
+		return result;
 	}
 
 	static function resultPolicyMap(value:Dynamic, field:String, path:String):Map<String, HxiResultErrorProjection> {

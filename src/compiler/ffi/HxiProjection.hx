@@ -5,6 +5,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ir.Ir.IrCNative;
+import compiler.ffi.HxiProjectedModule;
 
 /** Public entry points for HXI projection planning and emission. */
 class HxiProjection {
@@ -27,5 +28,15 @@ class HxiProjection {
 		var path = model.name + ".hxmap",
 			planned = HxiProjectionPlanner.plan(path, model, omitted, visibleDeclarations, providedAbi, profile);
 		return HxiHaxeEmitter.emit(planned);
+	}
+
+	/** Emit the projection as one or more Haxe modules according to its profile. */
+	public static function modules(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
+			?profile:HxiProjectionProfile):Array<HxiProjectedModule> {
+		if (model.library == null)
+			return [];
+		var path = model.name + ".hxmap",
+			planned = HxiProjectionPlanner.plan(path, model, omitted, visibleDeclarations, providedAbi, profile);
+		return HxiHaxeEmitter.emitModules(planned);
 	}
 }

@@ -60,9 +60,9 @@ class PackageManifest {
 	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
-	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>,
-			target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>,
-			ffi:Null<FfiManifest>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, scopeSourceRoots:Bool,
+			workspace:Array<String>, target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>,
+			native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -175,8 +175,8 @@ class PackageManifest {
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
-		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, scopeSourceRoots, workspace, target, defines, outputDir, dependencies, native, ffi,
-			androidApplicationId, androidAppLabel, compatibility);
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, scopeSourceRoots, workspace, target, defines, outputDir,
+			dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility);
 	}
 
 	static function isObject(value:Dynamic):Bool

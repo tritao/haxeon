@@ -120,7 +120,7 @@ class HxiParserMain {
 		var flagsCompiler = new Compiler();
 		flagsCompiler.addSourceRoot("stdlib");
 		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
-		var flagsMainSource = 'import flag_widths; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
+		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
 		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
 		flagsCompiler.analyze("FlagsMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "require an unsigned 8/16/32/64-bit integer representation");
@@ -215,6 +215,29 @@ class HxiParserMain {
 			&& styleSource.indexOf("extern function checkValue(arg0:Point):Int") >= 0
 			&& styleNatives[0].name == "style.checkValue",
 			"projection profiles should provide reusable C naming transforms");
+		var layoutProfile = HxiProjectionProfile.parse("layout.hxmap",
+			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}'),
+			layoutModules = HxiProjection.modules(styleModel, null, null, null, layoutProfile),
+			layoutFunctions = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.style"),
+			layoutTypes = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Types"),
+			layoutConstants = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Constants");
+		expect(layoutModules.length == 3
+			&& layoutFunctions != null
+			&& layoutFunctions.source.indexOf("package nativekit.ffi;") >= 0
+			&& layoutFunctions.source.indexOf("import nativekit.ffi.Types;") >= 0
+			&& layoutTypes != null
+			&& layoutTypes.source.indexOf("import nativekit.ffi.style as style;") >= 0
+			&& layoutConstants != null
+			&& layoutConstants.source.indexOf("class StyleConstants") >= 0,
+			"projection profiles should place generated declarations into configured package modules");
+		var layoutCompiler = new Compiler();
+		layoutCompiler.addSourceRoot("stdlib");
+		layoutCompiler.addFfiProjection("layout.hxmap",
+			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
+		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
+		layoutCompiler.update("LayoutMain.hx",
+			"import nativekit.ffi.style; import nativekit.ffi.Types; function main():Int { var point:Point = new Point(); point.set_textValue(42); return point.get_textValue(); }");
+		layoutCompiler.analyze("LayoutMain");
 		var mappedDependencyCompiler = new Compiler();
 		mappedDependencyCompiler.addFfiInterface("base.hxi", 'interface base @target("x86_64-linux-gnu") @library("base") { handle nk_handle : u32; }');
 		mappedDependencyCompiler.addFfiInterface("derived.hxi",

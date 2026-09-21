@@ -178,8 +178,8 @@ class ActionFingerprint {
 		return '${stat.size}:${stat.mtime.getTime()}';
 	}
 
-	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String,
-			environment:Map<String, String>, strong:Bool):Void {
+	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>,
+			strong:Bool):Void {
 		fields.add('command:$command');
 		fields.add('cwd:${Path.normalize(FileSystem.fullPath(cwd))}');
 		var executable = resolveTool(command);
@@ -189,8 +189,20 @@ class ActionFingerprint {
 		for (argument in arguments)
 			fields.add('argument:$argument');
 		for (name in [
-			"PATH", "CC", "CXX", "AR", "CFLAGS", "CPPFLAGS", "LDFLAGS", "CPATH",
-			"C_INCLUDE_PATH", "LIBRARY_PATH", "INCLUDE", "LIB", "LIBPATH", "SDKROOT",
+			"PATH",
+			"CC",
+			"CXX",
+			"AR",
+			"CFLAGS",
+			"CPPFLAGS",
+			"LDFLAGS",
+			"CPATH",
+			"C_INCLUDE_PATH",
+			"LIBRARY_PATH",
+			"INCLUDE",
+			"LIB",
+			"LIBPATH",
+			"SDKROOT",
 			"MACOSX_DEPLOYMENT_TARGET"
 		]) {
 			var value = Sys.getEnv(name);
@@ -203,8 +215,8 @@ class ActionFingerprint {
 			fields.add('environment:$key=${environment.get(key)}');
 	}
 
-	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>,
-			environment:Map<String, String>, action:ExecutionAction):Void {
+	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>, environment:Map<String, String>,
+			action:ExecutionAction):Void {
 		fields.add('command:${Path.withoutDirectory(command)}');
 		var executable = resolveTool(command);
 		if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
@@ -220,10 +232,11 @@ class ActionFingerprint {
 	static function ignoredDirectoryEntry(name:String, path:String, buildRoot:String):Bool {
 		if (!FileSystem.isDirectory(path))
 			return name == ".git";
-		if (name == ".git" || name == ".tools" || name == "build" || name == "out"
-			|| StringTools.startsWith(name, "cmake-build-"))
+		if (name == ".git" || name == ".tools" || name == "build" || name == "out" || StringTools.startsWith(name, "cmake-build-"))
 			return true;
 		if (buildRoot == null || buildRoot.length == 0)
+			return false;
+		if (!FileSystem.exists(buildRoot))
 			return false;
 		return Path.normalize(FileSystem.fullPath(path)) == Path.normalize(FileSystem.fullPath(buildRoot));
 	}
@@ -244,16 +257,19 @@ class ActionFingerprint {
 			var headPath = Path.join([gitDirectory, "HEAD"]);
 			if (!FileSystem.exists(headPath))
 				return;
-			var head = StringTools.trim(File.getContent(headPath)), revision = head;
+			var head = StringTools.trim(File.getContent(headPath)),
+				revision = head;
 			if (StringTools.startsWith(head, "ref:")) {
-				var reference = StringTools.trim(head.substr(4)), referencePath = Path.join([gitDirectory, reference]);
+				var reference = StringTools.trim(head.substr(4)),
+					referencePath = Path.join([gitDirectory, reference]);
 				if (FileSystem.exists(referencePath))
 					revision = StringTools.trim(File.getContent(referencePath));
 				else {
 					var packed = Path.join([gitDirectory, "packed-refs"]);
 					if (FileSystem.exists(packed))
 						for (line in File.getContent(packed).split("\n"))
-							if (!StringTools.startsWith(line, "#") && !StringTools.startsWith(line, "^")
+							if (!StringTools.startsWith(line, "#")
+								&& !StringTools.startsWith(line, "^")
 								&& StringTools.endsWith(line, ' $reference')) {
 								revision = line.substr(0, line.indexOf(" "));
 								break;

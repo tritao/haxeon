@@ -276,8 +276,8 @@ class WasmGcModuleBuilder {
 					importModule = native.library == null || native.library == "" ? "env" : native.library,
 					importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 				functions.set(native.name, module.addImport(importModule, importName, {parameters: parameters, results: results}));
-			} else if (used.exists(native.name) &&
-				(native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
+			} else if (used.exists(native.name)
+				&& (native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
 					nextLocal = native.arguments.length,
@@ -334,25 +334,25 @@ class WasmGcModuleBuilder {
 				"__array_splice_f64", "__array_splice_bytes", "__array_splice_ref", "__array_splice_i64", "__array_remove_i32", "__array_remove_i64",
 				"__array_remove_bool", "__array_remove_f64", "__array_remove_bytes", "__array_remove_ref", "__array_index_of_i32", "__array_index_of_i64",
 				"__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref", "__array_slice_i32", "__array_slice_i64",
-				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_floor", "__math_pow",
-				"__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "Math.mathIsFinite", "__math_is_finite", "Math.mathIsNaN",
-				"__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches", "__reflect_is_object",
-				"__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.and",
-				"haxe.Int64.or", "haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt",
-				"haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_get_i32",
-				"__bytes_set_i32", "__bytes_set_float", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64", "__bytes_view",
-				"__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer", "structSetBorrowedBytes",
-				"structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "__bytes_input_new", "__bytes_input_position",
-				"__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64",
-				"__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian",
-				"__bytes_output_write_byte", "__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write",
-				"__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed",
-				"native_pointer_owned_from_slot", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
-				"__string_compare_full", "__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from",
-				"__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code",
-				"__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
-				"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_callback_create", "native_callback_close", "native_callback_error_kind",
-				"native_callback_take_error": true;
+				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_floor",
+				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_fmod", "__math_round", "Math.mathIsFinite", "__math_is_finite",
+				"Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches",
+				"__reflect_is_object", "__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub",
+				"haxe.Int64.and", "haxe.Int64.or", "haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make",
+				"haxe.Int64.ofInt", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set",
+				"__bytes_get_i32", "__bytes_set_i32", "__bytes_set_float", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64",
+				"__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer",
+				"structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "__bytes_input_new",
+				"__bytes_input_position", "__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32",
+				"__bytes_input_read_f64", "__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian",
+				"__bytes_output_set_big_endian", "__bytes_output_write_byte", "__bytes_output_write_i32", "__bytes_output_write_f64",
+				"__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer",
+				"native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length", "__string_char_at",
+				"__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full", "__string_index_of", "__string_index_of_from",
+				"__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split",
+				"__string_substring", "__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time",
+				"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_callback_create",
+				"native_callback_close", "native_callback_error_kind", "native_callback_take_error": true;
 			default: false;
 		};
 	}

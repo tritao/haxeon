@@ -53,6 +53,7 @@ class PatchOpcodeTests {
 			{instruction: FieldGet(0, 1, 2), opcode: 38, operands: [0, 1, 2]},
 			{instruction: FieldSet(0, 1, 2), opcode: 39, operands: [0, 1, 2]},
 			{instruction: JumpTrue(0, "target"), opcode: 44, operands: [0, -2]},
+			{instruction: JumpNull(0, "target"), opcode: 46, operands: [0, -2]},
 			{instruction: JumpSignedLess(0, 1, "target"), opcode: 48, operands: [0, 1, -2]},
 			{instruction: JumpSignedLessOrEqual(0, 1, "target"), opcode: 51, operands: [0, 1, -2]},
 			{instruction: JumpEqual(0, 1, "target"), opcode: 56, operands: [0, 1, -2]},

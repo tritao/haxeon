@@ -55,6 +55,7 @@ import compiler.ffi.HxiParser;
 import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
+import compiler.ffi.HxiProjectedModule;
 
 typedef FfiInterfaceSource = {
 	final path:String;
@@ -188,7 +189,7 @@ class Compiler {
 	final ffiProjectionSources:Array<FfiProjectionSource> = [];
 	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
 	final ffiProjectionPaths:Map<String, String> = [];
-	final ffiProjectionCache:Map<String, String> = [];
+	final ffiProjectionCache:Map<String, Array<HxiProjectedModule>> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
 	var objectCache:Map<String, IrObject> = [];
@@ -364,17 +365,19 @@ class Compiler {
 	}
 
 	function refreshFfiProjection(model:HxiInterface):Void {
-		var projection = ffiProjectionCache.get(model.name);
-		if (projection == null) {
+		var projections = ffiProjectionCache.get(model.name);
+		if (projections == null) {
 			var composition = ffiComposition(model);
-			projection = HxiProjection.source(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
+			projections = HxiProjection.modules(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
 				ffiProjectionProfiles.get(model.name));
-			ffiProjectionCache.set(model.name, projection);
+			ffiProjectionCache.set(model.name, projections);
 		}
-		if (projection.length > 0)
-			update(model.name + ".hx", projection);
-		else
-			sourceGeneration++;
+		if (projections.length > 0)
+			for (projection in projections)
+				if (projection.source.length > 0)
+					update(projection.path + ".hx", projection.source);
+				else
+					sourceGeneration++;
 	}
 
 	function ffiAbi(model:HxiInterface, composition:FfiComposition):HxiAbi {

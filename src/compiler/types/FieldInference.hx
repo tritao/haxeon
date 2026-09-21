@@ -141,7 +141,8 @@ class FieldInference {
 		};
 		if (call == null)
 			return null;
-		var separator = call.lastIndexOf("."), targetOwner = separator < 0 ? currentOwner : call.substring(0, separator),
+		var separator = call.lastIndexOf("."),
+			targetOwner = separator < 0 ? currentOwner : call.substring(0, separator),
 			methodName = separator < 0 ? call : call.substring(separator + 1),
 			resolvedOwner = resolveOwner(targetOwner, currentOwner, classes, aliases),
 			declaration = classes.get(resolvedOwner);
@@ -150,8 +151,8 @@ class FieldInference {
 		return staticMethodResult(resolvedOwner, methodName, currentOwner, classes, aliases, []);
 	}
 
-	static function staticMethodResult(owner:String, methodName:String, currentOwner:String,
-			classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>, resolving:Map<String, Bool>):Null<AstType> {
+	static function staticMethodResult(owner:String, methodName:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:Map<String, String>, resolving:Map<String, Bool>):Null<AstType> {
 		if (resolving.exists(owner))
 			return null;
 		resolving.set(owner, true);
@@ -174,8 +175,8 @@ class FieldInference {
 			resolving.remove(owner);
 			return null;
 		}
-		var baseOwner = resolveOwner(base, currentOwner, classes, aliases), result = staticMethodResult(baseOwner,
-			methodName, currentOwner, classes, aliases, resolving);
+		var baseOwner = resolveOwner(base, currentOwner, classes, aliases),
+			result = staticMethodResult(baseOwner, methodName, currentOwner, classes, aliases, resolving);
 		resolving.remove(owner);
 		return result;
 	}

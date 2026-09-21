@@ -251,8 +251,7 @@ class TypeRepresentation {
 			case TNullable(_): true;
 			default: false;
 		};
-		if (argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue)
-			&& !alreadyNullable) {
+		if (argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue) && !alreadyNullable) {
 			result = {
 				semantic: TNullable(result.semantic),
 				physical: TNullable(result.physical)

@@ -63,6 +63,56 @@ class ModuleSourceLoader {
 		return null;
 	}
 
+	/** Materialize all source modules directly contained by a package. */
+	public function loadPackage(packageName:String, modules:Map<String, ModuleState>):Array<String> {
+		var result:Array<String> = [];
+		var prefix = packageName.length == 0 ? "" : packageName + ".";
+		for (moduleName in modules.keys())
+			if (StringTools.startsWith(moduleName, prefix)) {
+				var nestedName = moduleName.substr(prefix.length);
+				if (nestedName.length > 0 && nestedName.indexOf(".") < 0)
+					result.push(moduleName);
+			}
+		for (root in roots) {
+			var relativePackage:Null<String> = packageName;
+			if (root.packagePrefix != null) {
+				var prefix = root.packagePrefix + ".";
+				if (packageName == root.packagePrefix)
+					relativePackage = "";
+				else if (StringTools.startsWith(packageName, prefix))
+					relativePackage = packageName.substr(prefix.length);
+				else
+					continue;
+			}
+			var directory = root.path;
+			if (relativePackage != null && relativePackage.length > 0) {
+				var relativePath = relativePackage.split(".").join("/");
+				var resolved = exactDirectory(root.path, relativePath);
+				if (resolved == null)
+					continue;
+				directory = resolved;
+			}
+			if (!FileSystem.exists(directory) || !FileSystem.isDirectory(directory))
+				continue;
+			for (entry in FileSystem.readDirectory(directory)) {
+				if (!StringTools.endsWith(entry, ".hx") || entry == "import.hx")
+					continue;
+				var basename = entry.substring(0, entry.length - 3);
+				if (basename.length == 0)
+					continue;
+				var moduleName = packageName.length == 0 ? basename : packageName + "." + basename;
+				if (!modules.exists(moduleName)) {
+					var path = directory + "/" + entry;
+					modules.set(moduleName, new ModuleState(moduleName, new SourceFile(path, File.getContent(path))));
+				}
+				if (result.indexOf(moduleName) < 0)
+					result.push(moduleName);
+			}
+		}
+		result.sort(Reflect.compare);
+		return result;
+	}
+
 	/** Resolve a module path without allowing case-insensitive filesystem aliases. */
 	static function exactPath(root:String, relative:String):Null<String> {
 		if (caseSensitiveFileSystem) {
@@ -76,6 +126,30 @@ class ModuleSourceLoader {
 			var match:Null<String> = null;
 			for (entry in FileSystem.readDirectory(current))
 				if (entry == segment) {
+					match = entry;
+					break;
+				}
+			if (match == null)
+				return null;
+			current += "/" + match;
+		}
+		return current;
+	}
+
+	static function exactDirectory(root:String, relative:String):Null<String> {
+		if (relative.length == 0)
+			return root;
+		if (caseSensitiveFileSystem) {
+			var direct = root + "/" + relative;
+			return FileSystem.exists(direct) && FileSystem.isDirectory(direct) ? direct : null;
+		}
+		var current = root;
+		for (segment in relative.split("/")) {
+			if (!FileSystem.exists(current) || !FileSystem.isDirectory(current))
+				return null;
+			var match:Null<String> = null;
+			for (entry in FileSystem.readDirectory(current))
+				if (entry == segment && FileSystem.isDirectory(current + "/" + entry)) {
 					match = entry;
 					break;
 				}

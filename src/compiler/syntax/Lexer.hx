@@ -375,10 +375,10 @@ class Lexer {
 
 	/** Scans a numeric digit run, accepting separators only between digits. */
 	function scanNumericDigits(start:Int, hexadecimal:Bool, initialDigit:Bool, requireDigit:Bool = false):Void {
-		var count = initialDigit ? 1 : 0,
-			previousDigit = initialDigit;
+		var count = initialDigit ? 1 : 0, previousDigit = initialDigit;
 		while (position < source.length) {
-			var code = source.get(position), digit = hexadecimal ? isHexDigit(code) : isDigit(code);
+			var code = source.get(position),
+				digit = hexadecimal ? isHexDigit(code) : isDigit(code);
 			if (digit) {
 				count++;
 				previousDigit = true;
@@ -394,7 +394,7 @@ class Lexer {
 				break;
 		}
 		if (requireDigit && count == 0)
-			throw new CompileError(new Diagnostic("E0001", hexadecimal ? "Hexadecimal literal requires at least one digit" : "Exponent requires at least one digit",
-				file.span(start, position)));
+			throw new CompileError(new Diagnostic("E0001",
+				hexadecimal ? "Hexadecimal literal requires at least one digit" : "Exponent requires at least one digit", file.span(start, position)));
 	}
 }

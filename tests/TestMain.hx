@@ -108,9 +108,7 @@ class TestMain {
 			|| scientificTokens[1].text != "1.5E-2")
 			throw "Scientific-notation literals were not tokenized";
 		var separatedTokens = new Lexer(new SourceFile("numeric-separators.hx", "1_000 0x10_FF 1_5.2_5e+1_0")).tokenize();
-		if (separatedTokens[0].text != "1_000"
-			|| separatedTokens[1].text != "0x10_FF"
-			|| separatedTokens[2].text != "1_5.2_5e+1_0")
+		if (separatedTokens[0].text != "1_000" || separatedTokens[1].text != "0x10_FF" || separatedTokens[2].text != "1_5.2_5e+1_0")
 			throw "Numeric separators were not preserved in token spelling";
 		var invalidSeparator = false;
 		try {
@@ -127,7 +125,8 @@ class TestMain {
 		var separatedInteger = new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
 		if (separatedInteger != 5351)
 			throw "Numeric separators did not preserve integer literal values";
-		var separatedFloat = new IrInterpreter(Frontend.compile('function value():Float return 1_5.2_5e-1_0; function main():Int return value() == 1.525e-9 ? 42 : 0;')).run("main");
+		var separatedFloat = new IrInterpreter(Frontend.compile('function value():Float return 1_5.2_5e-1_0; function main():Int return value() == 1.525e-9 ? 42 : 0;'))
+			.run("main");
 		if (separatedFloat != 42)
 			throw "Numeric separators did not preserve float literal values";
 		var signedMinimumProgram = Frontend.compile('function main():Int return -2147483648;');
@@ -620,7 +619,8 @@ class TestMain {
 		for (fn in nullableEnumHl.functions)
 			for (opcode in fn.opcodes)
 				switch opcode {
-					case JumpNull(_, _): nullableEnumHasJump = true;
+					case JumpNull(_, _):
+						nullableEnumHasJump = true;
 					default:
 				}
 		if (!nullableEnumHasJump)

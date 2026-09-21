@@ -509,7 +509,8 @@ class HlLower {
 					case LessEqual(output, left, right):
 						lowerComparison(output, left, right, 1, false, false, registers, registerTypes, instructions);
 					case Equal(output, left, right):
-						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes, instructions);
+						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
+							instructions);
 					case Call(output, functionName, arguments):
 						var destination = defineRegister(output, registers, registerTypes);
 						var functionIndex = requireFunction(functionName);
@@ -858,8 +859,8 @@ class HlLower {
 		return writes;
 	}
 
-	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool, registers:Map<Int, Int>, registerTypes:Array<Int>,
-			instructions:Array<HlInstruction>):Void {
+	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool, registers:Map<Int, Int>,
+			registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
 			rightReg = requireRegister(right, registers);

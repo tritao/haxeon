@@ -44,7 +44,7 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		while (match(TokenKind.Import)) {
-			var path = parseQualifiedName();
+			var path = parseImportPath();
 			imports.push(path);
 			if (check(TokenKind.Identifier) && current().text == "as") {
 				advance();
@@ -109,6 +109,19 @@ class Parser {
 			classes: classes,
 			functions: functions
 		};
+	}
+
+	/** Parse a module or package import, including Haxe's trailing `.*`. */
+	function parseImportPath():String {
+		var path = consumeName().text;
+		while (match(TokenKind.Dot)) {
+			if (match(TokenKind.Star)) {
+				path += ".*";
+				break;
+			}
+			path += "." + consumeName().text;
+		}
+		return path;
 	}
 
 	/** Parse as much current source as possible for editor features. */

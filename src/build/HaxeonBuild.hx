@@ -71,29 +71,25 @@ class HaxeonBuild {
 		}
 
 		var seed = path("out", "bootstrap", "compiler-seed.hl");
-		var stageOne = path("out", "bootstrap", "compiler-stage-one.hl");
-		var stageTwo = path("out", "bootstrap", "compiler-stage-two.hl");
-		var stageThree = path("out", "bootstrap", "compiler-stage-three.hl");
 		var status = run(haxe(), ["--cwd", root(), "-cp", "src", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
 		if (status != 0)
 			return status;
-		for (stage in [
-			{compiler: seed, output: stageOne},
-			{compiler: stageOne, output: stageTwo},
-			{compiler: stageTwo, output: stageThree}
-		]) {
-			status = compileWith(stage.compiler, stage.output, sourcesFile);
+		var compiler = seed;
+		for (stage in 1...9) {
+			var output = path("out", "bootstrap", 'compiler-stage-$stage.hl');
+			status = compileWith(compiler, output, sourcesFile);
 			if (status != 0)
 				return status;
+			if (identical(compiler, output) && identical(compiler + ".functions", output + ".functions")) {
+				File.copy(output, checked);
+				File.copy(output + ".functions", checked + ".functions");
+				Sys.println('PASS: bootstrap stages converged after $stage self-host stages');
+				return 0;
+			}
+			compiler = output;
 		}
-		if (!identical(stageTwo, stageThree) || !identical(stageTwo + ".functions", stageThree + ".functions")) {
-			Sys.stderr().writeString("Bootstrap stages did not converge\n");
-			return 1;
-		}
-		File.copy(stageThree, checked);
-		File.copy(stageThree + ".functions", checked + ".functions");
-		Sys.println("PASS: bootstrap stages converged on an identical self-hosted compiler");
-		return 0;
+		Sys.stderr().writeString("Bootstrap stages did not converge within the stage limit\n");
+		return 1;
 	}
 
 	static function test(arguments:Array<String>):Int {

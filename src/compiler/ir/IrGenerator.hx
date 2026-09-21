@@ -1154,8 +1154,11 @@ class IrGenerator {
 					builder.store(objectName, object);
 					for (field in fields) {
 						var fieldValue = lowerExpression(field.value, builder, localTypes);
-						builder.call("__reflect_set_field", [builder.load(objectName, IrType.Dyn),
-							builder.constString(field.name), builder.toDyn(fieldValue)], Void);
+						builder.call("__reflect_set_field", [
+							builder.load(objectName, IrType.Dyn),
+							builder.constString(field.name),
+							builder.toDyn(fieldValue)
+						], Void);
 					}
 					builder.load(objectName, IrType.Dyn);
 				} else {

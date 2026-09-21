@@ -324,8 +324,7 @@ class CallResolver {
 				fail("E1007", 'Missing signature for method "$methodKey"', span);
 			if (functionTypeParameters(method).length > 0) {
 				var prepared = typeGenericCallArguments(method, arguments, scope, span);
-				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, true,
-					prepared.substitutions);
+				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, true, prepared.substitutions);
 			}
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey, scope);

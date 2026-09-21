@@ -1624,7 +1624,8 @@ class BodyTyper {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
-		return argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue)
+		return argument.optional == true
+			&& AstPredicates.isNullExpression(argument.defaultValue)
 			&& !isNullable(type) ? CompilerType.TNullable(type) : type;
 	}
 

@@ -127,7 +127,7 @@ class SemanticAssembly {
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
-				var importedType = sourceTypeAliases.get(importPath);
+				var importedType = ModuleAnalyzer.isWildcardImport(importPath) ? null : sourceTypeAliases.get(importPath);
 				if (importedType != null && enumCasesByType.exists(importedType))
 					for (caseName in enumCasesByType.get(importedType))
 						if (constructorTargets.exists(caseName))
@@ -135,17 +135,19 @@ class SemanticAssembly {
 						else
 							constructorTargets.set(caseName, importedType + "." + caseName);
 			}
-			for (importPath in ast.imports)
-				if (modules.exists(importPath))
+			for (importPath in ast.imports) {
+				var importedModule = ModuleAnalyzer.importModulePath(importPath);
+				if (modules.exists(importedModule))
 					for (sourceName => declarationName in sourceTypeAliases) {
 						var qualifiedSourceName:String = sourceName;
-						if (StringTools.startsWith(qualifiedSourceName, importPath + ".")) {
-							var nestedStart = importPath.length + 1,
+						if (StringTools.startsWith(qualifiedSourceName, importedModule + ".")) {
+							var nestedStart = importedModule.length + 1,
 								nestedName = qualifiedSourceName.substring(nestedStart, qualifiedSourceName.length);
 							if (nestedName.indexOf(".") < 0)
 								aliases.set(nestedName, declarationName);
 						}
 					}
+			}
 			var visiblePackage = ast.packageName;
 			while (true) {
 				var currentPackage:String;

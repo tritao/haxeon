@@ -77,14 +77,13 @@ class PackageResolver {
 					for (includeDir in manifest.native.includeDirs)
 						resolveDirectory(resolvedRoot, includeDir, "native include directory", manifest.packageName)
 				];
-				if (manifest.native.cmake != null)
-					{
-						resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
-						nativeCMakeInputs = [
-							for (input in manifest.native.cmake.inputs)
-								resolveInput(resolvedRoot, input, "native CMake input", manifest.packageName)
-						];
-					}
+				if (manifest.native.cmake != null) {
+					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
+					nativeCMakeInputs = [
+						for (input in manifest.native.cmake.inputs)
+							resolveInput(resolvedRoot, input, "native CMake input", manifest.packageName)
+					];
+				}
 			}
 			if (manifest.ffi != null) {
 				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName, "FFI interface");
