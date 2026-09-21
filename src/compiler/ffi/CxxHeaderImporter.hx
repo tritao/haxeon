@@ -150,7 +150,9 @@ private class CxxAstBuilder {
 				if (name != null
 					&& name.length != 0
 					&& ClangAstTools.field(node, "isImplicit") != true
-					&& (user || explicitlySelected(qualify(name, namespaces)))) {
+					&& (user
+						&& ClangAstTools.isSpelledInRoots(node, roots, currentFile)
+						|| explicitlySelected(qualify(name, namespaces)))) {
 					var alias = makeAlias(node, qualify(name, namespaces), namespaces, owner);
 					if (!aliasNames.exists(alias.qualifiedName)) {
 						aliasNames.set(alias.qualifiedName, true);
