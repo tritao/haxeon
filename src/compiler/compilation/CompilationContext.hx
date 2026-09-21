@@ -69,6 +69,9 @@ class CompilationContext {
 	public function nativeLayoutTarget():String
 		return owner.nativeLayoutTarget();
 
+	public function isWasmTarget():Bool
+		return owner.isWasmTarget();
+
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 

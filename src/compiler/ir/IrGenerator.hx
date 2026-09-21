@@ -47,6 +47,7 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
+	static var dynamicObjectLiterals:Bool = true;
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
@@ -54,6 +55,10 @@ class IrGenerator {
 		for (enumDecl in enums)
 			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
 	}
+
+	/** Enable dynamic allocation for `{}` literals on targets with runtime reflection. */
+	public static function bindDynamicObjectLiterals(enabled:Bool):Void
+		dynamicObjectLiterals = enabled;
 
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
@@ -1141,19 +1146,28 @@ class IrGenerator {
 					builder.call('$typeName.new', constructorArgs, Void);
 				}
 				builder.load(objectName, objectType);
-			case TObjectLiteral(typeName, fields):
-				var physicalName = switch expression.type {
-					case TAnonymous(name, _): name;
-					default: typeName;
-				}, object = builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
-					+ 'object-literal:${expression.span.start}:${object.id}';
-				localTypes.set(objectName, objectType);
-				builder.store(objectName, object);
-				for (field in fields) {
-					var fieldValue = lowerExpression(field.value, builder, localTypes);
-					builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
+			case TObjectLiteral(typeName, fields, isDynamic):
+				if (isDynamic && dynamicObjectLiterals) {
+					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn);
+					for (field in fields) {
+						var fieldValue = lowerExpression(field.value, builder, localTypes);
+						builder.call("__reflect_set_field", [object, builder.constString(field.name), builder.toDyn(fieldValue)], Void);
+					}
+					object;
+				} else {
+					var physicalName = switch expression.type {
+						case TAnonymous(name, _): name;
+						default: typeName;
+					}, object = builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
+						+ 'object-literal:${expression.span.start}:${object.id}';
+					localTypes.set(objectName, objectType);
+					builder.store(objectName, object);
+					for (field in fields) {
+						var fieldValue = lowerExpression(field.value, builder, localTypes);
+						builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
+					}
+					builder.load(objectName, objectType);
 				}
-				builder.load(objectName, objectType);
 			case TArrayLiteral(values):
 				var element = switch expression.type {
 					case TArray(element): element;

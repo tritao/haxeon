@@ -80,7 +80,7 @@ enum TypedExpressionKind {
 	TCast(expression:TypedExpression);
 	TAbiCast(expression:TypedExpression);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
-	TObjectLiteral(name:String, fields:Array<TypedObjectField>);
+	TObjectLiteral(name:String, fields:Array<TypedObjectField>, isDynamic:Bool);
 	TArrayLiteral(values:Array<TypedExpression>);
 	TMapLiteral(entries:Array<TypedMapEntry>);
 	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression);

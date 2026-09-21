@@ -42,6 +42,7 @@ private typedef BuildOptions = {
 	final explain:Bool;
 	final timings:Bool;
 	final jobs:Int;
+	final selfHosted:Bool;
 }
 
 private typedef FormatOptions = {
@@ -460,6 +461,9 @@ class HaxeonCli {
 		if ((options.plan || options.explain || options.timings)
 			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
+		if (options.selfHosted
+			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
+			throw 'The self-hosted compiler is currently available for structured host builds only';
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
@@ -467,7 +471,7 @@ class HaxeonCli {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs);
+				resolutionMs, options.selfHosted);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -476,7 +480,8 @@ class HaxeonCli {
 			var nativeDirectories = [
 				for (resolvedPackage in project.packages.packages)
 					if (resolvedPackage.nativeSources.length > 0
-						|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null))
+						|| (resolvedPackage.manifest.native != null
+							&& resolvedPackage.manifest.native.cmake != null))
 						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
 			configureRuntimeLibraryPath(home, nativeDirectories);
@@ -682,7 +687,7 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4;
+			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4, selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1";
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -696,6 +701,8 @@ class HaxeonCli {
 				explain = true;
 			else if (argument == "--timings")
 				timings = true;
+			else if (argument == "--self-hosted")
+				selfHosted = true;
 			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
@@ -749,7 +756,8 @@ class HaxeonCli {
 			plan: plan,
 			explain: explain,
 			timings: timings,
-			jobs: jobs
+			jobs: jobs,
+			selfHosted: selfHosted
 		};
 	}
 
@@ -1073,6 +1081,7 @@ class HaxeonCli {
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");
+		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");

@@ -159,8 +159,22 @@ class Sys {
 	public static inline function rename(path:String, newPath:String):Bool
 		return sysRename(path, newPath);
 
-	public static inline function command(command:String):Int
-		return sysCommand(command);
+	public static function command(command:String, ?args:Array<String>):Int {
+		if (args == null || args.length == 0)
+			return sysCommand(command);
+		var windows = systemName() == "Windows";
+		var parts = [command];
+		for (argument in args)
+			parts.push(quoteCommandArgument(argument, windows));
+		return sysCommand(parts.join(" "));
+	}
+
+	static function quoteCommandArgument(value:String, windows:Bool):String {
+		var argument = value == null ? "" : value;
+		if (windows)
+			return "\"" + argument.split("\"").join("\\\"") + "\"";
+		return "'" + argument.split("'").join("'\\''") + "'";
+	}
 
 	public static inline function sleep(seconds:Float):Void
 		sysSleep(seconds);

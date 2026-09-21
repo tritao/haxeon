@@ -792,6 +792,13 @@ class Compiler {
 		}
 	}
 
+	/** True when the active target uses one of the experimental WebAssembly backends. */
+	public function isWasmTarget():Bool
+		return switch defines.get("target") {
+			case "wasm32" | "wasm64" | "wasmgc" | "wasm-gc": true;
+			default: false;
+		};
+
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
 

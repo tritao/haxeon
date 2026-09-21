@@ -168,6 +168,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function toDyn(value:IrValue):IrValue {
+		var out = temporary(Dyn);
+		emit(ToDyn(out, value));
+		return out;
+	}
+
 	public function newObject(typeName:String):IrValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

@@ -53,6 +53,12 @@ function main():Int {
 	var command = systemName == "Windows" ? "cmd /C \"echo xé>nul\"" : "test xé = xé";
 	if (Sys.command(command) != 0)
 		return 7;
+	var argumentCommand = systemName == "Windows" ? "cmd /C if" : "test";
+	var argumentValues = systemName == "Windows"
+		? ["value with spaces", "==", "value with spaces"]
+		: ["value with spaces; 'quoted'", "=", "value with spaces; 'quoted'"];
+	if (Sys.command(argumentCommand, argumentValues) != 0)
+		return 13;
 	var fsDirectory = "out/filesystem-runtime-é";
 	var fsRenamed = "out/filesystem-runtime-renamed-é";
 	var fsFile = fsRenamed + "/value-ß.txt";

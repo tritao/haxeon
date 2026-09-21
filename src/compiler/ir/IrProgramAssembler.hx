@@ -254,6 +254,7 @@ class IrProgramAssembler {
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
+			needsDynamicObjectRuntime = false,
 			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in allFunctions)
 			for (block in fn.blocks)
@@ -264,6 +265,8 @@ class IrProgramAssembler {
 								needsExceptionRuntime = true;
 							if (name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
+							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
+								needsDynamicObjectRuntime = true;
 							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
@@ -298,6 +301,22 @@ class IrProgramAssembler {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsDynamicObjectRuntime && !hasNative(natives, "__reflect_dynamic_object"))
+			program.natives.push({
+				name: "__reflect_dynamic_object",
+				library: "haxeon_runtime",
+				symbol: "__reflect_dynamic_object",
+				arguments: [],
+				result: Dyn
+			});
+		if (needsDynamicObjectRuntime && !hasNative(natives, "__reflect_set_field"))
+			program.natives.push({
+				name: "__reflect_set_field",
+				library: "haxeon_runtime",
+				symbol: "__reflect_set_field",
+				arguments: [Dyn, Bytes, Dyn],
+				result: Void
+			});
 		if (needsExceptionRuntime)
 			program.natives.push({
 				name: "__exception_matches",

@@ -252,9 +252,17 @@ class ExpressionTyper {
 			case TAnonymous(name, _): name;
 			default: "";
 		};
+		var isDynamic = objectExpected == null && isDynamicExpectation(expectedType);
 		anonymousTypeRegistry.register(resolvedResult);
-		return new TypedExpression(TObjectLiteral(typeName, typedFields), resolvedResult, span);
+		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), resolvedResult, span);
 	}
+
+	static function isDynamicExpectation(type:Null<CompilerType>):Bool
+		return switch type {
+			case TDynamic: true;
+			case TNullable(element): isDynamicExpectation(element);
+			default: false;
+		};
 
 	public function typeArrayLiteral(values:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var expectedMap = mapExpectation(expectedType);
