@@ -530,9 +530,13 @@ private class CxxAstBuilder {
 
 	static function isStringViewName(value:String):Bool {
 		value = normalizeStdlibImplementationNamespace(compactType(value));
-		return value == "std::string_view"
-			|| value == "std::basic_string_view<char>"
-			|| value == "std::basic_string_view<char,std::char_traits<char>>";
+		if (value == "std::string_view" || value == "std::basic_string_view<char>")
+			return true;
+		var prefix = "std::basic_string_view<";
+		if (!StringTools.startsWith(value, prefix) || !StringTools.endsWith(value, ">"))
+			return false;
+		var arguments = splitTypeList(value.substring(prefix.length, value.length - 1));
+		return arguments.length == 2 && arguments[0] == "char" && arguments[1] == "std::char_traits<char>";
 	}
 
 	static function byteSpanElement(value:String):Null<CxxSpanElement> {

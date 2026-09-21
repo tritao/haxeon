@@ -1,4 +1,5 @@
 import compiler.ffi.CxxHeaderImporter;
+import compiler.ffi.CxxHeaderImporter.CxxImportResult;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxType;
 import compiler.ffi.CxxProjection;
@@ -363,12 +364,25 @@ class CxxHeaderImporterMain {
 		if (thunkFailPlan != null)
 			expect(thunkFailPlan.symbol == thunkMethod.thunkSymbol && thunkFailPlan.dispatch == DirectSymbol,
 				"throwing methods should use a direct call to their generated thunk");
-		var stringViewDisabled = "";
+		var stringViewDisabled = "",
+			stringViewImported:Null<CxxImportResult> = null;
 		try {
-			CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"]);
+			stringViewImported = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"]);
 		} catch (error:Dynamic)
 			stringViewDisabled = Std.string(error);
-		expect(stringViewDisabled.indexOf("CXX017") >= 0, "std::string_view should require an explicit generated adapter");
+		var stringViewDetails = stringViewDisabled;
+		if (stringViewDetails.length == 0 && stringViewImported != null) {
+			var importedTypes:Array<String> = [];
+			for (record in stringViewImported.model.records)
+				for (method in record.methods)
+					for (parameter in method.parameters)
+						importedTypes.push(record.qualifiedName + "::" + method.name + "=" + Std.string(parameter.type));
+			for (functionModel in stringViewImported.model.functions)
+				for (parameter in functionModel.parameters)
+					importedTypes.push(functionModel.qualifiedName + "=" + Std.string(parameter.type));
+			stringViewDetails = "import succeeded; parameter types: " + importedTypes.join(", ");
+		}
+		expect(stringViewDetails.indexOf("CXX017") >= 0, "std::string_view should require an explicit generated adapter: " + stringViewDetails);
 		var stringView = CxxHeaderImporter.importHeader("tests/ffi/cxx_string_view_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"], "clang++",
 			"cxx_view", "CxxStringViewFixture", null, null, "c++20", null, null, false, false, false, true),
 			stringViewText = HxiWriter.write(stringView.hxi, "// test"),
