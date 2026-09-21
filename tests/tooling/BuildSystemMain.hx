@@ -312,7 +312,7 @@ class BuildSystemMain {
 		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"foo":{"path":"../foo"}}}',
 			["src/Main.hx"]);
 		writePackage(foo,
-			'{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"dependencies":{"bar":{"path":"../bar"}},"native":{"sources":["native/foo.c"],"includeDirs":["native"]}}',
+			'{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"dependencies":{"bar":{"path":"../bar"}},"native":{"sources":["native/foo.c"],"includeDirs":["native"],"std":"c++20"}}',
 			["src/Foo.hx", "native/foo.c", "native/foo.h"]);
 		writePackage(bar, '{"version":1,"package":{"name":"bar"},"sourceRoots":["src"]}', ["src/Bar.hx"]);
 		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
@@ -320,6 +320,8 @@ class BuildSystemMain {
 		expect(project.packages.names().join(",") == "bar,foo,app", "nested packages should be ordered dependency-first");
 		expect(project.packages.get("foo").nativeSources.length == 1 && project.packages.get("foo").includeDirs.length == 1,
 			"native package metadata should be resolved");
+		expect(project.packages.get("foo").manifest.native.standard == "c++20",
+			"native language standards should be resolved from package metadata");
 		expect(project.rootPackage.sources.length == 1 && project.rootPackage.sources[0].indexOf("Main.hx") >= 0,
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),

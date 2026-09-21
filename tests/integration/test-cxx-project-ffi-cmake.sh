@@ -54,6 +54,9 @@ cmake_minimum_required(VERSION 3.16)
 project(foo LANGUAGES CXX)
 add_library(foo SHARED cxx_thunk_fixture.cpp cxx_owned_cmake_fixture.cpp)
 set_target_properties(foo PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED YES
+  CXX_EXTENSIONS NO
   PREFIX ""
   OUTPUT_NAME "foo"
   SUFFIX ".hdll"

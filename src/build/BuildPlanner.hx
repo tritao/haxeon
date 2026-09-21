@@ -55,6 +55,8 @@ class BuildPlanner {
 					var relative = relativePath(resolvedPackage.root, source),
 						id = new ArtifactId(resolvedPackage.name, NativeObject, target, relative),
 						details:Map<String, String> = ["source" => relative];
+					if (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.standard != null)
+						details.set("standard", resolvedPackage.manifest.native.standard);
 					artifacts.push(new Artifact(id, [], details));
 					baseObjects.push(id);
 					objects.push(id);

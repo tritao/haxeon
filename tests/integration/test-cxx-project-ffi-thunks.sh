@@ -25,7 +25,8 @@ cat > "$project_dir/haxeon.json" <<'JSON'
   "sourceRoots": ["src"],
   "native": {
     "sources": ["native/cxx_thunk_fixture.cpp"],
-    "includeDirs": ["ffi"]
+    "includeDirs": ["ffi"],
+    "std": "c++20"
   },
   "ffi": { "imports": ["ffi/cxx_thunk_project.ffi.json"] }
 }

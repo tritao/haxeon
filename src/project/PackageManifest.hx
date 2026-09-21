@@ -7,12 +7,15 @@ import build.Target;
 class NativeManifest {
 	public final sources:Array<String>;
 	public final includeDirs:Array<String>;
+	/** Optional language standard for native C and C++ source compilation. */
+	public final standard:Null<String>;
 	public final cmake:Null<NativeCMakeManifest>;
 	public final supportedTargets:Array<String>;
 
-	public function new(sources:Array<String>, includeDirs:Array<String>, ?cmake:NativeCMakeManifest, ?supportedTargets:Array<String>) {
+	public function new(sources:Array<String>, includeDirs:Array<String>, ?standard:String, ?cmake:NativeCMakeManifest, ?supportedTargets:Array<String>) {
 		this.sources = sources.copy();
 		this.includeDirs = includeDirs.copy();
+		this.standard = standard;
 		this.cmake = cmake;
 		this.supportedTargets = supportedTargets == null ? ["host", "android"] : supportedTargets.copy();
 	}
@@ -119,6 +122,7 @@ class PackageManifest {
 				throw '$path "native" must be an object';
 			var nativeSources = stringArray(nativeData, "sources", path, []),
 				includeDirs = stringArray(nativeData, "includeDirs", path, []),
+				standard = optionalNullableString(nativeData, "std", path),
 				supportedTargets = stringArray(nativeData, "targets", path, ["host", "android"]),
 				cmakeData:Dynamic = Reflect.field(nativeData, "cmake"),
 				cmake:Null<NativeCMakeManifest> = null;
@@ -138,7 +142,7 @@ class PackageManifest {
 				} catch (error:Dynamic) {
 					throw '$path "native.targets" contains an invalid target "$supportedTarget": ${Std.string(error)}';
 				}
-			native = new NativeManifest(nativeSources, includeDirs, cmake, supportedTargets);
+			native = new NativeManifest(nativeSources, includeDirs, standard, cmake, supportedTargets);
 		}
 		var android:Dynamic = Reflect.field(raw, "android"),
 			androidApplicationId = "org.haxeon.android",
