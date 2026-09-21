@@ -8,15 +8,19 @@ mkdir -p "$repo_dir/out/cxx_span_projection"
 case "$(uname -s):$(uname -m)" in
 	Linux:x86_64)
 		target="x86_64-linux-gnu"
+		library_path="$repo_dir/out/libcxx_span_fixture.so"
 		;;
 	Linux:aarch64|Linux:arm64)
 		target="aarch64-linux-gnu"
+		library_path="$repo_dir/out/libcxx_span_fixture.so"
 		;;
 	Darwin:x86_64)
 		target="x86_64-apple-darwin"
+		library_path="$repo_dir/out/libcxx_span_fixture.dylib"
 		;;
 	Darwin:arm64)
 		target="arm64-apple-darwin"
+		library_path="$repo_dir/out/libcxx_span_fixture.dylib"
 		;;
 	*)
 		echo "unsupported host for C++ span integration test" >&2
@@ -29,14 +33,14 @@ esac
 	--std=c++20 \
 	--target="$target" \
 	--cxx-thunks="$repo_dir/out/cxx_span_generated.cpp" \
-	--library="$repo_dir/out/libcxx_span_fixture.so" \
+	--library="$library_path" \
 	--interface=cxx_span \
 	--haxe-output-dir="$repo_dir/out/cxx_span_projection" \
 	--output="$repo_dir/out/cxx_span_fixture.hxi" \
 	"$repo_dir/tests/ffi/cxx_span_fixture.hpp"
 
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-span-fixture.sh")
-"$repo_dir/scripts/replace-in-file.sh" "s#${repo_dir}/out/libcxx_span_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_span_fixture.hxi"
+test "$fixture_path" = "$library_path"
 grep -q 'std::span<const std::byte>(arg0, arg0__length)' "$repo_dir/out/cxx_span_generated.cpp"
 grep -q 'std::span<const std::uint8_t>(arg0, arg0__length)' "$repo_dir/out/cxx_span_generated.cpp"
 grep -q 'public function byteCount(value:haxe.io.Bytes):Int' "$repo_dir/out/cxx_span_projection/Buffer.hx"
