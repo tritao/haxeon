@@ -102,17 +102,34 @@ class ClangAstTools {
 		var location:Dynamic = field(node, "loc");
 		if (location == null)
 			return false;
+		var spellingFile = spellingLocationPath(node);
+		if (spellingFile != null)
+			currentFile = FileSystem.fullPath(spellingFile);
 		// Clang omits loc.file for declarations from an included file and
 		// records that provenance in includedFrom. In that case the inherited
 		// currentFile is not reliable enough to classify the declaration as user
 		// source; exclude it conservatively instead of importing libstdc++ AST.
-		if (locationPath(node) == null && field(location, "includedFrom") != null)
+		if (spellingFile == null && locationPath(node) == null && field(location, "includedFrom") != null)
 			return false;
 		var key = pathKey(currentFile);
 		for (root in roots)
 			if (key == pathKey(root) || StringTools.startsWith(key, pathKey(root) + "/"))
 				return true;
 		return false;
+	}
+
+	/** Returns the declaration's spelling file, ignoring macro expansion provenance. */
+	static function spellingLocationPath(node:Dynamic):Null<String> {
+		var location:Dynamic = field(node, "loc"),
+			range:Dynamic = field(node, "range"),
+			begin:Dynamic = field(range, "begin"),
+			spelling:Dynamic = field(begin, "spellingLoc"),
+			path:String = field(spelling, "file");
+		if (path != null)
+			return path;
+		spelling = field(location, "spellingLoc");
+		path = field(spelling, "file");
+		return path == null ? field(location, "file") : path;
 	}
 
 	public static function declarationLocation(node:Dynamic):String {
