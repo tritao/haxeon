@@ -1,5 +1,7 @@
 #include "cxx_thunk_fixture.hpp"
 
+#include <stdexcept>
+
 namespace cxxthunk {
     static BinaryCallback retained_handler = nullptr;
 
