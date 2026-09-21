@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stdexcept>
-
 #if defined(__clang__)
 #define HXI_RETAINED __attribute__((annotate("hxi:retained")))
 #else
