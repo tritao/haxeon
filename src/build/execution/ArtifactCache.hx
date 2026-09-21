@@ -124,7 +124,7 @@ class ArtifactCache {
 		return switch action.action {
 			case Process(_, _, _, _): !StringTools.startsWith(action.id.key(),
 					"cmake-configure:") && !StringTools.startsWith(action.id.key(), "native-cmake-configure:");
-			case Compiler(_, _, _): false;
+			case Compiler(_, _, _, _, _): false;
 		};
 	}
 

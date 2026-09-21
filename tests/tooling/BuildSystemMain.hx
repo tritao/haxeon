@@ -268,7 +268,7 @@ class BuildSystemMain {
 
 		var compilerOutput = Path.join([root, "compiled.hl"]), compilerInvocations = 0,
 			compilerAction = new ExecutionAction(new ActionId("compile-haxe"), [], [source], [compilerOutput], "compile Haxe",
-				Compiler("Haxeon compilation", "target=hl;entry=Main", () -> {
+				Compiler("haxeon-compiler", ["--target=hl", "--entry=Main"], root, new Map(), () -> {
 					compilerInvocations++;
 					File.saveContent(compilerOutput, "compiled\n");
 					return 0;
@@ -535,7 +535,8 @@ class BuildSystemMain {
 	}
 
 	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
-		return new ExecutionAction(new ActionId(id), dependencies, [], [], description, Compiler(description, description, invoke));
+		return new ExecutionAction(new ActionId(id), dependencies, [], [], description,
+			Compiler("test-compiler", [description], Sys.getCwd(), new Map(), invoke));
 
 	static function temporaryDirectory(name:String):String {
 		var base = Sys.getEnv("TMPDIR");

@@ -2,7 +2,7 @@ package build.execution;
 
 enum ActionKind {
 	Process(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>);
-	Compiler(description:String, identity:String, invoke:Void->Int);
+	Compiler(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>, invoke:Void->Int);
 }
 
 /** A concrete, executable node in the lowered build graph. */

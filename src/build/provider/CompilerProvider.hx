@@ -48,7 +48,7 @@ class CompilerProvider {
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		return new ExecutionAction(actionId, dependencies, inputs, [output], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler('Haxeon ${project.manifest.target} compilation', haxe.Json.stringify(arguments),
+			Compiler(compiler, arguments, context.compilerHome, new Map(),
 				() -> ProcessRunner.run(compiler, arguments, context.compilerHome, new Map())));
 	}
 }

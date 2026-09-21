@@ -39,41 +39,9 @@ class ActionFingerprint {
 		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
-				fields.push(command);
-				fields.push('cwd:${Path.normalize(FileSystem.fullPath(cwd))}');
-				var executable = resolveTool(command);
-				fields.push('tool:$executable');
-				if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-					fields.add('tool-content:${fileIdentity(executable, false)}');
-				for (argument in arguments)
-					fields.push(argument);
-				for (name in [
-					"PATH",
-					"CC",
-					"CXX",
-					"AR",
-					"CFLAGS",
-					"CPPFLAGS",
-					"LDFLAGS",
-					"CPATH",
-					"C_INCLUDE_PATH",
-					"LIBRARY_PATH",
-					"INCLUDE",
-					"LIB",
-					"LIBPATH",
-					"SDKROOT",
-					"MACOSX_DEPLOYMENT_TARGET"
-				]) {
-					var value = Sys.getEnv(name);
-					if (value != null)
-						fields.push('inherited:$name=$value');
-				}
-				var keys = [for (key in environment.keys()) key];
-				keys.sort(Reflect.compare);
-				for (key in keys)
-					fields.push('$key=${environment.get(key)}');
-			case Compiler(_, identity, _):
-				fields.push('compiler:$identity');
+				appendCommand(fields, command, arguments, cwd, environment, false);
+			case Compiler(command, arguments, cwd, environment, _):
+				appendCommand(fields, command, arguments, cwd, environment, false);
 		}
 		for (input in action.inputs) {
 			fields.add('input:$input');
@@ -95,18 +63,9 @@ class ActionFingerprint {
 		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
-				fields.push('command:${Path.withoutDirectory(command)}');
-				var executable = resolveTool(command);
-				if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-					fields.add('tool-content:${fileIdentity(executable, true)}');
-				for (argument in arguments)
-					fields.push('argument:${portableArgument(argument, action)}');
-				var keys = [for (key in environment.keys()) key];
-				keys.sort(Reflect.compare);
-				for (key in keys)
-					fields.push('environment:$key=${portableArgument(environment.get(key), action)}');
-			case Compiler(_, identity, _):
-				fields.push('compiler:$identity');
+				appendPortableCommand(fields, command, arguments, environment, action);
+			case Compiler(command, arguments, _, environment, _):
+				appendPortableCommand(fields, command, arguments, environment, action);
 		}
 		var inputIndex = 0;
 		for (input in action.inputs) {
@@ -217,6 +176,45 @@ class ActionFingerprint {
 			return Sha256.make(File.getBytes(path)).toHex();
 		var stat = FileSystem.stat(path);
 		return '${stat.size}:${stat.mtime.getTime()}';
+	}
+
+	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String,
+			environment:Map<String, String>, strong:Bool):Void {
+		fields.add('command:$command');
+		fields.add('cwd:${Path.normalize(FileSystem.fullPath(cwd))}');
+		var executable = resolveTool(command);
+		fields.add('tool:$executable');
+		if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
+			fields.add('tool-content:${fileIdentity(executable, strong)}');
+		for (argument in arguments)
+			fields.add('argument:$argument');
+		for (name in [
+			"PATH", "CC", "CXX", "AR", "CFLAGS", "CPPFLAGS", "LDFLAGS", "CPATH",
+			"C_INCLUDE_PATH", "LIBRARY_PATH", "INCLUDE", "LIB", "LIBPATH", "SDKROOT",
+			"MACOSX_DEPLOYMENT_TARGET"
+		]) {
+			var value = Sys.getEnv(name);
+			if (value != null)
+				fields.add('inherited:$name=$value');
+		}
+		var keys = [for (key in environment.keys()) key];
+		keys.sort(Reflect.compare);
+		for (key in keys)
+			fields.add('environment:$key=${environment.get(key)}');
+	}
+
+	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>,
+			environment:Map<String, String>, action:ExecutionAction):Void {
+		fields.add('command:${Path.withoutDirectory(command)}');
+		var executable = resolveTool(command);
+		if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
+			fields.add('tool-content:${fileIdentity(executable, true)}');
+		for (argument in arguments)
+			fields.add('argument:${portableArgument(argument, action)}');
+		var keys = [for (key in environment.keys()) key];
+		keys.sort(Reflect.compare);
+		for (key in keys)
+			fields.add('environment:$key=${portableArgument(environment.get(key), action)}');
 	}
 
 	static function ignoredDirectoryEntry(name:String, path:String, buildRoot:String):Bool {

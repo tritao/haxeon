@@ -44,7 +44,7 @@ class ExecutionPlan {
 	static function kindName(action:ExecutionAction):String
 		return switch action.action {
 			case Process(_, _, _, _): "process";
-			case Compiler(_, _, _): "compiler";
+			case Compiler(_, _, _, _, _): "compiler";
 		};
 
 	function topologicalOrder(supplied:Array<ExecutionAction>):Array<ExecutionAction> {
