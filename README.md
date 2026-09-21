@@ -640,6 +640,16 @@ LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
 .tools/hashlink/hlprof-live --connect-timeout 10 --rate 500 --output out/compiler.hlpc 24020
 ```
 
+For host applications, `haxeon run --profile` automates that handshake: it builds
+the project, launches it with `--diagnostics-wait`, attaches `hlprof-live`, writes
+an HLPC capture (default `build/host/profile/profile-<timestamp>.hlpc`), and prints
+a top-functions report after the process exits. Pass `--profile-output PATH` to
+choose the capture location, and runtime arguments after `--`:
+
+```sh
+haxeon run --profile --profile-output build/host/profile/editor.hlpc
+```
+
 `bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
 source tree and reports bootstrap progress. Pass `--json` for a machine-readable
 dashboard.
