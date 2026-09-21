@@ -599,11 +599,10 @@ HL_PRIM haxeon_native_library *HL_NAME(native_open)( vbyte *path_bytes, int path
 			MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,wide_length);
 			DWORD flags = 0;
 			/* Native packages commonly place a thunk and its CMake-built
-			   dependency side by side. Opt into the safe DLL-directory search
-			   mode when the caller supplied an absolute Windows path so that
-			   dependent HDLLs resolve relative to the loaded module. */
+			   dependency side by side. For an absolute path, search the loaded
+			   module's directory first so dependent HDLLs resolve beside it. */
 			if ((path[0] != 0 && path[1] == ':') || (path[0] == '\\' && path[1] == '\\'))
-				flags = LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+				flags = LOAD_WITH_ALTERED_SEARCH_PATH;
 			handle = (void *)LoadLibraryExW(wide,NULL,flags);
 			free(wide);
 		}
