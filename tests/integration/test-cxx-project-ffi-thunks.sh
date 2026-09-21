@@ -8,6 +8,18 @@ cxx=${CXX:-c++}
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cxx-project-thunks.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
+case "$(uname -s)" in
+	Darwin)
+		ffi_suffix=".dylib"
+		;;
+	MINGW*|MSYS*|CYGWIN*)
+		ffi_suffix=".dll"
+		;;
+	*)
+		ffi_suffix=".so"
+		;;
+esac
+
 if [[ ! -x "$haxe" ]]; then
 	echo "missing Haxe executable: $haxe" >&2
 	exit 1
@@ -78,7 +90,7 @@ first_output=$(run_cli build --project "$project_dir/haxeon.json")
 test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/cxx-thunk-project.hxi"
 test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/cxx-thunk-project-thunks.cpp"
 test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/cxx-thunk-project-thunks.o"
-test -s "$project_dir/build/host/native/app/libcxx-thunk-project.so"
+test -s "$project_dir/build/host/native/app/libcxx-thunk-project$ffi_suffix"
 test -s "$project_dir/build/host/native/app/app.hdll"
 test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/projection/Counter.hx"
 test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/projection/CxxThunkProjectFunctions.hx"
