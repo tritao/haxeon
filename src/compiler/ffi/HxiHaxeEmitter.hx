@@ -393,6 +393,8 @@ class HxiHaxeEmitter {
 			}
 		}
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
+		for (dependency in model.dependencies)
+			output.add('import $dependency;\n');
 		if (constants.length != 0) {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants) {
