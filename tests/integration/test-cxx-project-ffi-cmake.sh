@@ -142,7 +142,13 @@ run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
 }
 
-first_output=$(run_cli build --project "$project_dir/app/haxeon.json")
+if ! first_output=$(run_cli build --project "$project_dir/app/haxeon.json"); then
+	echo "CMake-backed project build failed; captured output:" >&2
+	printf '%s\n' "$first_output" >&2
+	echo "Produced native files:" >&2
+	find "$project_dir/app/build/host/native" -type f -print >&2 2>/dev/null || true
+	exit 1
+fi
 [[ "$first_output" == *"Configure CMake package foo"* ]]
 [[ "$first_output" == *"Build CMake target foo"* ]]
 [[ "$first_output" == *"Compile C++"* ]]
