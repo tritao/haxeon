@@ -386,7 +386,14 @@ class HlLower {
 				}
 		}
 		var instructions:Array<HlInstruction> = [],
-			debugLocations:Array<HlDebugLocation> = [];
+			debugLocations:Array<HlDebugLocation> = [],
+			nullValues:Map<Int, Bool> = [];
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case ConstNull(value): nullValues.set(value.id, true);
+					default:
+				}
 		for (block in orderedBlocks(fn)) {
 			if (block.instructions.length == 0 && block.terminator == null)
 				continue;
@@ -505,11 +512,11 @@ class HlLower {
 						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Less(output, left, right):
-						lowerComparison(output, left, right, 0, registers, registerTypes, instructions);
+						lowerComparison(output, left, right, 0, false, false, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):
-						lowerComparison(output, left, right, 1, registers, registerTypes, instructions);
+						lowerComparison(output, left, right, 1, false, false, registers, registerTypes, instructions);
 					case Equal(output, left, right):
-						lowerComparison(output, left, right, 2, registers, registerTypes, instructions);
+						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes, instructions);
 					case Call(output, functionName, arguments):
 						var destination = defineRegister(output, registers, registerTypes);
 						var functionIndex = requireFunction(functionName);
@@ -858,18 +865,21 @@ class HlLower {
 		return writes;
 	}
 
-	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, registers:Map<Int, Int>, registerTypes:Array<Int>,
+	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool, registers:Map<Int, Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
 			rightReg = requireRegister(right, registers);
 		var trueLabel = '__cmp_true_${output.id}',
 			endLabel = '__cmp_end_${output.id}';
-		instructions.push(switch operation {
-			case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, trueLabel);
-			case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, trueLabel);
-			default: HlInstruction.JumpEqual(leftReg, rightReg, trueLabel);
-		});
+		if (operation == 2 && (leftNull || rightNull))
+			instructions.push(HlInstruction.JumpNull(leftNull ? rightReg : leftReg, trueLabel));
+		else
+			instructions.push(switch operation {
+				case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, trueLabel);
+				case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, trueLabel);
+				default: HlInstruction.JumpEqual(leftReg, rightReg, trueLabel);
+			});
 		instructions.push(HlInstruction.LoadBool(destination, false));
 		instructions.push(HlInstruction.Jump(endLabel));
 		instructions.push(HlInstruction.Label(trueLabel));

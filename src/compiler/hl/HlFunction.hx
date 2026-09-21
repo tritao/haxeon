@@ -94,6 +94,7 @@ enum HlInstruction {
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
 	JumpSignedLess(left:Int, right:Int, target:String);
+	JumpNull(value:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);
 	JumpTrue(condition:Int, target:String);
 	Jump(target:String);

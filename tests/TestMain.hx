@@ -590,6 +590,20 @@ class TestMain {
 			throw 'Pruned SSA expected two live loop phis, got $phis';
 		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
 
+		var nullableEnum = Frontend.compile('enum DropZone { Center; Left; } class Target { public function new() {} public function zoneAt():Null<DropZone> return Center; } function main():Int { var zone = new Target().zoneAt(); return zone != null ? 42 : 1; }'),
+			nullableEnumHl = HlLower.lower(nullableEnum),
+			nullableEnumHasJump = false;
+		for (fn in nullableEnumHl.functions)
+			for (opcode in fn.opcodes)
+				switch opcode {
+					case JumpNull(_, _): nullableEnumHasJump = true;
+					default:
+				}
+		if (!nullableEnumHasJump)
+			throw "Nullable enum null checks must lower through HashLink's dedicated null branch";
+		HlWriter.encode(nullableEnumHl);
+		Sys.println("PASS: nullable enum null checks use dedicated HashLink null branches");
+
 		var deepBlockCount = 2048, deepBlocks:Array<CfgBlock> = [];
 		for (index in 0...deepBlockCount) {
 			var block = new CfgBlock(index), value = new CfgValue(index, I32);

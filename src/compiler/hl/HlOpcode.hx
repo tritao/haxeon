@@ -49,6 +49,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var EnumIndex = 92;
 	var EnumField = 93;
 	var JTrue = 44;
+	var JNull = 46;
 	var JSLt = 48;
 	var JSLte = 51;
 	var JEq = 56;

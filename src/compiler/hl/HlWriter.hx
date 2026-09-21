@@ -466,6 +466,9 @@ class HlWriter {
 				case JumpSignedLess(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpNull(value, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JNull, operands: [value, targetPosition - (result.length + 1)]};
 				case JumpEqual(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JEq, operands: [left, right, targetPosition - (result.length + 1)]};
