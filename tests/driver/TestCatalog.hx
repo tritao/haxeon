@@ -47,6 +47,7 @@ class TestCatalog {
 		"TyperBoundaryMain",
 		"AbiMatrixMain",
 		"ParserRecoveryMain",
+		"TypeConstructorCollisionMain",
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",

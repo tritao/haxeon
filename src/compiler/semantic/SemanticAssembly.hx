@@ -135,9 +135,6 @@ class SemanticAssembly {
 						else
 							constructorTargets.set(caseName, importedType + "." + caseName);
 			}
-			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
-					aliases.set(caseName, target);
 			for (importPath in ast.imports)
 				if (modules.exists(importPath))
 					for (sourceName => declarationName in sourceTypeAliases) {
@@ -182,6 +179,13 @@ class SemanticAssembly {
 				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
 			}
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
+			// Enum constructors imported through their enum type are expression
+			// aliases. Install them only after visible type aliases have been
+			// collected, so a class in the current/imported package keeps its
+			// name in type positions such as `new Tabs()`.
+			for (caseName => target in constructorTargets)
+				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
+					aliases.set(caseName, target);
 			for (interfaceDecl in ast.interfaces)
 				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName));
 			for (alias in ast.aliases)

@@ -982,7 +982,9 @@ class Parser {
 		var start = current().span;
 		match(TokenKind.Return);
 		var value = parseExpression();
-		match(TokenKind.Semicolon);
+		// The terminator belongs to the surrounding expression statement. If
+		// this blockless closure is assigned, consuming it here makes the outer
+		// parser see the following statement where it still expects a semicolon.
 		return [Return(value, start.merge(expressionSpan(value)))];
 	}
 

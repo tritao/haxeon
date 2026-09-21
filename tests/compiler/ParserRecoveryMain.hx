@@ -55,8 +55,22 @@ class ParserRecoveryMain {
 
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
+		assertBlocklessClosureTerminators();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
+	}
+
+	static function assertBlocklessClosureTerminators():Void {
+		var source = "class ClosureHost {\n"
+			+ "  var callback:Void->Void;\n"
+			+ "  public function assign() { callback = function() refresh(); var after:Int = 1; }\n"
+			+ "  public function declare() { var local = function() refresh(); var after:Int = 2; }\n"
+			+ "  function refresh():Void {}\n"
+			+ "}";
+		var program = new Parser(new Lexer(new SourceFile("BlocklessClosure.hx", source)).tokenize())
+			.parseProgram();
+		if (program.classes.length != 1 || program.classes[0].methods.length != 3)
+			throw "blockless closure terminators consumed the following declaration";
 	}
 
 	static function assertNestedRecovery(tail:String):Void {
