@@ -102,11 +102,14 @@ class ClangAstTools {
 		var location:Dynamic = field(node, "loc");
 		if (location == null)
 			return false;
+		var spellingFile = spellingLocationPath(node);
+		if (spellingFile != null)
+			currentFile = FileSystem.fullPath(spellingFile);
 		// Clang omits loc.file for declarations from an included file and
 		// records that provenance in includedFrom. In that case the inherited
 		// currentFile is not reliable enough to classify the declaration as user
 		// source; exclude it conservatively instead of importing libstdc++ AST.
-		if (locationPath(node) == null && field(location, "includedFrom") != null)
+		if (spellingFile == null && locationPath(node) == null && field(location, "includedFrom") != null)
 			return false;
 		var key = pathKey(currentFile);
 		for (root in roots)
