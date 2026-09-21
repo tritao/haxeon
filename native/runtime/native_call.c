@@ -109,9 +109,9 @@ static void *haxeon_native_dlsym( void *handle, const char *name, const char **e
 	void *symbol = dlsym(handle,name);
 	const char *loader_error = dlerror();
 #ifdef __APPLE__
-	/* dlsym's Darwin spelling adds Mach-O's object-file underscore to
-	   Itanium names that already begin with the ABI's _Z prefix. */
-	if( symbol == NULL && name != NULL && name[0] == '_' && name[1] == 'Z' ) {
+	/* The native-call metadata path may add Mach-O's object-file underscore
+	   to an Itanium name that already begins with the ABI's _Z prefix. */
+	if( symbol == NULL && name != NULL && name[0] == '_' && name[1] == '_' && name[2] == 'Z' ) {
 		dlerror();
 		symbol = dlsym(handle,name + 1);
 		loader_error = dlerror();
