@@ -50,6 +50,11 @@ class CxxThunkGenerator {
 		output.add("#include <exception>\n\n");
 		output.add("#include <span>\n");
 		output.add("#include <string_view>\n\n");
+		output.add("#if defined(_WIN32)\n");
+		output.add("#define HAXEON_CXX_THUNK_EXPORT __declspec(dllexport)\n");
+		output.add("#else\n");
+		output.add("#define HAXEON_CXX_THUNK_EXPORT\n");
+		output.add("#endif\n\n");
 		output.add("namespace {\n");
 		output.add("thread_local char haxeon_cxx_thunk_error[512] = {};\n");
 		output.add("void haxeon_cxx_thunk_clear() noexcept { haxeon_cxx_thunk_error[0] = 0; }\n");
@@ -59,7 +64,7 @@ class CxxThunkGenerator {
 		output.add("\thaxeon_cxx_thunk_error[sizeof(haxeon_cxx_thunk_error) - 1] = 0;\n");
 		output.add("}\n");
 		output.add("}\n\n");
-		output.add("extern \"C\" const char *haxeon_cxx_thunk_last_error() noexcept {\n");
+		output.add("extern \"C\" HAXEON_CXX_THUNK_EXPORT const char *haxeon_cxx_thunk_last_error() noexcept {\n");
 		output.add("\treturn haxeon_cxx_thunk_error[0] == 0 ? nullptr : haxeon_cxx_thunk_error;\n");
 		output.add("}\n\n");
 
@@ -82,7 +87,7 @@ class CxxThunkGenerator {
 
 	static function emitFunction(output:StringBuf, functionModel:CxxFunction):Void {
 		var arguments = thunkParameterDeclarations(functionModel.parameters);
-		output.add('extern "C" ${cppType(functionModel.result)} ${functionModel.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
+		output.add('extern "C" HAXEON_CXX_THUNK_EXPORT ${cppType(functionModel.result)} ${functionModel.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
 		emitTry(output, '${functionModel.qualifiedName}(${callArguments(functionModel.parameters)})', functionModel.result);
 		output.add("}\n\n");
 	}
@@ -93,7 +98,7 @@ class CxxThunkGenerator {
 			arguments.push('${method.isConst ? "const " : ""}${record.qualifiedName} *__this');
 		arguments = arguments.concat(thunkParameterDeclarations(method.parameters));
 		var receiver = method.isStatic ? '${record.qualifiedName}::${method.name}' : '__this->${method.name}';
-		output.add('extern "C" ${cppType(method.result)} ${method.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
+		output.add('extern "C" HAXEON_CXX_THUNK_EXPORT ${cppType(method.result)} ${method.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
 		emitTry(output, '$receiver(${callArguments(method.parameters)})', method.result);
 		output.add("}\n\n");
 	}
