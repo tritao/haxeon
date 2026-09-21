@@ -36,7 +36,7 @@ esac
 	"$repo_dir/tests/ffi/cxx_span_fixture.hpp"
 
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-span-fixture.sh")
-sed -i "s#${repo_dir}/out/libcxx_span_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_span_fixture.hxi"
+"$repo_dir/scripts/replace-in-file.sh" "s#${repo_dir}/out/libcxx_span_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_span_fixture.hxi"
 grep -q 'std::span<const std::byte>(arg0, arg0__length)' "$repo_dir/out/cxx_span_generated.cpp"
 grep -q 'std::span<const std::uint8_t>(arg0, arg0__length)' "$repo_dir/out/cxx_span_generated.cpp"
 grep -q 'public function byteCount(value:haxe.io.Bytes):Int' "$repo_dir/out/cxx_span_projection/Buffer.hx"

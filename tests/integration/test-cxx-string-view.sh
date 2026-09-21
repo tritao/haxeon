@@ -36,7 +36,7 @@ esac
 	"$repo_dir/tests/ffi/cxx_string_view_fixture.hpp"
 
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-string-view-fixture.sh")
-sed -i "s#${repo_dir}/out/libcxx_string_view_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_string_view_fixture.hxi"
+"$repo_dir/scripts/replace-in-file.sh" "s#${repo_dir}/out/libcxx_string_view_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_string_view_fixture.hxi"
 grep -q 'std::string_view(arg0, arg0__length)' "$repo_dir/out/cxx_string_view_generated.cpp"
 grep -q 'public function count(value:String):Int' "$repo_dir/out/cxx_string_view_projection/Text.hx"
 grep -q 'haxe.Int64.ofInt(__cxx_value_bytes_0.length)' "$repo_dir/out/cxx_string_view_projection/Text.hx"

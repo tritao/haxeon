@@ -36,7 +36,7 @@ esac
 	"$repo_dir/tests/ffi/cxx_thunk_fixture.hpp"
 
 fixture_path=$(bash "$repo_dir/tests/integration/build-cxx-thunk-fixture.sh")
-sed -i "s#${repo_dir}/out/libcxx_thunk_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_thunk_fixture.hxi"
+"$repo_dir/scripts/replace-in-file.sh" "s#${repo_dir}/out/libcxx_thunk_fixture.so#${fixture_path}#" "$repo_dir/out/cxx_thunk_fixture.hxi"
 grep -q 'haxeon_cxx_thunk_last_error' "$repo_dir/out/cxx_thunk_generated.cpp"
 grep -q 'C++ exception' "$repo_dir/out/cxx_thunk_projection/Counter.hx"
 grep -q 'class CxxThunkFixtureFunctions' "$repo_dir/out/cxx_thunk_projection/CxxThunkFixtureFunctions.hx"

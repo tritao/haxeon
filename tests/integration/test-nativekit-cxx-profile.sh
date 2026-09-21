@@ -139,7 +139,7 @@ case "$(uname -s)" in
 			-o "$positive_library"
 		;;
 esac
-sed -i "s#${positive_dir}/libnativekit_display_list_fixture.so#${positive_library}#" "$positive_hxi"
+"$repo_dir/scripts/replace-in-file.sh" "s#${positive_dir}/libnativekit_display_list_fixture.so#${positive_library}#" "$positive_hxi"
 grep -q 'public function reset():Void' "$positive_dir/projection/DisplayList.hx"
 grep -q 'public function size():haxe.Int64' "$positive_dir/projection/DisplayList.hx"
 grep -q 'DisplayListFunctions' "$positive_dir/projection/NativeKitDisplayListFunctions.hx"
