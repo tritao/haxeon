@@ -93,6 +93,21 @@ static void haxeon_native_set_error( const char *message ) {
 	snprintf(haxeon_native_error,sizeof(haxeon_native_error),"%s",message);
 }
 
+#ifdef _WIN32
+static void haxeon_native_set_windows_load_error( const char *path ) {
+	DWORD code = GetLastError();
+	char system_message[256];
+	DWORD length = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,NULL,code,0,system_message,
+		(DWORD)sizeof(system_message),NULL);
+	if( length > 0 ) {
+		while( length > 0 && (system_message[length - 1] == '\r' || system_message[length - 1] == '\n' || system_message[length - 1] == ' ') )
+			system_message[--length] = 0;
+		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryW failed for %s (error %lu): %s",path,(unsigned long)code,system_message);
+	} else
+		snprintf(haxeon_native_error,sizeof(haxeon_native_error),"LoadLibraryW failed for %s (error %lu)",path,(unsigned long)code);
+}
+#endif
+
 static char *haxeon_native_string( const vbyte *bytes, int length ) {
 	if( bytes == NULL || length < 0 ) return NULL;
 	if( memchr(bytes,0,(size_t)length) != NULL ) return NULL;
@@ -586,7 +601,7 @@ HL_PRIM haxeon_native_library *HL_NAME(native_open)( vbyte *path_bytes, int path
 			free(wide);
 		}
 	}
-	if( handle == NULL ) haxeon_native_set_error("LoadLibraryW failed");
+	if( handle == NULL ) haxeon_native_set_windows_load_error(path);
 #else
 	dlerror();
 	handle = dlopen(path,RTLD_NOW | RTLD_LOCAL);
