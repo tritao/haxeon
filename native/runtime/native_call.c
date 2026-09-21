@@ -597,6 +597,8 @@ HL_PRIM haxeon_native_library *HL_NAME(native_open)( vbyte *path_bytes, int path
 		wchar_t *wide = (wchar_t *)malloc((size_t)wide_length * sizeof(wchar_t));
 		if( wide != NULL ) {
 			MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,path,-1,wide,wide_length);
+			for( int index = 0; wide[index] != 0; index++ )
+				if( wide[index] == L'/' ) wide[index] = L'\\';
 			DWORD flags = 0;
 			/* Native packages commonly place a thunk and its CMake-built
 			   dependency side by side. For an absolute path, search the loaded
