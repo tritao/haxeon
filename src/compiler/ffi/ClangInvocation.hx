@@ -20,6 +20,15 @@ typedef ClangInvocationOptions = {
 class ClangInvocation {
 	final options:ClangInvocationOptions;
 
+	/** Returns the target triple selected by the compiler executable itself. */
+	public static function hostTarget(clang:String = "clang++"):String {
+		var process = ProcessOutputCapture.capture(clang, ["-dumpmachine"], ProcessOutputCapture.defaultDiagnosticLimit),
+			output = StringTools.trim(process.stdout);
+		if (process.exitCode != 0 || output.length == 0)
+			throw 'Clang "$clang" could not report its host target${output.length == 0 ? "" : ":\n$output"}';
+		return StringTools.trim(output.split("\n")[0]);
+	}
+
 	public function new(options:ClangInvocationOptions) {
 		if (options.language != "c" && options.language != "c++")
 			throw 'Unsupported Clang language "${options.language}"';

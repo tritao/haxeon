@@ -5,6 +5,7 @@ import compiler.ffi.CxxProjection;
 import compiler.ffi.CxxSubsetValidator;
 import compiler.ffi.CxxThunkGenerator;
 import compiler.ffi.CxxTypeTools;
+import compiler.ffi.ClangInvocation;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -198,7 +199,7 @@ class CxxHeaderImporterMain {
 		expect(trivialText.indexOf("struct __cxx_Point @layout(8, 4)") >= 0
 			&& trivialText.indexOf("extern fn __cxx_make_point() -> __cxx_Point") >= 0,
 			"validated standard-layout records should lower by value only under the explicit trivial-value policy");
-		var hosted = CxxHeaderImporter.importHeader("tests/ffi/cxx_hosted_fixture.hpp", hostedCxxTarget(), ["tests/ffi"]);
+		var hosted = CxxHeaderImporter.importHeader("tests/ffi/cxx_hosted_fixture.hpp", ClangInvocation.hostTarget(), ["tests/ffi"]);
 		expect(hosted.model.records.length == 1
 			&& hosted.model.records[0].qualifiedName == "nkui::HostedDisplayList"
 			&& hosted.model.records[0].size > 0
@@ -449,15 +450,5 @@ class CxxHeaderImporterMain {
 	static function expect(value:Bool, message:String):Void {
 		if (!value)
 			throw message;
-	}
-
-	static function hostedCxxTarget():String {
-		var architecture = Sys.getEnv("RUNNER_ARCH");
-		return switch Sys.systemName() {
-			case "Windows": "x86_64-pc-windows-msvc";
-			case "Mac": architecture == "ARM64" ? "arm64-apple-darwin" : "x86_64-apple-darwin";
-			case "Linux": architecture == "ARM64" ? "aarch64-linux-gnu" : "x86_64-linux-gnu";
-			case _: "x86_64-linux-gnu";
-		};
 	}
 }
