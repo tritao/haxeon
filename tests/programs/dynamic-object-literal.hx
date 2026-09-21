@@ -6,5 +6,8 @@ function main():Int {
 	var seeded:Dynamic = {answer: 41};
 	Reflect.setField(seeded, "extra", 1);
 	var total = Std.int(Reflect.field(seeded, "answer")) + Std.int(Reflect.field(seeded, "extra"));
-	return total == 42 ? 42 : 2;
+	var choose = true;
+	var nested:Dynamic = {ui: choose ? {answer: total} : null};
+	var nestedValue:Dynamic = Reflect.field(Reflect.field(nested, "ui"), "answer");
+	return total == 42 && Std.int(nestedValue) == 42 ? 42 : 2;
 }

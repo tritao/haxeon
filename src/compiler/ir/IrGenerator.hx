@@ -1148,12 +1148,16 @@ class IrGenerator {
 				builder.load(objectName, objectType);
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && dynamicObjectLiterals) {
-					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn);
+					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
+						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
+					localTypes.set(objectName, IrType.Dyn);
+					builder.store(objectName, object);
 					for (field in fields) {
 						var fieldValue = lowerExpression(field.value, builder, localTypes);
-						builder.call("__reflect_set_field", [object, builder.constString(field.name), builder.toDyn(fieldValue)], Void);
+						builder.call("__reflect_set_field", [builder.load(objectName, IrType.Dyn),
+							builder.constString(field.name), builder.toDyn(fieldValue)], Void);
 					}
-					object;
+					builder.load(objectName, IrType.Dyn);
 				} else {
 					var physicalName = switch expression.type {
 						case TAnonymous(name, _): name;
