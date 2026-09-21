@@ -103,6 +103,25 @@ static char *haxeon_native_string( const vbyte *bytes, int length ) {
 	return result;
 }
 
+#ifndef _WIN32
+static void *haxeon_native_dlsym( void *handle, const char *name, const char **error ) {
+	dlerror();
+	void *symbol = dlsym(handle,name);
+	const char *loader_error = dlerror();
+#ifdef __APPLE__
+	/* dlsym's Darwin spelling adds Mach-O's object-file underscore to
+	   Itanium names that already begin with the ABI's _Z prefix. */
+	if( symbol == NULL && name != NULL && name[0] == '_' && name[1] == 'Z' ) {
+		dlerror();
+		symbol = dlsym(handle,name + 1);
+		loader_error = dlerror();
+	}
+#endif
+	if( error != NULL ) *error = loader_error;
+	return symbol;
+}
+#endif
+
 static int haxeon_native_utf8_size( const char *value );
 
 static void haxeon_native_unload( void *handle ) {
@@ -617,9 +636,8 @@ HL_PRIM haxeon_native_function *HL_NAME(native_resolve)( haxeon_native_library *
 	symbol = (void *)GetProcAddress((HMODULE)library->control->handle,symbol_name);
 	if( symbol == NULL ) haxeon_native_set_error("GetProcAddress failed");
 #else
-	dlerror();
-	symbol = dlsym(library->control->handle,symbol_name);
-	const char *loader_error = dlerror();
+	const char *loader_error = NULL;
+	symbol = haxeon_native_dlsym(library->control->handle,symbol_name,&loader_error);
 	if( loader_error != NULL ) {
 		haxeon_native_set_error(loader_error);
 		symbol = NULL;
@@ -918,8 +936,7 @@ static haxeon_native_pointer *haxeon_native_pointer_wrap_owned( void *value, hax
 #ifdef _WIN32
 	release = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
 #else
-	dlerror();
-	release = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
+	release = (void (*)(void *))haxeon_native_dlsym(entry->function->control->handle,release_name,NULL);
 #endif
 	if( release == NULL ) hl_error("Could not resolve ordinary C pointer release symbol");
 	haxeon_native_pointer *pointer = (haxeon_native_pointer *)hl_gc_alloc_finalizer(sizeof(haxeon_native_pointer));
@@ -1343,8 +1360,7 @@ static vbyte *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *s
 #ifdef _WIN32
 		release_function = (void (*)(void *))GetProcAddress((HMODULE)entry->function->control->handle,release_name);
 #else
-		dlerror();
-		release_function = (void (*)(void *))dlsym(entry->function->control->handle,release_name);
+		release_function = (void (*)(void *))haxeon_native_dlsym(entry->function->control->handle,release_name,NULL);
 #endif
 		if( release_function == NULL ) hl_error("Could not resolve ordinary C UTF-8 release symbol");
 		release_function(pointer);
@@ -1483,8 +1499,7 @@ HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
 #ifdef _WIN32
 	get_error = (haxeon_cxx_last_error_function)GetProcAddress((HMODULE)handle,"haxeon_cxx_thunk_last_error");
 #else
-	dlerror();
-	get_error = (haxeon_cxx_last_error_function)dlsym(handle,"haxeon_cxx_thunk_last_error");
+	get_error = (haxeon_cxx_last_error_function)haxeon_native_dlsym(handle,"haxeon_cxx_thunk_last_error",NULL);
 #endif
 	if( get_error == NULL ) {
 		haxeon_native_unload(handle);
