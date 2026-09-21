@@ -43,6 +43,8 @@ private typedef BuildOptions = {
 	final timings:Bool;
 	final jobs:Int;
 	final selfHosted:Bool;
+	final profile:Bool;
+	final profileOutput:Null<String>;
 }
 
 private typedef FormatOptions = {
@@ -464,6 +466,9 @@ class HaxeonCli {
 		if (options.selfHosted
 			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'The self-hosted compiler is currently available for structured host builds only';
+		if (options.profile
+			&& (!launch || !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost()))))
+			throw 'Profiling is currently available for "haxeon run" host builds only';
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
@@ -485,6 +490,10 @@ class HaxeonCli {
 						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
 			configureRuntimeLibraryPath(home, nativeDirectories);
+			if (options.profile) {
+				var capture = options.profileOutput == null ? defaultProfileCapture(output) : resolvePath(options.profileOutput, project.root);
+				return runProfiled(home, output, options.runtimeArguments, project.root, capture);
+			}
 			Sys.println('Launching $output');
 			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, new Map());
 		}
@@ -552,6 +561,92 @@ class HaxeonCli {
 		configureRuntimeLibraryPath(home);
 		Sys.println('Launching $output');
 		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
+	}
+
+	static function defaultProfileCapture(output:String):String {
+		var directory = Path.join([Path.directory(output), "profile"]);
+		ensureDirectory(directory);
+		return Path.join([directory, 'profile-${Std.int(Date.now().getTime())}.hlpc']);
+	}
+
+	static function allocateDiagnosticsPort():Int {
+		for (_ in 0...20) {
+			var port = 20000 + Std.random(40000),
+				socket = new sys.net.Socket();
+			try {
+				socket.bind(new sys.net.Host("127.0.0.1"), port);
+				socket.close();
+				return port;
+			} catch (_:Dynamic) {
+				socket.close();
+			}
+		}
+		throw "Could not find a free diagnostics port for profiling";
+	}
+
+	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
+		sys.thread.Thread.create(function() {
+			try {
+				var bytes = haxe.io.Bytes.alloc(8192),
+					count = input.readBytes(bytes, 0, bytes.length);
+				while (count > 0) {
+					output.writeBytes(bytes, 0, count);
+					output.flush();
+					count = input.readBytes(bytes, 0, bytes.length);
+				}
+			} catch (_:Dynamic) {}
+			done.release();
+		});
+	}
+
+	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String):Int {
+		var suffix = executableSuffix(),
+			runtime = Path.join([home, ".tools", "hashlink", "hl" + suffix]),
+			profiler = Path.join([home, ".tools", "hashlink", "hlprof-live" + suffix]);
+		if (!FileSystem.exists(runtime))
+			throw 'HashLink is missing: $runtime (run scripts/bootstrap-tools.sh)';
+		if (!FileSystem.exists(profiler))
+			throw 'hlprof-live is missing: $profiler (rebuild the native runtime)';
+		ensureDirectory(Path.directory(capture));
+		var port = allocateDiagnosticsPort(), done = new sys.thread.Lock(), readers = 0,
+			app = new sys.io.Process(runtime, ["--diagnostics", Std.string(port), "--diagnostics-wait", output].concat(runtimeArguments));
+		pumpProcessOutput(app.stdout, Sys.stdout(), done);
+		pumpProcessOutput(app.stderr, Sys.stderr(), done);
+		readers += 2;
+		Sys.println('Profiling $output -> $capture (diagnostics port $port)');
+		var profilerProcess = new sys.io.Process(profiler, [
+			"--connect-timeout",
+			"15",
+			"--rate",
+			"1000",
+			"--alloc-interval",
+			"65536",
+			"--interval",
+			"2000",
+			"--top",
+			"40",
+			"--output",
+			capture,
+			Std.string(port)
+		]);
+		pumpProcessOutput(profilerProcess.stdout, Sys.stdout(), done);
+		pumpProcessOutput(profilerProcess.stderr, Sys.stderr(), done);
+		readers += 2;
+		var profilerStatus = profilerProcess.exitCode();
+		profilerProcess.close();
+		if (profilerStatus != 0)
+			app.kill();
+		var runtimeStatus = app.exitCode();
+		app.close();
+		for (_ in 0...readers)
+			done.wait();
+		Sys.stdout().flush();
+		Sys.stderr().flush();
+		if (profilerStatus != 0)
+			throw 'Profiler capture did not finalize cleanly (status $profilerStatus)';
+		Sys.println('Capture: $capture');
+		ProcessRunner.run(profiler, ["report", "--top", "40", capture], projectDirectory, new Map());
+		return runtimeStatus;
 	}
 
 	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String, nativeRoot:String):Int {
@@ -687,7 +782,8 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4, selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1";
+			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4, selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
+			profile = false, profileOutput:Null<String> = null;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -703,7 +799,14 @@ class HaxeonCli {
 				timings = true;
 			else if (argument == "--self-hosted")
 				selfHosted = true;
-			else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
+			else if (argument == "--profile")
+				profile = true;
+			else if (argument == "--profile-output") {
+				if (index >= arguments.length)
+					throw 'Option "--profile-output" requires a value';
+				profileOutput = arguments[index++];
+				profile = true;
+			} else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
@@ -741,7 +844,10 @@ class HaxeonCli {
 				jobs = parsedJobs;
 			} else if (StringTools.startsWith(argument, "--define="))
 				defines.push(argument.substr("--define=".length));
-			else
+			else if (StringTools.startsWith(argument, "--profile-output=")) {
+				profileOutput = argument.substr("--profile-output=".length);
+				profile = true;
+			} else
 				throw 'Unknown build option "$argument"';
 		}
 		if (projectPath.length == 0)
@@ -757,7 +863,9 @@ class HaxeonCli {
 			explain: explain,
 			timings: timings,
 			jobs: jobs,
-			selfHosted: selfHosted
+			selfHosted: selfHosted,
+			profile: profile,
+			profileOutput: profileOutput
 		};
 	}
 
@@ -1083,6 +1191,8 @@ class HaxeonCli {
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
+		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
+		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");
 		Sys.println("  --output PATH                  Override the build output path");
