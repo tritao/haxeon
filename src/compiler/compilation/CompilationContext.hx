@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.Compiler;
+import compiler.Compiler.ReachabilityCache;
 import compiler.syntax.Ast.AstFunction;
 import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
@@ -102,6 +103,23 @@ class CompilationContext {
 
 	public function clearRehydrationBaseline():Void
 		owner.rehydrationBaseline = null;
+
+	public function cachedReachability(entry:String):Null<ReachabilityCache>
+		return owner.reachabilityCache.get(entry);
+
+	public function cacheReachability(entry:String, names:Array<String>, initializationClasses:Array<String>):Void {
+		var dependencyKeys:Map<String, String> = [];
+		for (name in names) {
+			var state = modules.get(name);
+			if (state != null)
+				dependencyKeys.set(name, state.dependencies.join("\x00"));
+		}
+		owner.reachabilityCache.set(entry, {
+			names: names.copy(),
+			dependencyKeys: dependencyKeys,
+			initializationClasses: initializationClasses.copy()
+		});
+	}
 
 	public static function mapIsEmpty(values:Map<String, Bool>):Bool
 		return Compiler.mapIsEmpty(values);

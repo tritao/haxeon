@@ -150,6 +150,12 @@ typedef ValidationResult = {
 	final diagnostic:Null<Diagnostic>;
 }
 
+typedef ReachabilityCache = {
+	final names:Array<String>;
+	final dependencyKeys:Map<String, String>;
+	final initializationClasses:Array<String>;
+}
+
 /** Semantic analysis completed without runtime artifact assembly or publication. */
 typedef AnalysisResult = {
 	final moduleNames:Array<String>;
@@ -204,6 +210,7 @@ class Compiler {
 	var cachedCompileEntry:Null<String>;
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
+	var reachabilityCache:Map<String, ReachabilityCache> = [];
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration) {
 		semanticWorkspace = new SemanticWorkspace(modules);
@@ -728,6 +735,7 @@ class Compiler {
 		candidate.compiledOnce = snapshot.compiledOnce;
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
 		candidate.cachedSemanticProgram = snapshot.semanticProgram;
+		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
 		candidate.genericSpecializations = genericSpecializations.copy();
 		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
 		return candidate;
@@ -745,6 +753,7 @@ class Compiler {
 		compiledOnce = candidate.compiledOnce;
 		rehydrationBaseline = candidate.rehydrationBaseline;
 		cachedSemanticProgram = candidate.cachedSemanticProgram;
+		reachabilityCache = candidate.reachabilityCache;
 		assembler = candidate.assembler;
 		genericSpecializations = candidate.genericSpecializations;
 		graph.rebuild(modules);
@@ -782,6 +791,17 @@ class Compiler {
 					return false;
 		}
 		return true;
+	}
+
+	static function copyReachabilityCache(source:Map<String, ReachabilityCache>):Map<String, ReachabilityCache> {
+		var result:Map<String, ReachabilityCache> = [];
+		for (entry => cached in source)
+			result.set(entry, {
+				names: cached.names.copy(),
+				dependencyKeys: [for (name => key in cached.dependencyKeys) name => key],
+				initializationClasses: cached.initializationClasses.copy()
+			});
+		return result;
 	}
 
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {

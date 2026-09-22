@@ -45,25 +45,50 @@ class FrontendCompilation {
 		var bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],
 			structuralChanged:Map<String, Bool> = [];
-		var reachability = new ModuleReachability(modules, entryModule);
-		while (reachability.hasNext(token)) {
-			var reachableState = reachability.next();
-			if (reachableState.ast == null) {
-				reachableState = context.writableState(reachableState.name, rollbackModules);
-				context.parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
-				context.addTypeDependencies(reachableState);
+		var names:Array<String> = [],
+			initializationClasses:Array<String> = [],
+			cachedReachability = context.cachedReachability(entryModule),
+			reuseGraph = cachedReachability != null;
+		if (cachedReachability != null)
+			for (name in cachedReachability.names) {
+				var state = modules.get(name);
+				if (state == null) {
+					reuseGraph = false;
+					break;
+				}
+				if (state.ast == null) {
+					state = context.writableState(name, rollbackModules);
+					context.parse(state, entryModule, bodyChanged, signatureChanged, structuralChanged);
+					context.addTypeDependencies(state);
+				}
+				if (cachedReachability.dependencyKeys.get(name) != state.dependencies.join("\x00"))
+					reuseGraph = false;
 			}
-			reachability.includeDependencies(reachableState);
-		}
-		var names = reachability.finish(token);
-		graph.rebuild(modules);
-		var initializationNames = graph.initializationOrder(modules, names),
-			initializationClasses:Array<String> = [];
-		for (name in initializationNames) {
-			var state = modules.get(name);
-			var ast = state.parsedAst();
-			for (classDecl in ast.classes)
-				initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
+		if (!CompilationContext.mapIsEmpty(structuralChanged))
+			reuseGraph = false;
+		if (reuseGraph && cachedReachability != null) {
+			names = cachedReachability.names.copy();
+			initializationClasses = cachedReachability.initializationClasses.copy();
+		} else {
+			var reachability = new ModuleReachability(modules, entryModule);
+			while (reachability.hasNext(token)) {
+				var reachableState = reachability.next();
+				if (reachableState.ast == null) {
+					reachableState = context.writableState(reachableState.name, rollbackModules);
+					context.parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
+					context.addTypeDependencies(reachableState);
+				}
+				reachability.includeDependencies(reachableState);
+			}
+			names = reachability.finish(token);
+			graph.rebuild(modules);
+			var initializationNames = graph.initializationOrder(modules, names);
+			for (name in initializationNames) {
+				var state = modules.get(name), ast = state.parsedAst();
+				for (classDecl in ast.classes)
+					initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
+			}
+			context.cacheReachability(entryModule, names, initializationClasses);
 		}
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 

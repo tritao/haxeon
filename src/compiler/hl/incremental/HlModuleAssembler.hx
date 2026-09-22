@@ -8,6 +8,7 @@ import compiler.hl.HlFunction;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
+import compiler.ir.Ir.IrNative;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
 typedef HlAssemblerState = {
@@ -50,6 +51,7 @@ class HlModuleAssembler {
 	var publishedStrings = 0;
 	var publishedTypes = 0;
 	var loweredFunctions:Map<String, HlFunction> = [];
+	var runtimeNatives:Array<IrNative> = [];
 
 	public function new(?stableIds:Map<String, Int>) {
 		cache = new HlFunctionCache(stableIds);
@@ -66,6 +68,7 @@ class HlModuleAssembler {
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
 		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
+		result.runtimeNatives = runtimeNatives.copy();
 		return result;
 	}
 
@@ -142,7 +145,8 @@ class HlModuleAssembler {
 			case Patch: true;
 			case ReloadDomain(_), Reject(_): false;
 		};
-		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated);
+		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && runtimeNatives.length > 0 ? runtimeNatives : null, reuseLowered && runtimeNatives.length > 0 ? regenerated : null);
+		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated, runtimeNatives);
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
 			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);

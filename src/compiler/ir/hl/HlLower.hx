@@ -32,6 +32,7 @@ class HlLower {
 	final enumTypeIndices:Map<String, Int> = [];
 	final cNatives:Map<String, IrCNative> = [];
 	final cDispatchNatives:Array<IrNative> = [];
+	final preparedRuntimeNatives:Null<Array<IrNative>>;
 
 	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
@@ -44,7 +45,7 @@ class HlLower {
 	}
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>):HlCode {
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>):HlCode {
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
 		else {
@@ -61,7 +62,7 @@ class HlLower {
 					selected.set(fn.name, true);
 			IrVerifier.verifyFunctions(program, selected);
 		}
-		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated).lowerProgram(program);
+		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives).lowerProgram(program);
 	}
 
 	final stableIds:Null<Map<String, Int>>;
@@ -69,10 +70,11 @@ class HlLower {
 	final regenerated:Map<String, Bool> = [];
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
-			?regenerated:Array<String>) {
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>) {
 		this.symbols = symbols;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
+		this.preparedRuntimeNatives = runtimeNatives;
 		if (regenerated != null)
 			for (name in regenerated)
 				this.regenerated.set(name, true);
@@ -88,22 +90,8 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var runtimeNatives = program.natives.copy(),
+		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy(),
 			dispatchArities:Map<String, Bool> = [];
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case PointerOffset(_, _, _):
-							ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std", "bytes_offset");
-						case IteratorNew(_, _):
-							ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
-						case IteratorHasNext(_, _):
-							ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
-						case IteratorNext(_, _):
-							ensureNative(runtimeNatives, "__iterator_next", [IrType.Abstract("realtime_iterator")], IrType.Dyn);
-						default:
-					}
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
@@ -142,6 +130,35 @@ class HlLower {
 				});
 			}
 		}
+		lowerProgramWithNatives(program, runtimeNatives);
+		return code;
+	}
+
+	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>, ?selected:Array<String>):Array<IrNative> {
+		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
+			selectedNames:Map<String, Bool> = [];
+		if (selected != null)
+			for (name in selected)
+				selectedNames.set(name, true);
+		for (fn in program.functions)
+			if (selected == null || selectedNames.exists(fn.name))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case PointerOffset(_, _, _):
+								ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std", "bytes_offset");
+							case IteratorNew(_, _):
+								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
+							case IteratorHasNext(_, _):
+								ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
+							case IteratorNext(_, _):
+								ensureNative(runtimeNatives, "__iterator_next", [IrType.Abstract("realtime_iterator")], IrType.Dyn);
+							default:
+						}
+		return runtimeNatives;
+	}
+
+	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
 		var hasFunctionIndices = false;
 		for (_ in functionIndices)
 			hasFunctionIndices = true;
@@ -285,7 +302,6 @@ class HlLower {
 		code.strings = code.strings.copy();
 		code.types = code.types.copy();
 		code.globals = code.globals.copy();
-		return code;
 	}
 
 	static function collectSourcePaths(fn:IrFunction, target:Map<String, Bool>):Void {
