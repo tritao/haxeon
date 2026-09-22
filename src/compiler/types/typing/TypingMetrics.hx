@@ -1,8 +1,10 @@
 package compiler.types.typing;
 
 import compiler.types.TypedAst.TypedProgram;
+import compiler.compilation.AllocationMeter.PhaseAllocation;
 
 typedef TyperPhaseMetrics = {
+	final allocationPhases:Array<PhaseAllocation>;
 	final declarationMs:Float;
 	final shapeConnectionMs:Float;
 	final signatureTypingMs:Float;

@@ -130,6 +130,8 @@ class FrontendCompilation {
 			entryPoint = semanticAssembly.entryPoint;
 		var frontendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSemantic = AllocationMeter.sample();
+		var allocationAfterAnalysis = allocationAfterSemantic;
+		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		try {
 			if (token != null)
@@ -144,8 +146,10 @@ class FrontendCompilation {
 				semantic = previousSemantic.replaceBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
+			allocationAfterAnalysis = AllocationMeter.sample();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null);
+			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
@@ -182,9 +186,11 @@ class FrontendCompilation {
 				}
 			}
 		}
+		var allocationAfterIndexRebuild = AllocationMeter.sample();
 		var retyped = [], regenerated = [];
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);
+		var allocationAfterObjects = AllocationMeter.sample();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
 			generatedFunctions:Map<String, Bool> = [];
@@ -234,10 +240,12 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
+		var allocationAfterFunctions = AllocationMeter.sample();
 		if (indexSemantics) {
 			indexTypedInitializers(context, typedNew, reindexedModules);
 			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
 		}
+		var allocationAfterIndexPublication = AllocationMeter.sample();
 		var functionNamesByModule:Map<String, Array<String>> = [];
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
@@ -253,6 +261,7 @@ class FrontendCompilation {
 		for (module in touchedModules.keys())
 			if (modules.exists(module))
 				modules.get(module).typeVersion++;
+		var allocationBeforeModulePrune = AllocationMeter.sample();
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -273,18 +282,28 @@ class FrontendCompilation {
 			// An unchanged caller can retain a call to a generated specialization.
 			// Such bodies are absent from this request's typedNew, but must survive
 			// pruning as long as their source origin still exists and is unchanged.
+			var retainedSpecializations:Map<String, Bool> = [];
+			var hasRetainedSpecializations = false;
 			for (cached => fn in state.typedFunctions) {
 				var origin = fn.genericOrigin;
 				if (origin != null && owners.exists(origin) && !selected.exists(origin)) {
 					valid.set(cached, true);
 					owners.set(cached, name);
-					for (nested in state.typedFunctions.keys())
-						if (StringTools.startsWith(nested, "$lambda:" + cached + ":")) {
-							valid.set(nested, true);
-							owners.set(nested, name);
-						}
+					retainedSpecializations.set(cached, true);
+					hasRetainedSpecializations = true;
 				}
 			}
+			if (hasRetainedSpecializations)
+				for (nested in state.typedFunctions.keys()) {
+					if (!StringTools.startsWith(nested, "$lambda:"))
+						continue;
+					for (specialization in retainedSpecializations.keys())
+						if (StringTools.startsWith(nested, "$lambda:" + specialization + ":")) {
+							valid.set(nested, true);
+							owners.set(nested, name);
+							break;
+						}
+				}
 			if (lowerToIr)
 				for (pending in state.pendingIrFunctions.keys())
 					valid.set(pending, true);
@@ -314,7 +333,9 @@ class FrontendCompilation {
 				}
 			}
 		}
+		var allocationAfterModulePrune = AllocationMeter.sample();
 		retyped.sort(Reflect.compare);
+		var allocationAfterPrune = AllocationMeter.sample();
 		if (lowerToIr)
 			for (name in names) {
 				if (!modules.exists(name))
@@ -346,8 +367,21 @@ class FrontendCompilation {
 		var allocationPhases = [
 			AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph),
 			AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic),
-			AllocationMeter.delta("typing-lowering", allocationAfterSemantic, allocationAfterTyping)
+			AllocationMeter.delta("typing-lowering", allocationAfterSemantic, allocationAfterTyping),
+			AllocationMeter.delta("semantic-analysis", allocationAfterSemantic, allocationAfterAnalysis),
+			AllocationMeter.delta("program-typing", allocationAfterAnalysis, allocationAfterProgramTyping),
+			AllocationMeter.delta("typing-publication", allocationAfterProgramTyping, allocationAfterTyping),
+			AllocationMeter.delta("publication-index-rebuild", allocationAfterProgramTyping, allocationAfterIndexRebuild),
+			AllocationMeter.delta("publication-objects", allocationAfterIndexRebuild, allocationAfterObjects),
+			AllocationMeter.delta("publication-functions", allocationAfterObjects, allocationAfterFunctions),
+			AllocationMeter.delta("publication-index", allocationAfterFunctions, allocationAfterIndexPublication),
+			AllocationMeter.delta("publication-prune", allocationAfterIndexPublication, allocationAfterPrune),
+			AllocationMeter.delta("publication-prune-setup", allocationAfterIndexPublication, allocationBeforeModulePrune),
+			AllocationMeter.delta("publication-prune-modules", allocationBeforeModulePrune, allocationAfterModulePrune),
+			AllocationMeter.delta("publication-pending-ir", allocationAfterPrune, allocationAfterTyping)
 		];
+		for (phase in typerMetrics.allocationPhases)
+			allocationPhases.push(phase);
 		if (!lowerToIr)
 			return {
 				ir: null,

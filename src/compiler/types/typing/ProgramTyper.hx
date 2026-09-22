@@ -23,6 +23,7 @@ import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
+import compiler.compilation.AllocationMeter;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
 class ProgramTyper {
@@ -40,6 +41,7 @@ class ProgramTyper {
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
 			?cachedMetadata:TypedProgram):MeasuredTypedProgram {
+		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
@@ -99,8 +101,10 @@ class ProgramTyper {
 				case HashLinkNative:
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
+		var allocationAfterSetup = AllocationMeter.sample();
 		bodyTyper.inferNoReturnFunctions();
 		var noReturnDoneAt = Sys.time() * 1000.0;
+		var allocationAfterNoReturn = AllocationMeter.sample();
 		if (requireMain) {
 			var main:AstFunction;
 			if (entryPoint != null && session.signatures.exists(entryPoint))
@@ -177,6 +181,7 @@ class ProgramTyper {
 		else
 			bindCachedNativeLayouts(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
+		var allocationAfterMetadata = AllocationMeter.sample();
 		for (fn in program.functions)
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
 				typedFunctions.push(bodyTyper.typeFunction(fn));
@@ -199,17 +204,28 @@ class ProgramTyper {
 			typedFunctions.push(codec);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
+		var allocationAfterBodies = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
 		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives);
 		var assemblyDoneAt = Sys.time() * 1000.0;
+		var allocationAfterAssembly = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(Finalized);
 		var finalizationDoneAt = Sys.time() * 1000.0;
 		var typedRuntimeDependencies = assembler.runtimeDependencies();
+		var allocationAfterFinalize = AllocationMeter.sample();
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
 			metrics: {
+				allocationPhases: [
+					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
+					AllocationMeter.delta("typer-no-return", allocationAfterSetup, allocationAfterNoReturn),
+					AllocationMeter.delta("typer-metadata", allocationAfterNoReturn, allocationAfterMetadata),
+					AllocationMeter.delta("typer-bodies", allocationAfterMetadata, allocationAfterBodies),
+					AllocationMeter.delta("typer-assembly", allocationAfterBodies, allocationAfterAssembly),
+					AllocationMeter.delta("typer-finalize", allocationAfterAssembly, allocationAfterFinalize)
+				],
 				declarationMs: semantic.lifecycleMetrics.declarationMs,
 				shapeConnectionMs: semantic.lifecycleMetrics.shapeConnectionMs,
 				signatureTypingMs: semantic.lifecycleMetrics.signatureTypingMs,
