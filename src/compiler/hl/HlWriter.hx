@@ -60,6 +60,31 @@ class HlWriter {
 		prepareDebugFiles(code);
 		if (cache != null)
 			cache.prepare(debugFiles);
+		var prefix = cache == null ? null : cache.getPrefix(code);
+		if (prefix == null) {
+			var prefixWriter = new HlWriter();
+			prefixWriter.hasDebug = hasDebug;
+			prefixWriter.debugFiles = debugFiles;
+			prefixWriter.debugFileIndices = debugFileIndices;
+			prefixWriter.writePrefix(code);
+			prefix = prefixWriter.output.getBytes();
+			if (cache != null)
+				cache.setPrefix(code, prefix);
+		}
+		output.write(prefix);
+		for (fn in code.functions) {
+			var encoded = cache == null ? null : cache.get(fn);
+			if (encoded == null) {
+				encoded = encodePreparedFunction(fn);
+				if (cache != null)
+					cache.set(fn, encoded);
+			}
+			output.write(encoded);
+		}
+		writeDebugSections(code);
+	}
+
+	function writePrefix(code:HlCode):Void {
 		output.writeString("HLB");
 		output.writeByte(HlCode.VERSION);
 		writeUnsignedIndex(hasDebug ? 1 : 0);
@@ -96,16 +121,6 @@ class HlWriter {
 			writeIndex(native.type);
 			writeUnsignedIndex(native.functionIndex);
 		}
-		for (fn in code.functions) {
-			var encoded = cache == null ? null : cache.get(fn);
-			if (encoded == null) {
-				encoded = encodePreparedFunction(fn);
-				if (cache != null)
-					cache.set(fn, encoded);
-			}
-			output.write(encoded);
-		}
-		writeDebugSections(code);
 	}
 
 	function encodePreparedFunction(fn:HlFunction):HaxeBytes {

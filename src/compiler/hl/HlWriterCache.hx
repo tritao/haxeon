@@ -9,6 +9,15 @@ class HlWriterCache {
 	var functions:ObjectMap<HlFunction, Bytes> = new ObjectMap();
 	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
 	var validatedSnapshots:ObjectMap<Bytes, Int> = new ObjectMap();
+	var prefix:Null<Bytes>;
+	var prefixInts:Dynamic;
+	var prefixFloats:Dynamic;
+	var prefixStrings:Dynamic;
+	var prefixTypes:Dynamic;
+	var prefixGlobals:Dynamic;
+	var prefixNativeKey = "";
+	var prefixFunctions = -1;
+	var prefixEntryPoint = -1;
 
 	public function new() {}
 
@@ -18,6 +27,7 @@ class HlWriterCache {
 		debugFiles = files.copy();
 		functions = new ObjectMap();
 		validatedFunctions = new ObjectMap();
+		prefix = null;
 	}
 
 	public function get(fn:HlFunction):Null<Bytes>
@@ -37,6 +47,34 @@ class HlWriterCache {
 
 	public function markSnapshotValidated(content:Bytes, sourceHash:Int):Void
 		validatedSnapshots.set(content, sourceHash);
+
+	public function getPrefix(code:HlCode):Null<Bytes> {
+		var nativeKey = [
+			for (native in code.natives) '${native.library}:${native.name}:${native.type}:${native.functionIndex}'
+		].join("|");
+		return prefixInts == code.ints
+			&& prefixFloats == code.floats
+			&& prefixStrings == code.strings
+			&& prefixTypes == code.types
+			&& prefixGlobals == code.globals
+			&& prefixNativeKey == nativeKey
+			&& prefixFunctions == code.functions.length
+			&& prefixEntryPoint == code.entryPoint ? prefix : null;
+	}
+
+	public function setPrefix(code:HlCode, bytes:Bytes):Void {
+		prefix = bytes;
+		prefixInts = code.ints;
+		prefixFloats = code.floats;
+		prefixStrings = code.strings;
+		prefixTypes = code.types;
+		prefixGlobals = code.globals;
+		prefixNativeKey = [
+			for (native in code.natives) '${native.library}:${native.name}:${native.type}:${native.functionIndex}'
+		].join("|");
+		prefixFunctions = code.functions.length;
+		prefixEntryPoint = code.entryPoint;
+	}
 
 	static function sameStrings(left:Array<String>, right:Array<String>):Bool {
 		if (left.length != right.length)
