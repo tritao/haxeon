@@ -2,6 +2,8 @@ package compiler.hl;
 
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
+import haxe.io.Output;
+import sys.io.File;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
@@ -23,37 +25,64 @@ class HlWriter {
 	public static inline final OPCODE_SOURCE_SPANS = 2;
 	public static inline final SOURCE_SNAPSHOTS = 3;
 
-	final output:BytesOutput;
+	final output:Output;
+	final bytesOutput:Null<BytesOutput>;
 	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
 
-	public function new(?cache:HlWriterCache) {
+	public function new(?cache:HlWriterCache, ?destination:Output) {
 		this.cache = cache;
-		output = new BytesOutput();
+		bytesOutput = destination == null ? new BytesOutput() : null;
+		output = destination == null ? bytesOutput : destination;
 		output.bigEndian = false;
+	}
+
+	function getBytes():HaxeBytes {
+		if (bytesOutput == null)
+			throw "HashLink writer has no byte buffer";
+		return bytesOutput.getBytes();
 	}
 
 	public static function encode(code:HlCode, ?cache:HlWriterCache):HaxeBytes {
 		HlValidator.validate(code, cache);
 		var writer = new HlWriter(cache);
 		writer.writeCode(code);
-		return writer.output.getBytes();
+		return writer.getBytes();
+	}
+
+	/** Write a module directly to an output without building a second module-sized buffer. */
+	public static function writeTo(code:HlCode, destination:Output, ?cache:HlWriterCache):Void {
+		HlValidator.validate(code, cache);
+		new HlWriter(cache, destination).writeCode(code);
+	}
+
+	/** Validate before opening the destination, preserving an older file on validation failure. */
+	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void {
+		HlValidator.validate(code, cache);
+		var destination = File.write(path, true);
+		try {
+			new HlWriter(cache, destination).writeCode(code);
+		} catch (error:Dynamic) {
+			destination.close();
+			throw error;
+		}
+		destination.close();
 	}
 
 	/** Public because index encoding is part of the HLB format contract. */
 	public static function encodeIndex(value:Int):HaxeBytes {
 		var writer = new HlWriter();
 		writer.writeIndex(value);
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	/** Encodes one function using its canonical HLB function representation. */
 	public static function encodeFunction(fn:HlFunction):HaxeBytes {
 		var writer = new HlWriter();
 		writer.writeFunction(fn);
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	function writeCode(code:HlCode):Void {
@@ -67,7 +96,7 @@ class HlWriter {
 			prefixWriter.debugFiles = debugFiles;
 			prefixWriter.debugFileIndices = debugFileIndices;
 			prefixWriter.writePrefix(code);
-			prefix = prefixWriter.output.getBytes();
+			prefix = prefixWriter.getBytes();
 			if (cache != null)
 				cache.setPrefix(code, prefix);
 		}
@@ -129,7 +158,7 @@ class HlWriter {
 		writer.debugFiles = debugFiles;
 		writer.debugFileIndices = debugFileIndices;
 		writer.writeFunction(fn);
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	function writeDebugSections(code:HlCode):Void {
@@ -159,7 +188,7 @@ class HlWriter {
 			writer.writeUnsignedIndex(identity.line);
 			writer.writeUnsignedIndex(identity.flags);
 		}
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	public static function encodeOpcodeSourceSpans(spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>):HaxeBytes {
@@ -218,7 +247,7 @@ class HlWriter {
 				writer.writeUnsignedIndex(span.flags);
 			}
 		}
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	/** Encode mappings that lowering already keeps grouped by stable function identity. */
@@ -279,7 +308,7 @@ class HlWriter {
 				writer.writeUnsignedIndex(span.flags);
 			}
 		}
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):HaxeBytes {
@@ -296,7 +325,7 @@ class HlWriter {
 			writer.writeUnsignedIndex(snapshot.content.length);
 			writer.output.write(snapshot.content);
 		}
-		return writer.output.getBytes();
+		return writer.getBytes();
 	}
 
 	function writeSizedString(value:String):Void {

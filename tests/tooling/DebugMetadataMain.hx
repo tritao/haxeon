@@ -2,6 +2,7 @@ import compiler.Frontend;
 import compiler.Source.SourceFile;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter;
+import compiler.hl.HlWriterCache;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.IrFunction;
@@ -91,6 +92,13 @@ class DebugMetadataMain {
 			throw "HLB function identity and opcode source-span sections were not emitted";
 		if (bytes.compare(HlWriter.encode(code)) != 0)
 			throw "HLB debug section encoding is not deterministic";
+		var writerCache = new HlWriterCache();
+		for (_ in 0...2) {
+			var streamed = new BytesOutput();
+			HlWriter.writeTo(code, streamed, writerCache);
+			if (bytes.compare(streamed.getBytes()) != 0)
+				throw "Streamed HLB encoding differs from canonical bytes";
+		}
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");

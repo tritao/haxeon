@@ -40,7 +40,7 @@ class CompilerDriver {
 				case "wasmgc", "wasm-gc": WasmGc;
 				default: HashLink;
 			},
-			outputBytes:Bytes,
+			outputBytes:Null<Bytes> = null,
 			outputIndices:Null<Map<String, Int>> = null;
 		if (isWasm) {
 			var backend:Backend = new WasmBackend(),
@@ -56,12 +56,16 @@ class CompilerDriver {
 				});
 			outputBytes = backendResult.bytes;
 		} else {
-			outputBytes = session == null ? HlWriter.encode(result.module) : session.encodeHashLink(result.module);
+			if (session == null)
+				HlWriter.writeFile(result.module, request.output);
+			else
+				session.writeHashLink(result.module, request.output);
 			outputIndices = result.functionIndices;
 		}
 		var backendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterEncode = AllocationMeter.sample();
-		File.saveBytes(request.output, outputBytes);
+		if (isWasm)
+			File.saveBytes(request.output, outputBytes);
 		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
 		if (!isWasm)

@@ -38,6 +38,9 @@ class CompilerSession {
 	public function encodeHashLink(code:HlCode):haxe.io.Bytes
 		return HlWriter.encode(code, writerCache);
 
+	public function writeHashLink(code:HlCode, path:String):Void
+		HlWriter.writeFile(code, path, writerCache);
+
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
 		var interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}],
 			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}],
