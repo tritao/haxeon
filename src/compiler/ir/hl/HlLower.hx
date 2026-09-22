@@ -33,9 +33,13 @@ class HlLower {
 	final cNatives:Map<String, IrCNative> = [];
 	final cDispatchNatives:Array<IrNative> = [];
 
-	public static function lower(program:IrProgram):HlCode {
+	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
-		return new HlLower(new HlSymbolTable(), null).lowerProgram(program);
+		var lowerer = new HlLower(new HlSymbolTable(), null), code = lowerer.lowerProgram(program);
+		if (indices != null)
+			for (name => index in lowerer.functionIndices)
+				indices.set(name, index);
+		return code;
 	}
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>):HlCode {

@@ -31,6 +31,25 @@ run_cli build --project "$project_dir/app/haxeon.json"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 second_output=$(run_cli build --project "$project_dir/app/haxeon.json")
 [[ "$second_output" == *"native-cmake-configure:foo"*"clean (fingerprint match)"* ]]
-[[ "$second_output" == *"native-cmake-build:foo"*"clean (fingerprint match)"* ]]
+[[ "$second_output" == *"Built target foo"* ]]
+[[ "$second_output" == *"compile-project:"*"clean (fingerprint match)"* ]]
+# CMake owns implementation/header dependencies, even without native.cmake.inputs.
+printf '%s\n' '#define VALUE 43' > "$project_dir/foo/native/value.h"
+printf '%s\n' '#include "value.h"' 'int foo_value(void) { return VALUE; }' > "$project_dir/foo/native/foo.c"
+changed_output=$(run_cli build --project "$project_dir/app/haxeon.json")
+[[ "$changed_output" == *"compile-project:"*"clean (fingerprint match)"* ]]
+python3 - "$project_dir/app/build/host/native/foo/foo.hdll" <<'PYTEST'
+import ctypes, sys
+assert ctypes.CDLL(sys.argv[1]).foo_value() == 43
+PYTEST
+printf '%s\n' '#define VALUE 47' > "$project_dir/foo/native/value.h"
+run_cli build --project "$project_dir/app/haxeon.json"
+python3 - "$project_dir/app/build/host/native/foo/foo.hdll" <<'PYTEST'
+import ctypes, sys
+assert ctypes.CDLL(sys.argv[1]).foo_value() == 47
+PYTEST
+rm "$project_dir/app/build/host/native/foo/foo.hdll"
+run_cli build --project "$project_dir/app/haxeon.json"
+test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 
 echo "PASS: CMake native provider configures and builds a coarse package target"

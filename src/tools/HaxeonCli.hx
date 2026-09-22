@@ -445,9 +445,9 @@ class HaxeonCli {
 		if (projectDirectory == "")
 			projectDirectory = Sys.getCwd();
 		var requestedTarget:Null<Target> = options.target == null ? null : Target.parse(options.target),
-			resolveStarted = Date.now().getTime(),
+			resolveStarted = Sys.time() * 1000.0,
 			project = discoverProject(projectConfigPath, requestedTarget),
-			resolutionMs = Date.now().getTime() - resolveStarted,
+			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
 		if (launch && targetInfo.isWasm())

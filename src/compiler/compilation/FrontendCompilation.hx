@@ -204,6 +204,21 @@ class FrontendCompilation {
 				for (lambdaName in lambdaNames.keys())
 					valid.set(lambdaName, true);
 			}
+			// An unchanged caller can retain a call to a generated specialization.
+			// Such bodies are absent from this request's typedNew, but must survive
+			// pruning as long as their source origin still exists and is unchanged.
+			for (cached => fn in state.typedFunctions) {
+				var origin = fn.genericOrigin;
+				if (origin != null && owners.exists(origin) && !selected.exists(origin)) {
+					valid.set(cached, true);
+					owners.set(cached, name);
+					for (nested in state.typedFunctions.keys())
+						if (StringTools.startsWith(nested, "$lambda:" + cached + ":")) {
+							valid.set(nested, true);
+							owners.set(nested, name);
+						}
+				}
+			}
 			if (lowerToIr)
 				for (pending in state.pendingIrFunctions.keys())
 					valid.set(pending, true);

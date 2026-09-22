@@ -18,7 +18,7 @@ class HaxeonProjectBuild {
 		timings.add("resolve", resolutionMs);
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, project.manifest.outputDir]), BuildProfile.Release),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
-			lowerStarted = Date.now().getTime(),
+			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted));
 		timings.addElapsed("plan and lower", lowerStarted);
 		if (planOnly) {

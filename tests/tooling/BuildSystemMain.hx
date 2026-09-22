@@ -50,6 +50,7 @@ class BuildSystemMain {
 		#end
 		testFingerprintsAndSkipping();
 		testArtifactCache();
+		testDelegatedNativeInvalidation();
 		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testPackageSourceModel();
@@ -240,6 +241,11 @@ class BuildSystemMain {
 		File.saveContent(Path.join([generatedDirectory, "generated.o"]), "first generated output\n");
 		File.saveContent(Path.join([toolsDirectory, "tool.bin"]), "first installed tool\n");
 		File.saveContent(output, "artifact\n");
+		var digests = new build.execution.ContentDigestCache();
+		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(), "memoized digests preserve SHA-256 identity");
+		File.saveContent(source, "int value(void) { return 420; }\n");
+		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(), "a changed tool/input must invalidate its memoized digest");
+
 		var environment = new BuildEnvironment(root, buildRoot),
 			actionValue = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory], [output], "compile foo.c",
 				Process("missing-tool-for-skip-test", [], root, new Map())),
@@ -279,6 +285,43 @@ class BuildSystemMain {
 		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0 && secondCompile.actions[0].skipped
 			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
+		removeTree(root);
+	}
+
+	static function testDelegatedNativeInvalidation():Void {
+		var root = temporaryDirectory("delegated-native"), buildRoot = Path.join([root, "build"]),
+			nativeSource = Path.join([root, "native.c"]), binding = Path.join([root, "api.hxi"]),
+			stamp = Path.join([root, "native.stamp"]), output = Path.join([root, "app.hl"]),
+			nativeRuns = 0, compilerRuns = 0, failNative = false;
+		File.saveContent(nativeSource, "first native implementation");
+		File.saveContent(binding, "first binding");
+		var nativeAction = new ExecutionAction(new ActionId("native-cmake-build:fixture"), [], [nativeSource], [stamp], "native",
+			Compiler("fixture-native", [], root, new Map(), () -> {
+				nativeRuns++;
+				File.saveContent(stamp, Std.string(nativeRuns));
+				return failNative ? 1 : 0;
+			}), true, true),
+			compileAction = new ExecutionAction(new ActionId("fixture-compile"), [nativeAction.id], [binding], [output], "compile",
+				Compiler("fixture-compiler", [], root, new Map(), () -> {
+					compilerRuns++;
+					File.saveContent(output, "bytecode");
+					return 0;
+				}), false),
+			plan = new ExecutionPlan([nativeAction, compileAction]), environment = new BuildEnvironment(root, buildRoot);
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0, "initial delegated build succeeds");
+		File.saveContent(nativeSource, "changed native implementation");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && nativeRuns == 2 && compilerRuns == 1,
+			"native changes run the delegate without recompiling independent bytecode");
+		File.saveContent(binding, "changed FFI binding");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && compilerRuns == 2,
+			"binding changes still recompile bytecode");
+		failNative = true;
+		var failed = new Executor(environment, 1, _ -> {}).execute(plan);
+		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2,
+			"a failed ordering dependency blocks even cached bytecode");
+		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp",
+			Process("cmake", [], root, new Map()));
+		expect(!build.execution.ArtifactCache.isShareable(stampAction), "CMake package stamps cannot restore missing runtime libraries");
 		removeTree(root);
 	}
 

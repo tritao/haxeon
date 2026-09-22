@@ -5,6 +5,7 @@ import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ProcessRunner;
+import build.execution.CompilerClient;
 import project.ResolvedProject;
 
 /** One project-level request to the persistent Haxeon compiler service. */
@@ -58,6 +59,7 @@ class CompilerProvider {
 			inputs = [command, compilerSourcePath];
 			environment = new Map();
 		}
+		inputs.push(haxe.io.Path.join([context.compilerHome, "stdlib"]));
 		for (resolvedPackage in project.packages.packages) {
 			for (source in resolvedPackage.sources)
 				inputs.push(source);
@@ -66,9 +68,11 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				inputs.push(interfacePath);
 		}
-		return new ExecutionAction(actionId, dependencies, inputs, [output], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
+		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions"], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment,
-				() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
+				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)
+					: CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
+						() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment))), false);
 	}
 
 	static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {

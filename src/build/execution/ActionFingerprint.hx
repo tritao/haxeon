@@ -47,7 +47,7 @@ class ActionFingerprint {
 			fields.add('input:$input');
 			appendPath(fields, input, new Map(), buildRoot, false);
 		}
-		var orderedDependencies = dependencies.copy();
+		var orderedDependencies = action.fingerprintDependencies ? dependencies.copy() : [];
 		orderedDependencies.sort(Reflect.compare);
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
@@ -55,7 +55,8 @@ class ActionFingerprint {
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
-	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>):String {
+	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>, ?digests:ContentDigestCache):String {
+		if (digests == null) digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
 		fields.add("artifact-action-v3");
 		fields.add(action.id.key());
@@ -63,17 +64,17 @@ class ActionFingerprint {
 		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
-				appendPortableCommand(fields, command, arguments, environment, action);
+				appendPortableCommand(fields, command, arguments, environment, action, digests);
 			case Compiler(command, arguments, _, environment, _):
-				appendPortableCommand(fields, command, arguments, environment, action);
+				appendPortableCommand(fields, command, arguments, environment, action, digests);
 		}
 		var inputIndex = 0;
 		for (input in action.inputs) {
 			fields.push('input:$inputIndex');
-			appendPortablePath(fields, input, "", new Map());
+			appendPortablePath(fields, input, "", new Map(), digests);
 			inputIndex++;
 		}
-		var orderedDependencies = dependencies.copy();
+		var orderedDependencies = action.fingerprintDependencies ? dependencies.copy() : [];
 		orderedDependencies.sort(Reflect.compare);
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
@@ -142,7 +143,7 @@ class ActionFingerprint {
 		fields.push(fileIdentity(path, strong));
 	}
 
-	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>):Void {
+	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>, digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$relative');
 			return;
@@ -164,11 +165,11 @@ class ActionFingerprint {
 					fields.add('ignored:$entry');
 					continue;
 				}
-				appendPortablePath(fields, child, Path.join([relative, entry]), visitedDirectories);
+				appendPortablePath(fields, child, Path.join([relative, entry]), visitedDirectories, digests);
 			}
 			return;
 		}
-		fields.push('file:$relative:${Sha256.make(File.getBytes(path)).toHex()}');
+		fields.push('file:$relative:${digests.file(path)}');
 	}
 
 	static function fileIdentity(path:String, strong:Bool):String {
@@ -216,11 +217,11 @@ class ActionFingerprint {
 	}
 
 	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>, environment:Map<String, String>,
-			action:ExecutionAction):Void {
+			action:ExecutionAction, digests:ContentDigestCache):Void {
 		fields.add('command:${Path.withoutDirectory(command)}');
 		var executable = resolveTool(command);
 		if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-			fields.add('tool-content:${fileIdentity(executable, true)}');
+			fields.add('tool-content:${digests.file(executable)}');
 		for (argument in arguments)
 			fields.add('argument:${portableArgument(argument, action)}');
 		var keys = [for (key in environment.keys()) key];

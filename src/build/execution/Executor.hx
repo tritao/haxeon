@@ -15,6 +15,7 @@ class Executor implements ExecutionBackend {
 	final workerCount:Int;
 	final print:String->Void;
 	final artifactCache:ArtifactCache;
+	var digests = new ContentDigestCache();
 
 	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void) {
 		this.environment = environment;
@@ -24,7 +25,8 @@ class Executor implements ExecutionBackend {
 	}
 
 	public function execute(plan:ExecutionPlan):ExecutionResult {
-		var started = Date.now().getTime();
+		digests = new ContentDigestCache();
+		var started = Sys.time() * 1000.0;
 		var pending = new Map<String, ExecutionAction>(),
 			completed = new Map<String, ActionResult>(),
 			fingerprints = new Map<String, String>(),
@@ -132,7 +134,7 @@ class Executor implements ExecutionBackend {
 							if (ArtifactCache.isShareable(item.action))
 								artifactCache.publish(item.action,
 									ActionFingerprint.globalKey(item.action, environment.target.toString(),
-										[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())]));
+										[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())], digests));
 						}
 						waveResults.set(item.action.id.key(),
 							new ActionResult(item.action.id, status, false, false, item.fingerprint, status == 0 ? null : 'Action exited with status $status'));
@@ -155,7 +157,7 @@ class Executor implements ExecutionBackend {
 					print('[${result.id}] failed: ${result.message}');
 			}
 		}
-		return new ExecutionResult(results, Date.now().getTime() - started);
+		return new ExecutionResult(results, Sys.time() * 1000.0 - started);
 	}
 
 	public function name():String
@@ -194,7 +196,7 @@ class Executor implements ExecutionBackend {
 			if (status == 0 && isCacheable(action)) {
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 				if (ArtifactCache.isShareable(action))
-					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints));
+					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests));
 			}
 			return new ActionResult(action.id, status, false, false, fingerprint, status == 0 ? null : 'Action exited with status $status');
 		} catch (error:Dynamic) {
@@ -208,7 +210,7 @@ class Executor implements ExecutionBackend {
 		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint && ActionFingerprint.outputsExist(action))
 			return true;
 		if (ArtifactCache.isShareable(action)
-			&& artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints))) {
+			&& artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests))) {
 			ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 			return true;
 		}
@@ -216,7 +218,7 @@ class Executor implements ExecutionBackend {
 	}
 
 	static function isCacheable(action:ExecutionAction):Bool
-		return switch action.action {
+		return !action.alwaysRun && switch action.action {
 			case Process(_, _, _, _): action.outputs.length > 0;
 			case Compiler(_, _, _, _, _): action.outputs.length > 0;
 		};

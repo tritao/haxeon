@@ -28,6 +28,8 @@ typedef BackendOptions = {
 typedef BackendResult = {
 	final target:BackendTarget;
 	final bytes:Bytes;
+	/** Function indices in the emitted artifact, which may differ from incremental slots. */
+	final ?functionIndices:Map<String, Int>;
 }
 
 /** Semantic backend boundary: the input is canonical Haxeon IR, not frontend AST. */

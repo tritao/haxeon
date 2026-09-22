@@ -13,8 +13,13 @@ class ExecutionAction {
 	public final outputs:Array<String>;
 	public final description:String;
 	public final action:ActionKind;
+	/** Keep ordering/failure dependencies without invalidating independently compiled outputs. */
+	public final fingerprintDependencies:Bool;
+	/** Delegated build tools must check their own complete dependency graph on every build. */
+	public final alwaysRun:Bool;
 
-	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>, description:String, action:ActionKind) {
+	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>, description:String, action:ActionKind,
+			fingerprintDependencies:Bool = true, alwaysRun:Bool = false) {
 		this.id = id;
 		this.dependencies = dependencies.copy();
 		this.dependencies.sort((left, right) -> Reflect.compare(left.key(), right.key()));
@@ -24,5 +29,7 @@ class ExecutionAction {
 		this.outputs.sort(Reflect.compare);
 		this.description = description;
 		this.action = action;
+		this.fingerprintDependencies = fingerprintDependencies;
+		this.alwaysRun = alwaysRun;
 	}
 }

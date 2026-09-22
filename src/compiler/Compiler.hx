@@ -486,6 +486,17 @@ class Compiler {
 		return state;
 	}
 
+	/** Refresh a lazily loaded module without deriving its name from its absolute source path. */
+	public function refreshLoadedSource(name:String, source:String):Void {
+		var state = modules.get(name);
+		if (state == null)
+			throw 'Cannot refresh unloaded module "$name"';
+		if (state.source.text != source) {
+			state.update(new SourceFile(state.source.path, source));
+			sourceGeneration++;
+		}
+	}
+
 	/** Remove a source module and invalidate graph/cached compilation state. */
 	public function remove(path:String):Bool {
 		var name = ModulePath.fromFile(path);

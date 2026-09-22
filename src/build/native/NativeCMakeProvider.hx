@@ -18,7 +18,8 @@ class NativeCMakeProvider {
 		var native = resolvedPackage.manifest.native;
 		if (native == null || native.cmake == null)
 			throw 'Package "${resolvedPackage.name}" has no native.cmake provider';
-		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])), cmakeInputs = [source].concat(resolvedPackage.nativeCMakeInputs),
+		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
+			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			buildDirectory = Path.join([context.layout.packageRoot(resolvedPackage.name), "cmake"]),
 			output = context.layout.haxeonNativeLibraryPath(resolvedPackage.name), outputDirectory = Path.directory(output),
 			configureId = new ActionId('native-cmake-configure:${resolvedPackage.name}:${context.environment.target.toString()}'),
@@ -34,8 +35,8 @@ class NativeCMakeProvider {
 						"-DHAXEON_TARGET=" + context.environment.target.toString()
 					],
 						resolvedPackage.root, new Map())),
-				new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output',
-					Process("cmake", ["--build", buildDirectory, "--target", native.cmake.target], resolvedPackage.root, new Map()))
+			new ExecutionAction(buildId, [configureId], [], [output], 'Build CMake target ${native.cmake.target} -> $output',
+				Process("cmake", ["--build", buildDirectory, "--target", native.cmake.target], resolvedPackage.root, new Map()), true, true)
 			], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)

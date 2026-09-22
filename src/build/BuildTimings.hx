@@ -12,7 +12,7 @@ class BuildTimings {
 		entries.push({name: name, milliseconds: milliseconds});
 
 	public function addElapsed(name:String, started:Float):Void
-		add(name, Date.now().getTime() - started);
+		add(name, Sys.time() * 1000.0 - started);
 
 	public function toString():String {
 		var output = new StringBuf();

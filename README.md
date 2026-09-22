@@ -353,7 +353,31 @@ Add `--explain` to show why each artifact is present, and `--timings` to print
 resolution, planning/lowering, and execution wall-clock measurements.
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
-application's `outputDir`; unchanged native actions are skipped on later builds.
+application's `outputDir`; unchanged native source actions are skipped on later builds.
+CMake package builds are delegated on every invocation, allowing CMake to check
+its own source, header, generated-file, and library dependencies. Configure
+fingerprints cover `CMakeLists.txt` and explicit `native.cmake.inputs`; use those
+inputs for additional configuration files, rather than entire source trees.
+CMake package stamps are never shared as if they were complete library artifacts.
+Native implementation changes do not invalidate independently compiled bytecode;
+Haxe sources, FFI interfaces/projections, compiler sources, and the standard
+library still do. Failed native builds still block the project build and launch.
+
+On Linux and macOS, host builds reuse a private compiler worker between CLI
+invocations. Small source edits retain semantic compiler state; changes to the
+source manifest, roots, defines, or FFI configuration reset it. Compiler or
+standard-library changes select a fresh worker. Workers exit after five idle
+minutes; their connection metadata and logs live under
+`<outputDir>/.haxeon/compiler/`. Set `HAXEON_COMPILER_SERVER=0` to use one-shot
+compilation. Windows, explicit `--self-hosted` builds, and unavailable workers
+retain the one-shot path. The normal CLI's local fingerprint checks run before
+contacting a worker, so unchanged bytecode is still skipped entirely.
+
+Shared-cache hashing reuses content digests within one build invocation. Set
+`HAXEON_DISABLE_ARTIFACT_CACHE=1` to disable the shared artifact cache while
+retaining local fingerprint checks. It is no longer necessary to disable it to
+avoid sharing a CMake package's stamp file.
+
 The current executor is selected through a replaceable backend boundary; set
 `HAXEON_EXECUTOR=native` explicitly to select it. Alternate schedulers can be
 evaluated against the same lowered `ExecutionPlan` without changing package or

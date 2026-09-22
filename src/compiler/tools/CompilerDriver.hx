@@ -1,9 +1,7 @@
 package compiler.tools;
 
-import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.ffi.CHeaderEmitter;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.MemoryContract.MemoryContractCodec;
@@ -17,30 +15,11 @@ import compiler.ir.codec.CanonicalIrCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void):CompileResult {
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession):CompileResult {
 		var report = progress == null ? function(message:String) {} : progress;
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
-		var compiler = new Compiler();
-		CompilerIntrinsics.register(compiler);
-		var defines = request.defines.copy();
-		for (define in targetDefines(request.target))
-			defines.push(define);
-		compiler.configure("cli:" + request.target + ":" + defines.join("|"), "cli:" + request.target, defines);
-		for (path in request.ffiProjections) {
-			report("loading FFI projection " + path);
-			compiler.addFfiProjection(path, File.getContent(path));
-		}
-		for (path in request.ffiInterfaces) {
-			report("loading FFI interface " + path);
-			compiler.addFfiInterface(path, File.getContent(path));
-		}
-		compiler.addSourceRoot("stdlib");
-		for (root in request.roots)
-			compiler.addSourceRoot(root);
-		for (root in request.packageRoots)
-			compiler.addPackageSourceRoot(root.packageName, root.path);
-		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots);
+		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);
 		if (request.dumpFunction >= 0)
@@ -66,8 +45,8 @@ class CompilerDriver {
 		File.saveBytes(request.output, backendResult.bytes);
 		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
-		if (request.target != "wasm32")
-			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(result.functionIndices)));
+		if (!isWasm)
+			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(backendResult.functionIndices)));
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.irOutput != null)
