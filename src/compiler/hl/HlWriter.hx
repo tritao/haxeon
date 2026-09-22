@@ -146,7 +146,9 @@ class HlWriter {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
-			byFunction:Map<Int, Array<compiler.hl.HlCode.HlOpcodeSourceSpan>> = [],
+			groups:Array<{stableId:Int, mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>}> = [],
+			current:Null<{stableId:Int, mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>}> = null,
+			seenFunctions:Map<Int, Bool> = [],
 			fileIndex:Null<Int>;
 		for (span in spans) {
 			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
@@ -158,29 +160,27 @@ class HlWriter {
 				fileIndices.set(span.sourcePath, files.length);
 				files.push(span.sourcePath);
 			}
-			var mappings = byFunction.get(span.stableId);
-			if (mappings == null) {
-				mappings = [];
-				byFunction.set(span.stableId, mappings);
+			if (current == null || current.stableId != span.stableId) {
+				if (seenFunctions.exists(span.stableId))
+					throw "Non-contiguous HLB opcode source spans";
+				current = {stableId: span.stableId, mappings: []};
+				groups.push(current);
+				seenFunctions.set(span.stableId, true);
 			}
-			mappings.push(span);
+			current.mappings.push(span);
 		}
 		writer.writeUnsignedIndex(files.length);
 		for (file in files)
 			writer.writeSizedString(file);
-		var stableIds = [for (stableId in byFunction.keys()) stableId];
-		stableIds.sort((left, right) -> left - right);
-		writer.writeUnsignedIndex(stableIds.length);
-		for (stableId in stableIds) {
-			if (!byFunction.exists(stableId))
-				throw 'Missing debug span mappings for function "$stableId"';
-			var mappings = byFunction.get(stableId);
-			mappings.sort((left, right) -> left.opcode - right.opcode);
-			writer.writeUnsignedIndex(stableId);
+		groups.sort((left, right) -> left.stableId - right.stableId);
+		writer.writeUnsignedIndex(groups.length);
+		for (group in groups) {
+			var mappings = group.mappings;
+			writer.writeUnsignedIndex(group.stableId);
 			writer.writeUnsignedIndex(mappings.length);
 			var previousOpcode = -1;
 			for (span in mappings) {
-				if (span.opcode == previousOpcode)
+				if (span.opcode <= previousOpcode)
 					throw "Invalid HLB opcode source span";
 				previousOpcode = span.opcode;
 				writer.writeUnsignedIndex(span.opcode);

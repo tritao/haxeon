@@ -38,6 +38,11 @@ typedef HlAssemblyResult = {
 	final cachePreparationMs:Float;
 	final loweringMs:Float;
 	final publicationMs:Float;
+	final verificationMs:Float;
+	final metadataMs:Float;
+	final functionLoweringMs:Float;
+	final debugAssemblyMs:Float;
+	final lowerFinalizationMs:Float;
 }
 
 /**
@@ -154,8 +159,9 @@ class HlModuleAssembler {
 		};
 		var cachePreparedAt = Sys.time() * 1000.0;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && runtimeNatives.length > 0 ? runtimeNatives : null, reuseLowered && runtimeNatives.length > 0 ? regenerated : null);
-		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated, runtimeNatives,
-			debugMetadata);
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
+			runtimeNatives, debugMetadata),
+			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
@@ -183,7 +189,12 @@ class HlModuleAssembler {
 			baseTypes: baseTypes,
 			cachePreparationMs: cachePreparedAt - startedAt,
 			loweringMs: loweredAt - cachePreparedAt,
-			publicationMs: Sys.time() * 1000.0 - loweredAt
+			publicationMs: Sys.time() * 1000.0 - loweredAt,
+			verificationMs: lowered.metrics.verificationMs,
+			metadataMs: lowered.metrics.metadataMs,
+			functionLoweringMs: lowered.metrics.functionsMs,
+			debugAssemblyMs: lowered.metrics.debugMs,
+			lowerFinalizationMs: lowered.metrics.finalizationMs
 		};
 	}
 }

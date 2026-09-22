@@ -140,6 +140,11 @@ typedef CompileMetrics = {
 	final backendLoweringMs:Float;
 	final backendPublicationMs:Float;
 	final backendSnapshotMs:Float;
+	final backendVerificationMs:Float;
+	final backendMetadataMs:Float;
+	final backendFunctionLoweringMs:Float;
+	final backendDebugAssemblyMs:Float;
+	final backendFinalizationMs:Float;
 	final patchEncodingMs:Float;
 	final finalizeMs:Float;
 	final modules:Int;
@@ -688,6 +693,11 @@ class Compiler {
 					backendLoweringMs: 0.0,
 					backendPublicationMs: 0.0,
 					backendSnapshotMs: 0.0,
+					backendVerificationMs: 0.0,
+					backendMetadataMs: 0.0,
+					backendFunctionLoweringMs: 0.0,
+					backendDebugAssemblyMs: 0.0,
+					backendFinalizationMs: 0.0,
 					patchEncodingMs: 0.0,
 					finalizeMs: 0.0,
 					modules: cached.metrics.modules,

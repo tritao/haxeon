@@ -22,6 +22,19 @@ import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 
+typedef HlLowerMetrics = {
+	final verificationMs:Float;
+	final metadataMs:Float;
+	final functionsMs:Float;
+	final debugMs:Float;
+	final finalizationMs:Float;
+}
+
+typedef MeasuredHlCode = {
+	final code:HlCode;
+	final metrics:HlLowerMetrics;
+}
+
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
 class HlLower {
 	final code:HlCode;
@@ -46,6 +59,13 @@ class HlLower {
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache):HlCode {
+		return lowerStableMeasured(program, symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache).code;
+	}
+
+	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
+			?debugCache:HlDebugMetadataCache):MeasuredHlCode {
+		var startedAt = Sys.time() * 1000.0;
 		var affected = regenerated;
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
@@ -64,13 +84,29 @@ class HlLower {
 			IrVerifier.verifyFunctions(program, selected);
 			affected = [for (name in selected.keys()) name];
 		}
-		return new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache).lowerProgram(program);
+		var verifiedAt = Sys.time() * 1000.0,
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache),
+			code = lowerer.lowerProgram(program);
+		return {
+			code: code,
+			metrics: {
+				verificationMs: verifiedAt - startedAt,
+				metadataMs: lowerer.metadataMs,
+				functionsMs: lowerer.functionsMs,
+				debugMs: lowerer.debugMs,
+				finalizationMs: lowerer.finalizationMs
+			}
+		};
 	}
 
 	final stableIds:Null<Map<String, Int>>;
 	final cachedFunctions:Null<Map<String, HlFunction>>;
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
+	var metadataMs = 0.0;
+	var functionsMs = 0.0;
+	var debugMs = 0.0;
+	var finalizationMs = 0.0;
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache) {
@@ -163,6 +199,7 @@ class HlLower {
 	}
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
+		var startedAt = Sys.time() * 1000.0;
 		var hasFunctionIndices = false;
 		for (_ in functionIndices)
 			hasFunctionIndices = true;
@@ -248,6 +285,7 @@ class HlLower {
 			lowerNative(native);
 		for (native in cDispatchNatives)
 			lowerNative(native);
+		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions) {
 			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
@@ -259,6 +297,7 @@ class HlLower {
 					throw 'HashLink lowering failed for ${fn.name}: $error';
 				}
 		}
+		var functionsDoneAt = Sys.time() * 1000.0;
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
@@ -304,6 +343,7 @@ class HlLower {
 			flags: 0,
 			payload: HlWriter.encodeOpcodeSourceSpans(spans)
 		});
+		var debugDoneAt = Sys.time() * 1000.0;
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = symbols.ints;
@@ -311,6 +351,11 @@ class HlLower {
 		code.strings = symbols.strings;
 		code.types = symbols.types;
 		code.globals = symbols.globals;
+		var finalizedAt = Sys.time() * 1000.0;
+		metadataMs = metadataDoneAt - startedAt;
+		functionsMs = functionsDoneAt - metadataDoneAt;
+		debugMs = debugDoneAt - functionsDoneAt;
+		finalizationMs = finalizedAt - debugDoneAt;
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
