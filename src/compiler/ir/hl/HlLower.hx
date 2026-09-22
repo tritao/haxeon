@@ -21,8 +21,11 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
+import compiler.compilation.AllocationMeter;
+import compiler.compilation.AllocationMeter.PhaseAllocation;
 
 typedef HlLowerMetrics = {
+	final allocationPhases:Array<PhaseAllocation>;
 	final verificationMs:Float;
 	final metadataMs:Float;
 	final functionsMs:Float;
@@ -66,6 +69,7 @@ class HlLower {
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
 			?debugCache:HlDebugMetadataCache):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
+		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
@@ -85,11 +89,15 @@ class HlLower {
 			affected = [for (name in selected.keys()) name];
 		}
 		var verifiedAt = Sys.time() * 1000.0,
+			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
 			metrics: {
+				allocationPhases: [
+					AllocationMeter.delta("backend-verification", allocationAtStart, allocationAfterVerification)
+				].concat(lowerer.allocationPhases),
 				verificationMs: verifiedAt - startedAt,
 				metadataMs: lowerer.metadataMs,
 				functionsMs: lowerer.functionsMs,
@@ -107,6 +115,7 @@ class HlLower {
 	var functionsMs = 0.0;
 	var debugMs = 0.0;
 	var finalizationMs = 0.0;
+	var allocationPhases:Array<PhaseAllocation> = [];
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache) {
@@ -200,6 +209,7 @@ class HlLower {
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
 		var startedAt = Sys.time() * 1000.0;
+		var allocationAtStart = AllocationMeter.sample();
 		var hasFunctionIndices = false;
 		for (_ in functionIndices)
 			hasFunctionIndices = true;
@@ -286,6 +296,7 @@ class HlLower {
 		for (native in cDispatchNatives)
 			lowerNative(native);
 		var metadataDoneAt = Sys.time() * 1000.0;
+		var allocationAfterMetadata = AllocationMeter.sample();
 		for (fn in program.functions) {
 			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
@@ -298,6 +309,7 @@ class HlLower {
 				}
 		}
 		var functionsDoneAt = Sys.time() * 1000.0;
+		var allocationAfterFunctions = AllocationMeter.sample();
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
@@ -305,6 +317,7 @@ class HlLower {
 			flags: 0,
 			payload: HlWriter.encodeFunctionIdentities(identities)
 		});
+		var allocationAfterIdentities = AllocationMeter.sample();
 		var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
 		for (index in 0...code.functions.length) {
 			var identity = identities[index],
@@ -336,6 +349,7 @@ class HlLower {
 				debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
 			spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
 		}
+		var allocationAfterSpanGroups = AllocationMeter.sample();
 		code.debugSections.push({
 			kind: HlWriter.OPCODE_SOURCE_SPANS,
 			version: 2,
@@ -343,6 +357,7 @@ class HlLower {
 			payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
 		});
 		var debugDoneAt = Sys.time() * 1000.0;
+		var allocationAfterDebug = AllocationMeter.sample();
 
 		code.entryPoint = requireFunction(program.entryPoint);
 		code.ints = symbols.ints;
@@ -351,6 +366,16 @@ class HlLower {
 		code.types = symbols.types;
 		code.globals = symbols.globals;
 		var finalizedAt = Sys.time() * 1000.0;
+		var allocationAfterFinalize = AllocationMeter.sample();
+		allocationPhases = [
+			AllocationMeter.delta("backend-metadata", allocationAtStart, allocationAfterMetadata),
+			AllocationMeter.delta("backend-functions", allocationAfterMetadata, allocationAfterFunctions),
+			AllocationMeter.delta("backend-debug", allocationAfterFunctions, allocationAfterDebug),
+			AllocationMeter.delta("backend-debug-identities", allocationAfterFunctions, allocationAfterIdentities),
+			AllocationMeter.delta("backend-debug-span-groups", allocationAfterIdentities, allocationAfterSpanGroups),
+			AllocationMeter.delta("backend-debug-encode", allocationAfterSpanGroups, allocationAfterDebug),
+			AllocationMeter.delta("backend-finalize", allocationAfterDebug, allocationAfterFinalize)
+		];
 		metadataMs = metadataDoneAt - startedAt;
 		functionsMs = functionsDoneAt - metadataDoneAt;
 		debugMs = debugDoneAt - functionsDoneAt;

@@ -227,6 +227,7 @@ class HlWriter {
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
 			seenFunctions:Map<Int, Bool> = [];
+		var previousPath = "";
 		for (group in groups) {
 			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
 				throw "Invalid HLB opcode source-span function";
@@ -239,9 +240,14 @@ class HlWriter {
 					|| !validRange)
 					throw "Invalid HLB opcode source span";
 				previousOpcode = span.opcode;
-				if (!fileIndices.exists(span.sourcePath)) {
-					fileIndices.set(span.sourcePath, files.length);
-					files.push(span.sourcePath);
+				if (span.sourcePath != previousPath) {
+					previousPath = span.sourcePath;
+					var fileIndex = fileIndices.get(previousPath);
+					if (fileIndex == null) {
+						fileIndex = files.length;
+						fileIndices.set(previousPath, fileIndex);
+						files.push(previousPath);
+					}
 				}
 			}
 		}
@@ -251,12 +257,18 @@ class HlWriter {
 		var ordered = groups.copy();
 		ordered.sort((left, right) -> left.stableId - right.stableId);
 		writer.writeUnsignedIndex(ordered.length);
+		previousPath = "";
+		var previousFileIndex = -1;
 		for (group in ordered) {
 			writer.writeUnsignedIndex(group.stableId);
 			writer.writeUnsignedIndex(group.mappings.length);
 			for (span in group.mappings) {
 				writer.writeUnsignedIndex(span.opcode);
-				writer.writeUnsignedIndex(fileIndices.get(span.sourcePath));
+				if (span.sourcePath != previousPath) {
+					previousPath = span.sourcePath;
+					previousFileIndex = fileIndices.get(previousPath);
+				}
+				writer.writeUnsignedIndex(previousFileIndex);
 				writer.writeIndex(span.start + 1);
 				writer.writeIndex(span.end + 1);
 				writer.writeUnsignedIndex(span.line);

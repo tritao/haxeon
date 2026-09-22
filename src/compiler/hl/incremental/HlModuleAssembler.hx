@@ -10,6 +10,7 @@ import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.hl.HlDebugMetadataCache;
+import compiler.compilation.AllocationMeter.PhaseAllocation;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
 typedef HlAssemblerState = {
@@ -43,6 +44,7 @@ typedef HlAssemblyResult = {
 	final functionLoweringMs:Float;
 	final debugAssemblyMs:Float;
 	final lowerFinalizationMs:Float;
+	final allocationPhases:Array<PhaseAllocation>;
 }
 
 /**
@@ -194,7 +196,8 @@ class HlModuleAssembler {
 			metadataMs: lowered.metrics.metadataMs,
 			functionLoweringMs: lowered.metrics.functionsMs,
 			debugAssemblyMs: lowered.metrics.debugMs,
-			lowerFinalizationMs: lowered.metrics.finalizationMs
+			lowerFinalizationMs: lowered.metrics.finalizationMs,
+			allocationPhases: lowered.metrics.allocationPhases
 		};
 	}
 }

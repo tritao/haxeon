@@ -79,7 +79,7 @@ class BackendAssembly {
 				AllocationMeter.delta("backend-assembly", allocationAfterCopy, allocationAfterAssembly),
 				AllocationMeter.delta("source-snapshots", allocationAfterAssembly, allocationAfterSnapshots),
 				AllocationMeter.delta("patch", allocationAfterSnapshots, allocationAfterPatch)
-			]
+			].concat(assembly.allocationPhases)
 		};
 	}
 
