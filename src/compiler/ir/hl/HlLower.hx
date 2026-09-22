@@ -45,7 +45,7 @@ class HlLower {
 	}
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>):HlCode {
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache):HlCode {
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
 		else {
@@ -62,19 +62,21 @@ class HlLower {
 					selected.set(fn.name, true);
 			IrVerifier.verifyFunctions(program, selected);
 		}
-		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives).lowerProgram(program);
+		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache).lowerProgram(program);
 	}
 
 	final stableIds:Null<Map<String, Int>>;
 	final cachedFunctions:Null<Map<String, HlFunction>>;
 	final regenerated:Map<String, Bool> = [];
+	final debugCache:Null<HlDebugMetadataCache>;
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>) {
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache) {
 		this.symbols = symbols;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
 		this.preparedRuntimeNatives = runtimeNatives;
+		this.debugCache = debugCache;
 		if (regenerated != null)
 			for (name in regenerated)
 				this.regenerated.set(name, true);
@@ -261,7 +263,7 @@ class HlLower {
 					throw 'HashLink lowering failed for ${fn.name}: $error';
 				}
 		}
-		var identities = [for (fn in program.functions) functionIdentity(fn)];
+		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
 			version: 1,
@@ -272,9 +274,16 @@ class HlLower {
 		for (index in 0...code.functions.length) {
 			var identity = identities[index],
 				loweredFunction = code.functions[index];
+			var cachedSpans = debugCache == null ? null : debugCache.functionSpans(loweredFunction);
+			if (cachedSpans != null) {
+				for (span in cachedSpans)
+					spans.push(span);
+				continue;
+			}
+			var functionSpans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
 			for (opcode in 0...loweredFunction.debugLocations.length) {
 				var location = loweredFunction.debugLocations[opcode];
-				spans.push({
+				var span:compiler.hl.HlCode.HlOpcodeSourceSpan = {
 					stableId: identity.stableId,
 					opcode: opcode,
 					sourcePath: location.path,
@@ -286,8 +295,12 @@ class HlLower {
 					endColumn: location.endColumn,
 					sourceHash: location.sourceHash,
 					flags: location.flags
-				});
+				};
+				spans.push(span);
+				functionSpans.push(span);
 			}
+			if (debugCache != null)
+				debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
 		}
 		code.debugSections.push({
 			kind: HlWriter.OPCODE_SOURCE_SPANS,
@@ -302,6 +315,16 @@ class HlLower {
 		code.strings = code.strings.copy();
 		code.types = code.types.copy();
 		code.globals = code.globals.copy();
+	}
+
+	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
+		var cached = debugCache == null ? null : debugCache.identity(fn);
+		if (cached != null)
+			return cached;
+		var identity = functionIdentity(fn);
+		if (debugCache != null)
+			debugCache.rememberIdentity(fn, identity);
+		return identity;
 	}
 
 	static function collectSourcePaths(fn:IrFunction, target:Map<String, Bool>):Void {

@@ -62,8 +62,8 @@ class SemanticProgram {
 		});
 	}
 
-	/** Reuse validated declarations when only explicitly typed top-level bodies changed. */
-	public function replaceTopLevelBodies(current:AstProgram, selected:Map<String, Bool>):SemanticProgram {
+	/** Reuse validated declarations when only explicitly typed function bodies changed. */
+	public function replaceBodies(current:AstProgram, selected:Map<String, Bool>):SemanticProgram {
 		var currentByName:Map<String, AstFunction> = [];
 		for (fn in current.functions)
 			currentByName.set(fn.name, fn);
@@ -73,6 +73,40 @@ class SemanticProgram {
 				functions.push(withBody(fn, currentByName.get(fn.name)));
 			else
 				functions.push(fn);
+		var currentClasses = [for (decl in current.classes) decl.name => decl],
+			classes = program.classes.copy();
+		for (index in 0...classes.length) {
+			var decl = program.classes[index],
+				replacement = currentClasses.get(decl.name);
+			if (replacement == null)
+				continue;
+			var currentMethods = [for (method in replacement.methods) method.name => method],
+				methods = decl.methods.copy();
+			for (methodIndex in 0...methods.length) {
+				var name = decl.name + "." + methods[methodIndex].name,
+					currentMethod = currentMethods.get(methods[methodIndex].name);
+				if (selected.exists(name) && currentMethod != null)
+					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
+			}
+			classes[index] = cast copyWithMethods(decl, methods);
+		}
+		var currentAbstracts = [for (decl in current.abstracts) decl.name => decl],
+			abstracts = program.abstracts.copy();
+		for (index in 0...abstracts.length) {
+			var decl = program.abstracts[index],
+				replacement = currentAbstracts.get(decl.name);
+			if (replacement == null)
+				continue;
+			var currentMethods = [for (method in replacement.methods) method.name => method],
+				methods = decl.methods.copy();
+			for (methodIndex in 0...methods.length) {
+				var name = decl.name + "." + methods[methodIndex].name,
+					currentMethod = currentMethods.get(methods[methodIndex].name);
+				if (selected.exists(name) && currentMethod != null)
+					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
+			}
+			abstracts[index] = cast copyWithMethods(decl, methods);
+		}
 		var nextProgram:AstProgram = {
 			packageName: program.packageName,
 			imports: program.imports,
@@ -80,9 +114,9 @@ class SemanticProgram {
 			aliases: program.aliases,
 			enums: program.enums,
 			enumAbstracts: program.enumAbstracts,
-			abstracts: program.abstracts,
+			abstracts: abstracts,
 			interfaces: program.interfaces,
-			classes: program.classes,
+			classes: classes,
 			functions: functions
 		};
 		var nextSignatures:Map<String, AstFunction> = [];
@@ -91,11 +125,29 @@ class SemanticProgram {
 		for (fn in functions)
 			if (selected.exists(fn.name))
 				nextSignatures.set(fn.name, fn);
+		for (decl in classes)
+			for (method in decl.methods) {
+				var name = decl.name + "." + method.name;
+				if (selected.exists(name))
+					nextSignatures.set(name, method);
+			}
+		for (decl in abstracts)
+			for (method in decl.methods) {
+				var name = decl.name + "." + method.name;
+				if (selected.exists(name))
+					nextSignatures.set(name, withOwnerTypeParameters(method, decl.typeParameters));
+			}
 		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations, new DeclarationLifecycle(declarations, SignatureTyped), {
 			declarationMs: 0.0,
 			shapeConnectionMs: 0.0,
 			signatureTypingMs: 0.0
 		});
+	}
+
+	static function copyWithMethods<T>(declaration:T, methods:Array<AstFunction>):T {
+		var result:Dynamic = Reflect.copy(declaration);
+		Reflect.setField(result, "methods", methods);
+		return cast result;
 	}
 
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction

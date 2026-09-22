@@ -8,6 +8,7 @@ class HlWriterCache {
 	var debugFiles:Array<String> = [];
 	var functions:ObjectMap<HlFunction, Bytes> = new ObjectMap();
 	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
+	var validatedSnapshots:ObjectMap<Bytes, Int> = new ObjectMap();
 
 	public function new() {}
 
@@ -30,6 +31,12 @@ class HlWriterCache {
 
 	public function markValidated(fn:HlFunction):Void
 		validatedFunctions.set(fn, true);
+
+	public function isSnapshotValidated(content:Bytes, sourceHash:Int):Bool
+		return validatedSnapshots.get(content) == sourceHash;
+
+	public function markSnapshotValidated(content:Bytes, sourceHash:Int):Void
+		validatedSnapshots.set(content, sourceHash);
 
 	static function sameStrings(left:Array<String>, right:Array<String>):Bool {
 		if (left.length != right.length)

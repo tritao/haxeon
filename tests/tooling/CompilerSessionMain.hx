@@ -43,6 +43,8 @@ class CompilerSessionMain {
 		File.saveContent(value, "class Value { public static function get():Int { return 9; } }");
 		var edited = compile();
 		expect(edited.retyped.length > 0, "a source edit must retype affected modules");
+		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0 && edited.metrics.signatureTypingMs == 0.0,
+			"an explicitly typed class-method body edit must reuse validated declarations");
 		expect(File.getBytes(output).compare(HlWriter.encode(edited.module)) == 0, "cached HashLink function encoding must match canonical serialization");
 		expect(functionByName(initial, "Main.main") == functionByName(edited, "Main.main"),
 			"backend assembly must reuse functions from unchanged source files");

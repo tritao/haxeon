@@ -73,8 +73,7 @@ class BackendAssembly {
 			var source = state.source, hash = source.contentHash();
 			if (!referenced.exists(hash))
 				continue;
-			var content = Bytes.ofString(source.text),
-				existing = byHash.get(hash);
+			var content = source.bytes, existing = byHash.get(hash);
 			if (existing != null && existing.compare(content) != 0)
 				throw 'Source snapshot hash collision for ${source.path}';
 			byHash.set(hash, content);

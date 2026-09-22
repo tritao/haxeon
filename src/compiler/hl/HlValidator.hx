@@ -113,8 +113,11 @@ class HlValidator {
 		for (snapshot in code.sourceSnapshots) {
 			if (snapshot.sourceHash == 0
 				|| snapshotHashes.exists(snapshot.sourceHash)
-				|| hashBytes(snapshot.content) != snapshot.sourceHash)
+				|| (cache == null || !cache.isSnapshotValidated(snapshot.content, snapshot.sourceHash))
+				&& hashBytes(snapshot.content) != snapshot.sourceHash)
 				throw "Invalid source snapshot";
+			if (cache != null)
+				cache.markSnapshotValidated(snapshot.content, snapshot.sourceHash);
 			snapshotHashes.set(snapshot.sourceHash, true);
 		}
 		if (code.sourceSnapshots.length > 0) {

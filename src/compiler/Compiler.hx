@@ -755,7 +755,7 @@ class Compiler {
 	}
 
 	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfigurationSnapshot());
+		var candidate = new Compiler(null, null, null, this);
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
@@ -764,7 +764,7 @@ class Compiler {
 			candidate.modules.remove(name);
 		for (name => state in snapshot.modules)
 			candidate.modules.set(name, state);
-		candidate.types = snapshot.types.copy();
+		candidate.types = snapshot.types;
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
 		candidate.publishedAbi = snapshot.publishedAbi;
@@ -773,7 +773,6 @@ class Compiler {
 		candidate.cachedSemanticProgram = snapshot.semanticProgram;
 		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
 		candidate.declarationOwners = [for (declaration => owner in declarationOwners) declaration => owner];
-		candidate.genericSpecializations = genericSpecializations.copy();
 		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
 		return candidate;
 	}

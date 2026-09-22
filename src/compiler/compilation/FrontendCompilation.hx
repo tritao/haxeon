@@ -17,6 +17,8 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstType;
 
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
@@ -125,17 +127,14 @@ class FrontendCompilation {
 			var canReuseSemantic = previousSemantic != null
 				&& CompilationContext.mapIsEmpty(signatureChanged)
 				&& CompilationContext.mapIsEmpty(structuralChanged)
-				&& canonicalProgram.classes.length == 0
-				&& canonicalProgram.abstracts.length == 0
-				&& canonicalProgram.enumAbstracts.length == 0
-				&& CompilationContext.explicitFunctionSignatures(canonicalProgram.functions);
+				&& selectedSignaturesExplicit(canonicalProgram, selected);
 			var semantic:SemanticProgram;
 			if (canReuseSemantic && previousSemantic != null)
-				semantic = previousSemantic.replaceTopLevelBodies(canonicalProgram, selected);
+				semantic = previousSemantic.replaceBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null);
+				context.nativeLayoutTarget(), canReuseSemantic && canonicalProgram.classes.length == 0 && canonicalProgram.abstracts.length == 0 ? context.lastTypedProgram : null);
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
@@ -405,6 +404,30 @@ class FrontendCompilation {
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt
 		};
+	}
+
+	static function selectedSignaturesExplicit(program:AstProgram, selected:Map<String, Bool>):Bool {
+		for (fn in program.functions)
+			if (selected.exists(fn.name) && !explicitSignature(fn))
+				return false;
+		for (decl in program.classes)
+			for (method in decl.methods)
+				if (selected.exists(decl.name + "." + method.name) && !explicitSignature(method))
+					return false;
+		for (decl in program.abstracts)
+			for (method in decl.methods)
+				if (selected.exists(decl.name + "." + method.name) && !explicitSignature(method))
+					return false;
+		return true;
+	}
+
+	static function explicitSignature(fn:compiler.syntax.Ast.AstFunction):Bool {
+		if (fn.result == InferredType)
+			return false;
+		for (argument in fn.arguments)
+			if (argument.type == InferredType)
+				return false;
+		return true;
 	}
 
 	static function resolveFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,
