@@ -3294,6 +3294,18 @@ class WasmLinearRuntime {
 			rightLength = builder.local("rightLength", I32),
 			index = builder.local("index", I32),
 			result = builder.local("result", I32);
+		// Null is distinct from every string, including the empty string.
+		builder.localGet(left);
+		builder.emit(I32Eqz);
+		builder.localGet(right);
+		builder.emit(I32Eqz);
+		builder.emit(I32Or);
+		builder.ifElse(function(builder) {
+			builder.localGet(left);
+			builder.localGet(right);
+			builder.emit(I32Eq);
+			builder.emit(Return);
+		}, function(builder) {});
 		builder.localGet(left);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localSet(leftLength);

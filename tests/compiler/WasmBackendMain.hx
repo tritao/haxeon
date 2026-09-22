@@ -209,6 +209,9 @@ class WasmBackendMain {
 		var patchEntries = WasmPatch.readManifest(patchArtifact.manifest);
 		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main" || patchArtifact.changed.length != 1)
 			throw "Wasm patch compilation must produce a validated replacement artifact";
+		var stringEquality = Frontend.compile(sys.io.File.getContent("tests/programs/string-null-equality.hx"));
+		if (new IrInterpreter(stringEquality).run("main") != 42)
+			throw "The SSA interpreter must distinguish null from empty and literal null strings";
 		var objectBytes = objectProgram();
 		if (new IrInterpreter(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int { var box = new Box(); box.value = 42; return box.value; }"))
 			.run("main") != 42)

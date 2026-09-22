@@ -15,6 +15,7 @@ HL_PRIM int HL_NAME(__string_length)( vbyte *value ) {
 }
 
 HL_PRIM bool HL_NAME(__string_equal)( vbyte *left, vbyte *right ) {
+	if( left == NULL || right == NULL ) return left == right;
 	int left_length = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
 	int right_length = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
 	return left_length == right_length

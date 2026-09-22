@@ -206,7 +206,7 @@ class IrInterpreter {
 				popped.values.length == 0 ? null : popped.values.pop();
 			case "__string_length": Std.string(arguments[0]).length;
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
-			case "__string_equal": Std.string(arguments[0]) == Std.string(arguments[1]);
+			case "__string_equal": arguments[0] == null || arguments[1] == null ? arguments[0] == arguments[1] : Std.string(arguments[0]) == Std.string(arguments[1]);
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();

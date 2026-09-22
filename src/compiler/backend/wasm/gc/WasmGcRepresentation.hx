@@ -4523,7 +4523,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				End,
 				End
 			];
-		return body;
+		// Handle null before comparing lengths: null and "" both have length zero.
+		return [
+			LocalGet(leftLocal),
+			RefIsNull,
+			LocalGet(rightLocal),
+			RefIsNull,
+			I32Or,
+			If(null),
+			LocalGet(leftLocal),
+			RefIsNull,
+			LocalGet(rightLocal),
+			RefIsNull,
+			I32And,
+			LocalSet(output),
+			Else
+		].concat(body).concat([End]);
 	}
 
 	function stringCompare(leftLocal:Int, rightLocal:Int, destination:Int):Array<WasmInstruction> {

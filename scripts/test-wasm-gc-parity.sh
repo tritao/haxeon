@@ -28,7 +28,7 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(add expression-lambda switch-expression-block member-range trailing-object-comma block-comprehension transparent-abstract computed-field-assignment
+shared_cases=(string-null-equality add expression-lambda switch-expression-block member-range trailing-object-comma block-comprehension transparent-abstract computed-field-assignment
 	assignment-expression literal-postfix bitwise bitwise-comparison-precedence type-annotation local-function switch-guard callback-method bound-method name-collision
 	bool-if fib while-arithmetic branch-assignment static-class static-field static-field-init instance-class instance-field-init instance-field-init-constructor
 	default-constructor-class enum-basic enum-payload enum-payload-pattern generic-enum-field nullable-guard-return nullable-array-guard native-abstract-null nullable-enum-switch
