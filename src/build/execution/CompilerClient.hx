@@ -59,6 +59,7 @@ class CompilerClient {
 				if (connection == null)
 					throw "Compiler worker did not become ready; see " + logPath;
 			}
+			shutdownObsoleteWorkers(directory, statePath);
 			var socket = connection.socket;
 			socket.setTimeout(600);
 			var bytes = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, arguments: arguments}));
@@ -97,6 +98,30 @@ class CompilerClient {
 			if (socket != null)
 				try socket.close() catch (_:Dynamic) {}
 			return null;
+		}
+	}
+
+	static function shutdownObsoleteWorkers(directory:String, currentStatePath:String):Void {
+		for (entry in FileSystem.readDirectory(directory)) {
+			if (!StringTools.endsWith(entry, ".json"))
+				continue;
+			var statePath = Path.join([directory, entry]);
+			if (statePath == currentStatePath)
+				continue;
+			var connection = connect(statePath);
+			if (connection == null)
+				continue;
+			try {
+				var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, shutdown: true}));
+				connection.socket.output.writeInt32(request.length);
+				connection.socket.output.write(request);
+				connection.socket.output.flush();
+				connection.socket.setTimeout(1);
+				connection.socket.input.readLine();
+				connection.socket.close();
+			} catch (_:Dynamic) {
+				try connection.socket.close() catch (_:Dynamic) {}
+			}
 		}
 	}
 }

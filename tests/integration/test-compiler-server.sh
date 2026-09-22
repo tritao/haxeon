@@ -41,10 +41,20 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         build()
         run(7)
         assert len(list(states.glob('*.json'))) == 1
+        obsolete_state = states / 'obsolete.json'
+        obsolete = subprocess.Popen([str(repo / '.tools/hashlink/hl'), str(next(states.glob('*.hl'))), str(obsolete_state)], env=env,
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(100):
+            if obsolete_state.exists():
+                break
+            time.sleep(0.01)
+        assert obsolete_state.exists(), 'obsolete worker did not start'
         time.sleep(1)
         source('9')
         assert 'reusing compiler session' in build()
         run(9)
+        obsolete.wait(timeout=5)
+        assert not obsolete_state.exists(), 'obsolete worker was not shut down'
         source('unknown_value')
         build(success=False)
         source('11')
