@@ -28,9 +28,13 @@ class CompilerServer {
 		FileSystem.rename(statePath + "." + token + ".tmp", statePath);
 		try {
 			var running = true;
+			var idleDeadline = Sys.time() + 300;
 			while (running) {
-				if (Socket.select([listener], [], [], 300).read.length == 0)
-					break;
+				if (Socket.select([listener], [], [], Math.max(0, idleDeadline - Sys.time())).read.length == 0) {
+					if (Sys.time() >= idleDeadline)
+						break;
+					continue;
+				}
 				var client = listener.accept();
 				client.setTimeout(600);
 				try {
@@ -72,6 +76,7 @@ class CompilerServer {
 					} catch (_:Dynamic) {}
 				}
 				client.close();
+				idleDeadline = Sys.time() + 300;
 			}
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("Compiler server stopped: " + Std.string(error) + "\n");

@@ -674,6 +674,23 @@ choose the capture location, and runtime arguments after `--`:
 haxeon run --profile --profile-output build/host/profile/editor.hlpc
 ```
 
+To profile incremental compiler edits, pass `--profile-output` to the project
+benchmark. It starts a dedicated worker with a diagnostics port, warms that
+worker before attaching, and captures the edit loop. The normal worker launch
+is unchanged. Sampling adds overhead, so use an unprofiled run for latency
+comparisons. HashLink's allocation samples currently identify the native
+allocator rather than Haxe allocation call sites; the compiler's per-phase
+allocation counters remain the better source for allocation totals.
+
+```sh
+python3 scripts/benchmark-incremental-project.py \
+  --project /path/to/haxeon.json --source /path/to/Main.hx \
+  --token-a 'before' --token-b 'after' --output /tmp/edit.hl \
+  --profile-output /tmp/compiler-edits.hlpc
+.tools/hashlink/hlprof-live export --format perfetto \
+  --output /tmp/compiler-edits.json /tmp/compiler-edits.hlpc
+```
+
 `bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
 source tree and reports bootstrap progress. Pass `--json` for a machine-readable
 dashboard.
