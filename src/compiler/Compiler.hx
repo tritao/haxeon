@@ -112,6 +112,7 @@ typedef CompileResult = {
 
 /** Work and output-size counters measured for one compilation. */
 typedef CompileMetrics = {
+	final allocationPhases:Array<compiler.compilation.AllocationMeter.PhaseAllocation>;
 	final elapsedMs:Float;
 	final transactionSnapshotMs:Float;
 	final candidateSetupMs:Float;
@@ -671,6 +672,7 @@ class Compiler {
 				revision: cached.revision,
 				patchBytes: null,
 				metrics: {
+					allocationPhases: [],
 					elapsedMs: 0.0,
 					transactionSnapshotMs: 0.0,
 					candidateSetupMs: 0.0,

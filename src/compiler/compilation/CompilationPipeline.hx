@@ -84,6 +84,7 @@ class CompilationPipeline {
 			abiPlanningDoneAt = backend.abiPlanningDoneAt,
 			backendAssemblyDoneAt = backend.backendAssemblyDoneAt,
 			patchEncodingDoneAt = backend.patchEncodingDoneAt;
+		var allocationBeforeFinalize = AllocationMeter.sample();
 		context.setLastTypedProgram(typedNew);
 		context.publishedAbi = nextAbi;
 		context.assembler = candidateAssembler;
@@ -104,6 +105,8 @@ class CompilationPipeline {
 		var invalidationReasonCount = 0;
 		for (artifact in frontend.invalidations)
 			invalidationReasonCount += artifact.reasons.length;
+		var allocationPhases = frontend.allocationPhases.concat(backend.allocationPhases);
+		allocationPhases.push(AllocationMeter.delta("finalize", allocationBeforeFinalize, AllocationMeter.sample()));
 		return {
 			ir: ir,
 			module: assembly.module,
@@ -119,6 +122,7 @@ class CompilationPipeline {
 			revision: assembly.revision,
 			patchBytes: patchBytes,
 			metrics: {
+				allocationPhases: allocationPhases,
 				elapsedMs: finishedAt - transactionStartedAt,
 				transactionSnapshotMs: snapshotDoneAt - transactionStartedAt,
 				candidateSetupMs: frontendStartedAt - snapshotDoneAt,

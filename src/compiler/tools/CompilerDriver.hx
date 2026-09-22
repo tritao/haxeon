@@ -12,19 +12,24 @@ import haxe.io.Bytes;
 import sys.io.File;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.compilation.AllocationMeter;
+import compiler.compilation.AllocationMeter.PhaseAllocation;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
 	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession):CompileResult {
 		var report = progress == null ? function(message:String) {} : progress;
 		var requestStartedAt = Sys.time() * 1000.0;
+		var allocationAtStart = AllocationMeter.sample();
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
 		var preparedAt = Sys.time() * 1000.0;
+		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);
 		var compiledAt = Sys.time() * 1000.0;
+		var allocationAfterCompile = AllocationMeter.sample();
 		var backendStartedAt = Sys.time() * 1000.0;
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
@@ -55,6 +60,7 @@ class CompilerDriver {
 			outputIndices = result.functionIndices;
 		}
 		var backendDoneAt = Sys.time() * 1000.0;
+		var allocationAfterEncode = AllocationMeter.sample();
 		File.saveBytes(request.output, outputBytes);
 		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
@@ -67,9 +73,17 @@ class CompilerDriver {
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 		var artifactsWrittenAt = Sys.time() * 1000.0;
+		var allocationAfterWrite = AllocationMeter.sample();
 		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
 			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
+		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
+		report(allocationReport("driver allocation phases:", [
+			AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
+			AllocationMeter.delta("compile", allocationAfterPrepare, allocationAfterCompile),
+			AllocationMeter.delta("encode", allocationAfterCompile, allocationAfterEncode),
+			AllocationMeter.delta("write", allocationAfterEncode, allocationAfterWrite)
+		]));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 		return result;
 	}
@@ -100,6 +114,17 @@ class CompilerDriver {
 
 	static inline function milliseconds(value:Float):String
 		return Std.string(Math.round(value * 100.0) / 100.0);
+
+	static function allocationReport(prefix:String, phases:Array<PhaseAllocation>):String {
+		var values = [prefix];
+		for (phase in phases) {
+			values.push(phase.name + "-bytes=" + Std.string(phase.bytes));
+			values.push(phase.name + "-count=" + Std.string(phase.count));
+			values.push(phase.name + "-gcs=" + Std.string(phase.collections));
+			values.push(phase.name + "-gc-ms=" + milliseconds(phase.markMicros / 1000.0));
+		}
+		return values.join(" ");
+	}
 
 	/** Defines supplied by the command-line target before user source is analyzed. */
 	public static function targetDefines(target:String):Array<String> {

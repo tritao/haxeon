@@ -16,7 +16,7 @@ import time
 COMPILER = re.compile(r"compiler: ([0-9]+) ms, ([0-9]+) functions retyped")
 EXECUTE = re.compile(r"execute: ([0-9.]+) ms")
 PHASE = re.compile(r"([a-z-]+)=([0-9.]+(?:[eE][+-]?[0-9]+)?)")
-ALLOCATIONS = re.compile(r"worker allocations: bytes=([0-9]+) count=([0-9]+) heap=([0-9]+)")
+ALLOCATIONS = re.compile(r"worker allocations: bytes=([0-9.eE+-]+) count=([0-9.eE+-]+) heap=([0-9.eE+-]+)")
 
 
 def main() -> None:
@@ -94,10 +94,14 @@ def main() -> None:
             execute = EXECUTE.search(output)
             phase_line = next((line for line in output.splitlines() if line.startswith("compiler phases")), "")
             driver_line = next((line for line in output.splitlines() if line.startswith("driver phases")), "")
+            allocation_line = next((line for line in output.splitlines() if line.startswith("compiler allocation phases")), "")
+            driver_allocation_line = next((line for line in output.splitlines() if line.startswith("driver allocation phases")), "")
             if compiler is None or execute is None or not phase_line:
                 raise SystemExit("timing output was incomplete\n" + output)
             sample = {name: float(value) for name, value in PHASE.findall(phase_line)}
             sample.update({"driver-" + name: float(value) for name, value in PHASE.findall(driver_line)})
+            sample.update({"alloc-" + name: float(value) for name, value in PHASE.findall(allocation_line)})
+            sample.update({"driver-alloc-" + name: float(value) for name, value in PHASE.findall(driver_allocation_line)})
             sample.update(compiler=float(compiler.group(1)), retyped=float(compiler.group(2)), execute=float(execute.group(1)))
             sample["command-overhead"] = sample["execute"] - sample["compiler"]
             allocations = ALLOCATIONS.search(output)
@@ -131,7 +135,7 @@ def main() -> None:
         print(report.stdout)
 
     keys = sorted(set.intersection(*(set(sample) for sample in samples)))
-    print(f"median of {len(samples)} incremental edits (ms):")
+    print(f"median of {len(samples)} incremental edits (units in metric names; timings in ms):")
     for key in keys:
         value = statistics.median(sample[key] for sample in samples)
         print(f"  {key}: {value:.2f}")

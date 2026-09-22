@@ -691,6 +691,13 @@ python3 scripts/benchmark-incremental-project.py \
   --output /tmp/compiler-edits.json /tmp/compiler-edits.hlpc
 ```
 
+Incremental benchmark output also reports `alloc-<phase>-bytes`, `-count`,
+`-gcs`, and `-gc-ms` from HashLink's cumulative GC counters. These are
+phase deltas; `gc-ms` measures stop-the-world marking. The `driver-alloc-*`
+values cover request preparation, compilation, artifact encoding, and writing.
+Use the unprofiled benchmark for latency comparisons, since live sampling adds
+CPU overhead.
+
 `bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
 source tree and reports bootstrap progress. Pass `--json` for a machine-readable
 dashboard.

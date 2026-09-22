@@ -19,6 +19,7 @@ import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstType;
+import compiler.compilation.AllocationMeter.PhaseAllocation;
 
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
@@ -41,12 +42,14 @@ typedef FrontendResult = {
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
+	final allocationPhases:Array<PhaseAllocation>;
 }
 
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true):FrontendResult {
+		var allocationAtStart = AllocationMeter.sample();
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
@@ -115,6 +118,7 @@ class FrontendCompilation {
 			graphInitializationMs = Sys.time() * 1000.0 - initializationStartedAt;
 		}
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
+		var allocationAfterGraph = AllocationMeter.sample();
 
 		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged),
 			canonicalProgram = semanticAssembly.canonicalProgram,
@@ -125,6 +129,7 @@ class FrontendCompilation {
 			selected = semanticAssembly.selected,
 			entryPoint = semanticAssembly.entryPoint;
 		var frontendDoneAt = Sys.time() * 1000.0;
+		var allocationAfterSemantic = AllocationMeter.sample();
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		try {
 			if (token != null)
@@ -337,6 +342,12 @@ class FrontendCompilation {
 			}
 		regenerated.sort(Reflect.compare);
 		var typingLoweringDoneAt = Sys.time() * 1000.0;
+		var allocationAfterTyping = AllocationMeter.sample();
+		var allocationPhases = [
+			AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph),
+			AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic),
+			AllocationMeter.delta("typing-lowering", allocationAfterSemantic, allocationAfterTyping)
+		];
 		if (!lowerToIr)
 			return {
 				ir: null,
@@ -358,7 +369,8 @@ class FrontendCompilation {
 				graphInitializationMs: graphInitializationMs,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
-				irAssemblyDoneAt: typingLoweringDoneAt
+				irAssemblyDoneAt: typingLoweringDoneAt,
+				allocationPhases: allocationPhases
 			};
 		var cachedNames:Array<String> = [];
 		for (moduleName in names) {
@@ -400,6 +412,7 @@ class FrontendCompilation {
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializerFrom(typedNew, initializationClasses),
 			entryPoint, irCNatives);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
+		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
 			ir: ir,
 			moduleNames: names,
@@ -420,7 +433,8 @@ class FrontendCompilation {
 			graphInitializationMs: graphInitializationMs,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
-			irAssemblyDoneAt: irAssemblyDoneAt
+			irAssemblyDoneAt: irAssemblyDoneAt,
+			allocationPhases: allocationPhases
 		};
 	}
 
