@@ -187,6 +187,18 @@ class FrontendCompilation {
 			indexTypedInitializers(context, typedNew, reindexedModules);
 			publishResolvedDependencies(context, typedNew, reindexedModules, rollbackModules);
 		}
+		var functionNamesByModule:Map<String, Array<String>> = [];
+		for (fn in functions) {
+			var owner = owners.get(fn.name);
+			if (owner == null)
+				continue;
+			var owned = functionNamesByModule.get(owner);
+			if (owned == null) {
+				owned = [];
+				functionNamesByModule.set(owner, owned);
+			}
+			owned.push(fn.name);
+		}
 		for (module in touchedModules.keys())
 			if (modules.exists(module))
 				modules.get(module).typeVersion++;
@@ -198,9 +210,10 @@ class FrontendCompilation {
 			var state = modules.get(name),
 				ast = state.parsedAst(),
 				valid:Map<String, Bool> = [];
-			for (fn in functions)
-				if (owners.exists(fn.name) && owners.get(fn.name) == name)
-					valid.set(fn.name, true);
+			var ownedFunctions = functionNamesByModule.get(name);
+			if (ownedFunctions != null)
+				for (functionName in ownedFunctions)
+					valid.set(functionName, true);
 			if (generatedByModule.exists(name)) {
 				var lambdaNames = generatedByModule.get(name);
 				for (lambdaName in lambdaNames.keys())

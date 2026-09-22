@@ -74,6 +74,12 @@ class CompilerDriver {
 			+ " (graph=" + milliseconds(metrics.frontendGraphMs)
 			+ " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")"
 			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs)
+			+ " (declarations=" + milliseconds(metrics.declarationMs)
+			+ " shapes=" + milliseconds(metrics.shapeConnectionMs)
+			+ " signatures=" + milliseconds(metrics.signatureTypingMs)
+			+ " setup=" + milliseconds(metrics.typerSetupMs)
+			+ " bodies=" + milliseconds(metrics.typerBodiesMs)
+			+ " assembly=" + milliseconds(metrics.typerAssemblyMs) + ")"
 			+ " ir-assembly=" + milliseconds(metrics.irAssemblyMs)
 			+ " abi=" + milliseconds(metrics.abiPlanningMs)
 			+ " incremental-backend=" + milliseconds(metrics.backendAssemblyMs)
