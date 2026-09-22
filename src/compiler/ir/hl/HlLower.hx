@@ -46,6 +46,7 @@ class HlLower {
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache):HlCode {
+		var affected = regenerated;
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
 		else {
@@ -61,8 +62,9 @@ class HlLower {
 				if (regeneratedNames.exists(fn.name) || touchesSourcePath(fn, regeneratedSources))
 					selected.set(fn.name, true);
 			IrVerifier.verifyFunctions(program, selected);
+			affected = [for (name in selected.keys()) name];
 		}
-		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache).lowerProgram(program);
+		return new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache).lowerProgram(program);
 	}
 
 	final stableIds:Null<Map<String, Int>>;
@@ -246,14 +248,8 @@ class HlLower {
 			lowerNative(native);
 		for (native in cDispatchNatives)
 			lowerNative(native);
-		var regeneratedSources:Map<String, Bool> = [];
-		for (fn in program.functions)
-			if (regenerated.exists(fn.name))
-				collectSourcePaths(fn, regeneratedSources);
 		for (fn in program.functions) {
-			var cached = cachedFunctions == null
-				|| regenerated.exists(fn.name)
-				|| touchesSourcePath(fn, regeneratedSources) ? null : cachedFunctions.get(fn.name);
+			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
 				code.functions.push(cached);
 			else
@@ -310,11 +306,11 @@ class HlLower {
 		});
 
 		code.entryPoint = requireFunction(program.entryPoint);
-		code.ints = symbols.ints.copy();
-		code.floats = symbols.floats.copy();
-		code.strings = symbols.strings.copy();
-		code.types = symbols.types.copy();
-		code.globals = symbols.globals.copy();
+		code.ints = symbols.ints;
+		code.floats = symbols.floats;
+		code.strings = symbols.strings;
+		code.types = symbols.types;
+		code.globals = symbols.globals;
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {

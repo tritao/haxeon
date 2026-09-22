@@ -80,8 +80,11 @@ class CompilerDriver {
 			+ milliseconds(metrics.typerMetadataMs) + " bodies=" + milliseconds(metrics.typerBodiesMs) + " body-transition="
 			+ milliseconds(metrics.bodyTransitionMs) + " assembly=" + milliseconds(metrics.typerAssemblyMs) + " finalization="
 			+ milliseconds(metrics.finalizationTransitionMs) + ")" + " ir-assembly=" + milliseconds(metrics.irAssemblyMs) + " abi="
-			+ milliseconds(metrics.abiPlanningMs) + " incremental-backend=" + milliseconds(metrics.backendAssemblyMs) + " patch="
-			+ milliseconds(metrics.patchEncodingMs) + " finalize=" + milliseconds(metrics.finalizeMs) + " output-backend=" + milliseconds(outputBackendMs);
+			+ milliseconds(metrics.abiPlanningMs) + " incremental-backend=" + milliseconds(metrics.backendAssemblyMs) + " (assembler-copy="
+			+ milliseconds(metrics.backendAssemblerCopyMs) + " cache-preparation=" + milliseconds(metrics.backendCachePreparationMs) + " backend-lowering="
+			+ milliseconds(metrics.backendLoweringMs) + " publication=" + milliseconds(metrics.backendPublicationMs) + " snapshots="
+			+ milliseconds(metrics.backendSnapshotMs) + ") patch=" + milliseconds(metrics.patchEncodingMs) + " finalize=" + milliseconds(metrics.finalizeMs)
+			+ " output-backend=" + milliseconds(outputBackendMs);
 	}
 
 	static inline function milliseconds(value:Float):String

@@ -21,9 +21,9 @@ def main() -> None:
     parser.add_argument("--token-b", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--runs", type=int, default=5)
-    parser.add_argument("--max-compiler-ms", type=float)
-    parser.add_argument("--max-execute-ms", type=float)
-    parser.add_argument("--max-retyped", type=float)
+    parser.add_argument("--max-compiler-ms", type=float, default=2000.0)
+    parser.add_argument("--max-execute-ms", type=float, default=2500.0)
+    parser.add_argument("--max-retyped", type=float, default=4.0)
     args = parser.parse_args()
     if args.runs < 1:
         raise SystemExit("--runs must be positive")

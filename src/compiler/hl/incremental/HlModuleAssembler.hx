@@ -35,6 +35,9 @@ typedef HlAssemblyResult = {
 	final baseFloats:Int;
 	final baseStrings:Int;
 	final baseTypes:Int;
+	final cachePreparationMs:Float;
+	final loweringMs:Float;
+	final publicationMs:Float;
 }
 
 /**
@@ -113,6 +116,7 @@ class HlModuleAssembler {
 	}
 
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
+		var startedAt = Sys.time() * 1000.0;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -148,9 +152,11 @@ class HlModuleAssembler {
 			case Patch: true;
 			case ReloadDomain(_), Reject(_): false;
 		};
+		var cachePreparedAt = Sys.time() * 1000.0;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && runtimeNatives.length > 0 ? runtimeNatives : null, reuseLowered && runtimeNatives.length > 0 ? regenerated : null);
 		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated, runtimeNatives,
 			debugMetadata);
+		var loweredAt = Sys.time() * 1000.0;
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
 			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);
@@ -174,7 +180,10 @@ class HlModuleAssembler {
 			baseInts: baseInts,
 			baseFloats: baseFloats,
 			baseStrings: baseStrings,
-			baseTypes: baseTypes
+			baseTypes: baseTypes,
+			cachePreparationMs: cachePreparedAt - startedAt,
+			loweringMs: loweredAt - cachePreparedAt,
+			publicationMs: Sys.time() * 1000.0 - loweredAt
 		};
 	}
 }

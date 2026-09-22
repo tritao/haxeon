@@ -23,6 +23,8 @@ typedef BackendAssemblyResult = {
 	final abiPlanningDoneAt:Float;
 	final backendAssemblyDoneAt:Float;
 	final patchEncodingDoneAt:Float;
+	final assemblerCopyMs:Float;
+	final snapshotAttachmentMs:Float;
 }
 
 /** Plans and assembles one IR candidate for the HashLink backend. */
@@ -41,7 +43,9 @@ class BackendAssembly {
 		var abiPlanningDoneAt = Sys.time() * 1000.0;
 		var candidateAssembler = context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
+		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision);
+		var assembledAt = Sys.time() * 1000.0;
 		attachSourceSnapshots(context, assembly.module);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		if (token != null)
@@ -56,6 +60,8 @@ class BackendAssembly {
 			abi: nextAbi,
 			reloadReasons: reloadReasons,
 			patchBytes: patchBytes,
+			assemblerCopyMs: assemblerCopiedAt - abiPlanningDoneAt,
+			snapshotAttachmentMs: backendAssemblyDoneAt - assembledAt,
 			abiPlanningDoneAt: abiPlanningDoneAt,
 			backendAssemblyDoneAt: backendAssemblyDoneAt,
 			patchEncodingDoneAt: Sys.time() * 1000.0
