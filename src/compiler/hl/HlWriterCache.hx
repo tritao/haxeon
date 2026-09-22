@@ -7,6 +7,7 @@ import haxe.io.Bytes;
 class HlWriterCache {
 	var debugFiles:Array<String> = [];
 	var functions:ObjectMap<HlFunction, Bytes> = new ObjectMap();
+	var functionPaths:ObjectMap<HlFunction, Array<String>> = new ObjectMap();
 	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
 	var validatedSnapshots:ObjectMap<Bytes, Int> = new ObjectMap();
 	var prefix:Null<Bytes>;
@@ -36,6 +37,12 @@ class HlWriterCache {
 	public function set(fn:HlFunction, bytes:Bytes):Void
 		functions.set(fn, bytes);
 
+	public function paths(fn:HlFunction):Null<Array<String>>
+		return functionPaths.get(fn);
+
+	public function retainPaths(active:ObjectMap<HlFunction, Array<String>>):Void
+		functionPaths = active;
+
 	public function isValidated(fn:HlFunction):Bool
 		return validatedFunctions.exists(fn);
 
@@ -50,7 +57,8 @@ class HlWriterCache {
 
 	public function getPrefix(code:HlCode):Null<Bytes> {
 		var nativeKey = [
-			for (native in code.natives) '${native.library}:${native.name}:${native.type}:${native.functionIndex}'
+			for (native in code.natives)
+				'${native.library}:${native.name}:${native.type}:${native.functionIndex}'
 		].join("|");
 		return prefixInts == code.ints
 			&& prefixFloats == code.floats
@@ -70,7 +78,8 @@ class HlWriterCache {
 		prefixTypes = code.types;
 		prefixGlobals = code.globals;
 		prefixNativeKey = [
-			for (native in code.natives) '${native.library}:${native.name}:${native.type}:${native.functionIndex}'
+			for (native in code.natives)
+				'${native.library}:${native.name}:${native.type}:${native.functionIndex}'
 		].join("|");
 		prefixFunctions = code.functions.length;
 		prefixEntryPoint = code.entryPoint;

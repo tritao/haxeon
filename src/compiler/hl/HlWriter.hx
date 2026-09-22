@@ -3,6 +3,7 @@ package compiler.hl;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
 import haxe.io.Output;
+import haxe.ds.ObjectMap;
 import sys.io.File;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
@@ -444,16 +445,39 @@ class HlWriter {
 		for (fn in code.functions)
 			if (fn.debugLocations.length > 0)
 				hasDebug = true;
-		if (!hasDebug)
+		if (!hasDebug) {
+			if (cache != null)
+				cache.retainPaths(new ObjectMap());
 			return;
+		}
+		var activePaths:ObjectMap<HlFunction, Array<String>> = cache == null ? null : new ObjectMap();
 		for (fn in code.functions) {
 			if (fn.debugLocations.length == 0) {
 				internDebugFile("<generated>");
 				continue;
 			}
-			for (location in fn.debugLocations)
-				internDebugFile(location.path);
+			if (cache == null) {
+				for (location in fn.debugLocations)
+					internDebugFile(location.path);
+				continue;
+			}
+			var paths = cache.paths(fn);
+			if (paths == null) {
+				paths = [];
+				var previousPath = "";
+				for (location in fn.debugLocations)
+					if (location.path != previousPath) {
+						previousPath = location.path;
+						if (paths.indexOf(previousPath) < 0)
+							paths.push(previousPath);
+					}
+			}
+			activePaths.set(fn, paths);
+			for (path in paths)
+				internDebugFile(path);
 		}
+		if (cache != null)
+			cache.retainPaths(activePaths);
 	}
 
 	function internDebugFile(path:String):Int {

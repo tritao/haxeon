@@ -99,6 +99,33 @@ class DebugMetadataMain {
 			if (bytes.compare(streamed.getBytes()) != 0)
 				throw "Streamed HLB encoding differs from canonical bytes";
 		}
+		if (fn.debugLocations.length < 3)
+			throw "Debug-file cache fixture needs three opcode locations";
+		var originalLocations = fn.debugLocations.copy();
+		for (index in 0...3) {
+			var location = originalLocations[index];
+			fn.debugLocations[index] = {
+				path: index == 1 ? "second-source.hx" : "first-source.hx",
+				line: location.line,
+				column: location.column,
+				endLine: location.endLine,
+				endColumn: location.endColumn,
+				sourceHash: location.sourceHash,
+				start: location.start,
+				end: location.end,
+				flags: location.flags
+			};
+		}
+		var mixedPaths = HlWriter.encode(code),
+			mixedCache = new HlWriterCache();
+		for (_ in 0...2) {
+			var streamed = new BytesOutput();
+			HlWriter.writeTo(code, streamed, mixedCache);
+			if (mixedPaths.compare(streamed.getBytes()) != 0)
+				throw "Cached debug files changed non-contiguous source-file ordering";
+		}
+		for (index in 0...3)
+			fn.debugLocations[index] = originalLocations[index];
 		if (!contains(bytes, suffix))
 			throw "HLB output did not serialize canonical debug assignment triples";
 		Sys.println("PASS: HLB serializes deterministic local and function debug metadata");
