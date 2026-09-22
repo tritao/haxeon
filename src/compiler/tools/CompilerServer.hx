@@ -28,7 +28,9 @@ class CompilerServer {
 		try {
 			var running = true;
 			while (running) {
-				if (Socket.select([listener], [], [], 300).read.length == 0)
+				// Socket.select follows each target's native timeout unit.
+				var idleTimeout = #if hl 300000 #else 300 #end;
+				if (Socket.select([listener], [], [], idleTimeout).read.length == 0)
 					break;
 				var client = listener.accept();
 				client.setTimeout(600);
@@ -62,7 +64,9 @@ class CompilerServer {
 				}
 				client.close();
 			}
-		} catch (_:Dynamic) {}
+		} catch (error:Dynamic) {
+			Sys.stderr().writeString("Compiler server stopped: " + Std.string(error) + "\n");
+		}
 		listener.close();
 		// A concurrent startup may have published a replacement worker.
 		try {

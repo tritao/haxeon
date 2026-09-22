@@ -5,8 +5,8 @@ import compiler.ffi.CHeaderEmitter;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.backend.hl.HlBackend;
 import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlWriter;
 import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
 import sys.io.File;
@@ -22,6 +22,7 @@ class CompilerDriver {
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);
+		var backendStartedAt = Sys.time() * 1000.0;
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
 		var isWasm = StringTools.startsWith(request.target, "wasm"),
@@ -31,8 +32,10 @@ class CompilerDriver {
 				case "wasmgc", "wasm-gc": WasmGc;
 				default: HashLink;
 			},
-			backend:Backend = isWasm ? new WasmBackend() : new HlBackend(),
-			backendResult = backend.compile(result.ir, {
+			outputBytes:Bytes,
+			outputIndices:Null<Map<String, Int>> = null;
+		if (isWasm) {
+			var backend:Backend = new WasmBackend(), backendResult = backend.compile(result.ir, {
 				target: wasmTarget,
 				debugNames: true,
 				importMemory: request.importMemory,
@@ -42,20 +45,43 @@ class CompilerDriver {
 				wasmGcStress: request.wasmGcStress,
 				exports: request.exports
 			});
-		File.saveBytes(request.output, backendResult.bytes);
+			outputBytes = backendResult.bytes;
+		} else {
+			outputBytes = HlWriter.encode(result.module);
+			outputIndices = result.functionIndices;
+		}
+		var backendDoneAt = Sys.time() * 1000.0;
+		File.saveBytes(request.output, outputBytes);
 		if (isWasm)
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
 		if (!isWasm)
-			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(backendResult.functionIndices)));
+			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.irOutput != null)
 			File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
+		report(phaseReport(result, backendDoneAt - backendStartedAt));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 		return result;
 	}
+
+	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
+		var metrics = result.metrics;
+		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs)
+			+ " frontend=" + milliseconds(metrics.frontendMs)
+			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs)
+			+ " ir-assembly=" + milliseconds(metrics.irAssemblyMs)
+			+ " abi=" + milliseconds(metrics.abiPlanningMs)
+			+ " incremental-backend=" + milliseconds(metrics.backendAssemblyMs)
+			+ " patch=" + milliseconds(metrics.patchEncodingMs)
+			+ " finalize=" + milliseconds(metrics.finalizeMs)
+			+ " output-backend=" + milliseconds(outputBackendMs);
+	}
+
+	static inline function milliseconds(value:Float):String
+		return Std.string(Math.round(value * 100.0) / 100.0);
 
 	/** Defines supplied by the command-line target before user source is analyzed. */
 	public static function targetDefines(target:String):Array<String> {

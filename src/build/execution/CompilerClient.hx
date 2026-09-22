@@ -23,20 +23,32 @@ class CompilerClient {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw "Could not make the compiler session directory private";
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
-			var identity = new ExecutionAction(new ActionId("compiler-session-v1"), [],
+			var identity = new ExecutionAction(new ActionId("compiler-session-v5"), [],
 				[compilerSource, Path.join([home, "stdlib"])], [], projectRoot,
 				ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
 				key = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
 			if (connection == null) {
-				var workerArguments = ["-cp", compilerSource, "--run", "compiler.tools.CompilerServer", statePath],
-					launch = [command].concat(workerArguments).map(SysTools.quoteUnixArg).join(" "),
+				var workerArtifact = Path.join([directory, key + ".hl"]),
+					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
-				// Eval does not support Process(detached=true). Redirect all three streams
-				// so the worker cannot keep the caller's pipes open after the build exits.
-				var status = Sys.command("sh", ["-c", "umask 077; cd " + SysTools.quoteUnixArg(home)
-					+ " && nohup " + launch + " > " + SysTools.quoteUnixArg(logPath) + " 2>&1 < /dev/null &"]);
+				if (!FileSystem.exists(workerArtifact)) {
+					var compileStatus = ProcessRunner.run(command,
+						["-cp", compilerSource, "-hl", workerArtifact, "-main", "compiler.tools.CompilerServer"], home, new Map());
+					if (compileStatus != 0)
+						throw "Could not compile the persistent compiler worker";
+				}
+				var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+					libraryPath = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"]), Sys.getEnv(libraryVariable)]
+						.filter(value -> value != null && value.length > 0).join(":"),
+					launch = [hashlink, workerArtifact, statePath].map(SysTools.quoteUnixArg).join(" ");
+				// Redirect all three streams so the worker cannot keep the caller's
+				// pipes open after the build exits.
+				var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
+					status = Sys.command("sh", ["-c", "umask 077; cd " + SysTools.quoteUnixArg(home)
+					+ " && export " + libraryVariable + "=" + SysTools.quoteUnixArg(libraryPath)
+					+ " && " + detach + "nohup " + launch + " > " + SysTools.quoteUnixArg(logPath) + " 2>&1 < /dev/null &"]);
 				if (status != 0)
 					throw "Could not start compiler worker";
 				var deadline = Sys.time() + 30;

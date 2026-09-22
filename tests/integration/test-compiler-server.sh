@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 python3 - "$repo_dir" <<'PY'
-import json, os, pathlib, socket, struct, subprocess, sys, tempfile
+import json, os, pathlib, socket, struct, subprocess, sys, tempfile, time
 
 repo = pathlib.Path(sys.argv[1])
 env = os.environ.copy()
@@ -41,6 +41,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         build()
         run(7)
         assert len(list(states.glob('*.json'))) == 1
+        time.sleep(1)
         source('9')
         assert 'reusing compiler session' in build()
         run(9)
