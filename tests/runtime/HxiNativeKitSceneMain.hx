@@ -1,4 +1,3 @@
-import nativekit.ffi.NativeKit;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -38,6 +37,7 @@ import NativeKitScene;
 import NativeKitSceneRender;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 import NativeKitEventValue;
 import NativeKitRuntime;
 import nativekit.scene.Scene;

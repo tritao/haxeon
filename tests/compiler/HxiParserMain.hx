@@ -241,8 +241,18 @@ class HxiParserMain {
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
 		layoutCompiler.update("LayoutMain.hx",
-			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Kind = cast 0; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
+			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = cast 0; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
 		layoutCompiler.analyze("LayoutMain");
+		layoutCompiler.update("QualifiedLayoutMain.hx",
+			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.LibKindPrimary; return kind; }");
+		layoutCompiler.analyze("QualifiedLayoutMain");
+		layoutCompiler.update("menu/Kind.hx", "package menu; class Kind { public function new(first:Int, second:Int, third:Int) {} }");
+		layoutCompiler.update("ImportPrecedenceMain.hx",
+			"import nativekit.ffi.Types; import menu.Kind; function main():Int { new Kind(1, 2, 3); return 0; }");
+		layoutCompiler.analyze("ImportPrecedenceMain");
+		layoutCompiler.update("ReverseImportPrecedenceMain.hx",
+			"import menu.Kind; import nativekit.ffi.Types; function main():Int { new Kind(1, 2, 3); return 0; }");
+		layoutCompiler.analyze("ReverseImportPrecedenceMain");
 		var mappedDependencyCompiler = new Compiler();
 		mappedDependencyCompiler.addFfiInterface("base.hxi", 'interface base @target("x86_64-linux-gnu") @library("base") { handle nk_handle : u32; }');
 		mappedDependencyCompiler.addFfiInterface("derived.hxi",

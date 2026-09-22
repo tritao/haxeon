@@ -139,6 +139,28 @@ native C spelling. This keeps C headers and generated ABI snapshots
 language-neutral while allowing each target language to define its own naming
 policy.
 
+Profiles can place the projection into a package and split functions, types,
+and constants into a few generated modules:
+
+```json
+{
+  "interface": "NativeKit",
+  "package": "nativekit.ffi",
+  "modules": {
+    "functions": "NativeKit",
+    "types": "NativeKitTypes",
+    "constants": "NativeKitConstants"
+  }
+}
+```
+
+An importing module can use `import nativekit.ffi.NativeKitTypes;` for its
+secondary declarations, or import a package with `import nativekit.ffi.*;`.
+For HXI dependencies whose functions and types are projected into different
+modules, `dependencyModules` selects the function module and
+`dependencyTypeModules` imports the corresponding type module. Secondary types
+can then be referenced as `NativeKitTypes.WindowHandle`.
+
 A projection can also define a conventional checked-result surface without
 changing the raw result-returning ABI function:
 

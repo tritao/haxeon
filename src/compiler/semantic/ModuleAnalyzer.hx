@@ -205,15 +205,20 @@ class ModuleAnalyzer {
 			var modulePath = importModulePath(path);
 			if (isWildcardImport(path)) {
 				for (sourceModule in importedSourceModules(path))
-					addModuleAliases(sourceModule, aliases, true);
+					addModuleAliases(sourceModule, aliases, true, QualifiedName.last(sourceModule));
 				continue;
 			}
 			var alias = QualifiedName.last(path),
 				importedName = importedDeclarationName(path);
+			for (explicitAlias => explicitPath in explicit)
+				if (explicitPath == path) {
+					alias = explicitAlias;
+					break;
+				}
 			aliases.set(alias, importedName);
 			aliases.set(path, importedName);
 			if (modules.exists(modulePath))
-				addModuleAliases(modulePath, aliases, false);
+				addModuleAliases(modulePath, aliases, false, alias);
 		}
 		for (alias => path in explicit) {
 			aliases.set(alias, importedDeclarationName(path));
@@ -230,32 +235,34 @@ class ModuleAnalyzer {
 	public static inline function importModulePath(path:String):String
 		return isWildcardImport(path) ? path.substring(0, path.length - 2) : path;
 
-	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool):Void {
+	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String):Void {
 		var ast = moduleAst(moduleName);
 		if (ast == null)
 			return;
 		for (declaration in ast.aliases)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		for (declaration in ast.enums)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		for (declaration in ast.enumAbstracts)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		for (declaration in ast.abstracts)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		for (declaration in ast.interfaces)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		for (declaration in ast.classes)
-			addDeclarationAlias(moduleName, declaration.name, aliases);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 		if (includeFunctions)
 			for (declaration in ast.functions)
-				addDeclarationAlias(moduleName, declaration.name, aliases);
+				addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
 	}
 
-	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>):Void {
+	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>, moduleAlias:String):Void {
 		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
 			importedName = importedDeclarationName(sourceName);
-		aliases.set(declarationName, importedName);
+		if (!aliases.exists(declarationName))
+			aliases.set(declarationName, importedName);
 		aliases.set(sourceName, importedName);
+		aliases.set(moduleAlias + "." + declarationName, importedName);
 	}
 
 	function moduleAst(moduleName:String):Null<compiler.syntax.Ast.AstProgram> {

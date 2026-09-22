@@ -143,7 +143,7 @@ class SemanticAssembly {
 						if (StringTools.startsWith(qualifiedSourceName, importedModule + ".")) {
 							var nestedStart = importedModule.length + 1,
 								nestedName = qualifiedSourceName.substring(nestedStart, qualifiedSourceName.length);
-							if (nestedName.indexOf(".") < 0)
+							if (nestedName.indexOf(".") < 0 && !aliases.exists(nestedName))
 								aliases.set(nestedName, declarationName);
 						}
 					}

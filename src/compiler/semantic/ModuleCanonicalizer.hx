@@ -349,7 +349,14 @@ class ModuleCanonicalizer {
 				if (imported != null) Variable(imported,
 					span); else if (dot < 0 && locals.exists(name)) Variable(module == entry
 					&& name == "main" ? "main" : module + "." + name, span); else e;
-			case Member(object, name, s): Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
+			case Member(object, name, s):
+				var qualifiedName = expressionPath(e),
+					prefix = qualifiedName == null ? null : compiler.QualifiedName.first(qualifiedName),
+					imported = qualifiedName == null || locals.exists(prefix) ? null : resolveOptionalExpressionAlias(qualifiedName, aliases);
+				if (imported != null)
+					Variable(imported, s);
+				else
+					Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
@@ -507,6 +514,15 @@ class ModuleCanonicalizer {
 			return null;
 		return resolveExpressionAlias(name, aliases);
 	}
+
+	static function expressionPath(expression:AstExpression):Null<String>
+		return switch expression {
+			case Variable(name, _): name;
+			case Member(object, name, _):
+				var prefix = expressionPath(object);
+				prefix == null ? null : prefix + "." + name;
+			case _: null;
+		};
 
 	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<Map<String, String>>,
 			?typeParameters:Array<String>):compiler.syntax.Ast.AstType
