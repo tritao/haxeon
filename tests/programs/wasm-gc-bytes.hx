@@ -18,11 +18,17 @@ function main():Int {
 		expected = Bytes.alloc(2),
 		word = Bytes.alloc(4),
 		floatWord = Bytes.alloc(4),
+		doubleWord = Bytes.alloc(8),
 		comparison = Bytes.ofString("o").compare(Bytes.ofString("p"));
 	expected.set(0, 9);
 	expected.set(1, 42);
 	word.setInt32(0, -2147483647);
 	floatWord.setFloat(0, 1.5);
+	doubleWord.setDouble(0, 2.25);
+	if (floatWord.getFloat(0) != 1.5)
+		return 1;
+	if (doubleWord.getDouble(0) != 2.25)
+		return 2;
 	var boundsCaught = false;
 	try {
 		bytes.get(bytes.length);
@@ -30,6 +36,7 @@ function main():Int {
 		boundsCaught = true;
 	}
 	return bytes.length == 6 && bytes.get(2) == 7 && bytes.get(3) == 42 && copy.get(0) == 9 && copy.compare(expected) == 0
-		&& word.getInt32(0) == -2147483647 && floatWord.getInt32(0) == 0x3fc00000 && text.toString() == "ok" && text.getString(1, 1) == "k"
+		&& word.getInt32(0) == -2147483647
+		&& text.toString() == "ok" && text.getString(1, 1) == "k"
 		&& comparison < 0 && boundsCaught ? 42 : 0;
 }

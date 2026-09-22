@@ -50,6 +50,8 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_get_data", "haxeon_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "haxeon_runtime", "__bytes_get", [bytes, TInt], TInt));
 		definitions.push(native("__bytes_get_i32", "haxeon_runtime", "__bytes_get_i32", [bytes, TInt], TInt));
+		definitions.push(native("__bytes_get_float", "haxeon_runtime", "getF32", [bytes, TInt], TFloat));
+		definitions.push(native("__bytes_get_double", "haxeon_runtime", "getF64", [bytes, TInt], TFloat));
 		definitions.push(native("__bytes_set", "haxeon_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_i32", "haxeon_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_float", "haxeon_runtime", "setF32", [bytes, TInt, TFloat], TVoid));

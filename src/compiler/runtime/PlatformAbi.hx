@@ -80,6 +80,8 @@ class PlatformAbi {
 				};
 			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};
 			case "getInt32": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get_i32"};
+			case "getFloat": {arguments: [CompilerType.TInt], result: CompilerType.TFloat, nativeName: "__bytes_get_float"};
+			case "getDouble": {arguments: [CompilerType.TInt], result: CompilerType.TFloat, nativeName: "__bytes_get_double"};
 			case "set": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set"};
 			case "setInt32": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set_i32"};
 			case "setFloat": {arguments: [CompilerType.TInt, CompilerType.TFloat], result: CompilerType.TVoid, nativeName: "__bytes_set_float"};

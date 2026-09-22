@@ -837,21 +837,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC HXI i64 setter signature";
 			return managedByteSetI64(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
-		if (name == "getF32") {
+		if (name == "__bytes_get_float" || name == "getF32") {
 			if (output.type != F64 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI f32 getter signature";
 			var bits = allocateLocal(I32),
 				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], bits);
 			return body.concat([LocalGet(bits), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)]);
 		}
-		if (name == "getF64") {
+		if (name == "__bytes_get_double" || name == "getF64") {
 			if (output.type != F64 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI f64 getter signature";
 			var bits = allocateLocal(I64),
 				body = managedByteGetI64(argumentLocals[0], argumentLocals[1], bits);
 			return body.concat([LocalGet(bits), F64ReinterpretI64, LocalSet(outputLocal)]);
 		}
-		if (name == "setF64") {
+		if (name == "__bytes_set_double" || name == "setF64") {
 			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != F64
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC HXI f64 setter signature";
