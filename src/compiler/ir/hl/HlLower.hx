@@ -310,11 +310,11 @@ class HlLower {
 		});
 
 		code.entryPoint = requireFunction(program.entryPoint);
-		code.ints = code.ints.copy();
-		code.floats = code.floats.copy();
-		code.strings = code.strings.copy();
-		code.types = code.types.copy();
-		code.globals = code.globals.copy();
+		code.ints = symbols.ints.copy();
+		code.floats = symbols.floats.copy();
+		code.strings = symbols.strings.copy();
+		code.types = symbols.types.copy();
+		code.globals = symbols.globals.copy();
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {

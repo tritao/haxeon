@@ -62,7 +62,7 @@ class HlModuleAssembler {
 
 	public function copy():HlModuleAssembler {
 		var result = new HlModuleAssembler(null, debugMetadata);
-		result.symbols = symbols.copy();
+		result.symbols = symbols.fork();
 		result.cache = cache.copy();
 		result.initialized = initialized;
 		result.revision = revision;

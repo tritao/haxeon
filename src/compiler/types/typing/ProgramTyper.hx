@@ -151,7 +151,7 @@ class ProgramTyper {
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
-			] : cachedMetadata.classes, typedFunctions:Array<TypedFunction> = [];
+			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
 		if (cachedMetadata == null)
 			for (enumDecl in typedEnums)
 				for (caseDecl in enumDecl.cases)
@@ -222,6 +222,41 @@ class ProgramTyper {
 				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
 		};
+	}
+
+	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+		if (selected == null)
+			return cached;
+		var parsedByName = [for (decl in parsed) decl.name => decl];
+		return [
+			for (cachedClass in cached) {
+				var changed = false;
+				for (name in selected.keys())
+					if (StringTools.startsWith(name, cachedClass.name + ".")) {
+						changed = true;
+						break;
+					}
+				if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
+					var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
+						cachedMethods = [for (method in cachedClass.methods) method.name => method];
+					var methods = [
+						for (method in refreshed.methods)
+							selected.exists(method.name) ? method : cachedMethods.exists(method.name) ? cachedMethods.get(method.name) : method
+					];
+					{
+						name: refreshed.name,
+						isValue: refreshed.isValue,
+						isNativeValue: refreshed.isNativeValue,
+						nativeLayouts: cachedClass.nativeLayouts,
+						base: refreshed.base,
+						interfaces: refreshed.interfaces,
+						fields: refreshed.fields,
+						methods: methods,
+						span: refreshed.span
+					};
+				}
+			}
+		];
 	}
 
 	function bindCachedNativeLayouts(classes:Array<TypedClass>):Void

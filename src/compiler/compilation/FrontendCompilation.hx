@@ -134,7 +134,7 @@ class FrontendCompilation {
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic && canonicalProgram.classes.length == 0 && canonicalProgram.abstracts.length == 0 ? context.lastTypedProgram : null);
+				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null);
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());

@@ -34,21 +34,22 @@ typedef HlSymbolState = {
  * Published prefixes are append-only so patches can validate prior contents.
  */
 class HlSymbolTable {
-	public final ints:Array<Int> = [];
-	public final strings:Array<String> = [];
-	public final floats:Array<Float> = [];
-	public final types:Array<HlTypeDef> = [];
-	public final globals:Array<Int> = [];
+	public var ints(default, null):Array<Int> = [];
+	public var strings(default, null):Array<String> = [];
+	public var floats(default, null):Array<Float> = [];
+	public var types(default, null):Array<HlTypeDef> = [];
+	public var globals(default, null):Array<Int> = [];
 
-	final intIndices:Map<Int, Int> = [];
-	final stringIndices:Map<String, Int> = [];
-	final floatIndices:Map<String, Int> = [];
-	final typeIndices:Map<String, Int> = [];
-	final globalIndices:Map<String, Int> = [];
-	final objectIndices:Map<String, Int> = [];
-	final objectMethodIndices:Map<String, Map<String, Int>> = [];
-	final interfaceMethodIndices:Map<String, Map<String, Int>> = [];
-	final pendingTypes:Map<String, Bool> = [];
+	var intIndices:Map<Int, Int> = [];
+	var stringIndices:Map<String, Int> = [];
+	var floatIndices:Map<String, Int> = [];
+	var typeIndices:Map<String, Int> = [];
+	var globalIndices:Map<String, Int> = [];
+	var objectIndices:Map<String, Int> = [];
+	var objectMethodIndices:Map<String, Map<String, Int>> = [];
+	var interfaceMethodIndices:Map<String, Map<String, Int>> = [];
+	var pendingTypes:Map<String, Bool> = [];
+	var shared = false;
 
 	public function new() {}
 
@@ -70,6 +71,51 @@ class HlSymbolTable {
 		copyNestedMap(objectMethodIndices, result.objectMethodIndices);
 		copyNestedMap(interfaceMethodIndices, result.interfaceMethodIndices);
 		return result;
+	}
+
+	public function fork():HlSymbolTable {
+		var result = new HlSymbolTable();
+		result.ints = ints;
+		result.strings = strings;
+		result.floats = floats;
+		result.types = types;
+		result.globals = globals;
+		result.intIndices = intIndices;
+		result.stringIndices = stringIndices;
+		result.floatIndices = floatIndices;
+		result.typeIndices = typeIndices;
+		result.globalIndices = globalIndices;
+		result.objectIndices = objectIndices;
+		result.objectMethodIndices = objectMethodIndices;
+		result.interfaceMethodIndices = interfaceMethodIndices;
+		result.pendingTypes = pendingTypes;
+		shared = true;
+		result.shared = true;
+		return result;
+	}
+
+	function ensureWritable():Void {
+		if (!shared)
+			return;
+		ints = ints.copy();
+		strings = strings.copy();
+		floats = floats.copy();
+		types = types.copy();
+		globals = globals.copy();
+		intIndices = [for (key => value in intIndices) key => value];
+		stringIndices = [for (key => value in stringIndices) key => value];
+		floatIndices = [for (key => value in floatIndices) key => value];
+		typeIndices = [for (key => value in typeIndices) key => value];
+		globalIndices = [for (key => value in globalIndices) key => value];
+		objectIndices = [for (key => value in objectIndices) key => value];
+		var objectMethods:Map<String, Map<String, Int>> = [],
+			interfaceMethods:Map<String, Map<String, Int>> = [];
+		copyNestedMap(objectMethodIndices, objectMethods);
+		copyNestedMap(interfaceMethodIndices, interfaceMethods);
+		objectMethodIndices = objectMethods;
+		interfaceMethodIndices = interfaceMethods;
+		pendingTypes = [for (key => value in pendingTypes) key => value];
+		shared = false;
 	}
 
 	public function exportState():HlSymbolState
@@ -165,6 +211,7 @@ class HlSymbolTable {
 	public function internInt(value:Int):Int {
 		if (intIndices.exists(value))
 			return intIndices.get(value);
+		ensureWritable();
 		var index = ints.length;
 		ints.push(value);
 		intIndices.set(value, index);
@@ -174,6 +221,7 @@ class HlSymbolTable {
 	public function internString(value:String):Int {
 		if (stringIndices.exists(value))
 			return stringIndices.get(value);
+		ensureWritable();
 		var index = strings.length;
 		strings.push(value);
 		stringIndices.set(value, index);
@@ -184,6 +232,7 @@ class HlSymbolTable {
 		var key = Std.string(value);
 		if (floatIndices.exists(key))
 			return floatIndices.get(key);
+		ensureWritable();
 		var index = floats.length;
 		floats.push(value);
 		floatIndices.set(key, index);
@@ -194,6 +243,7 @@ class HlSymbolTable {
 		var key = typeKey(type);
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
+		ensureWritable();
 		switch type {
 			case Function(arguments, result):
 				return internFunction(arguments, result);
@@ -240,6 +290,7 @@ class HlSymbolTable {
 		var key = 'enum:${enumDecl.name}';
 		if (typeIndices.exists(key) && !pendingTypes.exists(key))
 			return typeIndices.get(key);
+		ensureWritable();
 		var constructors = [
 			for (constructor in enumDecl.cases)
 				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
@@ -259,6 +310,7 @@ class HlSymbolTable {
 		var name = interfaceDecl.name, key = 'virt:$name';
 		if (typeIndices.exists(key) && !pendingTypes.exists(key))
 			return typeIndices.get(key);
+		ensureWritable();
 		var fields:Array<Null<HlVirtualField>> = [], slots:Map<String, Int> = [], next = 0;
 		for (base in interfaceDecl.bases)
 			if (interfaceMethodIndices.exists(base)) {
@@ -311,6 +363,7 @@ class HlSymbolTable {
 	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
+		ensureWritable();
 		var fields = [
 			for (field in object.fields)
 				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects)}
@@ -393,6 +446,7 @@ class HlSymbolTable {
 	function reserveType(key:String):Int {
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
+		ensureWritable();
 		var index = types.length;
 		types.push(HlTypeDef.Simple(HlType.Void));
 		typeIndices.set(key, index);
@@ -403,6 +457,7 @@ class HlSymbolTable {
 	public function internGlobal(name:String, type:IrType):Int {
 		if (globalIndices.exists(name))
 			return globalIndices.get(name);
+		ensureWritable();
 		var index = globals.length;
 		globals.push(internType(type));
 		globalIndices.set(name, index);
@@ -438,6 +493,7 @@ class HlSymbolTable {
 			found = typeIndices.get(key);
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
+		ensureWritable();
 		var args = [for (a in arguments) internType(a)],
 			ret = internType(result),
 			index = types.length;
