@@ -19,18 +19,20 @@ class HlWriter {
 	public static inline final SOURCE_SNAPSHOTS = 3;
 
 	final output:BytesOutput;
+	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
 
-	public function new() {
+	public function new(?cache:HlWriterCache) {
+		this.cache = cache;
 		output = new BytesOutput();
 		output.bigEndian = false;
 	}
 
-	public static function encode(code:HlCode):HaxeBytes {
+	public static function encode(code:HlCode, ?cache:HlWriterCache):HaxeBytes {
 		HlValidator.validate(code);
-		var writer = new HlWriter();
+		var writer = new HlWriter(cache);
 		writer.writeCode(code);
 		return writer.output.getBytes();
 	}
@@ -51,6 +53,8 @@ class HlWriter {
 
 	function writeCode(code:HlCode):Void {
 		prepareDebugFiles(code);
+		if (cache != null)
+			cache.prepare(debugFiles);
 		output.writeString("HLB");
 		output.writeByte(HlCode.VERSION);
 		writeUnsignedIndex(hasDebug ? 1 : 0);
@@ -87,9 +91,25 @@ class HlWriter {
 			writeIndex(native.type);
 			writeUnsignedIndex(native.functionIndex);
 		}
-		for (fn in code.functions)
-			writeFunction(fn);
+		for (fn in code.functions) {
+			var encoded = cache == null ? null : cache.get(fn);
+			if (encoded == null) {
+				encoded = encodePreparedFunction(fn);
+				if (cache != null)
+					cache.set(fn, encoded);
+			}
+			output.write(encoded);
+		}
 		writeDebugSections(code);
+	}
+
+	function encodePreparedFunction(fn:HlFunction):HaxeBytes {
+		var writer = new HlWriter();
+		writer.hasDebug = hasDebug;
+		writer.debugFiles = debugFiles;
+		writer.debugFileIndices = debugFileIndices;
+		writer.writeFunction(fn);
+		return writer.output.getBytes();
 	}
 
 	function writeDebugSections(code:HlCode):Void {

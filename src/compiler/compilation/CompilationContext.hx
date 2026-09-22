@@ -34,6 +34,7 @@ class CompilationContext {
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
+	public var lastTypedProgram(get, never):Null<TypedProgram>;
 
 	public function new(owner:Compiler, ?buildSemanticModels = true) {
 		this.owner = owner;
@@ -142,4 +143,7 @@ class CompilationContext {
 		owner.cachedSemanticProgram = value;
 		return value;
 	}
+
+	function get_lastTypedProgram():Null<TypedProgram>
+		return owner.lastTypedProgram;
 }

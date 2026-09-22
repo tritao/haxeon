@@ -35,19 +35,20 @@ class CompilerDriver {
 			outputBytes:Bytes,
 			outputIndices:Null<Map<String, Int>> = null;
 		if (isWasm) {
-			var backend:Backend = new WasmBackend(), backendResult = backend.compile(result.ir, {
-				target: wasmTarget,
-				debugNames: true,
-				importMemory: request.importMemory,
-				memoryBase: request.memoryBase,
-				memoryContract: memoryContract,
-				wasmMemoryStats: request.wasmMemoryStats,
-				wasmGcStress: request.wasmGcStress,
-				exports: request.exports
-			});
+			var backend:Backend = new WasmBackend(),
+				backendResult = backend.compile(result.ir, {
+					target: wasmTarget,
+					debugNames: true,
+					importMemory: request.importMemory,
+					memoryBase: request.memoryBase,
+					memoryContract: memoryContract,
+					wasmMemoryStats: request.wasmMemoryStats,
+					wasmGcStress: request.wasmGcStress,
+					exports: request.exports
+				});
 			outputBytes = backendResult.bytes;
 		} else {
-			outputBytes = HlWriter.encode(result.module);
+			outputBytes = session == null ? HlWriter.encode(result.module) : session.encodeHashLink(result.module);
 			outputIndices = result.functionIndices;
 		}
 		var backendDoneAt = Sys.time() * 1000.0;
@@ -69,23 +70,16 @@ class CompilerDriver {
 
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
-		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs)
-			+ " frontend=" + milliseconds(metrics.frontendMs)
-			+ " (graph=" + milliseconds(metrics.frontendGraphMs)
-			+ " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")"
-			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs)
-			+ " (declarations=" + milliseconds(metrics.declarationMs)
-			+ " shapes=" + milliseconds(metrics.shapeConnectionMs)
-			+ " signatures=" + milliseconds(metrics.signatureTypingMs)
-			+ " setup=" + milliseconds(metrics.typerSetupMs)
-			+ " bodies=" + milliseconds(metrics.typerBodiesMs)
-			+ " assembly=" + milliseconds(metrics.typerAssemblyMs) + ")"
-			+ " ir-assembly=" + milliseconds(metrics.irAssemblyMs)
-			+ " abi=" + milliseconds(metrics.abiPlanningMs)
-			+ " incremental-backend=" + milliseconds(metrics.backendAssemblyMs)
-			+ " patch=" + milliseconds(metrics.patchEncodingMs)
-			+ " finalize=" + milliseconds(metrics.finalizeMs)
-			+ " output-backend=" + milliseconds(outputBackendMs);
+		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " frontend=" + milliseconds(metrics.frontendMs)
+			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")" + " typing/lowering="
+			+ milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
+			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + " setup="
+			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="
+			+ milliseconds(metrics.typerMetadataMs) + " bodies=" + milliseconds(metrics.typerBodiesMs) + " body-transition="
+			+ milliseconds(metrics.bodyTransitionMs) + " assembly=" + milliseconds(metrics.typerAssemblyMs) + " finalization="
+			+ milliseconds(metrics.finalizationTransitionMs) + ")" + " ir-assembly=" + milliseconds(metrics.irAssemblyMs) + " abi="
+			+ milliseconds(metrics.abiPlanningMs) + " incremental-backend=" + milliseconds(metrics.backendAssemblyMs) + " patch="
+			+ milliseconds(metrics.patchEncodingMs) + " finalize=" + milliseconds(metrics.finalizeMs) + " output-backend=" + milliseconds(outputBackendMs);
 	}
 
 	static inline function milliseconds(value:Float):String

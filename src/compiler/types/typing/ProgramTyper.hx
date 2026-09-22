@@ -38,8 +38,8 @@ class ProgramTyper {
 		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
 	}
 
-	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
-			entryPoint:Null<String>):MeasuredTypedProgram {
+	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
+			?cachedMetadata:TypedProgram):MeasuredTypedProgram {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
@@ -58,37 +58,40 @@ class ProgramTyper {
 				bodyTyper.registerAnonymousTypes(aliasType);
 			}
 		}
-		var typedNatives:Array<TypedNative> = [];
-		for (fn in program.functions) {
-			if (session.externals.exists(fn.name))
-				BodyTyper.fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
-			if (fn.isExtern == true)
-				typedNatives.push(externTyper.typeExtern(fn));
-		}
-		for (classDecl in program.classes) {
-			var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata);
-			if (classDecl.isExtern == true || defaultLibrary != null) {
-				for (method in classDecl.methods) {
-					if (!method.isStatic)
-						BodyTyper.fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
-					var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
-					typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null));
+		var typedNatives:Array<TypedNative> = cachedMetadata == null ? [] : cachedMetadata.natives;
+		if (cachedMetadata == null)
+			for (fn in program.functions) {
+				if (session.externals.exists(fn.name))
+					BodyTyper.fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
+				if (fn.isExtern == true)
+					typedNatives.push(externTyper.typeExtern(fn));
+			}
+		if (cachedMetadata == null)
+			for (classDecl in program.classes) {
+				var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata);
+				if (classDecl.isExtern == true || defaultLibrary != null) {
+					for (method in classDecl.methods) {
+						if (!method.isStatic)
+							BodyTyper.fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
+						var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
+						typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null));
+					}
 				}
 			}
-		}
-		for (abstractDecl in program.abstracts)
-			if (abstractDecl.isExtern == true) {
-				var defaultLibrary = externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata);
-				for (method in abstractDecl.methods) {
-					var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
-					var receiverType = method.isStatic
-						|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-					var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-						BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
-					typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
+		if (cachedMetadata == null)
+			for (abstractDecl in program.abstracts)
+				if (abstractDecl.isExtern == true) {
+					var defaultLibrary = externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata);
+					for (method in abstractDecl.methods) {
+						var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
+						var receiverType = method.isStatic
+							|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+								BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
+						var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
+						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
+					}
 				}
-			}
 		for (native in typedNatives)
 			switch native.convention {
 				case CNative(_):
@@ -111,7 +114,7 @@ class ProgramTyper {
 			if (main.arguments.length != 0 || (bodyTyper.lowerType(main.result) != TInt && bodyTyper.lowerType(main.result) != TVoid))
 				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
-		var typedEnums:Array<TypedEnum> = [
+		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
@@ -127,7 +130,7 @@ class ProgramTyper {
 					],
 					span: enumDecl.span
 				}
-		], typedInterfaces:Array<TypedInterface> = [
+		] : cachedMetadata.enums, typedInterfaces:Array<TypedInterface> = cachedMetadata == null ? [
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
@@ -144,30 +147,35 @@ class ProgramTyper {
 							}
 					]
 				}
-			], typedClasses:Array<TypedClass> = [
+			] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
-			], typedFunctions:Array<TypedFunction> = [];
-		for (enumDecl in typedEnums)
-			for (caseDecl in enumDecl.cases)
-				for (parameter in caseDecl.params)
-					if (NativeLayout.containsNativeLayoutType(parameter))
-						BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
-		for (interfaceIndex in 0...typedInterfaces.length) {
-			var interfaceDecl = typedInterfaces[interfaceIndex],
-				parsed = program.interfaces[interfaceIndex];
-			for (methodIndex in 0...interfaceDecl.methods.length) {
-				var method = interfaceDecl.methods[methodIndex],
-					parsedMethod = parsed.methods[methodIndex];
-				for (argument in method.arguments)
-					if (NativeLayout.containsNativeLayoutType(argument))
-						BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
-				if (NativeLayout.containsNativeLayoutType(method.result))
-					BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+			] : cachedMetadata.classes, typedFunctions:Array<TypedFunction> = [];
+		if (cachedMetadata == null)
+			for (enumDecl in typedEnums)
+				for (caseDecl in enumDecl.cases)
+					for (parameter in caseDecl.params)
+						if (NativeLayout.containsNativeLayoutType(parameter))
+							BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
+		if (cachedMetadata == null)
+			for (interfaceIndex in 0...typedInterfaces.length) {
+				var interfaceDecl = typedInterfaces[interfaceIndex],
+					parsed = program.interfaces[interfaceIndex];
+				for (methodIndex in 0...interfaceDecl.methods.length) {
+					var method = interfaceDecl.methods[methodIndex],
+						parsedMethod = parsed.methods[methodIndex];
+					for (argument in method.arguments)
+						if (NativeLayout.containsNativeLayoutType(argument))
+							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
+					if (NativeLayout.containsNativeLayoutType(method.result))
+						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+				}
 			}
-		}
-		typedClasses = layoutNativeClasses(typedClasses);
+		if (cachedMetadata == null)
+			typedClasses = layoutNativeClasses(typedClasses);
+		else
+			bindCachedNativeLayouts(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		for (fn in program.functions)
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
@@ -215,6 +223,13 @@ class ProgramTyper {
 			}
 		};
 	}
+
+	function bindCachedNativeLayouts(classes:Array<TypedClass>):Void
+		for (classDecl in classes)
+			if (classDecl.isNativeValue)
+				for (layout in classDecl.nativeLayouts)
+					if (layout.target == session.nativeAbiTarget)
+						session.nativeLayoutsByName.set(classDecl.name, layout);
 
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
 		var requestedValue = hasMetadata(classDecl.metadata, "value"),

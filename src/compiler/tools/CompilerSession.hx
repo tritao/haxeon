@@ -2,6 +2,9 @@ package compiler.tools;
 
 import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
+import compiler.hl.HlCode;
+import compiler.hl.HlWriter;
+import compiler.hl.HlWriterCache;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -20,6 +23,7 @@ class CompilerSession {
 	var configuration:Null<String>;
 	final trustFileMetadata:Bool;
 	final sources:Map<String, CachedSource> = [];
+	var writerCache = new HlWriterCache();
 
 	public function new(trustFileMetadata = false)
 		this.trustFileMetadata = trustFileMetadata;
@@ -28,15 +32,24 @@ class CompilerSession {
 		compiler = null;
 		configuration = null;
 		sources.clear();
+		writerCache = new HlWriterCache();
 	}
+
+	public function encodeHashLink(code:HlCode):haxe.io.Bytes
+		return HlWriter.encode(code, writerCache);
 
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
 		var interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}],
 			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}],
 			identity = Json.stringify({
-				target: request.target, entry: request.entry, defines: request.defines, roots: request.roots,
-				packageRoots: request.packageRoots, paths: request.paths,
-				interfaces: interfaces, projections: projections
+				target: request.target,
+				entry: request.entry,
+				defines: request.defines,
+				roots: request.roots,
+				packageRoots: request.packageRoots,
+				paths: request.paths,
+				interfaces: interfaces,
+				projections: projections
 			});
 		if (configuration != identity)
 			reset();
@@ -99,11 +112,19 @@ class CompilerSession {
 	function readChanged(path:String):Null<String> {
 		if (!trustFileMetadata)
 			return File.getContent(path);
-		var stat = FileSystem.stat(path), cached = sources.get(path), modified = stat.mtime.getTime(), changed = stat.ctime.getTime();
+		var stat = FileSystem.stat(path),
+			cached = sources.get(path),
+			modified = stat.mtime.getTime(),
+			changed = stat.ctime.getTime();
 		if (cached != null && cached.size == stat.size && cached.modified == modified && cached.changed == changed)
 			return null;
 		var text = File.getContent(path);
-		sources.set(path, {size: stat.size, modified: modified, changed: changed, text: text});
+		sources.set(path, {
+			size: stat.size,
+			modified: modified,
+			changed: changed,
+			text: text
+		});
 		return text;
 	}
 }

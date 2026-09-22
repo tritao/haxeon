@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--max-edit-ms", type=int, default=5000)
     parser.add_argument("--max-edit-ratio", type=float, default=0.70)
     parser.add_argument("--max-retyped", type=int, default=4)
+    parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
     repo = pathlib.Path(__file__).resolve().parent.parent
     command = repo / "scripts/haxeon"
@@ -59,7 +60,7 @@ def main() -> None:
             )
         calls = " + ".join(f"Module{index}.value()" for index in range(args.modules))
         main_source = source / "Main.hx"
-        main_source.write_text(f"package bench; class Main {{ public static function main():Int return 0 + {calls}; }}\n", encoding="utf-8")
+        main_source.write_text(f"package bench; function main():Int return 0 + {calls};\n", encoding="utf-8")
 
         def build() -> tuple[int, int, str]:
             completed = subprocess.run(
@@ -82,6 +83,8 @@ def main() -> None:
             cold_ms, _, _ = build()
             main_source.write_text(main_source.read_text(encoding="utf-8").replace("return 0 +", "return 1 +"), encoding="utf-8")
             edit_ms, retyped, output = build()
+            if args.verbose:
+                print(output, end="")
             if "reusing compiler session" not in output:
                 raise SystemExit("incremental build did not reuse its compiler worker")
             failures = []
