@@ -307,6 +307,30 @@ FIXTURE_API int32_t native_fixture_read_bytes( int32_t first, uint8_t *data, uin
 	return 42;
 }
 
+FIXTURE_API int32_t native_fixture_map_points( const native_fixture_point *values, uint64_t count,
+		native_fixture_point *results ) {
+	if( count > 1024 || (count != 0 && (values == NULL || results == NULL)) ) return 0;
+	for( uint64_t index = 0; index < count; ++index ) {
+		results[index].x = values[index].x + 1;
+		results[index].y = values[index].y + 2;
+	}
+	return 42;
+}
+
+FIXTURE_API int32_t native_fixture_map_values( const int16_t *values, uint64_t count, uint16_t *results ) {
+	if( count > 1024 || (count != 0 && (values == NULL || results == NULL)) ) return 0;
+	for( uint64_t index = 0; index < count; ++index )
+		results[index] = (uint16_t)(values[index] * 2);
+	return 42;
+}
+
+FIXTURE_API int32_t native_fixture_fill_values( uint64_t count, uint32_t *results ) {
+	if( count > 1024 || (count != 0 && results == NULL) ) return 0;
+	for( uint64_t index = 0; index < count; ++index )
+		results[index] = (uint32_t)(index + 10);
+	return 42;
+}
+
 FIXTURE_API int32_t native_fixture_check_box_value( native_fixture_box box ) {
 	return box.start.x == 10 && box.start.y == 11 && box.end.x == 20 && box.end.y == 21 ? 42 : 0;
 }

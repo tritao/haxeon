@@ -290,13 +290,24 @@ helpers. Arrays of fixed-layout structures use typed element copies with the
 declared structure stride. Array sizes, offsets, alignment, and multiplication
 overflow are covered by the same layout validation as other fields.
 
-Function parameters can pair a pointer with an unsigned 32-bit count using
-`@in_array("count")`. Fixed-layout structure elements project as `Array<T>` and
-are packed into contiguous managed ABI storage for the call. A `ptr<utf8>`
-input array projects as `Array<String>` and builds a retained native pointer
-table. In both forms the paired count parameter is omitted from the Haxe API
-and derived from the array length. Unannotated pointer arrays remain
-ABI-visible but receive no managed array projection.
+Function parameters can pair a pointer with an unsigned 8-, 16-, 32-, or
+64-bit count using `@in_array("count")`. Fixed-layout structure and scalar
+elements project as `Array<T>` and are packed into contiguous managed ABI
+storage for the call. A `ptr<utf8>` input array projects as `Array<String>` and
+builds a retained native pointer table. The paired count parameter is omitted
+from the Haxe API and derived from the array length; counts wider than 32 bits
+are converted from the Haxe array length without narrowing.
+
+`@out_array("count")` supports fixed-capacity typed output arrays when `count`
+is an unsigned integer passed by value. The generated wrapper allocates the
+output storage, performs one native call, and returns `Array<T>` (alongside the
+native status when present). Scalar elements and pointer-free fixed-layout
+structures are supported. Haxeon bounds the allocation to 256 MiB and checks
+the requested count before calling native code. The existing UTF-8 pointer
+array query/fill convention remains supported with a nullable output pointer
+and an unsigned 32-bit `@inout` count; it projects as `Array<Null<String>>`.
+Unannotated pointer arrays remain ABI-visible but receive no managed array
+projection.
 
 Byte input arrays also receive a generated `<Function>_slice` companion. It
 accepts `haxe.io.Bytes`, an offset, and a length, validates the range, and

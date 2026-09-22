@@ -109,7 +109,7 @@ class HxiProjectionPlanner {
 			outputs:Array<ProjectedOutputResult> = [];
 		for (parameter in signature.semantics.parameters)
 			switch parameter.kind {
-				case OutputBuffer(size) | OutputArray(_, size):
+				case OutputBuffer(size) | OutputStringArray(size):
 					derivedCountParameters.set(size, true);
 				case _:
 			}
@@ -143,7 +143,18 @@ class HxiProjectionPlanner {
 						destroy: null,
 						semantics: parameter.kind
 					});
-				case OutputArray(_, _):
+				case OutputArray(element, _):
+					var projected = HxiHaxeEmitter.project(element, false, profile);
+					if (projected == null)
+						throw 'Unsupported projected output-array element for "${parameter.name}" in "$nativeName"';
+					outputs.push({
+						parameter: parameter.name,
+						type: 'Array<${projected.haxeType}>',
+						owned: false,
+						destroy: null,
+						semantics: parameter.kind
+					});
+				case OutputStringArray(_):
 					outputs.push({
 						parameter: parameter.name,
 						type: "Array<Null<String>>",
@@ -212,6 +223,9 @@ class HxiProjectionPlanner {
 					hasOutput = true;
 					isBuffer = true;
 				case OutputArray(_, _):
+					hasOutput = true;
+					isArray = true;
+				case OutputStringArray(_):
 					hasOutput = true;
 					isArray = true;
 			}

@@ -484,6 +484,27 @@ class HxiParserMain {
 			"must use @inout");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<u8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
 			"UTF-8 pointer array");
+		var typedArrays = parseValidated("typed-arrays.hxi",
+			'interface typed_arrays @target("portable-abi64") @library("typed_arrays") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn map_points(values: ptr<const<point>> @in_array("count"), count: u64, results: ptr<point> @out_array("count")) -> i32; extern fn map_values(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32; }');
+		var typedArraySource = HxiProjection.source(typedArrays);
+		expect(typedArraySource.indexOf("function map_points(values:Array<point>):Map_pointsOutResult") >= 0
+			&& typedArraySource.indexOf("haxe.Int64.ofInt(values.length)") >= 0
+			&& typedArraySource.indexOf("Array<point>") >= 0
+			&& typedArraySource.indexOf("__hxi_struct_slice(__out_results") >= 0
+			&& typedArraySource.indexOf("function map_values(values:Array<Int>):Map_valuesOutResult") >= 0
+			&& typedArraySource.indexOf("__hxi_struct_setI16(__array_values") >= 0
+			&& typedArraySource.indexOf("__hxi_struct_getU16(__out_results") >= 0,
+			"counted typed arrays should marshal scalar and fixed-layout structure values with 64-bit counts");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: ptr<i32> @out_array("count"), count: i32) -> void; }',
+			"requires an unsigned integer type");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: ptr<const<i32>> @out_array("count"), count: u32) -> void; }',
+			"requires a writable element pointer");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct item @layout(8, 8) { context: ptr<context> @offset(0) @borrowed; } extern fn read(values: ptr<item> @out_array("count"), count: u32) -> void; }',
+			"cannot contain structures with pointer fields");
+		var narrowCount = parseValidated("narrow-array-count.hxi",
+			'interface narrow_array_count @target("portable-abi64") @library("narrow_array_count") { extern fn send(values: ptr<const<u16>> @in_array("count"), count: u8) -> i32; }');
+		expect(HxiProjection.source(narrowCount).indexOf("values.length > 255") >= 0,
+			"counted input arrays should guard against narrowing into small unsigned native count types");
 		var callbacks = parseValidated("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary, left: i32, right: i32) -> i32; }');
 		var callbackSource = HxiProjection.source(callbacks);

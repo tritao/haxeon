@@ -18,6 +18,7 @@ enum HxiSemanticParameterKind {
 	OutputHandle(handle:String, owned:Bool, release:Null<String>);
 	OutputBuffer(size:String);
 	OutputArray(element:HxiAbiValue, count:String);
+	OutputStringArray(count:String);
 	InOutValue(value:HxiAbiValue);
 	RetainedCallback(callback:HxiAbiValue);
 }
@@ -98,7 +99,7 @@ class HxiSemantics {
 				case InArray(count):
 					if (isByteType(pointeeType(parameter.type), declarations, [])) InputBytes(count); else InputArray(pointeeValue(parameter.type, abi), count);
 				case OutArray(count):
-					OutputArray(pointeeValue(parameter.type, abi), count);
+					if (utf8ArrayPointer(parameter.type)) OutputStringArray(count); else OutputArray(pointeeValue(parameter.type, abi), count);
 				case OutBuffer(size):
 					OutputBuffer(size);
 				case Out:
@@ -188,5 +189,19 @@ class HxiSemantics {
 		return switch value {
 			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
 				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+		};
+
+	static function utf8ArrayPointer(type:HxiType):Bool
+		return switch type {
+			case Const(element) | Nullable(element): utf8ArrayPointer(element);
+			case Pointer(element): utf8ArrayElement(element);
+			case _: false;
+		};
+
+	static function utf8ArrayElement(type:HxiType):Bool
+		return switch type {
+			case Const(element): utf8ArrayElement(element);
+			case Primitive("utf8"): true;
+			case _: false;
 		};
 }

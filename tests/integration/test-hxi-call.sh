@@ -108,6 +108,20 @@ set +e
 (
 	cd "$repo_dir/out"
 	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.typed-array-overflow
+) >"$invalid_output" 2>&1
+invalid_status=$?
+set -e
+if [[ $invalid_status -eq 0 ]] || ! rg -q "HXI output array count exceeds the 256 MiB safety limit" "$invalid_output"; then
+	echo "oversized HXI typed output array was accepted or reported the wrong error" >&2
+	cat "$invalid_output" >&2
+	exit 1
+fi
+
+set +e
+(
+	cd "$repo_dir/out"
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.closed-callback
 ) >"$invalid_output" 2>&1
 invalid_status=$?

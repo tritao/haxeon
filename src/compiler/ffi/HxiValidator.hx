@@ -287,8 +287,6 @@ class HxiValidator {
 							case OutArray(countParameter):
 								if (outputArray != null)
 									fail('Function "$name" cannot declare more than one output array', parameter.span);
-								if (!nullablePointer(parameter.type) || !utf8ArrayPointer(parameter.type))
-									fail('Output array "${parameter.name}" requires a nullable pointer to a UTF-8 pointer array', parameter.span);
 								outputArray = {name: parameter.name, countParameter: countParameter, span: parameter.span};
 							case Out | InOut:
 								if (!pointerLike(parameter.type))
@@ -303,14 +301,17 @@ class HxiValidator {
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
-									&& !bytePointerLike(parameter.type, declarationsByName))
-									fail('Input array "${parameter.name}" requires a byte, structure, or UTF-8 pointer array', parameter.span);
+									&& !bytePointerLike(parameter.type, declarationsByName)
+									&& (arrayPointee(parameter.type) == null || !typedArrayElement(arrayPointee(parameter.type), abi)))
+									fail('Input array "${parameter.name}" requires a byte, scalar, structure, or UTF-8 pointer array', parameter.span);
 								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
 								if (count == null)
 									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
+								if (count.direction != In)
+									fail('Input array count parameter "${count.name}" must be passed by value', count.span);
 								switch abi.classify(count.type) {
-									case IntegerValue(32, Unsigned):
-									case _: fail('Input array "${parameter.name}" requires an unsigned 32-bit count parameter', count.span);
+									case IntegerValue(8 | 16 | 32 | 64, Unsigned):
+									case _: fail('Input array "${parameter.name}" requires an unsigned integer count parameter', count.span);
 								}
 							case In:
 						}
@@ -570,25 +571,108 @@ class HxiValidator {
 		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
 		if (count == null)
 			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"', array.span);
-		if (count.direction != InOut)
+		var outputType = arrayType(array.name, parameters),
+			isUtf8Array = utf8ArrayPointer(outputType),
+			legacyStringArray = count.direction == InOut;
+		if (isUtf8Array && !legacyStringArray)
 			fail('Output array count parameter "${count.name}" must use @inout', count.span);
-		var pointee = switch count.type {
-			case Pointer(value): value;
-			case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
-		};
-		switch abi.classify(pointee) {
-			case IntegerValue(32, Unsigned):
-			case _:
-				fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+		if (legacyStringArray) {
+			if (!nullablePointer(outputType) || !isUtf8Array)
+				fail('Output array "${array.name}" with an @inout count requires a nullable UTF-8 pointer array', array.span);
+			var pointee = switch count.type {
+				case Pointer(value): value;
+				case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+			};
+			switch abi.classify(pointee) {
+				case IntegerValue(32, Unsigned):
+				case _:
+					fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
+			}
+		} else {
+			if (count.direction != In)
+				fail('Typed output array count parameter "${count.name}" must be passed by value', count.span);
+			switch abi.classify(count.type) {
+				case IntegerValue(8 | 16 | 32 | 64, Unsigned):
+				case _:
+					fail('Typed output array count parameter "${count.name}" requires an unsigned integer type', count.span);
+			}
+			if (!writableArrayPointer(outputType))
+				fail('Typed output array "${array.name}" requires a writable element pointer', array.span);
+			var type = Lambda.find(parameters, parameter -> parameter.name == array.name).type,
+				element = arrayPointee(type);
+			if (element == null || !typedArrayElement(element, abi))
+				fail('Typed output array "${array.name}" requires a pointer to a fixed-layout scalar or structure element', array.span);
+			switch abi.classify(element) {
+				case AggregateValue(_, _, _) if (!pointerFreeArrayElement(element, abi.semanticDeclarations(), [])):
+					fail('Typed output array "${array.name}" cannot contain structures with pointer fields', array.span);
+				case _:
+			}
 		}
 		for (parameter in parameters)
 			switch parameter.direction {
 				case OutArray(_) | In:
-				case InOut if (parameter.name == count.name):
+				case InArray(_) if (!legacyStringArray):
+				case InOut if (legacyStringArray && parameter.name == count.name):
 				case _:
 					fail('Function "$functionName" cannot mix an output array with unrelated directed parameters', span);
 			}
 	}
+
+	static function arrayType(name:String, parameters:Array<HxiParameter>):HxiType
+		return Lambda.find(parameters, parameter -> parameter.name == name).type;
+
+	static function arrayPointee(type:HxiType):Null<HxiType>
+		return switch type {
+			case Const(element) | Nullable(element): arrayPointee(element);
+			case Pointer(element): stripConst(element);
+			case _: null;
+		};
+
+	static function writableArrayPointer(type:HxiType):Bool
+		return switch type {
+			case Const(element) | Nullable(element): writableArrayPointer(element);
+			case Pointer(Const(_)): false;
+			case Pointer(_): true;
+			case _: false;
+		};
+
+	static function stripConst(type:HxiType):HxiType
+		return switch type {
+			case Const(element): stripConst(element);
+			case _: type;
+		};
+
+	static function typedArrayElement(type:HxiType, abi:HxiAbi):Bool
+		return switch abi.classify(type) {
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _): true;
+			case _: false;
+		};
+
+static function pointerFreeArrayElement(type:HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool
+		return switch type {
+			case Const(element): pointerFreeArrayElement(element, declarations, visiting);
+			case Named(name):
+				if (visiting.exists(name)) false else {
+					visiting.set(name, true);
+					var result = switch declarations.get(name) {
+						case Structure(_, _, _, fields, _):
+							var result = true;
+							for (field in fields)
+								if (!pointerFreeArrayElement(field.type, declarations, visiting))
+									result = false;
+							result;
+						case Alias(_, target, _): pointerFreeArrayElement(target, declarations, visiting);
+						case Handle(_, _, _, _) | Enumeration(_, _, _, _, _): true;
+						case _: false;
+					};
+					visiting.remove(name);
+					result;
+				}
+			case Primitive("utf8") | Primitive("void") | Primitive("c_void"): false;
+			case Primitive(_): true;
+			case Array(element, _): pointerFreeArrayElement(element, declarations, visiting);
+			case _: false;
+		};
 
 	static function nullablePointer(type:HxiType):Bool
 		return switch type {

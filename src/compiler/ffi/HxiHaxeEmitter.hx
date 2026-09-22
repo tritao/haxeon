@@ -235,7 +235,7 @@ class HxiHaxeEmitter {
 						var lengthIndex = parameterIndex(parameters, lengthName);
 						isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
 					case OutputBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
-					case OutputArray(_, _): Output;
+					case OutputArray(_, _) | OutputStringArray(_): Output;
 					case OutputValue(_) | OutputHandle(_, _, _):
 						var info = outputInfo(parameters[index], abi, profile);
 						(info.structure || info.opaquePointer) ? FixedOutput(info.size,
@@ -343,7 +343,8 @@ class HxiHaxeEmitter {
 			omitted = plan.omitted,
 			visibleDeclarations = plan.visibleDeclarations,
 			abi = plan.abi,
-			profile = plan.profile;
+			profile = plan.profile,
+			functionModule = profile == null || profile.functionModule == null ? model.name : profile.functionModule;
 		var library = model.library;
 		if (library == null)
 			return "";
@@ -838,13 +839,30 @@ class HxiHaxeEmitter {
 									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
 								}
 							case InArray(_) if (utf8ArrayPointer(parameter.type)):
+								usesNestedStructures = true;
 								usesUtf8StringCopies = true;
 								usesPointerFields = true;
-							case OutBuffer(_) | InArray(_):
+							case OutBuffer(_):
 								usesNestedStructures = true;
-							case OutArray(_):
+							case InArray(_) if (!utf8ArrayPointer(parameter.type) && !isByteArray(parameter.type)):
+								usesNestedStructures = true;
+								var element = arrayElementInfo(parameter.type, abi, profile);
+								if (!element.structure) {
+									var access = structAccess(element.code);
+									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+								}
+							case InArray(_):
+								usesNestedStructures = true;
+							case OutArray(_) if (utf8ArrayPointer(parameter.type)):
 								usesNestedStructures = true;
 								usesUtf8Fields = true;
+							case OutArray(_):
+								usesNestedStructures = true;
+								var element = arrayElementInfo(parameter.type, abi, profile);
+								if (!element.structure) {
+									var access = structAccess(element.code);
+									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+								}
 							case In:
 						}
 				case _:
@@ -954,7 +972,7 @@ class HxiHaxeEmitter {
 					switch projectedFunction.outputStrategy {
 						case OutputArray if (array != null):
 							emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile,
-								model.documentation.get(fn.name));
+								functionModule, model.documentation.get(fn.name));
 						case OutputBuffer if (buffer != null):
 							emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 						case OutputValues:
@@ -1039,10 +1057,7 @@ class HxiHaxeEmitter {
 						callArguments.push(parameter.name);
 					}
 				case InArray(_):
-					var utf8 = utf8ArrayPointer(parameter.type),
-						elementType = rawArgumentTypes[index],
-						argumentType = elementType == "haxe.io.Bytes"
-							&& !utf8 ? "haxe.io.Bytes" : 'Array<${utf8 ? "String" : elementType}>';
+					var argumentType = inputArrayType(parameter.type, abi, profile);
 					arguments.push('${parameter.name}:$argumentType');
 					callArguments.push(parameter.name);
 				case InOut:
@@ -1352,6 +1367,13 @@ class HxiHaxeEmitter {
 		for (parameter in parameters)
 			switch parameter.direction {
 				case InArray(count):
+					var previous = arrayCounts.get(count);
+					if (previous != null)
+						setup.push('if ($previous.length != ${parameter.name}.length) throw "HXI arrays sharing a count must have equal lengths";');
+					var countParameter = Lambda.find(parameters, value -> value.name == count),
+						countLimit = unsignedCountLimit(countParameter.type, abi);
+					if (countLimit != null)
+						setup.push('if (${parameter.name}.length > $countLimit) throw "HXI input array count does not fit its native integer type";');
 					arrayCounts.set(count, parameter.name);
 				case _:
 			}
@@ -1364,20 +1386,17 @@ class HxiHaxeEmitter {
 						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 						callArguments.push(parameter.name);
 					} else
-						callArguments.push('$arrayName.length');
+						callArguments.push(arrayCountValue(parameter.type, '$arrayName.length', abi));
 				case InArray(_):
-					var utf8 = utf8ArrayPointer(parameter.type),
-						elementType = rawArgumentTypes[index];
-					if (elementType == "haxe.io.Bytes" && !utf8) {
+					var bytes = isByteArray(parameter.type);
+					if (bytes) {
 						arguments.push('${parameter.name}:haxe.io.Bytes');
 						callArguments.push(parameter.name);
 					} else {
-						arguments.push('${parameter.name}:Array<${utf8 ? "String" : elementType}>');
-						if (utf8)
-							setup.push('var __array_storage_${parameter.name} = __hxi_struct_alloc(${parameter.name}.length * ${Std.int(abi.pointerBits / 8)}); var __array_roots_${parameter.name}:Array<haxe.io.Bytes> = []; for (__root in 0...(${parameter.name}.length + 1)) __array_roots_${parameter.name}.push(null); __array_roots_${parameter.name}[0] = __array_storage_${parameter.name}; var __array_${parameter.name}:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_${parameter.name}, __array_roots_${parameter.name}); for (__index in 0...${parameter.name}.length) { var __text = __hxi_struct_utf8_copy(${parameter.name}[__index]); __array_roots_${parameter.name}[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_${parameter.name}, __index * ${Std.int(abi.pointerBits / 8)}, __text); }');
-						else
-							setup.push('var __array_${parameter.name} = $elementType.array(${parameter.name});');
-						callArguments.push('__array_${parameter.name}');
+						arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
+						for (statement in inputArraySetup(parameter, abi, profile))
+							setup.push(statement);
+						callArguments.push(inputArrayNativeValue(parameter));
 					}
 				case Out | InOut:
 					var info = outputInfo(parameter, abi, profile),
@@ -1508,9 +1527,7 @@ class HxiHaxeEmitter {
 						arguments.push('$lengthName:Int');
 						callArguments.push('haxe.io.Bytes.view(${parameter.name}, $offsetName, $lengthName)');
 					} else {
-						var utf8 = utf8ArrayPointer(parameter.type),
-							elementType = rawArgumentTypes[index];
-						arguments.push('${parameter.name}:${utf8 ? "Array<String>" : "Array<" + elementType + ">"}');
+						arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
 						callArguments.push(parameter.name);
 					}
 				case InOut:
@@ -1559,6 +1576,22 @@ class HxiHaxeEmitter {
 	}
 
 	static function emitOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, array:{
+			name:String,
+			countParameter:String
+		}, abi:HxiAbi, profile:HxiProjectionProfile,
+			moduleName:String, documentation:Null<HxiDocumentation>):Void {
+		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
+		if (count == null)
+			throw 'Missing count parameter "${array.countParameter}" for output array "$nativeName"';
+		if (count.direction == InOut) {
+			emitOutputStringArrayWrapper(output, nativeName, publicName, parameters, rawArgumentTypes, resultType, array, abi, profile, documentation);
+			return;
+		}
+		emitTypedOutputArrayWrapper(output, nativeName, publicName, parameters, rawArgumentTypes, resultType, array, count, abi, profile, moduleName, documentation);
+	}
+
+	static function emitOutputStringArrayWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
 			rawArgumentTypes:Array<String>, resultType:String, array:{
 			name:String,
 			countParameter:String
@@ -1616,12 +1649,179 @@ class HxiHaxeEmitter {
 		output.add('}\n');
 	}
 
+	static function emitTypedOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String,
+			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, resultType:String,
+			array:{name:String, countParameter:String}, countParameter:HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile,
+			moduleName:String, documentation:Null<HxiDocumentation>):Void {
+		var element = arrayElementInfo(Lambda.find(parameters, parameter -> parameter.name == array.name).type, abi, profile),
+			arrayCounts:Map<String, String> = [],
+			arguments:Array<String> = [],
+			callArguments:Array<String> = [],
+			setup:Array<String> = [];
+		for (parameter in parameters)
+			switch parameter.direction {
+				case InArray(count):
+					var previous = arrayCounts.get(count);
+					if (previous != null)
+						setup.push('if ($previous.length != ${parameter.name}.length) throw "HXI arrays sharing a count must have equal lengths";');
+					var pairedCount = Lambda.find(parameters, value -> value.name == count),
+						countLimit = unsignedCountLimit(pairedCount.type, abi);
+					if (countLimit != null)
+						setup.push('if (${parameter.name}.length > $countLimit) throw "HXI input array count does not fit its native integer type";');
+					arrayCounts.set(count, parameter.name);
+				case _:
+			}
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index];
+			switch parameter.direction {
+				case In:
+					var arrayName = arrayCounts.get(parameter.name);
+					if (arrayName == null) {
+						arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+						callArguments.push(parameter.name);
+					} else
+						callArguments.push(arrayCountValue(parameter.type, '$arrayName.length', abi));
+				case InArray(_):
+					arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
+					for (statement in inputArraySetup(parameter, abi, profile))
+						setup.push(statement);
+					callArguments.push(inputArrayNativeValue(parameter));
+				case OutArray(_):
+					callArguments.push('__out_${array.name}');
+				case _:
+					throw 'Unsupported parameter direction in typed output-array wrapper for "$nativeName"';
+			}
+		}
+		var countArray = arrayCounts.get(array.countParameter),
+			capacityExpression = countArray == null ? countParameter.name : '$countArray.length',
+			memoryCountLimit = maxArrayCount(element.size),
+			nativeCountLimit = unsignedCountLimit(countParameter.type, abi),
+			maxCount = nativeCountLimit == null ? memoryCountLimit : Std.int(Math.min(memoryCountLimit, nativeCountLimit)),
+			direct = resultType == "Void",
+			arrayType = 'Array<${element.haxeType}>',
+			wrapperResult = direct ? arrayType : upperFirst(publicName) + "OutResult";
+		if (countArray == null) {
+			switch abi.classify(countParameter.type) {
+				case IntegerValue(64, _):
+					setup.push('if (haxe.Int64.compare(${countParameter.name}, haxe.Int64.ofInt(0)) < 0 || haxe.Int64.compare(${countParameter.name}, haxe.Int64.ofInt($maxCount)) > 0) throw "HXI output array count exceeds the 256 MiB safety limit"; var __capacity = haxe.Int64.toInt(${countParameter.name});');
+				case _:
+					setup.push('if (${countParameter.name} < 0 || ${countParameter.name} > $maxCount) throw "HXI output array count exceeds the 256 MiB safety limit"; var __capacity = ${countParameter.name};');
+			}
+		} else
+			setup.push('if ($capacityExpression > $maxCount) throw "HXI output array count exceeds the 256 MiB safety limit"; var __capacity = $capacityExpression;');
+		if (!direct) {
+			output.add('class $wrapperResult {\n');
+			output.add('\tpublic var status:$resultType;\n');
+			output.add('\tpublic var ${array.name}:$arrayType;\n');
+			output.add('\tpublic function new(status:$resultType, ${array.name}:$arrayType) { this.status = status; this.${array.name} = ${array.name}; }\n');
+			output.add('}\n');
+		}
+		emitDocumentationValue(output, documentation);
+		output.add('function $publicName(${arguments.join(", ")}):$wrapperResult {\n');
+		for (statement in setup)
+			output.add('\t$statement\n');
+		output.add('\tvar __out_${array.name}:haxe.io.Bytes = __hxi_struct_alloc(__capacity == 0 ? 1 : __capacity * ${element.size});\n');
+		output.add('\tfor (__byte in 0...__out_${array.name}.length) __out_${array.name}.set(__byte, 0);\n');
+		if (direct)
+			output.add('\t__hxi_raw_$nativeName(${callArguments.join(", ")});\n');
+		else
+			output.add('\tvar __status = __hxi_raw_$nativeName(${callArguments.join(", ")});\n');
+		output.add('\tvar __items:$arrayType = [];\n');
+		output.add('\tfor (__index in 0...__capacity) __items.push(${arrayValueRead(element, '__out_${array.name}', '__index', moduleName)});\n');
+		output.add(direct ? '\treturn __items;\n' : '\treturn new $wrapperResult(__status, __items);\n');
+		output.add('}\n');
+	}
+
 	static function isByteArray(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
-			case Const(element): isByteArray(element);
+			case Const(element) | Nullable(element): isByteArray(element);
 			case Pointer(element): isByteElement(element);
 			case _: false;
 		};
+
+	static function arrayElementInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):{
+		haxeType:String,
+		code:Int,
+		size:Int,
+		structure:Bool
+	} {
+		var elementType = arrayPointeeType(type);
+		if (elementType == null)
+			throw "HXI counted array must use a pointer type";
+		var value = abi.classify(elementType),
+			projected = project(value, false, profile),
+			layout = abi.layout(elementType);
+		if (projected == null || layout == null || projected.code == 11)
+			throw "HXI counted array has an unsupported element type";
+		return {haxeType: projected.haxeType, code: projected.code, size: layout.size, structure: projected.code == 12};
+	}
+
+	static function inputArrayType(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):String {
+		if (isByteArray(type))
+			return "haxe.io.Bytes";
+		if (utf8ArrayPointer(type))
+			return "Array<String>";
+		return 'Array<${arrayElementInfo(type, abi, profile).haxeType}>';
+	}
+
+	static function inputArrayNativeValue(parameter:HxiParameter):String
+		return isByteArray(parameter.type) ? parameter.name : '__array_${parameter.name}';
+
+	static function inputArraySetup(parameter:HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile):Array<String> {
+		if (isByteArray(parameter.type))
+			return [];
+		var name = parameter.name;
+		if (utf8ArrayPointer(parameter.type)) {
+			var pointerSize = Std.int(abi.pointerBits / 8);
+			return ['if ($name.length > ${maxArrayCount(pointerSize)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_storage_$name = __hxi_struct_alloc($name.length * $pointerSize); var __array_roots_$name:Array<haxe.io.Bytes> = []; for (__root in 0...($name.length + 1)) __array_roots_$name.push(null); __array_roots_$name[0] = __array_storage_$name; var __array_$name:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_$name, __array_roots_$name); for (__index in 0...$name.length) { var __text = __hxi_struct_utf8_copy($name[__index]); __array_roots_$name[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_$name, __index * $pointerSize, __text); }'];
+		}
+		var element = arrayElementInfo(parameter.type, abi, profile);
+		if (element.structure)
+			return ['if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'];
+		var access = structAccess(element.code),
+			value = element.code == 15 ? '$name[__index] ? 1 : 0' : '$name[__index]';
+		return ['if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'];
+	}
+
+	static function arrayPointeeType(type:compiler.ffi.HxiModel.HxiType):Null<compiler.ffi.HxiModel.HxiType>
+		return switch type {
+			case Const(element) | Nullable(element): arrayPointeeType(element);
+			case Pointer(element): stripArrayConst(element);
+			case _: null;
+		};
+
+	static function stripArrayConst(type:compiler.ffi.HxiModel.HxiType):compiler.ffi.HxiModel.HxiType
+		return switch type {
+			case Const(element): stripArrayConst(element);
+			case _: type;
+		};
+
+	static function arrayCountValue(countType:compiler.ffi.HxiModel.HxiType, length:String, abi:HxiAbi):String
+		return switch abi.classify(countType) {
+			case IntegerValue(64, _): 'haxe.Int64.ofInt($length)';
+			case _: length;
+		};
+
+	static function maxArrayCount(stride:Int):Int
+		return Std.int(268435456 / stride);
+
+	static function unsignedCountLimit(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi):Null<Int>
+		return switch abi.classify(type) {
+			case IntegerValue(bits, Unsigned) if (bits < 32): (1 << bits) - 1;
+			case _: null;
+		};
+
+	static function arrayValueRead(element:{haxeType:String, code:Int, size:Int, structure:Bool}, bytes:String, index:String,
+			modelName:String):String {
+		var offset = '$index * ${element.size}';
+		if (element.structure)
+			return '${element.haxeType}.__hxi_attach($modelName.__hxi_struct_slice($bytes, $offset, ${element.size}))';
+		var access = structAccess(element.code),
+			read = '$modelName.__hxi_struct_get$access($bytes, $offset)';
+		if (element.code == 15)
+			return '$read != 0';
+		return element.haxeType == "Int" || element.haxeType == "Float" || element.haxeType == "haxe.Int64" ? read : 'cast $read';
+	}
 
 	static function isByteElement(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
@@ -2185,7 +2385,7 @@ class HxiHaxeEmitter {
 
 	static function utf8ArrayPointer(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
-			case Const(element): utf8ArrayPointer(element);
+			case Const(element) | Nullable(element): utf8ArrayPointer(element);
 			case Pointer(element): utf8ArrayElement(element);
 			case _: false;
 		};
