@@ -68,21 +68,15 @@ class ModuleGraph {
 				}
 		}
 		var orderedNames = names.copy(),
+			ready:Array<String> = [],
 			result:Array<String> = [],
 			emitted:Map<String, Bool> = [];
 		orderedNames.sort(Reflect.compare);
-		while (result.length < orderedNames.length) {
-			var candidateIndex = -1;
-			for (index in 0...orderedNames.length) {
-				var candidate = orderedNames[index];
-				if (!emitted.exists(candidate) && indegree.exists(candidate) && indegree.get(candidate) == 0) {
-					candidateIndex = index;
-					break;
-				}
-			}
-			if (candidateIndex < 0)
-				break;
-			var name = orderedNames[candidateIndex];
+		for (name in orderedNames)
+			if (indegree.exists(name) && indegree.get(name) == 0)
+				heapPush(ready, name);
+		while (ready.length > 0) {
+			var name = heapPop(ready);
 			emitted.set(name, true);
 			result.push(name);
 			if (!outgoing.exists(name))
@@ -92,12 +86,47 @@ class ModuleGraph {
 					throw 'Missing initialization indegree for dependent module "$dependent"';
 				var next = indegree.get(dependent) - 1;
 				indegree.set(dependent, next);
+				if (next == 0)
+					heapPush(ready, dependent);
 			}
 		}
 		if (result.length != orderedNames.length)
 			for (name in orderedNames)
 				if (!emitted.exists(name))
 					result.push(name);
+		return result;
+	}
+
+	static function heapPush(heap:Array<String>, value:String):Void {
+		var index = heap.length;
+		heap.push(value);
+		while (index > 0) {
+			var parent = (index - 1) >> 1;
+			if (Reflect.compare(heap[parent], value) <= 0)
+				break;
+			heap[index] = heap[parent];
+			index = parent;
+		}
+		heap[index] = value;
+	}
+
+	static function heapPop(heap:Array<String>):String {
+		var result = heap[0], tail = heap.pop();
+		if (heap.length > 0) {
+			var index = 0;
+			while (true) {
+				var left = index * 2 + 1;
+				if (left >= heap.length)
+					break;
+				var right = left + 1,
+					child = right < heap.length && Reflect.compare(heap[right], heap[left]) < 0 ? right : left;
+				if (Reflect.compare(heap[child], tail) >= 0)
+					break;
+				heap[index] = heap[child];
+				index = child;
+			}
+			heap[index] = tail;
+		}
 		return result;
 	}
 }

@@ -35,7 +35,8 @@ class HlLower {
 
 	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
-		var lowerer = new HlLower(new HlSymbolTable(), null), code = lowerer.lowerProgram(program);
+		var lowerer = new HlLower(new HlSymbolTable(), null),
+			code = lowerer.lowerProgram(program);
 		if (indices != null)
 			for (name => index in lowerer.functionIndices)
 				indices.set(name, index);
@@ -44,7 +45,22 @@ class HlLower {
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>):HlCode {
-		IrVerifier.verify(program);
+		if (cachedFunctions == null || regenerated == null)
+			IrVerifier.verify(program);
+		else {
+			var selected:Map<String, Bool> = [],
+				regeneratedNames:Map<String, Bool> = [],
+				regeneratedSources:Map<String, Bool> = [];
+			for (name in regenerated)
+				regeneratedNames.set(name, true);
+			for (fn in program.functions)
+				if (regeneratedNames.exists(fn.name))
+					collectSourcePaths(fn, regeneratedSources);
+			for (fn in program.functions)
+				if (regeneratedNames.exists(fn.name) || touchesSourcePath(fn, regeneratedSources))
+					selected.set(fn.name, true);
+			IrVerifier.verifyFunctions(program, selected);
+		}
 		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated).lowerProgram(program);
 	}
 
@@ -216,7 +232,9 @@ class HlLower {
 			if (regenerated.exists(fn.name))
 				collectSourcePaths(fn, regeneratedSources);
 		for (fn in program.functions) {
-			var cached = cachedFunctions == null || regenerated.exists(fn.name) || touchesSourcePath(fn, regeneratedSources) ? null : cachedFunctions.get(fn.name);
+			var cached = cachedFunctions == null
+				|| regenerated.exists(fn.name)
+				|| touchesSourcePath(fn, regeneratedSources) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
 				code.functions.push(cached);
 			else

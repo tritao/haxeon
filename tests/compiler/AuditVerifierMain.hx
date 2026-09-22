@@ -28,6 +28,17 @@ class AuditVerifierMain {
 		throw "Expected a typed conversion diagnostic";
 	}
 
+	static function rejectedFunctions(program:IrProgram, names:Map<String, Bool>, expected:String):Void {
+		try {
+			IrVerifier.verifyFunctions(program, names);
+		} catch (error:String) {
+			if (error.indexOf(expected) >= 0)
+				return;
+			throw error;
+		}
+		throw 'Selective verifier accepted malformed IR: $expected';
+	}
+
 	static function main():Void {
 		var builder = new IrBuilder(),
 			condition = builder.argument("condition", Bool),
@@ -86,6 +97,16 @@ class AuditVerifierMain {
 		if (before.compare(compiler.ir.codec.IrFunctionStateCodec.encode(criticalFunction)) != 0)
 			throw "Phi edge splitting mutated cached SSA";
 		IrVerifier.verify(criticalProgram);
+
+		var cached = new IrBuilder(), cachedValue = cached.constInt(1);
+		cached.returnValue(cachedValue);
+		var invalid = new IrBuilder(), invalidValue = invalid.constInt(2);
+		invalid.returnValue(new IrValue(invalidValue.id, "forged", Bool));
+		var selectiveProgram = new IrProgram("cached");
+		selectiveProgram.functions.push(new IrFunction("cached", [], I32, cached.blocks));
+		selectiveProgram.functions.push(new IrFunction("edited", [], Bool, invalid.blocks));
+		IrVerifier.verifyFunctions(selectiveProgram, ["cached" => true]);
+		rejectedFunctions(selectiveProgram, ["edited" => true], "definition type");
 
 		typeError('function f(value:Dynamic):Int return 42; function main():Int { var g:(Int)->Int = f; return g("wrong"); }');
 		typeError('function main():Int { var a:Array<Int> = [42]; var b:Array<Dynamic> = a; return 42; }');

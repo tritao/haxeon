@@ -8,6 +8,15 @@ import compiler.ir.Ir.IrCNativeArgumentMode;
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
 	public static function verify(program:IrProgram):Void {
+		verifySelected(program, null);
+	}
+
+	/** Verify shared program metadata and only the named function bodies. */
+	public static function verifyFunctions(program:IrProgram, names:Map<String, Bool>):Void {
+		verifySelected(program, names);
+	}
+
+	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>):Void {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
@@ -44,11 +53,12 @@ class IrVerifier {
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
-			try {
-				verifyFunction(fn, signatures, objects, interfaces, enums, globals);
-			} catch (error:String) {
-				throw 'IR verification failed for ${fn.name}: $error';
-			}
+			if (selected == null || selected.exists(fn.name))
+				try {
+					verifyFunction(fn, signatures, objects, interfaces, enums, globals);
+				} catch (error:String) {
+					throw 'IR verification failed for ${fn.name}: $error';
+				}
 	}
 
 	static function verifyCNative(native:IrCNative):Void {
