@@ -15,6 +15,8 @@ class Frontend {
 
 	public static function compileFile(file:SourceFile):IrProgram {
 		var ast = new Parser(new Lexer(file).tokenize()).parseProgram();
+		// The convenience frontend has no target; keep its IR portable.
+		IrGenerator.bindNativeArrayChecks(false);
 		return IrGenerator.generate(Typer.type(ast));
 	}
 }

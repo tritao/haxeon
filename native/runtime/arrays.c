@@ -44,6 +44,20 @@ HL_PRIM varray *HL_NAME(__array_alloc_ref)( int length ) {
 	return hl_alloc_array(&hlt_dyn, length);
 }
 
+HL_PRIM varray *HL_NAME(__array_alloc_typed_ref)( int length, hl_type *elementType ) {
+	if (elementType == NULL || !hl_is_ptr(elementType))
+		hl_error("Invalid reference array element type");
+	return hl_alloc_array(elementType, length);
+}
+
+HL_PRIM varray *HL_NAME(__array_check_cast)( varray *array, hl_type *elementType ) {
+	if (elementType == NULL)
+		hl_error("Invalid array element type");
+	if (array != NULL && !hl_same_type(array->at, elementType))
+		hl_error("Array element type mismatch: %s -> %s", hl_type_str(array->at), hl_type_str(elementType));
+	return array;
+}
+
 static varray *realtime_array_copy(varray *array) {
 	varray *copy = hl_alloc_array(array->at, array->size);
 	if (array->size > 0)

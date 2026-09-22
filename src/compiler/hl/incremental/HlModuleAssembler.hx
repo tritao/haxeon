@@ -133,11 +133,37 @@ class HlModuleAssembler {
 		ordered.enums = program.enums;
 		ordered.staticFields = program.staticFields;
 		ordered.functions = cache.ordered();
+		var reload = switch decision {
+			case Patch: false;
+			case ReloadDomain(_): true;
+			case Reject(diagnostics): throw diagnostics.join("; ");
+		};
+		var reuseLowered = initialized && !reload;
+		var cachePreparedAt = Sys.time() * 1000.0;
+		var previousNatives = runtimeNatives;
+		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null,
+			reuseLowered && previousNatives.length > 0 ? regenerated : null);
+		// New runtime imports shift every function slot. Publish a fresh module,
+		// never reuse opcodes or patch a live module with the old slot layout.
+		if (reuseLowered && runtimeNatives.length != previousNatives.length) {
+			reload = true;
+			reuseLowered = false;
+			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
+		}
 		var layout:Map<String, Int> = [], next = 0;
-		for (native in ordered.natives)
+		for (native in runtimeNatives)
 			layout.set(native.name, next++);
 		for (name in cache.slots)
 			layout.set(name, next++);
+		if (reuseLowered)
+			for (fn in ordered.functions) {
+				var previous = loweredFunctions.get(fn.name);
+				if (previous != null && previous.functionIndex != layout.get(fn.name)) {
+					reload = true;
+					reuseLowered = false;
+					break;
+				}
+			}
 		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
 		if (initialized)
 			for (name in regenerated) {
@@ -150,17 +176,6 @@ class HlModuleAssembler {
 			}
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
-		var reload = switch decision {
-			case Patch: false;
-			case ReloadDomain(_): true;
-			case Reject(diagnostics): throw diagnostics.join("; ");
-		};
-		var reuseLowered = initialized && switch decision {
-			case Patch: true;
-			case ReloadDomain(_), Reject(_): false;
-		};
-		var cachePreparedAt = Sys.time() * 1000.0;
-		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && runtimeNatives.length > 0 ? runtimeNatives : null, reuseLowered && runtimeNatives.length > 0 ? regenerated : null);
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
 			runtimeNatives, debugMetadata),
 			module = lowered.code;

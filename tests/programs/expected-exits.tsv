@@ -1,5 +1,7 @@
 # program\texpected exit
 add	42
+json-decoded-object-array	42
+json-typed-object-array	42
 bytes-view	42
 bytes-codec	42
 messagepack-codec	42

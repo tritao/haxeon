@@ -50,8 +50,14 @@ class FlowAnalysis {
 	static function typeTest(condition:TypedExpression):Null<{path:String, type:CompilerType, narrowsWhenTrue:Bool}> {
 		return switch condition.expression {
 			case TCall("__std_is_of_type", [value, target]):
-				var path = accessPath(value);
-				path == null ? null : {path: path, type: target.type, narrowsWhenTrue: true};
+				// A bare Array test proves only HARRAY, not its element representation.
+				// Narrowing to Array<Dynamic> would permit incompatible typed reads.
+				switch target.type {
+					case TArray(_): null;
+					default:
+						var path = accessPath(value);
+						path == null ? null : {path: path, type: target.type, narrowsWhenTrue: true};
+				}
 			case TNot(value):
 				var nested = typeTest(value);
 				nested == null ? null : {path: nested.path, type: nested.type, narrowsWhenTrue: !nested.narrowsWhenTrue};

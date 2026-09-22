@@ -77,6 +77,11 @@ HL_PRIM vdynamic *HL_NAME(__reflect_array_get)(vdynamic *value, int index) {
 		array->at);
 }
 
+HL_PRIM int HL_NAME(__reflect_array_length)(vdynamic *value) {
+	if (!value || value->t->kind != HARRAY) hl_error("Value is not an array");
+	return ((varray *)value)->size;
+}
+
 HL_PRIM int HL_NAME(__json_value_kind)(vdynamic *value) {
 	if (!value) return 0;
 	switch (value->t->kind) {

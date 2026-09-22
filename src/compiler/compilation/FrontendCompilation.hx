@@ -153,6 +153,7 @@ class FrontendCompilation {
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
+			IrGenerator.bindNativeArrayChecks(!context.isWasmTarget());
 			typerMetrics = typedResult.metrics;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics);

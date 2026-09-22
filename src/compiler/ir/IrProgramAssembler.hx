@@ -251,6 +251,8 @@ class IrProgramAssembler {
 		for (fn in functions)
 			allFunctions.push(fn);
 		var needsArrayRuntime = false,
+			needsTypedRefArrayRuntime = false,
+			needsArrayCastRuntime = false,
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
@@ -269,6 +271,10 @@ class IrProgramAssembler {
 								needsDynamicObjectRuntime = true;
 							if (StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
+							if (name == "__array_alloc_typed_ref")
+								needsTypedRefArrayRuntime = true;
+							if (name == "__array_check_cast")
+								needsArrayCastRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
 								|| name == "__string_substring" || name == "__string_to_lower_case" || name == "__string_to_upper_case")
@@ -376,6 +382,22 @@ class IrProgramAssembler {
 				arguments: [I32],
 				result: Array(Dyn)
 			});
+			if (needsTypedRefArrayRuntime)
+				program.natives.push({
+					name: "__array_alloc_typed_ref",
+					library: "haxeon_runtime",
+					symbol: "__array_alloc_typed_ref",
+					arguments: [I32, TypeRef],
+					result: Array(Dyn)
+				});
+			if (needsArrayCastRuntime)
+				program.natives.push({
+					name: "__array_check_cast",
+					library: "haxeon_runtime",
+					symbol: "__array_check_cast",
+					arguments: [Array(Dyn), TypeRef],
+					result: Array(Dyn)
+				});
 			var arrayKinds:Array<{name:String, type:IrType}> = [
 				{name: "i32", type: I32},
 				{name: "i64", type: I64},

@@ -48,6 +48,7 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var dynamicObjectLiterals:Bool = true;
+	static var nativeArrayChecks:Bool = false;
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
@@ -59,6 +60,9 @@ class IrGenerator {
 	/** Enable dynamic allocation for `{}` literals on targets with runtime reflection. */
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
+
+	public static function bindNativeArrayChecks(enabled:Bool):Void
+		nativeArrayChecks = enabled;
 
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
@@ -682,9 +686,19 @@ class IrGenerator {
 
 	static function referenceCastType(type:IrType):Bool
 		return switch type {
-			case Obj(_), Virtual(_), Function(_, _): true;
+			case Obj(_), Virtual(_), Function(_, _), Array(_): true;
 			default: false;
 		};
+
+	static function checkedCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
+		var casted = builder.safeCast(value, target);
+		return switch target {
+			case Array(element) if (nativeArrayChecks):
+				var checked = builder.call("__array_check_cast", [builder.safeCast(builder.toDyn(casted), Array(Dyn)), builder.typeValue(element)], Array(Dyn));
+				builder.safeCast(builder.toDyn(checked), target);
+			default: casted;
+		};
+	}
 
 	static function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
@@ -692,9 +706,9 @@ class IrGenerator {
 		if (target == Dyn)
 			return builder.toDyn(value);
 		if (value.type == Dyn)
-			return builder.safeCast(value, target);
+			return checkedCast(builder, value, target);
 		if (referenceCastType(value.type) && referenceCastType(target))
-			return builder.safeCast(builder.toDyn(value), target);
+			return checkedCast(builder, builder.toDyn(value), target);
 		throw 'Unsupported ABI boundary cast from ${value.type} to $target';
 	}
 
@@ -1010,9 +1024,9 @@ class IrGenerator {
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
 				if (sameIrType(source.type,
-					target)) source; else if (source.type == Dyn) builder.safeCast(source,
+					target)) source; else if (source.type == Dyn) checkedCast(builder, source,
 					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
-					builder.safeCast(builder.toDyn(source),
+					checkedCast(builder, builder.toDyn(source),
 					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
 					builder.intToFloat(source); else
 					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
@@ -1955,6 +1969,8 @@ class IrGenerator {
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
+		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref")
+			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 

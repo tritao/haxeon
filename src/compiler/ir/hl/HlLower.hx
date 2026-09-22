@@ -186,6 +186,9 @@ class HlLower {
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>, ?selected:Array<String>):Array<IrNative> {
 		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
 			selectedNames:Map<String, Bool> = [];
+		if (baseline != null)
+			for (native in program.natives)
+				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library, native.symbol);
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
@@ -384,7 +387,7 @@ class HlLower {
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
 		var cached = debugCache == null ? null : debugCache.identity(fn);
-		if (cached != null)
+		if (cached != null && cached.functionIndex == requireFunction(fn.name))
 			return cached;
 		var identity = functionIdentity(fn);
 		if (debugCache != null)
