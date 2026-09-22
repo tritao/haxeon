@@ -6,12 +6,15 @@ import sys.io.File;
 
 /** Loads a deterministic explicit source manifest into a compiler instance. */
 class SourceManifestLoader {
-	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>, ?packageRoots:Array<PackageSourceRoot>):Void {
+	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>, ?packageRoots:Array<PackageSourceRoot>,
+			?readSource:String->Null<String>):Void {
 		var ordered = paths.copy();
 		ordered.sort(Reflect.compare);
 		for (path in ordered)
 			try {
-				compiler.update(projectPath(path, roots, packageRoots), File.getContent(path));
+				var source = readSource == null ? File.getContent(path) : readSource(path);
+				if (source != null)
+					compiler.update(projectPath(path, roots, packageRoots), source);
 			} catch (error:Dynamic) {
 				throw "Could not load compiler source " + path + ": " + Std.string(error);
 			}
