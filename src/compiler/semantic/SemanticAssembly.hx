@@ -114,15 +114,60 @@ class SemanticAssembly {
 			}
 		}
 		var reuseModuleContributions = CompilationContext.mapIsEmpty(signatureChanged) && CompilationContext.mapIsEmpty(structuralChanged);
+		if (reuseModuleContributions) {
+			var discovered = true;
+			while (discovered) {
+				discovered = false;
+				for (moduleName in names) {
+					var cachedState = modules.get(moduleName);
+					if (cachedState == null)
+						continue;
+					for (classDecl in cachedState.canonicalClasses) {
+						var baseName = nominalTypeName(classDecl.base);
+						if (baseName != null && discoveryPrefixes.exists(baseName) && !discoveryPrefixes.exists(classDecl.name)) {
+							discoveryPrefixes.set(classDecl.name, discoveryPrefixes.get(baseName));
+							discovered = true;
+						}
+					}
+				}
+			}
+		}
 		for (name in names) {
 			if (token != null)
 				token.check();
 			if (!modules.exists(name))
 				continue;
-			var state = modules.get(name),
-				ast = state.parsedAst(),
-				locals:Map<String, Bool> = [],
-				aliases = context.importAliases(ast.imports, ast.importAliases);
+			var state = modules.get(name), ast = state.parsedAst();
+			if (reuseModuleContributions
+				&& state.canonicalRevision == state.revision
+				&& state.canonicalEntry == entryModule
+				&& state.canonicalAliasKey == aliasKey
+				&& state.canonicalAllFunctions.length > 0) {
+				for (value in state.canonicalAliases) typeAliases.push(value);
+				for (value in state.canonicalEnums) enums.push(value);
+				for (value in state.canonicalEnumAbstracts) enumAbstracts.push(value);
+				for (value in state.canonicalAbstracts) abstracts.push(value);
+				for (value in state.canonicalInterfaces) interfaces.push(value);
+				for (value in state.canonicalClasses) {
+					classes.push(value);
+					owners.set(value.name + ".new", name);
+				}
+				for (fn in state.canonicalAllFunctions) {
+					functions.push(fn);
+					owners.set(fn.name, name);
+					var fallbackCalls = state.canonicalCalls.get(fn.name);
+					if (fallbackCalls == null)
+						fallbackCalls = [];
+					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
+						addReverseCall(reverseCalls, callee, fn.name);
+				}
+				for (fn in state.canonicalProgramFunctions) programFunctions.push(fn);
+				for (functionName in state.canonicalGenericOrigins) genericOrigins.set(functionName, true);
+				if (state.canonicalGeneratedFunctions.length > 0)
+					generatedByModule.set(name, [for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
+				continue;
+			}
+			var locals:Map<String, Bool> = [], aliases = context.importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
 			var constructorTargets:Map<String, String> = [],
@@ -162,35 +207,6 @@ class SemanticAssembly {
 			for (caseName => target in constructorTargets)
 				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
 					aliases.set(caseName, target);
-			if (reuseModuleContributions
-				&& state.canonicalRevision == state.revision
-				&& state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey
-				&& state.canonicalAllFunctions.length > 0) {
-				for (value in state.canonicalAliases) typeAliases.push(value);
-				for (value in state.canonicalEnums) enums.push(value);
-				for (value in state.canonicalEnumAbstracts) enumAbstracts.push(value);
-				for (value in state.canonicalAbstracts) abstracts.push(value);
-				for (value in state.canonicalInterfaces) interfaces.push(value);
-				for (value in state.canonicalClasses) {
-					classes.push(value);
-					owners.set(value.name + ".new", name);
-				}
-				for (fn in state.canonicalAllFunctions) {
-					functions.push(fn);
-					owners.set(fn.name, name);
-					var fallbackCalls = state.canonicalCalls.get(fn.name);
-					if (fallbackCalls == null)
-						fallbackCalls = [];
-					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
-						addReverseCall(reverseCalls, callee, fn.name);
-				}
-				for (fn in state.canonicalProgramFunctions) programFunctions.push(fn);
-				for (functionName in state.canonicalGenericOrigins) genericOrigins.set(functionName, true);
-				if (state.canonicalGeneratedFunctions.length > 0)
-					generatedByModule.set(name, [for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
-				continue;
-			}
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,
 				enumAbstractStart = enumAbstracts.length,
