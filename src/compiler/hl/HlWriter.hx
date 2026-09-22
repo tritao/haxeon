@@ -6,6 +6,11 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
 
+typedef HlOpcodeSourceSpanGroup = {
+	final stableId:Int;
+	final mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>;
+}
+
 /** Encoded opcode bytes paired with unresolved symbolic branch targets. */
 private typedef EncodedInstruction = {
 	final opcode:HlOpcode;
@@ -188,6 +193,55 @@ class HlWriter {
 				if (fileIndex == null)
 					throw 'Missing debug source index for "${span.sourcePath}"';
 				writer.writeUnsignedIndex(fileIndex);
+				writer.writeIndex(span.start + 1);
+				writer.writeIndex(span.end + 1);
+				writer.writeUnsignedIndex(span.line);
+				writer.writeUnsignedIndex(span.column);
+				writer.writeUnsignedIndex(span.endLine);
+				writer.writeUnsignedIndex(span.endColumn);
+				writer.output.writeInt32(span.sourceHash);
+				writer.writeUnsignedIndex(span.flags);
+			}
+		}
+		return writer.output.getBytes();
+	}
+
+	/** Encode mappings that lowering already keeps grouped by stable function identity. */
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>):HaxeBytes {
+		var writer = new HlWriter(),
+			files:Array<String> = [],
+			fileIndices:Map<String, Int> = [],
+			seenFunctions:Map<Int, Bool> = [];
+		for (group in groups) {
+			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
+				throw "Invalid HLB opcode source-span function";
+			seenFunctions.set(group.stableId, true);
+			var previousOpcode = -1;
+			for (span in group.mappings) {
+				var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
+				if (span.stableId != group.stableId || span.opcode <= previousOpcode || span.sourcePath == "" || span.line < 1 || span.column < 1
+					|| span.endLine < span.line || span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0
+					|| !validRange)
+					throw "Invalid HLB opcode source span";
+				previousOpcode = span.opcode;
+				if (!fileIndices.exists(span.sourcePath)) {
+					fileIndices.set(span.sourcePath, files.length);
+					files.push(span.sourcePath);
+				}
+			}
+		}
+		writer.writeUnsignedIndex(files.length);
+		for (file in files)
+			writer.writeSizedString(file);
+		var ordered = groups.copy();
+		ordered.sort((left, right) -> left.stableId - right.stableId);
+		writer.writeUnsignedIndex(ordered.length);
+		for (group in ordered) {
+			writer.writeUnsignedIndex(group.stableId);
+			writer.writeUnsignedIndex(group.mappings.length);
+			for (span in group.mappings) {
+				writer.writeUnsignedIndex(span.opcode);
+				writer.writeUnsignedIndex(fileIndices.get(span.sourcePath));
 				writer.writeIndex(span.start + 1);
 				writer.writeIndex(span.end + 1);
 				writer.writeUnsignedIndex(span.line);

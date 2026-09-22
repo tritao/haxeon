@@ -305,14 +305,13 @@ class HlLower {
 			flags: 0,
 			payload: HlWriter.encodeFunctionIdentities(identities)
 		});
-		var spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
+		var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
 		for (index in 0...code.functions.length) {
 			var identity = identities[index],
 				loweredFunction = code.functions[index];
 			var cachedSpans = debugCache == null ? null : debugCache.functionSpans(loweredFunction);
 			if (cachedSpans != null) {
-				for (span in cachedSpans)
-					spans.push(span);
+				spanGroups.push({stableId: identity.stableId, mappings: cachedSpans});
 				continue;
 			}
 			var functionSpans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
@@ -331,17 +330,17 @@ class HlLower {
 					sourceHash: location.sourceHash,
 					flags: location.flags
 				};
-				spans.push(span);
 				functionSpans.push(span);
 			}
 			if (debugCache != null)
 				debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
+			spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
 		}
 		code.debugSections.push({
 			kind: HlWriter.OPCODE_SOURCE_SPANS,
 			version: 2,
 			flags: 0,
-			payload: HlWriter.encodeOpcodeSourceSpans(spans)
+			payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
 		});
 		var debugDoneAt = Sys.time() * 1000.0;
 
