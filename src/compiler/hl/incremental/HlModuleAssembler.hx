@@ -4,6 +4,7 @@ import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlCode;
+import compiler.hl.HlFunction;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
@@ -48,6 +49,7 @@ class HlModuleAssembler {
 	var publishedFloats = 0;
 	var publishedStrings = 0;
 	var publishedTypes = 0;
+	var loweredFunctions:Map<String, HlFunction> = [];
 
 	public function new(?stableIds:Map<String, Int>) {
 		cache = new HlFunctionCache(stableIds);
@@ -63,6 +65,7 @@ class HlModuleAssembler {
 		result.publishedFloats = publishedFloats;
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
+		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
 		return result;
 	}
 
@@ -135,7 +138,14 @@ class HlModuleAssembler {
 			case ReloadDomain(_): true;
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
-		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds);
+		var reuseLowered = initialized && switch decision {
+			case Patch: true;
+			case ReloadDomain(_), Reject(_): false;
+		};
+		var module = HlLower.lowerStable(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated);
+		loweredFunctions = [];
+		for (index in 0...ordered.functions.length)
+			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
 			baseStrings = publishedStrings,

@@ -42,16 +42,24 @@ class HlLower {
 		return code;
 	}
 
-	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>):HlCode {
+	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>):HlCode {
 		IrVerifier.verify(program);
-		return new HlLower(symbols, indices, stableIds).lowerProgram(program);
+		return new HlLower(symbols, indices, stableIds, cachedFunctions, regenerated).lowerProgram(program);
 	}
 
 	final stableIds:Null<Map<String, Int>>;
+	final cachedFunctions:Null<Map<String, HlFunction>>;
+	final regenerated:Map<String, Bool> = [];
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>) {
+	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
+			?regenerated:Array<String>) {
 		this.symbols = symbols;
 		this.stableIds = stableIds;
+		this.cachedFunctions = cachedFunctions;
+		if (regenerated != null)
+			for (name in regenerated)
+				this.regenerated.set(name, true);
 		code = new HlCode();
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
@@ -203,12 +211,21 @@ class HlLower {
 			lowerNative(native);
 		for (native in cDispatchNatives)
 			lowerNative(native);
+		var regeneratedSources:Map<String, Bool> = [];
 		for (fn in program.functions)
-			try {
-				code.functions.push(lowerFunction(PhiEdges.split(fn)));
-			} catch (error:String) {
-				throw 'HashLink lowering failed for ${fn.name}: $error';
-			}
+			if (regenerated.exists(fn.name))
+				collectSourcePaths(fn, regeneratedSources);
+		for (fn in program.functions) {
+			var cached = cachedFunctions == null || regenerated.exists(fn.name) || touchesSourcePath(fn, regeneratedSources) ? null : cachedFunctions.get(fn.name);
+			if (cached != null)
+				code.functions.push(cached);
+			else
+				try {
+					code.functions.push(lowerFunction(PhiEdges.split(fn)));
+				} catch (error:String) {
+					throw 'HashLink lowering failed for ${fn.name}: $error';
+				}
+		}
 		var identities = [for (fn in program.functions) functionIdentity(fn)];
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
@@ -251,6 +268,33 @@ class HlLower {
 		code.types = code.types.copy();
 		code.globals = code.globals.copy();
 		return code;
+	}
+
+	static function collectSourcePaths(fn:IrFunction, target:Map<String, Bool>):Void {
+		for (block in fn.blocks) {
+			for (instruction in block.instructions) {
+				var location = instruction.provenance.location;
+				if (location != null)
+					target.set(location.path, true);
+			}
+			var terminator = block.terminator;
+			if (terminator != null && terminator.provenance.location != null)
+				target.set(terminator.provenance.location.path, true);
+		}
+	}
+
+	static function touchesSourcePath(fn:IrFunction, paths:Map<String, Bool>):Bool {
+		for (block in fn.blocks) {
+			for (instruction in block.instructions) {
+				var location = instruction.provenance.location;
+				if (location != null && paths.exists(location.path))
+					return true;
+			}
+			var terminator = block.terminator;
+			if (terminator != null && terminator.provenance.location != null && paths.exists(terminator.provenance.location.path))
+				return true;
+		}
+		return false;
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {

@@ -1,6 +1,7 @@
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
 import compiler.tools.CompilerSession;
+import compiler.Compiler.CompileResult;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -28,12 +29,14 @@ class CompilerSessionMain {
 			expect(File.getContent(fresh + ".functions").indexOf("\tMain.main\n") >= 0,
 				"fresh bytecode must publish its function map");
 		}
-		compile();
+		var initial = compile();
 		var unchanged = compile();
 		expect(unchanged.retyped.length == 0, "unchanged compilation reuses semantic state");
 		File.saveContent(value, "class Value { public static function get():Int { return 9; } }");
 		var edited = compile();
 		expect(edited.retyped.length > 0, "a source edit must retype affected modules");
+		expect(functionByName(initial, "Main.main") == functionByName(edited, "Main.main"),
+			"backend assembly must reuse functions from unchanged source files");
 		compareFresh(9);
 		var lazy = root + "/Lazy.hx";
 		File.saveContent(lazy, "class Lazy { public static function value():Int { return 23; } }");
@@ -92,5 +95,13 @@ class CompilerSessionMain {
 
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition) throw message;
+	}
+
+	static function functionByName(result:CompileResult, name:String):compiler.hl.HlFunction {
+		var index = result.functionIndices.get(name);
+		for (fn in result.module.functions)
+			if (fn.functionIndex == index)
+				return fn;
+		throw 'Missing lowered function "$name"';
 	}
 }
