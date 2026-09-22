@@ -115,6 +115,8 @@ typedef CompileMetrics = {
 	final elapsedMs:Float;
 	final transactionSnapshotMs:Float;
 	final frontendMs:Float;
+	final frontendGraphMs:Float;
+	final semanticAssemblyMs:Float;
 	final typingLoweringMs:Float;
 	final declarationMs:Float;
 	final shapeConnectionMs:Float;
@@ -617,6 +619,8 @@ class Compiler {
 					elapsedMs: 0.0,
 					transactionSnapshotMs: 0.0,
 					frontendMs: 0.0,
+					frontendGraphMs: 0.0,
+					semanticAssemblyMs: 0.0,
 					typingLoweringMs: 0.0,
 					declarationMs: 0.0,
 					shapeConnectionMs: 0.0,

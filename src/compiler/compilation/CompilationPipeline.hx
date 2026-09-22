@@ -72,6 +72,7 @@ class CompilationPipeline {
 			regenerated = frontend.regenerated,
 			typerMetrics = frontend.typerMetrics;
 		var frontendDoneAt = frontend.frontendDoneAt,
+			frontendGraphDoneAt = frontend.frontendGraphDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
 		var backend = BackendAssembly.assemble(context, ir, regenerated, token);
@@ -121,6 +122,8 @@ class CompilationPipeline {
 				elapsedMs: finishedAt - transactionStartedAt,
 				transactionSnapshotMs: snapshotDoneAt - transactionStartedAt,
 				frontendMs: frontendDoneAt - snapshotDoneAt,
+				frontendGraphMs: frontendGraphDoneAt - snapshotDoneAt,
+				semanticAssemblyMs: frontendDoneAt - frontendGraphDoneAt,
 				typingLoweringMs: typingLoweringDoneAt - frontendDoneAt,
 				declarationMs: typerMetrics.declarationMs,
 				shapeConnectionMs: typerMetrics.shapeConnectionMs,

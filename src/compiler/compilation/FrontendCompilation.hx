@@ -26,6 +26,7 @@ typedef FrontendResult = {
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
+	final frontendGraphDoneAt:Float;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -64,6 +65,7 @@ class FrontendCompilation {
 			for (classDecl in ast.classes)
 				initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
 		}
+		var frontendGraphDoneAt = Sys.time() * 1000.0;
 
 		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged),
 			canonicalProgram = semanticAssembly.canonicalProgram,
@@ -285,6 +287,7 @@ class FrontendCompilation {
 				invalidations: semanticAssembly.invalidations,
 				regenerated: regenerated,
 				typerMetrics: typerMetrics,
+				frontendGraphDoneAt: frontendGraphDoneAt,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt
@@ -337,6 +340,7 @@ class FrontendCompilation {
 			invalidations: semanticAssembly.invalidations,
 			regenerated: regenerated,
 			typerMetrics: typerMetrics,
+			frontendGraphDoneAt: frontendGraphDoneAt,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt

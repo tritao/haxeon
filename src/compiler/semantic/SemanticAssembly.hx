@@ -47,6 +47,8 @@ class SemanticAssembly {
 			reverseCalls:Map<String, Array<String>> = [],
 			genericOrigins:Map<String, Bool> = [];
 		var sourceTypeAliases:Map<String, String> = [],
+			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
+			visibleAliasesByPackage:Map<String, Map<String, String>> = [],
 			enumCasesByType:Map<String, Array<String>> = [],
 			enumConstructorCounts:Map<String, Int> = [];
 		for (moduleName in names) {
@@ -54,12 +56,13 @@ class SemanticAssembly {
 				continue;
 			var moduleState = modules.get(moduleName),
 				program = moduleState.parsedAst();
+			var moduleAliases:Array<{sourceName:String, declarationName:String}> = [];
+			aliasesByModule.set(moduleName, moduleAliases);
 			for (declaration in program.aliases)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.enums) {
 				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name), canonicalName);
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 				enumCasesByType.set(canonicalName, [for (enumCase in declaration.cases) enumCase.name]);
 				for (enumCase in declaration.cases) {
 					var count = enumConstructorCounts.exists(enumCase.name) ? enumConstructorCounts.get(enumCase.name) : 0;
@@ -68,7 +71,7 @@ class SemanticAssembly {
 			}
 			for (declaration in program.enumAbstracts) {
 				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name), canonicalName);
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 				enumCasesByType.set(canonicalName, [for (enumCase in declaration.values) enumCase.name]);
 				for (enumCase in declaration.values) {
 					var count = enumConstructorCounts.exists(enumCase.name) ? enumConstructorCounts.get(enumCase.name) : 0;
@@ -76,14 +79,11 @@ class SemanticAssembly {
 				}
 			}
 			for (declaration in program.abstracts)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.interfaces)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.classes)
-				sourceTypeAliases.set(ModuleCanonicalizer.sourceDeclarationPath(moduleName, declaration.name),
-					ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name));
+				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 		}
 		var aliasUniverse = [
 			for (sourceName => declarationName in sourceTypeAliases)
@@ -137,49 +137,22 @@ class SemanticAssembly {
 			}
 			for (importPath in ast.imports) {
 				var importedModule = ModuleAnalyzer.importModulePath(importPath);
-				if (modules.exists(importedModule))
-					for (sourceName => declarationName in sourceTypeAliases) {
-						var qualifiedSourceName:String = sourceName;
+				if (aliasesByModule.exists(importedModule))
+					for (entry in aliasesByModule.get(importedModule)) {
+						var qualifiedSourceName = entry.sourceName;
 						if (StringTools.startsWith(qualifiedSourceName, importedModule + ".")) {
 							var nestedStart = importedModule.length + 1,
 								nestedName = qualifiedSourceName.substring(nestedStart, qualifiedSourceName.length);
 							if (nestedName.indexOf(".") < 0 && !aliases.exists(nestedName))
-								aliases.set(nestedName, declarationName);
+								aliases.set(nestedName, entry.declarationName);
 						}
 					}
 			}
 			var visiblePackage = ast.packageName;
-			while (true) {
-				var currentPackage:String;
-				if (visiblePackage == null)
-					break;
-				else
-					currentPackage = visiblePackage;
-				var packagePrefix = currentPackage.length == 0 ? "" : currentPackage + ".";
-				for (sourceName => declarationName in sourceTypeAliases) {
-					var qualifiedSourceName:String = sourceName,
-						qualifiedDeclarationName:String = declarationName;
-					if (StringTools.startsWith(qualifiedSourceName, packagePrefix)
-						&& StringTools.startsWith(qualifiedDeclarationName, packagePrefix)) {
-						var relativeSourceName = qualifiedSourceName.substring(packagePrefix.length, qualifiedSourceName.length),
-							simpleName = qualifiedDeclarationName.substring(packagePrefix.length, qualifiedDeclarationName.length);
-						if (!aliases.exists(relativeSourceName))
-							aliases.set(relativeSourceName, declarationName);
-						if (simpleName.indexOf(".") < 0 && !aliases.exists(simpleName))
-							aliases.set(simpleName, declarationName);
-					}
-				}
-				var separator = -1,
-					separatorCursor = currentPackage.length - 1;
-				while (separatorCursor >= 0) {
-					if (currentPackage.charCodeAt(separatorCursor) == 46) {
-						separator = separatorCursor;
-						break;
-					}
-					separatorCursor--;
-				}
-				visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
-			}
+			if (visiblePackage != null)
+				for (alias => target in visibleTypeAliases(visiblePackage, sourceTypeAliases, visibleAliasesByPackage))
+					if (!aliases.exists(alias))
+						aliases.set(alias, target);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression
 			// aliases. Install them only after visible type aliases have been
@@ -495,6 +468,38 @@ class SemanticAssembly {
 			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint
 		};
+	}
+
+	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{sourceName:String, declarationName:String}>, moduleName:String,
+			declarationName:String, packageName:Null<String>):Void {
+		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
+			canonicalName = ModuleCanonicalizer.qualifiedTypeName(packageName, declarationName);
+		target.set(sourceName, canonicalName);
+		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
+	}
+
+	static function visibleTypeAliases(packageName:String, sourceTypeAliases:Map<String, String>,
+			cache:Map<String, Map<String, String>>):Map<String, String> {
+		if (cache.exists(packageName))
+			return cache.get(packageName);
+		var result:Map<String, String> = [], visiblePackage:Null<String> = packageName;
+		while (visiblePackage != null) {
+			var currentPackage:String = visiblePackage,
+				packagePrefix = currentPackage.length == 0 ? "" : currentPackage + ".";
+			for (sourceName => declarationName in sourceTypeAliases)
+				if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
+					var relativeSourceName = sourceName.substring(packagePrefix.length, sourceName.length),
+						simpleName = declarationName.substring(packagePrefix.length, declarationName.length);
+					if (!result.exists(relativeSourceName))
+						result.set(relativeSourceName, declarationName);
+					if (simpleName.indexOf(".") < 0 && !result.exists(simpleName))
+						result.set(simpleName, declarationName);
+				}
+			var separator = currentPackage.lastIndexOf(".");
+			visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);
+		}
+		cache.set(packageName, result);
+		return result;
 	}
 
 	static function invalidate(invalid:Map<String, Bool>, reasons:Map<String, Array<InvalidationReason>>, artifact:String, kind:InvalidationKind,

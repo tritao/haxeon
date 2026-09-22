@@ -71,6 +71,8 @@ class CompilerDriver {
 		var metrics = result.metrics;
 		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs)
 			+ " frontend=" + milliseconds(metrics.frontendMs)
+			+ " (graph=" + milliseconds(metrics.frontendGraphMs)
+			+ " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")"
 			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs)
 			+ " ir-assembly=" + milliseconds(metrics.irAssemblyMs)
 			+ " abi=" + milliseconds(metrics.abiPlanningMs)
