@@ -121,6 +121,12 @@ typedef CompileMetrics = {
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
 	final semanticAssemblyMs:Float;
+	final semanticAliasMs:Float;
+	final semanticCanonicalizationMs:Float;
+	final semanticContributionReuseMs:Float;
+	final semanticContributionRebuildMs:Float;
+	final semanticInvalidationMs:Float;
+	final semanticAllocatedBytes:Float;
 	final typingLoweringMs:Float;
 	final declarationMs:Float;
 	final shapeConnectionMs:Float;
@@ -674,6 +680,12 @@ class Compiler {
 					graphDependencyMs: 0.0,
 					graphInitializationMs: 0.0,
 					semanticAssemblyMs: 0.0,
+					semanticAliasMs: 0.0,
+					semanticCanonicalizationMs: 0.0,
+					semanticContributionReuseMs: 0.0,
+					semanticContributionRebuildMs: 0.0,
+					semanticInvalidationMs: 0.0,
+					semanticAllocatedBytes: 0.0,
 					typingLoweringMs: 0.0,
 					declarationMs: 0.0,
 					shapeConnectionMs: 0.0,

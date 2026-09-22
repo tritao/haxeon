@@ -17,7 +17,8 @@ class CompilerServer {
 	}
 
 	static function serve(statePath:String):Void {
-		var random = File.read("/dev/urandom", true), token = random.read(32).toHex();
+		var random = File.read("/dev/urandom", true),
+			token = random.read(32).toHex();
 		random.close();
 		var listener = new Socket(), session = new CompilerSession(true);
 		listener.bind(new Host("127.0.0.1"), 0);
@@ -43,9 +44,18 @@ class CompilerServer {
 						running = false;
 					} else {
 						var started = Sys.time();
-						var result = CompilerDriver.compile(CompilerArguments.parse(cast request.arguments),
-							message -> send(client, {message: message}), session);
-						send(client, {message: 'compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'});
+						#if hl
+						var memoryBefore = hl.Gc.stats();
+						#end
+						var result = CompilerDriver.compile(CompilerArguments.parse(cast request.arguments), message -> send(client, {message: message}),
+							session);
+						#if hl
+						var memoryAfter = hl.Gc.stats();
+						send(client,
+							{message: 'worker allocations: bytes=${Math.round(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${Math.round(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${Math.round(memoryAfter.currentMemory)}'});
+						#end
+						send(client,
+							{message: 'compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'});
 					}
 					send(client, {status: 0});
 				} catch (error:Dynamic) {
@@ -53,7 +63,8 @@ class CompilerServer {
 					try {
 						var message = Std.string(error);
 						if (Std.isOfType(error, CompileError)) {
-							var failure:CompileError = cast error, diagnostic = failure.diagnostic;
+							var failure:CompileError = cast error,
+								diagnostic = failure.diagnostic;
 							message = diagnostic.span.file.path + ":" + diagnostic.span.start + ": " + diagnostic.code + ": " + diagnostic.message;
 						}
 						send(client, {message: message});

@@ -10,7 +10,8 @@ import subprocess
 
 COMPILER = re.compile(r"compiler: ([0-9]+) ms, ([0-9]+) functions retyped")
 EXECUTE = re.compile(r"execute: ([0-9.]+) ms")
-PHASE = re.compile(r"([a-z-]+)=([0-9.]+)")
+PHASE = re.compile(r"([a-z-]+)=([0-9.]+(?:[eE][+-]?[0-9]+)?)")
+ALLOCATIONS = re.compile(r"worker allocations: bytes=([0-9]+) count=([0-9]+) heap=([0-9]+)")
 
 
 def main() -> None:
@@ -58,10 +59,16 @@ def main() -> None:
             compiler = COMPILER.search(output)
             execute = EXECUTE.search(output)
             phase_line = next((line for line in output.splitlines() if line.startswith("compiler phases")), "")
+            driver_line = next((line for line in output.splitlines() if line.startswith("driver phases")), "")
             if compiler is None or execute is None or not phase_line:
                 raise SystemExit("timing output was incomplete\n" + output)
             sample = {name: float(value) for name, value in PHASE.findall(phase_line)}
+            sample.update({"driver-" + name: float(value) for name, value in PHASE.findall(driver_line)})
             sample.update(compiler=float(compiler.group(1)), retyped=float(compiler.group(2)), execute=float(execute.group(1)))
+            sample["command-overhead"] = sample["execute"] - sample["compiler"]
+            allocations = ALLOCATIONS.search(output)
+            if allocations is not None:
+                sample.update(allocated_bytes=float(allocations.group(1)), allocations=float(allocations.group(2)), heap_bytes=float(allocations.group(3)))
             samples.append(sample)
     finally:
         source.write_text(original, encoding="utf-8")

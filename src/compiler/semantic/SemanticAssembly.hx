@@ -26,6 +26,12 @@ typedef SemanticAssemblyResult = {
 	final selected:Map<String, Bool>;
 	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
+	final aliasSetupMs:Float;
+	final canonicalizationMs:Float;
+	final contributionReuseMs:Float;
+	final contributionRebuildMs:Float;
+	final invalidationMs:Float;
+	final allocatedBytes:Float;
 }
 
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
@@ -33,6 +39,11 @@ class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
 			structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
+		var startedAt = Sys.time() * 1000.0;
+		#if hl
+		var allocatedAtStart = hl.Gc.stats().totalAllocated;
+		#end
+		var contributionReuseMs = 0.0, contributionRebuildMs = 0.0;
 		var modules = context.modules;
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
@@ -132,7 +143,9 @@ class SemanticAssembly {
 				}
 			}
 		}
+		var aliasesPreparedAt = Sys.time() * 1000.0;
 		for (name in names) {
+			var contributionStartedAt = Sys.time() * 1000.0;
 			if (token != null)
 				token.check();
 			if (!modules.exists(name))
@@ -143,11 +156,16 @@ class SemanticAssembly {
 				&& state.canonicalEntry == entryModule
 				&& state.canonicalAliasKey == aliasKey
 				&& state.canonicalAllFunctions.length > 0) {
-				for (value in state.canonicalAliases) typeAliases.push(value);
-				for (value in state.canonicalEnums) enums.push(value);
-				for (value in state.canonicalEnumAbstracts) enumAbstracts.push(value);
-				for (value in state.canonicalAbstracts) abstracts.push(value);
-				for (value in state.canonicalInterfaces) interfaces.push(value);
+				for (value in state.canonicalAliases)
+					typeAliases.push(value);
+				for (value in state.canonicalEnums)
+					enums.push(value);
+				for (value in state.canonicalEnumAbstracts)
+					enumAbstracts.push(value);
+				for (value in state.canonicalAbstracts)
+					abstracts.push(value);
+				for (value in state.canonicalInterfaces)
+					interfaces.push(value);
 				for (value in state.canonicalClasses) {
 					classes.push(value);
 					owners.set(value.name + ".new", name);
@@ -161,13 +179,17 @@ class SemanticAssembly {
 					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
 						addReverseCall(reverseCalls, callee, fn.name);
 				}
-				for (fn in state.canonicalProgramFunctions) programFunctions.push(fn);
-				for (functionName in state.canonicalGenericOrigins) genericOrigins.set(functionName, true);
+				for (fn in state.canonicalProgramFunctions)
+					programFunctions.push(fn);
+				for (functionName in state.canonicalGenericOrigins)
+					genericOrigins.set(functionName, true);
 				if (state.canonicalGeneratedFunctions.length > 0)
 					generatedByModule.set(name, [for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
+				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
-			var locals:Map<String, Bool> = [], aliases = context.importAliases(ast.imports, ast.importAliases);
+			var locals:Map<String, Bool> = [],
+				aliases = context.importAliases(ast.imports, ast.importAliases);
 			for (sourceName => declarationName in sourceTypeAliases)
 				aliases.set(sourceName, declarationName);
 			var constructorTargets:Map<String, String> = [],
@@ -388,11 +410,15 @@ class SemanticAssembly {
 			state.canonicalClasses = classes.slice(classStart);
 			state.canonicalAllFunctions = functions.slice(functionStart);
 			state.canonicalProgramFunctions = programFunctions.slice(programFunctionStart);
-			state.canonicalGenericOrigins = [for (functionName in genericOrigins.keys()) if (owners.get(functionName) == name) functionName];
+			state.canonicalGenericOrigins = [
+				for (functionName in genericOrigins.keys()) if (owners.get(functionName) == name) functionName
+			];
 			var generated = generatedByModule.get(name);
 			state.canonicalGeneratedFunctions = generated == null ? [] : [for (functionName in generated.keys()) functionName];
+			contributionRebuildMs += Sys.time() * 1000.0 - contributionStartedAt;
 		}
 
+		var canonicalizedAt = Sys.time() * 1000.0;
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
@@ -526,6 +552,7 @@ class SemanticAssembly {
 			classes: classes,
 			functions: programFunctions
 		};
+		var invalidatedAt = Sys.time() * 1000.0;
 		return {
 			canonicalProgram: canonicalProgram,
 			functions: functions,
@@ -534,7 +561,13 @@ class SemanticAssembly {
 			invalidated: invalidated,
 			selected: selected,
 			invalidations: orderedInvalidations(invalidationReasons),
-			entryPoint: entryPoint
+			entryPoint: entryPoint,
+			aliasSetupMs: aliasesPreparedAt - startedAt,
+			canonicalizationMs: canonicalizedAt - aliasesPreparedAt,
+			contributionReuseMs: contributionReuseMs,
+			contributionRebuildMs: contributionRebuildMs,
+			invalidationMs: invalidatedAt - canonicalizedAt,
+			allocatedBytes: #if hl hl.Gc.stats().totalAllocated - allocatedAtStart #else 0.0 #end
 		};
 	}
 
@@ -555,11 +588,11 @@ class SemanticAssembly {
 		callers.push(caller);
 	}
 
-	static function visibleTypeAliases(packageName:String, sourceTypeAliases:Map<String, String>,
-			cache:Map<String, Map<String, String>>):Map<String, String> {
+	static function visibleTypeAliases(packageName:String, sourceTypeAliases:Map<String, String>, cache:Map<String, Map<String, String>>):Map<String, String> {
 		if (cache.exists(packageName))
 			return cache.get(packageName);
-		var result:Map<String, String> = [], visiblePackage:Null<String> = packageName;
+		var result:Map<String, String> = [],
+			visiblePackage:Null<String> = packageName;
 		while (visiblePackage != null) {
 			var currentPackage:String = visiblePackage,
 				packagePrefix = currentPackage.length == 0 ? "" : currentPackage + ".";

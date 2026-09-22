@@ -111,7 +111,7 @@ class Executor implements ExecutionBackend {
 							waveResults.set(action.id.key(), new ActionResult(action.id, 1, false, false, null, Std.string(error)));
 						}
 					case Compiler(_, _, _, _, _):
-						waveResults.set(action.id.key(), executeAction(action, dependencyFingerprints));
+						waveResults.set(action.id.key(), executeAction(action, dependencyFingerprints, fingerprint, true));
 				}
 			}
 			if (processTasks.length > 0) {
@@ -181,9 +181,11 @@ class Executor implements ExecutionBackend {
 		return true;
 	}
 
-	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>):ActionResult {
-		var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints);
-		if (isUpToDate(action, fingerprint, dependencyFingerprints))
+	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>, ?preparedFingerprint:String,
+			freshnessChecked:Bool = false):ActionResult {
+		var fingerprint = preparedFingerprint == null ? ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
+			dependencyFingerprints) : preparedFingerprint;
+		if (!freshnessChecked && isUpToDate(action, fingerprint, dependencyFingerprints))
 			return new ActionResult(action.id, 0, true, false, fingerprint);
 		try {
 			ensureOutputDirectories(action);

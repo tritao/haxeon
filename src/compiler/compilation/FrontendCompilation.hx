@@ -29,6 +29,12 @@ typedef FrontendResult = {
 	final regenerated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
+	final semanticAliasMs:Float;
+	final semanticCanonicalizationMs:Float;
+	final semanticContributionReuseMs:Float;
+	final semanticContributionRebuildMs:Float;
+	final semanticInvalidationMs:Float;
+	final semanticAllocatedBytes:Float;
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
@@ -341,6 +347,12 @@ class FrontendCompilation {
 				regenerated: regenerated,
 				typerMetrics: typerMetrics,
 				frontendGraphDoneAt: frontendGraphDoneAt,
+				semanticAliasMs: semanticAssembly.aliasSetupMs,
+				semanticCanonicalizationMs: semanticAssembly.canonicalizationMs,
+				semanticContributionReuseMs: semanticAssembly.contributionReuseMs,
+				semanticContributionRebuildMs: semanticAssembly.contributionRebuildMs,
+				semanticInvalidationMs: semanticAssembly.invalidationMs,
+				semanticAllocatedBytes: semanticAssembly.allocatedBytes,
 				graphParseMs: graphParseMs,
 				graphDependencyMs: graphDependencyMs,
 				graphInitializationMs: graphInitializationMs,
@@ -397,6 +409,12 @@ class FrontendCompilation {
 			regenerated: regenerated,
 			typerMetrics: typerMetrics,
 			frontendGraphDoneAt: frontendGraphDoneAt,
+			semanticAliasMs: semanticAssembly.aliasSetupMs,
+			semanticCanonicalizationMs: semanticAssembly.canonicalizationMs,
+			semanticContributionReuseMs: semanticAssembly.contributionReuseMs,
+			semanticContributionRebuildMs: semanticAssembly.contributionRebuildMs,
+			semanticInvalidationMs: semanticAssembly.invalidationMs,
+			semanticAllocatedBytes: semanticAssembly.allocatedBytes,
 			graphParseMs: graphParseMs,
 			graphDependencyMs: graphDependencyMs,
 			graphInitializationMs: graphInitializationMs,

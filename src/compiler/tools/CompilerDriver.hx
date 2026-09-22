@@ -17,11 +17,14 @@ import compiler.ir.codec.CanonicalIrCodec;
 class CompilerDriver {
 	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession):CompileResult {
 		var report = progress == null ? function(message:String) {} : progress;
+		var requestStartedAt = Sys.time() * 1000.0;
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
+		var preparedAt = Sys.time() * 1000.0;
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, null, false);
+		var compiledAt = Sys.time() * 1000.0;
 		var backendStartedAt = Sys.time() * 1000.0;
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
@@ -63,6 +66,9 @@ class CompilerDriver {
 			File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
+		var artifactsWrittenAt = Sys.time() * 1000.0;
+		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
+			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 		return result;
@@ -73,8 +79,11 @@ class CompilerDriver {
 		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
 			+ " frontend=" + milliseconds(metrics.frontendMs) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
 			+ milliseconds(metrics.graphParseMs) + " dependencies=" + milliseconds(metrics.graphDependencyMs) + " initialization="
-			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")" + " typing/lowering="
-			+ milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
+			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + " (alias-setup="
+			+ milliseconds(metrics.semanticAliasMs) + " canonicalization=" + milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse="
+			+ milliseconds(metrics.semanticContributionReuseMs) + " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs)
+			+ " invalidation=" + milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))"
+			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
 			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + " setup="
 			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="
 			+ milliseconds(metrics.typerMetadataMs) + " bodies=" + milliseconds(metrics.typerBodiesMs) + " body-transition="
