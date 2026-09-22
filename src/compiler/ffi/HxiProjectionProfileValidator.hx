@@ -12,6 +12,16 @@ class HxiProjectionProfileValidator {
 			profile:HxiProjectionProfile):Void {
 		if (profile.interfaceName != model.name)
 			HxiHaxeEmitter.profileError(path, 'names interface "${profile.interfaceName}" but was applied to "${model.name}"');
+		for (dependency in HxiHaxeEmitter.sortedKeys(profile.dependencyModules)) {
+			if (!Lambda.has(model.dependencies, dependency))
+				HxiHaxeEmitter.profileError(path, 'dependencyModules.$dependency does not name an HXI dependency of "${model.name}"');
+			HxiHaxeEmitter.validateTypePath(path, 'dependencyModules.$dependency', profile.dependencyModules.get(dependency), false);
+		}
+		for (dependency in HxiHaxeEmitter.sortedKeys(profile.dependencyTypeModules)) {
+			if (!Lambda.has(model.dependencies, dependency))
+				HxiHaxeEmitter.profileError(path, 'dependencyTypeModules.$dependency does not name an HXI dependency of "${model.name}"');
+			HxiHaxeEmitter.validateTypePath(path, 'dependencyTypeModules.$dependency', profile.dependencyTypeModules.get(dependency), false);
+		}
 
 		var declarations:Map<String, HxiDeclaration> = [],
 			local:Map<String, HxiDeclaration> = [];
@@ -163,6 +173,10 @@ class HxiProjectionProfileValidator {
 				&& profile.constantModule != profile.functionModule,
 			typeNames = splitTypes ? typeModuleNames : functionModuleNames,
 			constantNames = splitConstants ? constantModuleNames : functionModuleNames;
+		if (profile.packageName != null && !splitTypes)
+			HxiHaxeEmitter.addProjectedName(path, "module", profile.functionModule, "generated module namespace type", functionModuleNames);
+		if (splitTypes)
+			HxiHaxeEmitter.addProjectedName(path, "module", profile.typeModule, "generated module namespace type", typeModuleNames);
 		for (declaration in model.declarations)
 			if (!HxiHaxeEmitter.isOmitted(omitted, HxiHaxeEmitter.declarationName(declaration)))
 				switch declaration {

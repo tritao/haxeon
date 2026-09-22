@@ -156,6 +156,8 @@ class HxiHaxeEmitter {
 			return [];
 		if (profile == null)
 			profile = HxiProjectionProfile.empty();
+		var functionModule = profile.functionModule == null ? model.name : profile.functionModule,
+			nativeModule = profile.packageName == null ? functionModule : profile.packageName + "." + functionModule;
 		var result:Array<IrCNative> = [],
 			declarations:Map<String, HxiDeclaration> = [],
 			directed:Map<String, Bool> = [],
@@ -291,7 +293,7 @@ class HxiHaxeEmitter {
 			};
 			if (supported && returnValue != null)
 				result.push({
-					name: model.name + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : projectedFunctionName(fn.name, profile)),
+					name: nativeModule + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : projectedFunctionName(fn.name, profile)),
 					library: library,
 					symbol: fn.symbol,
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
@@ -425,12 +427,21 @@ class HxiHaxeEmitter {
 		if (profile != null && profile.packageName != null)
 			output.add('package ${profile.packageName};\n\n');
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
-		for (dependency in model.dependencies)
-			output.add('import $dependency;\n');
+		for (dependency in model.dependencies) {
+			var projectedDependency = profile == null ? null : profile.dependencyModules.get(dependency);
+			output.add(projectedDependency == null ? 'import $dependency;\n' : 'import $projectedDependency as $dependency;\n');
+		}
+		if (profile != null)
+			for (dependency in sortedKeys(profile.dependencyTypeModules))
+				output.add('import ${profile.dependencyTypeModules.get(dependency)};\n');
 		if (emitFunctions && splitTypes)
 			output.add('import ${profile.packageName}.${profile.typeModule};\n');
 		if (moduleKind == "types" && splitTypes)
 			output.add('import ${profile.packageName}.${profile.functionModule} as ${model.name};\n');
+		if (emitFunctions && profile != null && profile.packageName != null && !splitTypes)
+			output.add('class ${profile.functionModule} {}\n');
+		if (moduleKind == "types" && splitTypes)
+			output.add('class ${profile.typeModule} {}\n');
 		if (emitConstants && constants.length != 0) {
 			output.add('class ${upperFirst(model.name)}Constants {\n');
 			for (constant in constants) {
@@ -971,7 +982,10 @@ class HxiHaxeEmitter {
 				if (projectedFunction.checked != null)
 					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
 			}
-		return output.toString();
+		var source = output.toString();
+		if (moduleKind == "types" && splitTypes)
+			source = StringTools.replace(source, '${profile.packageName}.${profile.typeModule}.', "");
+		return source;
 	}
 
 	static inline function emitDocumentation(output:StringBuf, model:HxiInterface, name:String, indent:String = ""):Void
@@ -1752,6 +1766,23 @@ class HxiHaxeEmitter {
 		return pascalCase(value.substr(prefix.length).split("_"));
 	}
 
+	public static function projectedTypeReferenceName(value:String, profile:Null<HxiProjectionProfile>):String {
+		if (profile == null || profile.typeModule == null || profile.packageName == null || profile.typeModule == profile.functionModule)
+			return value;
+		var genericStart = value.indexOf("<");
+		if (genericStart > 0 && StringTools.endsWith(value, ">")) {
+			var wrapper = value.substr(0, genericStart),
+				inner = value.substring(genericStart + 1, value.length - 1);
+			return wrapper + "<" + projectedTypeReferenceName(inner, profile) + ">";
+		}
+		if (value.indexOf(".") >= 0 || value.length == 0)
+			return value;
+		var first = value.charAt(0);
+		if (first.toUpperCase() != first || value == "Bool" || value == "Float" || value == "Int" || value == "String" || value == "Void")
+			return value;
+		return profile.packageName + "." + profile.typeModule + "." + value;
+	}
+
 	public static function ownedTypeName(value:String, profile:Null<HxiProjectionProfile>):String {
 		var projected = projectedTypeName(value, profile),
 			separator = projected.lastIndexOf(".");
@@ -1872,7 +1903,7 @@ class HxiHaxeEmitter {
 			case EnumerationValue(name, bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
-					haxeType: enumTypeName(name, profile),
+					haxeType: projectedTypeReferenceName(enumTypeName(name, profile), profile),
 					nativePointer: false,
 					nullable: false,
 					code: switch bits {
@@ -1882,19 +1913,19 @@ class HxiHaxeEmitter {
 					}
 				};
 			case CallbackValue(name, _, _, nullable): {
-					haxeType: nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile) + "Callback",
+					haxeType: projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile) + "Callback", profile),
 					code: 11,
 					nativePointer: true,
 					nullable: false
 				};
 			case AggregateValue(name, _, _): {
-					haxeType: projectedTypeName(name, profile),
+					haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
 					code: 12,
 					nativePointer: false,
 					nullable: false
 				};
 			case HandleValue(name): {
-					haxeType: projectedTypeName(name, profile),
+					haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
 					code: 6,
 					nativePointer: false,
 					nullable: false
@@ -1924,9 +1955,9 @@ class HxiHaxeEmitter {
 					nullable: false
 				};
 			case PointerValue(_, nullable, opaquePointee, structure): {
-					haxeType: opaquePointee != null ? (nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile)) : structure != null ? (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
-						profile)) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+						profile), profile) : structure != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile), profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
 					nativePointer: opaquePointee != null,
 					nullable: nullable
@@ -1942,9 +1973,9 @@ class HxiHaxeEmitter {
 	}>
 		return switch value {
 			case PointerValue(_, nullable, opaquePointee, structure): {
-					haxeType: opaquePointee != null ? (nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile)) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : (nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
-						profile)),
+					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+						profile), profile) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile), profile),
 					code: 11,
 					nativePointer: opaquePointee != null || structure == null,
 					nullable: nullable
@@ -2131,7 +2162,7 @@ class HxiHaxeEmitter {
 			case Named(name):
 				switch declarations.get(name) {
 					case Alias(_, target, _): structureType(target, declarations, profile);
-					case Structure(_, size, _, _, _): {name: projectedTypeName(name, profile), size: size};
+					case Structure(_, size, _, _, _): {name: projectedTypeReferenceName(projectedTypeName(name, profile), profile), size: size};
 					case _: null;
 				}
 			case _: null;

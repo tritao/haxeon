@@ -207,7 +207,7 @@ class HxiParserMain {
 		var styleProfile = HxiProjectionProfile.parse("style.hxmap",
 			'{"interface":"style","typePrefix":"lib_","functionPrefix":"lib_","functionCase":"camel","fieldCase":"camel","constantPrefix":"LIB_","constantCase":"camel"}');
 		var styleModel = parseValidated("style.hxi",
-			'interface style @target("x86_64-linux-gnu") @library("style") { const LIB_VERSION = 1; struct lib_point @layout(4, 4) { text_value: i32 @offset(0); } extern fn lib_check_value(value: lib_point) -> i32; }');
+			'interface style @target("x86_64-linux-gnu") @library("style") { const LIB_VERSION = 1; enum lib_kind : i32 { LIB_KIND_PRIMARY = 0; } struct lib_point @layout(8, 4) { kind: lib_kind @offset(0); text_value: i32 @offset(4); } extern fn lib_check_value(value: lib_point) -> i32; }');
 		var styleSource = HxiProjection.source(styleModel, null, null, null, styleProfile),
 			styleNatives = HxiProjection.cNatives(styleModel, null, null, null, styleProfile);
 		expect(styleSource.indexOf("public static inline final version:Int = 1") >= 0
@@ -218,6 +218,7 @@ class HxiParserMain {
 		var layoutProfile = HxiProjectionProfile.parse("layout.hxmap",
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}'),
 			layoutModules = HxiProjection.modules(styleModel, null, null, null, layoutProfile),
+			layoutNatives = HxiProjection.cNatives(styleModel, null, null, null, layoutProfile),
 			layoutFunctions = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.style"),
 			layoutTypes = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Types"),
 			layoutConstants = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Constants");
@@ -227,8 +228,12 @@ class HxiParserMain {
 			&& layoutFunctions.source.indexOf("import nativekit.ffi.Types;") >= 0
 			&& layoutTypes != null
 			&& layoutTypes.source.indexOf("import nativekit.ffi.style as style;") >= 0
+			&& layoutTypes.source.indexOf("import nativekit.ffi.Types;") < 0
+			&& layoutTypes.source.indexOf("nativekit.ffi.Types.") < 0
+			&& layoutTypes.source.indexOf("set_kind(value:Kind)") >= 0
 			&& layoutConstants != null
-			&& layoutConstants.source.indexOf("class StyleConstants") >= 0,
+			&& layoutConstants.source.indexOf("class StyleConstants") >= 0
+			&& layoutNatives[0].name == "nativekit.ffi.style.lib_check_value",
 			"projection profiles should place generated declarations into configured package modules");
 		var layoutCompiler = new Compiler();
 		layoutCompiler.addSourceRoot("stdlib");
@@ -236,14 +241,17 @@ class HxiParserMain {
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
 		layoutCompiler.update("LayoutMain.hx",
-			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); point.set_textValue(42); return point.get_textValue(); }");
+			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Kind = cast 0; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
 		layoutCompiler.analyze("LayoutMain");
 		var mappedDependencyCompiler = new Compiler();
 		mappedDependencyCompiler.addFfiInterface("base.hxi", 'interface base @target("x86_64-linux-gnu") @library("base") { handle nk_handle : u32; }');
 		mappedDependencyCompiler.addFfiInterface("derived.hxi",
 			'interface derived @target("x86_64-linux-gnu") @library("derived") @depends("base") { extern fn use_handle(value: nk_handle) -> void; }');
-		mappedDependencyCompiler.addFfiProjection("derived.hxmap", '{"interface":"derived","typeNames":{"nk_handle":"Base.Handle"}}');
-		expect(mappedDependencyCompiler.modules.get("derived").source.text.indexOf("Base.Handle") >= 0,
+		mappedDependencyCompiler.addFfiProjection("derived.hxmap",
+			'{"interface":"derived","dependencyModules":{"base":"library.base"},"dependencyTypeModules":{"base":"library.base.Types"},"typeNames":{"nk_handle":"Base.Handle"}}');
+		expect(mappedDependencyCompiler.modules.get("derived").source.text.indexOf("import library.base as base;") >= 0
+			&& mappedDependencyCompiler.modules.get("derived").source.text.indexOf("import library.base.Types;") >= 0
+			&& mappedDependencyCompiler.modules.get("derived").source.text.indexOf("Base.Handle") >= 0,
 			"dependency type mappings should accept qualified Haxe type paths");
 		expectProfileError(function() {
 			var compiler = new Compiler();

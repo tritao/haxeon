@@ -21,6 +21,8 @@ class HxiProjectionProfile {
 	public final functionModule:Null<String>;
 	public final typeModule:Null<String>;
 	public final constantModule:Null<String>;
+	public final dependencyModules:Map<String, String>;
+	public final dependencyTypeModules:Map<String, String>;
 	public final typePrefix:Null<String>;
 	public final functionPrefix:Null<String>;
 	public final functionCase:String;
@@ -42,12 +44,14 @@ class HxiProjectionProfile {
 			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
 			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve",
 			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>, ?packageName:Null<String>, ?functionModule:Null<String>,
-			?typeModule:Null<String>, ?constantModule:Null<String>) {
+			?typeModule:Null<String>, ?constantModule:Null<String>, ?dependencyModules:Map<String, String>, ?dependencyTypeModules:Map<String, String>) {
 		this.interfaceName = interfaceName;
 		this.packageName = packageName;
 		this.functionModule = functionModule == null ? interfaceName : functionModule;
 		this.typeModule = typeModule;
 		this.constantModule = constantModule;
+		this.dependencyModules = dependencyModules == null ? [] : dependencyModules;
+		this.dependencyTypeModules = dependencyTypeModules == null ? [] : dependencyTypeModules;
 		this.typePrefix = typePrefix;
 		this.functionPrefix = functionPrefix;
 		this.functionCase = validateCase(functionCase);
@@ -99,7 +103,9 @@ class HxiProjectionProfile {
 			resultPolicies = resultPolicyMap(value, "resultPolicies", path),
 			functionModule = optionalString(value, "functionModule", path),
 			typeModule = optionalString(value, "typeModule", path),
-			constantModule = optionalString(value, "constantModule", path);
+			constantModule = optionalString(value, "constantModule", path),
+			dependencyModules = stringMap(value, "dependencyModules", path),
+			dependencyTypeModules = stringMap(value, "dependencyTypeModules", path);
 		if (Reflect.hasField(value, "modules")) {
 			var modules = Reflect.field(value, "modules");
 			if (modules == null || !Reflect.isObject(modules) || Std.isOfType(modules, Array))
@@ -118,7 +124,7 @@ class HxiProjectionProfile {
 			functionModule = interfaceName;
 		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
 			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies,
-			callbackErrorType, packageName, functionModule, typeModule, constantModule);
+			callbackErrorType, packageName, functionModule, typeModule, constantModule, dependencyModules, dependencyTypeModules);
 	}
 
 	static function moduleString(value:Dynamic, field:String, path:String):Null<String> {
