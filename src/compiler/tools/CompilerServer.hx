@@ -28,9 +28,7 @@ class CompilerServer {
 		try {
 			var running = true;
 			while (running) {
-				// Socket.select follows each target's native timeout unit.
-				var idleTimeout = #if hl 300000 #else 300 #end;
-				if (Socket.select([listener], [], [], idleTimeout).read.length == 0)
+				if (Socket.select([listener], [], [], 300).read.length == 0)
 					break;
 				var client = listener.accept();
 				client.setTimeout(600);

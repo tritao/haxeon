@@ -41,6 +41,7 @@ private typedef BuildOptions = {
 	final plan:Bool;
 	final explain:Bool;
 	final timings:Bool;
+	final compilerOnly:Bool;
 	final jobs:Int;
 	final selfHosted:Bool;
 	final profile:Bool;
@@ -456,6 +457,8 @@ class HaxeonCli {
 			throw 'Option "--plan" is only valid with "haxeon build"';
 		if (options.explain && launch)
 			throw 'Option "--explain" is only valid with "haxeon build"';
+		if (options.compilerOnly && launch)
+			throw 'Option "--compiler-only" is only valid with "haxeon build"';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
@@ -476,7 +479,7 @@ class HaxeonCli {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted);
+				resolutionMs, options.selfHosted, options.compilerOnly);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -782,7 +785,8 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, jobs = 4, selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
+			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, jobs = 4,
+			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
 			profile = false, profileOutput:Null<String> = null;
 		var index = 0;
 		while (index < arguments.length) {
@@ -797,6 +801,8 @@ class HaxeonCli {
 				explain = true;
 			else if (argument == "--timings")
 				timings = true;
+			else if (argument == "--compiler-only")
+				compilerOnly = true;
 			else if (argument == "--self-hosted")
 				selfHosted = true;
 			else if (argument == "--profile")
@@ -862,6 +868,7 @@ class HaxeonCli {
 			plan: plan,
 			explain: explain,
 			timings: timings,
+			compilerOnly: compilerOnly,
 			jobs: jobs,
 			selfHosted: selfHosted,
 			profile: profile,
@@ -1187,7 +1194,7 @@ class HaxeonCli {
 		Sys.println("       [--check] [--stdin]      Check files or format stdin");
 		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
-		Sys.println("       [--plan] [--explain] [--timings] [--jobs COUNT]");
+		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
