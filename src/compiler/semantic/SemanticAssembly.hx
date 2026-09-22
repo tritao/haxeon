@@ -113,6 +113,7 @@ class SemanticAssembly {
 					discoveryPrefixes.set(ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name), prefixes);
 			}
 		}
+		var reuseModuleContributions = CompilationContext.mapIsEmpty(signatureChanged) && CompilationContext.mapIsEmpty(structuralChanged);
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -161,6 +162,43 @@ class SemanticAssembly {
 			for (caseName => target in constructorTargets)
 				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
 					aliases.set(caseName, target);
+			if (reuseModuleContributions
+				&& state.canonicalRevision == state.revision
+				&& state.canonicalEntry == entryModule
+				&& state.canonicalAliasKey == aliasKey
+				&& state.canonicalAllFunctions.length > 0) {
+				for (value in state.canonicalAliases) typeAliases.push(value);
+				for (value in state.canonicalEnums) enums.push(value);
+				for (value in state.canonicalEnumAbstracts) enumAbstracts.push(value);
+				for (value in state.canonicalAbstracts) abstracts.push(value);
+				for (value in state.canonicalInterfaces) interfaces.push(value);
+				for (value in state.canonicalClasses) {
+					classes.push(value);
+					owners.set(value.name + ".new", name);
+				}
+				for (fn in state.canonicalAllFunctions) {
+					functions.push(fn);
+					owners.set(fn.name, name);
+					var fallbackCalls = state.canonicalCalls.get(fn.name);
+					if (fallbackCalls == null)
+						fallbackCalls = [];
+					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
+						addReverseCall(reverseCalls, callee, fn.name);
+				}
+				for (fn in state.canonicalProgramFunctions) programFunctions.push(fn);
+				for (functionName in state.canonicalGenericOrigins) genericOrigins.set(functionName, true);
+				if (state.canonicalGeneratedFunctions.length > 0)
+					generatedByModule.set(name, [for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
+				continue;
+			}
+			var aliasStart = typeAliases.length,
+				enumStart = enums.length,
+				enumAbstractStart = enumAbstracts.length,
+				abstractStart = abstracts.length,
+				interfaceStart = interfaces.length,
+				classStart = classes.length,
+				functionStart = functions.length,
+				programFunctionStart = programFunctions.length;
 			for (interfaceDecl in ast.interfaces)
 				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName));
 			for (alias in ast.aliases)
@@ -275,7 +313,9 @@ class SemanticAssembly {
 					for (statement in canonical.statements)
 						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
 					LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-					for (callee in dependencyCalls(state, rollbackModules, canonical.name, [for (name in calls.keys()) name])) {
+					var fallbackCalls = [for (name in calls.keys()) name];
+					state.canonicalCalls.set(canonical.name, fallbackCalls);
+					for (callee in dependencyCalls(state, rollbackModules, canonical.name, fallbackCalls)) {
 						var callers:Array<String>;
 						if (reverseCalls.exists(callee))
 							callers = reverseCalls.get(callee);
@@ -323,6 +363,18 @@ class SemanticAssembly {
 				});
 				owners.set(className + ".new", name);
 			}
+			state = context.writableState(name, rollbackModules);
+			state.canonicalAliases = typeAliases.slice(aliasStart);
+			state.canonicalEnums = enums.slice(enumStart);
+			state.canonicalEnumAbstracts = enumAbstracts.slice(enumAbstractStart);
+			state.canonicalAbstracts = abstracts.slice(abstractStart);
+			state.canonicalInterfaces = interfaces.slice(interfaceStart);
+			state.canonicalClasses = classes.slice(classStart);
+			state.canonicalAllFunctions = functions.slice(functionStart);
+			state.canonicalProgramFunctions = programFunctions.slice(programFunctionStart);
+			state.canonicalGenericOrigins = [for (functionName in genericOrigins.keys()) if (owners.get(functionName) == name) functionName];
+			var generated = generatedByModule.get(name);
+			state.canonicalGeneratedFunctions = generated == null ? [] : [for (functionName in generated.keys()) functionName];
 		}
 
 		for (module => lambdaNames in generatedByModule)
@@ -476,6 +528,15 @@ class SemanticAssembly {
 			canonicalName = ModuleCanonicalizer.qualifiedTypeName(packageName, declarationName);
 		target.set(sourceName, canonicalName);
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
+	}
+
+	static function addReverseCall(reverseCalls:Map<String, Array<String>>, callee:String, caller:String):Void {
+		var callers = reverseCalls.get(callee);
+		if (callers == null) {
+			callers = [];
+			reverseCalls.set(callee, callers);
+		}
+		callers.push(caller);
 	}
 
 	static function visibleTypeAliases(packageName:String, sourceTypeAliases:Map<String, String>,
