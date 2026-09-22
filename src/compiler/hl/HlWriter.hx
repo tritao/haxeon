@@ -31,7 +31,7 @@ class HlWriter {
 	}
 
 	public static function encode(code:HlCode, ?cache:HlWriterCache):HaxeBytes {
-		HlValidator.validate(code);
+		HlValidator.validate(code, cache);
 		var writer = new HlWriter(cache);
 		writer.writeCode(code);
 		return writer.output.getBytes();

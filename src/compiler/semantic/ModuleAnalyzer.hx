@@ -22,10 +22,10 @@ class ModuleAnalyzer {
 	final buildSemanticModels:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
-	final declarationOwners:Map<String, String> = [];
+	final declarationOwners:Map<String, String>;
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
-			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true) {
+			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:Map<String, String>) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
@@ -33,9 +33,11 @@ class ModuleAnalyzer {
 		this.buildSemanticModels = buildSemanticModels;
 		this.defines = defines;
 		this.sourceLoader = sourceLoader;
-		for (name => state in modules)
-			if (state.ast != null)
-				indexDeclarations(name, state.parsedAst());
+		this.declarationOwners = declarationOwners == null ? [] : declarationOwners;
+		if (declarationOwners == null)
+			for (name => state in modules)
+				if (state.ast != null)
+					indexDeclarations(name, state.parsedAst());
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
@@ -50,6 +52,9 @@ class ModuleAnalyzer {
 			state.conditionalDefines = conditional.defines;
 			state.tokens = new Lexer(state.source, conditional.text).tokenize();
 			state.ast = new Parser(state.tokens).parseProgram();
+			for (declaration => owner in [for (declaration => owner in declarationOwners) declaration => owner])
+				if (owner == state.name)
+					declarationOwners.remove(declaration);
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);

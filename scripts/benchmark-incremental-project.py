@@ -21,6 +21,9 @@ def main() -> None:
     parser.add_argument("--token-b", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--max-compiler-ms", type=float)
+    parser.add_argument("--max-execute-ms", type=float)
+    parser.add_argument("--max-retyped", type=float)
     args = parser.parse_args()
     if args.runs < 1:
         raise SystemExit("--runs must be positive")
@@ -69,6 +72,13 @@ def main() -> None:
     for key in keys:
         value = statistics.median(sample[key] for sample in samples)
         print(f"  {key}: {value:.2f}")
+    medians = {key: statistics.median(sample[key] for sample in samples) for key in keys}
+    failures = []
+    for key, limit in (("compiler", args.max_compiler_ms), ("execute", args.max_execute_ms), ("retyped", args.max_retyped)):
+        if limit is not None and medians[key] > limit:
+            failures.append(f"{key} median {medians[key]:.2f} exceeds {limit:.2f}")
+    if failures:
+        raise SystemExit("incremental performance regression: " + "; ".join(failures))
 
 
 if __name__ == "__main__":

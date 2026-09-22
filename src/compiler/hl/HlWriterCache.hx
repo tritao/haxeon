@@ -7,6 +7,7 @@ import haxe.io.Bytes;
 class HlWriterCache {
 	var debugFiles:Array<String> = [];
 	var functions:ObjectMap<HlFunction, Bytes> = new ObjectMap();
+	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
 
 	public function new() {}
 
@@ -15,6 +16,7 @@ class HlWriterCache {
 			return;
 		debugFiles = files.copy();
 		functions = new ObjectMap();
+		validatedFunctions = new ObjectMap();
 	}
 
 	public function get(fn:HlFunction):Null<Bytes>
@@ -22,6 +24,12 @@ class HlWriterCache {
 
 	public function set(fn:HlFunction, bytes:Bytes):Void
 		functions.set(fn, bytes);
+
+	public function isValidated(fn:HlFunction):Bool
+		return validatedFunctions.exists(fn);
+
+	public function markValidated(fn:HlFunction):Void
+		validatedFunctions.set(fn, true);
 
 	static function sameStrings(left:Array<String>, right:Array<String>):Bool {
 		if (left.length != right.length)

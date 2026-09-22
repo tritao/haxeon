@@ -114,8 +114,12 @@ typedef CompileResult = {
 typedef CompileMetrics = {
 	final elapsedMs:Float;
 	final transactionSnapshotMs:Float;
+	final candidateSetupMs:Float;
 	final frontendMs:Float;
 	final frontendGraphMs:Float;
+	final graphParseMs:Float;
+	final graphDependencyMs:Float;
+	final graphInitializationMs:Float;
 	final semanticAssemblyMs:Float;
 	final typingLoweringMs:Float;
 	final declarationMs:Float;
@@ -211,11 +215,19 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
 	var reachabilityCache:Map<String, ReachabilityCache> = [];
+	var declarationOwners:Map<String, String> = [];
 
-	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
 		semanticWorkspace = new SemanticWorkspace(modules);
-		natives = new NativeRegistry(nativeConfiguration);
-		if (identityState == null) {
+		natives = cloneFrom == null ? new NativeRegistry(nativeConfiguration) : cloneFrom.natives.clone();
+		if (cloneFrom != null) {
+			genericSpecializations = cloneFrom.genericSpecializations.copy();
+			moduleId = cloneFrom.moduleId;
+			assembler = cloneFrom.assembler;
+			types = cloneFrom.types.copy();
+			publishedAbi = cloneFrom.publishedAbi;
+			compiledOnce = cloneFrom.compiledOnce;
+		} else if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
 			assembler = new HlModuleAssembler();
@@ -241,7 +253,24 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
-		if (ffiConfiguration != null) {
+		if (cloneFrom != null) {
+			for (source in cloneFrom.ffiInterfaceSources)
+				ffiInterfaceSources.push(source);
+			for (name => model in cloneFrom.ffiInterfaceModels)
+				ffiInterfaceModels.set(name, model);
+			for (source in cloneFrom.ffiProjectionSources)
+				ffiProjectionSources.push(source);
+			for (name => profile in cloneFrom.ffiProjectionProfiles)
+				ffiProjectionProfiles.set(name, profile);
+			for (name => path in cloneFrom.ffiProjectionPaths)
+				ffiProjectionPaths.set(name, path);
+			for (name => projected in cloneFrom.ffiProjectionCache)
+				ffiProjectionCache.set(name, projected);
+			for (name => composition in cloneFrom.ffiCompositionCache)
+				ffiCompositionCache.set(name, composition);
+			for (name => abi in cloneFrom.ffiAbiCache)
+				ffiAbiCache.set(name, abi);
+		} else if (ffiConfiguration != null) {
 			for (source in ffiConfiguration.interfaceSources())
 				registerFfiInterface(source.path, source.text, false);
 			for (source in ffiConfiguration.projectionSources())
@@ -512,6 +541,9 @@ class Compiler {
 		if (!modules.exists(name))
 			return false;
 		modules.remove(name);
+		for (declaration => owner in [for (declaration => owner in declarationOwners) declaration => owner])
+			if (owner == name)
+				declarationOwners.remove(declaration);
 		graph.rebuild(modules);
 		sourceGeneration++;
 		return true;
@@ -585,7 +617,7 @@ class Compiler {
 	}
 
 	function fork():Compiler {
-		var candidate = new Compiler(exportIdentityState(), nativeConfiguration(), ffiConfigurationSnapshot());
+		var candidate = new Compiler(null, null, null, this);
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
@@ -625,8 +657,12 @@ class Compiler {
 				metrics: {
 					elapsedMs: 0.0,
 					transactionSnapshotMs: 0.0,
+					candidateSetupMs: 0.0,
 					frontendMs: 0.0,
 					frontendGraphMs: 0.0,
+					graphParseMs: 0.0,
+					graphDependencyMs: 0.0,
+					graphInitializationMs: 0.0,
 					semanticAssemblyMs: 0.0,
 					typingLoweringMs: 0.0,
 					declarationMs: 0.0,
@@ -736,6 +772,7 @@ class Compiler {
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
 		candidate.cachedSemanticProgram = snapshot.semanticProgram;
 		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
+		candidate.declarationOwners = [for (declaration => owner in declarationOwners) declaration => owner];
 		candidate.genericSpecializations = genericSpecializations.copy();
 		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
 		return candidate;
@@ -754,6 +791,7 @@ class Compiler {
 		rehydrationBaseline = candidate.rehydrationBaseline;
 		cachedSemanticProgram = candidate.cachedSemanticProgram;
 		reachabilityCache = candidate.reachabilityCache;
+		declarationOwners = candidate.declarationOwners;
 		assembler = candidate.assembler;
 		genericSpecializations = candidate.genericSpecializations;
 		graph.rebuild(modules);

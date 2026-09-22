@@ -70,8 +70,10 @@ class CompilerDriver {
 
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
-		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " frontend=" + milliseconds(metrics.frontendMs)
-			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")" + " typing/lowering="
+		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
+			+ " frontend=" + milliseconds(metrics.frontendMs) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
+			+ milliseconds(metrics.graphParseMs) + " dependencies=" + milliseconds(metrics.graphDependencyMs) + " initialization="
+			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + ")" + " typing/lowering="
 			+ milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
 			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + " setup="
 			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="

@@ -27,6 +27,9 @@ typedef FrontendResult = {
 	final regenerated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
+	final graphParseMs:Float;
+	final graphDependencyMs:Float;
+	final graphInitializationMs:Float;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -44,7 +47,10 @@ class FrontendCompilation {
 			token.check();
 		var bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],
-			structuralChanged:Map<String, Bool> = [];
+			structuralChanged:Map<String, Bool> = [],
+			graphParseMs = 0.0,
+			graphDependencyMs = 0.0,
+			graphInitializationMs = 0.0;
 		var names:Array<String> = [],
 			initializationClasses:Array<String> = [],
 			cachedReachability = context.cachedReachability(entryModule),
@@ -57,9 +63,13 @@ class FrontendCompilation {
 					break;
 				}
 				if (state.ast == null) {
+					var phaseStarted = Sys.time() * 1000.0;
 					state = context.writableState(name, rollbackModules);
 					context.parse(state, entryModule, bodyChanged, signatureChanged, structuralChanged);
+					graphParseMs += Sys.time() * 1000.0 - phaseStarted;
+					phaseStarted = Sys.time() * 1000.0;
 					context.addTypeDependencies(state);
+					graphDependencyMs += Sys.time() * 1000.0 - phaseStarted;
 				}
 				if (cachedReachability.dependencyKeys.get(name) != state.dependencies.join("\x00"))
 					reuseGraph = false;
@@ -74,13 +84,18 @@ class FrontendCompilation {
 			while (reachability.hasNext(token)) {
 				var reachableState = reachability.next();
 				if (reachableState.ast == null) {
+					var phaseStarted = Sys.time() * 1000.0;
 					reachableState = context.writableState(reachableState.name, rollbackModules);
 					context.parse(reachableState, entryModule, bodyChanged, signatureChanged, structuralChanged);
+					graphParseMs += Sys.time() * 1000.0 - phaseStarted;
+					phaseStarted = Sys.time() * 1000.0;
 					context.addTypeDependencies(reachableState);
+					graphDependencyMs += Sys.time() * 1000.0 - phaseStarted;
 				}
 				reachability.includeDependencies(reachableState);
 			}
 			names = reachability.finish(token);
+			var initializationStartedAt = Sys.time() * 1000.0;
 			graph.rebuild(modules);
 			var initializationNames = graph.initializationOrder(modules, names);
 			for (name in initializationNames) {
@@ -89,6 +104,7 @@ class FrontendCompilation {
 					initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
 			}
 			context.cacheReachability(entryModule, names, initializationClasses);
+			graphInitializationMs = Sys.time() * 1000.0 - initializationStartedAt;
 		}
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 
@@ -326,6 +342,9 @@ class FrontendCompilation {
 				regenerated: regenerated,
 				typerMetrics: typerMetrics,
 				frontendGraphDoneAt: frontendGraphDoneAt,
+				graphParseMs: graphParseMs,
+				graphDependencyMs: graphDependencyMs,
+				graphInitializationMs: graphInitializationMs,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt
@@ -379,6 +398,9 @@ class FrontendCompilation {
 			regenerated: regenerated,
 			typerMetrics: typerMetrics,
 			frontendGraphDoneAt: frontendGraphDoneAt,
+			graphParseMs: graphParseMs,
+			graphDependencyMs: graphDependencyMs,
+			graphInitializationMs: graphInitializationMs,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt

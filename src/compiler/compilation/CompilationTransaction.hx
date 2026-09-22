@@ -32,7 +32,9 @@ class CompilationTransaction {
 		var candidate = compiler.createCandidate(snapshot, startingAssembler);
 		try {
 			var context = new CompilationContext(candidate, indexSemantics);
-			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, indexSemantics);
+			var frontendStartedAt = Sys.time() * 1000.0;
+			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, frontendStartedAt,
+				indexSemantics);
 			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";

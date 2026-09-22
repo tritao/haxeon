@@ -91,8 +91,11 @@ class SemanticProgram {
 		for (fn in functions)
 			if (selected.exists(fn.name))
 				nextSignatures.set(fn.name, fn);
-		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations, new DeclarationLifecycle(declarations, SignatureTyped),
-			lifecycleMetrics);
+		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations, new DeclarationLifecycle(declarations, SignatureTyped), {
+			declarationMs: 0.0,
+			shapeConnectionMs: 0.0,
+			signatureTypingMs: 0.0
+		});
 	}
 
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction

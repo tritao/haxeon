@@ -44,7 +44,8 @@ class CompilationContext {
 		objectCache = owner.objectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
-		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader, buildSemanticModels);
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader, buildSemanticModels,
+			owner.declarationOwners);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState

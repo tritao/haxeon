@@ -5,7 +5,7 @@ import compiler.hl.HlFunction.HlInstruction;
 
 /** Validates an in-memory HashLink module before serialization. */
 class HlValidator {
-	public static function validate(code:HlCode):Void {
+	public static function validate(code:HlCode, ?cache:HlWriterCache):Void {
 		if (code.types.length == 0)
 			throw "HL module has no types";
 
@@ -85,6 +85,8 @@ class HlValidator {
 			addFunctionIndex(functionIndices, fn.functionIndex);
 		}
 		for (fn in code.functions) {
+			if (cache != null && cache.isValidated(fn))
+				continue;
 			if (fn.debugLocations.length != 0 && fn.debugLocations.length != fn.opcodes.length)
 				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
 			for (location in fn.debugLocations)
@@ -93,6 +95,8 @@ class HlValidator {
 			for (registerType in fn.registers)
 				requireType(code, registerType, 'register in function ${fn.functionIndex}');
 			validateInstructions(code, fn, functionIndices);
+			if (cache != null)
+				cache.markValidated(fn);
 		}
 		if (!functionIndices.exists(code.entryPoint))
 			throw 'Entry point ${code.entryPoint} is not a function';
