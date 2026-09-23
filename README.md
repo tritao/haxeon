@@ -666,13 +666,19 @@ LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
 
 For host applications, `haxeon run --profile` automates that handshake: it builds
 the project, launches it with `--diagnostics-wait`, attaches `hlprof-live`, writes
-an HLPC capture (default `build/host/profile/profile-<timestamp>.hlpc`), and prints
+an HLPC capture (default `build/host/profile/profile-<timestamp>/profile.hlpc`), and prints
 a top-functions report after the process exits. Pass `--profile-output PATH` to
 choose the capture location, and runtime arguments after `--`:
 
 ```sh
 haxeon run --profile --profile-output build/host/profile/editor.hlpc
 ```
+
+Profile captures include `capture.json` and a copy of the exact bytecode used
+by the run. A HashLink heap dump captured by the application can be placed in
+the same directory and added as the `heap` artifact in the manifest. Inspect
+it with `haxeon heap inspect --capture DIR`, or pass the bytecode and dump paths
+directly with `haxeon heap inspect BYTECODE DUMP`.
 
 To profile incremental compiler edits, pass `--profile-output` to the project
 benchmark. It starts a dedicated worker with a diagnostics port, warms that

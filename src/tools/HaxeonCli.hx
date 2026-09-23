@@ -108,6 +108,7 @@ class HaxeonCli {
 				case "fmt": fmt(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
+				case "heap": HeapInspector.run(arguments);
 				case "help", "--help", "-h": usage();
 				case _:
 					Sys.stderr().writeString('Unknown command: $command\n');
@@ -567,9 +568,9 @@ class HaxeonCli {
 	}
 
 	static function defaultProfileCapture(output:String):String {
-		var directory = Path.join([Path.directory(output), "profile"]);
+		var directory = Path.join([Path.directory(output), "profile", 'profile-${Std.int(Date.now().getTime())}']);
 		ensureDirectory(directory);
-		return Path.join([directory, 'profile-${Std.int(Date.now().getTime())}.hlpc']);
+		return Path.join([directory, "profile.hlpc"]);
 	}
 
 	static function allocateDiagnosticsPort():Int {
@@ -611,6 +612,8 @@ class HaxeonCli {
 		if (!FileSystem.exists(profiler))
 			throw 'hlprof-live is missing: $profiler (rebuild the native runtime)';
 		ensureDirectory(Path.directory(capture));
+		var bytecodeName = Path.withoutExtension(Path.withoutDirectory(capture)) + ".hl";
+		File.copy(output, Path.join([Path.directory(capture), bytecodeName]));
 		var port = allocateDiagnosticsPort(), done = new sys.thread.Lock(), readers = 0,
 			app = new sys.io.Process(runtime, ["--diagnostics", Std.string(port), "--diagnostics-wait", output].concat(runtimeArguments));
 		pumpProcessOutput(app.stdout, Sys.stdout(), done);
@@ -647,6 +650,11 @@ class HaxeonCli {
 		Sys.stderr().flush();
 		if (profilerStatus != 0)
 			throw 'Profiler capture did not finalize cleanly (status $profilerStatus)';
+		File.saveContent(Path.join([Path.directory(capture), "capture.json"]), Json.stringify({
+			schemaVersion: 1,
+			kind: "haxeon.capture",
+			artifacts: {bytecode: bytecodeName, profile: Path.withoutDirectory(capture)}
+		}, null, "  ") + "\n");
 		Sys.println('Capture: $capture');
 		ProcessRunner.run(profiler, ["report", "--top", "40", capture], projectDirectory, new Map());
 		return runtimeStatus;
@@ -1200,6 +1208,8 @@ class HaxeonCli {
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
+		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
+		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");
 		Sys.println("  --output PATH                  Override the build output path");
