@@ -616,9 +616,6 @@ class HaxeonCli {
 		File.copy(output, Path.join([Path.directory(capture), bytecodeName]));
 		var port = allocateDiagnosticsPort(), done = new sys.thread.Lock(), readers = 0,
 			app = new sys.io.Process(runtime, ["--diagnostics", Std.string(port), "--diagnostics-wait", output].concat(runtimeArguments));
-		pumpProcessOutput(app.stdout, Sys.stdout(), done);
-		pumpProcessOutput(app.stderr, Sys.stderr(), done);
-		readers += 2;
 		Sys.println('Profiling $output -> $capture (diagnostics port $port)');
 		var profilerProcess = new sys.io.Process(profiler, [
 			"--connect-timeout",
@@ -635,6 +632,11 @@ class HaxeonCli {
 			capture,
 			Std.string(port)
 		]);
+		// Start both processes before creating reader threads. Forking a second
+		// process from the eval runtime while those threads are active can stall.
+		pumpProcessOutput(app.stdout, Sys.stdout(), done);
+		pumpProcessOutput(app.stderr, Sys.stderr(), done);
+		readers += 2;
 		pumpProcessOutput(profilerProcess.stdout, Sys.stdout(), done);
 		pumpProcessOutput(profilerProcess.stderr, Sys.stderr(), done);
 		readers += 2;
