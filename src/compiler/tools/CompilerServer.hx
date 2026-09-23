@@ -48,12 +48,12 @@ class CompilerServer {
 						running = false;
 					} else {
 						var started = Sys.time();
-						#if hl
+						#if (hl && !haxeon)
 						var memoryBefore = hl.Gc.stats();
 						#end
 						var result = CompilerDriver.compile(CompilerArguments.parse(cast request.arguments), message -> send(client, {message: message}),
 							session);
-						#if hl
+						#if (hl && !haxeon)
 						var memoryAfter = hl.Gc.stats();
 						send(client,
 							{message: 'worker allocations: bytes=${Math.round(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${Math.round(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${Math.round(memoryAfter.currentMemory)}'});

@@ -18,7 +18,14 @@ typedef PhaseAllocation = {
 /** Lightweight counters at compiler phase boundaries. */
 class AllocationMeter {
 	public static function sample():AllocationSnapshot {
-		#if hl
+		#if haxeon
+		return {
+			bytes: hl.Gc.totalAllocated(),
+			count: 0.0,
+			collections: hl.Gc.collections(),
+			markMicros: hl.Gc.markMicros()
+		};
+		#elseif hl
 		var bytes = 0.0, count = 0.0, collections = 0.0, markMicros = 0.0;
 		detailedStats(bytes, count, collections, markMicros);
 		return {
@@ -47,7 +54,7 @@ class AllocationMeter {
 		};
 	}
 
-	#if hl
+	#if (hl && !haxeon)
 	@:hlNative("std", "gc_detailed_stats")
 	static function detailedStats(bytes:hl.Ref<Float>, count:hl.Ref<Float>, collections:hl.Ref<Float>, markMicros:hl.Ref<Float>):Void {}
 	#end

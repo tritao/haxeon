@@ -25,7 +25,7 @@ class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
-			enumsFrom(typed), staticFieldsFrom(typed), staticInitializerFrom(typed), null, cNativesFrom(typed));
+			enumsFrom(typed), staticFieldsFrom(typed), staticInitializersFrom(typed), null, cNativesFrom(typed));
 	}
 
 	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
@@ -63,8 +63,8 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	/** Build the module boot function from static field initializers. */
-	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction> {
+	/** Build ordered, bounded boot functions from static field initializers. */
+	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>):Array<IrFunction> {
 		var statements:Array<TypedStatement> = [],
 			spans:Array<compiler.Source.SourceSpan> = [];
 		var classes = orderedClasses(typed.classes, classOrder);
@@ -72,25 +72,36 @@ class IrProgramAssembler {
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (field.isStatic && !field.isInline && initializer != null) {
-					if (spans.length == 0)
-						spans.push(field.span);
+					spans.push(field.span);
 					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
 				}
 			}
 		if (statements.length == 0)
-			return null;
-		return IrGenerator.generateFunction({
-			name: "__init",
-			owner: null,
-			isStatic: true,
-			isConstructor: false,
-			arguments: [],
-			result: TVoid,
-			statements: statements,
-			cells: [],
-			cellCaptures: [],
-			span: spans[0]
-		});
+			return [];
+		var functions:Array<IrFunction> = [];
+		for (offset in 0...Std.int((statements.length + 7) / 8)) {
+			var start = offset * 8;
+			var name = "__init$part" + offset;
+			functions.push(IrGenerator.generateFunction({
+				name: name,
+				owner: null,
+				isStatic: true,
+				isConstructor: false,
+				arguments: [],
+				result: TVoid,
+				statements: statements.slice(start, start + 8),
+				cells: [],
+				cellCaptures: [],
+				span: spans[start]
+			}));
+		}
+		var boot = new IrBuilder();
+		var lastCall = boot.call(functions[0].name, [], Void);
+		for (index in 1...functions.length)
+			lastCall = boot.call(functions[index].name, [], Void);
+		boot.returnValue(lastCall);
+		functions.unshift(new IrFunction("__init", [], Void, boot.blocks));
+		return functions;
 	}
 
 	static function orderedClasses(classes:Array<compiler.types.TypedAst.TypedClass>, ?order:Array<String>):Array<compiler.types.TypedAst.TypedClass> {
@@ -243,11 +254,12 @@ class IrProgramAssembler {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
-		if (staticInitializer != null)
-			allFunctions.push(staticInitializer);
+		if (staticInitializers != null)
+			for (initializer in staticInitializers)
+				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
 		var needsArrayRuntime = false,
@@ -683,7 +695,7 @@ class IrProgramAssembler {
 		if (mainFunction == null)
 			throw 'IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"';
 		var entry = new IrBuilder();
-		if (staticInitializer != null)
+		if (staticInitializers != null && staticInitializers.length > 0)
 			entry.call("__init", [], Void);
 		var result = entry.call(mainFunction.name, [], mainFunction.result);
 		if (mainFunction.result == I32)

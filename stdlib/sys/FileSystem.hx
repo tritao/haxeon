@@ -69,7 +69,7 @@ class FileSystem {
 	/** Lightweight metadata for change detection, or null when the path is unavailable. */
 	public static function metadata(path:String):Null<FileMetadata> {
 		var values = fileSystemMetadata(path);
-		return values == null ? null : new FileMetadata(values[5], values[3]);
+		return values == null ? null : new FileMetadata(values[5], values[3], values[4]);
 	}
 
 	public static inline function createDirectory(path:String):Void
@@ -89,9 +89,12 @@ class FileMetadata {
 	public final size:Int;
 	/** Last modification time in Unix seconds. */
 	public final modified:Int;
+	/** Last metadata change time in Unix seconds. */
+	public final changed:Int;
 
-	public function new(size:Int, modified:Int) {
+	public function new(size:Int, modified:Int, changed:Int) {
 		this.size = size;
 		this.modified = modified;
+		this.changed = changed;
 	}
 }

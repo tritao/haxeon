@@ -2,7 +2,9 @@ package compiler.hl;
 
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
+#if !haxeon
 import haxe.io.Output;
+#end
 import haxe.ds.ObjectMap;
 import sys.io.File;
 import compiler.hl.HlCode.HlTypeDef;
@@ -26,19 +28,32 @@ class HlWriter {
 	public static inline final OPCODE_SOURCE_SPANS = 2;
 	public static inline final SOURCE_SNAPSHOTS = 3;
 
+	#if haxeon
+	final output:BytesOutput;
+	#else
 	final output:Output;
+	#end
 	final bytesOutput:Null<BytesOutput>;
 	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
 
+	#if haxeon
+	public function new(?cache:HlWriterCache) {
+		this.cache = cache;
+		bytesOutput = new BytesOutput();
+		bytesOutput.setBigEndian(false);
+		output = bytesOutput;
+	}
+	#else
 	public function new(?cache:HlWriterCache, ?destination:Output) {
 		this.cache = cache;
 		bytesOutput = destination == null ? new BytesOutput() : null;
 		output = destination == null ? bytesOutput : destination;
 		output.bigEndian = false;
 	}
+	#end
 
 	function getBytes():HaxeBytes {
 		if (bytesOutput == null)
@@ -53,15 +68,20 @@ class HlWriter {
 		return writer.getBytes();
 	}
 
+	#if !haxeon
 	/** Write a module directly to an output without building a second module-sized buffer. */
 	public static function writeTo(code:HlCode, destination:Output, ?cache:HlWriterCache):Void {
 		HlValidator.validate(code, cache);
 		new HlWriter(cache, destination).writeCode(code);
 	}
+	#end
 
 	/** Validate before opening the destination, preserving an older file on validation failure. */
 	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void {
 		HlValidator.validate(code, cache);
+		#if haxeon
+		File.saveBytes(path, new HlWriter(cache).writeAndGetBytes(code));
+		#else
 		var destination = File.write(path, true);
 		try {
 			new HlWriter(cache, destination).writeCode(code);
@@ -70,7 +90,15 @@ class HlWriter {
 			throw error;
 		}
 		destination.close();
+		#end
 	}
+
+	#if haxeon
+	function writeAndGetBytes(code:HlCode):HaxeBytes {
+		writeCode(code);
+		return getBytes();
+	}
+	#end
 
 	/** Public because index encoding is part of the HLB format contract. */
 	public static function encodeIndex(value:Int):HaxeBytes {
@@ -296,7 +324,7 @@ class HlWriter {
 				writer.writeUnsignedIndex(span.opcode);
 				if (span.sourcePath != previousPath) {
 					previousPath = span.sourcePath;
-					previousFileIndex = fileIndices.get(previousPath);
+					previousFileIndex = cast fileIndices.get(previousPath);
 				}
 				writer.writeUnsignedIndex(previousFileIndex);
 				writer.writeIndex(span.start + 1);

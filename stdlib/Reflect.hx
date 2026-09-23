@@ -48,6 +48,13 @@ extern function reflectIsObject(value:Dynamic):Bool;
 
 /** Supported reflection helpers backed by the stable runtime ABI. */
 class Reflect {
+	public static function copy(object:Dynamic):Dynamic {
+		var result:Dynamic = {};
+		for (name in fields(object))
+			setField(result, name, field(object, name));
+		return result;
+	}
+
 	public static inline function field(object:Dynamic, field:String):Dynamic
 		return reflectField(object, field);
 

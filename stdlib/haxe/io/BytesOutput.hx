@@ -10,6 +10,9 @@ extern abstract BytesOutput(hl.Abstract<"realtime_bytes_output">) {
 	@:hlNative("haxeon_runtime", "__bytes_output_write_byte")
 	public function writeByte(value:Int):Void;
 
+	@:hlNative("haxeon_runtime", "__bytes_output_set_big_endian")
+	public function setBigEndian(value:Bool):Void;
+
 	@:hlNative("haxeon_runtime", "__bytes_output_write_i32")
 	public function writeInt32(value:Int):Void;
 

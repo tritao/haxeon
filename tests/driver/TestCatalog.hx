@@ -118,6 +118,8 @@ class TestCatalog {
 				["{root}/out/plugin-runtime.hl"]),
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml", "static-init-order-test.hl", 0,
 				"static initializers respect dependency order"),
+			hxmlCase("runtime", "map-values", "tests/hxml/map-values-test.hxml", "map-values-test.hl", 0,
+				"string map value iteration preserves nested captures"),
 			hxmlCase("runtime", "instance-initializer", "tests/hxml/instance-initializer-test.hxml", "instance-initializer-test.hl", 0,
 				"instance initializer constructor invalidation"),
 			mainCase("runtime", "object", "ObjectMain", "object.hl", 42, "object allocation and field access executed"),

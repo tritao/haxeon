@@ -381,7 +381,7 @@ class IrVerifier {
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);
 				if (field == null || !sameType(out.type, field.type))
-					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName"';
+					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName": output=${out.type}, declared=${field == null ? "missing" : Std.string(field.type)}';
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);

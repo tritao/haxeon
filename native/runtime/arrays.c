@@ -134,8 +134,14 @@ static varray *realtime_typed_values(varray *dynamicValues, hl_type *valueType) 
 	varray *result = hl_alloc_array(valueType, dynamicValues->size);
 	vdynamic **source = hl_aptr(dynamicValues, vdynamic *);
 	int stride = hl_type_size(valueType);
-	for (int i = 0; i < dynamicValues->size; i++)
-		hl_write_dyn(hl_aptr(result, vbyte) + i * stride, valueType, source[i], false);
+	for (int i = 0; i < dynamicValues->size; i++) {
+		void *slot = hl_aptr(result, vbyte) + i * stride;
+		/* Map strings are boxed as vdynamic; an HBYTES array stores the inner byte pointer. */
+		if (valueType->kind == HBYTES)
+			*(void **)slot = source[i] == NULL ? NULL : source[i]->v.bytes;
+		else
+			hl_write_dyn(slot, valueType, source[i], false);
+	}
 	return result;
 }
 

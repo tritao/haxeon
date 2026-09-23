@@ -40,7 +40,9 @@ class SemanticAssembly {
 			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
 			structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
-		#if hl
+		#if haxeon
+		var allocatedAtStart = hl.Gc.totalAllocated();
+		#elseif hl
 		var allocatedAtStart = hl.Gc.stats().totalAllocated;
 		#end
 		var contributionReuseMs = 0.0, contributionRebuildMs = 0.0;
@@ -567,7 +569,7 @@ class SemanticAssembly {
 			contributionReuseMs: contributionReuseMs,
 			contributionRebuildMs: contributionRebuildMs,
 			invalidationMs: invalidatedAt - canonicalizedAt,
-			allocatedBytes: #if hl hl.Gc.stats().totalAllocated - allocatedAtStart #else 0.0 #end
+			allocatedBytes: #if haxeon hl.Gc.totalAllocated() - allocatedAtStart #elseif hl hl.Gc.stats().totalAllocated - allocatedAtStart #else 0.0 #end
 		};
 	}
 

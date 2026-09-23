@@ -67,8 +67,8 @@ class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
 
-	public static function staticInitializerFrom(typed:TypedProgram, ?classOrder:Array<String>):Null<IrFunction>
-		return IrProgramAssembler.staticInitializerFrom(typed, classOrder);
+	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>):Array<IrFunction>
+		return IrProgramAssembler.staticInitializersFrom(typed, classOrder);
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
 		return IrProgramAssembler.enumsFrom(typed);
@@ -83,8 +83,8 @@ class IrGenerator {
 		return IrProgramAssembler.staticFieldsFrom(typed);
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializer:IrFunction, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram
-		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializer, entryPoint, cNatives);
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram
+		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;

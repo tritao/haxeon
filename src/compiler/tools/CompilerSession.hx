@@ -109,21 +109,28 @@ class CompilerSession {
 		if (!trustFileMetadata)
 			return File.getContent(path);
 		var changed = readChanged(path);
-		return changed == null ? sources.get(path).text : changed;
+		var cached:CachedSource = sources.get(path);
+		return changed == null ? cached.text : changed;
 	}
 
 	function readChanged(path:String):Null<String> {
 		if (!trustFileMetadata)
 			return File.getContent(path);
-		var stat = FileSystem.stat(path),
-			cached = sources.get(path),
-			modified = stat.mtime.getTime(),
-			changed = stat.ctime.getTime();
-		if (cached != null && cached.size == stat.size && cached.modified == modified && cached.changed == changed)
+		#if haxeon
+		var metadata = FileSystem.metadata(path);
+		if (metadata == null)
+			return File.getContent(path);
+		var size = metadata.size, modified = metadata.modified, changed = metadata.changed;
+		#else
+		var stat = FileSystem.stat(path);
+		var size = stat.size, modified = stat.mtime.getTime(), changed = stat.ctime.getTime();
+		#end
+		var cached = sources.get(path);
+		if (cached != null && cached.size == size && cached.modified == modified && cached.changed == changed)
 			return null;
 		var text = File.getContent(path);
 		sources.set(path, {
-			size: stat.size,
+			size: size,
 			modified: modified,
 			changed: changed,
 			text: text

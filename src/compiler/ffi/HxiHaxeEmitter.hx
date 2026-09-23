@@ -1370,7 +1370,7 @@ class HxiHaxeEmitter {
 					var previous = arrayCounts.get(count);
 					if (previous != null)
 						setup.push('if ($previous.length != ${parameter.name}.length) throw "HXI arrays sharing a count must have equal lengths";');
-					var countParameter = Lambda.find(parameters, value -> value.name == count),
+					var countParameter:HxiParameter = Lambda.find(parameters, value -> value.name == count),
 						countLimit = unsignedCountLimit(countParameter.type, abi);
 					if (countLimit != null)
 						setup.push('if (${parameter.name}.length > $countLimit) throw "HXI input array count does not fit its native integer type";');
@@ -1653,7 +1653,8 @@ class HxiHaxeEmitter {
 			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, resultType:String,
 			array:{name:String, countParameter:String}, countParameter:HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile,
 			moduleName:String, documentation:Null<HxiDocumentation>):Void {
-		var element = arrayElementInfo(Lambda.find(parameters, parameter -> parameter.name == array.name).type, abi, profile),
+		var arrayParameter:HxiParameter = Lambda.find(parameters, parameter -> parameter.name == array.name);
+		var element = arrayElementInfo(arrayParameter.type, abi, profile),
 			arrayCounts:Map<String, String> = [],
 			arguments:Array<String> = [],
 			callArguments:Array<String> = [],
@@ -1664,7 +1665,7 @@ class HxiHaxeEmitter {
 					var previous = arrayCounts.get(count);
 					if (previous != null)
 						setup.push('if ($previous.length != ${parameter.name}.length) throw "HXI arrays sharing a count must have equal lengths";');
-					var pairedCount = Lambda.find(parameters, value -> value.name == count),
+					var pairedCount:HxiParameter = Lambda.find(parameters, value -> value.name == count),
 						countLimit = unsignedCountLimit(pairedCount.type, abi);
 					if (countLimit != null)
 						setup.push('if (${parameter.name}.length > $countLimit) throw "HXI input array count does not fit its native integer type";');
