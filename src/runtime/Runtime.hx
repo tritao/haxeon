@@ -17,6 +17,9 @@ private class RuntimeNative {
 	public static function call_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
 		return null;
 
+	public static function call_managed_bytes(module:hl.Abstract<"realtime_module">, index:Int):haxe.io.Bytes
+		return null;
+
 	public static function call_bytes1(module:hl.Abstract<"realtime_module">, index:Int, argument:hl.Bytes):Void {}
 
 	public static function call_closure(module:hl.Abstract<"realtime_module">, index:Int):Dynamic
@@ -130,6 +133,10 @@ class Runtime {
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
+
+	/** Call an isolated function that returns a copy of its packed haxe.io.Bytes value. */
+	public static function callBytes(module:LoadedModule, stableIndex:Int):Bytes
+		return invoke(module, stableIndex, 7, function(handle) return RuntimeNative.call_managed_bytes(handle, stableIndex));
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		invoke(module, stableIndex, 3, function(handle) {

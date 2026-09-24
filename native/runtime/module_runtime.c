@@ -28,6 +28,18 @@ HL_PRIM vbyte *HL_NAME(call_bytes)( hl_runtime_module *runtime, int stable_id ) 
 	return result;
 }
 
+HL_PRIM realtime_bytes *HL_NAME(call_managed_bytes)( hl_runtime_module *runtime, int stable_id ) {
+	realtime_bytes *source = NULL;
+	vdynamic *exception = NULL;
+	hl_runtime_status status = hl_runtime_module_call_abstract(runtime,stable_id,USTR("realtime_bytes"),(void**)&source,&exception);
+	if( status == HL_RUNTIME_EXCEPTION ) realtime_raise_module_exception();
+	if( status != HL_RUNTIME_OK ) hl_error("Invalid runtime managed-bytes call (status %d, stable ID %d)",status,stable_id);
+	if( source == NULL ) return NULL;
+	realtime_bytes *result = realtime_bytes_make(source->length);
+	if( source->length > 0 ) memcpy(result->data,source->data,(size_t)source->length);
+	return result;
+}
+
 HL_PRIM void HL_NAME(call_bytes1)( hl_runtime_module *runtime, int stable_id, vbyte *argument ) {
 	vdynamic *exception = NULL;
 	hl_runtime_status status = hl_runtime_module_call_bytes1(runtime,stable_id,argument,&exception);
