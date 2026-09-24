@@ -62,6 +62,7 @@ class BuildSystemMain {
 		testRegistryAdapter();
 		testRegistryPublisher();
 		testResolverDelegatesAcquisition();
+		testAlternateRootManifest();
 		testLockfileRoundTrip();
 		testNativeDependencyScanning();
 		Sys.println("PASS: build model, executor, fingerprints, target toolchains, demand-driven native outputs, and package discovery");
@@ -616,6 +617,21 @@ class BuildSystemMain {
 			project = new PackageResolver(acquirer).resolve(Path.join([app, "haxeon.json"]));
 		expect(acquirer.calls == 1 && project.packages.get("foo").source != null,
 			"package resolution should delegate source acquisition and retain the source identity");
+		removeTree(root);
+	}
+
+	static function testAlternateRootManifest():Void {
+		var root = temporaryDirectory("alternate-root-manifest"),
+			app = Path.join([root, "app"]),
+			alternate = Path.join([app, "test.haxeon.json"]);
+		writePackage(app, '{"package":{"name":"app"},"entry":"app.Main"}', ["src/Main.hx"]);
+		File.saveContent(alternate,
+			'{"package":{"name":"app"},"entry":"app.TestMain","sourceRoots":["src"]}\n');
+		var project = new PackageResolver(new PathSourceAcquirer()).resolve(alternate);
+		expect(project.manifestPath == FileSystem.fullPath(alternate)
+			&& project.manifest.entry == "app.TestMain"
+			&& project.rootPackage.manifest.entry == "app.TestMain",
+			"the requested root manifest must define the root package and build entry");
 		removeTree(root);
 	}
 

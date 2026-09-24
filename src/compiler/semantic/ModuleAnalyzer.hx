@@ -294,6 +294,13 @@ class ModuleAnalyzer {
 					owner = sourceModuleForType(name, ast.packageName);
 				if (owner != null && owner != state.name)
 					dependencies.set(owner, true);
+			case AppliedType(name, arguments):
+				var ast = state.parsedAst(),
+					owner = sourceModuleForType(name, ast.packageName);
+				if (owner != null && owner != state.name)
+					dependencies.set(owner, true);
+				for (argument in arguments)
+					addModuleTypeDependency(argument, state, dependencies);
 			case ArrayType(element), NullableType(element):
 				addModuleTypeDependency(element, state, dependencies);
 			case MapType(key, value):

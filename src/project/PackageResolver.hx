@@ -46,10 +46,11 @@ class PackageResolver {
 			workspaceMembers.set(workspaceManifest.packageName, {root: workspaceRoot, path: Path.normalize(workspacePath)});
 		}
 
-		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource):ResolvedPackage {
+		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource,
+				?manifestOverride:String):ResolvedPackage {
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
-				resolvedManifest = canonicalExistingFile(Path.join([resolvedRoot, MANIFEST_NAME]),
-					'Project file not found: ${Path.join([resolvedRoot, MANIFEST_NAME])}');
+				manifestFile = manifestOverride == null ? Path.join([resolvedRoot, MANIFEST_NAME]) : manifestOverride,
+				resolvedManifest = canonicalExistingFile(manifestFile, 'Project file not found: $manifestFile');
 			if (active.exists(resolvedRoot))
 				throw 'Package dependency cycle reaches "$resolvedRoot"';
 			var existing = visited.get(resolvedRoot);
@@ -139,7 +140,8 @@ class PackageResolver {
 			return resolvedPackage;
 		}
 
-		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path("."));
+		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path("."),
+			absoluteManifest);
 		var workspaceNames = [for (name in workspaceMembers.keys()) name];
 		workspaceNames.sort(Reflect.compare);
 		for (workspaceName in workspaceNames) {
