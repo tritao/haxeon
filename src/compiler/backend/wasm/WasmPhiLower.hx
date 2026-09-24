@@ -2,11 +2,11 @@ package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.ir.Ir.IrPhiInput;
-import compiler.ir.Ir.IrValue;
 
-/** Edge-aware phi destruction shared by structured and fallback CFG emission. */
+/** Captures phi operands before any destination is overwritten on an edge. */
 class WasmPhiLower {
-	public static function emit(body:Array<WasmInstruction>, output:IrValue, inputs:Array<IrPhiInput>, values:Map<Int, Int>, predecessor:Int):Void {
+	public static function capture(body:Array<WasmInstruction>, inputs:Array<IrPhiInput>, values:Map<Int, Int>, predecessor:Int,
+			temporary:Int):Void {
 		for (input in inputs) {
 			push(body, [
 				WasmInstruction.LocalGet(predecessor),
@@ -14,7 +14,7 @@ class WasmPhiLower {
 				WasmInstruction.I32Eq,
 				WasmInstruction.If(null),
 				WasmInstruction.LocalGet(requiredLocal(values, input.value.id)),
-				WasmInstruction.LocalSet(requiredLocal(values, output.id)),
+				WasmInstruction.LocalSet(temporary),
 				WasmInstruction.End
 			]);
 		}

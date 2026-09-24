@@ -302,17 +302,30 @@ class WasmFunctionLower {
 	function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
 			layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
+		emitPhiGroup(body, block, values, predecessor);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
 			// Safepoint liveness describes the instruction's entry state; snapshot before it can allocate or collect.
 			snapshotRoots(body, block.id, index);
 			switch located.value {
-				case Phi(output, inputs):
-					WasmPhiLower.emit(body, output, inputs, values, predecessor);
+				case Phi(_, _):
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}
 		}
+	}
+
+	function emitPhiGroup(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, predecessor:Int):Void {
+		var staged:Array<{target:Int, temporary:Int}> = [];
+		for (located in block.instructions) switch located.value {
+			case Phi(output, inputs):
+				var temporary = context.placement.allocate(context.representation.values.valueType(output.type));
+				WasmPhiLower.capture(body, inputs, values, predecessor, temporary);
+				staged.push({target: requiredLocal(values, output.id), temporary: temporary});
+			default:
+		}
+		for (entry in staged)
+			emit(body, [LocalGet(entry.temporary), LocalSet(entry.target)]);
 	}
 
 	function lowerDispatcher(fn:IrFunction, analysis:WasmCfgAnalysis, functions:Map<String, Int>, values:Map<Int, Int>, pc:Int, predecessor:Int,
@@ -398,12 +411,12 @@ class WasmFunctionLower {
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
 		var exceptionState = context.exceptionState;
+		emitPhiGroup(body, block, values, predecessor);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
 			snapshotRoots(body, block.id, index);
 			switch located.value {
-				case Phi(output, inputs):
-					WasmPhiLower.emit(body, output, inputs, values, predecessor);
+				case Phi(_, _):
 				default:
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
 			}

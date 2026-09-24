@@ -40,7 +40,7 @@ shared_cases=(string-null-equality add expression-lambda switch-expression-block
 	multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding
 	default-parameter-inference generic-functions generic-abstract bounded-generic generic-class inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
 	array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type
-	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality bytes-view
+	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality bytes-view bytes-blit sha256 loop-phi-parallel
 	try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches reflect-compare-sort generic-contextual-callback)
 for case_name in "${shared_cases[@]}"; do
 	for target in wasm32 wasm-gc; do
