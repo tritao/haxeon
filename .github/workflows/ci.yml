@@ -41,7 +41,7 @@ jobs:
             platform: macos-arm64
             os: macos
             runs_on: macos-15
-            timeout: 60
+            timeout: 90
             test_jobs: 4
     runs-on: ${{ matrix.runs_on }}
     timeout-minutes: ${{ matrix.timeout }}
