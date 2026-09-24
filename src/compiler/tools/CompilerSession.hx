@@ -62,6 +62,7 @@ class CompilerSession {
 		}
 		if (compiler == null) {
 			compiler = new Compiler();
+			compiler.enablePublicationTracking();
 			CompilerIntrinsics.register(compiler);
 			var defines = request.defines.concat(CompilerDriver.targetDefines(request.target));
 			compiler.configure("cli:" + request.target + ":" + defines.join("|"), "cli:" + request.target, defines);

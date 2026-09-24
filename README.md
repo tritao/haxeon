@@ -329,11 +329,23 @@ On Linux and macOS, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the
 full project build. A failed build leaves the running app open. Runtime output
-is forwarded from `<output>.watch.log`. This mode restarts the process; it does
-not yet apply HLP patches to a running app module.
+is forwarded from `<output>.watch.log`. This mode restarts the process.
 
 ```sh
 ./scripts/haxeon run --watch --project path/to/haxeon.json -- --verbose
+```
+
+`run --watch --live` keeps a stable host process and applies compatible HLP
+patches between application pump steps. The project entry class must expose
+static `start(arguments:String):Void`, `tick():Int` (nonzero while running),
+`saveState():String`, `close():Int`, and `restoreState(state:String):Void`.
+The host calls `start` once, then `tick` repeatedly. A structural change reloads
+the module through those state methods. Non-Haxe changes restart the process.
+The output path must be separate from any ordinary app build output.
+
+```sh
+./scripts/haxeon run --watch --live --project path/to/live.json \
+  --output build/host/live.hl -- --verbose
 ```
 
 Host builds resolve local path dependencies declared by package name. A

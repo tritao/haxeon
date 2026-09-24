@@ -82,7 +82,8 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				inputs.push(interfacePath);
 		}
-		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions"],
+		return new ExecutionAction(actionId, dependencies, inputs,
+			[output, output + ".functions", output + ".hli", output + ".live.json"],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment,
 				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,

@@ -9,11 +9,15 @@ import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
 import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
+import haxe.Json;
+import haxe.crypto.Base64;
+import sys.FileSystem;
 import sys.io.File;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.compilation.AllocationMeter;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.abi.AbiChangeSchema;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -70,6 +74,28 @@ class CompilerDriver {
 			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
 		if (!isWasm)
 			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
+		if (!isWasm) {
+			File.saveBytes(request.output + ".hli", result.runtimeIdentity);
+			var identities = [for (name => id in result.functionIds) {name: name, id: id}];
+			identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
+			if (result.patchBytes != null)
+				File.saveBytes(request.output + ".hlp", result.patchBytes);
+			else if (FileSystem.exists(request.output + ".hlp"))
+				FileSystem.deleteFile(request.output + ".hlp");
+			var manifest = request.output + ".live.json";
+			var temporary = manifest + ".tmp";
+			File.saveContent(temporary, Json.stringify({
+				revision: result.revision,
+				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+				requiresReload: result.requiresReload,
+				reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
+				patchAvailable: result.patchBytes != null,
+				changedFunctions: result.changedFunctions,
+				identities: identities
+			}));
+			FileSystem.rename(temporary, manifest);
+			compiler.acknowledgePublication(result.revision);
+		}
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.irOutput != null)

@@ -56,6 +56,7 @@ class LambdaCollector {
 			generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
 			case Lambda(_, body, span):
+				var lambdaName = '$' + 'lambda:' + functionName + ':' + Std.string(span.start);
 				var names:Map<String, Bool>;
 				if (generatedByModule.exists(module))
 					names = generatedByModule.get(module);
@@ -63,8 +64,8 @@ class LambdaCollector {
 					names = [];
 					generatedByModule.set(module, names);
 				}
-				names.set('$' + 'lambda:' + functionName + ':' + Std.string(span.start), true);
-				collect(body, functionName, module, generatedByModule);
+				names.set(lambdaName, true);
+				collect(body, lambdaName, module, generatedByModule);
 			case Call(_, args, _):
 				for (argument in args)
 					collectLambdaExpression(argument, functionName, module, generatedByModule);

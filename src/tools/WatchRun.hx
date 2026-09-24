@@ -1,6 +1,7 @@
 package tools;
 
 import haxe.io.Path;
+import haxe.Json;
 import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
@@ -9,13 +10,13 @@ import sys.io.Process;
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
-			rebuild:Bool->Null<ResolvedProject>):Int {
+			liveHost:Null<String>, entry:String, rebuild:Bool->Null<ResolvedProject>):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
 			throw "haxeon run --watch currently requires Linux or macOS";
 		var project = initial,
 			baseline = snapshot(project),
 			logPath = output + ".watch.log",
-			process = launch(runtime, output, arguments, project.root, logPath),
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry),
 			logOffset = 0,
 			result = 0;
 		try {
@@ -48,6 +49,10 @@ class WatchRun {
 					continue;
 				}
 				project = updated;
+				if (liveHost != null && compilerOnly) {
+					baseline = snapshot(project);
+					continue;
+				}
 				logOffset = printLog(logPath, logOffset);
 				var exited = process.exitCode(false);
 				if (exited != null) {
@@ -57,7 +62,7 @@ class WatchRun {
 				process.kill();
 				process.exitCode();
 				process.close();
-				process = launch(runtime, output, arguments, project.root, logPath);
+				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry);
 				logOffset = 0;
 				baseline = snapshot(project);
 			}
@@ -77,8 +82,11 @@ class WatchRun {
 		process.close();
 	}
 
-	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String):Process {
-		var command = "exec " + [runtime, output].concat(arguments).map(quote).join(" ")
+	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String,
+			liveHost:Null<String>, entry:String):Process {
+		var commandArguments = liveHost == null ? [runtime, output].concat(arguments)
+			: [runtime, liveHost, output, entry, Json.stringify(arguments)];
+		var command = "exec " + commandArguments.map(quote).join(" ")
 			+ " > " + quote(logPath) + " 2>&1";
 		var previous = Sys.getCwd();
 		try {
