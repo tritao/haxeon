@@ -31,7 +31,11 @@ run_cli build --project "$project_dir/app/haxeon.json"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 second_output=$(run_cli build --project "$project_dir/app/haxeon.json")
 [[ "$second_output" == *"native-cmake-configure:foo"*"clean (fingerprint match)"* ]]
-[[ "$second_output" == *"Built target foo"* ]]
+grep -Eq '^\[native-cmake-build:[^]]+\] Build CMake target foo -> ' <<<"$second_output"
+if grep -Eq '^\[native-cmake-build:[^]]+\] clean \(fingerprint match\)$' <<<"$second_output"; then
+	echo "expected the delegated CMake build to run on each build" >&2
+	exit 1
+fi
 [[ "$second_output" == *"compile-project:"*"clean (fingerprint match)"* ]]
 # CMake owns implementation/header dependencies, even without native.cmake.inputs.
 printf '%s\n' '#define VALUE 43' > "$project_dir/foo/native/value.h"

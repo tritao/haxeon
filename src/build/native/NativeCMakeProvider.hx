@@ -63,7 +63,7 @@ class NativeCMakeProvider {
 				native.cmake.target,
 				"--config",
 				configuration
-			], resolvedPackage.root, new Map()))
+			], resolvedPackage.root, new Map()), true, true)
 		], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)
