@@ -239,6 +239,7 @@ class WasmLinearRuntime {
 			case "__bytes_length": addBytesLength(module, native.name);
 			case "__bytes_compare": addBytesCompare(module, native.name, bytesDataPointer);
 			case "__bytes_get", "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer);
+			case "__bytes_blit": addBytesBlit(module, native.name, bytesDataPointer);
 			case "getI8": addBytesLoad(module, native.name, I32, I32Load8S(0), bytesDataPointer);
 			case "getU16": addBytesLoad(module, native.name, I32, I32Load16U(0), bytesDataPointer);
 			case "getI16": addBytesLoad(module, native.name, I32, I32Load16S(0), bytesDataPointer);
@@ -1217,6 +1218,29 @@ class WasmLinearRuntime {
 		if (before != null)
 			builder.emitAll(before);
 		builder.emit(instruction);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addBytesBlit(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32, I32, I32], results: []}),
+			destination = builder.parameter("destination", 0),
+			position = builder.parameter("position", 1),
+			source = builder.parameter("source", 2),
+			sourcePosition = builder.parameter("sourcePosition", 3),
+			length = builder.parameter("length", 4);
+		bytesRangeCheck(builder, destination, position, length);
+		bytesRangeCheck(builder, source, sourcePosition, length);
+		builder.localGet(destination);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(position);
+		builder.i32Add();
+		builder.localGet(source);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(sourcePosition);
+		builder.i32Add();
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}

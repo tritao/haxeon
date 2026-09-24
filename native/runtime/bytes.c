@@ -121,6 +121,14 @@ HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
 	return bytes->data[position];
 }
 
+HL_PRIM void HL_NAME(__bytes_blit)( realtime_bytes *destination, int position,
+    realtime_bytes *source, int source_position, int length ) {
+	realtime_bytes_bounds(destination, position, length);
+	realtime_bytes_bounds(source, source_position, length);
+	if( length > 0 ) memmove(destination->data + position,
+		source->data + source_position, (size_t)length);
+}
+
 HL_PRIM int HL_NAME(getI8)( realtime_bytes *bytes, int offset ) { int8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
 HL_PRIM int HL_NAME(getU8)( realtime_bytes *bytes, int offset ) { uint8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
 HL_PRIM int HL_NAME(getI16)( realtime_bytes *bytes, int offset ) { int16_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
