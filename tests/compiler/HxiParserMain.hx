@@ -247,8 +247,7 @@ class HxiParserMain {
 			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.LibKindPrimary; return kind; }");
 		layoutCompiler.analyze("QualifiedLayoutMain");
 		layoutCompiler.update("menu/Kind.hx", "package menu; class Kind { public function new(first:Int, second:Int, third:Int) {} }");
-		layoutCompiler.update("ImportPrecedenceMain.hx",
-			"import nativekit.ffi.Types; import menu.Kind; function main():Int { new Kind(1, 2, 3); return 0; }");
+		layoutCompiler.update("ImportPrecedenceMain.hx", "import nativekit.ffi.Types; import menu.Kind; function main():Int { new Kind(1, 2, 3); return 0; }");
 		layoutCompiler.analyze("ImportPrecedenceMain");
 		layoutCompiler.update("ReverseImportPrecedenceMain.hx",
 			"import menu.Kind; import nativekit.ffi.Types; function main():Int { new Kind(1, 2, 3); return 0; }");

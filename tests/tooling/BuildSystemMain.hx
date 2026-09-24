@@ -303,38 +303,43 @@ class BuildSystemMain {
 	}
 
 	static function testDelegatedNativeInvalidation():Void {
-		var root = temporaryDirectory("delegated-native"), buildRoot = Path.join([root, "build"]),
-			nativeSource = Path.join([root, "native.c"]), binding = Path.join([root, "api.hxi"]),
-			stamp = Path.join([root, "native.stamp"]), output = Path.join([root, "app.hl"]),
-			nativeRuns = 0, compilerRuns = 0, failNative = false;
+		var root = temporaryDirectory("delegated-native"),
+			buildRoot = Path.join([root, "build"]),
+			nativeSource = Path.join([root, "native.c"]),
+			binding = Path.join([root, "api.hxi"]),
+			stamp = Path.join([root, "native.stamp"]),
+			output = Path.join([root, "app.hl"]),
+			nativeRuns = 0,
+			compilerRuns = 0,
+			failNative = false;
 		File.saveContent(nativeSource, "first native implementation");
 		File.saveContent(binding, "first binding");
 		var nativeAction = new ExecutionAction(new ActionId("native-cmake-build:fixture"), [], [nativeSource], [stamp], "native",
-			Compiler("fixture-native", [], root, new Map(), () -> {
-				nativeRuns++;
-				File.saveContent(stamp, Std.string(nativeRuns));
-				return failNative ? 1 : 0;
-			}), true, true),
+			Compiler("fixture-native", [], root, new Map(),
+				() -> {
+					nativeRuns++;
+					File.saveContent(stamp, Std.string(nativeRuns));
+					return failNative ? 1 : 0;
+				}),
+			true, true),
 			compileAction = new ExecutionAction(new ActionId("fixture-compile"), [nativeAction.id], [binding], [output], "compile",
 				Compiler("fixture-compiler", [], root, new Map(), () -> {
 					compilerRuns++;
 					File.saveContent(output, "bytecode");
 					return 0;
 				}), false),
-			plan = new ExecutionPlan([nativeAction, compileAction]), environment = new BuildEnvironment(root, buildRoot);
+			plan = new ExecutionPlan([nativeAction, compileAction]),
+			environment = new BuildEnvironment(root, buildRoot);
 		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0, "initial delegated build succeeds");
 		File.saveContent(nativeSource, "changed native implementation");
 		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && nativeRuns == 2 && compilerRuns == 1,
 			"native changes run the delegate without recompiling independent bytecode");
 		File.saveContent(binding, "changed FFI binding");
-		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && compilerRuns == 2,
-			"binding changes still recompile bytecode");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && compilerRuns == 2, "binding changes still recompile bytecode");
 		failNative = true;
 		var failed = new Executor(environment, 1, _ -> {}).execute(plan);
-		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2,
-			"a failed ordering dependency blocks even cached bytecode");
-		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp",
-			Process("cmake", [], root, new Map()));
+		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2, "a failed ordering dependency blocks even cached bytecode");
+		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp", Process("cmake", [], root, new Map()));
 		expect(!build.execution.ArtifactCache.isShareable(stampAction), "CMake package stamps cannot restore missing runtime libraries");
 		removeTree(root);
 	}

@@ -22,7 +22,17 @@ class ContentDigestCache {
 		#end
 		try {
 			var stat = FileSystem.stat(path),
-				key = FileSystem.fullPath(path) + ":" + stat.dev + ":" + stat.ino + ":" + stat.size + ":" + stat.mtime.getTime() + ":" + stat.ctime.getTime(),
+				key = FileSystem.fullPath(path)
+					+ ":"
+					+ stat.dev
+					+ ":"
+					+ stat.ino
+					+ ":"
+					+ stat.size
+					+ ":"
+					+ stat.mtime.getTime()
+					+ ":"
+					+ stat.ctime.getTime(),
 				value = values.get(key);
 			if (value == null) {
 				value = Sha256.make(File.getBytes(path)).toHex();

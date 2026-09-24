@@ -31,9 +31,9 @@ private class FingerprintFields {
 
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
-	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>,
-			?digests:ContentDigestCache):String {
-		if (digests == null) digests = new ContentDigestCache();
+	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>, ?digests:ContentDigestCache):String {
+		if (digests == null)
+			digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
 		fields.add("action-v4");
 		fields.add(action.id.key());
@@ -58,7 +58,8 @@ class ActionFingerprint {
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
 	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>, ?digests:ContentDigestCache):String {
-		if (digests == null) digests = new ContentDigestCache();
+		if (digests == null)
+			digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
 		fields.add("artifact-action-v3");
 		fields.add(action.id.key());
@@ -114,8 +115,7 @@ class ActionFingerprint {
 	static function recordPath(buildRoot:String, action:ExecutionAction):String
 		return Path.join([buildRoot, ".haxeon", "actions", Sha256.encode(action.id.key()) + ".json"]);
 
-	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String,
-			digests:ContentDigestCache):Void {
+	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String, digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$path');
 			return;
@@ -146,7 +146,8 @@ class ActionFingerprint {
 		fields.push(digests.file(path));
 	}
 
-	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>, digests:ContentDigestCache):Void {
+	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>,
+			digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$relative');
 			return;

@@ -54,8 +54,8 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
 		var actions = [
-			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package ${resolvedPackage.name}',
-				Process("cmake", configureArguments, resolvedPackage.root, new Map())),
+			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])],
+				'Configure CMake package ${resolvedPackage.name}', Process("cmake", configureArguments, resolvedPackage.root, new Map())),
 			new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output', Process("cmake", [
 				"--build",
 				buildDirectory,

@@ -413,7 +413,8 @@ class SemanticAssembly {
 			state.canonicalAllFunctions = functions.slice(functionStart);
 			state.canonicalProgramFunctions = programFunctions.slice(programFunctionStart);
 			state.canonicalGenericOrigins = [
-				for (functionName in genericOrigins.keys()) if (owners.get(functionName) == name) functionName
+				for (functionName in genericOrigins.keys())
+					if (owners.get(functionName) == name) functionName
 			];
 			var generated = generatedByModule.get(name);
 			state.canonicalGeneratedFunctions = generated == null ? [] : [for (functionName in generated.keys()) functionName];

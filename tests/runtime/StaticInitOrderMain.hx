@@ -16,17 +16,19 @@ class StaticInitOrderMain {
 		Runtime.dispose(live);
 		var fields:Array<String> = [];
 		for (index in 0...80)
-			fields.push('public static var value$index:Int = ' +
-				(index == 0 ? '1' : 'value${index - 1} + 1') + ';');
+			fields.push('public static var value$index:Int = ' + (index == 0 ? '1' : 'value${index - 1} + 1') + ';');
 		compiler = new Compiler();
-		compiler.update("Main.hx", 'class Chain { ${fields.join(" ")} } ' +
-			'class Colour { public final red:Int; public function new(red:Int) this.red = red; ' +
-			'public static function rgba(red:Int):Colour return new Colour(red); } ' +
-			'class Palette { public static final colour:Colour = Colour.rgba(2); } ' +
-			'function main():Int { return Chain.value79 + Palette.colour.red; }');
+		compiler.update("Main.hx",
+			'class Chain { ${fields.join(" ")} } '
+			+ 'class Colour { public final red:Int; public function new(red:Int) this.red = red; '
+			+ 'public static function rgba(red:Int):Colour return new Colour(red); } '
+			+ 'class Palette { public static final colour:Colour = Colour.rgba(2); } '
+			+ 'function main():Int { return Chain.value79 + Palette.colour.red; }');
 		var chunked = compiler.compile("Main");
-		var helpers = [for (fn in chunked.ir.functions)
-			if (StringTools.startsWith(fn.name, "__init$part")) fn];
+		var helpers = [
+			for (fn in chunked.ir.functions)
+				if (StringTools.startsWith(fn.name, "__init$part")) fn
+		];
 		if (helpers.length < 10)
 			throw "Static initialization was not split into bounded functions";
 		live = Runtime.load(HlWriter.encode(chunked.module), chunked.runtimeIdentity);

@@ -141,8 +141,7 @@ class HlModuleAssembler {
 		var reuseLowered = initialized && !reload;
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
-		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null,
-			reuseLowered && previousNatives.length > 0 ? regenerated : null);
+		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
 		// New runtime imports shift every function slot. Publish a fresh module,
 		// never reuse opcodes or patch a live module with the old slot layout.
 		if (reuseLowered && runtimeNatives.length != previousNatives.length) {

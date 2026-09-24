@@ -46,8 +46,10 @@ class HxiCallMain {
 			+ '\textern fn shiftPoint(point: ptr<fixture_point> @inout) -> i32 @symbol("native_fixture_shift_point");\n'
 			+
 			'\textern fn readBytes(first: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("native_fixture_read_bytes");\n'
-			+ '\textern fn mapPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, results: ptr<fixture_point> @out_array("count")) -> i32 @symbol("native_fixture_map_points");\n'
-			+ '\textern fn mapValues(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32 @symbol("native_fixture_map_values");\n'
+			+
+			'\textern fn mapPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, results: ptr<fixture_point> @out_array("count")) -> i32 @symbol("native_fixture_map_points");\n'
+			+
+			'\textern fn mapValues(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32 @symbol("native_fixture_map_values");\n'
 			+ '\textern fn fillValues(count: u64, results: ptr<u32> @out_array("count")) -> i32 @symbol("native_fixture_fill_values");\n'
 			+ '\textern fn checkBoxValue(box: fixture_box) -> i32 @symbol("native_fixture_check_box_value");\n'
 			+ '\textern fn checkArraysValue(arrays: fixture_arrays) -> i32 @symbol("native_fixture_check_arrays_value");\n'

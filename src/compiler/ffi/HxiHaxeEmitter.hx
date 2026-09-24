@@ -960,7 +960,7 @@ class HxiHaxeEmitter {
 					},
 					aggregateResult = structureType(declaredResult, declarations, profile);
 				var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
-				callbackResult = callbackResultType(fn.result, profile),
+					callbackResult = callbackResultType(fn.result, profile),
 					hasOutputs = hasOutput(parameters),
 					rawName = projectedFunction.rawName;
 				if (projectedFunction.rawName == publicName)
@@ -995,8 +995,8 @@ class HxiHaxeEmitter {
 						buffer = outputBuffer(parameters);
 					switch projectedFunction.outputStrategy {
 						case OutputArray if (array != null):
-							emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile,
-								functionModule, model.documentation.get(fn.name));
+							emitOutputArrayWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, array, abi, profile, functionModule,
+								model.documentation.get(fn.name));
 						case OutputBuffer if (buffer != null):
 							emitBufferWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, buffer, model.documentation.get(fn.name));
 						case OutputValues:
@@ -1631,7 +1631,8 @@ class HxiHaxeEmitter {
 			emitOutputStringArrayWrapper(output, nativeName, publicName, parameters, rawArgumentTypes, resultType, array, abi, profile, documentation);
 			return;
 		}
-		emitTypedOutputArrayWrapper(output, nativeName, publicName, parameters, rawArgumentTypes, resultType, array, count, abi, profile, moduleName, documentation);
+		emitTypedOutputArrayWrapper(output, nativeName, publicName, parameters, rawArgumentTypes, resultType, array, count, abi, profile, moduleName,
+			documentation);
 	}
 
 	static function emitOutputStringArrayWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
@@ -1692,10 +1693,12 @@ class HxiHaxeEmitter {
 		output.add('}\n');
 	}
 
-	static function emitTypedOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String,
-			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, resultType:String,
-			array:{name:String, countParameter:String}, countParameter:HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile,
-			moduleName:String, documentation:Null<HxiDocumentation>):Void {
+	static function emitTypedOutputArrayWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, array:{
+			name:String,
+			countParameter:String
+		},
+			countParameter:HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile, moduleName:String, documentation:Null<HxiDocumentation>):Void {
 		var arrayParameter:HxiParameter = Lambda.find(parameters, parameter -> parameter.name == array.name);
 		var element = arrayElementInfo(arrayParameter.type, abi, profile),
 			arrayCounts:Map<String, String> = [],
@@ -1797,7 +1800,12 @@ class HxiHaxeEmitter {
 			layout = abi.layout(elementType);
 		if (projected == null || layout == null || projected.code == 11)
 			throw "HXI counted array has an unsupported element type";
-		return {haxeType: projected.haxeType, code: projected.code, size: layout.size, structure: projected.code == 12};
+		return {
+			haxeType: projected.haxeType,
+			code: projected.code,
+			size: layout.size,
+			structure: projected.code == 12
+		};
 	}
 
 	static function inputArrayType(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):String {
@@ -1817,14 +1825,20 @@ class HxiHaxeEmitter {
 		var name = parameter.name;
 		if (utf8ArrayPointer(parameter.type)) {
 			var pointerSize = Std.int(abi.pointerBits / 8);
-			return ['if ($name.length > ${maxArrayCount(pointerSize)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_storage_$name = __hxi_struct_alloc($name.length * $pointerSize); var __array_roots_$name:Array<haxe.io.Bytes> = []; for (__root in 0...($name.length + 1)) __array_roots_$name.push(null); __array_roots_$name[0] = __array_storage_$name; var __array_$name:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_$name, __array_roots_$name); for (__index in 0...$name.length) { var __text = __hxi_struct_utf8_copy($name[__index]); __array_roots_$name[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_$name, __index * $pointerSize, __text); }'];
+			return [
+				'if ($name.length > ${maxArrayCount(pointerSize)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_storage_$name = __hxi_struct_alloc($name.length * $pointerSize); var __array_roots_$name:Array<haxe.io.Bytes> = []; for (__root in 0...($name.length + 1)) __array_roots_$name.push(null); __array_roots_$name[0] = __array_storage_$name; var __array_$name:haxe.io.Bytes = __hxi_struct_with_roots(__array_storage_$name, __array_roots_$name); for (__index in 0...$name.length) { var __text = __hxi_struct_utf8_copy($name[__index]); __array_roots_$name[__index + 1] = __text; __hxi_struct_set_borrowed_bytes(__array_$name, __index * $pointerSize, __text); }'
+			];
 		}
 		var element = arrayElementInfo(parameter.type, abi, profile);
 		if (element.structure)
-			return ['if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'];
+			return [
+				'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'
+			];
 		var access = structAccess(element.code),
 			value = element.code == 15 ? '$name[__index] ? 1 : 0' : '$name[__index]';
-		return ['if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'];
+		return [
+			'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'
+		];
 	}
 
 	static function arrayPointeeType(type:compiler.ffi.HxiModel.HxiType):Null<compiler.ffi.HxiModel.HxiType>
@@ -1855,8 +1869,12 @@ class HxiHaxeEmitter {
 			case _: null;
 		};
 
-	static function arrayValueRead(element:{haxeType:String, code:Int, size:Int, structure:Bool}, bytes:String, index:String,
-			modelName:String):String {
+	static function arrayValueRead(element:{
+		haxeType:String,
+		code:Int,
+		size:Int,
+		structure:Bool
+	}, bytes:String, index:String, modelName:String):String {
 		var offset = '$index * ${element.size}';
 		if (element.structure)
 			return '${element.haxeType}.__hxi_attach($modelName.__hxi_struct_slice($bytes, $offset, ${element.size}))';
@@ -2023,7 +2041,10 @@ class HxiHaxeEmitter {
 	}
 
 	public static function projectedTypeReferenceName(value:String, profile:Null<HxiProjectionProfile>):String {
-		if (profile == null || profile.typeModule == null || profile.packageName == null || profile.typeModule == profile.functionModule)
+		if (profile == null
+			|| profile.typeModule == null
+			|| profile.packageName == null
+			|| profile.typeModule == profile.functionModule)
 			return value;
 		var genericStart = value.indexOf("<");
 		if (genericStart > 0 && StringTools.endsWith(value, ">")) {
@@ -2034,7 +2055,12 @@ class HxiHaxeEmitter {
 		if (value.indexOf(".") >= 0 || value.length == 0)
 			return value;
 		var first = value.charAt(0);
-		if (first.toUpperCase() != first || value == "Bool" || value == "Float" || value == "Int" || value == "String" || value == "Void")
+		if (first.toUpperCase() != first
+			|| value == "Bool"
+			|| value == "Float"
+			|| value == "Int"
+			|| value == "String"
+			|| value == "Void")
 			return value;
 		return profile.packageName + "." + profile.typeModule + "." + value;
 	}
@@ -2169,7 +2195,8 @@ class HxiHaxeEmitter {
 					}
 				};
 			case CallbackValue(name, _, _, nullable): {
-					haxeType: projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile) + "Callback", profile),
+					haxeType: projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile)
+						+ "Callback", profile),
 					code: 11,
 					nativePointer: true,
 					nullable: false
@@ -2212,8 +2239,10 @@ class HxiHaxeEmitter {
 				};
 			case PointerValue(_, nullable, opaquePointee, structure): {
 					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile), profile) : structure != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
-						profile), profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+						profile),
+						profile) : structure != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile),
+						profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
 					code: 11,
 					nativePointer: opaquePointee != null,
 					nullable: nullable
@@ -2230,7 +2259,8 @@ class HxiHaxeEmitter {
 		return switch value {
 			case PointerValue(_, nullable, opaquePointee, structure): {
 					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile), profile) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+						profile),
+						profile) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
 						profile), profile),
 					code: 11,
 					nativePointer: opaquePointee != null || structure == null,

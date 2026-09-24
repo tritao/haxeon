@@ -83,7 +83,8 @@ class IrGenerator {
 		return IrProgramAssembler.staticFieldsFrom(typed);
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>):IrProgram
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String,
+			?cNatives:Array<IrCNative>):IrProgram
 		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives);
 
 	static function lastSeparator(value:String):Int {

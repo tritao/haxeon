@@ -82,11 +82,13 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				inputs.push(interfacePath);
 		}
-		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions"], 'Compile Haxe package "${project.rootPackage.name}" -> $output',
+		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions"],
+			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment,
-				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)
-					: CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
-						() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment))), false);
+				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
+					environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
+						project.root, () -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment))),
+			false);
 	}
 
 	static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {

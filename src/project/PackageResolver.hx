@@ -70,7 +70,7 @@ class PackageResolver {
 					resolveDirectory(resolvedRoot, sourceRoot, 'source root', manifest.packageName)
 			],
 				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
-				manifest.packageName, "source"),
+					manifest.packageName, "source"),
 				nativeSources:Array<String> = [], includeDirs:Array<String> = [], nativeCMakeInputs:Array<String> = [], ffiInterfaces:Array<String> = [],
 				ffiProjections:Array<String> = [], ffiImports:Array<ResolvedFfiImport> = [];
 			if (manifest.native != null) {

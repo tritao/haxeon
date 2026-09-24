@@ -595,8 +595,7 @@ class HxiValidator {
 			if (!writableArrayPointer(outputType))
 				fail('Typed output array "${array.name}" requires a writable element pointer', array.span);
 			var arrayParameter:HxiParameter = Lambda.find(parameters, parameter -> parameter.name == array.name);
-			var type = arrayParameter.type,
-				element = arrayPointee(type);
+			var type = arrayParameter.type, element = arrayPointee(type);
 			if (element == null || !typedArrayElement(element, abi))
 				fail('Typed output array "${array.name}" requires a pointer to a fixed-layout scalar or structure element', array.span);
 			switch abi.classify(element) {
@@ -647,7 +646,7 @@ class HxiValidator {
 			case _: false;
 		};
 
-static function pointerFreeArrayElement(type:HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool
+	static function pointerFreeArrayElement(type:HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool
 		return switch type {
 			case Const(element): pointerFreeArrayElement(element, declarations, visiting);
 			case Named(name):

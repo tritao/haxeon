@@ -796,8 +796,7 @@ class HaxeonCli {
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
 			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, jobs = 4,
-			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
-			profile = false, profileOutput:Null<String> = null;
+			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileOutput:Null<String> = null;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];

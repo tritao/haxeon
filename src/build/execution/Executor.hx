@@ -91,8 +91,7 @@ class Executor implements ExecutionBackend {
 				}> = [];
 			for (action in wave) {
 				var dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
-				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints,
-					digests);
+				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests);
 				if (isUpToDate(action, fingerprint, dependencyFingerprints)) {
 					waveResults.set(action.id.key(), new ActionResult(action.id, 0, true, false, fingerprint));
 					continue;

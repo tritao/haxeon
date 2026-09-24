@@ -13,8 +13,10 @@ class ExecutionAction {
 	public final outputs:Array<String>;
 	public final description:String;
 	public final action:ActionKind;
+
 	/** Keep ordering/failure dependencies without invalidating independently compiled outputs. */
 	public final fingerprintDependencies:Bool;
+
 	/** Delegated build tools must check their own complete dependency graph on every build. */
 	public final alwaysRun:Bool;
 

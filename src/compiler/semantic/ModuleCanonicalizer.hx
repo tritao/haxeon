@@ -352,11 +352,9 @@ class ModuleCanonicalizer {
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
 					prefix = qualifiedName == null ? null : compiler.QualifiedName.first(qualifiedName),
-					imported = qualifiedName == null || locals.exists(prefix) ? null : resolveOptionalExpressionAlias(qualifiedName, aliases);
-				if (imported != null)
-					Variable(imported, s);
-				else
-					Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
+					imported = qualifiedName == null
+						|| locals.exists(prefix) ? null : resolveOptionalExpressionAlias(qualifiedName, aliases);
+				if (imported != null) Variable(imported, s); else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
