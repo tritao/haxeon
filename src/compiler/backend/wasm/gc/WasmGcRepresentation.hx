@@ -804,20 +804,24 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
 		if (name == "__bytes_blit") {
-			if (output.type != Void || arguments.length != 5
-				|| arguments[0].type != ManagedBytes || arguments[1].type != I32
-				|| arguments[2].type != ManagedBytes || arguments[3].type != I32
-				|| arguments[4].type != I32 || argumentLocals.length != 5)
+			if (output.type != Void || arguments.length != 5 || arguments[0].type != ManagedBytes || arguments[1].type != I32
+				|| arguments[2].type != ManagedBytes || arguments[3].type != I32 || arguments[4].type != I32 || argumentLocals.length != 5)
 				throw "Invalid Wasm GC Bytes.blit signature";
 			var body = checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1], argumentLocals[4]);
 			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[2], argumentLocals[3], argumentLocals[4]));
 			return body.concat([
-				LocalGet(argumentLocals[0]), StructGet(plan.managedBytesTypeIndex, 0),
-				LocalGet(argumentLocals[0]), StructGet(plan.managedBytesTypeIndex, 1),
-				LocalGet(argumentLocals[1]), I32Add,
-				LocalGet(argumentLocals[2]), StructGet(plan.managedBytesTypeIndex, 0),
-				LocalGet(argumentLocals[2]), StructGet(plan.managedBytesTypeIndex, 1),
-				LocalGet(argumentLocals[3]), I32Add,
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 0),
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 1),
+				LocalGet(argumentLocals[1]),
+				I32Add,
+				LocalGet(argumentLocals[2]),
+				StructGet(plan.managedBytesTypeIndex, 0),
+				LocalGet(argumentLocals[2]),
+				StructGet(plan.managedBytesTypeIndex, 1),
+				LocalGet(argumentLocals[3]),
+				I32Add,
 				LocalGet(argumentLocals[4]),
 				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
 			]);

@@ -317,13 +317,14 @@ class WasmFunctionLower {
 
 	function emitPhiGroup(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, predecessor:Int):Void {
 		var staged:Array<{target:Int, temporary:Int}> = [];
-		for (located in block.instructions) switch located.value {
-			case Phi(output, inputs):
-				var temporary = context.placement.allocate(context.representation.values.valueType(output.type));
-				WasmPhiLower.capture(body, inputs, values, predecessor, temporary);
-				staged.push({target: requiredLocal(values, output.id), temporary: temporary});
-			default:
-		}
+		for (located in block.instructions)
+			switch located.value {
+				case Phi(output, inputs):
+					var temporary = context.placement.allocate(context.representation.values.valueType(output.type));
+					WasmPhiLower.capture(body, inputs, values, predecessor, temporary);
+					staged.push({target: requiredLocal(values, output.id), temporary: temporary});
+				default:
+			}
 		for (entry in staged)
 			emit(body, [LocalGet(entry.temporary), LocalSet(entry.target)]);
 	}
