@@ -192,6 +192,10 @@ static vbyte *realtime_file_read( vbyte *path, int *length ) {
 HL_PRIM vbyte *HL_NAME(__file_get_content)( vbyte *path ) {
 	int length;
 	vbyte *data = realtime_file_read(path,&length);
+	if( length > 0 && memchr(data,0,(size_t)length) != NULL ) {
+		free(data);
+		hl_error("HashLink String cannot contain NUL; use File.getBytes for binary data");
+	}
 	vbyte *result = realtime_string_from_utf8((const char *)data);
 	free(data);
 	return result;

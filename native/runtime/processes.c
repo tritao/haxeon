@@ -37,6 +37,10 @@ static vbyte *realtime_process_read(void *process, bool stdout_stream) {
 	}
 	if (output.data == NULL)
 		return realtime_string_from_utf8("");
+	if (memchr(output.data, 0, (size_t)output.length) != NULL) {
+		free(output.data);
+		hl_error("HashLink String cannot contain NUL in process output");
+	}
 	output.data = (vbyte *)realloc(output.data, (size_t)output.length + 1);
 	output.data[output.length] = 0;
 	vbyte *result = realtime_string_from_utf8((const char *)output.data);

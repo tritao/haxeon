@@ -367,6 +367,9 @@ class HlWriter {
 		var data = new BytesOutput();
 		var lengths:Array<Int> = [];
 		for (value in strings) {
+			for (index in 0...value.length)
+				if (value.charCodeAt(index) == 0)
+					throw "HashLink String cannot contain NUL; use Bytes for binary data";
 			var bytes = HaxeBytes.ofString(value);
 			lengths.push(bytes.length);
 			data.write(bytes);

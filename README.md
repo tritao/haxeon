@@ -128,6 +128,10 @@ compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
 preserves object identity so aliases and fields continue to observe the same
 array.
 
+HashLink strings are zero terminated UTF-16 values. Haxeon rejects NUL code
+units when creating a `String` from a character code or byte buffer, and rejects
+NUL in compiled string constants. Use `Bytes` for binary data.
+
 Hosts may register typed HashLink natives with `Compiler.registerNative()`
 before the first build. Registrations then freeze so the native-table layout
 cannot silently change beneath a live module. `compiler.RuntimeAbi.register()`

@@ -177,6 +177,7 @@ HL_PRIM vbyte *HL_NAME(__string_char_at)( vbyte *value, int index ) {
 }
 
 HL_PRIM vbyte *HL_NAME(__string_from_char_code)( int code ) {
+	if( (uchar)code == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
 	vbyte *result = hl_alloc_bytes(2 * (int)sizeof(uchar));
 	((uchar *)result)[0] = (uchar)code;
 	((uchar *)result)[1] = 0;
@@ -186,6 +187,8 @@ HL_PRIM vbyte *HL_NAME(__string_from_char_code)( int code ) {
 HL_PRIM vbyte *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {
 	if( length < 0 ) hl_error("Negative string length");
 	if( value == NULL && length != 0 ) hl_error("Null string bytes");
+	for( int index = 0; index < length; index++ )
+		if( ((const uchar *)value)[index] == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
 	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
 	if( length > 0 ) memcpy(result,value,length * sizeof(uchar));
 	((uchar *)result)[length] = 0;

@@ -275,6 +275,8 @@ HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *righ
 	return compared != 0 ? compared : left->length - right->length;
 }
 HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
+	if( bytes->length > 0 && memchr(bytes->data,0,(size_t)bytes->length) != NULL )
+		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
 	char *utf8 = (char *)malloc((size_t)bytes->length + 1);
 	if( utf8 == NULL ) hl_error("Could not allocate byte string");
 	if( bytes->length > 0 ) memcpy(utf8, bytes->data, (size_t)bytes->length);
@@ -289,6 +291,8 @@ HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
 
 HL_PRIM vbyte *HL_NAME(__bytes_get_string)( realtime_bytes *bytes, int position, int length ) {
 	realtime_bytes_bounds(bytes, position, length);
+	if( length > 0 && memchr(bytes->data + position,0,(size_t)length) != NULL )
+		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
 	char *utf8 = (char *)malloc((size_t)length + 1);
 	if( utf8 == NULL ) hl_error("Could not allocate byte string");
 	if( length > 0 ) memcpy(utf8, bytes->data + position, (size_t)length);
@@ -356,6 +360,8 @@ HL_PRIM double HL_NAME(__bytes_input_read_f64)( realtime_bytes_input *input ) {
 }
 HL_PRIM vbyte *HL_NAME(__bytes_input_read_string)( realtime_bytes_input *input, int length ) {
 	if( length < 0 || input->position < 0 || input->position > input->length - length ) hl_error("Byte input is truncated");
+	if( length > 0 && memchr(input->data + input->position,0,(size_t)length) != NULL )
+		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
 	char *utf8 = (char *)malloc((size_t)length + 1);
 	if( utf8 == NULL ) hl_error("Could not allocate string input");
 	memcpy(utf8, input->data + input->position, (size_t)length);
