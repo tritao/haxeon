@@ -39,8 +39,17 @@ endif()
 option(HL_JIT_AARCH64_OLD "Use the legacy direct HL-bytecode AArch64 JIT" ${HAXEON_AARCH64_JIT_DEFAULT})
 
 add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # Keep development binaries from replacing the optimized VM used by tools
+  # and performance captures. Each preset has its own CMake build directory.
+  set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
+  set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/runtime")
+else()
+  set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/.tools/hashlink")
+  set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/out")
+endif()
 set_target_properties(hlprof-live PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "$<1:${CMAKE_SOURCE_DIR}/.tools/hashlink>"
+  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
 )
 
 # Haxeon's HDLL calls the patching API compiled into the VM executable. This is
@@ -118,21 +127,21 @@ endif()
 set_target_properties(haxeon_runtime PROPERTIES
   PREFIX ""
   SUFFIX ".hdll"
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out"
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/out"
+  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
+  LIBRARY_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
 )
 
 add_subdirectory(tests/native)
 
 set_target_properties(hl libhl PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"
-  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"
+  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
+  LIBRARY_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
+  ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
 )
 
 if(UNIX)
   set_target_properties(haxeon_runtime PROPERTIES
-    BUILD_RPATH "${CMAKE_SOURCE_DIR}/.tools/hashlink"
+    BUILD_RPATH "${HAXEON_HASHLINK_OUTPUT_DIR}"
   )
 endif()
 

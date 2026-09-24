@@ -614,6 +614,10 @@ backend. HashLink is built from the pinned `vendor/hashlink` submodule; the
 resulting VM and library are placed in `.tools/hashlink`, while Haxeon's runtime
 HDLL is placed in `out`.
 
+The Release preset owns those shared tool paths. The Debug preset writes its VM
+and runtime HDLL under `out/cmake/dev` so a development build cannot replace
+the optimized VM used by profiler captures and normal project commands.
+
 ```sh
 cmake --preset release
 cmake --build --preset release
@@ -673,6 +677,24 @@ choose the capture location, and runtime arguments after `--`:
 ```sh
 haxeon run --profile --profile-output build/host/profile/editor.hlpc
 ```
+
+Applications can mark a measured operation with `haxeon.ProfileSpan.begin(name)`
+and `haxeon.ProfileSpan.end(name)`. Markers use the same clock and thread IDs as
+the stack samples. Names may be UTF-8 text; begin/end names must match on each
+thread. After exporting the capture, `scripts/hlprof-spans.py` lists the
+slowest spans and the sampled leaf functions inside each one:
+
+```sh
+.tools/hashlink/hlprof-live export --format perfetto \
+  --output out/editor.perfetto.json out/editor.hlpc
+python3 scripts/hlprof-spans.py --min-ms 20 --top 20 \
+  --output out/span-spikes.json out/editor.perfetto.json
+```
+
+The report includes sample counts, dropped-record counts, and incomplete span
+counts when capture ends before the final marker is drained. A span with few
+samples needs further investigation; sampling alone cannot prove whether its
+thread was descheduled or blocked.
 
 Profile captures include `capture.json` and a copy of the exact bytecode used
 by the run. A HashLink heap dump captured by the application can be placed in
