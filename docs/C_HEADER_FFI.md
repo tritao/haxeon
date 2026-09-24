@@ -1,5 +1,241 @@
 # C header FFI import
 
+## C++ direct-call import (CXX_ABI_V1)
+
+The importer also has an intentionally small C++ path. Select it explicitly;
+the generated artifact is still ordinary HXI, so the existing native ABI
+classifier and runtime handle the call:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --std=c++20 \
+  --target=x86_64-linux-gnu \
+  --include=/path/to/library/include \
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
+```
+
+Project recipes may make the dispatch contract explicit with
+`"profile": "direct"`. Direct is the strict no-adapter profile: it forbids
+generated C++ thunks and virtual dispatch, so every imported call must use a
+Clang-selected mangled symbol with the ordinary HXI ABI. It still permits
+ABI-safe `noexcept` constructors, destructors, and explicit ownership release
+functions. The default profile preserves the individual legacy opt-in flags;
+`"profile": "virtual"` is a named opt-in for the existing Itanium vtable
+dispatch path. The standalone equivalent is `--cxx-profile=direct` or
+`--cxx-profile=virtual`.
+
+The direct profile imports namespaces, aliases, enum classes, opaque
+records, free functions, static methods, and public non-virtual `noexcept`
+methods. A member method is lowered to an HXI function with a synthetic
+`__this` pointer, while the `@symbol` value is exactly Clang's mangled name.
+References are represented as non-null pointer ABI values. Virtual methods and
+inheritance require the separate opt-in `--cxx-profile=virtual` profile; the
+legacy `--cxx-virtual` flag remains accepted for compatibility. That profile
+currently supports only Clang's Itanium ABI on 64-bit Linux/macOS and a single
+non-virtual base. The generated Haxe method reads the object's vtable and calls
+the selected function pointer, preserving dynamic dispatch. MSVC virtual
+dispatch is diagnosed until its ABI metadata path is implemented. Rvalue
+references, throwing calls, and non-trivial class values
+produce `CXX` diagnostics instead of an unsafe binding. Trivial record values
+are opt-in through `--cxx-trivial-values`. Constructors and destructors are
+also opt-in through `--cxx-lifetimes` and must be public, `noexcept`, and
+defined on a complete record with an explicit destructor.
+
+Throwing scalar and pointer functions or methods can be bound through a
+generated C++ catch thunk:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --target=x86_64-linux-gnu \
+  --library=/path/to/library-with-thunks.so \
+  --cxx-thunks=generated/library-thunks.cpp \
+  --haxe-output-dir=generated/library-cxx \
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
+```
+
+Compile the generated `.cpp` into the library named by `--library`. Each
+thunk is an `extern "C"` function with the same ABI-shaped arguments and
+result as its HXI declaration. It catches `std::exception` and unknown
+exceptions, stores a bounded thread-local diagnostic, and returns the
+zero/null fallback for the declared result. Generated Haxe projections read
+that diagnostic immediately after the call and throw a Haxe exception. This
+mode currently excludes throwing constructors/destructors, references as
+results, and non-trivial/STL conversions other than the explicitly supported
+`std::string_view` and read-only byte `std::span` input adapters. A
+`std::string_view` parameter is lowered to `const char*` plus a target-sized
+byte length inside the generated thunk; the Haxe projection accepts a `String`
+and computes its UTF-8 byte length. A `std::span<const std::byte>` or
+`std::span<const uint8_t>` parameter is lowered to `const byte*` plus a
+target-sized element count; the Haxe projection accepts `haxe.io.Bytes`. Both
+views are borrowed for the duration of the synchronous call, so the C++ API
+must not retain them. Embedded NUL bytes are not supported by the current
+UTF-8 bridge. Mutable, fixed-extent, non-byte, result, pointer, and reference
+span positions are unsupported. Unsupported string-view positions report
+`CXX017`; unsupported byte-span positions report `CXX018`. Without
+`--cxx-thunks`, throwing declarations continue to report `CXX003`, and view
+adapters report their corresponding diagnostic.
+
+With `--haxe-output-dir=<directory>`, the C++ importer also emits one Haxe
+class module per imported record. The generated class stores the raw opaque
+pointer, exposes `fromNative()` and `nativeHandle()`, and projects supported
+instance and static methods while retaining the HXI module as the ABI source:
+
+```sh
+scripts/haxeon-ffi-import \
+  --language=c++ \
+  --target=x86_64-linux-gnu \
+  --library=nativekit \
+  --interface=NativeKit \
+  --haxe-output-dir=generated/nativekit-cxx \
+  --output=generated/library.hxi \
+  /path/to/library/include/library.hpp
+```
+
+Add the projection directory as a source root when compiling the application,
+alongside the generated HXI interface:
+
+```sh
+haxeon-compiler \
+  --root=generated/nativekit-cxx \
+  --ffi-interface=generated/library.hxi \
+  --entry=app.Main \
+  sources.manifest
+```
+
+The generated `DisplayList.hx`-style modules are intentionally thin. Without
+`--cxx-lifetimes`, they expose borrowed `fromNative()` wrappers and do not
+allocate or destroy C++ objects; callers supply a native pointer obtained from
+an API with an explicit ownership contract. With lifetime support enabled,
+each constructor becomes `create()` (or a numbered overload), which allocates
+storage through the runtime and invokes the Clang-selected constructor symbol;
+`close()` invokes the destructor and then releases that storage. Borrowed
+wrappers cannot be closed. Overloaded methods receive stable numeric suffixes
+until a richer Haxe overload policy is added.
+
+Factory ownership is explicit and configured separately from C++ syntax. Map a
+free function returning `T*` to a free function accepting `T*` and returning
+`void` with `cxxOwnership` in a project recipe:
+
+    {
+      "cxxOwnership": {
+        "nkui::create_display_list": "nkui::release_display_list"
+      },
+      "cxxThunks": true,
+      "projection": true
+    }
+
+The equivalent standalone option is repeatable:
+
+    --cxx-owned=nkui::create_display_list=nkui::release_display_list
+
+The importer lowers the factory result to HXI `@owned("release_symbol")`
+metadata and emits `OwnedDisplayList.hx` plus an owned factory projection. The
+owner exposes `borrow()`, `nativeHandle()`, `isClosed()`, and idempotent
+`close()`. The release function must be explicit; C++ names and method names
+are never guessed. With `cxxThunks`, both the factory and release call use
+generated C-ABI entry points, which also keeps hidden C++ symbols and exception
+boundaries out of the Haxe runtime. `std::unique_ptr<T>` remains unsupported as
+a direct ABI value; adapt it through an explicit factory/release pair instead.
+
+The MSVC x64 profile is covered as a cross-target import (`x86_64-pc-windows-msvc`)
+even on non-Windows hosts. It uses Clang's MSVC mangled names and LLP64 layout
+rules; executing the resulting library still requires a Windows build and
+runtime.
+
+Large C++ headers can be narrowed with repeatable `--cxx-select=<qualified-name>`
+options. Select a record to retain all of its supported members, or select
+individual methods, free functions, enums, and aliases. Selecting a method
+implicitly retains its owning record. Named records, enums, and aliases used by
+selected signatures are retained transitively, including alias chains; a
+dependency hidden by the import roots or excluded headers reports CXX019
+instead of being silently dropped. This is useful for headers that expose a
+small supported facade alongside internal constructors, virtual classes, or
+template-heavy declarations.
+
+FFI imports can be attached to a Haxeon package instead of being generated by
+an ad hoc shell command. Add recipe paths to the package manifest:
+
+    {
+      "version": 1,
+      "package": { "name": "nativekit-bindings" },
+      "ffi": {
+        "imports": ["ffi/nativekit-display-list.ffi.json"]
+      }
+    }
+
+The recipe contains the Clang and declaration-selection details:
+
+    {
+      "version": 1,
+      "name": "nativekit-display-list",
+      "language": "c++",
+      "header": "nativekit/.../display_list.h",
+      "std": "c++20",
+      "includes": ["nativekit/.../ui/src"],
+      "library": "nativekit_ui",
+      "interface": "NativeKitDisplayList",
+      "select": [
+        "nkui::DisplayList::reset",
+        "nkui::DisplayList::size"
+      ],
+      "projection": true
+    }
+
+Paths in an FFI recipe are relative to the recipe file. During a project build,
+the package target supplies the Clang target triple. Haxeon generates HXI and
+optional C++ object projections below the target build directory, fingerprints
+the recipe and its header inputs, and makes Haxe compilation depend on the
+generated interface. Standalone generation also accepts
+haxeon-ffi-import --manifest=<file>.
+
+For project-owned C++ implementations, `"cxxThunks": true` makes the build
+generate the thunk `.cpp`, compile it, and link a separate ordinary shared
+library for the HXI calls. With `native.sources`, the package sources and thunk
+objects are linked together. With `native.cmake`, the thunk library links
+against the CMake target output, so the package's existing `CMakeLists.txt`
+needs no Haxeon-specific hook. The generated FFI library is distinct from the
+package's `.hdll` because HXI `@:cNative` calls use the platform shared-library
+ABI.
+
+On Windows, the CMake provider requests configuration-specific native output
+directories and links the target's import archive (`.lib` for MSVC or `.dll.a`
+for MinGW) into the generated thunk library. The CMake target should therefore
+produce the package's declared `<package>.hdll` output and its matching import
+archive in the same native output directory.
+
+NativeKit integration currently uses its stable public C ABI through the C
+importer. Its `nkui::DisplayList` implementation is an internal C++ class:
+its methods are not `noexcept`, and the shared UI library hides its C++ symbols.
+It therefore must not be presented as a direct call into the shipped shared
+library. An opt-in audit checks the real header and NativeKit compilation
+database and asserts the expected actionable diagnostics. It also builds the
+actual `display_list.cpp` beside a test-only factory and Haxeon's generated
+thunks, then executes `reset()` and `size()` through the generated projection.
+That positive path verifies the importer and thunk ABI against NativeKit's real
+C++ implementation without changing NativeKit's production exports. It is kept
+out of the default test suite because NativeKit is an external, optional
+dependency:
+
+```sh
+NATIVEKIT_ROOT=/path/to/nativekit \
+NATIVEKIT_BUILD_DIR=/path/to/nativekit/build-ui-integrated \
+tests/integration/test-nativekit-cxx-profile.sh
+```
+
+The existing C API remains the correct production binding for the current
+NativeKit build. A future NativeKit release can promote the source-level test
+to a shared-library test once it exports an intentional C++ surface.
+
+Use repeatable `--define=<name[=value]>` options for explicit preprocessor
+definitions. `--compile-commands=<path>` accepts a Clang
+`compile_commands.json` database and contributes the selected command's
+include/define/toolchain flags while the requested target and language mode
+remain authoritative.
+
 Haxeon can use Clang to turn the ABI-visible subset of a C header into a
 deterministic raw HXI description:
 
@@ -443,7 +679,16 @@ Semantic projections name snake-case enums in concise PascalCase, such as
 `Result.Ok` and `EventKind.WindowClose`. The C/HXI spellings remain unchanged
 at the native interface boundary.
 
-C function-pointer typedefs import as HXI `callback` declarations. Scalar and
+C and C++ free-function-pointer typedefs import as HXI `callback` declarations.
+For C++, `using Callback = result (*)(args...)` and equivalent typedefs are
+supported for callback parameters and results. The importer preserves the named
+callback type, lowers the native value directly, and invokes the exact
+Clang-selected C++ symbol; no C++ adapter thunk is generated. A callback result
+projects as a managed callable handle with `call(...)` and `close()` methods.
+Member-function pointers, overloaded function-pointer types, and `std::function`
+remain unsupported.
+
+Scalar and
 by-value structure arguments and results use the same recursive ABI descriptors
 as ordinary calls, with `void` also accepted as a result.
 Projection generates a typed Haxe function alias and a distinct managed callback
@@ -463,7 +708,10 @@ after the callback returns, including exceptional returns, so retaining one does
 not extend the native address lifetime. A null address passed for a non-null HXI
 parameter causes the callback to return zero without entering Haxe. Pointer
 callback results, variadic callbacks, and callbacks with more than sixteen
-arguments are rejected for now.
+arguments are rejected for now. A returned callback is only valid while the
+originating native library remains loaded; Haxeon keeps the ordinary imported
+library cache alive and the returned handle must still be closed when no longer
+needed.
 
 Callback failures never unwind through the C stack. Each callback handle keeps
 the first unread failure in a small synchronized record and returns the ABI zero
@@ -483,6 +731,23 @@ plain callback type. A closed non-null handle is rejected before entering C.
 Applications must unregister a callback and only then call `close()`; closing a
 function pointer that native code may still invoke remains a caller lifetime
 error.
+
+C++ APIs that retain a callback beyond the importing call must say so explicitly
+with the same Clang annotation used by HXI:
+
+```cpp
+#define HXI_RETAINED __attribute__((annotate("hxi:retained")))
+using Handler = void (*)(int) noexcept;
+
+void set_handler(Handler callback HXI_RETAINED) noexcept;
+void clear_handler() noexcept;
+```
+
+The importer accepts `hxi:retained` only on callback input parameters and emits
+the existing HXI `@retained` contract. The generated callback handle remains
+owned by Haxe, so callers must keep it alive until `clear_handler()` (or the
+API's equivalent) has detached it, and only then call `close()`. Retention is
+never inferred from a method name or callback typedef.
 
 Functions and callbacks accept `@callconv("cdecl")`, `@callconv("stdcall")`, or
 `@callconv("system")`; omitted metadata means `cdecl`. The convention is encoded

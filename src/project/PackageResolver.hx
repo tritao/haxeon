@@ -4,6 +4,8 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import project.PackageLockfile.PackageLockEntry;
+import project.FfiManifest.ResolvedFfiImport;
+import project.FfiManifest.FfiImportManifest;
 import build.Target;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
@@ -68,9 +70,9 @@ class PackageResolver {
 					resolveDirectory(resolvedRoot, sourceRoot, 'source root', manifest.packageName)
 			],
 				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
-					manifest.packageName, "source"),
+				manifest.packageName, "source"),
 				nativeSources:Array<String> = [], includeDirs:Array<String> = [], nativeCMakeInputs:Array<String> = [], ffiInterfaces:Array<String> = [],
-				ffiProjections:Array<String> = [];
+				ffiProjections:Array<String> = [], ffiImports:Array<ResolvedFfiImport> = [];
 			if (manifest.native != null) {
 				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName, "native source");
 				includeDirs = [
@@ -88,7 +90,12 @@ class PackageResolver {
 			if (manifest.ffi != null) {
 				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName, "FFI interface");
 				ffiProjections = resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection");
+				for (ffiPath in manifest.ffi.imports) {
+					var ffiManifestPath = resolveFiles(resolvedRoot, [ffiPath], manifest.packageName, "FFI manifest")[0];
+					ffiImports.push(FfiImportManifest.resolve(ffiManifestPath, resolvedRoot));
+				}
 			}
+			ffiImports.sort((left, right) -> Reflect.compare(left.config.name, right.config.name));
 
 			var dependencyNames = [for (name in manifest.dependencies.keys()) name];
 			dependencyNames.sort(Reflect.compare);
@@ -124,7 +131,7 @@ class PackageResolver {
 			}
 			active.remove(resolvedRoot);
 			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, acquired.source);
+				includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, ffiImports, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,

@@ -537,8 +537,13 @@ class HxiParserMain {
 			"calling conventions should be part of callback and function ABI identity");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn value() -> i32 @callconv("stdcall"); }', "only available for Windows");
 		expectError('interface bad @target("x86_64-linux-gnu") { callback Value = fn() -> i32 @callconv("fastcall"); }', "unsupported calling convention");
-		expectError('interface bad @target("x86_64-linux-gnu") { callback Binary = fn(value: i32) -> i32; extern fn get() -> nullable<Binary>; }',
-			"cannot return a callback handle yet");
+		var returnedCallbacks = parseValidated("returned-callbacks.hxi",
+			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(value: i32) -> i32; extern fn get() -> nullable<Binary>; }');
+		var returnedCallbackSource = HxiProjection.source(returnedCallbacks);
+		expect(returnedCallbackSource.indexOf("function fromNative(pointer:hl.Abstract<\"native_pointer\">)") >= 0
+			&& returnedCallbackSource.indexOf("function call(value:Int):Int") >= 0
+			&& returnedCallbackSource.indexOf("function get():Null<BinaryCallback>") >= 0,
+			"callback results should project typed callable wrappers over returned native code pointers");
 		var callbackCompiler = new Compiler();
 		callbackCompiler.addFfiInterface("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');

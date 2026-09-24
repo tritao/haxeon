@@ -1,5 +1,7 @@
 package project;
 
+import project.FfiManifest.ResolvedFfiImport;
+
 /** Paths in a resolved package have already been canonicalized. */
 class ResolvedPackage {
 	public final id:PackageId;
@@ -15,10 +17,11 @@ class ResolvedPackage {
 	public final nativeCMakeInputs:Array<String>;
 	public final ffiInterfaces:Array<String>;
 	public final ffiProjections:Array<String>;
+	public final ffiImports:Array<ResolvedFfiImport>;
 
 	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, sources:Array<String>, dependencies:Array<String>,
 			nativeSources:Array<String>, includeDirs:Array<String>, nativeCMakeInputs:Array<String>, ffiInterfaces:Array<String>,
-			ffiProjections:Array<String>, ?source:PackageSource) {
+			ffiProjections:Array<String>, ?ffiImports:Array<ResolvedFfiImport>, ?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;
@@ -32,5 +35,6 @@ class ResolvedPackage {
 		this.nativeCMakeInputs = nativeCMakeInputs.copy();
 		this.ffiInterfaces = ffiInterfaces.copy();
 		this.ffiProjections = ffiProjections.copy();
+		this.ffiImports = ffiImports == null ? [] : ffiImports.copy();
 	}
 }

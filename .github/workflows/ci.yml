@@ -4,145 +4,167 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: compiler-and-runtime-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+  platform:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: test
+            platform: test
+            os: linux
+            runs_on: ubuntu-24.04
+            timeout: 90
+          - name: linux-arm64
+            platform: linux-arm64
+            os: linux
+            runs_on: ubuntu-24.04-arm
+            timeout: 90
+            test_jobs: 4
+          - name: windows
+            platform: windows
+            os: windows
+            runs_on: windows-2022
+            timeout: 60
+          - name: macos
+            platform: macos
+            os: macos
+            runs_on: macos-15-intel
+            timeout: 90
+            test_jobs: 4
+          - name: macos-arm64
+            platform: macos-arm64
+            os: macos
+            runs_on: macos-15
+            timeout: 60
+            test_jobs: 4
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: ${{ matrix.timeout }}
+    env:
+      TEST_JOBS: ${{ matrix.test_jobs }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
+
+      - name: Verify ARM64 runner
+        if: matrix.platform == 'linux-arm64'
+        run: test "$(uname -m)" = aarch64
+
+      - name: Verify Apple Silicon runner
+        if: matrix.platform == 'macos-arm64'
+        run: test "$(uname -m)" = arm64
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
+
+      - name: Install macOS build dependencies
+        if: matrix.os == 'macos'
+        run: brew install cmake ninja node ripgrep autoconf automake libtool
+
+      - name: Set up Windows toolchain
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Bootstrap pinned tools
-        run: scripts/bootstrap-tools.sh
+        if: matrix.os != 'windows'
+        run: ./scripts/bootstrap-tools.sh
+
+      - name: Bootstrap pinned tools and native runtime
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./scripts/setup.ps1
+
       - name: Set up Node.js runtime
+        if: matrix.platform == 'test'
         uses: actions/setup-node@v4
         with:
           node-version: "22.21.1"
+
       - name: Set up Chrome for Wasm GC
+        if: matrix.platform == 'test'
         uses: browser-actions/setup-chrome@v2
         id: setup-chrome
         with:
           chrome-version: stable
           install-dependencies: true
-      - name: Browser Wasm GC smoke gate
-        env:
-          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: scripts/test-wasm-gc-chrome.sh
-      - name: Wasm backend runtime gates
-        run: scripts/test-wasm-backend.sh
-      - name: Wasm GC parity gate
-        run: scripts/test-wasm-gc-parity.sh
-      - name: Set up Wasmtime GC runtime
-        uses: bytecodealliance/actions/wasmtime/setup@v1
-        with:
-          version: "47.0.0"
-      - name: Wasm GC runtime gate
-        run: scripts/test-wasm-gc-wasmtime.sh
-      - name: Compiler, differential, and runtime gates
-        run: scripts/test.sh
-      - name: Project CLI smoke test
-        run: tests/integration/test-haxeon-cli.sh
-      - name: Self-hosted compiler gate
-        run: scripts/bootstrap-compiler.sh --self
-      - name: Hot reload and GDB metadata gate
-        run: tests/integration/test-gdb-hot-reload.sh
 
-  linux-arm64:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 90
-    env:
-      # Keep compiler fan-out bounded on the shared ARM runner.
-      TEST_JOBS: 4
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Verify ARM64 runner
-        run: test "$(uname -m)" = aarch64
-      - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
-      - name: Bootstrap pinned tools
-        run: scripts/bootstrap-tools.sh
-      - name: Compiler, differential, and runtime gates
-        run: scripts/test.sh
-      - name: Project CLI smoke test
-        run: tests/integration/test-haxeon-cli.sh
-      - name: Self-hosted compiler gate
-        run: scripts/bootstrap-compiler.sh --self
-      - name: Hot reload and GDB metadata gate
-        run: tests/integration/test-gdb-hot-reload.sh
-
-  windows:
-    runs-on: windows-2022
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: ilammy/msvc-dev-cmd@v1
-      - name: Bootstrap pinned tools and native runtime
-        shell: pwsh
-        run: ./scripts/setup.ps1
       - name: Verify self-hosted compiler convergence
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild bootstrap
+
       - name: Run cross-platform core tests
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+
       - name: Build with the MSVC Debug CRT
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           cmake --preset windows-msvc-debug -S .
           cmake --build --preset windows-msvc-debug --parallel
+
       - name: Run core tests with the MSVC Debug CRT
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+
+      - name: C++ CMake FFI integration
+        if: matrix.platform == 'windows'
+        shell: bash
+        env:
+          HAXEON_HAXE: ./.tools/haxe/haxe.exe
+        run: bash tests/integration/test-cxx-project-ffi-cmake.sh
+
+      - name: Browser Wasm GC smoke gate
+        if: matrix.platform == 'test'
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: scripts/test-wasm-gc-chrome.sh
+
+      - name: Wasm backend runtime gates
+        if: matrix.platform == 'test'
+        run: scripts/test-wasm-backend.sh
+
+      - name: Wasm GC parity gate
+        if: matrix.platform == 'test'
+        run: scripts/test-wasm-gc-parity.sh
+
+      - name: Set up Wasmtime GC runtime
+        if: matrix.platform == 'test'
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "47.0.0"
+
+      - name: Wasm GC runtime gate
+        if: matrix.platform == 'test'
+        run: scripts/test-wasm-gc-wasmtime.sh
+
+      - name: Compiler, differential, and runtime gates
+        if: matrix.platform != 'windows'
+        run: scripts/test.sh
+
       - name: Project CLI smoke test
+        if: matrix.platform != 'windows'
+        run: ./tests/integration/test-haxeon-cli.sh
+
+      - name: Project CLI smoke test
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: ./tests/integration/test-haxeon-cli.ps1
 
-  macos:
-    runs-on: macos-15-intel
-    timeout-minutes: 60
-    env:
-      # Keep compiler fan-out bounded on the shared Intel runner.
-      TEST_JOBS: 4
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install build dependencies
-        run: brew install cmake ninja node ripgrep autoconf automake libtool
-      - name: Bootstrap pinned tools and native runtime
-        run: ./scripts/bootstrap-tools.sh
-      - name: Compiler, differential, and runtime gates
-        run: ./scripts/test.sh
-      - name: Project CLI smoke test
-        run: ./tests/integration/test-haxeon-cli.sh
       - name: Self-hosted compiler gate
+        if: matrix.platform != 'windows'
         run: ./scripts/bootstrap-compiler.sh --self
 
-  macos-arm64:
-    runs-on: macos-15
-    timeout-minutes: 60
-    env:
-      # Keep compiler fan-out bounded on the shared Apple Silicon runner.
-      TEST_JOBS: 4
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Verify Apple Silicon runner
-        run: test "$(uname -m)" = arm64
-      - name: Install build dependencies
-        run: brew install cmake ninja node ripgrep autoconf automake libtool
-      - name: Bootstrap pinned tools and native runtime
-        run: ./scripts/bootstrap-tools.sh
-      - name: Compiler, differential, and runtime gates
-        run: ./scripts/test.sh
-      - name: Project CLI smoke test
-        run: ./tests/integration/test-haxeon-cli.sh
-      - name: Self-hosted compiler gate
-        run: ./scripts/bootstrap-compiler.sh --self
+      - name: Hot reload and GDB metadata gate
+        if: matrix.platform == 'test' || matrix.platform == 'linux-arm64'
+        run: ./tests/integration/test-gdb-hot-reload.sh

@@ -1,6 +1,7 @@
 package build.native;
 
 import build.BuildEnvironment;
+import build.Target.TargetAbi;
 import build.Target.TargetOs;
 
 /** Small host-only command selector for compiling and linking native C. */
@@ -10,20 +11,37 @@ class NativeToolchain {
 	public function new(environment:BuildEnvironment)
 		this.environment = environment;
 
-	public function compileCommand():String
-		return environment.toolchain.cCompiler;
+	public function compileCommand(source:String):String
+		return isCxxSource(source) ? environment.toolchain.cxxCompiler : environment.toolchain.cCompiler;
 
-	public function compileArguments(source:String, output:String, includeDirs:Array<String>):Array<String> {
+	public function isCxxSource(source:String):Bool {
+		var extension = haxe.io.Path.extension(source).toLowerCase();
+		return extension == "cc" || extension == "cpp" || extension == "cxx" || extension == "mm";
+	}
+
+	public function compileArguments(source:String, output:String, includeDirs:Array<String>, ?standard:String):Array<String> {
 		var arguments:Array<String> = [];
 		switch environment.target.os {
 			case Windows:
-				arguments = ["/nologo", "/c", source, "/Fo" + output];
-				for (directory in includeDirs)
-					arguments.push("/I" + directory);
+				if (environment.target.abi == TargetAbi.Msvc) {
+					arguments = ["/nologo", "/c", source, "/Fo" + output];
+					if (isCxxSource(source) && standard != null)
+						arguments.unshift("/std:" + standard);
+					for (directory in includeDirs)
+						arguments.push("/I" + directory);
+				} else {
+					arguments = ["-c", source, "-o", output];
+					if (isCxxSource(source) && standard != null)
+						arguments.unshift("-std=" + standard);
+					for (directory in includeDirs)
+						arguments.push("-I" + directory);
+				}
 			case _:
 				arguments = ["-c", source, "-o", output];
 				if (environment.target.os != TargetOs.Windows)
 					arguments.push("-fPIC");
+				if (isCxxSource(source) && standard != null)
+					arguments.unshift("-std=" + standard);
 				arguments = environment.toolchain.compileFlags.concat(arguments);
 				for (directory in includeDirs)
 					arguments.push("-I" + directory);
@@ -35,17 +53,25 @@ class NativeToolchain {
 		return environment.toolchain.archiver;
 
 	public function archiveArguments(output:String, objects:Array<String>):Array<String>
-		return environment.target.os == TargetOs.Windows ? ["/nologo", "/OUT:" + output].concat(objects) : ["rcs", output].concat(objects);
+		return environment.target.os == TargetOs.Windows
+			&& environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/OUT:" + output].concat(objects) : ["rcs", output].concat(objects);
 
 	public function sharedCommand():String
 		return environment.toolchain.linker;
 
-	public function sharedArguments(output:String, objects:Array<String>):Array<String> {
+	public function sharedArguments(output:String, objects:Array<String>, ?linkInputs:Array<String>, ?runtimeSearchPaths:Array<String>):Array<String> {
+		var inputs = linkInputs == null ? [] : linkInputs,
+			searchPaths = runtimeSearchPaths == null ? [] : runtimeSearchPaths;
 		var arguments = switch environment.target.os {
-			case TargetOs.Windows: ["/nologo", "/LD", "/Fe:" + output].concat(objects);
-			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects);
-			case _: ["-shared", "-o", output].concat(objects);
+			case TargetOs.Windows:
+				environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/LD", "/Fe:" + output].concat(objects)
+				.concat(inputs) : ["-shared", "-o", output].concat(objects).concat(inputs);
+			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects).concat(inputs);
+			case _: ["-shared", "-o", output].concat(objects).concat(inputs);
 		};
+		if (environment.target.os != TargetOs.Windows)
+			for (searchPath in searchPaths)
+				arguments.push("-Wl,-rpath," + searchPath);
 		return environment.toolchain.linkFlags.concat(arguments);
 	}
 }

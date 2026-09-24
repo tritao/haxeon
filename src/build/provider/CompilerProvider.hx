@@ -23,7 +23,7 @@ class CompilerProvider {
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry
-			];
+			], inputs:Array<String> = [];
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				arguments.push("--root=" + sourceRoot);
@@ -41,22 +41,36 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				arguments.push("--ffi-interface=" + interfacePath);
 		}
+		for (resolvedPackage in project.packages.packages)
+			for (ffi in resolvedPackage.ffiImports) {
+				var interfacePath = context.layout.ffiInterfacePath(resolvedPackage.name, ffi.config.name);
+				arguments.push("--ffi-interface=" + interfacePath);
+				inputs.push(interfacePath);
+				if (ffi.config.projection) {
+					var projectionPath = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
+						projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name);
+					arguments.push("--root=" + projectionPath);
+					arguments.push("--sources-file=" + projectionManifest);
+					inputs.push(projectionManifest);
+				}
+			}
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		var command:String,
 			argumentsWithLauncher:Array<String>,
-			inputs:Array<String>,
 			environment:Map<String, String>;
 		if (context.selfHosted) {
 			var artifact = haxe.io.Path.join([context.compilerHome, "bootstrap", "compiler.hl"]);
 			command = haxe.io.Path.join([context.compilerHome, ".tools", "hashlink", "hl" + suffix]);
 			argumentsWithLauncher = [artifact].concat(arguments);
-			inputs = [command, artifact];
+			inputs.push(command);
+			inputs.push(artifact);
 			environment = runtimeLibraryEnvironment(context.compilerHome);
 		} else {
 			command = haxe.io.Path.join([context.compilerHome, ".tools", "haxe", "haxe" + suffix]);
 			argumentsWithLauncher = ["-cp", compilerSourcePath, "--run", "compiler.tools.HaxeonCompiler"].concat(arguments);
-			inputs = [command, compilerSourcePath];
+			inputs.push(command);
+			inputs.push(compilerSourcePath);
 			environment = new Map();
 		}
 		inputs.push(haxe.io.Path.join([context.compilerHome, "stdlib"]));

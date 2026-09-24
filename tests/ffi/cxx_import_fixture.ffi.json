@@ -1,0 +1,15 @@
+{
+	"version": 1,
+	"name": "cxx-import-fixture",
+	"language": "c++",
+	"header": "cxx_import_fixture.hpp",
+	"includes": ["."],
+	"library": "cxx_fixture",
+	"interface": "CxxFixture",
+	"select": [
+		"nkui::DisplayList::reset",
+		"nkui::DisplayList::size",
+		"nkui::acquire"
+	],
+	"projection": true
+}

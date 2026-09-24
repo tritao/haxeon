@@ -7,12 +7,17 @@ import build.Target;
 class NativeManifest {
 	public final sources:Array<String>;
 	public final includeDirs:Array<String>;
+
+	/** Optional language standard for native C and C++ source compilation. */
+	public final standard:Null<String>;
+
 	public final cmake:Null<NativeCMakeManifest>;
 	public final supportedTargets:Array<String>;
 
-	public function new(sources:Array<String>, includeDirs:Array<String>, ?cmake:NativeCMakeManifest, ?supportedTargets:Array<String>) {
+	public function new(sources:Array<String>, includeDirs:Array<String>, ?standard:String, ?cmake:NativeCMakeManifest, ?supportedTargets:Array<String>) {
 		this.sources = sources.copy();
 		this.includeDirs = includeDirs.copy();
+		this.standard = standard;
 		this.cmake = cmake;
 		this.supportedTargets = supportedTargets == null ? ["host", "android"] : supportedTargets.copy();
 	}
@@ -31,10 +36,12 @@ class NativeCMakeManifest {
 }
 
 class FfiManifest {
+	public final imports:Array<String>;
 	public final interfaces:Array<String>;
 	public final projections:Array<String>;
 
-	public function new(interfaces:Array<String>, projections:Array<String>) {
+	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>) {
+		this.imports = imports.copy();
 		this.interfaces = interfaces.copy();
 		this.projections = projections.copy();
 	}
@@ -134,6 +141,7 @@ class PackageManifest {
 				throw '$path "native" must be an object';
 			var nativeSources = stringArray(nativeData, "sources", path, []),
 				includeDirs = stringArray(nativeData, "includeDirs", path, []),
+				standard = optionalNullableString(nativeData, "std", path),
 				supportedTargets = stringArray(nativeData, "targets", path, ["host", "android"]),
 				cmakeData:Dynamic = Reflect.field(nativeData, "cmake"),
 				cmake:Null<NativeCMakeManifest> = null;
@@ -153,18 +161,19 @@ class PackageManifest {
 				} catch (error:Dynamic) {
 					throw '$path "native.targets" contains an invalid target "$supportedTarget": ${Std.string(error)}';
 				}
-			native = new NativeManifest(nativeSources, includeDirs, cmake, supportedTargets);
+			native = new NativeManifest(nativeSources, includeDirs, standard, cmake, supportedTargets);
 		}
 		var ffiData:Dynamic = Reflect.field(raw, "ffi"),
 			ffi:Null<FfiManifest> = null;
 		if (ffiData != null) {
 			if (!isObject(ffiData))
 				throw '$path "ffi" must be an object';
-			var interfaces = stringArray(ffiData, "interfaces", path, []),
+			var imports = stringArray(ffiData, "imports", path, []),
+				interfaces = stringArray(ffiData, "interfaces", path, []),
 				projections = stringArray(ffiData, "projections", path, []);
-			if (interfaces.length == 0 && projections.length == 0)
-				throw '$path "ffi" requires "interfaces" or "projections"';
-			ffi = new FfiManifest(interfaces, projections);
+			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0)
+				throw '$path "ffi" requires "imports", "interfaces", or "projections"';
+			ffi = new FfiManifest(imports, interfaces, projections);
 		}
 		var android:Dynamic = Reflect.field(raw, "android"),
 			androidApplicationId = "org.haxeon.android",

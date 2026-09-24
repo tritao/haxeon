@@ -6,22 +6,15 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiResultPolicy;
 import compiler.ffi.HxiSemantics.HxiSemanticFunction;
+import compiler.ffi.NativeCallPlan.NativeCallPlan;
+import compiler.ffi.NativeCallPlan.NativeDispatch;
 
-typedef HxiFunctionAbi = {
-	final name:String;
-	final symbol:String;
-	final library:Null<String>;
-	final arguments:Array<HxiAbiValue>;
-	final result:HxiAbiValue;
-	final leaf:Bool;
-	final callConvention:String;
-	final resultPolicy:HxiResultPolicy;
-	final semantics:HxiSemanticFunction;
-}
+typedef HxiFunctionAbi = NativeCallPlan;
 
 /** Lowers a normalized HXI function into its complete target-specific native signature. */
 class HxiNativeSignature {
-	public static function lower(model:HxiInterface, abi:HxiAbi, ?visibleDeclarations:Map<String, HxiDeclaration>):Array<HxiFunctionAbi> {
+	public static function lower(model:HxiInterface, abi:HxiAbi, ?visibleDeclarations:Map<String, HxiDeclaration>,
+			?dispatches:Map<String, NativeDispatch>):Array<HxiFunctionAbi> {
 		var semantics = HxiSemantics.normalize(model, abi, visibleDeclarations),
 			declarations:Map<String, HxiDeclaration> = [];
 		for (declaration in model.declarations)
@@ -43,7 +36,8 @@ class HxiNativeSignature {
 						leaf: leaf,
 						callConvention: callConvention,
 						resultPolicy: resultPolicy,
-						semantics: semantic
+						semantics: semantic,
+						dispatch: dispatches == null || dispatches.get(name) == null ? DirectSymbol : dispatches.get(name)
 					});
 				case _:
 			}

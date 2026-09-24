@@ -323,10 +323,6 @@ class HxiValidator {
 					if (outputArray != null && outputBuffer != null)
 						fail('Function "$name" cannot combine an output array with an output buffer', span);
 					validateType(result, names, declarationsByName, span, true);
-					switch abi.classify(result, true) {
-						case CallbackValue(_, _, _, _): fail('Function "$name" cannot return a callback handle yet', span);
-						case _:
-					}
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 			}

@@ -20,9 +20,11 @@ import build.execution.Executor;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
+import build.native.NativeToolchain;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
+import project.FfiManifest.FfiImportManifest;
 import project.PackageSourceTools;
 import project.PackageResolver;
 import project.PackageLockfile;
@@ -53,6 +55,7 @@ class BuildSystemMain {
 		testDelegatedNativeInvalidation();
 		testTargetsAndToolchains();
 		testProjectDiscovery();
+		testFfiProjectIntegration();
 		testPackageSourceModel();
 		testPackageCompatibility();
 		testHaxelibAdapter();
@@ -88,6 +91,17 @@ class BuildSystemMain {
 			layout = new TargetLayout(environment);
 		expect(layout.targetDirectory() == "android-arm64" && layout.packageRoot("foo").indexOf("android-arm64") >= 0,
 			"non-host artifacts should be isolated by target");
+		var msvcToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-msvc"]), BuildProfile.Debug, windows)),
+			gnuWindows = Target.parse("windows-x86_64-gnu"),
+			gnuToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-gnu"]), BuildProfile.Debug, gnuWindows)),
+			msvcCompile = msvcToolchain.compileArguments("fixture.cpp", "fixture.obj", [], "c++20"),
+			gnuCompile = gnuToolchain.compileArguments("fixture.cpp", "fixture.o", [], "c++20"),
+			msvcLink = msvcToolchain.sharedArguments("fixture.dll", ["fixture.obj"], ["foo.lib"]),
+			gnuLink = gnuToolchain.sharedArguments("fixture.dll", ["fixture.o"], ["libfoo.dll.a"]);
+		expect(msvcCompile.indexOf("/std:c++20") >= 0 && msvcLink.indexOf("/LD") >= 0 && msvcLink.indexOf("foo.lib") >= 0,
+			"MSVC C++ toolchains should use cl standard, DLL, and import-library arguments");
+		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0 && gnuLink.indexOf("libfoo.dll.a") >= 0,
+			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
 		removeTree(root);
 	}
 
@@ -365,7 +379,7 @@ class BuildSystemMain {
 		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"foo":{"path":"../foo"}}}',
 			["src/Main.hx"]);
 		writePackage(foo,
-			'{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"dependencies":{"bar":{"path":"../bar"}},"native":{"sources":["native/foo.c"],"includeDirs":["native"]}}',
+			'{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"dependencies":{"bar":{"path":"../bar"}},"native":{"sources":["native/foo.c"],"includeDirs":["native"],"std":"c++20"}}',
 			["src/Foo.hx", "native/foo.c", "native/foo.h"]);
 		writePackage(bar, '{"version":1,"package":{"name":"bar"},"sourceRoots":["src"]}', ["src/Bar.hx"]);
 		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
@@ -373,6 +387,7 @@ class BuildSystemMain {
 		expect(project.packages.names().join(",") == "bar,foo,app", "nested packages should be ordered dependency-first");
 		expect(project.packages.get("foo").nativeSources.length == 1 && project.packages.get("foo").includeDirs.length == 1,
 			"native package metadata should be resolved");
+		expect(project.packages.get("foo").manifest.native.standard == "c++20", "native language standards should be resolved from package metadata");
 		expect(project.rootPackage.sources.length == 1 && project.rootPackage.sources[0].indexOf("Main.hx") >= 0,
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
@@ -447,6 +462,41 @@ class BuildSystemMain {
 		var dependencies = NativeDependencyScanner.dependencies(source, [includeDirectory]);
 		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0 && dependencies[1].indexOf("second.h") >= 0,
 			"native dependency scanning should follow recursive local includes");
+		removeTree(root);
+	}
+
+	static function testFfiProjectIntegration():Void {
+		var root = temporaryDirectory("ffi-project"),
+			app = Path.join([root, "app"]),
+			manifestPath = Path.join([app, "ffi", "fixture.ffi.json"]),
+			headerPath = Path.join([app, "headers", "fixture.hpp"]);
+		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"ffi":{"imports":["ffi/fixture.ffi.json"]}}',
+			["src/Main.hx"]);
+		ensureDirectory(Path.directory(manifestPath));
+		ensureDirectory(Path.directory(headerPath));
+		File.saveContent(headerPath, "namespace fixture { class Widget { public: void reset() noexcept; }; }\n");
+		File.saveContent(manifestPath,
+			'{"version":1,"name":"fixture","language":"c++","profile":"direct","header":"../headers/fixture.hpp","std":"c++20","library":"fixture","interface":"Fixture","select":["fixture::Widget::reset"],"projection":true}\n');
+		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
+		expect(project.rootPackage.ffiImports.length == 1
+			&& project.rootPackage.ffiImports[0].config.name == "fixture"
+			&& project.rootPackage.ffiImports[0].config.profile == "direct"
+			&& project.rootPackage.ffiImports[0].header == FileSystem.fullPath(headerPath),
+			"project resolution should load FFI recipes relative to the package");
+		expectThrows(() -> FfiImportManifest.parse("/tmp/direct.ffi.json",
+			'{"version":1,"name":"direct","language":"c++","profile":"direct","header":"fixture.hpp","library":"fixture","cxxThunks":true}'),
+			"direct C++ FFI profiles should reject generated thunks");
+		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
+			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
+			execution = PlanLowerer.lower(plan,
+				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+			planText = plan.toDebugString(),
+			executionText = execution.toDebugString();
+		expect(planText.indexOf("app:FfiInterface") >= 0
+			&& executionText.indexOf("Import c++ FFI fixture") >= 0
+			&& executionText.indexOf("projection.sources") >= 0
+			&& executionText.indexOf("Compile Haxe package") >= 0,
+			"project FFI recipes should become build artifacts before Haxe compilation");
 		removeTree(root);
 	}
 

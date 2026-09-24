@@ -343,10 +343,16 @@ The `foo` package can list native inputs in its own manifest:
   "sourceRoots": ["src"],
   "native": {
     "sources": ["native/foo.c"],
-    "includeDirs": ["native/include"]
+    "includeDirs": ["native/include"],
+    "std": "c++20"
   }
 }
 ```
+
+The optional native `std` value controls compilation of package-owned C and
+C++ sources. It is separate from the `std` value in an FFI recipe, which
+controls Clang's header import and generated thunk compilation. CMake-backed
+packages continue to declare their language standard in `CMakeLists.txt`.
 
 `haxeon build --plan` prints the deterministic artifact and action plans.
 Add `--explain` to show why each artifact is present, and `--timings` to print

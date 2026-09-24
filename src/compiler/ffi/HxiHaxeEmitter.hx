@@ -22,6 +22,7 @@ import compiler.ffi.HaxeProjectionModel.ProjectedEnum;
 import compiler.ffi.HaxeProjectionModel.ProjectedCheckedFunction;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
+import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 import compiler.ffi.HxiProjectedModule;
 
 /** Projects bridgeable HXI functions into a synthetic, source-visible module. */
@@ -186,6 +187,12 @@ class HxiHaxeEmitter {
 			}
 		var abi = providedAbi == null ? HxiAbi.forInterface(model, declarations) : providedAbi;
 		for (fn in abi.functions())
+			switch fn.result {
+				case CallbackValue(_, _, _, _):
+					directed.set(fn.name, true);
+				case _:
+			}
+		for (fn in abi.functions())
 			switch fn.semantics.result {
 				case OwnedHandle(_, _):
 					directed.set(fn.name, true);
@@ -279,6 +286,12 @@ class HxiHaxeEmitter {
 						release: release
 					};
 				case BorrowedPointer(_) | BorrowedHandle(_): {
+						managedBytes: false,
+						length: null,
+						ownership: "borrowed",
+						release: null
+					};
+				case PlainValue(CallbackValue(_, _, _, _)): {
 						managedBytes: false,
 						length: null,
 						ownership: "borrowed",
@@ -526,6 +539,13 @@ class HxiHaxeEmitter {
 						output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 						output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
 						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
+						output.add('\tpublic static inline function fromNative(pointer:hl.Abstract<"native_pointer">):${projectedName}Callback return cast ${model.name}.__hxi_callback_from_pointer_$name(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), pointer);\n');
+						var callbackNames = [for (parameter in parameters) parameter.name],
+							invokeArguments = callbackNames.length == 0 ? "" : ", " + callbackNames.join(", ");
+						if (returnValue.haxeType == "Void")
+							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):Void { ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments); }\n');
+						else
+							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):${returnValue.haxeType} return cast ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments);\n');
 						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
 						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
 						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
@@ -535,11 +555,14 @@ class HxiHaxeEmitter {
 		if (emitFunctions)
 			for (callbackDeclaration in callbackDeclarations)
 				switch callbackDeclaration {
-					case Callback(name, _, _, _, _):
+					case Callback(name, parameters, _, _, _):
 						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
 						if (projectedCallback != null) {
 							var projectedName = projectedCallback.name;
 							output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_from_pointer") extern function __hxi_callback_from_pointer_$name(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, pointer:hl.Abstract<"native_pointer">):hl.Abstract<"native_callback">;\n');
+							var invokeParameters = [for (index in 0...parameters.length) 'arg$index:Dynamic'];
+							output.add('@:hlNative("haxeon_runtime", "native_callback_invoke_${parameters.length}") extern function __hxi_callback_invoke_$name(callback:${projectedName}Callback${invokeParameters.length == 0 ? "" : ", " + invokeParameters.join(", ")}):Dynamic;\n');
 							output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${projectedName}Callback):Int;\n');
 							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${projectedName}Callback):Null<haxe.io.Bytes>;\n');
 						}
@@ -937,6 +960,7 @@ class HxiHaxeEmitter {
 					},
 					aggregateResult = structureType(declaredResult, declarations, profile);
 				var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
+				callbackResult = callbackResultType(fn.result, profile),
 					hasOutputs = hasOutput(parameters),
 					rawName = projectedFunction.rawName;
 				if (projectedFunction.rawName == publicName)
@@ -988,6 +1012,9 @@ class HxiHaxeEmitter {
 					}
 				} else if (ownedHandleResult != null) {
 					emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
+				} else if (callbackResult != null) {
+					emitCallbackResultWrapper(output, publicName, rawName, argumentTypes, callbackResult.name, callbackResult.nullable,
+						model.documentation.get(fn.name));
 				} else if (aggregateResult != null) {
 					emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name, model.documentation.get(fn.name));
 				}
@@ -1353,6 +1380,22 @@ class HxiHaxeEmitter {
 			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
 		emitDocumentationValue(output, documentation);
 		output.add('function $publicName(${arguments.join(", ")}):$structureType return $structureType.__hxi_attach($rawName(${callArguments.join(", ")}));\n');
+	}
+
+	static function callbackResultType(value:HxiAbiValue, profile:Null<HxiProjectionProfile>):Null<{name:String, nullable:Bool}>
+		return switch value {
+			case CallbackValue(name, _, _, nullable): {name: projectedTypeName(name, profile) + "Callback", nullable: nullable};
+			case _: null;
+		};
+
+	static function emitCallbackResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, callbackType:String,
+			nullable:Bool, documentation:Null<HxiDocumentation>):Void {
+		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
+			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
+		emitDocumentationValue(output, documentation);
+		var resultType = nullable ? 'Null<$callbackType>' : callbackType,
+			conversion = nullable ? '__pointer == null ? null : $callbackType.fromNative(__pointer)' : '$callbackType.fromNative(__pointer)';
+		output.add('function $publicName(${arguments.join(", ")}):$resultType { var __pointer = $rawName(${callArguments.join(", ")}); return $conversion; }\n');
 	}
 
 	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
@@ -1914,6 +1957,18 @@ class HxiHaxeEmitter {
 			return mapped;
 		var stripped = stripPrefix(value, profile.functionPrefix);
 		return profile.functionCase == "camel" ? camelCase(stripped) : value;
+	}
+
+	/** Returns the runtime signature descriptor used by dynamic native calls. */
+	public static function nativeSignature(model:HxiInterface, functionAbi:HxiFunctionAbi):String {
+		var declarations:Map<String, HxiDeclaration> = [];
+		for (declaration in model.declarations)
+			declarations.set(declarationName(declaration), declaration);
+		var abi = HxiAbi.forInterface(model), aggregateDescriptors:Map<String, String> = [], arguments = [
+			for (argument in functionAbi.arguments)
+				abiDescriptor(argument, declarations, abi, aggregateDescriptors)
+		], result = abiDescriptor(functionAbi.result, declarations, abi, aggregateDescriptors);
+		return callSignature(arguments.join(",") + ">" + result, functionAbi.callConvention);
 	}
 
 	public static function projectedConstantName(value:String, profile:Null<HxiProjectionProfile>):String {

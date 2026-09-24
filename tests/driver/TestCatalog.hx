@@ -53,6 +53,7 @@ class TestCatalog {
 		"FunctionTypeSyntaxMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",
+		"CxxHeaderImporterMain",
 		"HxiAuditMain",
 		"HxiFlagsMain",
 		"HxiParserMain",

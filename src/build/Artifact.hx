@@ -8,6 +8,8 @@ enum ArtifactKind {
 	NativeObject;
 	NativeStaticLibrary;
 	NativeSharedLibrary;
+	FfiNativeSharedLibrary;
+	FfiInterface;
 	Executable;
 	NativeRuntime;
 }
@@ -37,6 +39,8 @@ class Artifact {
 			case NativeObject: "NativeObject";
 			case NativeStaticLibrary: "NativeStaticLibrary";
 			case NativeSharedLibrary: "NativeSharedLibrary";
+			case FfiNativeSharedLibrary: "FfiNativeSharedLibrary";
+			case FfiInterface: "FfiInterface";
 			case Executable: "Executable";
 			case NativeRuntime: "NativeRuntime";
 		};
