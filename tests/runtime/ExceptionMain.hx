@@ -21,7 +21,7 @@ class ExceptionMain {
 			+ "  catch (error:ValueException) {\n"
 			+
 			"    return identity(42) == 42 && checkSample() && error.value == 42 && error.message == '42' && error.previous != null && error.previous.message == 'root'"
-			+ " && error.stack.length == 0 && error.details() == '42' && CallStack.exceptionStack().length == 0 ? 42 : 0;\n"
+			+ " && error.stack.length == 0 && error.details() == '42' && CallStack.exceptionStack().length > 0 ? 42 : 0;\n"
 			+ "  }\n"
 			+ "}");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));

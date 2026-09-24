@@ -51,8 +51,8 @@ call site.
 
 The source exception subset provides `haxe.Exception`, `haxe.ValueException`,
 and `haxe.CallStack`. Exception objects retain messages, wrapped values, and
-previous-exception chains. Stack snapshots are currently deterministic and
-empty until native HashLink stack capture is exposed through the runtime ABI.
+previous-exception chains. Caught exception stacks resolve through HashLink's
+native stack capture. Current-call snapshots remain empty.
 
 `EReg` accepts both `new EReg(pattern, options)` and Haxe regex-literal syntax.
 The current deterministic subset treats patterns literally and supports `i`
