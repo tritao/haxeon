@@ -24,6 +24,14 @@ HL_PRIM double HL_NAME(__math_tan)(double value) {
 	return tan(value);
 }
 
+HL_PRIM double HL_NAME(__math_sqrt)(double value) {
+	return sqrt(value);
+}
+
+HL_PRIM double HL_NAME(__math_atan2)(double y, double x) {
+	return atan2(y, x);
+}
+
 HL_PRIM double HL_NAME(__math_fmod)(double value, double modulus) {
 	return fmod(value, modulus);
 }

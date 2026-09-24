@@ -37,6 +37,12 @@ extern function mathSin(value:Float):Float;
 @:hlNative("haxeon_runtime", "__math_tan")
 extern function mathTan(value:Float):Float;
 
+@:hlNative("haxeon_runtime", "__math_sqrt")
+extern function mathSqrt(value:Float):Float;
+
+@:hlNative("haxeon_runtime", "__math_atan2")
+extern function mathAtan2(y:Float, x:Float):Float;
+
 @:hlNative("haxeon_runtime", "__math_round")
 extern function mathRound(value:Float):Int;
 
@@ -76,6 +82,12 @@ class Math {
 
 	public static inline function tan(value:Float):Float
 		return mathTan(value);
+
+	public static inline function sqrt(value:Float):Float
+		return mathSqrt(value);
+
+	public static inline function atan2(y:Float, x:Float):Float
+		return mathAtan2(y, x);
 
 	public static inline function round(value:Float):Int
 		return mathRound(value);
