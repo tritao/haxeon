@@ -443,11 +443,11 @@
 777	$lambda:compiler.compilation.BackendAssembly.assemble:1650
 778	$lambda:compiler.compilation.BackendAssembly.attachSourceSnapshots:4747
 779	$lambda:compiler.ffi.CHeaderEmitter.emit:529
-780	$lambda:compiler.ffi.HxiHaxeEmitter.aggregateDescriptor:114986
-781	$lambda:compiler.ffi.HxiHaxeEmitter.emitOutputArrayWrapper:84651
-782	$lambda:compiler.ffi.HxiHaxeEmitter.emitOutputWrapper:75374
-783	$lambda:compiler.ffi.HxiHaxeEmitter.emitTypedOutputArrayWrapper:88857
-784	$lambda:compiler.ffi.HxiHaxeEmitter.emitTypedOutputArrayWrapper:89461
+780	$lambda:compiler.ffi.HxiHaxeEmitter.aggregateDescriptor:115094
+781	$lambda:compiler.ffi.HxiHaxeEmitter.emitOutputArrayWrapper:84652
+782	$lambda:compiler.ffi.HxiHaxeEmitter.emitOutputWrapper:75375
+783	$lambda:compiler.ffi.HxiHaxeEmitter.emitTypedOutputArrayWrapper:88868
+784	$lambda:compiler.ffi.HxiHaxeEmitter.emitTypedOutputArrayWrapper:89472
 785	$lambda:compiler.ffi.HxiHaxeEmitter.projectedEnumValueName:1763
 786	$lambda:compiler.ffi.HxiHaxeEmitter.sourceRaw:20605
 787	$lambda:compiler.ffi.HxiHaxeEmitter.sourceRaw:22179
@@ -463,7 +463,7 @@
 797	$lambda:compiler.ffi.HxiProjectionProfileValidator.validate:6160
 798	$lambda:compiler.ffi.HxiProjectionProfileValidator.validate:7495
 799	$lambda:compiler.ffi.HxiProjectionProfileValidator.validate:7677
-800	$lambda:compiler.ffi.HxiValidator.arrayType:31656
+800	$lambda:compiler.ffi.HxiValidator.arrayType:31652
 801	$lambda:compiler.ffi.HxiValidator.validate:15937
 802	$lambda:compiler.ffi.HxiValidator.validate:8787
 803	$lambda:compiler.ffi.HxiValidator.validateOutputArray:29057
@@ -475,8 +475,8 @@
 809	$lambda:compiler.hl.incremental.HlFunctionCache.exportState:2595
 810	$lambda:compiler.hl.incremental.HlFunctionCache.exportState:2673
 811	$lambda:compiler.hl.incremental.HlFunctionCache.exportState:2750
-812	$lambda:compiler.hl.incremental.HlModuleAssembler.assemble:6419
-813	$lambda:compiler.hl.incremental.HlModuleAssembler.assemble:6469
+812	$lambda:compiler.hl.incremental.HlModuleAssembler.assemble:6416
+813	$lambda:compiler.hl.incremental.HlModuleAssembler.assemble:6466
 814	$lambda:compiler.hl.incremental.HlSymbolTable.orderedMap:6335
 815	$lambda:compiler.hl.incremental.HlSymbolTable.orderedNestedMap:6627
 816	$lambda:compiler.ir.IrProgramAssembler.staticFieldsFrom:8315
