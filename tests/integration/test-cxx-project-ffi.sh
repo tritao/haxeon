@@ -98,11 +98,14 @@ if [[ $run_status -ne 42 ]]; then
 fi
 
 second_output=$(run_cli build --project "$project_dir/haxeon.json")
-[[ "$second_output" == *"ffi-import:"*"clean (fingerprint match)"* ]]
+grep -Eq '^\[ffi-import:[^]]+\] clean \(fingerprint match\)$' <<<"$second_output"
 
 printf '\n// invalidate the project FFI import\n' >> "$project_dir/ffi/cxx_runtime_fixture.hpp"
 changed_output=$(run_cli build --project "$project_dir/haxeon.json")
 [[ "$changed_output" == *"Import c++ FFI cxx-project"* ]]
-[[ "$changed_output" != *"ffi-import:"*"clean (fingerprint match)"* ]]
+if grep -Eq '^\[ffi-import:[^]]+\] clean \(fingerprint match\)$' <<<"$changed_output"; then
+	echo "expected the changed C++ header to rerun the FFI import" >&2
+	exit 1
+fi
 
 echo "PASS: project C++ FFI build, projection, runtime call, caching, and header invalidation"
