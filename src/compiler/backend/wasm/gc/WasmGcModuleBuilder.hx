@@ -339,7 +339,7 @@ class WasmGcModuleBuilder {
 				"Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__exception_matches",
 				"__reflect_is_object", "__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub",
 				"haxe.Int64.and", "haxe.Int64.or", "haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make",
-				"haxe.Int64.ofInt", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set",
+				"haxe.Int64.ofInt", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_blit",
 				"__bytes_get_i32", "__bytes_get_float", "__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI32", "setI32", "getI64", "setI64",
 				"getF32", "setF32", "getF64", "setF64", "__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string",
 				"structCopy", "structCopyPointer", "structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots",

@@ -157,6 +157,7 @@ DEFINE_PRIM(_ABSTRACT(realtime_module),load,_BYTES _I32 _BYTES _I32);
 DEFINE_PRIM(_I32,call_i32,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_void,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_BYTES,call_bytes,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_ABSTRACT(realtime_bytes),call_managed_bytes,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_VOID,call_bytes1,_ABSTRACT(realtime_module) _I32 _BYTES);
 DEFINE_PRIM(_DYN,call_closure,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,call_closure_i32,_ABSTRACT(realtime_module) _DYN);
@@ -478,6 +479,7 @@ DEFINE_PRIM(_ABSTRACT(realtime_bytes),__bytes_view,_ABSTRACT(realtime_bytes) _I3
 DEFINE_PRIM(_I32,__bytes_length,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_BYTES,__bytes_get_data,_ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_I32,__bytes_get,_ABSTRACT(realtime_bytes) _I32);
+DEFINE_PRIM(_VOID,__bytes_blit,_ABSTRACT(realtime_bytes) _I32 _ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_I32,getI8,_ABSTRACT(realtime_bytes) _I32);
 DEFINE_PRIM(_VOID,setI8,_ABSTRACT(realtime_bytes) _I32 _I32);
 DEFINE_PRIM(_I32,getU8,_ABSTRACT(realtime_bytes) _I32);

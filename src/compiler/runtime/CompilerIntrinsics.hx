@@ -56,6 +56,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_set_i32", "haxeon_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_float", "haxeon_runtime", "setF32", [bytes, TInt, TFloat], TVoid));
 		definitions.push(native("__bytes_set_double", "haxeon_runtime", "setF64", [bytes, TInt, TFloat], TVoid));
+		definitions.push(native("__bytes_blit", "haxeon_runtime", "__bytes_blit", [bytes, TInt, bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_sub", "haxeon_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));
 		definitions.push(native("__bytes_compare", "haxeon_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "haxeon_runtime", "__bytes_to_string", [bytes], TString));
