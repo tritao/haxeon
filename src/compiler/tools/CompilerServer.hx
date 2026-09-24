@@ -20,7 +20,7 @@ class CompilerServer {
 		var random = File.read("/dev/urandom", true),
 			token = random.read(32).toHex();
 		random.close();
-		var listener = new Socket(), session = new CompilerSession(true);
+		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
 		listener.listen(8);
 		var descriptor = Json.stringify({port: listener.host().port, token: token});

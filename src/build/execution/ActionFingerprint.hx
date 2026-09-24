@@ -31,21 +31,23 @@ private class FingerprintFields {
 
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
-	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>):String {
+	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>,
+			?digests:ContentDigestCache):String {
+		if (digests == null) digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
-		fields.add("action-v3");
+		fields.add("action-v4");
 		fields.add(action.id.key());
 		fields.add(target);
 		fields.add(action.description);
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
-				appendCommand(fields, command, arguments, cwd, environment, false);
+				appendCommand(fields, command, arguments, cwd, environment, digests);
 			case Compiler(command, arguments, cwd, environment, _):
-				appendCommand(fields, command, arguments, cwd, environment, false);
+				appendCommand(fields, command, arguments, cwd, environment, digests);
 		}
 		for (input in action.inputs) {
 			fields.add('input:$input');
-			appendPath(fields, input, new Map(), buildRoot, false);
+			appendPath(fields, input, new Map(), buildRoot, digests);
 		}
 		var orderedDependencies = action.fingerprintDependencies ? dependencies.copy() : [];
 		orderedDependencies.sort(Reflect.compare);
@@ -112,7 +114,8 @@ class ActionFingerprint {
 	static function recordPath(buildRoot:String, action:ExecutionAction):String
 		return Path.join([buildRoot, ".haxeon", "actions", Sha256.encode(action.id.key()) + ".json"]);
 
-	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String, strong:Bool):Void {
+	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String,
+			digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$path');
 			return;
@@ -135,12 +138,12 @@ class ActionFingerprint {
 					continue;
 				}
 				fields.push('entry:$child');
-				appendPath(fields, child, visitedDirectories, buildRoot, strong);
+				appendPath(fields, child, visitedDirectories, buildRoot, digests);
 			}
 			return;
 		}
 		fields.push('file:$path');
-		fields.push(fileIdentity(path, strong));
+		fields.push(digests.file(path));
 	}
 
 	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>, digests:ContentDigestCache):Void {
@@ -172,21 +175,14 @@ class ActionFingerprint {
 		fields.push('file:$relative:${digests.file(path)}');
 	}
 
-	static function fileIdentity(path:String, strong:Bool):String {
-		if (strong)
-			return Sha256.make(File.getBytes(path)).toHex();
-		var stat = FileSystem.stat(path);
-		return '${stat.size}:${stat.mtime.getTime()}';
-	}
-
 	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>,
-			strong:Bool):Void {
+			digests:ContentDigestCache):Void {
 		fields.add('command:$command');
 		fields.add('cwd:${Path.normalize(FileSystem.fullPath(cwd))}');
 		var executable = resolveTool(command);
 		fields.add('tool:$executable');
 		if (FileSystem.exists(executable) && !FileSystem.isDirectory(executable))
-			fields.add('tool-content:${fileIdentity(executable, strong)}');
+			fields.add('tool-content:${digests.file(executable)}');
 		for (argument in arguments)
 			fields.add('argument:$argument');
 		for (name in [

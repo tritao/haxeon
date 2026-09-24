@@ -91,7 +91,8 @@ class Executor implements ExecutionBackend {
 				}> = [];
 			for (action in wave) {
 				var dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
-				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints);
+				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints,
+					digests);
 				if (isUpToDate(action, fingerprint, dependencyFingerprints)) {
 					waveResults.set(action.id.key(), new ActionResult(action.id, 0, true, false, fingerprint));
 					continue;
@@ -184,7 +185,7 @@ class Executor implements ExecutionBackend {
 	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>, ?preparedFingerprint:String,
 			freshnessChecked:Bool = false):ActionResult {
 		var fingerprint = preparedFingerprint == null ? ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
-			dependencyFingerprints) : preparedFingerprint;
+			dependencyFingerprints, digests) : preparedFingerprint;
 		if (!freshnessChecked && isUpToDate(action, fingerprint, dependencyFingerprints))
 			return new ActionResult(action.id, 0, true, false, fingerprint);
 		try {

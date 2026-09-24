@@ -10,28 +10,17 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
-private typedef CachedSource = {
-	final size:Int;
-	final modified:Float;
-	final changed:Float;
-	final text:String;
-}
-
 /** One reusable semantic compiler, reset whenever its source/FFI configuration changes. */
 class CompilerSession {
 	var compiler:Null<Compiler>;
 	var configuration:Null<String>;
-	final trustFileMetadata:Bool;
-	final sources:Map<String, CachedSource> = [];
 	var writerCache = new HlWriterCache();
 
-	public function new(trustFileMetadata = false)
-		this.trustFileMetadata = trustFileMetadata;
+	public function new() {}
 
 	public function reset():Void {
 		compiler = null;
 		configuration = null;
-		sources.clear();
 		writerCache = new HlWriterCache();
 	}
 
@@ -106,35 +95,13 @@ class CompilerSession {
 	}
 
 	function read(path:String):String {
-		if (!trustFileMetadata)
-			return File.getContent(path);
-		var changed = readChanged(path);
-		var cached:CachedSource = sources.get(path);
-		return changed == null ? cached.text : changed;
+		return File.getContent(path);
 	}
 
 	function readChanged(path:String):Null<String> {
-		if (!trustFileMetadata)
-			return File.getContent(path);
-		#if haxeon
-		var metadata = FileSystem.metadata(path);
-		if (metadata == null)
-			return File.getContent(path);
-		var size = metadata.size, modified = metadata.modified, changed = metadata.changed;
-		#else
-		var stat = FileSystem.stat(path);
-		var size = stat.size, modified = stat.mtime.getTime(), changed = stat.ctime.getTime();
-		#end
-		var cached = sources.get(path);
-		if (cached != null && cached.size == size && cached.modified == modified && cached.changed == changed)
-			return null;
-		var text = File.getContent(path);
-		sources.set(path, {
-			size: size,
-			modified: modified,
-			changed: changed,
-			text: text
-		});
-		return text;
+		// Metadata timestamps can have coarse resolution and miss same-size edits.
+		// Compare actual source text so persistent compiler sessions always invalidate
+		// from the bytes they compile, independent of filesystem timestamp behavior.
+		return File.getContent(path);
 	}
 }
