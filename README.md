@@ -256,6 +256,11 @@ for the current desktop host, experimental Wasm32 modules, and Android APKs, and
 can launch host programs or install and launch an Android app. The same command
 is available on Unix-like systems and Windows:
 
+On Unix-like systems, `scripts/haxeon` compiles the CLI to cached HashLink
+bytecode when its sources change, then runs that bytecode. If HashLink is not
+installed yet, the script uses the pinned Haxe interpreter for bootstrap and
+diagnostic commands.
+
 ```sh
 ./scripts/haxeon init
 ./scripts/haxeon doctor
@@ -318,6 +323,17 @@ running program after `--`:
 
 ```sh
 ./scripts/haxeon run -- --verbose
+```
+
+On Linux and macOS, `run --watch` rebuilds after edits to resolved package
+sources and relaunches the host app after a successful build. Haxe source edits
+use the compiler-only build path; FFI, manifest, and native source edits use the
+full project build. A failed build leaves the running app open. Runtime output
+is forwarded from `<output>.watch.log`. This mode restarts the process; it does
+not yet apply HLP patches to a running app module.
+
+```sh
+./scripts/haxeon run --watch --project path/to/haxeon.json -- --verbose
 ```
 
 Host builds resolve local path dependencies declared by package name. A

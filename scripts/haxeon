@@ -10,4 +10,19 @@ if [[ ! -x "$haxe" ]]; then
 fi
 
 export HAXEON_HOME="$root_dir"
+hashlink="$root_dir/.tools/hashlink/hl"
+if [[ -x "$hashlink" ]]; then
+	cli="$root_dir/out/haxeon-cli.hl"
+	mkdir -p "$root_dir/out"
+	if [[ ! -f "$cli" || "$root_dir/scripts/haxeon" -nt "$cli" ]] ||
+		find "$root_dir/src" -type f -name '*.hx' -newer "$cli" -print -quit | grep -q .; then
+		temporary="$cli.tmp.$$"
+		trap 'rm -f "$temporary"' EXIT
+		"$haxe" -cp "$root_dir/src" -main tools.HaxeonCli -hl "$temporary"
+		mv "$temporary" "$cli"
+		trap - EXIT
+	fi
+	export LD_LIBRARY_PATH="$root_dir/.tools/hashlink:$root_dir/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+	exec "$hashlink" "$cli" "$@"
+fi
 exec "$haxe" -cp "$root_dir/src" --run tools.HaxeonCli "$@"

@@ -42,6 +42,7 @@ private typedef BuildOptions = {
 	final explain:Bool;
 	final timings:Bool;
 	final compilerOnly:Bool;
+	final watch:Bool;
 	final jobs:Int;
 	final selfHosted:Bool;
 	final profile:Bool;
@@ -460,6 +461,12 @@ class HaxeonCli {
 			throw 'Option "--explain" is only valid with "haxeon build"';
 		if (options.compilerOnly && launch)
 			throw 'Option "--compiler-only" is only valid with "haxeon build"';
+		if (options.watch && !launch)
+			throw 'Option "--watch" is only valid with "haxeon run"';
+		if (options.watch && options.profile)
+			throw 'Option "--watch" cannot be combined with "--profile"';
+		if (options.watch && !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
+			throw 'Option "--watch" currently requires a host project';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
@@ -494,6 +501,19 @@ class HaxeonCli {
 						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
 			configureRuntimeLibraryPath(home, nativeDirectories);
+			if (options.watch) {
+				return WatchRun.run(project, hashlink, output, options.runtimeArguments, function(compilerOnly) {
+					try {
+						var candidate = discoverProject(projectConfigPath, requestedTarget);
+						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false,
+							0.0, options.selfHosted, compilerOnly);
+						return status == 0 ? candidate : null;
+					} catch (error:Dynamic) {
+						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
+						return null;
+					}
+				});
+			}
 			if (options.profile) {
 				var capture = options.profileOutput == null ? defaultProfileCapture(output) : resolvePath(options.profileOutput, project.root);
 				return runProfiled(home, output, options.runtimeArguments, project.root, capture);
@@ -795,7 +815,7 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, jobs = 4,
+			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileOutput:Null<String> = null;
 		var index = 0;
 		while (index < arguments.length) {
@@ -812,6 +832,8 @@ class HaxeonCli {
 				timings = true;
 			else if (argument == "--compiler-only")
 				compilerOnly = true;
+			else if (argument == "--watch")
+				watch = true;
 			else if (argument == "--self-hosted")
 				selfHosted = true;
 			else if (argument == "--profile")
@@ -878,6 +900,7 @@ class HaxeonCli {
 			explain: explain,
 			timings: timings,
 			compilerOnly: compilerOnly,
+			watch: watch,
 			jobs: jobs,
 			selfHosted: selfHosted,
 			profile: profile,
@@ -1207,6 +1230,7 @@ class HaxeonCli {
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
+		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
