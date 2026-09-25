@@ -468,7 +468,8 @@ class HaxeonCli {
 			throw 'Option "--live" requires "haxeon run --watch"';
 		if (options.watch && options.profile)
 			throw 'Option "--watch" cannot be combined with "--profile"';
-		if (options.watch && !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
+		if (options.watch
+			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Option "--watch" currently requires a host project';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
@@ -509,14 +510,23 @@ class HaxeonCli {
 				if (options.live) {
 					liveHost = Path.join([home, "out", "haxeon-live-host.hl"]);
 					var haxe = Path.join([home, ".tools", "haxe", "haxe" + executableSuffix()]);
-					if (ProcessRunner.run(haxe, ["-cp", Path.join([home, "src"]), "-main", "tools.LiveHost", "-dce", "full", "-hl", liveHost], home, new Map()) != 0)
+					if (ProcessRunner.run(haxe, [
+						"-cp",
+						Path.join([home, "src"]),
+						"-main",
+						"tools.LiveHost",
+						"-dce",
+						"full",
+						"-hl",
+						liveHost
+					], home, new Map()) != 0)
 						throw "Could not build the live development host";
 				}
 				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, function(compilerOnly) {
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
-						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false,
-							0.0, options.selfHosted, compilerOnly);
+						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
+							options.selfHosted, compilerOnly);
 						return status == 0 ? candidate : null;
 					} catch (error:Dynamic) {
 						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");

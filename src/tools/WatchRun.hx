@@ -9,16 +9,12 @@ import sys.io.Process;
 
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
-	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
-			liveHost:Null<String>, entry:String, rebuild:Bool->Null<ResolvedProject>):Int {
+	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
+			rebuild:Bool->Null<ResolvedProject>):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
 			throw "haxeon run --watch currently requires Linux or macOS";
-		var project = initial,
-			baseline = snapshot(project),
-			logPath = output + ".watch.log",
-			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry),
-			logOffset = 0,
-			result = 0;
+		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log",
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry), logOffset = 0, result = 0;
 		try {
 			while (true) {
 				Sys.sleep(0.35);
@@ -77,17 +73,15 @@ class WatchRun {
 	}
 
 	static function stop(process:Process):Void {
-		if (process.exitCode(false) == null) process.kill();
+		if (process.exitCode(false) == null)
+			process.kill();
 		process.exitCode();
 		process.close();
 	}
 
-	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String,
-			liveHost:Null<String>, entry:String):Process {
-		var commandArguments = liveHost == null ? [runtime, output].concat(arguments)
-			: [runtime, liveHost, output, entry, Json.stringify(arguments)];
-		var command = "exec " + commandArguments.map(quote).join(" ")
-			+ " > " + quote(logPath) + " 2>&1";
+	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String):Process {
+		var commandArguments = liveHost == null ? [runtime, output].concat(arguments) : [runtime, liveHost, output, entry, Json.stringify(arguments)];
+		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
@@ -105,9 +99,11 @@ class WatchRun {
 		return "'" + value.split("'").join("'\\''") + "'";
 
 	static function printLog(path:String, offset:Int):Int {
-		if (!FileSystem.exists(path)) return offset;
+		if (!FileSystem.exists(path))
+			return offset;
 		var size = Std.int(FileSystem.stat(path).size);
-		if (size <= offset) return size;
+		if (size <= offset)
+			return size;
 		var input = File.read(path);
 		try {
 			input.seek(offset, sys.io.FileSeek.SeekBegin);
@@ -125,11 +121,16 @@ class WatchRun {
 		var files:Map<String, Bool> = [];
 		for (item in project.packages.packages) {
 			files.set(Path.join([item.root, "haxeon.json"]), true);
-			for (root in item.sourceRoots) collect(root, files);
-			for (path in item.ffiInterfaces) files.set(path, true);
-			for (path in item.ffiProjections) files.set(path, true);
-			for (path in item.nativeSources) files.set(path, true);
-			for (path in item.nativeCMakeInputs) files.set(path, true);
+			for (root in item.sourceRoots)
+				collect(root, files);
+			for (path in item.ffiInterfaces)
+				files.set(path, true);
+			for (path in item.ffiProjections)
+				files.set(path, true);
+			for (path in item.nativeSources)
+				files.set(path, true);
+			for (path in item.nativeCMakeInputs)
+				files.set(path, true);
 		}
 		var result:Map<String, String> = [];
 		for (path in files.keys())
@@ -141,29 +142,39 @@ class WatchRun {
 	}
 
 	static function collect(root:String, files:Map<String, Bool>):Void {
-		if (!FileSystem.exists(root)) return;
+		if (!FileSystem.exists(root))
+			return;
 		if (!FileSystem.isDirectory(root)) {
-			if (Path.extension(root) == "hx") files.set(root, true);
+			if (Path.extension(root) == "hx")
+				files.set(root, true);
 			return;
 		}
 		for (name in FileSystem.readDirectory(root)) {
 			var path = Path.join([root, name]);
-			if (FileSystem.isDirectory(path)) collect(path, files);
-			else if (Path.extension(path) == "hx") files.set(path, true);
+			if (FileSystem.isDirectory(path))
+				collect(path, files);
+			else if (Path.extension(path) == "hx")
+				files.set(path, true);
 		}
 	}
 
 	static function same(a:Map<String, String>, b:Map<String, String>):Bool {
-		for (path in a.keys()) if (a.get(path) != b.get(path)) return false;
-		for (path in b.keys()) if (!a.exists(path)) return false;
+		for (path in a.keys())
+			if (a.get(path) != b.get(path))
+				return false;
+		for (path in b.keys())
+			if (!a.exists(path))
+				return false;
 		return true;
 	}
 
 	static function haxeOnly(before:Map<String, String>, after:Map<String, String>):Bool {
 		for (path in before.keys())
-			if (before.get(path) != after.get(path) && Path.extension(path) != "hx") return false;
+			if (before.get(path) != after.get(path) && Path.extension(path) != "hx")
+				return false;
 		for (path in after.keys())
-			if (!before.exists(path) && Path.extension(path) != "hx") return false;
+			if (!before.exists(path) && Path.extension(path) != "hx")
+				return false;
 		return true;
 	}
 }

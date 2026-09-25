@@ -1,5 +1,6 @@
 class Label {
 	public var renders = 0;
+
 	final text:String;
 
 	public function new(text:String)

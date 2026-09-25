@@ -625,8 +625,7 @@ class BuildSystemMain {
 			app = Path.join([root, "app"]),
 			alternate = Path.join([app, "test.haxeon.json"]);
 		writePackage(app, '{"package":{"name":"app"},"entry":"app.Main"}', ["src/Main.hx"]);
-		File.saveContent(alternate,
-			'{"package":{"name":"app"},"entry":"app.TestMain","sourceRoots":["src"]}\n');
+		File.saveContent(alternate, '{"package":{"name":"app"},"entry":"app.TestMain","sourceRoots":["src"]}\n');
 		var project = new PackageResolver(new PathSourceAcquirer()).resolve(alternate);
 		expect(project.manifestPath == FileSystem.fullPath(alternate)
 			&& project.manifest.entry == "app.TestMain"

@@ -63,7 +63,11 @@ function sum(limit:Int):Int {
 
 // Inferred-pure helpers (including mutually recursive ones) keep field narrowing.
 function valid(limits:Limits):Bool
-	return limits.lower != null && Bounds.positive(limits.lower) && Bounds.even(4) && sum(3) == 3 && limits.lower < 10
+	return limits.lower != null
+		&& Bounds.positive(limits.lower)
+		&& Bounds.even(4)
+		&& sum(3) == 3
+		&& limits.lower < 10
 		&& (limits.upper == null || limits.upper > limits.lower);
 
 function main():Int {

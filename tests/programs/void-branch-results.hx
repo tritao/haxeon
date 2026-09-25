@@ -1,4 +1,7 @@
-enum Setting { Flag(value:Bool); Count(value:Int); }
+enum Setting {
+	Flag(value:Bool);
+	Count(value:Int);
+}
 
 class Store {
 	public var flags = 0;
@@ -21,8 +24,10 @@ class Store {
 function main():Int {
 	var store = new Store();
 	var apply:Setting->Void = function(setting) switch (setting) {
-		case Flag(value): store.setFlag(value);
-		case Count(value): store.setCount(value);
+		case Flag(value):
+			store.setFlag(value);
+		case Count(value):
+			store.setCount(value);
 	};
 	var toggle:Bool->Void = function(on) on ? store.setFlag(on) : store.setCount(1);
 	apply(Flag(true));
