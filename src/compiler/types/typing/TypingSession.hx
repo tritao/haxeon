@@ -80,13 +80,21 @@ class TypingSession {
 
 	/** `@:pure` on a function, or on the class of a static method, promises no observable writes.
 	 * Calls to annotated or inferred-pure functions keep flow facts about mutable fields and map entries.
+	 *
+	 * Records the answer against the function currently being typed: typed bodies are cached
+	 * between incremental compiles, so a later compile whose fresh purity answer for `name`
+	 * disagrees with what this body relied on must retype this body, even though its own source
+	 * did not change. See `purityQueries` and the drift check in `SemanticAssembly`.
 	 */
-	public function isPureCall(name:String):Bool
-		return inferredPureFunctions.exists(name) || isDeclaredPure(name);
+	public function isPureCall(name:String):Bool {
+		var answer = inferredPureFunctions.exists(name) || isDeclaredPure(name);
+		recordQuery(purityQueries, name, answer);
+		return answer;
+	}
 
 	/** Annotated functions and read-only compiler intrinsics; the inference seeds from these. */
 	function isDeclaredPure(name:String):Bool
-		return compiler.runtime.CompilerIntrinsics.isPure(name) || hasPureAnnotation(name);
+		return compiler.types.analysis.PurityAnnotations.isDeclaredPure(name, signatures, classDecls);
 
 	/** Static and module functions inferred pure by `PurityInference`. */
 	public var inferredPureFunctions:Map<String, Bool> = [];
@@ -97,28 +105,35 @@ class TypingSession {
 	}
 
 	function isTypeName(name:String):Bool
-		return classDecls.exists(name) || interfaceDecls.exists(name) || enumDecls.exists(name) || enumAbstractDecls.exists(name)
-			|| declarations.abstracts.exists(name);
+		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls, enumAbstractDecls, declarations.abstracts);
 
-	public function hasPureAnnotation(name:String):Bool {
-		var fn = signatures.get(name);
-		if (fn == null)
-			return false;
-		if (hasPureMetadata(fn.metadata))
-			return true;
-		var dot = name.lastIndexOf(".");
-		if (dot < 0 || !fn.isStatic)
-			return false;
-		var owner = classDecls.get(name.substr(0, dot));
-		return owner != null && hasPureMetadata(owner.metadata);
+	public function hasPureAnnotation(name:String):Bool
+		return compiler.types.analysis.PurityAnnotations.hasPureAnnotation(name, signatures, classDecls);
+
+	/** Whether a call to `name` was typed as never returning; recorded the same way as `isPureCall`. */
+	public function isNoReturnCall(name:String):Bool {
+		var answer = noReturnFunctions.exists(name);
+		recordQuery(noReturnQueries, name, answer);
+		return answer;
 	}
 
-	static function hasPureMetadata(metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>):Bool {
-		if (metadata != null)
-			for (entry in metadata)
-				if (entry.name == "pure")
-					return true;
-		return false;
+	/** Purity/no-return answers the function currently being typed asked about, keyed by that
+	 * function's own name (or a lambda's synthetic name, itself tied back to its origin).
+	 */
+	public final purityQueries:Map<String, Map<String, Bool>> = [];
+
+	public final noReturnQueries:Map<String, Map<String, Bool>> = [];
+
+	function recordQuery(target:Map<String, Map<String, Bool>>, name:String, answer:Bool):Void {
+		var caller = currentContext.name;
+		if (caller == "")
+			return;
+		var record = target.get(caller);
+		if (record == null) {
+			record = [];
+			target.set(caller, record);
+		}
+		record.set(name, answer);
 	}
 
 	/** Resolve a source Map ABI, restricting enum keys to nullary constructors. */

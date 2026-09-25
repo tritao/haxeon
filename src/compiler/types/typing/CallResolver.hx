@@ -370,7 +370,7 @@ class CallResolver {
 			castCall = session.representation.boundaryCast(call, methodResult.semantic);
 		if (scope != null && !session.isPureCall(methodKey))
 			scope.invalidateAllExpressions();
-		return session.noReturnFunctions.exists(methodKey) ? new TypedExpression(TNoReturn(castCall), TNever, castCall.span) : castCall;
+		return session.isNoReturnCall(methodKey) ? new TypedExpression(TNoReturn(castCall), TNever, castCall.span) : castCall;
 	}
 
 	public function typeAbstractMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
@@ -508,7 +508,7 @@ class CallResolver {
 			call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
 		if (!session.isPureCall(name))
 			scope.invalidateAllExpressions();
-		return session.noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
+		return session.isNoReturnCall(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}
 
 	public function resolveImplicitMethodCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -965,7 +965,7 @@ class CallResolver {
 	function applyCallEffect(call:TypedExpression, name:String, ?scope:Scope):TypedExpression {
 		if (scope != null && !session.isPureCall(name))
 			scope.invalidateAllExpressions();
-		return session.noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
+		return session.isNoReturnCall(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}
 
 	function projectNominal(type:CompilerType, target:String):CompilerType {

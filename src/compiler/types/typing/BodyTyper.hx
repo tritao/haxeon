@@ -153,115 +153,13 @@ class BodyTyper {
 		return result;
 	}
 
+	/** Delegates to the free-standing analysis so the same inference can also run, on plain
+	 * canonical signatures, before typing to detect a purity/no-return answer that drifted.
+	 */
 	function inferNoReturnFunctions():Void {
-		var reverse:Map<String, Array<String>> = [], queue:Array<String> = [], queued:Map<String, Bool> = [], cursor = 0,
-			overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
-		for (name => fn in session.signatures) {
-			var dependencies:Map<String, Bool> = [];
-			collectNoReturnDependencies(fn.statements, name, dependencies);
-			for (dependency in dependencies.keys()) {
-				var users = reverse.get(dependency);
-				if (users == null) {
-					users = [];
-					reverse.set(dependency, users);
-				}
-				users.push(name);
-			}
-			queue.push(name);
-			queued.set(name, true);
-		}
-		while (cursor < queue.length) {
-			var name = queue[cursor++];
-			queued.remove(name);
-			var fn = session.signatures.get(name);
-			if (fn == null
-				|| overridden.exists(name)
-				|| session.noReturnFunctions.exists(name)
-				|| !astStatementsDoNotReturn(fn.statements, name))
-				continue;
+		var overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
+		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, overridden).keys())
 			session.noReturnFunctions.set(name, true);
-			var users = reverse.get(name);
-			if (users != null)
-				for (user in users)
-					if (!queued.exists(user) && !session.noReturnFunctions.exists(user)) {
-						queued.set(user, true);
-						queue.push(user);
-					}
-		}
-	}
-
-	function collectNoReturnDependencies(statements:Array<AstStatement>, functionName:String, target:Map<String, Bool>):Void {
-		for (statement in statements)
-			switch statement {
-				case Throw(_, _):
-					return;
-				case Expression(expression, _):
-					switch expression {
-						case Call(name, _, _): target.set(qualifiedLocalCall(name, functionName), true);
-						default:
-					}
-					return;
-				case If(_, yes, no, _):
-					if (no.length > 0) {
-						collectNoReturnDependencies(yes, functionName, target);
-						collectNoReturnDependencies(no, functionName, target);
-					}
-					return;
-				case Switch(_, cases, fallback, hasDefault, _):
-					if (hasDefault) {
-						collectNoReturnDependencies(fallback, functionName, target);
-						for (switchCase in cases)
-							collectNoReturnDependencies(switchCase.statements, functionName, target);
-					}
-					return;
-				case VarDeclaration(_, _, _, _), UninitializedDeclaration(_, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _),
-					FieldAssignment(_, _, _, _), Increment(_, _, _):
-				default:
-					return;
-			}
-	}
-
-	function astStatementsDoNotReturn(statements:Array<AstStatement>, functionName:String):Bool {
-		for (statement in statements)
-			switch statement {
-				case Throw(_, _):
-					return true;
-				case Expression(expression, _):
-					switch expression {
-						case Call(name, _, _): return session.noReturnFunctions.exists(qualifiedLocalCall(name, functionName));
-						default: return false;
-					}
-				case If(_, yes, no, _) if (no.length > 0
-					&& astStatementsDoNotReturn(yes, functionName)
-					&& astStatementsDoNotReturn(no, functionName)):
-					return true;
-				case Switch(_, cases, fallback, hasDefault, _) if (hasDefault && astStatementsDoNotReturn(fallback, functionName)):
-					var allExit = true;
-					for (switchCase in cases)
-						if (!astStatementsDoNotReturn(switchCase.statements, functionName))
-							allExit = false;
-					if (allExit)
-						return true;
-					return false;
-				case VarDeclaration(_, _, _, _), UninitializedDeclaration(_, _, _), Assignment(_, _, _), IndexAssignment(_, _, _, _),
-					FieldAssignment(_, _, _, _), Increment(_, _, _):
-					// Continue through statements which cannot transfer control.
-				default:
-					return false;
-			}
-		return false;
-	}
-
-	static function qualifiedLocalCall(name:String, functionName:String):String {
-		if (name.indexOf(".") >= 0)
-			return name;
-		var cursor = functionName.length - 1;
-		while (cursor >= 0) {
-			if (functionName.charCodeAt(cursor) == 46)
-				return functionName.substring(0, cursor) + "." + name;
-			cursor--;
-		}
-		return name;
 	}
 
 	static function parentPath(path:String):Null<String> {

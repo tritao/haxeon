@@ -64,6 +64,14 @@ class ModuleState {
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
 
+	/** Purity/no-return answers each cached typed function's body relied on, keyed by that
+	 * function's own name. Compared against a fresh recomputation on every compile so a caller
+	 * whose depended-upon answer changed elsewhere gets retyped even though its own body did not.
+	 */
+	public var purityQueries:Map<String, Map<String, Bool>> = [];
+
+	public var noReturnQueries:Map<String, Map<String, Bool>> = [];
+
 	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
 	public var pendingIrFunctions:Map<String, Bool> = [];
 
@@ -144,6 +152,8 @@ class ModuleState {
 		result.bodyFingerprints = copyMap(bodyFingerprints);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
+		result.purityQueries = copyNestedMap(purityQueries);
+		result.noReturnQueries = copyNestedMap(noReturnQueries);
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
@@ -178,6 +188,13 @@ class ModuleState {
 		var result:Map<String, Array<SemanticDependency>> = [];
 		for (name => dependencies in source)
 			result.set(name, dependencies.copy());
+		return result;
+	}
+
+	static function copyNestedMap(source:Map<String, Map<String, Bool>>):Map<String, Map<String, Bool>> {
+		var result:Map<String, Map<String, Bool>> = [];
+		for (name => record in source)
+			result.set(name, copyMap(record));
 		return result;
 	}
 }

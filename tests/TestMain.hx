@@ -924,6 +924,36 @@ class TestMain {
 		voidEntryCompiler.update("Main.hx", "class Main { public static function main():Void {} }");
 		voidEntryCompiler.compile("Main");
 		Sys.println("PASS: constructor parameters infer from declared field constraints");
+		expectDependentAnswerInvalidated([
+			{path: "Helper.hx", source: "class Helper { public static function check(v:Float):Bool return v > 0; }"},
+			{
+				path: "Main.hx",
+				source: "typedef Limits = {var lower:Null<Float>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower) && l.lower < 10; function main():Int return ok({lower: 1.0}) ? 42 : 0;"
+			}
+		],
+			{path: "Helper.hx", source: "class Helper { public static var count = 0; public static function check(v:Float):Bool { count++; return v > 0; } }"},
+			"numeric operands", "a pure helper's body gaining a field write");
+		expectDependentAnswerInvalidated([
+			{
+				path: "Base.hx",
+				source: "typedef Limits = {var lower:Null<Float>;}; class Base { public function new() {} public function m(v:Float):Bool return v > 0; public function ok(l:Limits):Bool return l.lower != null && this.m(l.lower) && l.lower < 10; }"
+			},
+			{path: "Sub.hx", source: "class Sub extends Base {}"},
+			{path: "Main.hx", source: "import Sub; function main():Int return new Sub().ok({lower: 1.0}) ? 42 : 0;"}
+		],
+			{path: "Sub.hx", source: "class Sub extends Base { override public function m(v:Float):Bool return true; }"}, "numeric operands",
+			"a subclass overriding a previously-pure base method");
+		expectDependentAnswerInvalidated([
+			{
+				path: "Base.hx",
+				source: "class Base { public function new() {} public function fail():Void throw \"no\"; public function get(v:Null<Float>):Float { if (v == null) this.fail(); return v + 1; } }"
+			},
+			{path: "Sub.hx", source: "class Sub extends Base {}"},
+			{path: "Main.hx", source: "import Sub; function main():Int return Std.int(new Sub().get(41.0));"}
+		],
+			{path: "Sub.hx", source: "class Sub extends Base { override public function fail():Void {} }"}, "numeric operands",
+			"a subclass overriding a previously-never-returning base method");
+		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:id(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; } @:wire enum MetadataStatus { @:id(5) Ready; }'))
 			.tokenize()).parseProgram();
@@ -1792,6 +1822,28 @@ class TestMain {
 		} catch (error:CompileError) {
 			if (error.diagnostic.message != expected)
 				throw error;
+		}
+	}
+
+	/**
+	 * Purity and no-return are computed over the whole program, but typed bodies are cached
+	 * between incremental compiles. An edit that only changes a callee's purity or no-return
+	 * answer (not its own caller's source) must still retype every caller that relied on the
+	 * old answer, on the very next `compile` call.
+	 */
+	static function expectDependentAnswerInvalidated(initial:Array<{path:String, source:String}>, edit:{path:String, source:String}, expectedSubstring:String,
+			label:String):Void {
+		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+		for (module in initial)
+			compiler.update(module.path, module.source);
+		compiler.compile("Main");
+		compiler.update(edit.path, edit.source);
+		try {
+			compiler.compile("Main");
+			throw 'Incremental recompile after $label accepted a caller whose narrowing should have been invalidated';
+		} catch (error:CompileError) {
+			if (error.diagnostic.message.indexOf(expectedSubstring) < 0)
+				throw 'Incremental recompile after $label produced "${error.diagnostic.message}", expected it to mention "$expectedSubstring"';
 		}
 	}
 

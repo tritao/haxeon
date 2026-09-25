@@ -133,6 +133,8 @@ class FrontendCompilation {
 		var allocationAfterAnalysis = allocationAfterSemantic;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
+		var purityQueries:Map<String, Map<String, Bool>>,
+			noReturnQueries:Map<String, Map<String, Bool>>;
 		try {
 			if (token != null)
 				token.check();
@@ -155,6 +157,8 @@ class FrontendCompilation {
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(!context.isWasmTarget());
 			typerMetrics = typedResult.metrics;
+			purityQueries = typedResult.purityQueries;
+			noReturnQueries = typedResult.noReturnQueries;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics);
 			context.cachedSemanticProgram = semantic;
@@ -218,6 +222,16 @@ class FrontendCompilation {
 			var state = context.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
+			var purityRecord = purityQueries.get(fn.name);
+			if (purityRecord != null)
+				state.purityQueries.set(fn.name, purityRecord);
+			else
+				state.purityQueries.remove(fn.name);
+			var noReturnRecord = noReturnQueries.get(fn.name);
+			if (noReturnRecord != null)
+				state.noReturnQueries.set(fn.name, noReturnRecord);
+			else
+				state.noReturnQueries.remove(fn.name);
 			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			var semanticOrigin = fn.genericOrigin;
@@ -327,6 +341,8 @@ class FrontendCompilation {
 				for (cached in removed) {
 					state.typedFunctions.remove(cached);
 					state.typedSourceRevisions.remove(cached);
+					state.purityQueries.remove(cached);
+					state.noReturnQueries.remove(cached);
 					state.pendingIrFunctions.remove(cached);
 					state.irFunctions.remove(cached);
 					state.irSourceRevisions.remove(cached);

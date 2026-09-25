@@ -9,6 +9,11 @@ enum abstract InvalidationKind(String) {
 	var DependencySignature = "dependency-signature";
 	var GenericOrigin = "generic-origin";
 	var ModuleSemanticSnapshot = "module-semantic-snapshot";
+
+	/** A callee's purity or never-returns answer changed since this artifact was last typed,
+	 * though neither the artifact's own source nor its signature changed.
+	 */
+	var PurityDependency = "purity-dependency";
 }
 
 typedef InvalidationReason = {

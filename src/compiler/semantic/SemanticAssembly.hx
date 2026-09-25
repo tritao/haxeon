@@ -425,6 +425,46 @@ class SemanticAssembly {
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
+
+		// Purity and no-return are whole-program facts, but typed bodies are cached between
+		// incremental compiles. Recompute both fresh from the current canonical program (cheap:
+		// purely syntactic, no type resolution needed) and compare against what each cached
+		// body's own typing last recorded asking about. A caller whose depended-upon answer
+		// flipped elsewhere is retyped below through the ordinary invalidation propagation, even
+		// though neither its own source nor its signature changed.
+		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
+		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> = [for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
+		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> = [for (enumDecl in enums) enumDecl.name => enumDecl];
+		var purityScopeEnumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [for (decl in enumAbstracts) decl.name => decl];
+		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [for (decl in abstracts) decl.name => decl];
+		var purityScopeSignatures:Map<String, AstFunction> = [for (fn in functions) fn.name => fn];
+		var isAnnotatedPure = function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
+			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures, purityScopeClasses);
+		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations.isTypeName(candidate, purityScopeClasses,
+			purityScopeInterfaces, purityScopeEnums, purityScopeEnumAbstracts, purityScopeAbstracts);
+		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses, purityScopeAbstracts,
+			purityScopeEnums, isAnnotatedPure, isTypeName);
+		var freshNoReturn = compiler.types.analysis.NoReturnInference.infer(purityScopeSignatures,
+			compiler.types.analysis.OverrideAnalysis.overriddenMethods(purityScopeClasses));
+		var purityDrifted:Map<String, Bool> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			var dependencyState = modules.get(moduleName);
+			for (caller => record in dependencyState.purityQueries)
+				for (callee => wasPure in record)
+					if ((freshInferredPure.exists(callee) || isAnnotatedPure(callee)) != wasPure) {
+						purityDrifted.set(purityDependencyOwner(caller), true);
+						break;
+					}
+			for (caller => record in dependencyState.noReturnQueries)
+				for (callee => wasNoReturn in record)
+					if (freshNoReturn.exists(callee) != wasNoReturn) {
+						purityDrifted.set(purityDependencyOwner(caller), true);
+						break;
+					}
+		}
+
 		var invalid:Map<String, Bool> = [],
 			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
 			initialBuild = true;
@@ -494,6 +534,10 @@ class SemanticAssembly {
 				work.push(name);
 				invalidate(invalid, invalidationReasons, name, GenericOrigin, name);
 			}
+		for (name in purityDrifted.keys()) {
+			work.push(name);
+			invalidate(invalid, invalidationReasons, name, PurityDependency, name);
+		}
 		while (workCursor < work.length) {
 			if (token != null)
 				token.check();
@@ -638,6 +682,19 @@ class SemanticAssembly {
 		var names = [for (name in reasons.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) {artifact: name, reasons: reasons.get(name)}];
+	}
+
+	/** A purity/no-return answer is recorded against the exact body that asked, which for a
+	 * closure is its own `$lambda:origin:offset` name. Only the top-level function is ever
+	 * independently retyped, so walk back through any lambda nesting to find it.
+	 */
+	static function purityDependencyOwner(name:String):String {
+		var owner = name;
+		while (StringTools.startsWith(owner, "$lambda:")) {
+			var lastColon = owner.lastIndexOf(":");
+			owner = owner.substring("$lambda:".length, lastColon);
+		}
+		return owner;
 	}
 
 	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */

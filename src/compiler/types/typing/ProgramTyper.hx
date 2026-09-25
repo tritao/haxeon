@@ -218,6 +218,8 @@ class ProgramTyper {
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
+			purityQueries: session.purityQueries,
+			noReturnQueries: session.noReturnQueries,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
