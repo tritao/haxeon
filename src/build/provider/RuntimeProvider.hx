@@ -28,13 +28,11 @@ class RuntimeProvider {
 		return [
 			new ExecutionAction(configureId, [], cmakeInputs, [configuredGraph, Path.join([buildDirectory, "CMakeCache.txt"])],
 				'Configure HashLink and Haxeon runtime ($preset)', Process("cmake", ["--preset", preset, "-S", root], root, new Map())),
-			new ExecutionAction(buildId, [configureId], [
-				Path.join([root, "native"]),
-				Path.join([root, "vendor", "hashlink", "src"]),
-				Path.join([root, "vendor", "hashlink", "include"])
-			],
-				[runtime, hashlink, profiler, libhl], 'Build HashLink and Haxeon runtime ($preset)',
-				Process("cmake", ["--build", "--preset", preset], root, new Map()))
+			// Let CMake/Ninja check its full dependency graph. Recursively hashing
+			// HashLink's source and include trees here costs far more than an
+			// incremental `cmake --build` and duplicates the native build check.
+			new ExecutionAction(buildId, [configureId], [], [runtime, hashlink, profiler, libhl], 'Build HashLink and Haxeon runtime ($preset)',
+				Process("cmake", ["--build", "--preset", preset], root, new Map()), true, true)
 		];
 	}
 }

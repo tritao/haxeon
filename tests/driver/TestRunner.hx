@@ -2,6 +2,7 @@ package driver;
 
 import driver.TestCatalog.CompileStep;
 import driver.TestCatalog.ExecutableCase;
+import driver.TestCatalog.NamedCase;
 import driver.TestCatalog.ProgramCase;
 import haxe.io.Path;
 import sys.io.Process;
@@ -23,6 +24,20 @@ private typedef ActiveProgram = {
 	var process:Process;
 }
 
+private typedef ActiveMain = {
+	var index:Int;
+	var name:String;
+	var process:Process;
+}
+
+private typedef ActiveExecutable = {
+	var index:Int;
+	var test:ExecutableCase;
+	var process:Process;
+	var output:String;
+	var compiling:Bool;
+}
+
 class TestRunner {
 	final root:String;
 	final haxe:String;
@@ -42,6 +57,38 @@ class TestRunner {
 			return true;
 		Sys.stderr().writeString('FAIL: $name exited with $status\n');
 		return false;
+	}
+
+	public function runHaxeMains(tests:Array<NamedCase>, jobs:Int):Int {
+		if (tests.length == 0)
+			return 0;
+		if (jobs <= 1) {
+			var failures = 0;
+			for (test in tests)
+				if (!runHaxeMain(test.name))
+					failures++;
+			return failures;
+		}
+
+		var workerCount = Std.int(Math.min(Math.min(jobs, 4), tests.length));
+		var results:Array<ProgramResult> = [];
+		var active:Array<ActiveMain> = [];
+		var next = 0;
+		while (next < tests.length || active.length > 0) {
+			while (next < tests.length && active.length < workerCount) {
+				var test = tests[next];
+				active.push({index: next, name: test.name, process: new Process(haxe, haxeMainArguments(test.name))});
+				next++;
+			}
+			var current = active.shift();
+			var command = finishCommand(current.process);
+			results[current.index] = {
+				index: current.index,
+				passed: command.status == 0,
+				output: command.output + (command.status == 0 ? "" : 'FAIL: ${current.name} exited with ${command.status}\n')
+			};
+		}
+		return reportResults(results);
 	}
 
 	public function runExecutable(test:ExecutableCase):Bool {
@@ -69,6 +116,59 @@ class TestRunner {
 		return true;
 	}
 
+	public function runExecutables(tests:Array<ExecutableCase>, jobs:Int):Int {
+		if (tests.length == 0)
+			return 0;
+		if (jobs <= 1) {
+			var failures = 0;
+			for (test in tests)
+				if (!runExecutable(test))
+					failures++;
+			return failures;
+		}
+
+		var workerCount = Std.int(Math.min(Math.min(jobs, 4), tests.length));
+		var results:Array<ProgramResult> = [];
+		var active:Array<ActiveExecutable> = [];
+		var next = 0;
+		while (next < tests.length || active.length > 0) {
+			while (next < tests.length && active.length < workerCount) {
+				var test = tests[next];
+				active.push({
+					index: next,
+					test: test,
+					process: compileExecutable(test),
+					output: "",
+					compiling: true
+				});
+				next++;
+			}
+			var current = active.shift();
+			var command = finishCommand(current.process);
+			current.output += command.output;
+			if (current.compiling) {
+				if (command.status != 0) {
+					results[current.index] = {
+						index: current.index,
+						passed: false,
+						output: current.output + 'FAIL: ${current.test.name} setup failed\n'
+					};
+				} else {
+					current.compiling = false;
+					current.process = runExecutableProcess(current.test);
+					active.push(current);
+				}
+			} else {
+				var expected = current.test.expectedExit;
+				var passed = expected == null ? command.status != 0 : command.status == expected;
+				var exitDescription = expected == null ? 'non-zero exit ${command.status}' : 'exit $expected';
+				var message = passed ? 'PASS: ${current.test.message} ($exitDescription)\n' : 'FAIL: ${current.test.name} expected $exitDescription, got ${command.status}\n';
+				results[current.index] = {index: current.index, passed: passed, output: current.output + message};
+			}
+		}
+		return reportResults(results);
+	}
+
 	public function runProgram(test:ProgramCase):Bool {
 		var result = runProgramCaptured(test, 0);
 		Sys.print(result.output);
@@ -87,8 +187,12 @@ class TestRunner {
 		}
 
 		var ordered = runProgramsParallel(tests, Std.int(Math.min(jobs, tests.length)));
+		return reportResults(ordered);
+	}
+
+	function reportResults(results:Array<ProgramResult>):Int {
 		var failures = 0;
-		for (result in ordered) {
+		for (result in results) {
 			Sys.print(result.output);
 			if (!result.passed)
 				failures++;
@@ -185,6 +289,22 @@ class TestRunner {
 		var status = process.exitCode();
 		process.close();
 		return {status: status, output: stdout + stderr};
+	}
+
+	function compileExecutable(test:ExecutableCase):Process {
+		var output = Path.join([root, "out", test.output]);
+		return switch test.compile {
+			case HaxeMain(main, arguments):
+				var args = haxeMainArguments(main).concat(resolveArguments(output, arguments));
+				new Process(haxe, args);
+			case Hxml(path):
+				new Process(haxe, ["--cwd", root, Path.join([root, path])]);
+		};
+	}
+
+	function runExecutableProcess(test:ExecutableCase):Process {
+		var output = Path.join([root, "out", test.output]);
+		return new Process(hl, [output].concat(resolveArguments(output, test.runtimeArguments)));
 	}
 
 	public function runPosInfos():Bool {

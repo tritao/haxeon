@@ -16,27 +16,37 @@ class TestDriver {
 		var runner = new TestRunner(options.root);
 		var failures = 0;
 		var selected = 0;
+		var phaseStarted = Sys.time();
 
-		for (entry in TestCatalog.namedCases()) {
+		var namedCases = TestCatalog.namedCases();
+		for (entry in namedCases) {
 			if (!matches(options, entry.suite, entry.name))
 				continue;
 			selected++;
 			if (options.listOnly)
 				Sys.println('${entry.suite}\t${entry.name}');
-			else if (!runner.runHaxeMain(entry.name))
-				failures++;
+		}
+		if (!options.listOnly) {
+			failures += runner.runHaxeMains(namedCases.filter(entry -> matches(options, entry.suite, entry.name)), options.jobs);
+			printTiming("named cases", phaseStarted);
 		}
 
-		for (test in TestCatalog.executableCases()) {
+		phaseStarted = Sys.time();
+		var executableCases = TestCatalog.executableCases();
+		for (test in executableCases) {
 			if (!matches(options, test.suite, test.name))
 				continue;
 			selected++;
 			if (options.listOnly)
 				Sys.println('${test.suite}\t${test.name}');
-			else if (!runner.runExecutable(test))
-				failures++;
+		}
+		if (!options.listOnly) {
+			var selectedExecutableCases = executableCases.filter(test -> matches(options, test.suite, test.name));
+			failures += runner.runExecutables(selectedExecutableCases, options.jobs);
+			printTiming("executable cases", phaseStarted);
 		}
 
+		phaseStarted = Sys.time();
 		var programs = [];
 		for (test in TestCatalog.loadPrograms(options.root)) {
 			if (!matches(options, "programs", test.name))
@@ -47,9 +57,12 @@ class TestDriver {
 			else
 				programs.push(test);
 		}
-		if (!options.listOnly)
+		if (!options.listOnly) {
 			failures += runner.runPrograms(programs, options.jobs);
+			printTiming("program cases", phaseStarted);
+		}
 
+		phaseStarted = Sys.time();
 		for (test in TestCatalog.customCases()) {
 			if (!matches(options, test.suite, test.name))
 				continue;
@@ -59,6 +72,8 @@ class TestDriver {
 			else if (!runner.runPosInfos())
 				failures++;
 		}
+		if (!options.listOnly)
+			printTiming("custom cases", phaseStarted);
 
 		if (selected == 0)
 			throw "No tests matched the requested suite and filter";
@@ -67,6 +82,10 @@ class TestDriver {
 		Sys.println('Test driver: ${selected - failures} passed, $failures failed, $selected total');
 		if (failures != 0)
 			Sys.exit(1);
+	}
+
+	static function printTiming(phase:String, started:Float):Void {
+		Sys.println('TIMING: test-driver $phase: ${Std.int((Sys.time() - started) * 1000)}ms');
 	}
 
 	static function matches(options:DriverOptions, suite:String, name:String):Bool {
