@@ -61,6 +61,60 @@ function sum(limit:Int):Int {
 	return total;
 }
 
+// A loop over a known Array<Int>/Map<K, V> is pure: it runs the runtime iterator, never user code.
+function sumArray(values:Array<Int>):Int {
+	var total = 0;
+	for (value in values)
+		total += value;
+	return total;
+}
+
+function sumMap(values:Map<String, Int>):Int {
+	var total = 0;
+	for (value in values)
+		total += value;
+	return total;
+}
+
+class Counter {
+	public var total:Int;
+
+	public function new(total:Int)
+		this.total = total;
+
+	public function isPositive():Bool
+		return total > 0;
+}
+
+// A method called on a parameter whose declared type is a known class resolves like a call
+// through `this`, instead of unconditionally losing narrowing.
+function countedValid(limits:Limits, counter:Counter):Bool
+	return limits.lower != null && counter.isPositive() && limits.lower < 10;
+
+class Shape {
+	public function new() {}
+
+	public function area():Float
+		return 0.0;
+}
+
+class Circle extends Shape {
+	var radius:Float;
+
+	public function new(radius:Float) {
+		super();
+		this.radius = radius;
+	}
+
+	override public function area():Float
+		return radius * radius * 3.14159;
+}
+
+// Base.area is overridden, but every override (here, only Circle.area) is also pure, so a call
+// through the base class keeps narrowing rather than being excluded outright.
+function shapeValid(limits:Limits, shape:Shape):Bool
+	return limits.lower != null && shape.area() >= 0 && limits.lower < 10;
+
 // Inferred-pure helpers (including mutually recursive ones) keep field narrowing.
 function valid(limits:Limits):Bool
 	return limits.lower != null
@@ -77,5 +131,11 @@ function main():Int {
 		return 2;
 	if (!valid({lower: 3.0, upper: 7.0}) || valid({lower: 12.0, upper: null}) || !Bounds.recorded(1) || Bounds.checks != 1)
 		return 1;
+	if (sumArray([1, 2, 3]) != 6 || sumMap(["a" => 1, "b" => 2]) != 3)
+		return 3;
+	if (!countedValid({lower: 2.0, upper: null}, new Counter(1)) || countedValid({lower: 2.0, upper: null}, new Counter(0)))
+		return 4;
+	if (!shapeValid({lower: 2.0, upper: null}, new Circle(2.0)) || !shapeValid({lower: 2.0, upper: null}, new Shape()))
+		return 5;
 	return 42;
 }

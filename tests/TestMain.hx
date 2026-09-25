@@ -940,9 +940,11 @@ class TestMain {
 			},
 			{path: "Sub.hx", source: "class Sub extends Base {}"},
 			{path: "Main.hx", source: "import Sub; function main():Int return new Sub().ok({lower: 1.0}) ? 42 : 0;"}
-		],
-			{path: "Sub.hx", source: "class Sub extends Base { override public function m(v:Float):Bool return true; }"}, "numeric operands",
-			"a subclass overriding a previously-pure base method");
+		], {
+			path: "Sub.hx",
+			source: "class Sub extends Base { var c = 0; override public function m(v:Float):Bool { c++; return true; } }"
+		}, "numeric operands",
+			"a subclass overriding a previously-pure base method with an impure one");
 		expectDependentAnswerInvalidated([
 			{
 				path: "Base.hx",
@@ -954,6 +956,12 @@ class TestMain {
 			{path: "Sub.hx", source: "class Sub extends Base { override public function fail():Void {} }"}, "numeric operands",
 			"a subclass overriding a previously-never-returning base method");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
+		// A base method is pure only once every concrete override is also pure - never merely
+		// because none happens to exist yet. A single impure override is enough to reject it, in
+		// one fresh compile, with no incremental edit involved.
+		expectCompileError("typedef Limits = {var lower:Null<Float>;} class Base { public function new() {} public function m():Bool return true; public function ok(l:Limits):Bool return l.lower != null && this.m() && l.lower < 10; } class Sub extends Base { var c = 0; override public function m():Bool { c++; return true; } } function main():Int { var l:Limits = {lower: 1.0}; return new Sub().ok(l) ? 42 : 0; }",
+			"Comparison requires matching numeric operands");
+		Sys.println("PASS: a base method's purity requires every concrete override to also be pure");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:id(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; } @:wire enum MetadataStatus { @:id(5) Ready; }'))
 			.tokenize()).parseProgram();

@@ -158,7 +158,7 @@ class BodyTyper {
 	 */
 	function inferNoReturnFunctions():Void {
 		var overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
-		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, overridden).keys())
+		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, session.classDecls, overridden).keys())
 			session.noReturnFunctions.set(name, true);
 	}
 

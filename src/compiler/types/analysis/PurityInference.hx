@@ -23,6 +23,11 @@ class PurityInference {
 	final classes:Map<String, AstClass>;
 	final overridden:Map<String, Bool>;
 
+	/** For an overridden method key, the concrete override bodies it also requires to be pure
+	 * before a call through it can keep flow facts (see `dependenciesOf`).
+	 */
+	final overrideFamilies:Map<String, Array<String>>;
+
 	function new(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool,
 			isTypeName:String->Bool) {
 		this.signatures = signatures;
@@ -30,6 +35,7 @@ class PurityInference {
 		this.isTypeName = isTypeName;
 		this.classes = classes;
 		overridden = OverrideAnalysis.overriddenMethods(classes);
+		overrideFamilies = OverrideAnalysis.overrideFamilies(classes, overridden);
 		for (className => classDecl in classes)
 			for (field in classDecl.fields)
 				if (field.readAccess == GetAccess || field.readAccess == DynamicAccess) {
@@ -113,19 +119,41 @@ class PurityInference {
 		return false;
 	}
 
-	/** Callee keys the body depends on, or null when the body has a direct effect. */
+	/** Callee keys the body depends on, or null when the body has a direct effect.
+	 *
+	 * An overridden method also depends on every concrete override in its subclasses: a virtual
+	 * call through it might run one of them instead, so its own answer is only trustworthy once
+	 * theirs is too. Injecting those keys here lets the ordinary fixpoint in `infer` decide it,
+	 * exactly as it already does for an ordinary callee.
+	 */
 	function dependenciesOf(fn:AstFunction, name:String):Null<Map<String, Bool>> {
 		var walker = new PurityWalker(this, name);
 		walker.declare("this");
 		for (argument in fn.arguments) {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
-			walker.declare(argument.name, PurityWalker.isNumericType(argument.type));
+			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
+				PurityWalker.isIterableType(argument.type));
 		}
 		if (!walker.statements(fn.statements))
 			return null;
-		return walker.dependencies;
+		var result = walker.dependencies;
+		var family = overrideFamilies.get(name);
+		if (family != null)
+			for (overrideKey in family)
+				result.set(overrideKey, true);
+		return result;
 	}
+
+	/** The known concrete class of a declared type, when it names a class this program declares -
+	 * only then can a call through a value of that type be resolved to a specific method key.
+	 */
+	public function classNameOfType(type:Null<AstType>):Null<String>
+		return switch type {
+			case NamedType(name) if (classes.exists(name)): name;
+			case AppliedType(name, _) if (classes.exists(name)): name;
+			default: null;
+		};
 
 	public function resolveCall(name:String, functionName:String):Null<String> {
 		var keys = name.indexOf(".") >= 0 ? [name] : [sibling(functionName, name), name];
@@ -153,8 +181,15 @@ class PurityInference {
 		return null;
 	}
 
+	/** A method called on a receiver whose static type is a known class of this program. */
+	public function resolveInstance(className:String, method:String):Null<String> {
+		var candidate = className + "." + method;
+		return signatures.exists(candidate) ? candidate : null;
+	}
+
 	/** Functions whose calls always reach the analysed body: statics, module functions, and
-	 * instance methods of classes that no subclass overrides.
+	 * instance methods. An overridden instance method is also a candidate - `dependenciesOf`
+	 * makes its acceptance depend on every concrete override sharing the same answer.
 	 */
 	public function isCandidate(key:String):Bool {
 		var fn = signatures.get(key);
@@ -163,12 +198,25 @@ class PurityInference {
 		var owner = compiler.QualifiedName.parent(key);
 		if (fn.isStatic || owner == null || !isTypeName(owner))
 			return true;
-		return classes.exists(owner) && fn.name != "new" && !overridden.exists(key);
+		return classes.exists(owner) && fn.name != "new";
 	}
 
 	/** Getter keys a property read depends on; null when the name has no getter. */
 	public function getterDependencies(name:String):Null<Array<String>>
 		return getters.get(name);
+
+	/** The declared type of `owner`'s own field named `name`, when it has one. */
+	public function ownFieldType(owner:Null<String>, name:String):Null<AstType> {
+		if (owner == null)
+			return null;
+		var classDecl = classes.get(owner);
+		if (classDecl == null)
+			return null;
+		for (field in classDecl.fields)
+			if (field.name == name)
+				return field.type;
+		return null;
+	}
 
 	public function isConstructor(name:String):Bool
 		return constructors.exists(name);
@@ -179,6 +227,15 @@ class PurityInference {
 	}
 }
 
+/** What is known, purely syntactically, about one local: whether `+` on it can skip `toString`,
+ * and whether a call or a loop through it reaches only compiler-owned code.
+ */
+private typedef LocalFact = {
+	final numeric:Bool;
+	final className:Null<String>;
+	final iterable:Bool;
+}
+
 /** Walks one body with lexical locals, collecting callees and rejecting direct effects. */
 private class PurityWalker {
 	public final dependencies:Map<String, Bool> = [];
@@ -186,16 +243,16 @@ private class PurityWalker {
 	final inference:PurityInference;
 	final functionName:String;
 
-	/** Local name to whether it is known numeric; numeric `+` never converts through toString. */
-	final scopes:Array<Map<String, Bool>> = [[]];
+	/** Local name to what is known about it; see `LocalFact`. */
+	final scopes:Array<Map<String, LocalFact>> = [[]];
 
 	public function new(inference:PurityInference, functionName:String) {
 		this.inference = inference;
 		this.functionName = functionName;
 	}
 
-	public function declare(name:String, numeric:Bool = false):Void
-		scopes[scopes.length - 1].set(name, numeric);
+	public function declare(name:String, numeric:Bool = false, ?className:String, iterable:Bool = false):Void
+		scopes[scopes.length - 1].set(name, {numeric: numeric, className: className, iterable: iterable});
 
 	public static function isNumericType(type:Null<AstType>):Bool
 		return switch type {
@@ -204,14 +261,41 @@ private class PurityWalker {
 			default: false;
 		};
 
-	function isNumericLocal(name:String):Bool {
+	/** `Array<T>`/`Map<K, V>` values are backed by a runtime iterator: looping over one runs no
+	 * user code, however its elements were produced.
+	 */
+	public static function isIterableType(type:Null<AstType>):Bool
+		return switch type {
+			case ArrayType(_), MapType(_, _): true;
+			default: false;
+		};
+
+	function localFact(name:String):Null<LocalFact> {
 		var index = scopes.length;
 		while (index > 0) {
 			index--;
 			if (scopes[index].exists(name))
 				return scopes[index].get(name);
 		}
-		return false;
+		return null;
+	}
+
+	function isNumericLocal(name:String):Bool {
+		var fact = localFact(name);
+		return fact != null && fact.numeric;
+	}
+
+	/** The known concrete class of a local, if any - lets `obj.m()` resolve to a method key
+	 * instead of unconditionally rejecting the call.
+	 */
+	function classNameOfLocal(name:String):Null<String> {
+		var fact = localFact(name);
+		return fact == null ? null : fact.className;
+	}
+
+	function isIterableLocal(name:String):Bool {
+		var fact = localFact(name);
+		return fact != null && fact.iterable;
 	}
 
 	/** Syntactically numeric: numeric literals and locals, and arithmetic over them. */
@@ -253,11 +337,14 @@ private class PurityWalker {
 		return switch value {
 			case ErrorStatement(_): false;
 			case UninitializedDeclaration(name, type, _):
-				declare(name, isNumericType(type));
+				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type));
 				true;
 			case VarDeclaration(name, type, initializer, _):
 				var pure = expression(initializer);
-				declare(name, type == null || type == InferredType ? isNumeric(initializer) : isNumericType(type));
+				if (type == null || type == InferredType)
+					declare(name, isNumeric(initializer), null, isIterableInitializer(initializer));
+				else
+					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type));
 				pure;
 			case Assignment(name, value, _): isLocal(name) && expression(value);
 			case Increment(name, _, _): isLocal(name);
@@ -276,7 +363,7 @@ private class PurityWalker {
 				true;
 			case If(test, yes, no, _): expression(test) && statements(yes) && statements(no);
 			case While(test, body, _), DoWhile(body, test, _): expression(test) && statements(body);
-			case ForIn(key, item, iterable, body, _): isRange(iterable) && expression(iterable) && scoped(() -> {
+			case ForIn(key, item, iterable, body, _): isPureIterable(iterable) && expression(iterable) && scoped(() -> {
 					declare(key, true);
 					if (item != null)
 						declare(item);
@@ -340,7 +427,7 @@ private class PurityWalker {
 					if (!expression(entry.key) || !expression(entry.value))
 						return false;
 				true;
-			case ArrayComprehension(key, item, iterable, filter, result, _): isRange(iterable) && expression(iterable) && scoped(() -> {
+			case ArrayComprehension(key, item, iterable, filter, result, _): isPureIterable(iterable) && expression(iterable) && scoped(() -> {
 					declare(key);
 					if (item != null)
 						declare(item);
@@ -360,6 +447,9 @@ private class PurityWalker {
 				var key = switch object {
 					case Variable("this", _): inference.resolveOwnMethod(name, functionName);
 					case Variable(typeName, _) if (!isLocal(typeName)): inference.resolveStatic(typeName, name, functionName);
+					case Variable(local, _) if (classNameOfLocal(local) != null): inference.resolveInstance(classNameOfLocal(local), name);
+					case Member(Variable("this", _), field, _) if (fieldClassName(field) != null && readsProperty(field)):
+						inference.resolveInstance(fieldClassName(field), name);
 					default: null;
 				};
 				if (key != null && !inference.isCandidate(key))
@@ -417,9 +507,35 @@ private class PurityWalker {
 		}
 	}
 
-	static function isRange(iterable:AstExpression):Bool
-		return switch iterable {
-			case Range(_, _, _): true;
+	function classNameOfType(type:Null<AstType>):Null<String>
+		return inference.classNameOfType(type);
+
+	/** `new T(...)` always taints its enclosing statement impure (constructors are not analysed),
+	 * so tracking a class name from one would never be consulted; only literal shapes are worth
+	 * inferring here.
+	 */
+	function isIterableInitializer(initializer:AstExpression):Bool
+		return switch initializer {
+			case ArrayLiteral(_, _), MapLiteral(_, _), NewArray(_, _, _), NewMap(_, _, _): true;
 			default: false;
 		};
+
+	/** A loop runs no user code when its iterable is a numeric range, a fresh array/map literal,
+	 * or a value already known to be `Array<T>`/`Map<K, V>` - a local of that type, or one of the
+	 * enclosing class's own fields declared with that type.
+	 */
+	function isPureIterable(iterable:AstExpression):Bool
+		return switch iterable {
+			case Range(_, _, _), ArrayLiteral(_, _), MapLiteral(_, _): true;
+			case Variable(name, _): isIterableLocal(name);
+			case Member(Variable("this", _), field, _): fieldIsIterable(field);
+			default: false;
+		};
+
+	/** The known concrete class of `this`'s own field, when its declared type names one. */
+	function fieldClassName(field:String):Null<String>
+		return classNameOfType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), field));
+
+	function fieldIsIterable(field:String):Bool
+		return PurityWalker.isIterableType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), field));
 }

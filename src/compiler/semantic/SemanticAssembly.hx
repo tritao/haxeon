@@ -444,7 +444,7 @@ class SemanticAssembly {
 			purityScopeInterfaces, purityScopeEnums, purityScopeEnumAbstracts, purityScopeAbstracts);
 		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses, purityScopeAbstracts,
 			purityScopeEnums, isAnnotatedPure, isTypeName);
-		var freshNoReturn = compiler.types.analysis.NoReturnInference.infer(purityScopeSignatures,
+		var freshNoReturn = compiler.types.analysis.NoReturnInference.infer(purityScopeSignatures, purityScopeClasses,
 			compiler.types.analysis.OverrideAnalysis.overriddenMethods(purityScopeClasses));
 		var purityDrifted:Map<String, Bool> = [];
 		for (moduleName in names) {

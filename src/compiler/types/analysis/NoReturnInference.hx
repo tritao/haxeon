@@ -9,20 +9,35 @@ import compiler.syntax.Ast;
  * for some callee has changed since the caller was last typed.
  */
 class NoReturnInference {
-	public static function infer(signatures:Map<String, AstFunction>, overridden:Map<String, Bool>):Map<String, Bool> {
+	/**
+	 * `classes` supplies the class-hierarchy override families: a call through `Base.m` never
+	 * returns only once `Base.m` and every concrete override in its subclasses are each,
+	 * independently, also inferred never-returning - since a virtual call might reach any of
+	 * them. That requirement is wired in as an ordinary reverse dependency below, so an override
+	 * proven never-returning on a later round correctly reawakens the base method (and vice
+	 * versa), through the same worklist used for an actual forwarding call.
+	 */
+	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, overridden:Map<String, Bool>):Map<String, Bool> {
+		var overrideFamilies = OverrideAnalysis.overrideFamilies(classes, overridden);
 		var result:Map<String, Bool> = [];
 		var reverse:Map<String, Array<String>> = [], queue:Array<String> = [], queued:Map<String, Bool> = [], cursor = 0;
+		function link(dependency:String, dependent:String):Void {
+			var users = reverse.get(dependency);
+			if (users == null) {
+				users = [];
+				reverse.set(dependency, users);
+			}
+			users.push(dependent);
+		}
 		for (name => fn in signatures) {
 			var dependencies:Map<String, Bool> = [];
 			collectDependencies(fn.statements, name, dependencies);
-			for (dependency in dependencies.keys()) {
-				var users = reverse.get(dependency);
-				if (users == null) {
-					users = [];
-					reverse.set(dependency, users);
-				}
-				users.push(name);
-			}
+			for (dependency in dependencies.keys())
+				link(dependency, name);
+			var family = overrideFamilies.get(name);
+			if (family != null)
+				for (overrideKey in family)
+					link(overrideKey, name);
 			queue.push(name);
 			queued.set(name, true);
 		}
@@ -30,7 +45,17 @@ class NoReturnInference {
 			var name = queue[cursor++];
 			queued.remove(name);
 			var fn = signatures.get(name);
-			if (fn == null || overridden.exists(name) || result.exists(name) || !astStatementsDoNotReturn(fn.statements, name, result))
+			if (fn == null || result.exists(name) || !astStatementsDoNotReturn(fn.statements, name, result))
+				continue;
+			var family = overridden.exists(name) ? overrideFamilies.get(name) : null;
+			var blockedByFamily = false;
+			if (family != null)
+				for (overrideKey in family)
+					if (!result.exists(overrideKey)) {
+						blockedByFamily = true;
+						break;
+					}
+			if (blockedByFamily)
 				continue;
 			result.set(name, true);
 			var users = reverse.get(name);
