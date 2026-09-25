@@ -89,6 +89,9 @@ class Math {
 	public static inline function atan2(y:Float, x:Float):Float
 		return mathAtan2(y, x);
 
+	public static inline function acos(value:Float):Float
+		return mathAtan2(mathSqrt(1.0 - value * value), value);
+
 	public static inline function round(value:Float):Int
 		return mathRound(value);
 
