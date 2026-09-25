@@ -154,7 +154,8 @@ class BodyTyper {
 	}
 
 	function inferNoReturnFunctions():Void {
-		var reverse:Map<String, Array<String>> = [], queue:Array<String> = [], queued:Map<String, Bool> = [], cursor = 0;
+		var reverse:Map<String, Array<String>> = [], queue:Array<String> = [], queued:Map<String, Bool> = [], cursor = 0,
+			overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
 		for (name => fn in session.signatures) {
 			var dependencies:Map<String, Bool> = [];
 			collectNoReturnDependencies(fn.statements, name, dependencies);
@@ -173,7 +174,10 @@ class BodyTyper {
 			var name = queue[cursor++];
 			queued.remove(name);
 			var fn = session.signatures.get(name);
-			if (fn == null || session.noReturnFunctions.exists(name) || !astStatementsDoNotReturn(fn.statements, name))
+			if (fn == null
+				|| overridden.exists(name)
+				|| session.noReturnFunctions.exists(name)
+				|| !astStatementsDoNotReturn(fn.statements, name))
 				continue;
 			session.noReturnFunctions.set(name, true);
 			var users = reverse.get(name);

@@ -368,7 +368,7 @@ class CallResolver {
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical, span),
 			castCall = session.representation.boundaryCast(call, methodResult.semantic);
-		if (scope != null)
+		if (scope != null && !session.isPureCall(methodKey))
 			scope.invalidateAllExpressions();
 		return session.noReturnFunctions.exists(methodKey) ? new TypedExpression(TNoReturn(castCall), TNever, castCall.span) : castCall;
 	}
@@ -506,7 +506,8 @@ class CallResolver {
 		var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, name).arguments, scope, name,
 			span) : typeCallArguments(arguments, expectedArguments, scope, name),
 			call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
-		scope.invalidateAllExpressions();
+		if (!session.isPureCall(name))
+			scope.invalidateAllExpressions();
 		return session.noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}
 
@@ -570,6 +571,8 @@ class CallResolver {
 	}
 
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
+			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
 		if (scope.resolve(name) != null)
 			return typeClosureCall(Variable(name, span), arguments, span, scope, name, false);
 		if (name.indexOf(".") < 0) {
@@ -737,6 +740,39 @@ class CallResolver {
 			method = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
 			physicalArguments = session.representation.adaptConstructorArguments(baseInstance, resolvedBase, method, semanticArguments);
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
+	}
+
+	/** `super.name(...)` calls the base-class body directly, bypassing virtual dispatch. */
+	function typeSuperMethodCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var owner = session.currentContext.lexicalOwner,
+			baseType:Null<AstType> = null;
+		if (owner != null && session.classDecls.exists(owner))
+			baseType = requiredMapValue(session.classDecls, owner).base;
+		if (baseType == null)
+			fail("E1007", 'super.$name() requires a base class', span);
+		if (scope.resolve("this") == null)
+			fail("E1007", 'super.$name() requires an instance method', span);
+		var baseName = switch session.declarations.resolve(baseType, span, session.currentContext.typeSubstitutions) {
+			case TInstance(_, value, _): value;
+			default: null;
+		};
+		var methodInfo = baseName == null ? null : findMethod(baseName, name);
+		if (methodInfo == null || methodInfo.isStatic)
+			fail("E1007", 'Base class has no instance method "$name"', span);
+		var methodKey = methodInfo.owner + "." + name,
+			method = session.signatures.get(methodKey);
+		if (method == null || method.isExtern == true)
+			fail("E1007", 'Missing body for base method "$methodKey"', span);
+		if (functionTypeParameters(method).length > 0)
+			fail("E1016", 'super.$name() cannot call a generic method yet', span);
+		var receiver = typeExpressionValue(Variable("this", span), scope),
+			methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
+			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
+			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
+			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
+			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
+			call = new TypedExpression(TCall(methodKey, [receiver].concat(physicalArguments)), methodResult.physical, span);
+		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
 	}
 
 	public function typeRuntimeDataCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -927,7 +963,7 @@ class CallResolver {
 		return code >= 48 && code <= 57 ? code - 48 : code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
 
 	function applyCallEffect(call:TypedExpression, name:String, ?scope:Scope):TypedExpression {
-		if (scope != null)
+		if (scope != null && !session.isPureCall(name))
 			scope.invalidateAllExpressions();
 		return session.noReturnFunctions.exists(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
 	}

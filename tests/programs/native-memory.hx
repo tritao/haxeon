@@ -40,6 +40,11 @@ function main():Int {
 	ints.offset(2).store(33);
 	ints.offset(3).store(44);
 	correct = correct && ints.offset(0).load() == 11 && ints.offset(1).load() == 22 && ints.offset(2).load() == 33 && ints.offset(3).load() == 44;
+	// Branching operands keep evaluation order and stay valid across the join block.
+	var pick = Sys.args().length == 0;
+	(pick ? ints : second.castTo()).offset(pick ? 2 : 0).store(pick ? 55 : 0);
+	correct = correct && (pick ? ints : ints.offset(1)).byteOffset(pick ? 8 : 0).load() == 55;
+	ints.offset(2).store(33);
 	correct = correct && tag.load() == 7 && secondTag.load() == 9 && value.load() == 9001 && ratio.load() == 1.25;
 	arena.reset();
 	var reused:RawPtr<Int32> = arena.alloc();

@@ -933,10 +933,10 @@ static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *libr
 		&entry->argument_count,&entry->result_code,&entry->result_type,&entry->result_size,&entry->result_align,&call_abi) )
 		hl_error("Invalid ordinary C call signature");
 	haxeon_native_library *library = HL_NAME(native_open)((vbyte *)library_name,(int)strlen(library_name));
-	if( library == NULL ) hl_error("Could not open ordinary C library: %s",haxeon_native_error);
+	if( library == NULL ) hl_error("Could not open ordinary C library: %s",hl_to_utf16(haxeon_native_error));
 	entry->function = HL_NAME(native_resolve)(library,(vbyte *)symbol,(int)strlen(symbol),entry->argument_codes,entry->argument_count,entry->result_code);
 	HL_NAME(native_close)(library);
-	if( entry->function == NULL ) hl_error("Could not resolve ordinary C symbol: %s",haxeon_native_error);
+	if( entry->function == NULL ) hl_error("Could not resolve ordinary C symbol: %s",hl_to_utf16(haxeon_native_error));
 	for( int index = 0; index < entry->argument_count; index++ ) entry->function->argument_types[index] = entry->argument_types[index];
 	if( ffi_prep_cif(&entry->function->cif,call_abi,(unsigned int)entry->argument_count,entry->result_type,entry->function->argument_types) != FFI_OK )
 		hl_error("Could not prepare ordinary C calling convention");

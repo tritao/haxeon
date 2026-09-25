@@ -13,6 +13,44 @@ class CompilerIntrinsics {
 			compiler.registerNative(native.name, native.library, native.symbol, native.arguments, native.result, native.generatedFunctionDependencies);
 	}
 
+	static final PURE:Array<String> = [
+		"__std_int_f64",
+		"__math_ceil",
+		"__math_floor",
+		"__math_fmod",
+		"__reflect_is_object",
+		"__iterator_has_next",
+		"__string_compare_full",
+		"__string_last_index_of",
+		"__string_last_index_of_from",
+		"__string_index_of_from",
+		"__string_to_lower_case",
+		"__string_to_upper_case",
+		"__string_split",
+		"__string_from_bytes",
+		"__string_bytes",
+		"__hl_bytes_ucs2_length",
+		"__bytes_length",
+		"__bytes_get_data",
+		"__bytes_get",
+		"__bytes_get_i32",
+		"__bytes_get_float",
+		"__bytes_get_double",
+		"__bytes_sub",
+		"__bytes_compare",
+		"__bytes_to_string",
+		"__bytes_get_string",
+		"__bytes_input_position",
+		"__bytes_input_big_endian",
+		"__bytes_output_big_endian"
+	];
+
+	/** Intrinsics that only read their operands or allocate fresh values. Calls that can reach user
+	 * code (`__std_string` and `__dynamic_equal` may run `toString` or comparisons) are excluded.
+	 */
+	public static function isPure(name:String):Bool
+		return PURE.indexOf(name) >= 0;
+
 	/** Immutable native definitions shared by compiler snapshots and services. */
 	public static function configuration():Array<NativeFunction> {
 		var definitions:Array<NativeFunction> = [];

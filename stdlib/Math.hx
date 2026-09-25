@@ -19,40 +19,41 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-@:hlNative("haxeon_runtime", "__math_is_nan")
+@:pure @:hlNative("haxeon_runtime", "__math_is_nan")
 extern function mathIsNaN(value:Float):Bool;
 
-@:hlNative("haxeon_runtime", "__math_is_finite")
+@:pure @:hlNative("haxeon_runtime", "__math_is_finite")
 extern function mathIsFinite(value:Float):Bool;
 
-@:hlNative("haxeon_runtime", "__math_pow")
+@:pure @:hlNative("haxeon_runtime", "__math_pow")
 extern function mathPow(value:Float, exponent:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_cos")
+@:pure @:hlNative("haxeon_runtime", "__math_cos")
 extern function mathCos(value:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_sin")
+@:pure @:hlNative("haxeon_runtime", "__math_sin")
 extern function mathSin(value:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_tan")
+@:pure @:hlNative("haxeon_runtime", "__math_tan")
 extern function mathTan(value:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_sqrt")
+@:pure @:hlNative("haxeon_runtime", "__math_sqrt")
 extern function mathSqrt(value:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_atan2")
+@:pure @:hlNative("haxeon_runtime", "__math_atan2")
 extern function mathAtan2(y:Float, x:Float):Float;
 
-@:hlNative("haxeon_runtime", "__math_round")
+@:pure @:hlNative("haxeon_runtime", "__math_round")
 extern function mathRound(value:Float):Int;
 
-@:hlNative("haxeon_runtime", "__math_ceil")
+@:pure @:hlNative("haxeon_runtime", "__math_ceil")
 extern function mathCeil(value:Float):Int;
 
-@:hlNative("haxeon_runtime", "__math_floor")
+@:pure @:hlNative("haxeon_runtime", "__math_floor")
 extern function mathFloor(value:Float):Int;
 
 /** Supported mathematical helpers backed by the stable runtime ABI. */
+@:pure
 class Math {
 	public static inline var PI:Float = 3.141592653589793;
 
@@ -100,4 +101,28 @@ class Math {
 
 	public static inline function floor(value:Float):Int
 		return mathFloor(value);
+
+	/** Largest integral Float not above `value`; NaN, infinities, and values from 2^52 are already integral. */
+	public static function ffloor(value:Float):Float {
+		if (!(Math.abs(value) < 4503599627370496.0))
+			return value;
+		var truncated = value - value % 1.0;
+		return truncated > value ? truncated - 1.0 : truncated;
+	}
+
+	/** Smallest integral Float not below `value`. */
+	public static function fceil(value:Float):Float {
+		if (!(Math.abs(value) < 4503599627370496.0))
+			return value;
+		var truncated = value - value % 1.0;
+		return truncated < value ? truncated + 1.0 : truncated;
+	}
+
+	/** Nearest integral Float, with halves rounded up like `round`. */
+	public static function fround(value:Float):Float {
+		if (!(Math.abs(value) < 4503599627370496.0))
+			return value;
+		var lower = ffloor(value);
+		return value - lower >= 0.5 ? lower + 1.0 : lower;
+	}
 }

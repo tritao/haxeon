@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.runtime.RuntimeType;
 import compiler.types.Type.NominalKind;
+import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;
@@ -168,7 +169,12 @@ class IrProgramAssembler {
 					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
 						var functionName = methodDecl.name;
 						var separator = lastSeparator(functionName);
-						methods.push({name: functionName.substring(separator + 1, functionName.length), functionName: functionName});
+						var methodName = functionName.substring(separator + 1, functionName.length);
+						methods.push({name: methodName, functionName: functionName});
+						// HashLink string conversion calls a proto method named `__string` returning UCS-2
+						// bytes, which is the representation of a Haxe String here.
+						if (methodName == "toString" && methodDecl.arguments.length == 0 && methodDecl.result == TString)
+							methods.push({name: "__string", functionName: functionName});
 					}
 				objects.push({
 					name: classDecl.name,
@@ -266,6 +272,7 @@ class IrProgramAssembler {
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,
+			needsAnyArrayRuntime = false,
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
@@ -288,6 +295,8 @@ class IrProgramAssembler {
 								needsTypedRefArrayRuntime = true;
 							if (name == "__array_check_cast")
 								needsArrayCastRuntime = true;
+							if (StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_any"))
+								needsAnyArrayRuntime = true;
 							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal" || name == "__string_index_of"
 								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
 								|| name == "__string_substring" || name == "__string_to_lower_case" || name == "__string_to_upper_case")
@@ -419,6 +428,24 @@ class IrProgramAssembler {
 				{name: "bool", type: Bool},
 				{name: "ref", type: Dyn}
 			];
+			// Array<Dynamic> views may alias any storage; only HL lowering emits them.
+			if (needsAnyArrayRuntime) {
+				arrayKinds.push({name: "any", type: Dyn});
+				program.natives.push({
+					name: "__array_get_any",
+					library: "haxeon_runtime",
+					symbol: "__array_get_any",
+					arguments: [Array(Dyn), I32],
+					result: Dyn
+				});
+				program.natives.push({
+					name: "__array_set_any",
+					library: "haxeon_runtime",
+					symbol: "__array_set_any",
+					arguments: [Array(Dyn), I32, Dyn],
+					result: Void
+				});
+			}
 			for (entry in arrayKinds) {
 				var arrayType:IrType = Array(entry.type);
 				program.natives.push({

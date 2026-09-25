@@ -78,6 +78,49 @@ class TypingSession {
 		classDecls = declarations.classes;
 	}
 
+	/** `@:pure` on a function, or on the class of a static method, promises no observable writes.
+	 * Calls to annotated or inferred-pure functions keep flow facts about mutable fields and map entries.
+	 */
+	public function isPureCall(name:String):Bool
+		return inferredPureFunctions.exists(name) || isDeclaredPure(name);
+
+	/** Annotated functions and read-only compiler intrinsics; the inference seeds from these. */
+	function isDeclaredPure(name:String):Bool
+		return compiler.runtime.CompilerIntrinsics.isPure(name) || hasPureAnnotation(name);
+
+	/** Static and module functions inferred pure by `PurityInference`. */
+	public var inferredPureFunctions:Map<String, Bool> = [];
+
+	public function inferPureFunctions():Void {
+		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls, declarations.abstracts, enumDecls, isDeclaredPure,
+			isTypeName);
+	}
+
+	function isTypeName(name:String):Bool
+		return classDecls.exists(name) || interfaceDecls.exists(name) || enumDecls.exists(name) || enumAbstractDecls.exists(name)
+			|| declarations.abstracts.exists(name);
+
+	public function hasPureAnnotation(name:String):Bool {
+		var fn = signatures.get(name);
+		if (fn == null)
+			return false;
+		if (hasPureMetadata(fn.metadata))
+			return true;
+		var dot = name.lastIndexOf(".");
+		if (dot < 0 || !fn.isStatic)
+			return false;
+		var owner = classDecls.get(name.substr(0, dot));
+		return owner != null && hasPureMetadata(owner.metadata);
+	}
+
+	static function hasPureMetadata(metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>):Bool {
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == "pure")
+					return true;
+		return false;
+	}
+
 	/** Resolve a source Map ABI, restricting enum keys to nullary constructors. */
 	public function mapName(key:CompilerType, value:CompilerType):Null<String> {
 		var enumKey = enumKeyType(key);

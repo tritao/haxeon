@@ -171,7 +171,8 @@ class ExpressionTyper {
 			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope);
 			case MethodCall(object, name, arguments, span):
 				var call = dispatchRules.methodCall(object, name, arguments, span, scope, expectedType);
-				scope.invalidateAllExpressions();
+				if (!isPureCallExpression(call))
+					scope.invalidateAllExpressions();
 				call;
 		};
 
@@ -528,7 +529,7 @@ class ExpressionTyper {
 				caseIndex = typedCases.length,
 				typedResult:TypedExpression;
 			if (typedGuard != null)
-				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
+				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
 			if (expectedType == null && resultType == null && isEmptyArrayLiteral(switchCase.result)) {
 				deferredCaseResults.set(caseIndex, {expression: switchCase.result, scope: caseScope});
 				typedResult = new TypedExpression(TUnreachable, TNever, switchCase.span);
@@ -592,7 +593,7 @@ class ExpressionTyper {
 					span: switchCase.span,
 					isCatchAll: switchCase.isCatchAll,
 					guard: switchCase.guard,
-					result: coerce(result, resultType, "switch branch", "E1003"),
+					result: branchResult(result, resultType, "switch branch"),
 					enumName: switchCase.enumName,
 					constructorIndex: switchCase.constructorIndex,
 					bindings: switchCase.bindings,
@@ -603,7 +604,7 @@ class ExpressionTyper {
 		if (deferredDefault != null)
 			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
 		if (typedDefault != null)
-			typedDefault = coerce(typedDefault, resultType, "switch branch", "E1003");
+			typedDefault = branchResult(typedDefault, resultType, "switch branch");
 		if (typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
 			fail("E1021", "Switch expression requires a default branch", span);
 		if (switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
@@ -657,8 +658,8 @@ class ExpressionTyper {
 		var typedCondition = typeExpressionCallback(predicate, scope, TBool, false);
 		if (!sameType(typedCondition.type, TBool))
 			fail("E1011", "Conditional expression requires a Bool condition", span);
-		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true),
-			falseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false),
+		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
+			falseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false, session.isPureCall),
 			contextualType = expectedType;
 		if (contextualType == null) {
 			contextualType = contextualExpressionType(whenTrue, trueScope);
@@ -670,18 +671,39 @@ class ExpressionTyper {
 				&& (containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse)))
 				contextualType = TNullable(contextualType);
 		}
+		// An empty literal takes its type from the other branch, whichever side it is on.
+		var earlyFalse:Null<TypedExpression> = null;
+		if (contextualType == null && isEmptyLiteral(whenTrue)) {
+			earlyFalse = typeExpressionCallback(whenFalse, falseScope, null, false);
+			if (earlyFalse.type != TNull && earlyFalse.type != TNever)
+				contextualType = earlyFalse.type;
+		}
 		var typedTrue = typeExpressionCallback(whenTrue, trueScope, contextualType, false),
 			branchExpected = expectedType == null
 				&& typedTrue.type != TNull
 				&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
-			typedFalse = typeExpressionCallback(whenFalse, falseScope, branchExpected, false),
+			typedFalse = earlyFalse != null ? earlyFalse : typeExpressionCallback(whenFalse, falseScope, branchExpected, false),
 			resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 		if (resultType == null)
 			fail("E1003", "Conditional branches must have matching types", span);
-		typedTrue = coerce(typedTrue, resultType, "conditional branch", "E1003");
-		typedFalse = coerce(typedFalse, resultType, "conditional branch", "E1003");
+		typedTrue = branchResult(typedTrue, resultType, "conditional branch");
+		typedFalse = branchResult(typedFalse, resultType, "conditional branch");
 		return new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 	}
+
+	/** A branch in a Void context is evaluated for its effects and its value is discarded. */
+	function branchResult(value:TypedExpression, resultType:CompilerType, context:String):TypedExpression {
+		if (resultType != TVoid || value.type == TVoid || value.type == TNever)
+			return coerce(value, resultType, context, "E1003");
+		return new TypedExpression(TBlockExpression([TExpression(value, value.span)], new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
+	}
+
+	static function isEmptyLiteral(expression:AstExpression):Bool
+		return switch expression {
+			case ArrayLiteral(values, _): values.length == 0;
+			case MapLiteral(entries, _): entries.length == 0;
+			default: false;
+		};
 
 	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
@@ -811,7 +833,7 @@ class ExpressionTyper {
 
 	public function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
-			rightScope = FlowAnalysis.narrowedScope(scope, left, and),
+			rightScope = FlowAnalysis.narrowedScope(scope, left, and, session.isPureCall),
 			right = typeExpressionCallback(b, rightScope, null, false);
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);
@@ -1031,6 +1053,14 @@ class ExpressionTyper {
 
 	static function anonymousTypeName(fields:Array<AnonymousField>):String
 		return SemanticSignature.anonymousTypeName(fields);
+
+	/** Argument effects were applied while typing them; only the callee itself is checked here. */
+	function isPureCallExpression(call:TypedExpression):Bool
+		return switch call.expression {
+			case TCall(name, _), TCNativeCall(name, _), TMethodCall(_, name, _): session.isPureCall(name);
+			case TCast(inner), TAbiCast(inner), TNoReturn(inner): isPureCallExpression(inner);
+			default: false;
+		};
 
 	static function isNullable(type:CompilerType):Bool
 		return switch type {

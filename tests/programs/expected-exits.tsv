@@ -177,3 +177,10 @@ dynamic-object-literal	42
 std-is-of-type	42
 native-memory	42
 string-null-equality	42
+generic-array-storage	42
+math-float-rounding	42
+pure-inference	42
+conditional-empty-literal	42
+void-branch-results	42
+std-string-to-string	42
+super-method-call	42

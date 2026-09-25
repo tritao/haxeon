@@ -5,24 +5,30 @@ import compiler.types.TypedAst.TypedExpression;
 
 /** Applies branch-local type facts without owning declaration or body typing. */
 class FlowAnalysis {
-	public static function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool):Scope {
+	/** `isPureCall` decides which calls inside the condition keep earlier mutable facts. */
+	public static function narrowedScope(scope:Scope, condition:TypedExpression, truthy:Bool, isPureCall:String->Bool):Scope {
 		var result = new Scope(scope);
-		applyConditionNarrowing(result, condition, truthy);
+		applyConditionNarrowing(result, condition, truthy, isPureCall);
 		return result;
 	}
 
-	public static function refineAfterGuard(scope:Scope, condition:TypedExpression):Void
-		applyConditionNarrowing(scope, condition, false);
+	public static function refineAfterGuard(scope:Scope, condition:TypedExpression, isPureCall:String->Bool):Void
+		applyConditionNarrowing(scope, condition, false, isPureCall);
 
-	static function applyConditionNarrowing(scope:Scope, condition:TypedExpression, truthy:Bool):Void {
+	static function applyConditionNarrowing(scope:Scope, condition:TypedExpression, truthy:Bool, isPureCall:String->Bool):Void {
 		switch condition.expression {
+			// Facts from the left operand hold after the right one only when it cannot mutate state.
 			case TAnd(left, right) if (truthy):
-				applyConditionNarrowing(scope, left, true);
-				applyConditionNarrowing(scope, right, true);
+				applyConditionNarrowing(scope, left, true, isPureCall);
+				if (mayHaveEffect(right, isPureCall))
+					scope.invalidateAllExpressions();
+				applyConditionNarrowing(scope, right, true, isPureCall);
 				return;
 			case TOr(left, right) if (!truthy):
-				applyConditionNarrowing(scope, left, false);
-				applyConditionNarrowing(scope, right, false);
+				applyConditionNarrowing(scope, left, false, isPureCall);
+				if (mayHaveEffect(right, isPureCall))
+					scope.invalidateAllExpressions();
+				applyConditionNarrowing(scope, right, false, isPureCall);
 				return;
 			default:
 		}
@@ -45,6 +51,44 @@ class FlowAnalysis {
 			else
 				scope.refineExpression(comparison.path, refined, comparison.stable);
 		}
+	}
+
+	/** Conservative: only expression kinds known not to write state, and pure calls, are effect-free. */
+	public static function mayHaveEffect(expression:TypedExpression, isPureCall:String->Bool):Bool {
+		return switch expression.expression {
+			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_), TEnumLiteral(_, _), TNullLiteral, TVoidLiteral,
+				TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_), TStaticField(_, _), TFunctionRef(_), TLambda(_, _, _),
+				TNewMap(_, _):
+				false;
+			case TEnumIndex(value), TEnumField(value, _, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value),
+				TToDynamic(value), TNegate(value), TNot(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value),
+				TStringLength(value), TStringFromCharCode(value), TNewArray(_, value), TMethodRef(value, _), TField(value, _):
+				mayHaveEffect(value, isPureCall);
+			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right), TBitAnd(left, right), TBitXor(left, right),
+				TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right), TUnsignedShiftRight(left, right), TLess(left, right),
+				TLessEqual(left, right), TEqual(left, right), TAnd(left, right), TOr(left, right), TIndex(left, right), TMapGet(left, right),
+				TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right), TRange(left, right): mayHaveEffect(left,
+					isPureCall) || mayHaveEffect(right, isPureCall);
+			case TStringSubstring(value, start, end): mayHaveEffect(value,
+					isPureCall) || mayHaveEffect(start, isPureCall) || (end != null && mayHaveEffect(end, isPureCall));
+			case TConditional(test, yes, no): mayHaveEffect(test, isPureCall) || mayHaveEffect(yes, isPureCall) || mayHaveEffect(no, isPureCall);
+			case TEnumConstruct(_, _, values), TArrayLiteral(values): anyEffect(values, isPureCall);
+			case TCall(name, arguments): !isPureCall(name) || anyEffect(arguments, isPureCall);
+			case TMethodCall(object, name, arguments): !isPureCall(name) || mayHaveEffect(object, isPureCall) || anyEffect(arguments, isPureCall);
+			case TCollectionCall(receiver, operation, arguments):
+				switch operation {
+					case "exists" | "index_of" | "copy" | "slice" | "join" | "keys": mayHaveEffect(receiver, isPureCall) || anyEffect(arguments, isPureCall);
+					default: true;
+				}
+			default: true;
+		};
+	}
+
+	static function anyEffect(values:Array<TypedExpression>, isPureCall:String->Bool):Bool {
+		for (value in values)
+			if (mayHaveEffect(value, isPureCall))
+				return true;
+		return false;
 	}
 
 	static function typeTest(condition:TypedExpression):Null<{path:String, type:CompilerType, narrowsWhenTrue:Bool}> {

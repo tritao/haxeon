@@ -61,6 +61,9 @@ class IrGenerator {
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
 
+	/** HL array representation: reference arrays share dynamic storage with checked typed reads,
+	 * `Array<Dynamic>` views dispatch on the storage element type, and array casts are checked.
+	 */
 	public static function bindNativeArrayChecks(enabled:Bool):Void
 		nativeArrayChecks = enabled;
 
@@ -194,7 +197,7 @@ class IrGenerator {
 					builder.globalSet(name + "." + field, lowerExpression(value, builder, localTypes));
 				case TIndexAssign(array, index, value, _):
 					var operands = lowerOperands([array, index, value], builder, localTypes);
-					builder.arraySet(operands[0], operands[1], operands[2]);
+					elementSet(builder, operands[0], operands[1], operands[2]);
 				case TMapAssign(map, key, value, _):
 					var mapType = switch map.type {
 						case TMap(keyType, valueType): {key: keyType, value: valueType};
@@ -442,7 +445,7 @@ class IrGenerator {
 					} else {
 						var bodyArray = builder.load(arrayName, arrayType),
 							bodyIndex = builder.load(indexName, I32);
-						initializeLocal(name, builder.arrayGet(bodyArray, bodyIndex, elementType), builder, localTypes);
+						initializeLocal(name, elementGet(builder, bodyArray, bodyIndex, elementType), builder, localTypes);
 					}
 					if (valueName != null)
 						initializeLocal(valueName,
@@ -694,6 +697,7 @@ class IrGenerator {
 	static function checkedCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		var casted = builder.safeCast(value, target);
 		return switch target {
+			case Array(Dyn): casted;
 			case Array(element) if (nativeArrayChecks):
 				var checked = builder.call("__array_check_cast", [builder.safeCast(builder.toDyn(casted), Array(Dyn)), builder.typeValue(element)], Array(Dyn));
 				builder.safeCast(builder.toDyn(checked), target);
@@ -946,17 +950,19 @@ class IrGenerator {
 					default: throw "RawPtr.store width must be constant";
 				};
 				{
-					builder.memoryStore(lowerExpression(pointer, builder, localTypes), lowerExpression(value, builder, localTypes), width);
+					var operands = lowerOperands([pointer, value], builder, localTypes);
+					builder.memoryStore(operands[0], operands[1], width);
 					builder.constVoid();
 				}
 			case TCall("$rawptr.offset", [pointer, count, stride]):
 				var elementSize = switch stride.expression {
 					case TIntLiteral(value): value;
 					default: throw "RawPtr.offset stride must be constant";
-				}, byteOffset = builder.mul(lowerExpression(count, builder, localTypes), builder.constInt(elementSize));
-				builder.pointerOffset(lowerExpression(pointer, builder, localTypes), byteOffset);
+				}, operands = lowerOperands([pointer, count], builder, localTypes);
+				builder.pointerOffset(operands[0], builder.mul(operands[1], builder.constInt(elementSize)));
 			case TCall("$rawptr.byteOffset", [pointer, count]):
-				builder.pointerOffset(lowerExpression(pointer, builder, localTypes), lowerExpression(count, builder, localTypes));
+				var operands = lowerOperands([pointer, count], builder, localTypes);
+				builder.pointerOffset(operands[0], operands[1]);
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
@@ -1278,7 +1284,7 @@ class IrGenerator {
 					var next = builder.iteratorNext(builder.load(inputName, inputType), lowerType(keyType));
 					builder.store(keyName, next);
 				} else
-					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
+					builder.store(keyName, elementGet(builder, builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
 				if (valueName != null)
 					builder.store(valueName,
 						lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(keyName, lowerType(keyType)), mapTypes.key,
@@ -1364,7 +1370,7 @@ class IrGenerator {
 					var next = builder.iteratorNext(builder.load(inputName, inputType), lowerType(itemType));
 					builder.store(keyName, next);
 				} else
-					builder.store(keyName, builder.arrayGet(builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
+					builder.store(keyName, elementGet(builder, builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
 				if (valueName != null)
 					builder.store(valueName,
 						lowerMapGet(builder, builder.load(sourceMapName, lowerType(iterable.type)), builder.load(keyName, lowerType(itemType)),
@@ -1444,13 +1450,12 @@ class IrGenerator {
 				var separator = IrGenerator.lastSeparator(name);
 				builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
 			case TSuperCall(owner, args):
-				builder.call(owner + ".new", [builder.load("this", localTypes.get("this"))].concat([
-					for (arg in args)
-						lowerExpression(arg, builder, localTypes)
-				]), Void);
+				// Arguments may branch; load `this` in the block that performs the call.
+				var loweredArguments = lowerOperands(args, builder, localTypes);
+				builder.call(owner + ".new", [builder.load("this", localTypes.get("this"))].concat(loweredArguments), Void);
 			case TIndex(array, index):
 				var operands = lowerOperands([array, index], builder, localTypes);
-				builder.arrayGet(operands[0], operands[1], lowerType(expression.type));
+				elementGet(builder, operands[0], operands[1], lowerType(expression.type));
 			case TPostfixLocal(name, delta):
 				var type = lowerType(expression.type),
 					oldValue = builder.load(name, type),
@@ -1485,9 +1490,9 @@ class IrGenerator {
 				var operands = lowerOperands([array, index], builder, localTypes),
 					receiver = operands[0],
 					offset = operands[1],
-					oldValue = builder.arrayGet(receiver, offset, lowerType(expression.type)),
+					oldValue = elementGet(builder, receiver, offset, lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
-				builder.arraySet(receiver, offset, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+				elementSet(builder, receiver, offset, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TMapGet(map, key):
 				var mapType = switch map.type {
@@ -1572,7 +1577,7 @@ class IrGenerator {
 		builder.select(outerCondition);
 		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, arrayType))), outerBody, done);
 		builder.select(outerBody);
-		builder.store(keyName, builder.arrayGet(builder.load(arrayName, arrayType), builder.load(indexName, I32), elementType));
+		builder.store(keyName, elementGet(builder, builder.load(arrayName, arrayType), builder.load(indexName, I32), elementType));
 		builder.store(scanName, builder.sub(builder.load(indexName, I32), builder.constInt(1)));
 		builder.jump(innerCondition);
 		builder.select(innerCondition);
@@ -1583,18 +1588,19 @@ class IrGenerator {
 			default: throw "Array.sort comparator must be a function";
 		};
 		var order = builder.callClosure(builder.load(comparatorName, comparatorType), [
-			abiBoundaryCast(builder, builder.arrayGet(builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType), comparatorArguments[0]),
+			abiBoundaryCast(builder, elementGet(builder, builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType), comparatorArguments[0]),
 			abiBoundaryCast(builder, builder.load(keyName, elementType), comparatorArguments[1])
 		], I32);
 		builder.branch(builder.less(builder.constInt(0), order), move, insert);
 		builder.select(move);
 		var scan = builder.load(scanName, I32);
-		builder.arraySet(builder.load(arrayName, arrayType), builder.add(scan, builder.constInt(1)),
-			builder.arrayGet(builder.load(arrayName, arrayType), scan, elementType));
+		elementSet(builder, builder.load(arrayName, arrayType), builder.add(scan, builder.constInt(1)),
+			elementGet(builder, builder.load(arrayName, arrayType), scan, elementType));
 		builder.store(scanName, builder.sub(scan, builder.constInt(1)));
 		builder.jump(innerCondition);
 		builder.select(insert);
-		builder.arraySet(builder.load(arrayName, arrayType), builder.add(builder.load(scanName, I32), builder.constInt(1)), builder.load(keyName, elementType));
+		elementSet(builder, builder.load(arrayName, arrayType), builder.add(builder.load(scanName, I32), builder.constInt(1)),
+			builder.load(keyName, elementType));
 		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 		builder.jump(outerCondition);
 		builder.select(done);
@@ -1636,7 +1642,7 @@ class IrGenerator {
 		builder.select(conditionBlock);
 		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(sourceName, sourceType))), bodyBlock, afterBlock);
 		builder.select(bodyBlock);
-		var element = builder.arrayGet(builder.load(sourceName, sourceType), builder.load(indexName, I32), lowerType(resultElement));
+		var element = elementGet(builder, builder.load(sourceName, sourceType), builder.load(indexName, I32), lowerType(resultElement));
 		lowerArrayNativeCall(builder, resultElement, "push", [builder.load(resultName, resultType), element], I32);
 		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 		builder.jump(conditionBlock);
@@ -1658,7 +1664,7 @@ class IrGenerator {
 				builder.jump(successBlock);
 			else {
 				var elementType = lowerType(elementPattern.type),
-					elementValue = builder.arrayGet(builder.load(subjectName, subjectType), builder.constInt(index), elementType);
+					elementValue = elementGet(builder, builder.load(subjectName, subjectType), builder.constInt(index), elementType);
 				if (elementPattern.constructorIndex >= 0) {
 					// Include the subject local in the compiler-generated name.  Case and
 					// element indices restart for every switch, so using only those indices
@@ -1697,7 +1703,7 @@ class IrGenerator {
 			caseSpan:compiler.Source.SourceSpan, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		for (index in 0...pattern.elements.length) {
 			var elementPattern = pattern.elements[index],
-				elementValue = builder.arrayGet(builder.load(subjectName, subjectType), builder.constInt(index), lowerType(elementPattern.type));
+				elementValue = elementGet(builder, builder.load(subjectName, subjectType), builder.constInt(index), lowerType(elementPattern.type));
 			if (elementPattern.subjectBinding != null) {
 				var name = elementPattern.subjectBinding;
 				localTypes.set(name, elementValue.type);
@@ -1724,7 +1730,7 @@ class IrGenerator {
 			for (access in predicate.objectPath ?? [])
 				field = builder.fieldGet(field, access.name, lowerType(access.storageType));
 			if (predicate.arrayIndex >= 0)
-				field = builder.arrayGet(field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
+				field = elementGet(builder, field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
 			field = abiBoundaryCast(builder, field, lowerType(predicate.type));
 			var nestedConstructorIndex = predicate.nestedConstructorIndex,
 				matches = if (nestedConstructorIndex != null) builder.equal(builder.enumIndex(field),
@@ -1750,7 +1756,7 @@ class IrGenerator {
 		for (access in binding.nestedPath ?? [])
 			field = builder.enumField(field, access.constructorIndex, access.fieldIndex, lowerType(access.storageType));
 		if (binding.arrayIndex >= 0)
-			field = builder.arrayGet(field, builder.constInt(binding.arrayIndex), lowerType(binding.storageType));
+			field = elementGet(builder, field, builder.constInt(binding.arrayIndex), lowerType(binding.storageType));
 		return abiBoundaryCast(builder, field, lowerType(binding.type));
 	}
 
@@ -1970,13 +1976,48 @@ class IrGenerator {
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
-		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref")
+		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && elementType != Dyn)
 			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 
+	static function arrayElementType(array:CfgValue):Null<IrType>
+		return switch array.type {
+			case Array(element): element;
+			default: null;
+		};
+
+	/** Reads one element. Array<Dynamic> views dispatch on the storage element type; a nested
+	 * array is checked because retyping the outer array cannot retype the arrays it holds.
+	 */
+	static function elementGet(builder:CfgBuilder, array:CfgValue, index:CfgValue, type:IrType):CfgValue {
+		var element = arrayElementType(array);
+		if (!nativeArrayChecks || element == null)
+			return builder.arrayGet(array, index, type);
+		if (element == Dyn) {
+			var value = builder.call("__array_get_any", [array, index], Dyn);
+			return type == Dyn ? value : checkedCast(builder, value, type);
+		}
+		var value = builder.arrayGet(array, index, type);
+		return switch type {
+			case Array(inner) if (inner != Dyn): checkedCast(builder, builder.toDyn(value), type);
+			default: value;
+		};
+	}
+
+	/** Writes one element; Array<Dynamic> writes convert to the storage element type. */
+	static function elementSet(builder:CfgBuilder, array:CfgValue, index:CfgValue, value:CfgValue):Void {
+		if (nativeArrayChecks && arrayElementType(array) == Dyn)
+			builder.call("__array_set_any", [array, index, builder.toDyn(value)], Void);
+		else
+			builder.arraySet(array, index, value);
+	}
+
+	static function arrayNativeName(element:CompilerType, operation:String):String
+		return nativeArrayChecks && lowerType(element) == Dyn ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
+
 	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
-		var nativeName = RuntimeType.arrayNative(element, operation);
+		var nativeName = arrayNativeName(element, operation);
 		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
 			case Array(_): return builder.call(nativeName, arguments, resultType);
 			case Obj(_), Enum(_), ManagedBytes, Abstract(_), Virtual(_), Function(_, _): Dyn;

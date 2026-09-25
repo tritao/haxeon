@@ -7,11 +7,15 @@ haxeon/.tools/haxe/haxe --cwd haxeon -cp src --run Main tests/programs/json-type
 LD_LIBRARY_PATH="$PWD/haxeon/out:$PWD/haxeon/.tools/hashlink" haxeon/.tools/hashlink/hl haxeon/out/json-typed-object-array.hl
 ```
 
-The JSON parser creates an `Array<Dynamic>` of dynamic objects. Assigning the
-result to `Array<Item>` does not materialize `Item` records. The runtime now
-rejects that cast before a typed field read. The conversion path is covered by
-`tests/programs/json-decoded-object-array.hx`: validate each field and create
-a new typed value.
+The JSON parser creates an `Array<Dynamic>` of dynamic objects. Arrays created
+for dynamic values take their element type on the first concrete view, so
+assigning the result to `Array<Item>` validates every element and rejects the
+dynamic objects before any typed field read, leaving the array unchanged. The
+conversion path is covered by `tests/programs/json-decoded-object-array.hx`:
+validate each field and create a new typed value.
 
-Do not treat `__string_equal` or `ustrlen` as the cause. The array cast must
-check the element representation before indexed reads or writes.
+`Array<Dynamic>` accepts storage of any element type and converts on each read
+and write; exact storage of one type is never viewed as another. See
+`tests/programs/generic-array-storage.hx`.
+
+Do not treat `__string_equal` or `ustrlen` as the cause.

@@ -427,8 +427,8 @@ class StatementTyper {
 		var typedCondition = typeExpression(predicate, scope, null, false);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "If condition must be Bool", span);
-		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true),
-			elseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false),
+		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
+			elseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false, session.isPureCall),
 			typedThen = typeStatements(thenBranch, thenScope, result),
 			typedElse = typeStatements(elseBranch, elseScope, result),
 			continuing:Array<Scope> = [];
@@ -441,7 +441,7 @@ class StatementTyper {
 		scope.mergeAssignmentsFrom(continuing);
 		scope.mergeRefinementsFrom(continuing);
 		if (elseBranch.length == 0 && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
-			FlowAnalysis.refineAfterGuard(scope, typedCondition);
+			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TIf(typedCondition, typedThen, typedElse, span);
 	}
 
@@ -551,7 +551,7 @@ class StatementTyper {
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
 			if (typedGuard != null)
-				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true);
+				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
 			var typedBody = typeStatements(switchCase.statements, caseScope, result),
 				constructorIndex = pattern == null ? -1 : pattern.index,
 				enumName:Null<String> = pattern == null ? null : pattern.enumName,

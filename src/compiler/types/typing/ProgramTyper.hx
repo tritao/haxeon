@@ -103,6 +103,7 @@ class ProgramTyper {
 		var setupDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSetup = AllocationMeter.sample();
 		bodyTyper.inferNoReturnFunctions();
+		session.inferPureFunctions();
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		var allocationAfterNoReturn = AllocationMeter.sample();
 		if (requireMain) {

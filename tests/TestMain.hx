@@ -1295,6 +1295,22 @@ class TestMain {
 			'class Service { public var failure:Null<String>; public function new() { failure = null; } function mutate():Void { failure = "changed"; } public function update():Void { if (failure != null) return; mutate(); if (failure != null) return; } } function main():Int { new Service().update(); return 42; }');
 		callEffectCompiler.compile("Main");
 		Sys.println("PASS: calls invalidate stale nullable field refinements before IR lowering");
+		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower) || limits.lower < 0); function main():Int return valid({lower: 1.0}) ? 1 : 0;',
+			"Comparison requires matching numeric operands");
+		Sys.println("PASS: impure calls invalidate nullable numeric field refinements");
+		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && Service.touch(limits.lower) && limits.lower < 0; function main():Int return valid({lower: 1.0}) ? 1 : 0;',
+			"Comparison requires matching numeric operands");
+		Sys.println("PASS: an impure right operand invalidates facts from the left side of a condition");
+		var branchingSuperCompiler = new Compiler();
+		branchingSuperCompiler.update("Main.hx",
+			'class Base { public final code:Int; function new(code:Int) this.code = code; } class Child extends Base { public function new(flag:Bool, other:Bool) super(flag ? (other ? 40 : 41) : 1); } function main():Int return new Child(true, true).code + 2;');
+		branchingSuperCompiler.compile("Main");
+		Sys.println("PASS: branching super-constructor arguments lower without cross-block receiver values");
+		var overriddenNoReturnCompiler = new Compiler();
+		overriddenNoReturnCompiler.update("Main.hx",
+			'class Part { public function new() {} public function size():Int return 42; } class Base { public function new() {} public function make():Part throw "abstract"; function fail():Int throw "failed"; public function guarded(flag:Bool):Int { if (flag) return 1; fail(); } } class Child extends Base { public function new() super(); override public function make():Part return new Part(); } function main():Int { var base:Base = new Child(); var part = base.make(); return part.size() + base.guarded(true) - 1; }');
+		overriddenNoReturnCompiler.compile("Main");
+		Sys.println("PASS: overridden throwing methods return values while other throwing methods stay no-return");
 		var assignmentConversionCompiler = new Compiler();
 		assignmentConversionCompiler.update("Main.hx",
 			'enum Resize { Changed(width:Int, height:Int); } class View { public function new() {} public function setViewport(width:Float, height:Float):Void {} } function main():Int { var view = new View(); var width = 900.0; var height = 650.0; switch Resize.Changed(1200, 800) { case Resize.Changed(nextWidth, nextHeight): width = nextWidth; height = nextHeight; } view.setViewport(width, height); return 42; }');
