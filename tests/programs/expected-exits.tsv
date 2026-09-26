@@ -183,6 +183,7 @@ dynamic-array-references	42
 math-float-rounding	42
 math-constants	42
 prefix-increment	42
+lambda-stdlib-dependency	42
 pure-inference	42
 conditional-empty-literal	42
 void-branch-results	42
