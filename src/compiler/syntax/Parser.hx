@@ -1325,6 +1325,28 @@ class Parser {
 			var start = previous().span, value = parsePrimary();
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
+		if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
+			// Prefix `++x`/`--x` update the target and evaluate to its new value,
+			// lowered like an assignment expression. Field and index targets are
+			// stabilized first so their receiver and index are evaluated once.
+			var start = previous().span,
+				delta = previous().kind == TokenKind.Increment ? 1 : -1,
+				target = parsePrimary(),
+				span = start.merge(expressionSpan(target)),
+				stabilized = AssignmentTarget.stabilize(target, span, expressionSpan),
+				bindings = stabilized.bindings;
+			target = stabilized.target;
+			var assigned = Add(target, IntegerLiteral(delta, start), span);
+			bindings.push(switch target {
+				case Variable(name, _): Assignment(name, assigned, span);
+				case Index(array, offset, _): IndexAssignment(array, offset, assigned, span);
+				case Member(object, field, _): FieldAssignment(object, field, assigned, span);
+				default:
+					throw new CompileError(new Diagnostic("E0002", "Prefix increment target must be a variable, field, or array element",
+						expressionSpan(target)));
+			});
+			return BlockExpression(bindings, target, span);
+		}
 		if (match(TokenKind.Integer)) {
 			var token = previous();
 			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
