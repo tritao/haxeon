@@ -108,7 +108,10 @@ class InlineConstantEvaluator {
 				default: null;
 			};
 		var leftNumber = numberValue(left), rightNumber = numberValue(right);
-		if (leftNumber == null || rightNumber == null || operation == 4 || (rightNumber == 0.0 && operation == 3))
+		// `/` is IEEE float division, so a zero divisor folds to an infinity or
+		// NaN exactly as it evaluates at runtime (Math.POSITIVE_INFINITY relies
+		// on this). Float `%` stays unfolded.
+		if (leftNumber == null || rightNumber == null || operation == 4)
 			return null;
 		return switch operation {
 			case 0: InlineConstantValue.Floating(leftNumber + rightNumber);

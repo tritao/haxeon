@@ -57,6 +57,15 @@ extern function mathFloor(value:Float):Int;
 class Math {
 	public static inline var PI:Float = 3.141592653589793;
 
+	/** IEEE 754 positive infinity, as in the standard Haxe `Math`. */
+	public static inline var POSITIVE_INFINITY:Float = 1.0 / 0.0;
+
+	/** IEEE 754 negative infinity, as in the standard Haxe `Math`. */
+	public static inline var NEGATIVE_INFINITY:Float = -1.0 / 0.0;
+
+	/** IEEE 754 quiet NaN, as in the standard Haxe `Math`. */
+	public static inline var NaN:Float = 0.0 / 0.0;
+
 	public static inline function min(left:Float, right:Float):Float
 		return left < right ? left : right;
 

@@ -523,6 +523,23 @@ class TestMain {
 					}
 		if (!storedInlineValue)
 			throw "Typed inline fields did not retain their evaluated constant value";
+		var ieeeTyped = Typer.type(new Parser(new Lexer(new SourceFile("inline-ieee-constant.hx",
+			'class Constants { public static inline final UP:Float = 1.0 / 0.0; public static inline final DOWN:Float = -1 / 0; public static inline final MISSING:Float = 0.0 / 0.0; } function main():Int return 0;'))
+			.tokenize()).parseProgram()),
+			foldedIeee = 0;
+		for (classDecl in ieeeTyped.classes)
+			for (field in classDecl.fields)
+				if (field.inlineValue != null)
+					switch field.inlineValue.expression {
+						case compiler.types.TypedAst.TypedExpressionKind.TFloatLiteral(value):
+							if ((field.name == "UP" && value > 0.0 && !Math.isFinite(value))
+								|| (field.name == "DOWN" && value < 0.0 && !Math.isFinite(value))
+								|| (field.name == "MISSING" && Math.isNaN(value)))
+								foldedIeee++;
+						default:
+					}
+		if (foldedIeee != 3)
+			throw "Inline float division by zero did not fold to its IEEE value";
 		expectCompileError('class Invalid { public static inline final VALUE:Int = read(); } function read():Int return 16; function main():Int return 0;',
 			'Inline field "Invalid.VALUE" requires a compile-time constant initializer');
 		expectCompileError('class Invalid { public static inline final VALUE:Int = 16; public static function mutate():Void VALUE = 20; } function main():Int return 0;',
