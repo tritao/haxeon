@@ -1909,7 +1909,7 @@ class TestMain {
 		if (Std.isOfType(value, compiler.ir.Ir.IrValue)) {
 			var irValue:compiler.ir.Ir.IrValue = cast value;
 			values.set(irValue.id, irValue);
-		} else if (Std.isOfType(value, Array))
+		} else if (Std.isOfType(value, std.Array)) // `Array` alone is IrType.Array here
 			for (item in (cast value : Array<Dynamic>))
 				collectInstructionValues(Reflect.hasField(item, "value") ? Reflect.field(item, "value") : item, values);
 	}

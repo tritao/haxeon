@@ -58,7 +58,7 @@ class ArtifactCache {
 					|| Sha256.make(File.getBytes(source)).toHex() != cached.checksum)
 					throw "invalid cached output";
 				var temp = action.outputs[index] + '.haxeon-cache-${Std.int(Date.now().getTime())}-$index';
-				ensureDirectory(Path.directory(temp));
+				Directories.ensure(Path.directory(temp));
 				File.copy(source, temp);
 				temporary.push(temp);
 			}
@@ -90,7 +90,7 @@ class ArtifactCache {
 			return;
 		var temporary = Path.join([cacheRoot, '.artifact-${key}-${Std.int(Date.now().getTime())}']);
 		try {
-			ensureDirectory(temporary);
+			Directories.ensure(temporary);
 			var outputs:Array<CachedOutput> = [];
 			for (index in 0...action.outputs.length) {
 				var output = action.outputs[index],
@@ -100,7 +100,7 @@ class ArtifactCache {
 				outputs.push({file: cachedFile, checksum: Sha256.make(File.getBytes(destination)).toHex(), mode: FileSystem.stat(output).mode & 0x1ff});
 			}
 			File.saveContent(Path.join([temporary, "manifest.json"]), Json.stringify({version: 2, outputs: outputs}) + "\n");
-			ensureDirectory(cacheRoot);
+			Directories.ensure(cacheRoot);
 			if (!FileSystem.exists(directory))
 				FileSystem.rename(temporary, directory);
 			else
@@ -128,16 +128,6 @@ class ArtifactCache {
 				&& !StringTools.startsWith(action.id.key(), "native-cmake-build:");
 			case Compiler(_, _, _, _, _): false;
 		};
-	}
-
-	static function ensureDirectory(path:String):Void {
-		if (path == null || path == "" || path == "." || FileSystem.exists(path))
-			return;
-		var parent = Path.directory(path);
-		if (parent != path && parent != "")
-			ensureDirectory(parent);
-		if (!FileSystem.exists(path))
-			FileSystem.createDirectory(path);
 	}
 
 	static function applyMode(path:String, mode:Int):Void {

@@ -231,7 +231,7 @@ class ProcessRunner {
 
 	static function createWaveDirectory(base:String):String {
 		var parent = Path.join([base, ".haxeon", "process-waves"]);
-		ensureDirectory(parent);
+		Directories.ensure(parent);
 		while (true) {
 			waveCounter++;
 			var candidate = Path.join([parent, 'wave-${Std.int(Date.now().getTime())}-$waveCounter']);
@@ -255,21 +255,6 @@ class ProcessRunner {
 				FileSystem.deleteFile(path);
 		}
 		FileSystem.deleteDirectory(directory);
-	}
-
-	static function ensureDirectory(path:String):Void {
-		if (path == null || path == "" || path == "." || FileSystem.exists(path))
-			return;
-		var parent = Path.directory(path);
-		if (parent != path && parent != "")
-			ensureDirectory(parent);
-		if (!FileSystem.exists(path))
-			try {
-				FileSystem.createDirectory(path);
-			} catch (error:Dynamic) {
-				if (!FileSystem.exists(path))
-					throw error;
-			}
 	}
 	#end
 }

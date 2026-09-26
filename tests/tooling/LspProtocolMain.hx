@@ -623,10 +623,10 @@ class LspProtocolMain {
 			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("22") + 1)}
 		}));
 		if (signature.result == null
-			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int"
-			|| signature.result.signatures[0].documentation.value.indexOf("Adds values") < 0
-			|| signature.result.signatures[0].parameters[0].documentation.value != "First value."
-			|| signature.result.activeParameter != 1)
+			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int" // Typed: HashLink rejects dynamic calls that omit String.indexOf's optional argument.
+			|| (signature.result.signatures[0].documentation.value : String).indexOf("Adds values") < 0
+				|| signature.result.signatures[0].parameters[0].documentation.value != "First value."
+				|| signature.result.activeParameter != 1)
 			throw "LSP signature help did not use compiler signature information";
 		var callHints = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -711,7 +711,7 @@ class LspProtocolMain {
 			params: addCompletionItem
 		}));
 		if (resolvedAdd.result.documentation.kind != "markdown"
-			|| resolvedAdd.result.documentation.value.indexOf("**Deprecated.** Use sum.") < 0)
+			|| (resolvedAdd.result.documentation.value : String).indexOf("**Deprecated.** Use sum.") < 0)
 			throw "completion resolve did not reuse compiler-owned documentation";
 		var addHoverPosition = callDocument.position(callSource.indexOf("add") + 1),
 			documentedHover = request(protocol, Json.stringify({
@@ -720,7 +720,8 @@ class LspProtocolMain {
 				method: "textDocument/hover",
 				params: {textDocument: {uri: callUri}, position: addHoverPosition}
 			}));
-		if (documentedHover.result.contents.kind != "markdown" || documentedHover.result.contents.value.indexOf("Adds values") < 0)
+		if (documentedHover.result.contents.kind != "markdown"
+			|| (documentedHover.result.contents.value : String).indexOf("Adds values") < 0)
 			throw "hover did not reuse compiler-owned documentation";
 		var callSemantic = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -767,7 +768,7 @@ class LspProtocolMain {
 			method: "completionItem/resolve",
 			params: helperItem
 		}));
-		if (resolvedHelper.result.documentation.value.indexOf(helperPath) < 0
+		if ((resolvedHelper.result.documentation.value : String).indexOf(helperPath) < 0
 			|| resolvedHelper.result.additionalTextEdits.length != 1
 			|| resolvedHelper.result.additionalTextEdits[0].newText != "import workspace.tools.Helper;\n")
 			throw "completion resolve omitted documentation or the deterministic import edit";

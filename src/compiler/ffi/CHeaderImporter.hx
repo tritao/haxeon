@@ -902,6 +902,8 @@ class CHeaderImporter {
 			column:Dynamic = field(location, "col");
 		if (file == null)
 			file = "<header>";
-		return '$file:${line == null ? "?" : line}:${column == null ? "?" : column}';
+		// Clang's line and column are JSON numbers: convert explicitly, since a conditional typed by
+		// its "?" branch would cast them to String, which fails on HashLink.
+		return '$file:${line == null ? "?" : Std.string(line)}:${column == null ? "?" : Std.string(column)}';
 	}
 }

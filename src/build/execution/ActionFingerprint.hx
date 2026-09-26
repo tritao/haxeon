@@ -99,7 +99,7 @@ class ActionFingerprint {
 	public static function save(buildRoot:String, action:ExecutionAction, fingerprint:String):Void {
 		var path = recordPath(buildRoot, action),
 			directory = Path.directory(path);
-		ensureDirectory(directory);
+		Directories.ensure(directory);
 		File.saveContent(path, Json.stringify({fingerprint: fingerprint}) + "\n");
 	}
 
@@ -304,15 +304,5 @@ class ActionFingerprint {
 					return FileSystem.fullPath(candidate);
 			}
 		return command;
-	}
-
-	static function ensureDirectory(path:String):Void {
-		if (path == null || path == "" || path == "." || FileSystem.exists(path))
-			return;
-		var parent = Path.directory(path);
-		if (parent != path && parent != "")
-			ensureDirectory(parent);
-		if (!FileSystem.exists(path))
-			FileSystem.createDirectory(path);
 	}
 }

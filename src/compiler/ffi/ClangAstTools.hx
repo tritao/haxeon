@@ -164,7 +164,9 @@ class ClangAstTools {
 			file:String = field(node, "_hxiFile"),
 			line:Dynamic = field(location, "line"),
 			column:Dynamic = field(location, "col");
-		return '${file == null ? "<header>" : file}:${line == null ? "?" : line}:${column == null ? "?" : column}';
+		// Clang's line and column are JSON numbers: convert explicitly, since a conditional typed by
+		// its "?" branch would cast them to String, which fails on HashLink.
+		return '${file == null ? "<header>" : file}:${line == null ? "?" : Std.string(line)}:${column == null ? "?" : Std.string(column)}';
 	}
 
 	public static function pathKey(path:String):String

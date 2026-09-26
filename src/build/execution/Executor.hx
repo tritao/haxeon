@@ -72,7 +72,10 @@ class Executor implements ExecutionBackend {
 						fingerprints.get(dependency.key())
 				];
 				Thread.create(function() {
-					var result = executeAction(currentAction, dependencyFingerprints);
+					// Always report and release: an exception escaping this thread would leave the
+					// wave waiting on the lock forever.
+					var result = try executeAction(currentAction,
+						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
 					waveMutex.acquire();
 					waveResults.set(currentAction.id.key(), result);
 					waveMutex.release();
@@ -230,22 +233,7 @@ class Executor implements ExecutionBackend {
 			var directory = haxe.io.Path.directory(output);
 			if (directory == "" || directory == "." || sys.FileSystem.exists(directory))
 				continue;
-			ensureDirectory(directory);
+			Directories.ensure(directory);
 		}
-	}
-
-	static function ensureDirectory(path:String):Void {
-		if (path == "" || path == "." || sys.FileSystem.exists(path))
-			return;
-		var parent = haxe.io.Path.directory(path);
-		if (parent != path && parent != "")
-			ensureDirectory(parent);
-		if (!sys.FileSystem.exists(path))
-			try {
-				sys.FileSystem.createDirectory(path);
-			} catch (error:Dynamic) {
-				if (!sys.FileSystem.exists(path))
-					throw error;
-			}
 	}
 }
