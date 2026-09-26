@@ -12,13 +12,14 @@ if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
+source "$root_dir/scripts/haxeon-compiler.sh"
 if ! command -v "$chrome_bin" >/dev/null 2>&1; then
 	echo "missing Chrome; set CHROME_BIN or install Google Chrome" >&2
 	exit 1
 fi
 
 mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile \
 	--target=wasm-gc --output="$wasm_path" --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
 

@@ -8,160 +8,167 @@ if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
+source "$root_dir/scripts/haxeon-compiler.sh"
 
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
 bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
 	--root=tests/programs tests/programs/add.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-source-root.wasm --entry=Main \
 	--root=tests/fixtures/source_root tests/fixtures/source_root/Main.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
 	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
 	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-typed-std-dependency.wasm --entry=wasm-typed-std-dependency \
 	--root=tests/programs tests/programs/wasm-typed-std-dependency.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
 	--root=tests/programs tests/programs/wasm-int64-of-int.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
 	--root=tests/programs tests/programs/wasm-int64-of-int.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-ryu-source.wasm --entry=wasm-ryu-source \
 	--export=wasm-ryu-source.stringifyFloat --root=tests/programs tests/programs/wasm-ryu-source.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-ryu-source.wasm --entry=wasm-ryu-source \
 	--root=tests/programs tests/programs/wasm-ryu-source.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
 	--root=tests/programs tests/programs/wasm-std-string-fields.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
 	--root=tests/programs tests/programs/wasm-std-string-fields.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-function-wrapper.wasm --entry=function-wrapper \
 	--root=tests/programs tests/programs/function-wrapper.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-type-test.wasm --entry=std-is-of-type \
 	--root=tests/programs tests/programs/std-is-of-type.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-numeric-promotion.wasm --entry=numeric-promotion \
 	--root=tests/programs tests/programs/numeric-promotion.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-array-slice.wasm --entry=array-slice-index \
 	--root=tests/programs tests/programs/array-slice-index.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-array-mutation.wasm --entry=array-splice \
 	--root=tests/programs tests/programs/array-splice.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-array-growth.wasm --entry=array-growth-wasm \
 	--root=tests/programs tests/programs/array-growth-wasm.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-array-iterator.wasm --entry=array-iterator-wasm \
 	--root=tests/programs tests/programs/array-iterator-wasm.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-basic.wasm --entry=map-basic \
 	--root=tests/programs tests/programs/map-basic.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-int.wasm --entry=map-int \
 	--root=tests/programs tests/programs/map-int.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-primitive-types.wasm --entry=map-primitive-types \
 	--root=tests/programs tests/programs/map-primitive-types.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-for-in.wasm --entry=map-for-in \
 	--root=tests/programs tests/programs/map-for-in.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-key-value-for-in.wasm --entry=map-key-value-for-in \
 	--root=tests/programs tests/programs/map-key-value-for-in.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-object.wasm --entry=map-object \
 	--root=tests/programs tests/programs/map-object.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-messagepack-enum-map.wasm --entry=wasm-messagepack-enum-map \
 	--root=tests/programs tests/programs/wasm-messagepack-enum-map.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
 	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
 	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-wasm32-bytes-view.wasm --entry=wasm32-bytes-view \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_bytes_view.hxi tests/ffi/wasm32-bytes-view.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-try-catch.wasm --entry=try-catch \
 	--root=tests/programs tests/programs/try-catch.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-try-nested.wasm --entry=try-nested \
 	--root=tests/programs tests/programs/try-nested.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-try-bounds.wasm --entry=try-array-bounds \
 	--root=tests/programs tests/programs/try-array-bounds.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-hxi-retained.wasm --entry=wasm-hxi-retained \
 	--root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-hxi-retained-imported.wasm --entry=wasm-hxi-retained \
 	--wasm-import-memory --root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-hxi-value-records.wasm --entry=wasm32-value-records \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-arrays.wasm --entry=wasm-gc-arrays \
 	--root=tests/programs tests/programs/wasm-gc-arrays.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-enums.wasm --entry=wasm-gc-enums \
 	--root=tests/programs tests/programs/wasm-gc-enums.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-closures.wasm --entry=wasm-gc-closures \
 	--root=tests/programs tests/programs/wasm-gc-closures.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-dynamic.wasm --entry=wasm-gc-dynamic \
 	--root=tests/programs tests/programs/wasm-gc-dynamic.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-exceptions.wasm --entry=wasm-gc-exceptions \
 	--root=tests/programs tests/programs/wasm-gc-exceptions.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-strings.wasm --entry=wasm-gc-strings \
 	--root=tests/programs tests/programs/wasm-gc-strings.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
 	--root=tests/programs tests/programs/wasm-string-split.hx
-# Exact array storage with checked Array<Dynamic> views; Wasm GC joins once it shares the representation.
-for case_name in generic-array-storage dynamic-array-views; do
-	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
-		--target=wasm32 --output="out/wasm-cli-$case_name.wasm" --entry="$case_name" \
-		--root=tests/programs "tests/programs/$case_name.hx"
+# Exact array storage with checked Array<Dynamic> views. These check diagnostics through
+# Std.string, which gives Wasm GC modules linear memory, so they stay out of the parity suite.
+for case_name in generic-array-storage dynamic-array-views dynamic-array-references; do
+	for target in wasm32 wasm-gc; do
+		prefix=$([[ $target == wasm-gc ]] && echo wasm-gc-cli || echo wasm-cli)
+		haxeon_compile_async \
+			--target="$target" --output="out/$prefix-$case_name.wasm" --entry="$case_name" \
+			--root=tests/programs "tests/programs/$case_name.hx"
+	done
 done
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-bytes.wasm --entry=wasm-gc-ffi-bytes \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-bytes.hx
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
+haxeon_compile_wait
+
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
@@ -243,7 +250,11 @@ const cases = [
 	["out/wasm-cli-gc-strings.wasm", 42],
 	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-generic-array-storage.wasm", 42],
+	["out/wasm-gc-cli-generic-array-storage.wasm", 42],
 	["out/wasm-cli-dynamic-array-views.wasm", 42],
+	["out/wasm-gc-cli-dynamic-array-views.wasm", 42],
+	["out/wasm-cli-dynamic-array-references.wasm", 42],
+	["out/wasm-gc-cli-dynamic-array-references.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
@@ -529,7 +540,10 @@ const cases = [
       const messagePackWire = relative.endsWith("wasm-gc-cli-messagepack-wire.wasm");
       const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
         || relative.endsWith("wasm-gc-cli-ryu-source.wasm")
-        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm");
+        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm")
+        || relative.endsWith("wasm-gc-cli-generic-array-storage.wasm")
+        || relative.endsWith("wasm-gc-cli-dynamic-array-views.wasm")
+        || relative.endsWith("wasm-gc-cli-dynamic-array-references.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
           || (!ffiBytes && !shortStruct && !messagePackWire && !staticDataRuntime && hasMemory)

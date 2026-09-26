@@ -11,9 +11,10 @@ if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
+source "$root_dir/scripts/haxeon-compiler.sh"
 
 mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+haxeon_compile \
 	--target=wasm32 --wasm-memory-stats --wasm-gc-stress --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
 	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --export=wasm-gc-invariants.allocationBurst \
 	--export=wasm-gc-invariants.runtimeRootFrameExercise \
@@ -24,13 +25,13 @@ mkdir -p "$root_dir/out"
 	--export=wasm-gc-invariants.returnRootExercise \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
-"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+haxeon_compile \
 	--target=wasm32 --wasm-memory-stats --export=wasm-gc-invariants.allocationBurst \
 	--export=wasm-gc-invariants.growBeyondInitialMemory --export=wasm-gc-invariants.deepGraphExercise \
 	--export=wasm-gc-invariants.wideGraphExercise --output="$normal_artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
-"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+haxeon_compile \
 	--target=wasm32 --wasm-gc-stress --output="$map_artifact" \
 	--entry=map-object --root="$root_dir/tests/programs" "$root_dir/tests/programs/map-object.hx"
 

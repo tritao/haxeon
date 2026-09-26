@@ -9,9 +9,10 @@ if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
+source "$root_dir/scripts/haxeon-compiler.sh"
 
 mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+haxeon_compile \
 	--target=wasm32 --output="$artifact" --entry=wasm-gc-reuse \
 	--wasm-gc-stress \
 	--root=tests/programs tests/programs/wasm-gc-reuse.hx
