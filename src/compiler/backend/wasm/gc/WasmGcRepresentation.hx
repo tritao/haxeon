@@ -443,6 +443,257 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		].concat(integerValueString(value, outputLocal));
 	}
 
+	/** Int64 decimal text, as `%lld` prints it; digits are taken from the negative-safe remainder. */
+	function int64String(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var value = allocateLocal(I64),
+			negative = allocateLocal(I32),
+			position = allocateLocal(I32),
+			digit = allocateLocal(I32),
+			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+			byteArray = plan.byteArrayTypeIndex;
+		function putCharacter(character:Array<WasmInstruction>):Array<WasmInstruction>
+			return [LocalGet(storage), LocalGet(position)].concat(character)
+				.concat([ArraySet(byteArray), LocalGet(position), I32Const(1), I32Sub, LocalSet(position)]);
+		var body:Array<WasmInstruction> = [
+			LocalGet(valueLocal),
+			LocalTee(value),
+			I64Const(0),
+			I64LtS,
+			LocalSet(negative),
+			I32Const(20),
+			ArrayNewDefault(byteArray),
+			LocalSet(storage),
+			I32Const(19),
+			LocalSet(position),
+			LocalGet(value),
+			I64Eqz,
+			If(null)
+		];
+		body = body.concat(putCharacter([I32Const(48)]));
+		body = body.concat([Else, Block(null), Loop(null), LocalGet(value), I64Eqz, BrIf(1)]);
+		body = body.concat([
+			LocalGet(value),
+			I64Const(10),
+			I64RemS,
+			I32WrapI64,
+			LocalTee(digit),
+			I32Const(0),
+			I32LtS,
+			If(null),
+			I32Const(0),
+			LocalGet(digit),
+			I32Sub,
+			LocalSet(digit),
+			End
+		]);
+		body = body.concat(putCharacter([LocalGet(digit), I32Const(48), I32Add]));
+		body = body.concat([
+			LocalGet(value),
+			I64Const(10),
+			I64DivS,
+			LocalSet(value),
+			Br(0),
+			End,
+			End,
+			End,
+			LocalGet(negative),
+			If(null)
+		]);
+		body = body.concat(putCharacter([I32Const(45)]));
+		return body.concat([
+			End,
+			LocalGet(storage),
+			LocalGet(position),
+			I32Const(1),
+			I32Add,
+			I32Const(19),
+			LocalGet(position),
+			I32Sub,
+			StructNew(plan.bytesTypeIndex),
+			LocalSet(outputLocal)
+		]);
+	}
+
+	/**
+	 * Int64 parsing as `strtoll` accepts it (`native/runtime/int64.c`): leading whitespace, an optional
+	 * sign, then decimal digits to the end. Digits accumulate negatively so the minimum value parses;
+	 * null, empty, malformed and out-of-range input fail.
+	 */
+	function int64Parse(textLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var length = allocateLocal(I32),
+			index = allocateLocal(I32),
+			character = allocateLocal(I32),
+			negative = allocateLocal(I32),
+			digit = allocateLocal(I64),
+			value = allocateLocal(I64),
+			minimum = allocateLocal(I64),
+			limit = allocateLocal(I64),
+			fail = trapInstructions();
+		function failWhen(condition:Array<WasmInstruction>):Array<WasmInstruction>
+			return condition.concat([If(null)]).concat(fail).concat([End]);
+		var loadCharacter:Array<WasmInstruction> = [
+			LocalGet(textLocal),
+			StructGet(plan.bytesTypeIndex, 0),
+			LocalGet(textLocal),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(index),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			LocalSet(character)
+		], belowLength:Array<WasmInstruction> = [LocalGet(index), LocalGet(length), I32LtS], advance:Array<WasmInstruction> = [LocalGet(index), I32Const(1), I32Add, LocalSet(index)];
+		// I64Const takes a 32-bit operand: build Int64.MIN and MIN / 10 at run time.
+		var body:Array<WasmInstruction> = [
+			I64Const(1),
+			I64Const(63),
+			I64Shl,
+			LocalTee(minimum),
+			I64Const(10),
+			I64DivS,
+			LocalSet(limit),
+			I64Const(0),
+			LocalSet(value),
+			I32Const(0),
+			LocalSet(index),
+			I32Const(0),
+			LocalSet(negative)
+		];
+		body = body.concat(failWhen([LocalGet(textLocal), RefIsNull]));
+		body = body.concat([LocalGet(textLocal), StructGet(plan.bytesTypeIndex, 2), LocalSet(length)]);
+		// Skip ASCII whitespace: space and \t through \r.
+		body = body.concat([Block(null), Loop(null)])
+			.concat(belowLength)
+			.concat([I32Eqz, BrIf(1)])
+			.concat(loadCharacter);
+		body = body.concat([
+			LocalGet(character),
+			I32Const(32),
+			I32Eq,
+			LocalGet(character),
+			I32Const(9),
+			I32Sub,
+			I32Const(5),
+			I32LtS,
+			LocalGet(character),
+			I32Const(9),
+			I32LtS,
+			I32Eqz,
+			I32And,
+			I32Or,
+			I32Eqz,
+			BrIf(1)
+		]).concat(advance).concat([Br(0), End, End]);
+		body = body.concat(belowLength).concat([If(null)]).concat(loadCharacter);
+		body = body.concat([
+			LocalGet(character),
+			I32Const(45),
+			I32Eq,
+			LocalTee(negative),
+			LocalGet(character),
+			I32Const(43),
+			I32Eq,
+			I32Or,
+			If(null)
+		]).concat(advance).concat([End, End]);
+		// At least one digit is required.
+		body = body.concat(failWhen(belowLength.concat([I32Eqz])));
+		body = body.concat([Block(null), Loop(null)])
+			.concat(belowLength)
+			.concat([I32Eqz, BrIf(1)])
+			.concat(loadCharacter);
+		body = body.concat([LocalGet(character), I32Const(48), I32Sub, LocalSet(character)]);
+		body = body.concat(failWhen([
+			LocalGet(character),
+			I32Const(10),
+			I32LtS,
+			LocalGet(character),
+			I32Const(0),
+			I32LtS,
+			I32Eqz,
+			I32And,
+			I32Eqz
+		]));
+		body = body.concat([LocalGet(character), I64ExtendI32S, LocalSet(digit)]);
+		// value * 10 - digit must stay >= Int64.MIN.
+		body = body.concat(failWhen([LocalGet(value), LocalGet(limit), I64LtS]));
+		body = body.concat([LocalGet(value), I64Const(10), I64Mul, LocalSet(value)]);
+		body = body.concat(failWhen([LocalGet(value), LocalGet(minimum), LocalGet(digit), I64Add, I64LtS]));
+		body = body.concat([LocalGet(value), LocalGet(digit), I64Sub, LocalSet(value)]).concat(advance).concat([Br(0), End, End]);
+		body = body.concat([LocalGet(negative), I32Eqz, If(null)]);
+		body = body.concat(failWhen([LocalGet(value), LocalGet(minimum), I64Eq]));
+		return body.concat([
+			I64Const(0),
+			LocalGet(value),
+			I64Sub,
+			LocalSet(value),
+			End,
+			LocalGet(value),
+			LocalSet(outputLocal)
+		]);
+	}
+
+	/** String.startsWith / endsWith: a null string counts as empty, as in `native/runtime/strings.c`. */
+	function stringAffix(valueLocal:Int, affixLocal:Int, outputLocal:Int, suffix:Bool):Array<WasmInstruction> {
+		var valueLength = allocateLocal(I32),
+			affixLength = allocateLocal(I32),
+			start = allocateLocal(I32),
+			index = allocateLocal(I32),
+			body:Array<WasmInstruction> = [];
+		function characterAt(stringLocal:Int, position:Array<WasmInstruction>):Array<WasmInstruction>
+			return [
+				LocalGet(stringLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(stringLocal),
+				StructGet(plan.bytesTypeIndex, 1)
+			].concat(position).concat([I32Add, ArrayGetUnsigned(plan.byteArrayTypeIndex)]);
+		for (entry in [
+			{string: valueLocal, length: valueLength},
+			{string: affixLocal, length: affixLength}
+		])
+			body = body.concat([
+				LocalGet(entry.string),
+				RefIsNull,
+				If(I32),
+				I32Const(0),
+				Else,
+				LocalGet(entry.string),
+				StructGet(plan.bytesTypeIndex, 2),
+				End,
+				LocalSet(entry.length)
+			]);
+		body = body.concat([I32Const(0), LocalSet(outputLocal), I32Const(0), LocalSet(index)]);
+		body = body.concat(suffix ? [LocalGet(valueLength), LocalGet(affixLength), I32Sub, LocalSet(start)] : [I32Const(0), LocalSet(start)]);
+		body = body.concat([
+			LocalGet(affixLength),
+			LocalGet(valueLength),
+			I32LeS,
+			If(null),
+			I32Const(1),
+			LocalSet(outputLocal),
+			Block(null),
+			Loop(null)
+		]);
+		body = body.concat([LocalGet(index), LocalGet(affixLength), I32LtS, I32Eqz, BrIf(1)]);
+		body = body.concat(characterAt(valueLocal, [LocalGet(start), LocalGet(index), I32Add]));
+		body = body.concat(characterAt(affixLocal, [LocalGet(index)]));
+		return body.concat([
+			I32Eq,
+			I32Eqz,
+			If(null),
+			I32Const(0),
+			LocalSet(outputLocal),
+			Br(2),
+			End,
+			LocalGet(index),
+			I32Const(1),
+			I32Add,
+			LocalSet(index),
+			Br(0),
+			End,
+			End,
+			End
+		]);
+	}
+
 	function integerValueString(value:Int, outputLocal:Int):Array<WasmInstruction> {
 		var negative = allocateLocal(I32),
 			position = allocateLocal(I32),
@@ -1127,6 +1378,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)
 				throw "Invalid Wasm GC string equality signature";
 			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
+		}
+		if (name == "__int64_to_string") {
+			if (output.type != Bytes || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Int64.toStr signature";
+			return int64String(argumentLocals[0], outputLocal);
+		}
+		if (name == "__int64_parse") {
+			if (output.type != I64 || arguments.length != 1 || arguments[0].type != Bytes || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Int64.parseString signature";
+			return int64Parse(argumentLocals[0], outputLocal);
+		}
+		if (name == "__string_starts_with" || name == "__string_ends_with") {
+			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes || argumentLocals.length != 2)
+				throw 'Invalid Wasm GC $name signature';
+			return stringAffix(argumentLocals[0], argumentLocals[1], outputLocal, name == "__string_ends_with");
 		}
 		if (name == "__string_compare_full") {
 			if (output.type != I32 || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != Bytes)

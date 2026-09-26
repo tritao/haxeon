@@ -248,6 +248,10 @@ class WasmLinearRuntime {
 				"native_callback_create", "native_callback_close", "native_callback_error_kind", "native_callback_take_error":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
+			case "__int64_to_string": addInt64ToString(module, native.name, allocator);
+			case "__int64_parse": addInt64Parse(module, native.name);
+			case "__string_starts_with": addStringAffix(module, native.name, false);
+			case "__string_ends_with": addStringAffix(module, native.name, true);
 			case "__runtime_string_from_ascii": addStringFromAscii(module, native.name, allocator);
 			case "__bytes_of_string": addBytesFromString(module, native.name, allocator);
 			case "__bytes_view": addBytesView(module, native.name, allocator);
@@ -3126,6 +3130,227 @@ class WasmLinearRuntime {
 			builder.emit(I32Store8(0));
 		});
 		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/**
+	 * Int64 parsing as `strtoll` accepts it (`native/runtime/int64.c`): leading whitespace, an optional
+	 * sign, then decimal digits to the end. Digits accumulate negatively so the minimum value parses;
+	 * null, empty, malformed and out-of-range input fail.
+	 */
+	static function addInt64Parse(module:WasmModule, name:String):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I64]}),
+			text = builder.parameter("text", 0),
+			length = builder.local("length", I32),
+			index = builder.local("index", I32),
+			character = builder.local("character", I32),
+			negative = builder.local("negative", I32),
+			digit = builder.local("digit", I64),
+			value = builder.local("value", I64),
+			minimum = builder.local("minimum", I64),
+			limit = builder.local("limit", I64);
+		// I64Const takes a 32-bit operand: build Int64.MIN and MIN / 10 at run time.
+		builder.emit(I64Const(1));
+		builder.emit(I64Const(63));
+		builder.emit(I64Shl);
+		builder.localTee(minimum);
+		builder.emit(I64Const(10));
+		builder.emit(I64DivS);
+		builder.localSet(limit);
+		function loadCharacter(builder:WasmFunctionBuilder):Void {
+			builder.localGet(text);
+			builder.localGet(index);
+			builder.i32Add();
+			builder.emit(I32Load8U(WasmLayout.STRING_DATA_OFFSET));
+			builder.localSet(character);
+		}
+		function whenIndexBelowLength(builder:WasmFunctionBuilder):Void {
+			builder.localGet(index);
+			builder.localGet(length);
+			builder.emit(I32LtS);
+		}
+		builder.localGet(text);
+		builder.i32Eqz();
+		builder.if_(runtimeFailure);
+		builder.localGet(text);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		// Skip ASCII whitespace: space and \t through \r.
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				whenIndexBelowLength(builder);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				loadCharacter(builder);
+				builder.localGet(character);
+				builder.i32Const(32);
+				builder.emit(I32Eq);
+				builder.localGet(character);
+				builder.i32Const(9);
+				builder.i32Sub();
+				builder.i32Const(5);
+				builder.emit(I32LtS);
+				builder.localGet(character);
+				builder.i32Const(9);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(I32And);
+				builder.emit(I32Or);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		whenIndexBelowLength(builder);
+		builder.if_(function(builder) {
+			loadCharacter(builder);
+			builder.localGet(character);
+			builder.i32Const(45);
+			builder.emit(I32Eq);
+			builder.localSet(negative);
+			builder.localGet(negative);
+			builder.localGet(character);
+			builder.i32Const(43);
+			builder.emit(I32Eq);
+			builder.emit(I32Or);
+			builder.if_(function(builder) {
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+			});
+		});
+		// At least one digit is required.
+		whenIndexBelowLength(builder);
+		builder.i32Eqz();
+		builder.if_(runtimeFailure);
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				whenIndexBelowLength(builder);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				loadCharacter(builder);
+				builder.localGet(character);
+				builder.i32Const(48);
+				builder.i32Sub();
+				builder.localTee(character);
+				builder.i32Const(10);
+				builder.emit(I32LtS);
+				builder.localGet(character);
+				builder.i32Const(0);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(I32And);
+				builder.i32Eqz();
+				builder.if_(runtimeFailure);
+				builder.localGet(character);
+				builder.emit(I64ExtendI32S);
+				builder.localSet(digit);
+				// value * 10 - digit must stay >= Int64.MIN.
+				builder.localGet(value);
+				builder.localGet(limit);
+				builder.emit(I64LtS);
+				builder.if_(runtimeFailure);
+				builder.localGet(value);
+				builder.emit(I64Const(10));
+				builder.emit(I64Mul);
+				builder.localTee(value);
+				builder.localGet(minimum);
+				builder.localGet(digit);
+				builder.emit(I64Add);
+				builder.emit(I64LtS);
+				builder.if_(runtimeFailure);
+				builder.localGet(value);
+				builder.localGet(digit);
+				builder.emit(I64Sub);
+				builder.localSet(value);
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Add();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.localGet(negative);
+		builder.ifElse(builder -> builder.localGet(value), function(builder) {
+			builder.localGet(value);
+			builder.localGet(minimum);
+			builder.emit(I64Eq);
+			builder.if_(runtimeFailure);
+			builder.emit(I64Const(0));
+			builder.localGet(value);
+			builder.emit(I64Sub);
+		}, I64);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/** String.startsWith / endsWith: a null string counts as empty, as in `native/runtime/strings.c`. */
+	static function addStringAffix(module:WasmModule, name:String, suffix:Bool):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			affix = builder.parameter("affix", 1),
+			valueLength = builder.local("valueLength", I32),
+			affixLength = builder.local("affixLength", I32),
+			start = builder.local("start", I32),
+			index = builder.local("index", I32);
+		for (entry in [{string: value, length: valueLength}, {string: affix, length: affixLength}]) {
+			builder.localGet(entry.string);
+			builder.i32Eqz();
+			builder.ifElse(builder -> builder.i32Const(0), function(builder) {
+				builder.localGet(entry.string);
+				builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+			}, I32);
+			builder.localSet(entry.length);
+		}
+		builder.localGet(valueLength);
+		builder.localGet(affixLength);
+		builder.emit(I32LtS);
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
+		if (suffix) {
+			builder.localGet(valueLength);
+			builder.localGet(affixLength);
+			builder.i32Sub();
+			builder.localSet(start);
+		}
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.localGet(affixLength);
+				builder.emit(I32LtS);
+				builder.i32Eqz();
+				builder.emit(BrIf(1));
+				builder.localGet(value);
+				builder.localGet(start);
+				builder.i32Add();
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(WasmLayout.STRING_DATA_OFFSET));
+				builder.localGet(affix);
+				builder.localGet(index);
+				builder.i32Add();
+				builder.emit(I32Load8U(WasmLayout.STRING_DATA_OFFSET));
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					builder.localGet(index);
+					builder.i32Const(1);
+					builder.i32Add();
+					builder.localSet(index);
+					builder.emit(Br(1));
+				});
+				builder.i32Const(0);
+				builder.return_();
+			});
+		});
+		builder.i32Const(1);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}

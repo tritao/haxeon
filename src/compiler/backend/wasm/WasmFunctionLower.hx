@@ -280,6 +280,8 @@ class WasmFunctionLower {
 		var staged:Array<{target:Int, temporary:Int}> = [];
 		for (located in block.instructions)
 			switch located.value {
+				// A Void join (branches whose results are discarded) carries no value; placement gives it no local.
+				case Phi(output, _) if (output.type == Void):
 				case Phi(output, inputs):
 					var temporary = context.placement.allocate(context.representation.values.valueType(output.type));
 					WasmPhiLower.capture(body, inputs, values, predecessor, temporary);

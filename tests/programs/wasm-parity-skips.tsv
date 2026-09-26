@@ -2,9 +2,7 @@
 # Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
 # mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets).
 # name	mode	reason
-void-branch-results	skip	Neither Wasm backend supports Void-typed IR values
-messagepack-wire	skip	No Wasm lowering for haxe.Int64.parseString
-messagepack-interop	skip	No Wasm lowering for haxe.Int64.toStr (wasm32) or StringTools.startsWith (Wasm GC)
+messagepack-interop	skip	Reads its vectors from fixture files through sys.io.File and Sys.args
 json-decoded-object-array	skip	JSON needs Reflect field access and dynamic objects on Wasm
 json-typed-object-array	skip	JSON needs Reflect field access and dynamic objects on Wasm
 dynamic-object-literal	skip	Dynamic objects and Reflect field access are not implemented on Wasm
