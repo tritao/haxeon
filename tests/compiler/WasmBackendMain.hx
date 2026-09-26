@@ -620,11 +620,14 @@ class WasmBackendMain {
 			nodeElementType = switch storageType.type {
 				case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
 				default: false;
-			},
-			arrayDataType = switch nodeArrayType[1].type {
-				case Value(Ref(ref)): !ref.nullable && isTypeHeap(ref.heap, nodeStorageIndex);
+			}, // Every array shares one wrapper: element-typed storage behind an abstract arrayref, plus its element type id.
+			arrayDataType = (switch nodeArrayType[1].type {
+				case Value(Ref(ref)): !ref.nullable && ref.heap == WasmHeapType.Array;
 				default: false;
-			},
+			}) && (switch nodeArrayType[2].type {
+				case Value(I32): true;
+				default: false;
+			}),
 			iteratorArrayType = switch iteratorFields[0].type {
 				case Value(Ref(ref)): ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
 				default: false;

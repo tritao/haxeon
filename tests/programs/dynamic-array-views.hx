@@ -134,5 +134,15 @@ function main():Int {
 		flags.push(false);
 	}, "element 1 is Int"))
 		return 21;
+
+	// Explicit iterators over a Dynamic view read through the storage element type.
+	var counted = [1, 2, 3];
+	var countedView:Array<Dynamic> = cast counted;
+	var total = 0;
+	var iterator = countedView.iterator();
+	while (iterator.hasNext())
+		total += iterator.next();
+	if (total != 6)
+		return 22;
 	return 42;
 }

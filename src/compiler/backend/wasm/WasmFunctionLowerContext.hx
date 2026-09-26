@@ -50,7 +50,6 @@ class WasmFunctionLowerContext {
 	public final valueLocals:Map<Int, Int>;
 	public final locals:Array<WasmLocal>;
 	public final arrayTemps:WasmFunctionArrayTemps;
-	public var elidedDynamicArrayCasts:Map<Int, IrValue> = [];
 	public var exceptionState:Null<WasmFunctionExceptionState>;
 	public var gcRootState:Null<WasmFunctionGcRootState>;
 

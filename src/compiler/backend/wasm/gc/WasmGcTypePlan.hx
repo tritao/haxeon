@@ -140,6 +140,7 @@ class WasmGcTypePlan {
 		return field + 1;
 	}
 
+	/** Every Haxe array shares one wrapper, so `Array<T>` and `Array<Dynamic>` views alias one object. */
 	public function arrayType(element:IrType):Int
 		return arrayPlan(element).wrapperTypeIndex;
 
@@ -152,18 +153,23 @@ class WasmGcTypePlan {
 	public function mapPlan(name:String):WasmGcMapTypePlan
 		return requireMapPlan(name);
 
-	/** Returns every concrete array wrapper planned for this program. */
-	public function arrayWrapperTypes():Array<Int> {
-		var keys = [for (key in arrayTypes.keys()) key];
-		keys.sort(Reflect.compare);
-		return [for (key in keys) arrayTypes.get(key).wrapperTypeIndex];
-	}
+	/** Element types with planned array storage, in first-use order. */
+	public function arrayElementTypes():Array<IrType>
+		return arrayElements.copy();
+
+	/** Reference to element-typed storage; the wrapper's data field holds it as an abstract `arrayref`. */
+	public function arrayStorageReference(element:IrType):WasmRefType
+		return {nullable: false, heap: Type(arrayStorageType(element))};
 
 	public static inline function arrayLengthFieldIndex():Int
 		return 0;
 
 	public static inline function arrayDataFieldIndex():Int
 		return 1;
+
+	/** Runtime type id of the storage element type, the counterpart of HashLink's `varray.at`. */
+	public static inline function arrayElementTypeFieldIndex():Int
+		return 2;
 
 	public function iteratorType(element:IrType):Int
 		return requireIndex(iteratorTypeIndices, typeKey(element), 'Unknown Wasm GC iterator type');
@@ -490,9 +496,10 @@ class WasmGcTypePlan {
 	}
 
 	function reserveGenericTypes():Void {
+		var wrapperTypeIndex = arrayElements.length == 0 ? -1 : reserveType();
 		for (element in arrayElements) {
 			var key = typeKey(element);
-			arrayTypes.set(key, {storageTypeIndex: reserveType(), wrapperTypeIndex: reserveType()});
+			arrayTypes.set(key, {storageTypeIndex: reserveType(), wrapperTypeIndex: wrapperTypeIndex});
 		}
 		for (element in iteratorElements)
 			iteratorTypeIndices.set(typeKey(element), reserveType());
@@ -588,11 +595,13 @@ class WasmGcTypePlan {
 		for (element in arrayElements) {
 			var plan = arrayPlan(element), wasmElement = valueType(element);
 			setType(plan.storageTypeIndex, true, [], Array({type: Value(wasmElement), mutable: true}));
-			setType(plan.wrapperTypeIndex, true, [], Struct([
-				{type: Value(I32), mutable: true},
-				{type: Value(Ref({nullable: false, heap: Type(plan.storageTypeIndex)})), mutable: true}
-			]));
 		}
+		if (arrayElements.length != 0)
+			setType(arrayPlan(arrayElements[0]).wrapperTypeIndex, true, [], Struct([
+				{type: Value(I32), mutable: true},
+				{type: Value(Ref({nullable: false, heap: WasmHeapType.Array})), mutable: true},
+				{type: Value(I32), mutable: true}
+			]));
 		for (element in iteratorElements) {
 			var arrayIndex = arrayType(element),
 				iteratorIndex = iteratorType(element);

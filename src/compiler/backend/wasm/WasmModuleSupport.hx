@@ -51,6 +51,9 @@ class WasmModuleSupport {
 								result.set(name, true);
 							case StaticClosure(_, name):
 								result.set(name, true);
+							// Dynamic iterators read through the Array<Dynamic> element reader.
+							case IteratorNext(output, _) if (output.type == Dyn):
+								result.set("__array_get_any", true);
 							default:
 						}
 		return result;

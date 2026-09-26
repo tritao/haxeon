@@ -306,6 +306,10 @@ class IrProgramAssembler {
 								if (operationStart > 0)
 									mapRuntimeNames.set(name.substring(2, operationStart), true);
 							}
+						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
+						case IteratorNext(output, _) if (output.type == Dyn):
+							needsArrayRuntime = true;
+							needsAnyArrayRuntime = true;
 						default:
 					}
 		program.objects = objects == null ? [] : objects;

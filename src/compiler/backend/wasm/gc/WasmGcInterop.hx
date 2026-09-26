@@ -755,6 +755,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			End,
 			LocalGet(rootsLocal),
 			StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(rootsStorageType)}),
 			LocalGet(rootIndexLocal),
 			ArrayGet(rootsStorageType),
 			LocalTee(rootValueLocal),

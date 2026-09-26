@@ -539,11 +539,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body.push(I32Const(WasmModuleSupport.typeId(Array(Dyn))));
 		body.push(I32Eq);
 		body.push(If(null));
-		body.push(I32Const(0));
-		for (arrayType in plan.arrayWrapperTypes()) {
+		var elements = plan.arrayElementTypes();
+		if (elements.length == 0)
+			body.push(I32Const(0));
+		else {
 			body.push(LocalGet(valueLocal));
-			body.push(RefTest({nullable: false, heap: Type(arrayType)}));
-			body.push(I32Or);
+			body.push(RefTest({nullable: false, heap: Type(plan.arrayType(elements[0]))}));
 		}
 		body.push(LocalSet(outputLocal));
 		body.push(End);
@@ -931,6 +932,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				End,
 				LocalGet(rootsLocal),
 				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(plan.arrayStorageType(ManagedBytes))}),
 				LocalGet(indexLocal),
 				ArrayGet(plan.arrayStorageType(ManagedBytes)),
 				LocalGet(argumentLocals[2]),
@@ -985,6 +987,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				End,
 				LocalGet(rootsLocal),
 				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(rootsStorageType)}),
 				LocalGet(indexLocal),
 				RefNull(Type(plan.managedBytesTypeIndex)),
 				ArraySet(rootsStorageType),
@@ -1001,6 +1004,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			body = body.concat([
 				LocalGet(rootsLocal),
 				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(rootsStorageType)}),
 				LocalGet(indexLocal),
 				LocalGet(utf8Local),
 				ArraySet(rootsStorageType),
@@ -1107,6 +1111,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC String.substring signature";
 			return stringSubstring(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
+		// Dynamic array views are shared module functions (WasmGcDynamicArrays).
+		if (WasmGcDynamicArrays.isOperation(name))
+			return UseDefault;
 		if (name == "__array_join_bytes") {
 			if (output.type != Bytes
 				|| arguments.length != 2
@@ -1130,6 +1137,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(8),
 				I32Add,
 				ArrayNewDefault(plan.arrayStorageType(element)),
+				I32Const(WasmModuleSupport.typeId(element)),
 				StructNew(plan.arrayType(element)),
 				LocalSet(outputLocal)
 			];
@@ -1950,6 +1958,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				If(null),
 				LocalGet(arrayLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				LocalGet(index),
 				ArrayGet(storageType),
 				LocalSet(value)
@@ -2059,11 +2071,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Const(0),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalGet(start),
 			LocalGet(resultLength),
 			ArrayCopy(storageType, storageType),
 			LocalGet(resultLength),
 			LocalGet(storage),
+			I32Const(WasmModuleSupport.typeId(element)),
 			StructNew(wrapperType),
 			LocalSet(destination)
 		]);
@@ -2112,6 +2129,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(0),
 				LocalGet(leftLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				I32Const(0),
 				LocalGet(leftLength),
 				ArrayCopy(storageType, storageType),
@@ -2119,11 +2140,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalGet(leftLength),
 				LocalGet(rightLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				I32Const(0),
 				LocalGet(rightLength),
 				ArrayCopy(storageType, storageType),
 				LocalGet(totalLength),
 				LocalGet(storage),
+				I32Const(WasmModuleSupport.typeId(element)),
 				StructNew(wrapperType),
 				LocalSet(destination)
 			];
@@ -2152,6 +2178,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End,
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalSet(storage),
 			LocalGet(length),
 			I32Const(1),
@@ -2198,6 +2225,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(right),
 				LocalGet(arrayLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				LocalSet(storage),
 				Loop(null),
 				LocalGet(left),
@@ -2252,6 +2283,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(length),
 				LocalGet(arrayLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				LocalSet(storage),
 				LocalGet(length),
 				I32Const(1),
@@ -2330,6 +2365,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(index),
 				LocalGet(arrayLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storageType)
+				}),
 				LocalSet(storage),
 				LocalGet(index),
 				I32Const(0),
@@ -2437,6 +2476,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalSet(length),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalSet(storage),
 			LocalGet(storage),
 			ArrayLen,
@@ -2552,6 +2595,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End,
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalSet(storage),
 			LocalGet(storage),
 			I32Const(0),
@@ -2632,12 +2676,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalSet(newLength),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalSet(storage),
 			LocalGet(count),
 			ArrayNewDefault(resultStorageType),
 			LocalSet(removedStorage),
 			LocalGet(count),
 			LocalGet(removedStorage),
+			I32Const(WasmModuleSupport.typeId(resultElement)),
 			StructNew(resultWrapperType),
 			LocalSet(removedArray),
 			LocalGet(removedStorage),
@@ -2746,6 +2795,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body = body.concat([
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalGet(indexLocal),
 			ArrayGet(storageType),
 			LocalSet(destination)
@@ -2771,6 +2821,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			If(null),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalGet(indexLocal),
 			LocalGet(valueLocal),
 			ArraySet(storageType),
@@ -2790,6 +2844,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalGet(indexLocal),
 			LocalGet(valueLocal),
 			ArraySet(storageType),
@@ -2814,6 +2872,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Const(0),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			I32Const(0),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
@@ -2826,6 +2888,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			StructSet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
 			LocalGet(indexLocal),
 			LocalGet(valueLocal),
 			ArraySet(storageType),
@@ -2885,11 +2951,25 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32LtS,
 			If(null),
 			LocalGet(iteratorLocal),
-			StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()),
-			StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex())
+		];
+		// Dynamic iterators may walk storage of any element type; read it like Array<Dynamic>.
+		var readAny = element == Dyn ? gc.functions.get("__array_get_any") : null;
+		body = body.concat(readAny != null ? [
 			LocalGet(iteratorLocal),
 			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
-			ArrayGet(storageType),
+			Call(readAny)
+		] : [
+			StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(storageType)
+			}),
+			LocalGet(iteratorLocal),
+			StructGet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
+			ArrayGet(storageType)
+		]);
+		body = body.concat([
 			LocalSet(destination),
 			LocalGet(iteratorLocal),
 			LocalGet(iteratorLocal),
@@ -2898,7 +2978,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Add,
 			StructSet(iteratorType, WasmGcTypePlan.iteratorPositionFieldIndex()),
 			Else
-		];
+		]);
 		body = body.concat(trapInstructions());
 		body.push(End);
 		return body;
@@ -3533,6 +3613,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End,
 			LocalGet(charsLocal),
 			StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalSet(chars),
 			LocalGet(lengthLocal),
 			ArrayNewDefault(plan.byteArrayTypeIndex),
@@ -3851,6 +3932,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(0),
 				LocalGet(capacity),
 				ArrayNewDefault(arrayStorage),
+				I32Const(WasmModuleSupport.typeId(Bytes)),
 				StructNew(arrayType),
 				LocalSet(result),
 				I32Const(0),
@@ -4377,6 +4459,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			countLocal:Int, startLocal:Int, endLocal:Int):Void {
 		body.push(LocalGet(resultLocal));
 		body.push(StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()));
+		body.push(RefCast({nullable: false, heap: Type(arrayStorage)}));
 		body.push(LocalGet(countLocal));
 		body.push(LocalGet(sourceLocal));
 		body.push(StructGet(plan.bytesTypeIndex, 0));
@@ -4449,6 +4532,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End,
 			LocalGet(arrayLocal),
 			StructGet(wrapperType, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalGet(index),
 			ArrayGet(storageType),
 			LocalSet(element),
@@ -4715,7 +4799,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			default: throw 'Wasm GC enum operation requires an enum, got ${Std.string(type)}';
 		};
 
-	static function arrayNativeSuffix(type:IrType):String
+	public static function arrayNativeSuffix(type:IrType):String
 		return switch type {
 			case I32: "i32";
 			case I64: "i64";

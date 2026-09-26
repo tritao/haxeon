@@ -75,9 +75,6 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
-	public function supportsNativeArrayChecks():Bool
-		return owner.supportsNativeArrayChecks();
-
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 

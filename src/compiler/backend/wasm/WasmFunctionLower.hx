@@ -41,44 +41,6 @@ class WasmFunctionLower {
 		return locals.get(valueId);
 	}
 
-	static function elidedDynamicArrayCasts(fn:IrFunction, representation:WasmRepresentationSet):Map<Int, IrValue> {
-		// A GC Array<Dynamic> wrapper cannot cast an element-typed array wrapper. When
-		// flow narrowing is immediately erased again, preserve the original anyref.
-		var result:Map<Int, IrValue> = [];
-		if (!Std.isOfType(representation.values, WasmGcRepresentation))
-			return result;
-		var candidates:Map<Int, IrValue> = [],
-			invalid:Map<Int, Bool> = [],
-			uses:Map<Int, Int> = [];
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case SafeCast(output, value) if (value.type == Dyn && isDynamicArrayType(output.type)):
-						candidates.set(output.id, value);
-					default:
-				}
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				for (input in IrOperands.inputs(located.value))
-					if (candidates.exists(input.id))
-						switch located.value {
-							case ToDyn(_, value) if (value.id == input.id):
-								uses.set(input.id, (uses.get(input.id) ?? 0) + 1);
-							default:
-								invalid.set(input.id, true);
-						}
-		for (valueId in candidates.keys())
-			if (!invalid.exists(valueId) && uses.get(valueId) == 1)
-				result.set(valueId, candidates.get(valueId));
-		return result;
-	}
-
-	static function isDynamicArrayType(type:IrType):Bool
-		return switch type {
-			case Array(Dyn): true;
-			default: false;
-		};
-
 	static function requiredBlockIndex(blocks:Map<Int, Int>, blockId:Int):Int {
 		if (!blocks.exists(blockId))
 			throw 'Unknown Wasm block $blockId';
@@ -101,7 +63,6 @@ class WasmFunctionLower {
 			placement = context.placement,
 			valueLocals = context.valueLocals,
 			locals = context.locals;
-		context.elidedDynamicArrayCasts = elidedDynamicArrayCasts(fn, context.representation);
 		var rootLocals:Array<Int> = [],
 			rootIds:Map<Int, Bool> = [],
 			live:Map<Int, Map<Int, Array<Int>>> = [];
@@ -480,10 +441,7 @@ class WasmFunctionLower {
 			case TypeValue(output, type):
 				emit(body, [I32Const(typeId(type)), LocalSet(requiredLocal(values, output.id))]);
 			case ToDyn(output, value):
-				var original = context.elidedDynamicArrayCasts.get(value.id),
-					dynamicValue = original == null ? value : original,
-					represented = context.representation.values.toDynamic(dynamicValue, requiredLocal(values, output.id),
-						requiredLocal(values, dynamicValue.id));
+				var represented = context.representation.values.toDynamic(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch value.type {
 						case I32, Bool:
@@ -526,31 +484,29 @@ class WasmFunctionLower {
 							]);
 					}
 			case SafeCast(output, value):
-				if (!context.elidedDynamicArrayCasts.exists(output.id)) {
-					var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
-					if (emitIfHandled(body, represented)) {} else
-						switch output.type {
-							case I32, Bool, I64, F64 if (value.type == Dyn):
-								emit(body, [
-									LocalGet(requiredLocal(values, value.id)),
-									I32Load(0),
-									I32Const(typeId(output.type)),
-									I32Eq,
-									If(null),
-									LocalGet(requiredLocal(values, value.id)),
-									load(output.type, WasmLayout.DYN_PAYLOAD_OFFSET),
-									LocalSet(requiredLocal(values, output.id)),
-									Else,
-									Unreachable,
-									End
-								]);
-							default:
-								emit(body, [
-									LocalGet(requiredLocal(values, value.id)),
-									LocalSet(requiredLocal(values, output.id))
-								]);
-						}
-				}
+				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
+				if (emitIfHandled(body, represented)) {} else
+					switch output.type {
+						case I32, Bool, I64, F64 if (value.type == Dyn):
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								I32Load(0),
+								I32Const(typeId(output.type)),
+								I32Eq,
+								If(null),
+								LocalGet(requiredLocal(values, value.id)),
+								load(output.type, WasmLayout.DYN_PAYLOAD_OFFSET),
+								LocalSet(requiredLocal(values, output.id)),
+								Else,
+								Unreachable,
+								End
+							]);
+						default:
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								LocalSet(requiredLocal(values, output.id))
+							]);
+					}
 			case BeginTry(catchBlock, _):
 				if (exceptionState == null)
 					throw 'Wasm exception lowering has no active exception state';
@@ -1054,7 +1010,17 @@ class WasmFunctionLower {
 						I32Load(arrayOffset),
 						I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
 						I32LtS,
-						If(null),
+						If(null)
+					]);
+					// Dynamic iterators may walk storage of any element type; read it like Array<Dynamic>.
+					var readAny = output.type == Dyn ? functions.get("__array_get_any") : null;
+					iteratorBody = iteratorBody.concat(readAny != null ? [
+						LocalGet(iteratorLocal),
+						I32Load(arrayOffset),
+						LocalGet(iteratorLocal),
+						I32Load(positionOffset),
+						Call(readAny)
+					] : [
 						LocalGet(iteratorLocal),
 						I32Load(arrayOffset),
 						I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
@@ -1063,7 +1029,9 @@ class WasmFunctionLower {
 						I32Const(stride),
 						I32Mul,
 						I32Add,
-						load(output.type, 0),
+						load(output.type, 0)
+					]);
+					iteratorBody = iteratorBody.concat([
 						LocalSet(outputLocal),
 						LocalGet(iteratorLocal),
 						LocalGet(iteratorLocal),

@@ -68,6 +68,10 @@ class WasmGcMaps {
 				LocalGet(0),
 				StructGet(mapType, 2),
 				StructGet(keyType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(keyStorage)
+				}),
 				LocalGet(2),
 				ArrayGet(keyStorage)
 			];
@@ -213,15 +217,25 @@ class WasmGcMaps {
 		body.push(LocalSet(5));
 		appendNewArray(body, plan, map.valueType, [LocalGet(4)]);
 		body.push(LocalSet(6));
-		appendArrayCopy(body, keyStorage, [LocalGet(5), StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex())], [I32Const(0)], [
+		appendArrayCopy(body, keyStorage, [
+			LocalGet(5),
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
+		], [I32Const(0)], [
 			LocalGet(0),
 			StructGet(mapType, 2),
-			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
 		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
-		appendArrayCopy(body, valueStorage, [LocalGet(6), StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex())], [I32Const(0)], [
+		appendArrayCopy(body, valueStorage, [
+			LocalGet(6),
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
+		], [I32Const(0)], [
 			LocalGet(0),
 			StructGet(mapType, 3),
-			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
 		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
 		body = body.concat([
 			LocalGet(0),
@@ -237,6 +251,10 @@ class WasmGcMaps {
 			LocalGet(0),
 			StructGet(mapType, 2),
 			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(keyStorage)
+			}),
 			LocalGet(3),
 			LocalGet(1),
 			ArraySet(keyStorage),
@@ -250,6 +268,10 @@ class WasmGcMaps {
 			LocalGet(0),
 			StructGet(mapType, 3),
 			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({
+				nullable: false,
+				heap: Type(valueStorage)
+			}),
 			LocalGet(3),
 			LocalGet(2),
 			ArraySet(valueStorage),
@@ -286,6 +308,10 @@ class WasmGcMaps {
 				LocalGet(0),
 				StructGet(mapType, 3),
 				StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(valueStorage)
+				}),
 				LocalGet(2),
 				ArrayGet(valueStorage)
 			],
@@ -349,14 +375,20 @@ class WasmGcMaps {
 			I32Const(8),
 			I32Add,
 			ArrayNewDefault(storage),
+			I32Const(WasmModuleSupport.typeId(element)),
 			StructNew(array),
 			LocalSet(1)
 			];
 		if (sourceElement == element) {
-			appendArrayCopy(body, storage, [LocalGet(1), StructGet(array, WasmGcTypePlan.arrayDataFieldIndex())], [I32Const(0)], [
+			appendArrayCopy(body, storage, [
+				LocalGet(1),
+				StructGet(array, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(storage)})
+			], [I32Const(0)], [
 				LocalGet(0),
 				StructGet(mapType, mapField),
-				StructGet(sourceArray, WasmGcTypePlan.arrayDataFieldIndex())
+				StructGet(sourceArray, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(sourceStorage)})
 			], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
 		} else {
 			var targetReference = switch plan.valueType(element) {
@@ -376,10 +408,15 @@ class WasmGcMaps {
 				BrIf(1),
 				LocalGet(1),
 				StructGet(array, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(storage)
+				}),
 				LocalGet(2),
 				LocalGet(0),
 				StructGet(mapType, mapField),
 				StructGet(sourceArray, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({nullable: false, heap: Type(sourceStorage)}),
 				LocalGet(2),
 				ArrayGet(sourceStorage),
 				RefCast(targetReference),
@@ -428,20 +465,24 @@ class WasmGcMaps {
 		appendArrayCopy(body, keyStorage, [
 			LocalGet(0),
 			StructGet(mapType, 2),
-			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
 		], [LocalGet(2)], [
 			LocalGet(0),
 			StructGet(mapType, 2),
-			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
 		], [LocalGet(2), I32Const(1), I32Add], [LocalGet(4)]);
 		appendArrayCopy(body, valueStorage, [
 			LocalGet(0),
 			StructGet(mapType, 3),
-			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
 		], [LocalGet(2)], [
 			LocalGet(0),
 			StructGet(mapType, 3),
-			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex())
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
 		], [LocalGet(2), I32Const(1), I32Add], [LocalGet(4)]);
 		appendMapArrayDefault(body, plan, mapType, 2, map.keyType, [LocalGet(3), I32Const(1), I32Sub]);
 		appendMapArrayDefault(body, plan, mapType, 3, map.valueType, [LocalGet(3), I32Const(1), I32Sub]);
@@ -466,6 +507,7 @@ class WasmGcMaps {
 		body.push(LocalGet(0));
 		body.push(StructGet(mapType, mapField));
 		body.push(StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()));
+		body.push(RefCast({nullable: false, heap: Type(storageType)}));
 		for (instruction in index)
 			body.push(instruction);
 		switch plan.valueType(element) {
@@ -491,6 +533,7 @@ class WasmGcMaps {
 		body.push(I32Const(8));
 		body.push(I32Add);
 		body.push(ArrayNewDefault(plan.arrayStorageType(element)));
+		body.push(I32Const(WasmModuleSupport.typeId(element)));
 		body.push(StructNew(plan.arrayType(element)));
 	}
 

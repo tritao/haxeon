@@ -102,6 +102,7 @@ class WasmGcModuleBuilder {
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
+		WasmGcDynamicArrays.register(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		var scratchAllocator = -1;
 		if (requiresScratchMemory) {
@@ -318,7 +319,7 @@ class WasmGcModuleBuilder {
 	}
 
 	static function isSupportedGcRuntimeNative(name:String):Bool {
-		if (WasmModuleSupport.mapNativeParts(name) != null)
+		if (WasmModuleSupport.mapNativeParts(name) != null || WasmGcDynamicArrays.isOperation(name))
 			return true;
 		return switch name {
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref",

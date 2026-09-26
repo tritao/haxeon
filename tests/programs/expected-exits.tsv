@@ -179,6 +179,7 @@ native-memory	42
 string-null-equality	42
 generic-array-storage	42
 dynamic-array-views	42
+dynamic-array-references	42
 math-float-rounding	42
 pure-inference	42
 conditional-empty-literal	42
