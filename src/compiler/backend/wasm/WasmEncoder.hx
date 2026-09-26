@@ -55,6 +55,9 @@ class WasmEncoder {
 			writeSection(output, 8, encodeStart(module.start));
 		if (module.tableMin != null && module.tableElements.length > 0)
 			writeSection(output, 9, encodeElements(module.tableElements));
+		// Instructions that name a data segment require the data count section before the code.
+		if (Lambda.exists(module.data, segment -> segment.passive == true))
+			writeSection(output, 12, encodeDataCount(module.data.length));
 		writeSection(output, 10, encodeCode(module));
 		if (module.data.length > 0)
 			writeSection(output, 11, encodeData(module.data));
@@ -244,13 +247,23 @@ class WasmEncoder {
 		var body = new BytesOutput();
 		writeU32(body, data.length);
 		for (segment in data) {
-			body.writeByte(0);
-			body.writeByte(0x41);
-			writeS32(body, segment.offset);
-			body.writeByte(0x0b);
+			if (segment.passive == true)
+				body.writeByte(1);
+			else {
+				body.writeByte(0);
+				body.writeByte(0x41);
+				writeS32(body, segment.offset);
+				body.writeByte(0x0b);
+			}
 			writeU32(body, segment.bytes.length);
 			body.writeBytes(segment.bytes, 0, segment.bytes.length);
 		}
+		return body.getBytes();
+	}
+
+	static function encodeDataCount(count:Int):Bytes {
+		var body = new BytesOutput();
+		writeU32(body, count);
 		return body.getBytes();
 	}
 
@@ -612,6 +625,9 @@ class WasmEncoder {
 					writeGcOpcode(output, 6, typeIndex);
 				case ArrayNewDefault(typeIndex):
 					writeGcOpcode(output, 7, typeIndex);
+				case ArrayNewData(typeIndex, dataIndex):
+					writeGcOpcode(output, 9, typeIndex);
+					writeU32(output, dataIndex);
 				case ArrayGet(typeIndex):
 					writeGcOpcode(output, 11, typeIndex);
 				case ArrayGetSigned(typeIndex):

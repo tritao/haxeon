@@ -48,6 +48,10 @@ class WasmGcTypePlan {
 	public final functionTypeIndices:Map<String, Int> = [];
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
 	public var byteArrayTypeIndex(default, null):Int = -1;
+
+	/** Immutable `(array i32)` holding `RuntimeData.address` tables, or -1 when the program has none. */
+	public var staticDataTypeIndex(default, null):Int = -1;
+
 	public var bytesTypeIndex(default, null):Int = -1;
 	public var managedBytesTypeIndex(default, null):Int = -1;
 	public var nativePointerTypeIndex(default, null):Int = -1;
@@ -466,7 +470,21 @@ class WasmGcTypePlan {
 		}
 	}
 
+	function usesStaticData():Bool {
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case StaticDataAddress(_, _):
+							return true;
+						default:
+					}
+		return false;
+	}
+
 	function reserveRuntimeTypes():Void {
+		if (usesStaticData())
+			staticDataTypeIndex = reserveType();
 		byteArrayTypeIndex = reserveType();
 		bytesTypeIndex = reserveType();
 		managedBytesTypeIndex = reserveType();
@@ -547,6 +565,8 @@ class WasmGcTypePlan {
 	}
 
 	function defineRuntimeTypes():Void {
+		if (staticDataTypeIndex >= 0)
+			setType(staticDataTypeIndex, true, [], Array({type: Value(I32), mutable: false}));
 		setType(byteArrayTypeIndex, true, [], Array({type: I8, mutable: true}));
 		setType(bytesTypeIndex, true, [], Struct([
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},

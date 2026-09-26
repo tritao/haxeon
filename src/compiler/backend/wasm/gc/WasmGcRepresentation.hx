@@ -18,6 +18,9 @@ import compiler.backend.wasm.gc.WasmGcTypePlan;
 
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
 class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation {
+	/** Global holding the module's static data array (see WasmGcModuleBuilder.addGcStaticData). */
+	public static inline final STATIC_DATA_GLOBAL = "__haxeon_static_data";
+
 	final gc:WasmGcContext;
 	final plan:WasmGcTypePlan;
 	final functionContext:Null<WasmGcFunctionContext>;
@@ -716,6 +719,27 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [LocalSet(temporary)].concat(requireHandled(converted));
 	}
 
+	/**
+	 * `RuntimeData.loadI32` reads the word at a static data address. Wasm GC keeps static data in an
+	 * immutable i32 array (little-endian words, as `i32.load` reads them), so addresses must be aligned.
+	 */
+	function staticDataLoadI32(addressLocal:Int, destination:Int):Array<WasmInstruction> {
+		var global = gc.globals.get(STATIC_DATA_GLOBAL);
+		if (global == null)
+			throw "Wasm GC RuntimeData.loadI32 requires static data from RuntimeData.address";
+		var body:Array<WasmInstruction> = [LocalGet(addressLocal), I32Const(3), I32And, If(null)];
+		body = body.concat(trapInstructions());
+		return body.concat([
+			End,
+			GlobalGet(global),
+			LocalGet(addressLocal),
+			I32Const(2),
+			I32ShrU,
+			ArrayGet(plan.staticDataTypeIndex),
+			LocalSet(destination)
+		]);
+	}
+
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
 			if (output.type != Bytes
@@ -730,7 +754,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		if (name == "__wasm_memory_load_i32" || name == "runtime.RuntimeData.loadI32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC runtime memory.load i32 signature";
-			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
+			return staticDataLoadI32(argumentLocals[0], outputLocal);
 		}
 		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
 			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)

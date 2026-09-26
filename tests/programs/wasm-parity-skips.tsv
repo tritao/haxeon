@@ -1,18 +1,7 @@
 # Manifest programs the Wasm parity suite does not require yet (scripts/test-wasm-gc-parity.sh).
 # Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
-# mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets);
-#       gc-memory = must pass, but its Wasm GC module may use linear memory.
+# mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets).
 # name	mode	reason
-generic-array-storage	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
-dynamic-array-views	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
-dynamic-array-references	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
-string-concat-mixed	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-messagepack-codec	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-messagepack-generated	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-messagepack-malformed	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-enum-argument-string	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-string-interpolation	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-std-string-to-string	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
 void-branch-results	skip	Neither Wasm backend supports Void-typed IR values
 messagepack-wire	skip	No Wasm lowering for haxe.Int64.parseString
 messagepack-interop	skip	No Wasm lowering for haxe.Int64.toStr (wasm32) or StringTools.startsWith (Wasm GC)

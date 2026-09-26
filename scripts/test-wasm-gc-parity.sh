@@ -84,7 +84,7 @@ const runtime = {
   __std_int_f64: Math.trunc
 };
 
-async function run(name, target, mode) {
+async function run(name, target) {
   const file = path.join(root, "out", `wasm-parity-${target}-${name}.wasm`);
   if (!fs.existsSync(file)) {
     const log = path.join(root, "out", "wasm-parity-logs", `${target}-${name}.log`);
@@ -98,7 +98,7 @@ async function run(name, target, mode) {
   if (missing.length !== 0)
     return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
   if (target === "wasm-gc") {
-    if (mode !== "gc-memory" && WebAssembly.Module.exports(module).some(entry => entry.name === "memory"))
+    if (WebAssembly.Module.exports(module).some(entry => entry.name === "memory"))
       return {failure: "GC module contains linear memory"};
     if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
       return {failure: "GC module contains custom root metadata"};
@@ -121,7 +121,7 @@ async function run(name, target, mode) {
     const mode = modes.get(name);
     const results = {};
     for (const target of ["wasm32", "wasm-gc"]) {
-      const result = await run(name, target, mode);
+      const result = await run(name, target);
       if (result.failure === undefined && result.exit !== expected)
         result.failure = `expected ${expected}, got ${result.exit}`;
       results[target] = result;

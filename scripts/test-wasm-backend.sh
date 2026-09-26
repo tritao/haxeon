@@ -521,13 +521,9 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
-      const messagePackWire = relative.endsWith("wasm-gc-cli-messagepack-wire.wasm");
-      const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
-        || relative.endsWith("wasm-gc-cli-ryu-source.wasm")
-        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !messagePackWire && !staticDataRuntime && hasMemory)
+          || (!ffiBytes && !shortStruct && hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)

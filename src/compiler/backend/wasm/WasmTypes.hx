@@ -185,6 +185,10 @@ enum WasmInstruction {
 	StructSet(typeIndex:Int, fieldIndex:Int);
 	ArrayNew(typeIndex:Int);
 	ArrayNewDefault(typeIndex:Int);
+
+	/** Create an array of numeric elements from a byte range of a passive data segment. */
+	ArrayNewData(typeIndex:Int, dataIndex:Int);
+
 	ArrayGet(typeIndex:Int);
 	ArrayGetSigned(typeIndex:Int);
 	ArrayGetUnsigned(typeIndex:Int);

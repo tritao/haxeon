@@ -29,6 +29,7 @@ import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmModule.WasmDataSegment;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 /** Owns construction and lowering of a complete Wasm GC module. */
@@ -73,9 +74,6 @@ class WasmGcModuleBuilder {
 						case Value:
 					}
 			}
-		for (native in program.natives)
-			if (usedNatives.exists(native.name) && native.symbol == "__wasm_memory_load_i32")
-				requiresLinearMemory = true;
 
 		var plan = new WasmGcTypePlan(program),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
@@ -86,18 +84,19 @@ class WasmGcModuleBuilder {
 			gcRepresentation = new WasmGcRepresentation(gcContext);
 		plan.addTo(module);
 		module.importMemory = importMemory;
-		var staticData = WasmModuleSupport.placeStaticData(program, module, memoryBase + 8, reachable),
-			hasStaticData = staticData.addresses.iterator().hasNext();
+		// Static data lives in an immutable GC array rather than linear memory, so a module
+		// needs linear memory only for C FFI scratch space or an imported memory contract.
+		var staticData = WasmModuleSupport.layoutStaticData(program, 8, reachable),
+			staticDataInit = addGcStaticData(module, globals, plan, staticData),
+			memoryEnd = memoryBase + 8;
 		var scratchTop = -1;
-		if (requiresScratchMemory || requiresLinearMemory || hasStaticData || importMemory) {
-			if (contract != null && staticData.end > contract.guestLimit)
-				throw 'Wasm GC static data exceeds memory contract guest limit ${contract.guestLimit}';
-			module.memoryMin = WasmModuleSupport.memoryPages(contract == null ? staticData.end : contract.memorySize);
+		if (requiresScratchMemory || requiresLinearMemory || importMemory) {
+			module.memoryMin = WasmModuleSupport.memoryPages(contract == null ? memoryEnd : contract.memorySize);
 			module.exportMemory = !importMemory && (requiresScratchMemory || requiresLinearMemory);
 		}
 		if (requiresScratchMemory) {
 			scratchTop = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(staticData.end)]});
+			module.globals.push({type: I32, mutable: true, init: [I32Const(memoryEnd)]});
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
@@ -155,8 +154,8 @@ class WasmGcModuleBuilder {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm GC entry point $preferredEntry was not emitted';
-		if (WasmModuleSupport.hasFunction(program, "__init"))
-			module.start = functions.get("__init");
+		var init = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
+		module.start = staticDataInit == null ? init : addGcStartFunction(module, staticDataInit, init);
 		module.exports.push({name: "main", functionIndex: entry});
 		for (exported in exportedFunctions) {
 			var exportIndex = functions.get(exported);
@@ -170,6 +169,44 @@ class WasmGcModuleBuilder {
 		if (Sys.getEnv("HAXEON_WASM_LEGACY_EXCEPTIONS") != "1")
 			WasmExceptionLowering.lower(module);
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
+	}
+
+	/**
+	 * Store static data in one passive segment behind a global immutable i32 array. Returns the
+	 * instructions that fill the global, which must run before any Haxe code, or null without data.
+	 */
+	static function addGcStaticData(module:WasmModule, globals:Map<String, Int>, plan:WasmGcTypePlan,
+			staticData:{addresses:Map<String, Int>, segments:Array<WasmDataSegment>, end:Int}):Null<Array<WasmInstruction>> {
+		if (staticData.segments.length == 0)
+			return null;
+		if (plan.staticDataTypeIndex < 0)
+			throw "Wasm GC static data has no planned array type";
+		var blob = haxe.io.Bytes.alloc(staticData.end);
+		for (segment in staticData.segments)
+			blob.blit(segment.offset, segment.bytes, 0, segment.bytes.length);
+		module.data.push({offset: 0, bytes: blob, passive: true});
+		var global = module.globals.length;
+		module.globals.push({
+			type: Ref({nullable: true, heap: Type(plan.staticDataTypeIndex)}),
+			mutable: true,
+			init: [RefNull(Type(plan.staticDataTypeIndex))]
+		});
+		globals.set(WasmGcRepresentation.STATIC_DATA_GLOBAL, global);
+		return [
+			I32Const(0),
+			I32Const(staticData.end >> 2),
+			ArrayNewData(plan.staticDataTypeIndex, module.data.length - 1),
+			GlobalSet(global)
+		];
+	}
+
+	/** Start function that fills the static data global, then runs Haxe static initialization. */
+	static function addGcStartFunction(module:WasmModule, staticDataInit:Array<WasmInstruction>, init:Null<Int>):Int {
+		var body = staticDataInit.copy();
+		if (init != null)
+			body.push(Call(init));
+		body.push(Return);
+		return module.addFunction(new WasmFunction("__haxeon_start", {parameters: [], results: []}, [], body));
 	}
 
 	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {

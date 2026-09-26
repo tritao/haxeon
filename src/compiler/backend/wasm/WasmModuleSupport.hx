@@ -14,6 +14,7 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmModule.WasmDataSegment;
 
 typedef WasmClosureTypes = {
 	final staticType:Int;
@@ -76,8 +77,18 @@ class WasmModuleSupport {
 	public static function memoryPages(bytes:Int):Int
 		return Std.int(Math.ceil(bytes / 65536.0));
 
+	/** Place static data in linear memory as active data segments starting at `start`. */
 	public static function placeStaticData(program:IrProgram, module:WasmModule, start:Int, reachable:Map<String, Bool>):{addresses:Map<String, Int>, end:Int} {
-		var addresses:Map<String, Int> = [], next = start;
+		var layout = layoutStaticData(program, start, reachable);
+		for (segment in layout.segments)
+			module.data.push(segment);
+		return {addresses: layout.addresses, end: layout.end};
+	}
+
+	/** Assign each distinct static data blob an 8-byte-aligned address from `start`. */
+	public static function layoutStaticData(program:IrProgram, start:Int,
+			reachable:Map<String, Bool>):{addresses:Map<String, Int>, segments:Array<WasmDataSegment>, end:Int} {
+		var addresses:Map<String, Int> = [], segments:Array<WasmDataSegment> = [], next = start;
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
 				for (block in fn.blocks)
@@ -90,13 +101,13 @@ class WasmModuleSupport {
 										data = HaxeBytes.alloc(bytes.length);
 									for (index in 0...bytes.length)
 										data.set(index, bytes[index]);
-									module.data.push({offset: offset, bytes: data});
+									segments.push({offset: offset, bytes: data});
 									addresses.set(key, offset);
 									next = offset + data.length;
 								}
 							default:
 						}
-		return {addresses: addresses, end: align(next, 8)};
+		return {addresses: addresses, segments: segments, end: align(next, 8)};
 	}
 
 	public static function staticDataKey(bytes:Array<Int>):String {

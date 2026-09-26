@@ -11,6 +11,9 @@ import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
 typedef WasmDataSegment = {
 	final offset:Int;
 	final bytes:haxe.io.Bytes;
+
+	/** Passive segments are not copied into memory; instructions such as `array.new_data` read them. */
+	@:optional final passive:Bool;
 }
 
 typedef WasmImport = {

@@ -211,8 +211,8 @@ class WasmValidator {
 							structField(module, typeIndex, fieldIndex);
 						default:
 					}
-				case ArrayNew(typeIndex), ArrayNewDefault(typeIndex), ArrayGet(typeIndex), ArrayGetSigned(typeIndex), ArrayGetUnsigned(typeIndex),
-					ArraySet(typeIndex):
+				case ArrayNew(typeIndex), ArrayNewDefault(typeIndex), ArrayNewData(typeIndex, _), ArrayGet(typeIndex), ArrayGetSigned(typeIndex),
+					ArrayGetUnsigned(typeIndex), ArraySet(typeIndex):
 					arrayType(module, typeIndex);
 				case ArrayCopy(destinationTypeIndex, sourceTypeIndex):
 					arrayType(module, destinationTypeIndex);
@@ -600,6 +600,17 @@ class WasmValidator {
 						pop(stack, I32, fn);
 						stack.push(nonNullTypeRef(typeIndex));
 					}
+				case ArrayNewData(typeIndex, dataIndex):
+					var field = arrayType(module, typeIndex);
+					if (!isNumericStorage(field.type))
+						throw 'Wasm function ${fn.name} uses array.new_data with a reference element type';
+					if (dataIndex < 0 || dataIndex >= module.data.length || module.data[dataIndex].passive != true)
+						throw 'Wasm function ${fn.name} uses array.new_data with invalid passive data segment $dataIndex';
+					if (reachable) {
+						pop(stack, I32, fn);
+						pop(stack, I32, fn);
+						stack.push(nonNullTypeRef(typeIndex));
+					}
 				case ArrayGet(typeIndex):
 					var field = arrayType(module, typeIndex);
 					if (reachable) {
@@ -710,6 +721,14 @@ class WasmValidator {
 				throw 'Wasm function ${fn.name} uses a packed-field access on an unpacked field';
 		};
 	}
+
+	/** Packed or numeric storage, the element types a data segment can initialize. */
+	static function isNumericStorage(type:WasmStorageType):Bool
+		return switch type {
+			case I8, I16: true;
+			case Value(Ref(_)): false;
+			case Value(_): true;
+		};
 
 	static function isDefaultable(type:WasmStorageType):Bool
 		return switch type {
