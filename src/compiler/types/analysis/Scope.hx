@@ -6,6 +6,7 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.syntax.Ast.AstArgument;
 
 /** Resolved local binding identity and its declared semantic type. */
 private typedef ScopeValue = {
@@ -13,6 +14,7 @@ private typedef ScopeValue = {
 	final declared:CompilerType;
 	final id:String;
 	final receiver:Bool;
+	final functionParameters:Null<Array<AstArgument>>;
 }
 
 /**
@@ -36,14 +38,16 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
-	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false):Void {
+	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false,
+			?functionParameters:Array<AstArgument>):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
 			declared: type,
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
-			receiver: receiver
+			receiver: receiver,
+			functionParameters: functionParameters
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
@@ -134,8 +138,8 @@ class Scope {
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String,
-			?storageType:CompilerType):Void {
-		define(name, type, span, true, bindingId);
+			?storageType:CompilerType, ?functionParameters:Array<AstArgument>):Void {
+		define(name, type, span, true, bindingId, false, functionParameters);
 		captures.set(name, true);
 		if (storageType != null)
 			captureStorageTypes.set(requireId(name), storageType);
@@ -224,6 +228,11 @@ class Scope {
 	public function resolveId(name:String):Null<String> {
 		var value = resolveLocal(name);
 		return value == null ? null : value.id;
+	}
+
+	public function localFunctionParameters(name:String):Null<Array<AstArgument>> {
+		var value = resolveLocal(name);
+		return value == null ? null : value.functionParameters;
 	}
 
 	public function requireId(name:String):String {

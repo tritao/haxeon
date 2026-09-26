@@ -779,7 +779,10 @@ class Parser {
 				body = parseStatementOrBlock(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
 				span = start.merge(end),
-				declared = result == null ? null : FunctionType([for (argument in arguments) argument.type], result);
+				declared = result == null ? null : FunctionType([
+					for (argument in arguments)
+						localParameterType(argument.type, argument.optional, argument.defaultValue)
+				], result);
 			return VarDeclaration(name, declared, Lambda(arguments, body, span), span);
 		}
 		if (match(TokenKind.Break)) {
@@ -988,6 +991,20 @@ class Parser {
 		var expression = parseExpression();
 		match(TokenKind.Semicolon);
 		return [Expression(expression, expressionSpan(expression))];
+	}
+
+	/**
+	 * The parameter type a local function exposes: a bare optional parameter
+	 * (no default, or a null default) is nullable, as for declared functions,
+	 * so a call that omits it can pass null.
+	 */
+	static function localParameterType(type:AstType, optional:Bool, defaultValue:Null<AstExpression>):AstType {
+		if (optional != true || !AstPredicates.isNullExpression(defaultValue))
+			return type;
+		return switch type {
+			case InferredType, NullableType(_): type;
+			default: NullableType(type);
+		};
 	}
 
 	function parseAnonymousFunctionBody():Array<AstStatement> {
@@ -1260,7 +1277,10 @@ class Parser {
 			// Lambda carries no result type; bind it through a typed local like a named local function.
 			var name = "$typedLambda" + typedLambdaCount++;
 			return BlockExpression([
-				VarDeclaration(name, FunctionType([for (argument in arguments) argument.type], result), Lambda(arguments, body, span), span)
+				VarDeclaration(name, FunctionType([
+					for (argument in arguments)
+						localParameterType(argument.type, argument.optional, argument.defaultValue)
+				], result), Lambda(arguments, body, span), span)
 			], Variable(name, span), span);
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {

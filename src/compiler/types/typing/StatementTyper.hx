@@ -11,6 +11,7 @@ import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 import compiler.types.analysis.ControlFlow;
+import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
@@ -121,13 +122,22 @@ class StatementTyper {
 				bindCell(name, span, scope, declaredType);
 				[TDeclare(scope.requireId(name), declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
+				var localFunctionParameters:Null<Array<compiler.syntax.Ast.AstArgument>> = null;
+				switch initializer {
+					case Lambda(arguments, body, _) if ([for (argument in arguments) if (argument.optional == true) argument].length > 0):
+						var assignments:Map<String, Bool> = [];
+						CaptureAnalysis.collectAssignedLocals(statements.slice(statementIndex + 1), assignments);
+						CaptureAnalysis.collectAssignedLocals(body, assignments);
+						if (!assignments.exists(name)) localFunctionParameters = arguments;
+					default:
+				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
 					statementIndex + 1) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				var predeclared = false;
 				if (declaredType != null)
 					switch initializer {
 						case Lambda(_, _, _):
-							scope.define(name, declaredType, span);
+							scope.define(name, declaredType, span, true, null, false, localFunctionParameters);
 							predeclared = true;
 						default:
 					}
@@ -137,7 +147,7 @@ class StatementTyper {
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 				if (!predeclared)
-					scope.define(name, value.type, span);
+					scope.define(name, value.type, span, true, null, false, localFunctionParameters);
 				scope.setMapKeySource(name, value.mapKeySource);
 				bindCell(name, span, scope, value.type);
 				[TVar(scope.requireId(name), value, span)];

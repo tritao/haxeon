@@ -34,6 +34,13 @@ class FunctionTypeSyntaxMain {
 			"enum Mode { On; Off; } function main():Int { var mode = On; var base = 40; var read = function(value:Int):Int return mode == On ? base + value : 0; return read(2); }");
 		expectValue("two typed lambdas",
 			"function main():Int { var a = function(value:Int):Int return value + 1; var b = function(value:Int):Int return value * 2; return b(a(20)); }");
+		expectValue("bare optional local parameter", "function main():Int { function read(?value:Int):Int return value == null ? 42 : value; return read(); }");
+		expectValue("defaulted local parameter", "function main():Int { function read(value:Int = 42):Int return value; return read(); }");
+		expectValue("captured optional local function",
+			"function main():Int { function read(value:Int = 42):Int return value; var call = function():Int return read(); return call(); }");
+		expectCompileError("required local parameter", "function main():Int { function read(value:Int, ?extra:Int):Int return value; return read(); }");
+		expectCompileError("reassigned local function requires full arity",
+			"function main():Int { function read(value:Int = 42):Int return value; read = function(value:Int):Int return value; return read(); }");
 		var mismatch = false;
 		try {
 			Frontend.compile('function main():Int { var read = function(value:Int):Int return "text"; return read(1); }');
@@ -48,5 +55,14 @@ class FunctionTypeSyntaxMain {
 		var value = new IrInterpreter(Frontend.compile(source)).run("main");
 		if (value != 42)
 			throw '$label returned $value instead of 42';
+	}
+
+	static function expectCompileError(label:String, source:String):Void {
+		try {
+			Frontend.compile(source);
+		} catch (error:CompileError) {
+			return;
+		}
+		throw '$label unexpectedly compiled';
 	}
 }

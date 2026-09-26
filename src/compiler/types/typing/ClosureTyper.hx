@@ -80,6 +80,14 @@ class ClosureTyper {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
 			var argumentType = argument.type == InferredType ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
+			if (argumentType != null
+				&& argument.type != InferredType
+				&& argument.optional == true
+				&& compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
+				argumentType = switch argumentType {
+					case TNullable(_): argumentType;
+					default: TNullable(argumentType);
+				};
 			if (argumentType == null)
 				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context', argument.span);
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
@@ -127,7 +135,7 @@ class ClosureTyper {
 							scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
 							CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 					lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-						declaredCaptureType == null ? captureType : declaredCaptureType);
+						declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunctionParameters(name));
 					if (cellClass != null)
 						captureCells.set(name, cellClass);
 					captureTypes.set(name, captureType);
@@ -148,7 +156,7 @@ class ClosureTyper {
 		}
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
-				capture.bindingId, capture.storageType);
+				capture.bindingId, capture.storageType, scope.localFunctionParameters(capture.field));
 		var lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;

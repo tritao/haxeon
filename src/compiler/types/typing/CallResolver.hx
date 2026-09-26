@@ -459,7 +459,14 @@ class CallResolver {
 			};
 		if (functionType == null)
 			fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
-		if (arguments.length != functionType.arguments.length)
+		var localParameters = callableName == null ? null : scope.localFunctionParameters(callableName);
+		if (localParameters != null && localParameters.length != functionType.arguments.length)
+			localParameters = null;
+		var required = functionType.arguments.length;
+		if (localParameters != null)
+			while (required > 0 && localParameters[required - 1].optional == true)
+				required--;
+		if (arguments.length < required || arguments.length > functionType.arguments.length)
 			fail("E1008",
 				callableName == null ? 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}' : 'Function value "$callableName" expects ${functionType.arguments.length} arguments, got ${arguments.length}',
 				span);
@@ -467,6 +474,12 @@ class CallResolver {
 			for (index in 0...arguments.length)
 				typeExpression(arguments[index], scope, functionType.arguments[index], false)
 		];
+		if (localParameters != null)
+			for (index in arguments.length...functionType.arguments.length) {
+				var defaultValue = localParameters[index].defaultValue;
+				typedArguments.push(defaultValue == null ? new TypedExpression(TNullLiteral, TNull,
+					span) : typeDefaultExpression(defaultValue, functionType.arguments[index], callableName));
+			}
 		typedArguments = coerceArguments(typedArguments, functionType.arguments, callableName == null ? "function expression" : callableName);
 		for (captured in session.currentContext.storage.candidateSourceNames())
 			scope.invalidate(captured);
