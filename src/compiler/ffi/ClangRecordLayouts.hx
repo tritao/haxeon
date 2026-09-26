@@ -13,6 +13,7 @@ class ClangRecordLayouts {
 		var result:Map<String, RecordLayout> = [],
 			current:Null<String> = null,
 			offsets:Map<String, Int> = [],
+			fieldIndent:Null<Int> = null,
 			size:Null<Int> = null,
 			align:Null<Int> = null;
 		for (rawLine in text.split("\n")) {
@@ -25,15 +26,24 @@ class ClangRecordLayouts {
 			if (record.match(line)) {
 				current = record.matched(1);
 				offsets = [];
+				fieldIndent = null;
 				size = null;
 				align = null;
 				continue;
 			}
 			if (current == null)
 				continue;
-			var fieldLine = ~/^\s*([0-9]+) \|\s+.+ ([A-Za-z_][A-Za-z0-9_]*)$/;
-			if (fieldLine.match(line))
-				offsets.set(fieldLine.matched(2), Std.parseInt(fieldLine.matched(1)));
+			// A record's own fields share the indentation of its first field. A
+			// nested record's fields follow it more deeply indented and can reuse
+			// the same names, so they must not replace the enclosing offsets.
+			var fieldLine = ~/^\s*([0-9]+) \|( +)\S.* ([A-Za-z_][A-Za-z0-9_]*)$/;
+			if (fieldLine.match(line)) {
+				var indent = fieldLine.matched(2).length;
+				if (fieldIndent == null)
+					fieldIndent = indent;
+				if (indent == fieldIndent)
+					offsets.set(fieldLine.matched(3), Std.parseInt(fieldLine.matched(1)));
+			}
 			var sizeValue = ~/sizeof=([0-9]+)/;
 			if (sizeValue.match(line))
 				size = Std.parseInt(sizeValue.matched(1));
