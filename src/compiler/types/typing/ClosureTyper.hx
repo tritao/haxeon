@@ -114,7 +114,10 @@ class ClosureTyper {
 		var captures:Array<TypedCapture> = [],
 			captureCells:Map<String, String> = [],
 			captureTypes:Map<String, CompilerType> = [];
-		for (name in freeVariables.keys())
+		// Map iteration order differs between hosts; sort so closure layouts are deterministic.
+		var freeNames = [for (name in freeVariables.keys()) name];
+		freeNames.sort(Reflect.compare);
+		for (name in freeNames)
 			if (!declared.exists(name)) {
 				var capturedType = scope.resolve(name);
 				if (capturedType != null) {

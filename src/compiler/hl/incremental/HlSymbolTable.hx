@@ -228,8 +228,15 @@ class HlSymbolTable {
 		return index;
 	}
 
+	/**
+	 * Floats are pooled by their exact IEEE-754 bits. `Std.string` is not a round-trip
+	 * representation on every host (HashLink prints 0.49999999999999994 as "0.5"), so a
+	 * string key merged distinct constants when the compiler itself ran on HashLink.
+	 */
 	public function internFloat(value:Float):Int {
-		var key = Std.string(value);
+		var bits = haxe.io.Bytes.alloc(8);
+		bits.setDouble(0, value);
+		var key = bits.getInt32(0) + ":" + bits.getInt32(4);
 		if (floatIndices.exists(key))
 			return floatIndices.get(key);
 		ensureWritable();
