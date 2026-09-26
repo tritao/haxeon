@@ -204,7 +204,11 @@ HL_PRIM int HL_NAME(__std_parse_int)( vbyte *value ) {
 }
 
 HL_PRIM double HL_NAME(__std_parse_float)( vbyte *value ) {
-	return value == NULL ? 0.0 : strtod(hl_to_utf8((const uchar *)value), NULL);
+	if( value == NULL ) return NAN;
+	const char *text = hl_to_utf8((const uchar *)value);
+	char *end = NULL;
+	double result = strtod(text, &end);
+	return end == text ? NAN : result;
 }
 
 HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
