@@ -130,7 +130,7 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"])
+		for (value in ["null", "true", "false", "Object"].concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value),
 					offset = nextData;
@@ -218,6 +218,7 @@ class WasmLinearModuleBuilder {
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
 		WasmLinearArrays.registerNativeAllocators(linear);
+		WasmLinearDynamicArrays.register(linear);
 		runtimeFunctionCount = module.functions.length;
 	}
 

@@ -908,6 +908,13 @@ class Compiler {
 			default: false;
 		};
 
+	/** True when the active backend implements exact array storage with checked views. */
+	public function supportsNativeArrayChecks():Bool
+		return switch defines.get("target") {
+			case "wasmgc" | "wasm-gc": false;
+			default: true;
+		};
+
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
 

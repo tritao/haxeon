@@ -8,6 +8,7 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
+import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 import compiler.backend.wasm.WasmBackend;
 
 class WasmLinearArrays {
@@ -63,6 +64,7 @@ class WasmLinearArrays {
 		builder.localGet(copy);
 		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
+		copyElementType(builder, copy, source);
 		builder.localGet(copy);
 		builder.localGet(sourceLength);
 		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -287,6 +289,7 @@ class WasmLinearArrays {
 		builder.localGet(result);
 		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
+		copyElementType(builder, result, source);
 		builder.localGet(result);
 		builder.localGet(length);
 		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -354,6 +357,10 @@ class WasmLinearArrays {
 			LocalGet(4),
 			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
 			I32Store(0),
+			LocalGet(4),
+			LocalGet(0),
+			I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
+			I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
 			LocalGet(2),
 			LocalGet(3),
 			I32Add,
@@ -1111,6 +1118,7 @@ class WasmLinearArrays {
 		builder.localGet(removed);
 		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
+		copyElementType(builder, removed, array);
 		builder.localGet(removed);
 		builder.localGet(deleteCount);
 		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -1191,6 +1199,9 @@ class WasmLinearArrays {
 			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
 			I32Store(0),
 			LocalGet(1),
+			I32Const(WasmModuleSupport.typeId(allocatedElementType(name))),
+			I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
+			LocalGet(1),
 			LocalGet(0),
 			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalGet(1),
@@ -1235,6 +1246,31 @@ class WasmLinearArrays {
 			Return
 		]);
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, type, [{type: I32}, {type: I32}, {type: I32}], body));
+	}
+
+	/** Storage element type recorded by each allocator; reference arrays start as dynamic storage. */
+	public static function allocatedElementType(name:String):IrType
+		return switch name {
+			case "__array_alloc_i32": I32;
+			case "__array_alloc_i64": I64;
+			case "__array_alloc_f64": F64;
+			case "__array_alloc_bool": Bool;
+			case "__array_alloc_bytes": Bytes;
+			default: Dyn;
+		};
+
+	/** Element type recorded for storage holding `type` values; references start as dynamic storage. */
+	public static function storageElementType(type:IrType):IrType
+		return switch type {
+			case I32, I64, F64, Bool, Bytes: type;
+			default: Dyn;
+		};
+
+	static function copyElementType(builder:WasmFunctionBuilder, target:WasmLocalRef, source:WasmLocalRef):Void {
+		builder.localGet(target);
+		builder.localGet(source);
+		builder.emit(I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
+		builder.emit(I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
 	}
 
 	public static function arrayStrideForNative(name:String):Null<Int>

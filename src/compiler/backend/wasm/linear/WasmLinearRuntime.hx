@@ -2128,6 +2128,10 @@ class WasmLinearRuntime {
 		builder.emit(I32Load(WasmLayout.MAP_COUNT_OFFSET));
 		builder.call(builder.functionRef(arrayAllocator));
 		builder.localSet(array);
+		// Allocators are shared by stride; record the projected element type itself.
+		builder.localGet(array);
+		builder.i32Const(WasmModuleSupport.typeId(WasmLinearArrays.storageElementType(elementType)));
+		builder.emit(I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
 		builder.localGet(map);
 		builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 		builder.localSet(entries);
@@ -2336,7 +2340,7 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addTypeTest(module:WasmModule, name:String, program:IrProgram):Int {
+	public static function addTypeTest(module:WasmModule, name:String, program:IrProgram):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 			value = builder.parameter("value", 0),
 			typeId = builder.parameter("typeId", 1),
@@ -2398,7 +2402,7 @@ class WasmLinearRuntime {
 		]));
 	}
 
-	static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
+	public static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
@@ -2560,7 +2564,7 @@ class WasmLinearRuntime {
 				builder.localGet(needleLength);
 				builder.i32Add();
 				builder.localGet(valueLength);
-				builder.emit(I32LtS);
+				builder.emit(I32LeS);
 				builder.i32Eqz();
 				builder.emit(BrIf(1));
 				builder.i32Const(0);
@@ -2721,6 +2725,9 @@ class WasmLinearRuntime {
 		builder.localGet(result);
 		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
 		builder.emit(I32Store(0));
+		builder.localGet(result);
+		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.emit(I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
 		builder.localGet(result);
 		builder.i32Const(0);
 		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -2986,7 +2993,7 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addIntToString(module:WasmModule, name:String, allocator:Int):Int {
+	public static function addIntToString(module:WasmModule, name:String, allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
 			value = builder.parameter("value", 0),
 			number = builder.local("number", I32),
@@ -3310,7 +3317,7 @@ class WasmLinearRuntime {
 		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
 	}
 
-	static function addStringEqual(module:WasmModule, name:String):Int {
+	public static function addStringEqual(module:WasmModule, name:String):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 			left = builder.parameter("left", 0),
 			right = builder.parameter("right", 1),
@@ -3490,7 +3497,7 @@ class WasmLinearRuntime {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
 			[LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
 
-	static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
+	public static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 			left = builder.parameter("left", 0),
 			right = builder.parameter("right", 1),

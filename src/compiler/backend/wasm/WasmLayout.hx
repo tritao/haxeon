@@ -31,6 +31,10 @@ class WasmLayout {
 	public static inline final ARRAY_LENGTH_OFFSET = 8;
 	public static inline final ARRAY_CAPACITY_OFFSET = 12;
 	public static inline final ARRAY_DATA_POINTER_OFFSET = 16;
+
+	/** Runtime type id of the storage element, the Wasm counterpart of HashLink's `varray.at`. */
+	public static inline final ARRAY_ELEMENT_TYPE_OFFSET = 20;
+
 	public static inline final ARRAY_HEADER_SIZE = 24;
 	public static inline final ITERATOR_ARRAY_OFFSET = 8;
 	public static inline final ITERATOR_POSITION_OFFSET = 12;

@@ -428,7 +428,7 @@ class IrProgramAssembler {
 				{name: "bool", type: Bool},
 				{name: "ref", type: Dyn}
 			];
-			// Array<Dynamic> views may alias any storage; only HL lowering emits them.
+			// Array<Dynamic> views may alias any storage; emitted for targets with exact array storage.
 			if (needsAnyArrayRuntime) {
 				arrayKinds.push({name: "any", type: Dyn});
 				program.natives.push({

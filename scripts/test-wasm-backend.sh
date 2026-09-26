@@ -147,6 +147,12 @@ bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
 	--root=tests/programs tests/programs/wasm-string-split.hx
+# Exact array storage with checked Array<Dynamic> views; Wasm GC joins once it shares the representation.
+for case_name in generic-array-storage dynamic-array-views; do
+	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+		--target=wasm32 --output="out/wasm-cli-$case_name.wasm" --entry="$case_name" \
+		--root=tests/programs "tests/programs/$case_name.hx"
+done
 "$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
@@ -236,6 +242,8 @@ const cases = [
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
 	["out/wasm-cli-string-split.wasm", 42],
+	["out/wasm-cli-generic-array-storage.wasm", 42],
+	["out/wasm-cli-dynamic-array-views.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]

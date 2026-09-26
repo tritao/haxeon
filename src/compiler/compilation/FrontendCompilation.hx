@@ -158,7 +158,7 @@ class FrontendCompilation {
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
-			IrGenerator.bindNativeArrayChecks(!context.isWasmTarget());
+			IrGenerator.bindNativeArrayChecks(context.supportsNativeArrayChecks());
 			typerMetrics = typedResult.metrics;
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;

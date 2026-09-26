@@ -61,7 +61,7 @@ class IrGenerator {
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
 
-	/** HL array representation: reference arrays share dynamic storage with checked typed reads,
+	/** Exact array storage (HL and linear Wasm): reference arrays share dynamic storage with checked typed reads,
 	 * `Array<Dynamic>` views dispatch on the storage element type, and array casts are checked.
 	 */
 	public static function bindNativeArrayChecks(enabled:Bool):Void
