@@ -148,16 +148,6 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
 	--root=tests/programs tests/programs/wasm-string-split.hx
-# Exact array storage with checked Array<Dynamic> views. These check diagnostics through
-# Std.string, which gives Wasm GC modules linear memory, so they stay out of the parity suite.
-for case_name in generic-array-storage dynamic-array-views dynamic-array-references; do
-	for target in wasm32 wasm-gc; do
-		prefix=$([[ $target == wasm-gc ]] && echo wasm-gc-cli || echo wasm-cli)
-		haxeon_compile_async \
-			--target="$target" --output="out/$prefix-$case_name.wasm" --entry="$case_name" \
-			--root=tests/programs "tests/programs/$case_name.hx"
-	done
-done
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
@@ -249,12 +239,6 @@ const cases = [
 	["out/wasm-gc-strings.wasm", 42],
 	["out/wasm-cli-gc-strings.wasm", 42],
 	["out/wasm-cli-string-split.wasm", 42],
-	["out/wasm-cli-generic-array-storage.wasm", 42],
-	["out/wasm-gc-cli-generic-array-storage.wasm", 42],
-	["out/wasm-cli-dynamic-array-views.wasm", 42],
-	["out/wasm-gc-cli-dynamic-array-views.wasm", 42],
-	["out/wasm-cli-dynamic-array-references.wasm", 42],
-	["out/wasm-gc-cli-dynamic-array-references.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
@@ -540,10 +524,7 @@ const cases = [
       const messagePackWire = relative.endsWith("wasm-gc-cli-messagepack-wire.wasm");
       const staticDataRuntime = relative.endsWith("wasm-gc-cli-runtime-source.wasm")
         || relative.endsWith("wasm-gc-cli-ryu-source.wasm")
-        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm")
-        || relative.endsWith("wasm-gc-cli-generic-array-storage.wasm")
-        || relative.endsWith("wasm-gc-cli-dynamic-array-views.wasm")
-        || relative.endsWith("wasm-gc-cli-dynamic-array-references.wasm");
+        || relative.endsWith("wasm-gc-cli-std-string-fields.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
           || (!ffiBytes && !shortStruct && !messagePackWire && !staticDataRuntime && hasMemory)

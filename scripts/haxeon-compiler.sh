@@ -38,6 +38,18 @@ haxeon_compile_async() {
 	haxeon_jobs=$((haxeon_jobs + 1))
 }
 
+# Start a compile whose failure the caller reports itself: haxeon_compile_logged_async LOG ARGS...
+haxeon_compile_logged_async() {
+	local log=$1
+	shift
+	if ((haxeon_jobs >= haxeon_max_jobs)); then
+		wait -n || haxeon_failed=1
+		haxeon_jobs=$((haxeon_jobs - 1))
+	fi
+	{ haxeon_compile "$@" > "$log" 2>&1 || true; } &
+	haxeon_jobs=$((haxeon_jobs + 1))
+}
+
 # Wait for every background compile; fails when any of them failed.
 haxeon_compile_wait() {
 	while ((haxeon_jobs > 0)); do

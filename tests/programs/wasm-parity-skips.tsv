@@ -1,0 +1,29 @@
+# Manifest programs the Wasm parity suite does not require yet (scripts/test-wasm-gc-parity.sh).
+# Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
+# mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets);
+#       gc-memory = must pass, but its Wasm GC module may use linear memory.
+# name	mode	reason
+generic-array-storage	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
+dynamic-array-views	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
+dynamic-array-references	gc-memory	Std.string diagnostics format floats through linear-memory Ryu tables on Wasm GC
+string-concat-mixed	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+messagepack-codec	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+messagepack-generated	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+enum-argument-string	skip	wasm32 exits 0 (Wasm GC passes)
+string-interpolation	skip	wasm32 exits 0 (Wasm GC passes)
+std-string-to-string	skip	wasm32 exits 1 (Wasm GC passes)
+generic-interface	skip	wasm32 traps with unreachable (Wasm GC passes)
+messagepack-malformed	skip	wasm32 traps with unreachable (Wasm GC passes)
+compiler-audit-regressions	skip	wasm32 has no __string_index_of_from (Wasm GC passes)
+void-branch-results	skip	Neither Wasm backend supports Void-typed IR values
+messagepack-wire	skip	No Wasm lowering for haxe.Int64.parseString
+messagepack-interop	skip	No Wasm lowering for haxe.Int64.toStr (wasm32) or StringTools.startsWith (Wasm GC)
+json-decoded-object-array	skip	JSON needs Reflect field access and dynamic objects on Wasm
+json-typed-object-array	skip	JSON needs Reflect field access and dynamic objects on Wasm
+dynamic-object-literal	skip	Dynamic objects and Reflect field access are not implemented on Wasm
+trace	skip	trace needs host output (wasm32 __sys_print import; no Wasm GC lowering)
+short-circuit	skip	Uses trace, which needs host output on Wasm
+date-runtime	skip	Date natives are not implemented on Wasm
+sys-runtime	skip	Sys natives are not implemented on Wasm
+native-memory	skip	The native memory runtime is not implemented on Wasm
+jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm

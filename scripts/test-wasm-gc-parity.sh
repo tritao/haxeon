@@ -29,81 +29,123 @@ for target in wasm32 wasm-gc; do
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
-shared_cases=(string-null-equality add expression-lambda switch-expression-block member-range trailing-object-comma block-comprehension transparent-abstract computed-field-assignment
-	assignment-expression literal-postfix bitwise bitwise-comparison-precedence type-annotation local-function switch-guard callback-method bound-method name-collision
-	bool-if fib while-arithmetic branch-assignment static-class static-field static-field-init instance-class instance-field-init instance-field-init-constructor
-	default-constructor-class enum-basic enum-payload enum-payload-pattern generic-enum-field nullable-guard-return nullable-array-guard native-abstract-null nullable-enum-switch
-	array-mutation wasm-gc-invariants increment logical-comparisons negation switch-subject-binding enum-exhaustive try-return try-branch try-loop-control try-outer-local
-	try-branch-local try-call-local local-shadowing captured-shadowing dynamic-argument switch-expression string-switch-statement switch-inline-final throw-expression
-	array-literal empty-array-flow-inference do-while postfix-increment optional-enum-parameter
-	call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property
-	mutable-capture nested-mutable-capture captured-lambda captured-this nullable-basic nullable-compound object-array for-in loop-control modulo switch-enum
-	multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding
-	default-parameter-inference generic-functions generic-abstract bounded-generic generic-class inheritance-class override-method virtual-dispatch array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation
-	array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse dynamic-equality numeric-promotion function-wrapper std-is-of-type
-	map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality bytes-view bytes-blit sha256 loop-phi-parallel
-	try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches reflect-compare-sort generic-contextual-callback
-	pure-inference)
-for case_name in "${shared_cases[@]}"; do
+# Every program in the manifest runs on both targets and must exit as it does on HL, except
+# those listed in wasm-parity-skips.tsv with the reason they cannot yet.
+# Compile failures are reported with the other results; skipped programs still compile so the
+# suite notices when one starts passing.
+mkdir -p "$root_dir/out/wasm-parity-logs"
+while IFS=$'\t' read -r case_name _; do
+	[[ -z $case_name || $case_name == \#* ]] && continue
 	for target in wasm32 wasm-gc; do
-		haxeon_compile_async \
-			--target="$target" --output="out/wasm-parity-$target-$case_name.wasm" \
-			--entry="$case_name" --root=tests/programs "tests/programs/$case_name.hx"
+		output="out/wasm-parity-$target-$case_name.wasm"
+		rm -f "$root_dir/$output"
+		haxeon_compile_logged_async "$root_dir/out/wasm-parity-logs/$target-$case_name.log" \
+			--target="$target" --output="$output" --entry="$case_name" --root=tests/programs "tests/programs/$case_name.hx"
 	done
-done
+done < "$root_dir/tests/programs/expected-exits.tsv"
 
 haxeon_compile_async \
 	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-bytes-view-stress.wasm \
 	--entry=bytes-view --root=tests/programs tests/programs/bytes-view.hx
 
-cases+=(bytes-compare "${shared_cases[@]}")
-
+cases+=(bytes-compare)
 haxeon_compile_wait
 
 node - "$root_dir" "${cases[@]}" <<'JS'
 const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
-const cases = process.argv.slice(3);
-const expectedResults = { "array-object-mutation": 8, "array-field-mutation": 11, "single-argument-lambda": 43, "mutable-capture": 78, "nested-mutable-capture": 3, "static-field": 81, "fib": 55, "inheritance-class": 43, "map-for-in": 52, "virtual-dispatch": 71 };
+const gcCases = process.argv.slice(3);
+
+function table(file) {
+  return fs.readFileSync(path.join(root, "tests", "programs", file), "utf8").split("\n")
+    .filter(line => line.trim() !== "" && !line.startsWith("#")).map(line => line.split("\t"));
+}
+
+const modes = new Map(table("wasm-parity-skips.tsv").map(([name, mode]) => [name, mode]));
+const cases = gcCases.map(name => ({name, expected: 42}))
+  .concat(table("expected-exits.tsv").map(([name, expected]) => ({name, expected: Number(expected)})));
+for (const name of modes.keys())
+  if (!cases.some(entry => entry.name === name))
+    throw new Error(`wasm-parity-skips.tsv lists ${name}, which is not in expected-exits.tsv`);
+
+// Host functions of the haxeon_runtime ABI, matching native/runtime/core.c.
+const runtime = {
+  __math_ceil: Math.ceil,
+  __math_floor: Math.floor,
+  __math_round: value => Math.floor(value + 0.5) | 0,
+  __math_pow: Math.pow,
+  __math_sqrt: Math.sqrt,
+  __math_fmod: (value, modulus) => value % modulus,
+  __math_sin: Math.sin,
+  __math_cos: Math.cos,
+  __math_tan: Math.tan,
+  __math_atan2: Math.atan2,
+  __std_int_f64: Math.trunc
+};
+
+async function run(name, target, mode) {
+  const file = path.join(root, "out", `wasm-parity-${target}-${name}.wasm`);
+  if (!fs.existsSync(file)) {
+    const log = path.join(root, "out", "wasm-parity-logs", `${target}-${name}.log`);
+    const text = fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "";
+    const reason = text.split("\n").find(line => /Uncaught exception|: E\d{4}:/.test(line)) ?? "";
+    return {failure: `did not compile: ${reason.replace(/^.*(Uncaught exception |E\d{4}: )/, "").slice(0, 120)}`};
+  }
+  const module = new WebAssembly.Module(fs.readFileSync(file));
+  const imports = WebAssembly.Module.imports(module);
+  const missing = imports.filter(entry => entry.module !== "haxeon_runtime" || !(entry.name in runtime));
+  if (missing.length !== 0)
+    return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
+  if (target === "wasm-gc") {
+    if (mode !== "gc-memory" && WebAssembly.Module.exports(module).some(entry => entry.name === "memory"))
+      return {failure: "GC module contains linear memory"};
+    if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
+      return {failure: "GC module contains custom root metadata"};
+  }
+  const instance = await WebAssembly.instantiate(module, {haxeon_runtime: runtime});
+  try {
+    return {exit: instance.exports.main()};
+  } catch (error) {
+    // An uncaught Haxe exception ends the program with status 1, as on HL.
+    if (error instanceof WebAssembly.Exception)
+      return {exit: 1};
+    return {failure: `trap: ${error.message}`};
+  }
+}
 
 (async () => {
-  for (const name of cases) {
+  const failures = [];
+  let skipped = 0;
+  for (const {name, expected} of cases) {
+    const mode = modes.get(name);
     const results = {};
     for (const target of ["wasm32", "wasm-gc"]) {
-      const file = path.join(root, "out", `wasm-parity-${target}-${name}.wasm`);
-      const bytes = fs.readFileSync(file);
-      const module = new WebAssembly.Module(bytes);
-      if (target === "wasm-gc") {
-        const imports = WebAssembly.Module.imports(module);
-        const exports = WebAssembly.Module.exports(module);
-        if (imports.length !== 0 || exports.some(entry => entry.name === "memory")
-            || WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
-          throw new Error(`${name}: GC module contains linear memory or custom root metadata`);
-      }
-      const imports = target === "wasm32"
-        ? { haxeon_runtime: {
-            __math_ceil: value => Math.ceil(value),
-            __math_floor: value => Math.floor(value),
-            __std_int_f64: value => Math.trunc(value)
-          } }
-        : {};
-      const instance = await WebAssembly.instantiate(module, imports);
-      results[target] = instance.exports.main();
-      const expected = expectedResults[name] ?? 42;
-      if (results[target] !== expected)
-        throw new Error(`${name} (${target}): expected ${expected}, got ${results[target]}`);
+      const result = await run(name, target, mode);
+      if (result.failure === undefined && result.exit !== expected)
+        result.failure = `expected ${expected}, got ${result.exit}`;
+      results[target] = result;
     }
-    if (results.wasm32 !== results["wasm-gc"])
-      throw new Error(`${name}: Wasm32 returned ${results.wasm32}, Wasm GC returned ${results["wasm-gc"]}`);
+    const passing = results.wasm32.failure === undefined && results["wasm-gc"].failure === undefined;
+    if (mode === "skip") {
+      skipped++;
+      if (passing)
+        failures.push(`${name}: passes on both targets; remove it from tests/programs/wasm-parity-skips.tsv`);
+      continue;
+    }
+    for (const target of ["wasm32", "wasm-gc"])
+      if (results[target].failure !== undefined)
+        failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   const stressBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-bytes-view-stress.wasm"));
   const stressInstance = await WebAssembly.instantiate(stressBytes, {});
   if (stressInstance.instance.exports.main() !== 42)
-    throw new Error("bytes-view (wasm32 stress GC): view failed to retain and alias its source");
-  console.log(`PASS: ${cases.length} Haxe fixtures agree across Wasm32 and Wasm GC`);
+    failures.push("bytes-view (wasm32 stress GC): view failed to retain and alias its source");
+  if (failures.length !== 0)
+    throw new Error(`Wasm parity failures:\n  ${failures.join("\n  ")}`);
+  console.log(`PASS: ${cases.length - skipped} Haxe fixtures agree across Wasm32, Wasm GC and HL (${skipped} skipped)`);
 })().catch(error => {
-  console.error(error);
+  console.error(error.message ?? error);
   process.exitCode = 1;
 });
 JS
