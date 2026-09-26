@@ -51,6 +51,7 @@ class TestCatalog {
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
+		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",
 		"CxxHeaderImporterMain",

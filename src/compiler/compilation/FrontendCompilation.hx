@@ -1,7 +1,9 @@
 package compiler.compilation;
 
 import compiler.Diagnostic.CompileError;
+import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrProgramAssembler;
@@ -142,7 +144,8 @@ class FrontendCompilation {
 			var canReuseSemantic = previousSemantic != null
 				&& CompilationContext.mapIsEmpty(signatureChanged)
 				&& CompilationContext.mapIsEmpty(structuralChanged)
-				&& selectedSignaturesExplicit(canonicalProgram, selected);
+				&& selectedSignaturesExplicit(canonicalProgram, selected)
+				&& sameDeclarations(previousSemantic.program, canonicalProgram);
 			var semantic:SemanticProgram;
 			if (canReuseSemantic && previousSemantic != null)
 				semantic = previousSemantic.replaceBodies(canonicalProgram, selected);
@@ -193,6 +196,13 @@ class FrontendCompilation {
 		}
 		var allocationAfterIndexRebuild = AllocationMeter.sample();
 		var retyped = [], regenerated = [];
+		var previousTyped = context.lastTypedProgram;
+		if (previousTyped != null) {
+			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
+			for (classDecl in previousTyped.classes)
+				if (!currentClasses.exists(classDecl.name))
+					objectCache.remove(classDecl.name);
+		}
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);
 		var allocationAfterObjects = AllocationMeter.sample();
@@ -446,7 +456,8 @@ class FrontendCompilation {
 		}
 		if (token != null)
 			token.check();
-		var objectNames = [for (name in objectCache.keys()) name];
+		var resolvedObjects = resolvedObjectsFrom(objectCache, typedNew);
+		var objectNames = [for (name in resolvedObjects.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var irNatives = context.irNatives();
 		for (native in IrProgramAssembler.nativesFrom(typedNew)) {
@@ -459,7 +470,7 @@ class FrontendCompilation {
 		for (native in IrProgramAssembler.cNativesFrom(typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
-		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) objectCache.get(name)], IrGenerator.interfacesFrom(typedNew),
+		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializersFrom(typedNew, initializationClasses),
 			entryPoint, irCNatives);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
@@ -488,6 +499,69 @@ class FrontendCompilation {
 			allocationPhases: allocationPhases
 		};
 	}
+
+	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
+	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
+		return sameNames([for (decl in previous.enums) decl.name], [for (decl in current.enums) decl.name])
+			&& sameNames([for (decl in previous.enumAbstracts) decl.name], [for (decl in current.enumAbstracts) decl.name])
+			&& sameNames([for (decl in previous.abstracts) decl.name], [for (decl in current.abstracts) decl.name])
+			&& sameNames([for (decl in previous.interfaces) decl.name], [for (decl in current.interfaces) decl.name])
+			&& sameNames([for (decl in previous.classes) decl.name], [for (decl in current.classes) decl.name])
+			&& sameNames([for (decl in previous.functions) decl.name], [for (decl in current.functions) decl.name])
+			&& sameNames([for (decl in previous.aliases) decl.name], [for (decl in current.aliases) decl.name]);
+	}
+
+	static function sameNames(previous:Array<String>, current:Array<String>):Bool {
+		if (previous.length != current.length)
+			return false;
+		var known = [for (name in previous) name => true];
+		for (name in current)
+			if (!known.exists(name))
+				return false;
+		return true;
+	}
+
+	/**
+	 * Cached closure and anonymous objects outlive the typing pass that produced them and are
+	 * kept for when their module becomes reachable again; only objects whose layout resolves
+	 * against this program's declarations are lowered.
+	 */
+	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram):Map<String, IrObject> {
+		var enums = [for (decl in typed.enums) decl.name => true],
+			interfaces = [for (decl in typed.interfaces) decl.name => true],
+			objects = [for (name => object in objectCache) name => object];
+		var removed = true;
+		while (removed) {
+			removed = false;
+			for (name in [for (name in objects.keys()) name]) {
+				var object = objects.get(name),
+					resolved = object.base == null || objects.exists(Std.string(object.base));
+				for (field in object.fields)
+					if (!typeResolved(field.type, objects, enums, interfaces))
+						resolved = false;
+				if (!resolved) {
+					objects.remove(name);
+					removed = true;
+				}
+			}
+		}
+		return objects;
+	}
+
+	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>, interfaces:Map<String, Bool>):Bool
+		return switch type {
+			case Obj(name): objects.exists(name);
+			case Enum(name): enums.exists(name);
+			case Virtual(name): interfaces.exists(name);
+			case Array(element), Iterator(element): typeResolved(element, objects, enums, interfaces);
+			case Function(arguments, result):
+				var resolved = typeResolved(result, objects, enums, interfaces);
+				for (argument in arguments)
+					if (!typeResolved(argument, objects, enums, interfaces))
+						resolved = false;
+				resolved;
+			default: true;
+		};
 
 	static function selectedSignaturesExplicit(program:AstProgram, selected:Map<String, Bool>):Bool {
 		for (fn in program.functions)
