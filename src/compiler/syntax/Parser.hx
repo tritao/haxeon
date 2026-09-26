@@ -31,6 +31,7 @@ class Parser {
 	final tokens:Array<Token>;
 	var position:Int = 0;
 	var recovering:Bool = false;
+	var typedLambdaCount:Int = 0;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
 	public function new(tokens:Array<Token>) {
@@ -1250,9 +1251,17 @@ class Parser {
 					});
 				} while (match(TokenKind.Comma));
 			consume(TokenKind.RightParen);
-			var body = parseAnonymousFunctionBody(),
-				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]);
-			return Lambda(arguments, body, start.merge(end));
+			var result = match(TokenKind.Colon) ? parseType() : null,
+				body = parseAnonymousFunctionBody(),
+				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
+				span = start.merge(end);
+			if (result == null)
+				return Lambda(arguments, body, span);
+			// Lambda carries no result type; bind it through a typed local like a named local function.
+			var name = "$typedLambda" + typedLambdaCount++;
+			return BlockExpression([
+				VarDeclaration(name, FunctionType([for (argument in arguments) argument.type], result), Lambda(arguments, body, span), span)
+			], Variable(name, span), span);
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
 			var argument = advance(), start = argument.span;
