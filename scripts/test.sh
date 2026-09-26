@@ -91,6 +91,14 @@ run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.s
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
 run_timed compiler-runtime-tests "$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild test "${TEST_JOBS:-16}"
+# Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes.
+run_timed wasm-backend bash "$root_dir/scripts/test-wasm-backend.sh"
+run_timed wasm-parity bash "$root_dir/scripts/test-wasm-gc-parity.sh"
+if [[ -n ${WASMTIME:-} || -x "$root_dir/.tools/wasmtime-47.0.0/wasmtime" ]] || command -v wasmtime >/dev/null 2>&1; then
+	run_timed wasm-gc-wasmtime bash "$root_dir/scripts/test-wasm-gc-wasmtime.sh"
+else
+	echo "Skipping Wasm GC wasmtime checks: Wasmtime 47.0.0 is not installed (set WASMTIME to its executable)"
+fi
 run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatter.sh"
 run_timed native-call-integration "$root_dir/tests/integration/test-native-call.sh"
 run_timed hxi-call-integration "$root_dir/tests/integration/test-hxi-call.sh"

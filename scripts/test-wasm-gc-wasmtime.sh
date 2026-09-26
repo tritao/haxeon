@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
-wasmtime_bin=${WASMTIME:-wasmtime}
+bundled_wasmtime="$root_dir/.tools/wasmtime-47.0.0/wasmtime"
+wasmtime_bin=${WASMTIME:-$([[ -x $bundled_wasmtime ]] && echo "$bundled_wasmtime" || echo wasmtime)}
 
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
