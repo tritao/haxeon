@@ -85,24 +85,58 @@ if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
 fi
 
 run_timed native-build build_native_quietly
+export HAXEON_NATIVE_READY=1
 mkdir -p "$root_dir/out"
+
+# Build the compiler entry points and the build tool to HashLink bytecode once. The test driver,
+# the differential tests and the Wasm scripts reuse the compilers instead of re-interpreting the
+# whole compiler with `haxe --run` for every case (~2 s each, of which compiling takes ~0.2 s),
+# and the build tool hashes native inputs under the JIT instead of the interpreter.
+mkdir -p "$root_dir/out/test-tools"
+prebuilt_compilers=$(mktemp -d "$root_dir/out/test-tools/compilers.XXXXXX")
+trap 'rm -rf -- "$prebuilt_compilers"' EXIT
+export HAXEON_MAIN_HL="$prebuilt_compilers/haxeon-main.hl"
+export HAXEON_COMPILER_HL="$prebuilt_compilers/haxeon-compiler.hl"
+prebuilt_build_tool="$prebuilt_compilers/haxeon-build.hl"
+build_prebuilt_compilers() {
+	local status=0
+	"$haxe" --cwd "$root_dir" -cp src -hl "$HAXEON_MAIN_HL" -main Main &
+	local main_build=$!
+	"$haxe" --cwd "$root_dir" -cp src -hl "$prebuilt_build_tool" -main build.HaxeonBuild &
+	local build_tool_build=$!
+	"$haxe" --cwd "$root_dir" -cp src -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler || status=1
+	wait "$main_build" || status=1
+	wait "$build_tool_build" || status=1
+	return "$status"
+}
+run_timed prebuilt-compilers build_prebuilt_compilers
 run_timed hxi-value-records bash "$root_dir/scripts/test-hxi-value-records.sh"
 run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.sh"
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
-run_timed compiler-runtime-tests "$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild test "${TEST_JOBS:-16}"
+run_haxeon_build() {
+	(cd "$root_dir" && LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$hl" "$prebuilt_build_tool" "$@")
+}
+run_timed compiler-runtime-tests run_haxeon_build test "${TEST_JOBS:-16}"
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes.
-run_timed wasm-backend bash "$root_dir/scripts/test-wasm-backend.sh"
-run_timed wasm-parity bash "$root_dir/scripts/test-wasm-gc-parity.sh"
-if [[ -n ${WASMTIME:-} || -x "$root_dir/.tools/wasmtime-47.0.0/wasmtime" ]] || command -v wasmtime >/dev/null 2>&1; then
-	run_timed wasm-gc-wasmtime bash "$root_dir/scripts/test-wasm-gc-wasmtime.sh"
-else
-	echo "Skipping Wasm GC wasmtime checks: Wasmtime 47.0.0 is not installed (set WASMTIME to its executable)"
-fi
+# They run alongside the integration stages below, which never touch Wasm artifacts. (Not alongside
+# compiler-runtime-tests: its WasmBackendMain case rewrites the out/wasm-backend-* files they read.)
+run_wasm_stages() {
+	run_timed wasm-backend bash "$root_dir/scripts/test-wasm-backend.sh"
+	run_timed wasm-parity bash "$root_dir/scripts/test-wasm-gc-parity.sh"
+	if [[ -n ${WASMTIME:-} || -x "$root_dir/.tools/wasmtime-47.0.0/wasmtime" ]] || command -v wasmtime >/dev/null 2>&1; then
+		run_timed wasm-gc-wasmtime bash "$root_dir/scripts/test-wasm-gc-wasmtime.sh"
+	else
+		echo "Skipping Wasm GC wasmtime checks: Wasmtime 47.0.0 is not installed (set WASMTIME to its executable)"
+	fi
+}
+wasm_log="$prebuilt_compilers/wasm-stages.log"
+run_wasm_stages >"$wasm_log" 2>&1 &
+wasm_stages=$!
 run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatter.sh"
 run_timed native-call-integration "$root_dir/tests/integration/test-native-call.sh"
 run_timed hxi-call-integration "$root_dir/tests/integration/test-hxi-call.sh"
-run_timed cxx-hxi-call-integration "$root_dir/tests/integration/test-cxx-hxi-call.sh"
 
 # These project tests build below their own mktemp project roots and use
 # separate source caches, so they can share runner slots without racing on the
@@ -120,12 +154,21 @@ run_isolated_integration_group \
 	tests/integration/test-git-package-lock.sh \
 	tests/integration/test-workspace.sh
 
-run_timed cxx-owned-integration "$root_dir/tests/integration/test-cxx-owned.sh"
-run_timed cxx-lifetime-integration "$root_dir/tests/integration/test-cxx-lifetime.sh"
-run_timed cxx-virtual-integration "$root_dir/tests/integration/test-cxx-virtual.sh"
-run_timed cxx-thunks-integration "$root_dir/tests/integration/test-cxx-thunks.sh"
-run_timed cxx-string-view-integration "$root_dir/tests/integration/test-cxx-string-view.sh"
-run_timed cxx-span-integration "$root_dir/tests/integration/test-cxx-span.sh"
-run_timed cxx-msvc-profile-integration "$root_dir/tests/integration/test-cxx-msvc-profile.sh"
+# The C++ FFI fixtures write distinct out/ files; with the native runtime already built
+# (HAXEON_NATIVE_READY) they share no build tree, so they share runner slots too.
+run_isolated_integration_group \
+	tests/integration/test-cxx-hxi-call.sh \
+	tests/integration/test-cxx-owned.sh \
+	tests/integration/test-cxx-lifetime.sh \
+	tests/integration/test-cxx-virtual.sh \
+	tests/integration/test-cxx-thunks.sh \
+	tests/integration/test-cxx-string-view.sh \
+	tests/integration/test-cxx-span.sh \
+	tests/integration/test-cxx-msvc-profile.sh
 run_timed profiler-disconnect-integration "$root_dir/tests/integration/test-profiler-disconnect.sh"
 run_timed process-output-capture-integration bash "$root_dir/tests/integration/test-process-output-capture.sh"
+
+wasm_status=0
+wait "$wasm_stages" || wasm_status=$?
+cat "$wasm_log"
+exit "$wasm_status"

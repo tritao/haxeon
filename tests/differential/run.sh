@@ -28,6 +28,15 @@ fi
 "$root_dir/scripts/build-native.sh" >/dev/null
 mkdir -p "$out_dir"
 
+# Compile with haxeon: the HashLink build scripts/test.sh provides, else `haxe --run Main`.
+realtime_compile() {
+	if [[ -n ${HAXEON_MAIN_HL:-} && -f $HAXEON_MAIN_HL ]]; then
+		(cd "$root_dir" && run_hl "$root_dir/out:$root_dir/.tools/hashlink" "$HAXEON_MAIN_HL" "$1" "$2")
+	else
+		"$haxe" --cwd "$root_dir" -cp src --run Main "$1" "$2"
+	fi
+}
+
 run_case() {
 	local name=$1
 	local expected_status=${2:-}
@@ -42,7 +51,7 @@ run_case() {
 	cp "$official_source" "$official_dir/Main.hx"
 
 	"$haxe" -cp "$official_dir" -main Main -hl "$official_output"
-	"$haxe" --cwd "$root_dir" -cp src --run Main "$realtime_source" "$realtime_output" >/dev/null
+	realtime_compile "$realtime_source" "$realtime_output" >/dev/null
 
 	set +e
 	local official_log="$out_dir/$name.official.log"
@@ -86,7 +95,7 @@ run_compile_failure() {
 	set +e
 	"$haxe" -cp "$official_dir" -main Main -hl "$out_dir/$name.official.hl" >/dev/null 2>&1
 	local official_status=$?
-	"$haxe" --cwd "$root_dir" -cp src --run Main "$root_dir/tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
+	realtime_compile "$root_dir/tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
 	local realtime_status=$?
 	set -e
 	rm -rf "$official_dir"
@@ -97,15 +106,30 @@ run_compile_failure() {
 	echo "PASS: $name official and realtime compilers both reject invalid source"
 }
 
-run_case arithmetic
-run_case fibonacci
-run_case control-flow
-run_case nullable
-run_case observable-output
-run_case compiler-audit
-run_case exception-capture-order 0
+# Cases are independent; run them concurrently and report in order.
+pids=()
+logs=()
+in_background() {
+	local log="$out_dir/$2.run.log"
+	("$@") >"$log" 2>&1 &
+	pids+=($!)
+	logs+=("$log")
+}
+in_background run_case arithmetic
+in_background run_case fibonacci
+in_background run_case control-flow
+in_background run_case nullable
+in_background run_case observable-output
+in_background run_case compiler-audit
+in_background run_case exception-capture-order 0
 # Haxe 4.3.7's HL backend loses the final local write before this throw;
 # its interpreter preserves it. Keep this case against the interpreter oracle.
-run_case exception-loop-control 0 interp
-run_case assignment-evaluation-order 0
-run_compile_failure type-error
+in_background run_case exception-loop-control 0 interp
+in_background run_case assignment-evaluation-order 0
+in_background run_compile_failure type-error
+status=0
+for index in "${!pids[@]}"; do
+	wait "${pids[$index]}" || status=1
+	cat "${logs[$index]}"
+done
+exit "$status"

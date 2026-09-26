@@ -1,10 +1,12 @@
 package driver;
 
+import driver.TestCatalog;
 import driver.TestCatalog.CompileStep;
 import driver.TestCatalog.ExecutableCase;
 import driver.TestCatalog.NamedCase;
 import driver.TestCatalog.ProgramCase;
 import haxe.io.Path;
+import sys.FileSystem;
 import sys.io.Process;
 
 private typedef CommandResult = {
@@ -24,18 +26,24 @@ private typedef ActiveProgram = {
 	var process:Process;
 }
 
-private typedef ActiveMain = {
-	var index:Int;
-	var name:String;
-	var process:Process;
+/** One command of a test pipeline; `failure` returns a message when the exit status fails the test. */
+private typedef PipelineStep = {
+	var start:Void->Process;
+	var failure:Int->Null<String>;
 }
 
-private typedef ActiveExecutable = {
+/** Commands that run in order until one fails; `success` is printed when all of them pass. */
+private typedef Pipeline = {
+	var steps:Array<PipelineStep>;
+	var success:String;
+}
+
+private typedef ActivePipeline = {
 	var index:Int;
-	var test:ExecutableCase;
+	var pipeline:Pipeline;
+	var step:Int;
 	var process:Process;
 	var output:String;
-	var compiling:Bool;
 }
 
 class TestRunner {
@@ -43,127 +51,115 @@ class TestRunner {
 	final haxe:String;
 	final hl:String;
 
+	/** Compiler entry point prebuilt to HashLink bytecode (HAXEON_MAIN_HL), when scripts/test.sh provides one. */
+	final prebuiltMain:Null<String>;
+
 	public function new(root:String) {
 		this.root = root;
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
 		hl = Path.join([root, ".tools", "hashlink", "hl" + suffix]);
+		var main = Sys.getEnv("HAXEON_MAIN_HL");
+		prebuiltMain = main != null && main != "" && FileSystem.exists(main) ? main : null;
 		configureRuntimeLibraryPath();
 	}
 
-	public function runHaxeMain(name:String):Bool {
-		var status = Sys.command(haxe, haxeMainArguments(name));
-		if (status == 0)
-			return true;
-		Sys.stderr().writeString('FAIL: $name exited with $status\n');
-		return false;
-	}
+	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
+	function compileProgram(source:String, output:String):Process
+		return prebuiltMain != null ? new Process(hl,
+			[prebuiltMain, source, output]) : new Process(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
 
-	public function runHaxeMains(tests:Array<NamedCase>, jobs:Int):Int {
-		if (tests.length == 0)
-			return 0;
-		if (jobs <= 1) {
-			var failures = 0;
-			for (test in tests)
-				if (!runHaxeMain(test.name))
-					failures++;
-			return failures;
-		}
-
-		var workerCount = Std.int(Math.min(Math.min(jobs, 4), tests.length));
-		var results:Array<ProgramResult> = [];
-		var active:Array<ActiveMain> = [];
-		var next = 0;
-		while (next < tests.length || active.length > 0) {
-			while (next < tests.length && active.length < workerCount) {
-				var test = tests[next];
-				active.push({index: next, name: test.name, process: new Process(haxe, haxeMainArguments(test.name))});
-				next++;
+	/**
+	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
+	 * with `haxe --run` for every main, and it exercises the compiler on the host it ships on.
+	 */
+	public function runHaxeMains(tests:Array<NamedCase>, jobs:Int):Int
+		return runPipelines([
+			for (test in tests) {
+				var compiled = testMainOutput(test.name);
+				{
+					steps: [
+						compileMainStep(test.name, compiled),
+						{
+							start: () -> new Process(hl, [compiled]),
+							failure: status -> status == 0 ? null : 'FAIL: ${test.name} exited with $status'
+						}
+					],
+					success: ""
+				};
 			}
-			var current = active.shift();
-			var command = finishCommand(current.process);
-			results[current.index] = {
-				index: current.index,
-				passed: command.status == 0,
-				output: command.output + (command.status == 0 ? "" : 'FAIL: ${current.name} exited with ${command.status}\n')
-			};
-		}
-		return reportResults(results);
+		], jobs);
+
+	public function runExecutables(tests:Array<ExecutableCase>, jobs:Int):Int
+		return runPipelines([for (test in tests) executablePipeline(test)], jobs);
+
+	function executablePipeline(test:ExecutableCase):Pipeline {
+		var output = Path.join([root, "out", test.output]),
+			setupFailure = (status:Int) -> status == 0 ? null : 'FAIL: ${test.name} setup failed',
+			steps:Array<PipelineStep> = switch test.compile {
+				// These mains are short compiler-API runners: interpreting them beats compiling each to HashLink.
+				case HaxeMain(main, arguments):
+					[
+						{start: () -> new Process(haxe, haxeMainArguments(main).concat(resolveArguments(output, arguments))), failure: setupFailure}
+					];
+				case Hxml(path):
+					[
+						{start: () -> new Process(haxe, ["--cwd", root, Path.join([root, path])]), failure: setupFailure}
+					];
+			},
+			expected = test.expectedExit,
+			exitDescription = (status:Int) -> expected == null ? 'non-zero exit $status' : 'exit $expected';
+		steps.push({
+			start: () -> new Process(hl, [output].concat(resolveArguments(output, test.runtimeArguments))),
+			failure: status ->
+				(expected == null ? status != 0 : status == expected) ? null : 'FAIL: ${test.name} expected ${exitDescription(status)}, got $status'
+		});
+		return {steps: steps, success: 'PASS: ${test.message} (${expected == null ? "non-zero exit" : 'exit $expected'})'};
 	}
 
-	public function runExecutable(test:ExecutableCase):Bool {
-		var output = Path.join([root, "out", test.output]);
-		var setupStatus = switch test.compile {
-			case HaxeMain(main, arguments):
-				var args = haxeMainArguments(main).concat(resolveArguments(output, arguments));
-				Sys.command(haxe, args);
-			case Hxml(path):
-				Sys.command(haxe, ["--cwd", root, Path.join([root, path])]);
+	/** Output path for a compiled test main; one per case, since several cases share a main. */
+	function testMainOutput(name:String):String
+		return Path.join([root, "out", "test-mains", name + ".hl"]);
+
+	function compileMainStep(main:String, output:String):PipelineStep
+		return {
+			start: () -> {
+				FileSystem.createDirectory(Path.directory(output));
+				new Process(haxe, testClassPath().concat(["-hl", output, "-main", main]));
+			},
+			failure: status -> status == 0 ? null : 'FAIL: $main failed to compile'
 		};
-		if (setupStatus != 0) {
-			Sys.stderr().writeString('FAIL: ${test.name} setup failed\n');
-			return false;
-		}
-		var status = Sys.command(hl, [output].concat(resolveArguments(output, test.runtimeArguments)));
-		var passed = test.expectedExit == null ? status != 0 : status == test.expectedExit;
-		if (!passed) {
-			var expected = test.expectedExit == null ? "a non-zero exit" : 'exit ${test.expectedExit}';
-			Sys.stderr().writeString('FAIL: ${test.name} expected $expected, got $status\n');
-			return false;
-		}
-		var exitDescription = test.expectedExit == null ? 'non-zero exit $status' : 'exit ${test.expectedExit}';
-		Sys.println('PASS: ${test.message} ($exitDescription)');
-		return true;
-	}
 
-	public function runExecutables(tests:Array<ExecutableCase>, jobs:Int):Int {
-		if (tests.length == 0)
+	/** Run pipelines on `jobs` workers, reporting each test's output in catalog order. */
+	function runPipelines(pipelines:Array<Pipeline>, jobs:Int):Int {
+		if (pipelines.length == 0)
 			return 0;
-		if (jobs <= 1) {
-			var failures = 0;
-			for (test in tests)
-				if (!runExecutable(test))
-					failures++;
-			return failures;
-		}
-
-		var workerCount = Std.int(Math.min(Math.min(jobs, 4), tests.length));
-		var results:Array<ProgramResult> = [];
-		var active:Array<ActiveExecutable> = [];
-		var next = 0;
-		while (next < tests.length || active.length > 0) {
-			while (next < tests.length && active.length < workerCount) {
-				var test = tests[next];
+		var workerCount = Std.int(Math.max(1, Math.min(jobs, pipelines.length))), results:Array<ProgramResult> = [], active:Array<ActivePipeline> = [],
+			next = 0;
+		while (next < pipelines.length || active.length > 0) {
+			while (next < pipelines.length && active.length < workerCount) {
+				var pipeline = pipelines[next];
 				active.push({
 					index: next,
-					test: test,
-					process: compileExecutable(test),
-					output: "",
-					compiling: true
+					pipeline: pipeline,
+					step: 0,
+					process: pipeline.steps[0].start(),
+					output: ""
 				});
 				next++;
 			}
-			var current = active.shift();
-			var command = finishCommand(current.process);
+			var current = active.shift(),
+				command = finishCommand(current.process),
+				failure = current.pipeline.steps[current.step].failure(command.status);
 			current.output += command.output;
-			if (current.compiling) {
-				if (command.status != 0) {
-					results[current.index] = {
-						index: current.index,
-						passed: false,
-						output: current.output + 'FAIL: ${current.test.name} setup failed\n'
-					};
-				} else {
-					current.compiling = false;
-					current.process = runExecutableProcess(current.test);
-					active.push(current);
-				}
+			if (failure != null)
+				results[current.index] = {index: current.index, passed: false, output: current.output + failure + "\n"};
+			else if (++current.step < current.pipeline.steps.length) {
+				current.process = current.pipeline.steps[current.step].start();
+				active.push(current);
 			} else {
-				var expected = current.test.expectedExit;
-				var passed = expected == null ? command.status != 0 : command.status == expected;
-				var exitDescription = expected == null ? 'non-zero exit ${command.status}' : 'exit $expected';
-				var message = passed ? 'PASS: ${current.test.message} ($exitDescription)\n' : 'FAIL: ${current.test.name} expected $exitDescription, got ${command.status}\n';
-				results[current.index] = {index: current.index, passed: passed, output: current.output + message};
+				var success = current.pipeline.success;
+				results[current.index] = {index: current.index, passed: true, output: current.output + (success == "" ? "" : success + "\n")};
 			}
 		}
 		return reportResults(results);
@@ -214,7 +210,7 @@ class TestRunner {
 				active.push({
 					index: next,
 					test: test,
-					process: new Process(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output])
+					process: compileProgram(source, output)
 				});
 				next++;
 			}
@@ -256,7 +252,7 @@ class TestRunner {
 	function runProgramCaptured(test:ProgramCase, index:Int):ProgramResult {
 		var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
 		var output = Path.join([root, "out", test.name + ".hl"]);
-		var compilation = runCommand(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
+		var compilation = finishCommand(compileProgram(source, output));
 		if (compilation.status != 0) {
 			return {
 				index: index,
@@ -291,22 +287,6 @@ class TestRunner {
 		return {status: status, output: stdout + stderr};
 	}
 
-	function compileExecutable(test:ExecutableCase):Process {
-		var output = Path.join([root, "out", test.output]);
-		return switch test.compile {
-			case HaxeMain(main, arguments):
-				var args = haxeMainArguments(main).concat(resolveArguments(output, arguments));
-				new Process(haxe, args);
-			case Hxml(path):
-				new Process(haxe, ["--cwd", root, Path.join([root, path])]);
-		};
-	}
-
-	function runExecutableProcess(test:ExecutableCase):Process {
-		var output = Path.join([root, "out", test.output]);
-		return new Process(hl, [output].concat(resolveArguments(output, test.runtimeArguments)));
-	}
-
 	public function runPosInfos():Bool {
 		var initialOutput = Path.join([root, "out", "pos-initial.hl"]);
 		var editedOutput = Path.join([root, "out", "pos-edited.hl"]);
@@ -335,7 +315,10 @@ class TestRunner {
 		Sys.putEnv(variable, paths.join(Sys.systemName() == "Windows" ? ";" : ":"));
 	}
 
-	function haxeMainArguments(main:String):Array<String> {
+	function haxeMainArguments(main:String):Array<String>
+		return testClassPath().concat(["--run", main]);
+
+	function testClassPath():Array<String>
 		return [
 			"--cwd",
 			root,
@@ -348,11 +331,8 @@ class TestRunner {
 			"-cp",
 			"tests/runtime",
 			"-cp",
-			"tests/tooling",
-			"--run",
-			main
+			"tests/tooling"
 		];
-	}
 
 	function resolveArguments(output:String, arguments:Array<String>):Array<String> {
 		return [

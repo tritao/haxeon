@@ -17,6 +17,9 @@ class Executor implements ExecutionBackend {
 	final artifactCache:ArtifactCache;
 	var digests = new ContentDigestCache();
 
+	/** Actions whose fingerprint another action consumes; see `fingerprintFor`. */
+	var dependedOn:Map<String, Bool> = [];
+
 	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void) {
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
@@ -26,6 +29,10 @@ class Executor implements ExecutionBackend {
 
 	public function execute(plan:ExecutionPlan):ExecutionResult {
 		digests = new ContentDigestCache();
+		dependedOn = [];
+		for (action in plan.actions)
+			for (dependency in action.dependencies)
+				dependedOn.set(dependency.key(), true);
 		var started = Sys.time() * 1000.0;
 		var pending = new Map<String, ExecutionAction>(),
 			completed = new Map<String, ActionResult>(),
@@ -94,7 +101,7 @@ class Executor implements ExecutionBackend {
 				}> = [];
 			for (action in wave) {
 				var dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
-				var fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests);
+				var fingerprint = fingerprintFor(action, dependencyFingerprints);
 				if (isUpToDate(action, fingerprint, dependencyFingerprints)) {
 					waveResults.set(action.id.key(), new ActionResult(action.id, 0, true, false, fingerprint));
 					continue;
@@ -186,8 +193,7 @@ class Executor implements ExecutionBackend {
 
 	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>, ?preparedFingerprint:String,
 			freshnessChecked:Bool = false):ActionResult {
-		var fingerprint = preparedFingerprint == null ? ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
-			dependencyFingerprints, digests) : preparedFingerprint;
+		var fingerprint = preparedFingerprint == null ? fingerprintFor(action, dependencyFingerprints) : preparedFingerprint;
 		if (!freshnessChecked && isUpToDate(action, fingerprint, dependencyFingerprints))
 			return new ActionResult(action.id, 0, true, false, fingerprint);
 		try {
@@ -207,6 +213,17 @@ class Executor implements ExecutionBackend {
 		} catch (error:Dynamic) {
 			return new ActionResult(action.id, 1, false, false, null, Std.string(error));
 		}
+	}
+
+	/**
+	 * Fingerprints hash tool binaries and inputs, which is expensive (a 30 MB compiler takes ~25 s to
+	 * hash under the Haxe interpreter). Only cacheable actions and actions others depend on use one;
+	 * every other action always runs, so it gets none.
+	 */
+	function fingerprintFor(action:ExecutionAction, dependencyFingerprints:Array<String>):Null<String> {
+		if (!isCacheable(action) && !dependedOn.exists(action.id.key()))
+			return null;
+		return ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests);
 	}
 
 	function isUpToDate(action:ExecutionAction, fingerprint:String, dependencyFingerprints:Array<String>):Bool {
