@@ -9,12 +9,10 @@ dynamic-array-references	gc-memory	Std.string diagnostics format floats through 
 string-concat-mixed	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
 messagepack-codec	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
 messagepack-generated	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
-enum-argument-string	skip	wasm32 exits 0 (Wasm GC passes)
-string-interpolation	skip	wasm32 exits 0 (Wasm GC passes)
-std-string-to-string	skip	wasm32 exits 1 (Wasm GC passes)
-generic-interface	skip	wasm32 traps with unreachable (Wasm GC passes)
-messagepack-malformed	skip	wasm32 traps with unreachable (Wasm GC passes)
-compiler-audit-regressions	skip	wasm32 has no __string_index_of_from (Wasm GC passes)
+messagepack-malformed	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+enum-argument-string	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+string-interpolation	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
+std-string-to-string	gc-memory	Float-to-string formatting reads linear-memory Ryu tables on Wasm GC
 void-branch-results	skip	Neither Wasm backend supports Void-typed IR values
 messagepack-wire	skip	No Wasm lowering for haxe.Int64.parseString
 messagepack-interop	skip	No Wasm lowering for haxe.Int64.toStr (wasm32) or StringTools.startsWith (Wasm GC)

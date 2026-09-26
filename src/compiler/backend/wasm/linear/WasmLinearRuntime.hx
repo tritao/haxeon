@@ -13,6 +13,9 @@ import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 import compiler.backend.wasm.WasmModuleSupport;
 
 class WasmLinearRuntime {
+	/** Whether runtime errors throw a catchable Haxe exception; set per module by `register`. */
+	static var runtimeErrorsThrow = false;
+
 	public static function addImports(context:WasmLinearContext, used:Map<String, Bool>):Void {
 		var module = context.module, program = context.program;
 		for (native in program.natives)
@@ -27,8 +30,19 @@ class WasmLinearRuntime {
 				}
 	}
 
-	public static function register(context:WasmLinearContext):Void
+	public static function register(context:WasmLinearContext):Void {
+		runtimeErrorsThrow = WasmModuleSupport.hasExceptions(context.program);
 		addRuntimeFunctions(context);
+	}
+
+	/** Fail a runtime check: throw a null Haxe exception when the program can catch one, else trap. */
+	static function runtimeFailure(builder:WasmFunctionBuilder):Void {
+		if (runtimeErrorsThrow) {
+			builder.i32Const(0);
+			builder.emit(Throw(0));
+		} else
+			builder.emit(Unreachable);
+	}
 
 	static function runtimeImport(module:WasmModule, native:compiler.ir.Ir.IrNative):Int {
 		var existing = runtimeImportIndex(module, native);
@@ -85,6 +99,8 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringCase(module, native.name, allocator, false));
 						case "__string_index_of":
 							functions.set(native.name, addStringIndexOf(module, native.name));
+						case "__string_index_of_from":
+							functions.set(native.name, addStringIndexOf(module, native.name, true));
 						case "__string_substring":
 							if (!functions.exists(native.name))
 								functions.set(native.name, addStringSubstring(module, native.name, allocator));
@@ -1011,7 +1027,7 @@ class WasmLinearRuntime {
 		builder.i32Const(length);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(runtimeFailure);
 		builder.localGet(input);
 		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
 		builder.i32Const(length);
@@ -1019,14 +1035,14 @@ class WasmLinearRuntime {
 		builder.localGet(input);
 		builder.emit(I32Load(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(runtimeFailure);
 	}
 
 	static function inputReadCheckLocal(builder:WasmFunctionBuilder, input:WasmLocalRef, length:WasmLocalRef):Void {
 		builder.localGet(length);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(runtimeFailure);
 		builder.localGet(input);
 		builder.emit(I32Load(WasmLayout.BYTES_STREAM_LENGTH_OFFSET));
 		builder.localGet(length);
@@ -1034,7 +1050,7 @@ class WasmLinearRuntime {
 		builder.localGet(input);
 		builder.emit(I32Load(WasmLayout.BYTES_STREAM_POSITION_OFFSET));
 		builder.emit(I32LtS);
-		builder.if_(function(builder) builder.emit(Unreachable));
+		builder.if_(runtimeFailure);
 	}
 
 	static function loadInputState(builder:WasmFunctionBuilder, input:WasmLocalRef, position:WasmLocalRef, bytes:WasmLocalRef):Void {
@@ -2533,10 +2549,12 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addStringIndexOf(module:WasmModule, name:String):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
+	/** String.indexOf, optionally from a start index: a negative start searches from 0, one past the end finds nothing. */
+	static function addStringIndexOf(module:WasmModule, name:String, fromStart = false):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
 			value = builder.parameter("value", 0),
 			needle = builder.parameter("needle", 1),
+			start = fromStart ? builder.parameter("start", 2) : null,
 			valueLength = builder.local("valueLength", I32),
 			needleLength = builder.local("needleLength", I32),
 			index = builder.local("index", I32),
@@ -2548,15 +2566,17 @@ class WasmLinearRuntime {
 		builder.localGet(needle);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localSet(needleLength);
+		// An empty needle matches at the first candidate position, so the loop covers it too.
 		builder.i32Const(-1);
 		builder.localSet(result);
-		builder.localGet(needleLength);
-		builder.i32Eqz();
-		builder.if_(function(builder) {
+		if (start == null)
 			builder.i32Const(0);
-			builder.localSet(result);
-		});
-		builder.i32Const(0);
+		else {
+			builder.localGet(start);
+			builder.i32Const(0);
+			builder.emit(I32LtS);
+			builder.ifElse(builder -> builder.i32Const(0), builder -> builder.localGet(start), I32);
+		}
 		builder.localSet(index);
 		builder.block(function(builder) {
 			builder.loop(function(builder) {
@@ -3230,7 +3250,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram, ?floatString:Int):Int {
+	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram, ?floatString:Int,
+			?functions:Map<String, Int>):Int {
 		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
 			nullString = requiredStringOffset(strings, "null"),
@@ -3272,13 +3293,21 @@ class WasmLinearRuntime {
 				builder.return_();
 			});
 		}
+		// Objects print through their class's toString, or their class name without one, as on HL.
+		// Method indices exist only after user functions are declared (finalizeDynamicString).
 		for (object in program.objects) {
+			var method = WasmModuleSupport.stringMethod(program, object.name),
+				methodIndex = method == null || functions == null ? null : functions.get(method);
 			builder.localGet(value);
 			builder.emit(I32Load(0));
 			builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
-				builder.i32Const(objectString);
+				if (methodIndex != null) {
+					builder.localGet(value);
+					builder.call(builder.functionRef(methodIndex));
+				} else
+					builder.i32Const(requiredStringOffset(strings, object.name));
 				builder.return_();
 			});
 		}
@@ -3296,6 +3325,26 @@ class WasmLinearRuntime {
 			}, I32);
 			builder.return_();
 		});
+		// Parameterless enum constructors print their name, as on HL and Wasm GC.
+		for (enumDecl in program.enums) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				for (index in 0...enumDecl.cases.length)
+					if (enumDecl.cases[index].params.length == 0) {
+						builder.localGet(value);
+						builder.emit(I32Load(WasmLayout.HEADER_SIZE));
+						builder.i32Const(index);
+						builder.emit(I32Eq);
+						builder.if_(function(builder) {
+							builder.i32Const(requiredStringOffset(strings, enumDecl.cases[index].name));
+							builder.return_();
+						});
+					}
+			});
+		}
 		// Keep dynamic object stringification total. Some objects can arrive
 		// through generated/native boundaries without appearing in the program's
 		// concrete object table; they still follow the standard "Object" fallback.
@@ -3308,12 +3357,23 @@ class WasmLinearRuntime {
 	 * Complete dynamic stringification after user functions have been assigned
 	 * Wasm indices, allowing the runtime helper to call the shared Ryu formatter.
 	 */
+	/** Static strings dynamic stringification returns: class names and parameterless enum constructor names. */
+	public static function dynamicStringConstants(program:IrProgram):Array<String> {
+		var result:Array<String> = [for (object in program.objects) object.name];
+		for (enumDecl in program.enums)
+			for (constructor in enumDecl.cases)
+				if (constructor.params.length == 0)
+					result.push(constructor.name);
+		return result;
+	}
+
 	public static function finalizeDynamicString(context:WasmLinearContext):Void {
 		var dynamicString = context.functions.get("__std_string"),
 			floatString = context.functions.get("runtime.Ryu.format");
-		if (dynamicString == null || floatString == null)
+		if (dynamicString == null)
 			return;
-		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction, context.strings, context.program, floatString);
+		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction, context.strings, context.program, floatString,
+			context.functions);
 		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
 	}
 

@@ -130,7 +130,8 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"].concat(WasmLinearDynamicArrays.runtimeStrings(program)))
+		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program))
+			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value),
 					offset = nextData;

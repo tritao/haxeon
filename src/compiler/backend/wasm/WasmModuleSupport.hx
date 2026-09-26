@@ -293,6 +293,16 @@ class WasmModuleSupport {
 			reachable = reachableFunctions(program, entry, roots);
 		while (true) {
 			var added = false, usedNatives = reachableNatives(program, reachable);
+			// Dynamic stringification calls each class's toString, as HashLink's `__string` proto does.
+			for (native in program.natives)
+				if (usedNatives.exists(native.name) && native.symbol == "__std_string")
+					for (object in program.objects) {
+						var method = stringMethod(program, object.name);
+						if (method != null && roots.indexOf(method) < 0) {
+							roots.push(method);
+							added = true;
+						}
+					}
 			for (native in program.natives)
 				if (usedNatives.exists(native.name) && native.generatedFunctionDependencies != null)
 					for (dependency in native.generatedFunctionDependencies)
@@ -309,6 +319,10 @@ class WasmModuleSupport {
 	static function enqueueFunction(name:Null<String>, byName:Map<String, IrFunction>, pending:Array<String>):Void
 		if (name != null && byName.exists(name))
 			pending.push(name);
+
+	/** The toString implementation an object of exactly this class uses, if any. */
+	public static function stringMethod(program:IrProgram, objectName:String):Null<String>
+		return findMethod(program, objectName, "__string");
 
 	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String> {
 		for (object in program.objects)

@@ -443,46 +443,7 @@ class WasmFunctionLower {
 			case ToDyn(output, value):
 				var represented = context.representation.values.toDynamic(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
-					switch value.type {
-						case I32, Bool:
-							emit(body, [
-								I32Const(WasmLayout.DYN_I32_SIZE),
-								Call(allocator),
-								LocalTee(requiredLocal(values, output.id)),
-								I32Const(typeId(value.type)),
-								I32Store(0),
-								LocalGet(requiredLocal(values, output.id)),
-								LocalGet(requiredLocal(values, value.id)),
-								I32Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-							]);
-						case F64:
-							emit(body, [
-								I32Const(WasmLayout.DYN_F64_SIZE),
-								Call(allocator),
-								LocalTee(requiredLocal(values, output.id)),
-								I32Const(typeId(F64)),
-								I32Store(0),
-								LocalGet(requiredLocal(values, output.id)),
-								LocalGet(requiredLocal(values, value.id)),
-								F64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-							]);
-						case I64:
-							emit(body, [
-								I32Const(WasmLayout.DYN_I64_SIZE),
-								Call(allocator),
-								LocalTee(requiredLocal(values, output.id)),
-								I32Const(typeId(I64)),
-								I32Store(0),
-								LocalGet(requiredLocal(values, output.id)),
-								LocalGet(requiredLocal(values, value.id)),
-								I64Store(WasmLayout.DYN_PAYLOAD_OFFSET)
-							]);
-						default:
-							emit(body, [
-								LocalGet(requiredLocal(values, value.id)),
-								LocalSet(requiredLocal(values, output.id))
-							]);
-					}
+					emit(body, boxedValue(value.type, requiredLocal(values, value.id), requiredLocal(values, output.id), allocator));
 			case SafeCast(output, value):
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
@@ -688,11 +649,17 @@ class WasmFunctionLower {
 									If(null),
 									LocalGet(requiredLocal(values, object.id))
 								]);
-								for (argument in arguments)
-									body.push(LocalGet(requiredLocal(values, argument.id)));
+								for (argumentIndex in 0...arguments.length)
+									emit(body,
+										adaptInterfaceValue(arguments[argumentIndex].type, target.argumentTypes[argumentIndex + 1],
+											requiredLocal(values, arguments[argumentIndex].id), allocator));
 								body.push(Call(target.functionIndex));
-								if (output.type != Void)
+								if (output.type != Void) {
+									var result = context.placement.allocate(WasmModuleSupport.requireValueType(target.resultType));
+									body.push(LocalSet(result));
+									emit(body, adaptInterfaceValue(target.resultType, output.type, result, allocator));
 									body.push(LocalSet(requiredLocal(values, output.id)));
+								}
 								if (index < targets.length - 1)
 									body.push(Else);
 								else
@@ -1299,6 +1266,52 @@ class WasmFunctionLower {
 			case F64: F64Load(offset);
 			default: I32Load(offset);
 		};
+
+	/** Linear Dynamic representation of a value: primitives are boxed with their runtime type id. */
+	static function boxedValue(type:IrType, source:Int, destination:Int, allocator:Int):Array<WasmInstruction> {
+		var size = switch type {
+			case I32, Bool: WasmLayout.DYN_I32_SIZE;
+			case F64: WasmLayout.DYN_F64_SIZE;
+			case I64: WasmLayout.DYN_I64_SIZE;
+			default: return [LocalGet(source), LocalSet(destination)];
+		};
+		return [
+			I32Const(size),
+			Call(allocator),
+			LocalTee(destination),
+			I32Const(typeId(type)),
+			I32Store(0),
+			LocalGet(destination),
+			LocalGet(source),
+			store(type, WasmLayout.DYN_PAYLOAD_OFFSET)
+		];
+	}
+
+	static function isBoxedPrimitive(type:IrType):Bool
+		return switch type {
+			case I32, Bool, I64, F64: true;
+			default: false;
+		};
+
+	/**
+	 * Convert a value between an interface signature and its implementation's: a generic
+	 * interface erases type parameters to Dynamic while implementations keep primitives.
+	 */
+	function adaptInterfaceValue(sourceType:IrType, targetType:IrType, source:Int, allocator:Int):Array<WasmInstruction> {
+		if (sourceType == targetType)
+			return [LocalGet(source)];
+		if (isBoxedPrimitive(sourceType) && targetType == Dyn) {
+			var boxed = context.placement.allocate(I32);
+			return boxedValue(sourceType, source, boxed, allocator).concat([LocalGet(boxed)]);
+		}
+		if (sourceType == Dyn && isBoxedPrimitive(targetType))
+			return [LocalGet(source), load(targetType, WasmLayout.DYN_PAYLOAD_OFFSET)];
+		return switch [sourceType, targetType] {
+			case [I32, F64]: [LocalGet(source), F64ConvertI32S];
+			case [F64, I32]: [LocalGet(source), I32TruncF64S];
+			default: [LocalGet(source)];
+		};
+	}
 
 	static function store(type:IrType, offset:Int):WasmInstruction
 		return switch type {

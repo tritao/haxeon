@@ -362,6 +362,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			Else
 		]);
 		body = body.concat(stringLiteral("Object", outputLocal));
+		body = body.concat(dynamicObjectString(valueLocal, outputLocal));
 		body = body.concat(dynamicIntegerString(valueLocal, outputLocal));
 		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
@@ -379,6 +380,45 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				}
 			}
 		body = body.concat([End, End]);
+		return body;
+	}
+
+	/**
+	 * Objects print through their class's toString, or their class name without one, as on HL.
+	 * Classes are tested most-derived first so exactly one toString runs.
+	 */
+	function dynamicObjectString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var program = plan.program,
+			bases:Map<String, Null<String>> = [for (object in program.objects) object.name => object.base];
+		function depth(name:String):Int {
+			var base = bases.get(name);
+			return base == null || !bases.exists(base) ? 0 : depth(base) + 1;
+		}
+		var classes = [
+			for (object in program.objects)
+				if (!object.isValue && plan.objectTypeIndices.exists(object.name)) object.name
+		];
+		classes.sort((left, right) -> depth(right) - depth(left));
+		var body:Array<WasmInstruction> = [];
+		for (name in classes) {
+			var objectType = plan.objectType(name),
+				method = WasmModuleSupport.stringMethod(program, name),
+				methodIndex = method == null ? null : gc.functions.get(method);
+			body = body.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(objectType)}),
+				If(null)
+			]);
+			body = body.concat(methodIndex == null ? stringLiteral(name, outputLocal) : [
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(objectType)}),
+				Call(methodIndex),
+				LocalSet(outputLocal)
+			]);
+			body.push(Else);
+		}
+		for (_ in classes)
+			body.push(End);
 		return body;
 	}
 
