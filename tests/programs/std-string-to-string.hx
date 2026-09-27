@@ -34,5 +34,8 @@ function main():Int {
 		return 2;
 	if (Std.string(new Plain()) != "Plain")
 		return 3;
+	if (Std.string(12.7) != "12.7" || Std.string(40.0) != "40"
+		|| Std.string(Math.round((0.1 + 0.2) * 1000) / 1000) != "0.3")
+		return 4;
 	return 42;
 }
