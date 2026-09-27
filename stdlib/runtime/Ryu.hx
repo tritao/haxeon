@@ -1,8 +1,10 @@
 package runtime;
 
+#if wasm
 import runtime.FloatBits;
 import runtime.RyuTables;
 import runtime.RuntimeData;
+#end
 
 /** A finite Ryū decimal, or one of the special IEEE-754 values. */
 typedef RyuDecimal = {
@@ -17,6 +19,12 @@ private typedef RyuUInt128 = {
 }
 
 /** Binary64 to shortest-decimal conversion, implemented in ordinary Haxe. */
+#if !wasm
+class Ryu {
+	public static function format(value:Float):String
+		return Std.string(value);
+}
+#else
 class Ryu {
 	static inline final KIND_POSITIVE = 0;
 	static inline final KIND_NEGATIVE = 1;
@@ -327,3 +335,4 @@ class Ryu {
 	static inline function wide(high:Int, low:Int):haxe.Int64
 		return haxe.Int64.make(high, low);
 }
+#end

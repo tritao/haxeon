@@ -423,6 +423,8 @@ DEFINE_PRIM(_I32,__string_length,_BYTES);
 DEFINE_PRIM(_I64,__int64_parse,_BYTES);
 DEFINE_PRIM(_BYTES,__int64_to_string,_I64);
 DEFINE_PRIM(_F64,__int64_to_float,_I64);
+DEFINE_PRIM(_I64,__f64_to_i64_bits,_F64);
+DEFINE_PRIM(_F64,__i64_to_f64_bits,_I64);
 DEFINE_PRIM(_I64,__int64_of_int,_I32);
 DEFINE_PRIM(_I64,__int64_from_float,_F64);
 DEFINE_PRIM(_I64,__int64_make,_I32 _I32);

@@ -2,15 +2,28 @@
 
 package haxe.format;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__json_value_kind")
 extern function jsonValueKind(value:Dynamic):Int;
 
 @:hlNative("haxeon_runtime", "__reflect_array_get")
 extern function jsonArrayGet(value:Dynamic, index:Int):Dynamic;
 
-#if !wasm
 @:hlNative("haxeon_runtime", "__reflect_array_length")
 extern function jsonArrayLength(value:Dynamic):Int;
+#else
+function jsonValueKind(value:Dynamic):Int {
+	if (value == null) return 0;
+	if (Std.isOfType(value, String)) return 1;
+	if (Std.isOfType(value, Bool)) return 2;
+	if (Std.isOfType(value, Int)) return 3;
+	if (Std.isOfType(value, Float)) return 4;
+	if (Std.isOfType(value, Array)) return 5;
+	return 7;
+}
+
+function jsonArrayGet(value:Dynamic, index:Int):Dynamic
+	return (cast(value, Array<Dynamic>))[index];
 #end
 
 class JsonPrinter {
@@ -44,7 +57,11 @@ class JsonPrinter {
 				output.add(Std.string(value));
 			case 4:
 				var number = cast(value, Float);
+				#if wasm
+				output.add(number == number && number != 1.0 / 0.0 && number != -1.0 / 0.0 ? Std.string(number) : "null");
+				#else
 				output.add(Math.isFinite(number) ? Std.string(number) : "null");
+				#end
 			case 5:
 				writeArray(value);
 			case 6:
@@ -59,7 +76,7 @@ class JsonPrinter {
 		output.add("[");
 		depth++;
 		#if wasm
-		var length = (cast value : Array<Dynamic>).length;
+		var length = cast(value, Array<Dynamic>).length;
 		#else
 		var length = jsonArrayLength(value);
 		#end
@@ -77,6 +94,9 @@ class JsonPrinter {
 	}
 
 	function writeObject(value:Dynamic):Void {
+		#if wasm
+		throw "Wasm JSON object reflection is not available";
+		#else
 		enter(value);
 		var fields = Reflect.fields(value);
 		output.add("{");
@@ -95,6 +115,7 @@ class JsonPrinter {
 			line();
 		output.add("}");
 		stack.pop();
+		#end
 	}
 
 	function enter(value:Dynamic):Void {
