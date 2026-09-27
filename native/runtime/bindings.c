@@ -468,6 +468,7 @@ DEFINE_PRIM(_BOOL,__string_ends_with,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__string_replace,_BYTES _BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__file_get_content,_BYTES);
 DEFINE_PRIM(_VOID,__file_save_content,_BYTES _BYTES);
+DEFINE_PRIM(_VOID,__file_append_content,_BYTES _BYTES);
 DEFINE_PRIM(_BYTES,__file_write_atomic,_BYTES _ABSTRACT(realtime_bytes) _BOOL);
 DEFINE_PRIM(_BYTES,__sys_get_cwd,_NO_ARG);
 DEFINE_PRIM(_BYTES,__sys_full_path,_BYTES);

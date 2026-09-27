@@ -150,6 +150,24 @@ HL_PRIM void HL_NAME(__file_save_content)( vbyte *path, vbyte *content ) {
 	if( fclose(file) != 0 ) hl_error("Could not close output file");
 }
 
+HL_PRIM void HL_NAME(__file_append_content)( vbyte *path, vbyte *content ) {
+#ifdef HL_WIN
+	FILE *file = _wfopen((const wchar_t *)path,L"ab");
+#else
+	char *owned_path = realtime_utf8_copy(path);
+	FILE *file = fopen(owned_path, "ab");
+	free(owned_path);
+#endif
+	const char *utf8 = content == NULL ? "" : hl_to_utf8((const uchar *)content);
+	if( file == NULL ) hl_error("Could not open append file");
+	size_t length = strlen(utf8);
+	if( length > 0 && fwrite(utf8, 1, length, file) != length ) {
+		fclose(file);
+		hl_error("Could not append file");
+	}
+	if( fclose(file) != 0 ) hl_error("Could not close append file");
+}
+
 
 static vbyte *realtime_file_read( vbyte *path, int *length ) {
 #ifdef HL_WIN

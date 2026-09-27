@@ -33,6 +33,9 @@ extern function fileGetBytes(path:String):Bytes;
 @:hlNative("haxeon_runtime", "__file_save_content")
 extern function fileSaveContent(path:String, content:String):Void;
 
+@:hlNative("haxeon_runtime", "__file_append_content")
+extern function fileAppendContent(path:String, content:String):Void;
+
 @:hlNative("haxeon_runtime", "__file_save_bytes")
 extern function fileSaveBytes(path:String, bytes:Bytes):Void;
 
@@ -46,6 +49,9 @@ class File {
 
 	public static inline function saveContent(path:String, content:String):Void
 		fileSaveContent(path, content);
+
+	public static inline function appendContent(path:String, content:String):Void
+		fileAppendContent(path, content);
 
 	public static inline function saveBytes(path:String, bytes:Bytes):Void
 		fileSaveBytes(path, bytes);
