@@ -71,6 +71,7 @@ for (const name of modes.keys())
 
 // Host functions of the haxeon_runtime ABI, matching native/runtime/core.c.
 const runtime = {
+  __math_is_finite: Number.isFinite,
   __math_ceil: Math.ceil,
   __math_floor: Math.floor,
   __math_round: value => Math.floor(value + 0.5) | 0,
