@@ -193,7 +193,8 @@ enum AstExpression {
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);
 	MapLiteral(entries:Array<AstMapEntry>, span:SourceSpan);
-	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, value:AstExpression, span:SourceSpan);
+	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, value:AstExpression, flattened:Bool,
+		span:SourceSpan);
 	MapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, key:AstExpression, value:AstExpression,
 		span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);

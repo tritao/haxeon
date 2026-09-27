@@ -415,9 +415,10 @@ class ModuleCanonicalizer {
 							span: mapEntry.span
 						}
 				], s);
-			case ArrayComprehension(keyName, valueName, iterable, predicate, value, s):
+			case ArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, s):
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalOptionalExpression(predicate, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases), s);
+					canonicalOptionalExpression(predicate, module, entry, locals, aliases), canonicalExpression(value, module, entry, locals, aliases),
+					flattened, s);
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, s):
 				MapComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
 					canonicalOptionalExpression(predicate, module, entry, locals, aliases), canonicalExpression(key, module, entry, locals, aliases),

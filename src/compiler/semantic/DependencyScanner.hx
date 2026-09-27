@@ -114,7 +114,7 @@ class DependencyScanner {
 					scanExpression(mapEntry.key, dependencies);
 					scanExpression(mapEntry.value, dependencies);
 				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				scanExpression(iterable, dependencies);
 				if (predicate != null)
 					scanExpression(predicate, dependencies);

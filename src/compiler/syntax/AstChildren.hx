@@ -36,7 +36,7 @@ class AstChildren {
 				if (fallback != null)
 					result.push(fallback);
 				result;
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				predicate == null ? [iterable, value] : [iterable, predicate, value];
 			case MapComprehension(_, _, iterable, predicate, key, value, _):
 				predicate == null ? [iterable, key, value] : [iterable, predicate, key, value];

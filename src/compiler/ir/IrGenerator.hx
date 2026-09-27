@@ -1225,7 +1225,7 @@ class IrGenerator {
 					lowerMapSet(builder, callArguments[0], callArguments[1], callArguments[2], types.key, types.value);
 				}
 				builder.load(mapName, resultType);
-			case TArrayComprehension(keyName, valueName, iterable, condition, value):
+			case TArrayComprehension(keyName, valueName, iterable, condition, value, _):
 				var inputName = '$' + 'comprehension-input:${expression.span.start}',
 					mapName = '$' + 'comprehension-map:${expression.span.start}',
 					resultName = '$' + 'comprehension-result:${expression.span.start}',
@@ -1261,7 +1261,7 @@ class IrGenerator {
 					builder.store(inputName, lowerMapKeys(builder, localTypes, builder.load(mapName, loweredMapType), mapTypes.key, mapTypes.value));
 				}
 				var flattened = switch value.expression {
-					case TArrayComprehension(_, _, _, _, _): true;
+					case TArrayComprehension(_, _, _, _, _, true): true;
 					case _: false;
 				};
 				var capacity = !iterator

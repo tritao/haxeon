@@ -286,7 +286,7 @@ class SemanticDependencyCollector {
 					scanCallExpression(mapEntry.key, calls, aliases);
 					scanCallExpression(mapEntry.value, calls, aliases);
 				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				scanCallExpression(iterable, calls, aliases);
 				if (predicate != null)
 					scanCallExpression(predicate, calls, aliases);

@@ -427,7 +427,7 @@ private class PurityWalker {
 					if (!expression(entry.key) || !expression(entry.value))
 						return false;
 				true;
-			case ArrayComprehension(key, item, iterable, filter, result, _): isPureIterable(iterable) && expression(iterable) && scoped(() -> {
+			case ArrayComprehension(key, item, iterable, filter, result, _, _): isPureIterable(iterable) && expression(iterable) && scoped(() -> {
 					declare(key);
 					if (item != null)
 						declare(item);
