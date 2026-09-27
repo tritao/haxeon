@@ -490,19 +490,20 @@ class BodyTyper {
 
 	function collectPatternBindingTypes(pattern:AstExpression, bindings:Map<String, CompilerType>):Void
 		switch pattern {
-			case Call(name, arguments, _):
+			case Call(name, arguments, span):
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0) {
 					var matchedName:Null<String> = null;
 					for (enumName => declaration in session.enumDecls)
-						for (enumCase in declaration.cases)
-							if (enumCase.name == name
-								&& arguments.length >= requiredEnumParameters(enumCase.params)
-								&& arguments.length <= enumCase.params.length) {
-								if (matchedName != null)
-									return;
-								matchedName = enumName;
-							}
+						if (declaration.span.file.path == span.file.path)
+							for (enumCase in declaration.cases)
+								if (enumCase.name == name
+									&& arguments.length >= requiredEnumParameters(enumCase.params)
+									&& arguments.length <= enumCase.params.length) {
+									if (matchedName != null)
+										return;
+									matchedName = enumName;
+								}
 					if (matchedName != null)
 						info = enumCaseInfo(matchedName + "." + name);
 				}
@@ -805,12 +806,14 @@ class BodyTyper {
 	}> {
 		return switch value {
 			case Call(name, arguments, span):
-				var info = enumCaseInfo(name);
+				var expectedEnum = enumName(expected);
+				var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
+				var info = expectedEnum != null && sourceIsBareReference(span) ? enumCaseInfo(expectedEnum + "." + constructorName) : null;
 				if (info == null) {
-					var expectedEnum = enumName(expected);
-					var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
+					info = enumCaseInfo(name);
 					if (expectedEnum != null)
-						info = enumCaseInfo(expectedEnum + "." + constructorName);
+						if (info == null && name.indexOf(".") < 0)
+							info = enumCaseInfo(expectedEnum + "." + constructorName);
 				}
 				if (info == null)
 					return null;
@@ -1165,7 +1168,18 @@ class BodyTyper {
 						requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
 				type, span, false, scope.mapKeySource(name), scope.isCapture(name) ? scope.resolveDeclared(name) : null);
 		} else {
-			var enumLiteral = expectedEnumLiteral(name, expectedType, span);
+			var owner = context.lexicalOwner;
+			if (owner != null && name.indexOf(".") < 0) {
+				var ownStatic = findStaticFieldNullable(owner, name);
+				if (ownStatic != null) {
+					var inlineValue = inlineStaticFieldExpression(ownStatic.owner, name, span);
+					return inlineValue == null ? new TypedExpression(TStaticField(ownStatic.owner, name), ownStatic.type, span) : inlineValue;
+				}
+				var thisType = scope.resolve("this");
+				if (thisType != null && findFieldType(thisType, name) != null)
+					return typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
+			}
+			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
 			if (enumLiteral != null)
 				return enumLiteral;
 			var inferredEnumLiteral = uniqueEnumLiteral(name, span);
@@ -1705,18 +1719,27 @@ class BodyTyper {
 	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {
 		var enumName:Null<String> = null, index = -1;
 		for (candidateName => declaration in session.enumDecls)
-			for (candidateIndex in 0...declaration.cases.length) {
-				var enumCase = declaration.cases[candidateIndex];
-				if (enumCase.name != name || enumCase.params.length != 0)
-					continue;
-				if (enumName != null)
-					fail("E1005", 'Ambiguous enum value "$name"', span);
-				enumName = candidateName;
-				index = candidateIndex;
-			}
+			if (declaration.span.file.path == span.file.path)
+				for (candidateIndex in 0...declaration.cases.length) {
+					var enumCase = declaration.cases[candidateIndex];
+					if (enumCase.name != name || enumCase.params.length != 0)
+						continue;
+					if (enumName != null)
+						fail("E1005", 'Ambiguous enum value "$name"', span);
+					enumName = candidateName;
+					index = candidateIndex;
+				}
 		if (enumName == null)
 			return null;
 		return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
+	}
+
+	static function sourceIsBareReference(span:SourceSpan):Bool {
+		var source = span.file.slice(span.start, span.end);
+		var callStart = source.indexOf("(");
+		if (callStart >= 0)
+			source = source.substr(0, callStart);
+		return source.indexOf(".") < 0;
 	}
 
 	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {

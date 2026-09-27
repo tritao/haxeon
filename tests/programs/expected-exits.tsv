@@ -150,6 +150,7 @@ dynamic-argument	42
 anonymous-record	42
 switch-expression	42
 string-switch-statement	42
+string-switch-expression-nullable	42
 switch-inline-final	42
 throw-expression	42
 array-literal	42

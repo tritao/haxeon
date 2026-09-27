@@ -126,7 +126,7 @@ class ModuleAnalyzer {
 			}
 			if (dependency.indexOf(".") < 0 && packageName != null) {
 				var packageCandidate = packageName + "." + dependency;
-				if (modules.exists(packageCandidate)) {
+				if (sourceModuleForDependency(packageCandidate) != null) {
 					dependencies.remove(dependency);
 					dependencies.set(packageCandidate, true);
 					continue;

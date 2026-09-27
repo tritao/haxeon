@@ -24,8 +24,8 @@ function main():Int {
 	var fixedSmall = 0.000001;
 	var scientificSmall = 0.0000001;
 	var smallestSubnormal = FloatBits.fromInt64(haxe.Int64.make(0, 1));
-	#if wasm
 	var largestFinite = FloatBits.fromInt64(haxe.Int64.make(0x7fefffff, -1));
+	#if wasm
 	var subnormalDecimal = Ryu.toDecimal(smallestSubnormal);
 	var shortestCommonValues = decimalMatches(1.0, 1, 0)
 		&& decimalMatches(0.1, 1, -1)
@@ -63,10 +63,34 @@ function main():Int {
 	var stringConcatenation = fixedLarge + "!" == "100000000000000000000!"
 		&& scientificSmall + "!" == "1e-7!"
 		&& dynamicValue + "!" == "100000000000000000000!";
-	var parityValues = [12.7, 6.35, 0.1 + 0.2, 20.0, 1e21, 1e-7, smallestSubnormal, -0.0,
-		1.0 / 0.0, -1.0 / 0.0, 0.0 / 0.0];
-	var parityText = ["12.7", "6.35", "0.30000000000000004", "20", "1e+21", "1e-7", "5e-324", "0",
-		"Infinity", "-Infinity", "NaN"];
+	var parityValues = [
+		12.7,
+		6.35,
+		0.1 + 0.2,
+		20.0,
+		1e21,
+		1e-7,
+		smallestSubnormal,
+		largestFinite,
+		-0.0,
+		1.0 / 0.0,
+		-1.0 / 0.0,
+		0.0 / 0.0
+	];
+	var parityText = [
+		"12.7",
+		"6.35",
+		"0.30000000000000004",
+		"20",
+		"1e+21",
+		"1e-7",
+		"5e-324",
+		"1.7976931348623157e+308",
+		"0",
+		"Infinity",
+		"-Infinity",
+		"NaN"
+	];
 	var parity = true;
 	for (index in 0...parityValues.length)
 		parity = parity && Std.string(parityValues[index]) == parityText[index];
@@ -81,7 +105,8 @@ function main():Int {
 		bits = bits ^ (bits >>> 7);
 		bits = bits ^ (bits << 17);
 		var value = FloatBits.fromInt64(bits);
-		parity = parity && Std.string(value) == '$value';
+		if (Math.isFinite(value))
+			parity = parity && Std.parseFloat(Std.string(value)) == value;
 	}
 	#end
 	return shortestCommonValues && commonLayouts && dynamicDispatch && stringConcatenation && parity ? 42 : 0;

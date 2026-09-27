@@ -612,14 +612,16 @@ class CallResolver {
 				receiver = typeCallMemberWithFlow(receiver, parts[index], span, scope);
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
-		var enumCase = enumCaseInfo(name);
+		var expectedEnumName = enumName(expectedType);
+		var constructorName = name.indexOf(".") < 0 ? name : compiler.QualifiedName.last(name);
+		var enumCase = expectedEnumName != null
+			&& sourceIsBareReference(span) ? enumCaseInfo(expectedEnumName + "." + constructorName) : null;
 		if (enumCase == null) {
-			var expectedEnumName = enumName(expectedType);
-			var constructorName = name.indexOf(".") < 0 ? name : compiler.QualifiedName.last(name);
-			if (expectedEnumName != null)
+			enumCase = enumCaseInfo(name);
+			if (enumCase == null && expectedEnumName != null && name.indexOf(".") < 0)
 				enumCase = enumCaseInfo(expectedEnumName + "." + constructorName);
 			if (enumCase == null && name.indexOf(".") < 0)
-				enumCase = uniqueEnumCaseInfo(constructorName, arguments.length);
+				enumCase = uniqueEnumCaseInfo(constructorName, arguments.length, span);
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
@@ -672,25 +674,34 @@ class CallResolver {
 		return null;
 	}
 
-	function uniqueEnumCaseInfo(name:String, argumentCount:Int):Null<EnumConstructorInfo> {
+	function uniqueEnumCaseInfo(name:String, argumentCount:Int, span:SourceSpan):Null<EnumConstructorInfo> {
 		var found:Null<EnumConstructorInfo> = null;
 		for (enumName => declaration in session.enumDecls)
-			for (index in 0...declaration.cases.length) {
-				var enumCase = declaration.cases[index];
-				if (enumCase.name != name
-					|| argumentCount < requiredEnumParameters(enumCase.params)
-					|| argumentCount > enumCase.params.length)
-					continue;
-				if (found != null)
-					return null;
-				found = {
-					enumName: enumName,
-					index: index,
-					params: enumCase.params,
-					typeParameters: declaration.typeParameters
-				};
-			}
+			if (declaration.span.file.path == span.file.path)
+				for (index in 0...declaration.cases.length) {
+					var enumCase = declaration.cases[index];
+					if (enumCase.name != name
+						|| argumentCount < requiredEnumParameters(enumCase.params)
+						|| argumentCount > enumCase.params.length)
+						continue;
+					if (found != null)
+						return null;
+					found = {
+						enumName: enumName,
+						index: index,
+						params: enumCase.params,
+						typeParameters: declaration.typeParameters
+					};
+				}
 		return found;
+	}
+
+	static function sourceIsBareReference(span:SourceSpan):Bool {
+		var source = span.file.slice(span.start, span.end);
+		var callStart = source.indexOf("(");
+		if (callStart >= 0)
+			source = source.substr(0, callStart);
+		return source.indexOf(".") < 0;
 	}
 
 	function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {

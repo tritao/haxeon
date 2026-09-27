@@ -62,8 +62,7 @@ class SemanticAssembly {
 		var sourceTypeAliases:Map<String, String> = [],
 			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
 			visibleAliasesByPackage:Map<String, Map<String, String>> = [],
-			enumCasesByType:Map<String, Array<String>> = [],
-			enumConstructorCounts:Map<String, Int> = [];
+			enumCasesByType:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -77,19 +76,11 @@ class SemanticAssembly {
 				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 				enumCasesByType.set(canonicalName, [for (enumCase in declaration.cases) enumCase.name]);
-				for (enumCase in declaration.cases) {
-					var count = enumConstructorCounts.exists(enumCase.name) ? enumConstructorCounts.get(enumCase.name) : 0;
-					enumConstructorCounts.set(enumCase.name, count + 1);
-				}
 			}
 			for (declaration in program.enumAbstracts) {
 				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 				enumCasesByType.set(canonicalName, [for (enumCase in declaration.values) enumCase.name]);
-				for (enumCase in declaration.values) {
-					var count = enumConstructorCounts.exists(enumCase.name) ? enumConstructorCounts.get(enumCase.name) : 0;
-					enumConstructorCounts.set(enumCase.name, count + 1);
-				}
 			}
 			for (declaration in program.abstracts)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
@@ -229,7 +220,7 @@ class SemanticAssembly {
 			// collected, so a class in the current/imported package keeps its
 			// name in type positions such as `new Tabs()`.
 			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName) && enumConstructorCounts.get(caseName) == 1 && !aliases.exists(caseName))
+				if (!ambiguousConstructors.exists(caseName) && !aliases.exists(caseName))
 					aliases.set(caseName, target);
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,
@@ -315,6 +306,9 @@ class SemanticAssembly {
 			for (classDecl in ast.classes) {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 					classAliases:Map<String, String> = [for (alias => target in aliases) alias => target];
+				for (field in classDecl.fields)
+					if (constructorTargets.exists(field.name) && classAliases.get(field.name) == constructorTargets.get(field.name))
+						classAliases.remove(field.name);
 				for (parameter in classDecl.typeParameters)
 					classAliases.set(parameter, parameter);
 				var parsedBase = classDecl.base,
@@ -368,7 +362,7 @@ class SemanticAssembly {
 				}
 				var canonicalFields:Array<compiler.syntax.Ast.AstField> = [];
 				for (field in classDecl.fields) {
-					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, aliases);
+					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, classAliases);
 					if (initializer != null)
 						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
 					canonicalFields.push({

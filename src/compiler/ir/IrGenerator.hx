@@ -1093,8 +1093,8 @@ class IrGenerator {
 						var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes),
 							matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
-								builder.constNull(subjectType)); else if (subject.type == TString) builder.call("__string_equal",
-								[comparisonValue, caseValue], Bool); else builder.equal(comparisonValue, caseValue);
+								builder.constNull(subjectType)); else if (subjectType == Bytes) builder.call("__string_equal", [comparisonValue, caseValue],
+								Bool); else builder.equal(comparisonValue, caseValue);
 						if (switchCase.isCatchAll || switchCase.subjectBinding != null || isExhaustiveFinalCase)
 							builder.jump(bodyBlock);
 						else {
