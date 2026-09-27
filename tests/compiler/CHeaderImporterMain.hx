@@ -31,14 +31,16 @@ class CHeaderImporterMain {
 		// A nested record's own fields follow it, more deeply indented. They must
 		// not replace same-named fields of the enclosing record.
 		var shadowedLayout = CHeaderImporter.parseLayouts("*** Dumping AST Record Layout\n" + "         0 | struct sample_outer\n"
-			+ "         0 |   uint32_t struct_size\n" + "         4 |   uint32_t reserved0\n"
-			+ "         8 |   struct sample_pose pose\n" + "         8 |     uint32_t struct_size\n"
-			+ "        12 |     uint32_t reserved0\n" + "        16 |     double[3] position\n"
+			+ "         0 |   uint32_t struct_size\n" + "         4 |   uint32_t reserved0\n" + "         8 |   struct sample_pose pose\n"
+			+ "         8 |     uint32_t struct_size\n" + "        12 |     uint32_t reserved0\n" + "        16 |     double[3] position\n"
 			+ "        40 |   uint64_t[2] reserved\n" + "           | [sizeof=56, align=8]\n")
 			.get("sample_outer");
-		expect(shadowedLayout != null && shadowedLayout.offsets.get("struct_size") == 0
-			&& shadowedLayout.offsets.get("reserved0") == 4 && shadowedLayout.offsets.get("pose") == 8
-			&& shadowedLayout.offsets.get("reserved") == 40 && !shadowedLayout.offsets.exists("position"),
+		expect(shadowedLayout != null
+			&& shadowedLayout.offsets.get("struct_size") == 0
+			&& shadowedLayout.offsets.get("reserved0") == 4
+			&& shadowedLayout.offsets.get("pose") == 8
+			&& shadowedLayout.offsets.get("reserved") == 40
+			&& !shadowedLayout.offsets.exists("position"),
 			"record layout parser should keep only a record's own fields, not those of nested records");
 		expect(CHeaderImporter.isUserDeclaration({loc: {}}, ["D:/project/include"], "D:\\project\\include\\fixture.h"),
 			"C header declaration filtering should normalize Windows path separators");
