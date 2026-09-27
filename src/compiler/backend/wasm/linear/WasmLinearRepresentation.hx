@@ -86,6 +86,11 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return UseDefault;
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+		if (name == "__int64_to_float") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+				throw "Invalid Wasm Int64.toFloat signature";
+			return [LocalGet(argumentLocals[0]), F64ConvertI64S, LocalSet(outputLocal)];
+		}
 		if (name == "__wasm_memory_load_i32") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
 				throw "Invalid Wasm runtime memory.load i32 signature";

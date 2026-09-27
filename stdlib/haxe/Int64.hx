@@ -8,6 +8,10 @@ extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_to_string")
 	public static function toStr(value:haxe.Int64):String;
 
+	/** Converts to a Float; every integer with |value| < 2^53 is exact. */
+	@:hlNative("haxeon_runtime", "__int64_to_float")
+	public static function toFloat(value:haxe.Int64):Float;
+
 	@:hlNative("haxeon_runtime", "__int64_of_int")
 	public static function ofInt(value:Int):haxe.Int64;
 

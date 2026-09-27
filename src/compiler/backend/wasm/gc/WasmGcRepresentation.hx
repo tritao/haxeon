@@ -1384,6 +1384,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Int64.toStr signature";
 			return int64String(argumentLocals[0], outputLocal);
 		}
+		if (name == "__int64_to_float") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Int64.toFloat signature";
+			return [LocalGet(argumentLocals[0]), F64ConvertI64S, LocalSet(outputLocal)];
+		}
 		if (name == "__int64_parse") {
 			if (output.type != I64 || arguments.length != 1 || arguments[0].type != Bytes || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Int64.parseString signature";
