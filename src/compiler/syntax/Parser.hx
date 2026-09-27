@@ -1393,7 +1393,7 @@ class Parser {
 					return parsePostfix(MapComprehension(keyName, valueName, iterable, condition, value, mapValue, start.merge(end)));
 				}
 				var end = consume(TokenKind.RightBracket).span;
-				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(end)));
+				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, false, start.merge(end)));
 			}
 			if (!check(TokenKind.RightBracket)) {
 				var first = parseExpression();
@@ -1651,7 +1651,7 @@ class Parser {
 			consume(TokenKind.RightParen);
 		}
 		var value = parseComprehensionValue();
-		return ArrayComprehension(keyName, valueName, iterable, condition, value, start.merge(expressionSpan(value)));
+		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
 	function parseExpressionBranch():AstExpression {
@@ -2275,7 +2275,7 @@ class Parser {
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
-			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, span),
+			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}
 

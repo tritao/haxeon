@@ -143,8 +143,8 @@ class ExpressionTyper {
 			case ObjectLiteral(fields, span): typeObjectLiteral(fields, span, scope, expectedType);
 			case ArrayLiteral(values, span): typeArrayLiteral(values, span, scope, expectedType);
 			case MapLiteral(entries, span): typeMapLiteral(entries, span, scope, expectedType);
-			case ArrayComprehension(keyName, valueName, iterable, predicate, value, span):
-				typeArrayComprehension(keyName, valueName, iterable, predicate, value, span, scope, expectedType);
+			case ArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, span):
+				typeArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, span, scope, expectedType);
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
@@ -319,7 +319,7 @@ class ExpressionTyper {
 	}
 
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
-			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = typeExpressionCallback(iterable, scope, null, false),
 			originalIterable = typedIterable,
 			loopScope = new Scope(scope),
@@ -376,14 +376,14 @@ class ExpressionTyper {
 		var expectedElement = arrayElementExpectation(expectedType),
 			typedValue = typeExpressionCallback(value, loopScope, expectedElement, false),
 			flattenedElement = switch typedValue.expression {
-				case TArrayComprehension(_, _, _, _, _): arrayElementType(typedValue.type, span);
+				case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
 				case _: null;
 			},
 			elementType = expectedElement == null ? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
 		if (flattenedElement == null)
 			typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
 		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
-			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue),
+			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue, flattened),
 			TArray(elementType), span, false, map);
 	}
 

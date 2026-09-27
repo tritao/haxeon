@@ -126,7 +126,7 @@ class LambdaCollector {
 					collectLambdaExpression(mapEntry.key, functionName, module, generatedByModule);
 					collectLambdaExpression(mapEntry.value, functionName, module, generatedByModule);
 				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				collectLambdaExpression(iterable, functionName, module, generatedByModule);
 				if (predicate != null)
 					collectLambdaExpression(predicate, functionName, module, generatedByModule);

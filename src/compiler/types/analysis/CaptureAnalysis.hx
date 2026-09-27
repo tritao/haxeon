@@ -323,7 +323,7 @@ class CaptureAnalysis {
 					collectMutableCaptureExpression(entry.key, outerDeclared, result);
 					collectMutableCaptureExpression(entry.value, outerDeclared, result);
 				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				collectMutableCaptureExpression(iterable, outerDeclared, result);
 				if (predicate != null)
 					collectMutableCaptureExpression(predicate, outerDeclared, result);
@@ -408,7 +408,7 @@ class CaptureAnalysis {
 					collectExpressionVariables(entry.key, names, writesOnly);
 					collectExpressionVariables(entry.value, names, writesOnly);
 				}
-			case ArrayComprehension(_, _, iterable, predicate, value, _):
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
 				collectExpressionVariables(iterable, names, writesOnly);
 				if (predicate != null)
 					collectExpressionVariables(predicate, names, writesOnly);

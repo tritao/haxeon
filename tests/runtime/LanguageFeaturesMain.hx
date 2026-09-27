@@ -17,9 +17,11 @@ class LanguageFeaturesMain {
 			+ "  var recovered = try [0][1] catch (_:Dynamic) 4;\n"
 			+ "  var input:Value = Number(22); var selected = switch input { case Number(20) | Number(22): 6; case _: 0; };\n"
 			+ "  var flat = [for (left in [1, 2]) for (right in [10, 20]) left + right];\n"
+			+ "  var grid:Array<Array<Float>> = [for (row in 0...2) [for (column in 0...2) row * 10.0 + column]];\n"
 			+ "  var found = Lambda.find(flat, value -> value == 22);\n"
 			+ "  return bits + Std.int(fraction) + recovered + selected + (flat.length == 4 && flat.contains(22) && found == 22 ? 25 : 0)"
-			+ "    + (Constants.names.length == 2 && 'ffi'.toUpperCase() == 'FFI' && Math.min(2, 3) == 2 && Math.max(2, 3) == 3 ? 0 : -100);\n"
+			+ "    + (Constants.names.length == 2 && 'ffi'.toUpperCase() == 'FFI' && Math.min(2, 3) == 2 && Math.max(2, 3) == 3 ? 0 : -100)\n"
+			+ "    + (grid.length == 2 && grid[0].length == 2 && grid[1][1] == 11.0 ? 0 : -100);\n"
 			+ "}");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
 	}

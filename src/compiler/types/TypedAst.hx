@@ -83,7 +83,8 @@ enum TypedExpressionKind {
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>, isDynamic:Bool);
 	TArrayLiteral(values:Array<TypedExpression>);
 	TMapLiteral(entries:Array<TypedMapEntry>);
-	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression);
+	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression,
+		flattened:Bool);
 	TMapComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, key:TypedExpression,
 		value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
