@@ -3,7 +3,14 @@ HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, hl_type *type ) {
 }
 
 HL_PRIM bool HL_NAME(__std_is_of_type)(vdynamic *value, hl_type *type) {
-	return value != NULL && type != NULL && hl_safe_cast(value->t, type);
+	if( value == NULL || type == NULL ) return false;
+	if( hl_safe_cast(value->t, type) ) return true;
+	/* Interface values are HashLink virtual wrappers around the concrete object. */
+	if( value->t->kind == HVIRTUAL ) {
+		vdynamic *concrete = ((vvirtual*)value)->value;
+		return concrete != NULL && hl_safe_cast(concrete->t, type);
+	}
+	return false;
 }
 
 static vbyte **array_int_storage(vobj *object) {
