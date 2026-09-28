@@ -210,3 +210,4 @@ local-function-recursion	42
 array-abstract-pop	42
 throw-lambda	52
 local-function-defaults	42
+enum-abstract-switch	42

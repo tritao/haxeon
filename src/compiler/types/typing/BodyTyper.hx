@@ -1028,6 +1028,11 @@ class BodyTyper {
 					if (expectedEnum != null)
 						info = enumCaseInfo(expectedEnum + "." + name);
 				}
+				// Enum abstracts are erased to their underlying type, so the
+				// subject cannot name its values; a bare value name resolves as
+				// in any expression rather than binding the subject.
+				if (info == null && scope.resolve(name) == null && isEnumAbstractValueName(name))
+					return null;
 				if (info != null) null; else if (name == "_") null; else {
 					scope.define(name, expected, span);
 					bindCell(name, span, scope, expected);
@@ -1035,6 +1040,14 @@ class BodyTyper {
 				}
 			default: null;
 		}
+	}
+
+	function isEnumAbstractValueName(name:String):Bool {
+		for (candidate in session.enumAbstractDecls)
+			for (value in candidate.values)
+				if (value.name == name)
+					return true;
+		return false;
 	}
 
 	static function isSwitchCatchAll(value:AstExpression):Bool
