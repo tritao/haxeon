@@ -171,8 +171,8 @@ class IrProgramAssembler {
 						var separator = lastSeparator(functionName);
 						var methodName = functionName.substring(separator + 1, functionName.length);
 						methods.push({name: methodName, functionName: functionName});
-						// HashLink string conversion calls a proto method named `__string` returning UCS-2
-						// bytes, which is the representation of a Haxe String here.
+						// HashLink string conversion calls a proto method named `__string`; the runtime reads the
+						// String object it returns.
 						if (methodName == "toString" && methodDecl.arguments.length == 0 && methodDecl.result == TString)
 							methods.push({name: "__string", functionName: functionName});
 					}

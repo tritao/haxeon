@@ -20,7 +20,7 @@ class NativeCallApi {
 	public static function native_last_error(output:hl.Bytes, capacity:Int):Int
 		return 0;
 
-	public static function native_cxx_last_error(library:hl.Bytes):hl.Bytes
+	public static function native_cxx_last_error(library:String):String
 		return null;
 
 	public static function native_pointer_alloc(size:Int):hl.Abstract<"native_pointer">

@@ -13,7 +13,7 @@ class CollectionMain {
 			CompilerType.TInt);
 		compiler.registerNative("array_int_length", "haxeon_runtime", "array_int_length", [CompilerType.TInstance(Class, "IntArray", [])], CompilerType.TInt);
 		compiler.update("Main.hx",
-			"class IntArray { public var storage:String; public var length:Int; public function new() { array_int_init(this); } public function push(value:Int):Void { array_int_push(this, value); } public function get(index:Int):Int { return array_int_get(this, index); } } function main():Int { var values = new IntArray(); values.push(41); return values.get(0) + values.length; }");
+			"class IntArray { public var storage:hl.Bytes; public var length:Int; public function new() { array_int_init(this); } public function push(value:Int):Void { array_int_push(this, value); } public function get(index:Int):Int { return array_int_get(this, index); } } function main():Int { var values = new IntArray(); values.push(41); return values.get(0) + values.length; }");
 		var result = compiler.compile("Main");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
 	}

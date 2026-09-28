@@ -1880,7 +1880,7 @@ class IrGenerator {
 			case TNativeScalar(_): I32;
 			case TString: Bytes;
 			case TBytes: ManagedBytes;
-			case THlBytes: Bytes;
+			case THlBytes: RawPtr;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
 			case TNever: throw "Never must be coerced before lowering";

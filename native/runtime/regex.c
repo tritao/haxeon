@@ -5,12 +5,12 @@ extern bool hl_regexp_match(realtime_ereg *expression, vbyte *value, int positio
 extern int hl_regexp_matched_pos(realtime_ereg *expression, int group, int *length);
 extern int hl_regexp_matched_num(realtime_ereg *expression);
 
-HL_PRIM realtime_ereg *HL_NAME(__regexp_new)(vbyte *pattern, vbyte *options) {
-	return hl_regexp_new_options(pattern, options);
+HL_PRIM realtime_ereg *HL_NAME(__regexp_new)(vstring *pattern, vstring *options) {
+	return hl_regexp_new_options((vbyte *)realtime_string_data(pattern), (vbyte *)realtime_string_data(options));
 }
 
-HL_PRIM bool HL_NAME(__regexp_match)(realtime_ereg *expression, vbyte *value, int position, int length) {
-	return hl_regexp_match(expression, value, position, length);
+HL_PRIM bool HL_NAME(__regexp_match)(realtime_ereg *expression, vstring *value, int position, int length) {
+	return hl_regexp_match(expression, (vbyte *)realtime_string_data(value), position, length);
 }
 
 HL_PRIM int HL_NAME(__regexp_matched_pos)(realtime_ereg *expression, int group) {
@@ -27,8 +27,8 @@ HL_PRIM int HL_NAME(__regexp_matched_num)(realtime_ereg *expression) {
 	return hl_regexp_matched_num(expression);
 }
 
-DEFINE_PRIM(_ABSTRACT(ereg), __regexp_new, _BYTES _BYTES);
-DEFINE_PRIM(_BOOL, __regexp_match, _ABSTRACT(ereg) _BYTES _I32 _I32);
+DEFINE_PRIM(_ABSTRACT(ereg), __regexp_new, _STRING _STRING);
+DEFINE_PRIM(_BOOL, __regexp_match, _ABSTRACT(ereg) _STRING _I32 _I32);
 DEFINE_PRIM(_I32, __regexp_matched_pos, _ABSTRACT(ereg) _I32);
 DEFINE_PRIM(_I32, __regexp_matched_length, _ABSTRACT(ereg) _I32);
 DEFINE_PRIM(_I32, __regexp_matched_num, _ABSTRACT(ereg));

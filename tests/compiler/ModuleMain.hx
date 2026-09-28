@@ -11,7 +11,7 @@ import compiler.modules.ModuleState.SemanticDependencyKind;
 class ModuleMain {
 	static function main():Void {
 		var output = Sys.args()[0], compiler = new Compiler();
-		compiler.registerNative("print", "std", "sys_print", [TString], TVoid);
+		compiler.registerNative("print", "haxeon_runtime", "__sys_print", [TString], TVoid);
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
@@ -157,7 +157,7 @@ class ModuleMain {
 		var layoutA = new Compiler(), layoutB = new Compiler();
 		layoutA.registerNative("clock", "std", "sys_time", [], TFloat);
 		layoutB.registerNative("clock", "std", "sys_time", [], TFloat);
-		layoutB.registerNative("print", "std", "sys_print", [TString], TVoid);
+		layoutB.registerNative("print", "haxeon_runtime", "__sys_print", [TString], TVoid);
 		layoutA.update("Main.hx", "function main():Int { return 1; }");
 		layoutB.update("Main.hx", "function main():Int { return 1; }");
 		var buildA = layoutA.compile("Main"), buildB = layoutB.compile("Main");

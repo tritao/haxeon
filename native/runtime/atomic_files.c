@@ -1,14 +1,14 @@
 #ifdef HL_WIN
 #include <windows.h>
 
-static vbyte *realtime_atomic_windows_error( DWORD error ) {
+static vstring *realtime_atomic_windows_error( DWORD error ) {
 	wchar_t *message = NULL;
 	DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 		NULL,error,0,(wchar_t *)&message,0,NULL);
 	if( length == 0 ) return realtime_string_from_utf8("unknown Windows error");
 	while( length > 0 && (message[length - 1] == L'\r' || message[length - 1] == L'\n') ) length--;
 	message[length] = 0;
-	vbyte *result = hl_copy_bytes((vbyte *)message,(int)((length + 1) * sizeof(wchar_t)));
+	vstring *result = realtime_string_copy((const uchar *)message,(int)length);
 	LocalFree(message);
 	return result;
 }
@@ -18,7 +18,7 @@ static vbyte *realtime_atomic_windows_error( DWORD error ) {
 #include <sys/stat.h>
 #include <unistd.h>
 
-static vbyte *realtime_atomic_error( int error ) {
+static vstring *realtime_atomic_error( int error ) {
 	return realtime_string_from_utf8(strerror(error));
 }
 
@@ -39,10 +39,10 @@ static int realtime_sync_parent( const char *path ) {
 #endif
 
 /* Null means success; otherwise the returned string is the platform error. */
-HL_PRIM vbyte *HL_NAME(__file_write_atomic)( vbyte *path, realtime_bytes *content, bool replace ) {
+HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *content, bool replace ) {
 #ifdef HL_WIN
 	if( content == NULL ) return realtime_string_from_utf8("content is null");
-	const wchar_t *target = (const wchar_t *)path;
+	const wchar_t *target = (const wchar_t *)realtime_string_data(path);
 	DWORD attributes = GetFileAttributesW(target), error = ERROR_SUCCESS;
 	bool target_exists = attributes != INVALID_FILE_ATTRIBUTES;
 	if( target_exists && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ) return realtime_atomic_windows_error(ERROR_DIRECTORY);
@@ -81,7 +81,7 @@ HL_PRIM vbyte *HL_NAME(__file_write_atomic)( vbyte *path, realtime_bytes *conten
 		}
 	}
 	if( error != ERROR_SUCCESS ) DeleteFileW(temporary);
-	vbyte *result = error == ERROR_SUCCESS ? NULL : realtime_atomic_windows_error(error);
+	vstring *result = error == ERROR_SUCCESS ? NULL : realtime_atomic_windows_error(error);
 	free(temporary);
 	return result;
 #else
@@ -118,7 +118,7 @@ HL_PRIM vbyte *HL_NAME(__file_write_atomic)( vbyte *path, realtime_bytes *conten
 	if( error == 0 ) error = realtime_sync_parent(target);
 	if( error != 0 && descriptor >= 0 ) unlink(temporary);
 
-	vbyte *result = error == 0 ? NULL : realtime_atomic_error(error);
+	vstring *result = error == 0 ? NULL : realtime_atomic_error(error);
 	free(temporary);
 	free(target);
 	return result;

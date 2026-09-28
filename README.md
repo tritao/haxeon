@@ -128,9 +128,11 @@ compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
 preserves object identity so aliases and fields continue to observe the same
 array.
 
-HashLink strings are zero terminated UTF-16 values. Haxeon rejects NUL code
-units when creating a `String` from a character code or byte buffer, and rejects
-NUL in compiled string constants. Use `Bytes` for binary data.
+HashLink strings use HashLink's standard `String` object layout: zero
+terminated UTF-16 data plus its length in code units, so `.length` and
+`charCodeAt` take constant time. Haxeon rejects NUL code units when creating a
+`String` from a character code or byte buffer, and rejects NUL in compiled
+string constants. Use `Bytes` for binary data.
 
 Hosts may register typed HashLink natives with `Compiler.registerNative()`
 before the first build. Registrations then freeze so the native-table layout

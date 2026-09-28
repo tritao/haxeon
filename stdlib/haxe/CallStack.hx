@@ -1,6 +1,6 @@
 package haxe;
 
-@:hlNative("std", "exception_stack")
+@:hlNative("haxeon_runtime", "__exception_stack")
 extern function nativeExceptionStack():Array<String>;
 
 /** One portable call-stack entry. */

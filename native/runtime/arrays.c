@@ -40,7 +40,7 @@ HL_PRIM varray *HL_NAME(__array_alloc_f64)( int length ) {
 }
 
 HL_PRIM varray *HL_NAME(__array_alloc_bytes)( int length ) {
-	return hl_alloc_array(&hlt_bytes, length);
+	return hl_alloc_array(hl_string_type, length);
 }
 
 HL_PRIM varray *HL_NAME(__array_alloc_bool)( int length ) {
@@ -65,9 +65,9 @@ static const uchar *realtime_array_type_name(hl_type *type) {
 	case HF64: return USTR("Float");
 	case HF32: return USTR("Single");
 	case HBOOL: return USTR("Bool");
-	case HBYTES: return USTR("String");
+	case HBYTES: return USTR("hl.Bytes");
 	case HDYN: return USTR("Dynamic");
-	default: return hl_type_str(type);
+	default: return hl_is_string_type(type) ? USTR("String") : hl_type_str(type);
 	}
 }
 
@@ -94,7 +94,11 @@ static bool realtime_array_accepts(hl_type *elementType, vdynamic *value) {
 		}
 	case HBYTES:
 		return value == NULL || value->t->kind == HBYTES;
-	case HOBJ: case HENUM: case HARRAY: case HFUN:
+	case HOBJ:
+		if (hl_is_string_type(elementType))
+			return value == NULL || realtime_is_string(value);
+		return value == NULL || hl_safe_cast(value->t, elementType);
+	case HENUM: case HARRAY: case HFUN:
 		return value == NULL || hl_safe_cast(value->t, elementType);
 	default:
 		/* Virtuals and nullable boxes convert through HashLink's own cast. */
@@ -206,11 +210,10 @@ static varray *realtime_array_splice(varray *array, int position, int length) {
 	return removed;
 }
 
-static bool realtime_bytes_equal(vbyte *left, vbyte *right) {
-	int leftLength = left == NULL ? 0 : (int)ustrlen((const uchar *)left);
-	int rightLength = right == NULL ? 0 : (int)ustrlen((const uchar *)right);
-	return leftLength == rightLength
-		&& (leftLength == 0 || memcmp(left, right, leftLength * (int)sizeof(uchar)) == 0);
+static bool realtime_string_equal(vstring *left, vstring *right) {
+	if (left == NULL || right == NULL) return left == right;
+	return left->length == right->length
+		&& (left->length == 0 || memcmp(left->bytes, right->bytes, left->length * (int)sizeof(uchar)) == 0);
 }
 
 static varray *realtime_typed_values(varray *dynamicValues, hl_type *valueType) {
@@ -219,11 +222,7 @@ static varray *realtime_typed_values(varray *dynamicValues, hl_type *valueType) 
 	int stride = hl_type_size(valueType);
 	for (int i = 0; i < dynamicValues->size; i++) {
 		void *slot = hl_aptr(result, vbyte) + i * stride;
-		/* Map strings are boxed as vdynamic; an HBYTES array stores the inner byte pointer. */
-		if (valueType->kind == HBYTES)
-			*(void **)slot = source[i] == NULL ? NULL : source[i]->v.bytes;
-		else
-			hl_write_dyn(slot, valueType, source[i], false);
+		hl_write_dyn(slot, valueType, source[i], false);
 	}
 	return result;
 }
@@ -263,7 +262,7 @@ DEFINE_ARRAY_INDEX_OF(i32, int, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(i64, int64_t, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(f64, double, values[i] == value)
 DEFINE_ARRAY_INDEX_OF(bool, bool, values[i] == value)
-DEFINE_ARRAY_INDEX_OF(bytes, vbyte *, realtime_bytes_equal(values[i], value))
+DEFINE_ARRAY_INDEX_OF(bytes, vstring *, realtime_string_equal(values[i], value))
 DEFINE_ARRAY_INDEX_OF(ref, void *, values[i] == value)
 
 #undef DEFINE_ARRAY_INDEX_OF
@@ -288,7 +287,7 @@ DEFINE_ARRAY_REMOVE(i32, int, values[index] == value)
 DEFINE_ARRAY_REMOVE(i64, int64_t, values[index] == value)
 DEFINE_ARRAY_REMOVE(f64, double, values[index] == value)
 DEFINE_ARRAY_REMOVE(bool, bool, values[index] == value)
-DEFINE_ARRAY_REMOVE(bytes, vbyte *, realtime_bytes_equal(values[index], value))
+DEFINE_ARRAY_REMOVE(bytes, vstring *, realtime_string_equal(values[index], value))
 DEFINE_ARRAY_REMOVE(ref, vdynamic *, values[index] == value)
 
 #undef DEFINE_ARRAY_REMOVE
@@ -379,7 +378,7 @@ HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 DEFINE_ARRAY_MUTATION(i32, int)
 DEFINE_ARRAY_MUTATION(i64, int64_t)
 DEFINE_ARRAY_MUTATION(f64, double)
-DEFINE_ARRAY_MUTATION(bytes, vbyte *)
+DEFINE_ARRAY_MUTATION(bytes, vstring *)
 DEFINE_ARRAY_MUTATION(bool, bool)
 DEFINE_ARRAY_MUTATION(ref, vdynamic *)
 
@@ -539,29 +538,26 @@ HL_PRIM void HL_NAME(__array_resize_any)( varray *array, int length ) {
 	array->size = length;
 }
 
-HL_PRIM vbyte *HL_NAME(__array_join_bytes)( varray *array, vbyte *separator ) {
-	int separator_length = separator == NULL ? 0 : (int)ustrlen((const uchar *)separator);
+HL_PRIM vstring *HL_NAME(__array_join_bytes)( varray *array, vstring *separator ) {
+	vstring **values = hl_aptr(array,vstring*);
+	int separator_length = realtime_string_length(separator);
 	int length = separator_length * (array->size > 0 ? array->size - 1 : 0);
-	for( int i = 0; i < array->size; i++ ) {
-		vbyte *value = hl_aptr(array,vbyte*)[i];
-		if( value != NULL ) length += (int)ustrlen((const uchar *)value);
-	}
-	vbyte *result = hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
-	uchar *output = (uchar *)result;
+	for( int i = 0; i < array->size; i++ )
+		length += realtime_string_length(values[i]);
+	uchar *output;
+	vstring *result = realtime_string_alloc(length,&output);
 	int offset = 0;
 	for( int i = 0; i < array->size; i++ ) {
 		if( i > 0 && separator_length > 0 ) {
-			memcpy(output + offset, separator, separator_length * sizeof(uchar));
+			memcpy(output + offset, separator->bytes, separator_length * sizeof(uchar));
 			offset += separator_length;
 		}
-		vbyte *value = hl_aptr(array,vbyte*)[i];
-		int value_length = value == NULL ? 0 : (int)ustrlen((const uchar *)value);
+		int value_length = realtime_string_length(values[i]);
 		if( value_length > 0 ) {
-			memcpy(output + offset, value, value_length * sizeof(uchar));
+			memcpy(output + offset, values[i]->bytes, value_length * sizeof(uchar));
 			offset += value_length;
 		}
 	}
-	output[offset] = 0;
 	return result;
 }
 

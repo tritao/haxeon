@@ -12,3 +12,5 @@ date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
+string-utf16-length	skip	Wasm Strings count UTF-8 bytes; HashLink counts UTF-16 code units
+string-object-layout	skip	Checks HashLink String objects at runtime boundaries, including Reflect.field, which Wasm does not implement yet

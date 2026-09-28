@@ -214,7 +214,7 @@ HL_PRIM void HL_NAME(structSetBorrowedBytes)( realtime_bytes *bytes, int offset,
 	memcpy(bytes->data + offset,&pointer,sizeof(pointer));
 }
 
-HL_PRIM vbyte *HL_NAME(structGetUtf8)( realtime_bytes *bytes, int offset, bool nullable ) {
+HL_PRIM vstring *HL_NAME(structGetUtf8)( realtime_bytes *bytes, int offset, bool nullable ) {
 	realtime_bytes_bounds(bytes,offset,sizeof(void *));
 	const char *value = NULL;
 	memcpy(&value,bytes->data + offset,sizeof(value));
@@ -226,12 +226,12 @@ HL_PRIM vbyte *HL_NAME(structGetUtf8)( realtime_bytes *bytes, int offset, bool n
 	return realtime_string_from_utf8(value);
 }
 
-HL_PRIM void HL_NAME(structSetUtf8)( realtime_bytes *bytes, int offset, vbyte *input, bool nullable ) {
+HL_PRIM void HL_NAME(structSetUtf8)( realtime_bytes *bytes, int offset, vstring *input, bool nullable ) {
 	realtime_bytes_bounds(bytes,offset,sizeof(void *));
 	if( input == NULL && !nullable ) hl_error("Cannot assign NULL to a non-null HXI UTF-8 structure field");
 	char *copy = NULL;
 	if( input != NULL ) {
-		const char *value = hl_to_utf8((const uchar *)input);
+		const char *value = realtime_string_utf8(input);
 		int length = haxeon_native_utf8_size(value);
 		if( length < 0 ) hl_error("HXI UTF-8 structure field is invalid");
 		copy = haxeon_native_string((const vbyte *)value,length);
@@ -440,9 +440,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 			return NULL;
 		}
 		if( haxeon_native_utf8_size(pointer) < 0 ) { *valid = false; return NULL; }
-		result = hl_alloc_dynamic(&hlt_bytes);
-		result->v.bytes = realtime_string_from_utf8(pointer);
-		return result;
+		return (vdynamic *)realtime_string_from_utf8(pointer);
 	}
 	default: return NULL;
 	}
@@ -521,10 +519,10 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 		if( result == NULL ) {
 			if( callback->result_code == HAXEON_NATIVE_UTF8 )
 				haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned NULL for a non-null UTF-8 result");
-		} else if( result->t == NULL || result->t->kind != HBYTES )
+		} else if( !realtime_is_string(result) )
 			haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned a non-string UTF-8 result");
 		else {
-			const char *converted = hl_to_utf8((const uchar *)result->v.bytes);
+			const char *converted = realtime_string_utf8((vstring *)result);
 			int length = haxeon_native_utf8_size(converted);
 			if( length < 0 )
 				haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_STRING_CONTRACT,"Native callback returned invalid UTF-8");
@@ -978,8 +976,8 @@ static haxeon_native_pointer *haxeon_native_pointer_wrap_owned( void *value, hax
 	return pointer;
 }
 
-HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_owned_from_slot)( realtime_bytes *bytes, int offset, vbyte *library, vbyte *symbol,
-	vbyte *signature, vbyte *release, bool nullable ) {
+HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_owned_from_slot)( realtime_bytes *bytes, int offset, vstring *library, vstring *symbol,
+	vstring *signature, vstring *release, bool nullable ) {
 	if( bytes == NULL || library == NULL || symbol == NULL || signature == NULL || release == NULL )
 		hl_error("Owned ordinary C pointer slot has an invalid descriptor");
 	realtime_bytes_bounds(bytes,offset,sizeof(void *));
@@ -989,13 +987,13 @@ HL_PRIM haxeon_native_pointer *HL_NAME(native_pointer_owned_from_slot)( realtime
 		if( nullable ) return NULL;
 		hl_error("Non-null ordinary C output pointer returned NULL");
 	}
-	const char *converted = hl_to_utf8((const uchar *)library);
+	const char *converted = realtime_string_utf8(library);
 	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	converted = hl_to_utf8((const uchar *)symbol);
+	converted = realtime_string_utf8(symbol);
 	char *symbol_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	converted = hl_to_utf8((const uchar *)signature);
+	converted = realtime_string_utf8(signature);
 	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
-	converted = hl_to_utf8((const uchar *)release);
+	converted = realtime_string_utf8(release);
 	char *release_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	if( library_name == NULL || symbol_name == NULL || signature_text == NULL || release_name == NULL )
 		hl_error("Could not retain ordinary C output pointer descriptor");
@@ -1078,8 +1076,8 @@ static vdynamic *haxeon_native_invoke_prepared( unsigned char *argument_codes, i
 			continue;
 		}
 		case HAXEON_NATIVE_UTF8: case HAXEON_NATIVE_UTF8_NULLABLE: {
-			if( value->t->kind != HBYTES ) hl_error("Ordinary C UTF-8 argument requires a String");
-			const char *converted = hl_to_utf8((const uchar *)value->v.bytes);
+			if( !realtime_is_string(value) ) hl_error("Ordinary C UTF-8 argument requires a String");
+			const char *converted = realtime_string_utf8((vstring *)value);
 			if( haxeon_native_utf8_size(converted) < 0 ) hl_error("Ordinary C UTF-8 argument is invalid");
 			memcpy(slots + index * HAXEON_NATIVE_SLOT_SIZE,&converted,sizeof(converted));
 			break;
@@ -1138,11 +1136,10 @@ static vdynamic *haxeon_native_callback_invoke( haxeon_native_callback *callback
 		const char *value = (const char *)result->v.bytes;
 		if( value == NULL ) {
 			if( callback->result_code == HAXEON_NATIVE_UTF8 ) hl_error("Non-null native callback UTF-8 result returned NULL");
-			result->v.bytes = NULL;
-		} else {
-			if( haxeon_native_utf8_size(value) < 0 ) hl_error("Native callback UTF-8 result is invalid");
-			result->v.bytes = realtime_string_from_utf8(value);
+			return NULL;
 		}
+		if( haxeon_native_utf8_size(value) < 0 ) hl_error("Native callback UTF-8 result is invalid");
+		return (vdynamic *)realtime_string_from_utf8(value);
 	}
 	return result;
 }
@@ -1197,11 +1194,11 @@ static vdynamic *haxeon_native_invoke( vbyte *library, vbyte *symbol, vbyte *sig
 	return haxeon_native_invoke_aggregate(library,symbol,signature,arguments,argument_count,NULL);
 }
 
-static vdynamic *haxeon_native_virtual_invoke( vbyte *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment,
+static vdynamic *haxeon_native_virtual_invoke( vstring *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment,
 	vdynamic **arguments, int argument_count ) {
 	if( signature == NULL || object == NULL || object->value == NULL ) hl_error("C++ virtual call requires an open native object");
 	if( vtable_index < 0 || vtable_index > 255 ) hl_error("C++ virtual call has an invalid vtable index");
-	const char *converted = hl_to_utf8((const uchar *)signature);
+	const char *converted = realtime_string_utf8(signature);
 	char *signature_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	if( signature_text == NULL ) hl_error("Could not convert C++ virtual call signature");
 	unsigned char argument_codes[HAXEON_NATIVE_MAX_ARGUMENTS];
@@ -1231,7 +1228,7 @@ static vdynamic *haxeon_native_virtual_invoke( vbyte *signature, haxeon_native_p
 
 #define HAXEON_NATIVE_VIRTUAL_PARAMS(...) __VA_ARGS__
 #define HAXEON_NATIVE_VIRTUAL(n, params, count, ...) \
-	HL_PRIM vdynamic *HL_NAME(native_virtual_invoke_##n)( vbyte *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment HAXEON_NATIVE_VIRTUAL_PARAMS params ) { \
+	HL_PRIM vdynamic *HL_NAME(native_virtual_invoke_##n)( vstring *signature, haxeon_native_pointer *object, int vtable_index, int this_adjustment HAXEON_NATIVE_VIRTUAL_PARAMS params ) { \
 		vdynamic *arguments[] = {__VA_ARGS__}; \
 		return haxeon_native_virtual_invoke(signature,object,vtable_index,this_adjustment,arguments,count); \
 	}
@@ -1338,7 +1335,7 @@ static realtime_bytes *haxeon_native_bytes_invoke( vbyte *library, vbyte *symbol
 	length_signature[prefix] = sizeof(size_t) == 8 ? '8' : '6';
 	if( convention_length > 0 ) memcpy(length_signature + prefix + 1,convention,convention_length);
 	length_signature[prefix + 1 + convention_length] = 0;
-	vbyte *length_signature_value = realtime_string_from_utf8(length_signature);
+	vbyte *length_signature_value = (vbyte *)hl_to_utf16(length_signature);
 	vdynamic *length_result = haxeon_native_invoke(library,length_symbol,length_signature_value,arguments,argument_count);
 	uint64_t length;
 	if( sizeof(size_t) == 8 ) {
@@ -1359,7 +1356,7 @@ static realtime_bytes *haxeon_native_bytes_invoke( vbyte *library, vbyte *symbol
 	return bytes;
 }
 
-static vbyte *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership,
+static vstring *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership,
 	vbyte *release, bool nullable, vdynamic **arguments, int argument_count ) {
 	vdynamic *raw = haxeon_native_invoke(library,symbol,signature,arguments,argument_count);
 	if( raw == NULL || raw->t != &hlt_bytes ) hl_error("Ordinary C UTF-8 call returned an invalid value");
@@ -1369,7 +1366,7 @@ static vbyte *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *s
 		hl_error("Non-null ordinary C UTF-8 result returned NULL");
 	}
 	bool valid_utf8 = haxeon_native_utf8_size(pointer) >= 0;
-	vbyte *result = valid_utf8 ? realtime_string_from_utf8(pointer) : NULL;
+	vstring *result = valid_utf8 ? realtime_string_from_utf8(pointer) : NULL;
 	const char *converted = hl_to_utf8((const uchar *)ownership);
 	char *ownership_text = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	converted = hl_to_utf8((const uchar *)release);
@@ -1401,23 +1398,23 @@ static vbyte *haxeon_native_utf8_invoke( vbyte *library, vbyte *symbol, vbyte *s
 	return result;
 }
 
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable ) { return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,NULL,0); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,1); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1 ) { vdynamic *arguments[] = {a0,a1}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,2); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *arguments[] = {a0,a1,a2}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,3); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *arguments[] = {a0,a1,a2,a3}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,4); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_5)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,5); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_6)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,6); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_7)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,7); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_8)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,8); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_9)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,9); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_10)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,10); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_11)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,11); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_12)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,12); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_13)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,13); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_14)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,14); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_15)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,15); }
-HL_PRIM vbyte *HL_NAME(native_utf8_invoke_16)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,16); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable ) { return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,NULL,0); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,1); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_2)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1 ) { vdynamic *arguments[] = {a0,a1}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,2); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_3)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2 ) { vdynamic *arguments[] = {a0,a1,a2}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,3); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_4)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3 ) { vdynamic *arguments[] = {a0,a1,a2,a3}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,4); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_5)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,5); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_6)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,6); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_7)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,7); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_8)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,8); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_9)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,9); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_10)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,10); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_11)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,11); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_12)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,12); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_13)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,13); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_14)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,14); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_15)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,15); }
+HL_PRIM vstring *HL_NAME(native_utf8_invoke_16)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, bool nullable, vdynamic *a0, vdynamic *a1, vdynamic *a2, vdynamic *a3, vdynamic *a4, vdynamic *a5, vdynamic *a6, vdynamic *a7, vdynamic *a8, vdynamic *a9, vdynamic *a10, vdynamic *a11, vdynamic *a12, vdynamic *a13, vdynamic *a14, vdynamic *a15 ) { vdynamic *arguments[] = {a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15}; return haxeon_native_utf8_invoke(library,symbol,signature,ownership,release,nullable,arguments,16); }
 
 HL_PRIM realtime_bytes *HL_NAME(native_bytes_invoke_0)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vbyte *length_symbol, bool nullable ) { return haxeon_native_bytes_invoke(library,symbol,signature,ownership,release,length_symbol,nullable,NULL,0); }
 HL_PRIM realtime_bytes *HL_NAME(native_bytes_invoke_1)( vbyte *library, vbyte *symbol, vbyte *signature, vbyte *ownership, vbyte *release, vbyte *length_symbol, bool nullable, vdynamic *a0 ) { vdynamic *arguments[] = {a0}; return haxeon_native_bytes_invoke(library,symbol,signature,ownership,release,length_symbol,nullable,arguments,1); }
@@ -1498,9 +1495,9 @@ HL_PRIM int HL_NAME(native_last_error)( vbyte *output, int capacity ) {
 	return length;
 }
 
-HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
+HL_PRIM vstring *HL_NAME(native_cxx_last_error)( vstring *library ) {
 	if( library == NULL ) hl_error("C++ thunk error lookup requires a library");
-	const char *converted = hl_to_utf8((const uchar *)library);
+	const char *converted = realtime_string_utf8(library);
 	char *library_name = haxeon_native_string((const vbyte *)converted,(int)strlen(converted));
 	if( library_name == NULL ) hl_error("Invalid C++ thunk library name");
 	haxeon_native_control *control = haxeon_native_cached_control(library_name);
@@ -1519,7 +1516,7 @@ HL_PRIM vbyte *HL_NAME(native_cxx_last_error)( vbyte *library ) {
 		hl_error("Could not resolve haxeon_cxx_thunk_last_error");
 	}
 	const char *message = get_error();
-	vbyte *result = NULL;
+	vstring *result = NULL;
 	if( message != NULL && message[0] != 0 )
 		result = haxeon_native_utf8_size(message) < 0 ? realtime_string_from_utf8("C++ thunk returned an invalid diagnostic") : realtime_string_from_utf8(message);
 	return result;

@@ -11,7 +11,7 @@ extern int hl_process_exit(void *process, bool *running);
 extern void hl_process_close(void *process);
 extern void hl_process_kill(void *process);
 
-static vbyte *realtime_process_read(void *process, bool stdout_stream) {
+static vstring *realtime_process_read(void *process, bool stdout_stream) {
 	realtime_process_output output = {NULL, 0, 0};
 	for (;;) {
 		if (output.capacity - output.length < 16384) {
@@ -43,24 +43,24 @@ static vbyte *realtime_process_read(void *process, bool stdout_stream) {
 	}
 	output.data = (vbyte *)realloc(output.data, (size_t)output.length + 1);
 	output.data[output.length] = 0;
-	vbyte *result = realtime_string_from_utf8((const char *)output.data);
+	vstring *result = realtime_string_from_utf8((const char *)output.data);
 	free(output.data);
 	return result;
 }
 
-HL_PRIM void *HL_NAME(__process_run)(vbyte *command, varray *arguments) {
-	if (command == NULL || ((const uchar *)command)[0] == 0)
+HL_PRIM void *HL_NAME(__process_run)(vstring *command, varray *arguments) {
+	if (command == NULL || command->length == 0)
 		hl_error("Process command cannot be empty");
 #ifdef HL_WIN
 	if (arguments != NULL && arguments->size != 0)
 		hl_error("Process arguments are not yet supported on Windows");
-	void *process = hl_process_run(command, NULL, false);
+	void *process = hl_process_run((vbyte *)command->bytes, NULL, false);
 #else
 	char *command_utf8 = realtime_utf8_copy(command);
 	varray *native_arguments = hl_alloc_array(&hlt_bytes, arguments == NULL ? 0 : arguments->size);
 	vbyte **native_values = hl_aptr(native_arguments, vbyte *);
 	for (int index = 0; index < native_arguments->size; index++) {
-		vbyte *argument = hl_aptr(arguments, vbyte *)[index];
+		vstring *argument = hl_aptr(arguments, vstring *)[index];
 		native_values[index] = (vbyte *)realtime_utf8_copy(argument);
 	}
 	void *process = hl_process_run((vbyte *)command_utf8, native_arguments, false);
@@ -73,8 +73,8 @@ HL_PRIM void *HL_NAME(__process_run)(vbyte *command, varray *arguments) {
 	return process;
 }
 
-HL_PRIM vbyte *HL_NAME(__process_read_stdout)(void *process) { return realtime_process_read(process, true); }
-HL_PRIM vbyte *HL_NAME(__process_read_stderr)(void *process) { return realtime_process_read(process, false); }
+HL_PRIM vstring *HL_NAME(__process_read_stdout)(void *process) { return realtime_process_read(process, true); }
+HL_PRIM vstring *HL_NAME(__process_read_stderr)(void *process) { return realtime_process_read(process, false); }
 HL_PRIM int HL_NAME(__process_exit)(void *process) { return hl_process_exit(process, NULL); }
 HL_PRIM void HL_NAME(__process_close)(void *process) { hl_process_close(process); }
 HL_PRIM void HL_NAME(__process_kill)(void *process) { hl_process_kill(process); }

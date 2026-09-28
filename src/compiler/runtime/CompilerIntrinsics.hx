@@ -69,7 +69,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));
 
 		// Primitive String methods lowered directly by the typer.
-		definitions.push(native("__string_compare_full", "std", "string_compare_full", [TString, TString], TInt));
+		definitions.push(native("__string_compare_full", "haxeon_runtime", "__string_compare_full", [TString, TString], TInt));
 		definitions.push(native("__string_last_index_of", "haxeon_runtime", "__string_last_index_of", [TString, TString], TInt));
 		definitions.push(native("__string_last_index_of_from", "haxeon_runtime", "__string_last_index_of_from", [TString, TString, TInt], TInt));
 		definitions.push(native("__string_index_of_from", "haxeon_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));

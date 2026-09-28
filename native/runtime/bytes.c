@@ -95,17 +95,38 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_alloc)( int length ) {
 	return realtime_bytes_make(length);
 }
 
-HL_PRIM realtime_bytes *HL_NAME(__bytes_of_string)( vbyte *value ) {
-	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+static vstring *realtime_string_from_utf8( const char *utf8 ) {
+	int chars = hl_utf8_length((const vbyte *)utf8, 0);
+	uchar *output;
+	vstring *result = realtime_string_alloc(chars,&output);
+	result->length = hl_from_utf8(output, chars, utf8);
+	return result;
+}
+
+/* Decodes `length` UTF-8 bytes, which must not contain NUL. */
+static vstring *realtime_string_from_utf8_bytes( const vbyte *data, int length ) {
+	if( length > 0 && memchr(data,0,(size_t)length) != NULL )
+		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
+	char *utf8 = (char *)malloc((size_t)length + 1);
+	if( utf8 == NULL ) hl_error("Could not allocate byte string");
+	if( length > 0 ) memcpy(utf8, data, (size_t)length);
+	utf8[length] = 0;
+	vstring *result = realtime_string_from_utf8(utf8);
+	free(utf8);
+	return result;
+}
+
+HL_PRIM realtime_bytes *HL_NAME(__bytes_of_string)( vstring *value ) {
+	const char *utf8 = value == NULL ? "" : realtime_string_utf8(value);
 	int length = (int)strlen(utf8);
 	realtime_bytes *bytes = realtime_bytes_make(length);
 	if( length > 0 ) memcpy(bytes->data, utf8, (size_t)length);
 	return bytes;
 }
 
-HL_PRIM realtime_bytes *HL_NAME(structUtf8Copy)( vbyte *value ) {
+HL_PRIM realtime_bytes *HL_NAME(structUtf8Copy)( vstring *value ) {
 	if( value == NULL ) hl_error("Cannot pack a NULL HXI UTF-8 array element");
-	const char *utf8 = hl_to_utf8((const uchar *)value);
+	const char *utf8 = realtime_string_utf8(value);
 	size_t length = strlen(utf8);
 	if( length >= 0x7FFFFFFF ) hl_error("HXI UTF-8 array element is too large");
 	realtime_bytes *bytes = realtime_bytes_make((int)length + 1);
@@ -274,51 +295,21 @@ HL_PRIM int HL_NAME(__bytes_compare)( realtime_bytes *left, realtime_bytes *righ
 	int compared = common == 0 ? 0 : memcmp(left->data, right->data, (size_t)common);
 	return compared != 0 ? compared : left->length - right->length;
 }
-HL_PRIM vbyte *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
-	if( bytes->length > 0 && memchr(bytes->data,0,(size_t)bytes->length) != NULL )
-		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	char *utf8 = (char *)malloc((size_t)bytes->length + 1);
-	if( utf8 == NULL ) hl_error("Could not allocate byte string");
-	if( bytes->length > 0 ) memcpy(utf8, bytes->data, (size_t)bytes->length);
-	utf8[bytes->length] = 0;
-	int chars = hl_utf8_length((vbyte *)utf8, 0);
-	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
-	hl_from_utf8(result, chars, utf8);
-	result[chars] = 0;
-	free(utf8);
-	return (vbyte *)result;
+HL_PRIM vstring *HL_NAME(__bytes_to_string)( realtime_bytes *bytes ) {
+	return realtime_string_from_utf8_bytes(bytes->data, bytes->length);
 }
 
-HL_PRIM vbyte *HL_NAME(__bytes_get_string)( realtime_bytes *bytes, int position, int length ) {
+HL_PRIM vstring *HL_NAME(__bytes_get_string)( realtime_bytes *bytes, int position, int length ) {
 	realtime_bytes_bounds(bytes, position, length);
-	if( length > 0 && memchr(bytes->data + position,0,(size_t)length) != NULL )
-		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	char *utf8 = (char *)malloc((size_t)length + 1);
-	if( utf8 == NULL ) hl_error("Could not allocate byte string");
-	if( length > 0 ) memcpy(utf8, bytes->data + position, (size_t)length);
-	utf8[length] = 0;
-	int chars = hl_utf8_length((vbyte *)utf8, 0);
-	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
-	hl_from_utf8(result, chars, utf8);
-	result[chars] = 0;
-	free(utf8);
-	return (vbyte *)result;
-}
-
-static vbyte *realtime_string_from_utf8( const char *utf8 ) {
-	int chars = hl_utf8_length((const vbyte *)utf8, 0);
-	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
-	hl_from_utf8(result, chars, utf8);
-	result[chars] = 0;
-	return (vbyte *)result;
+	return realtime_string_from_utf8_bytes(bytes->data + position, length);
 }
 
 HL_PRIM varray *HL_NAME(__sys_args)( void ) {
-	varray *result = hl_alloc_array(&hlt_bytes, hl_setup.sys_nargs);
-	vbyte **arguments = hl_aptr(result, vbyte *);
+	varray *result = hl_alloc_array(hl_string_type, hl_setup.sys_nargs);
+	vstring **arguments = hl_aptr(result, vstring *);
 	for( int index = 0; index < hl_setup.sys_nargs; index++ ) {
 #ifdef HL_WIN
-		arguments[index] = (vbyte *)hl_setup.sys_args[index];
+		arguments[index] = realtime_string_of_ustr((const uchar *)hl_setup.sys_args[index]);
 #else
 		arguments[index] = realtime_string_from_utf8(hl_setup.sys_args[index]);
 #endif
@@ -358,21 +349,11 @@ HL_PRIM double HL_NAME(__bytes_input_read_f64)( realtime_bytes_input *input ) {
 	input->position += 8;
 	return decoded.value;
 }
-HL_PRIM vbyte *HL_NAME(__bytes_input_read_string)( realtime_bytes_input *input, int length ) {
+HL_PRIM vstring *HL_NAME(__bytes_input_read_string)( realtime_bytes_input *input, int length ) {
 	if( length < 0 || input->position < 0 || input->position > input->length - length ) hl_error("Byte input is truncated");
-	if( length > 0 && memchr(input->data + input->position,0,(size_t)length) != NULL )
-		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	char *utf8 = (char *)malloc((size_t)length + 1);
-	if( utf8 == NULL ) hl_error("Could not allocate string input");
-	memcpy(utf8, input->data + input->position, (size_t)length);
-	utf8[length] = 0;
+	vstring *result = realtime_string_from_utf8_bytes(input->data + input->position, length);
 	input->position += length;
-	int chars = hl_utf8_length((vbyte *)utf8, 0);
-	uchar *result = (uchar *)hl_alloc_bytes((chars + 1) * (int)sizeof(uchar));
-	hl_from_utf8(result, chars, utf8);
-	result[chars] = 0;
-	free(utf8);
-	return (vbyte *)result;
+	return result;
 }
 HL_PRIM realtime_bytes *HL_NAME(__bytes_input_read)( realtime_bytes_input *input, int length ) {
 	if( length < 0 || input->position < 0 || input->position > input->length - length ) hl_error("Byte input is truncated");
@@ -409,8 +390,8 @@ HL_PRIM void HL_NAME(__bytes_output_write_f64)( realtime_bytes_output *output, d
 	for( int i = 0; i < 8; i++ ) output->data[output->length + i] = encoded.bytes[output->big_endian ? 7 - i : i];
 	output->length += 8;
 }
-HL_PRIM void HL_NAME(__bytes_output_write_string)( realtime_bytes_output *output, vbyte *value ) {
-	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+HL_PRIM void HL_NAME(__bytes_output_write_string)( realtime_bytes_output *output, vstring *value ) {
+	const char *utf8 = value == NULL ? "" : realtime_string_utf8(value);
 	int length = (int)strlen(utf8);
 	realtime_bytes_output_reserve(output, length);
 	if( length > 0 ) memcpy(output->data + output->length, utf8, (size_t)length);

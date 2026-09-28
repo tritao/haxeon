@@ -160,21 +160,21 @@ class HlLower {
 					library: "haxeon_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
 					arguments: ((pointerResult || utf8Result) ? [
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
 						IrType.Bool
 					] : bytesResult ? [
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
-						IrType.Bytes,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr,
 						IrType.Bool
-					] : [IrType.Bytes, IrType.Bytes, IrType.Bytes]).concat([for (_ in 0...arity) IrType.Dyn]),
+					] : [IrType.RawPtr, IrType.RawPtr, IrType.RawPtr]).concat([for (_ in 0...arity) IrType.Dyn]),
 					result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn
 				});
 			}
@@ -236,6 +236,8 @@ class HlLower {
 				if (!functionIndices.exists(native.name))
 					addFunctionName(native.name, nextFunction++);
 		}
+		// Patches cannot add object types, so every base module carries String.
+		internType(IrType.Bytes);
 		for (enumDecl in program.enums)
 			symbols.reserveEnum(enumDecl.name);
 		for (interfaceDecl in program.interfaces)
@@ -577,7 +579,7 @@ class HlLower {
 					case ConstFloat(output, value):
 						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes), symbols.internFloat(value)));
 					case ConstString(output, value):
-						instructions.push(HlInstruction.LoadString(defineRegister(output, registers, registerTypes), internString(value)));
+						lowerStringLiteral(defineRegister(output, registers, registerTypes), value, registerTypes, instructions);
 					case StaticDataAddress(output, _):
 						// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
 						// still assembled for a Wasm compilation, but never executes this path.
@@ -717,9 +719,9 @@ class HlLower {
 						if (native.result != Void && unsupportedCDispatchResult(native.result))
 							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
 						var callArguments = [
-							temporaryRegister(IrType.Bytes, registerTypes),
-							temporaryRegister(IrType.Bytes, registerTypes),
-							temporaryRegister(IrType.Bytes, registerTypes)
+							temporaryRegister(IrType.RawPtr, registerTypes),
+							temporaryRegister(IrType.RawPtr, registerTypes),
+							temporaryRegister(IrType.RawPtr, registerTypes)
 						];
 						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
 						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
@@ -729,8 +731,8 @@ class HlLower {
 							aggregateResult = isAggregateResult(native),
 							utf8Result = isUtf8Result(native);
 						if (pointerResult || bytesResult || utf8Result) {
-							var ownership = temporaryRegister(IrType.Bytes, registerTypes),
-								release = temporaryRegister(IrType.Bytes, registerTypes),
+							var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
+								release = temporaryRegister(IrType.RawPtr, registerTypes),
 								nullable = temporaryRegister(IrType.Bool, registerTypes);
 							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
 							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
@@ -738,7 +740,7 @@ class HlLower {
 							callArguments.push(ownership);
 							callArguments.push(release);
 							if (bytesResult) {
-								var length = temporaryRegister(IrType.Bytes, registerTypes);
+								var length = temporaryRegister(IrType.RawPtr, registerTypes);
 								instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
 								callArguments.push(length);
 							}
@@ -1061,6 +1063,20 @@ class HlLower {
 		registers.set(value.id, index);
 		types.push(internType(value.type));
 		return index;
+	}
+
+	/**
+	 * A HashLink String is an object carrying its UTF-16 data and length. Patches cannot add globals,
+	 * so literals allocate a fresh String over the module's interned, immutable UTF-16 data.
+	 */
+	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
+		var data = temporaryRegister(IrType.RawPtr, registerTypes),
+			length = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.LoadString(data, internString(value)));
+		instructions.push(HlInstruction.LoadInt(length, internInt(HlSymbolTable.utf16Length(value))));
+		instructions.push(HlInstruction.New(destination, internType(IrType.Bytes), 0));
+		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_BYTES_FIELD, data));
+		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_LENGTH_FIELD, length));
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {

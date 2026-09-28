@@ -21,7 +21,9 @@ typedef HlPersistentIdentity = {
 
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
-	public static inline final VERSION = 6;
+	/** Version 7: Strings are HashLink String objects, so earlier type tables cannot be patched. */
+	public static inline final VERSION = 7;
+
 	public static inline final RUNTIME_VERSION = 3;
 	static var sequence = 1;
 
@@ -111,7 +113,7 @@ class HlRuntimeIdentity {
 			if (input.readString(3) != "HCS")
 				throw "Invalid compiler identity state";
 			var version = input.readByte();
-			if (version != 5 && version != VERSION)
+			if (version != VERSION)
 				throw "Invalid compiler identity state";
 			var moduleId = input.read(16),
 				count = input.readInt32(),
@@ -158,13 +160,10 @@ class HlRuntimeIdentity {
 			var assemblerState:Null<Bytes> = assemblerLength == 0 ? null : input.read(assemblerLength);
 			if ((acknowledgedRevision > 0 && assemblerState == null) || (acknowledgedRevision == 0 && assemblerState != null))
 				throw "Invalid acknowledged assembler baseline";
-			var specializationState:Null<Bytes> = null;
-			if (version >= 6) {
-				var specializationLength = input.readInt32();
-				if (specializationLength < 0 || specializationLength > 0x10000000 || specializationLength > bytes.length - input.position)
-					throw "Invalid generic specialization state";
-				specializationState = specializationLength == 0 ? null : input.read(specializationLength);
-			}
+			var specializationLength = input.readInt32();
+			if (specializationLength < 0 || specializationLength > 0x10000000 || specializationLength > bytes.length - input.position)
+				throw "Invalid generic specialization state";
+			var specializationState:Null<Bytes> = specializationLength == 0 ? null : input.read(specializationLength);
 			if (input.position != bytes.length)
 				throw "Trailing compiler identity data";
 			return {

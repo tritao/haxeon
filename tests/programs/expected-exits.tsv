@@ -193,3 +193,7 @@ super-method-call	42
 jit-stack-trace	42
 # An interface-typed value retains its concrete runtime class after array storage.
 std-is-of-type-interface-array	42
+# Strings cross runtime boundaries as String objects carrying their length.
+string-object-layout	42
+# String lengths count UTF-16 code units, including literals outside the BMP.
+string-utf16-length	42

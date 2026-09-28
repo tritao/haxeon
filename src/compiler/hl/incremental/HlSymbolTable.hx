@@ -246,6 +246,9 @@ class HlSymbolTable {
 		return index;
 	}
 
+	public static inline final STRING_BYTES_FIELD = 0;
+	public static inline final STRING_LENGTH_FIELD = 1;
+
 	public function internType(type:IrType):Int {
 		var key = typeKey(type);
 		if (typeIndices.exists(key))
@@ -258,6 +261,11 @@ class HlSymbolTable {
 				throw 'Enum type "$name" must be registered before use';
 			case Virtual(name):
 				throw 'Virtual type "$name" must be registered before use';
+			default:
+		}
+		switch type {
+			case Bytes:
+				return internStringObject(key);
 			default:
 		}
 		var index = types.length;
@@ -275,7 +283,7 @@ class HlSymbolTable {
 					case Bool: HlType.Bool;
 					case F32: HlType.F32;
 					case F64: HlType.F64;
-					case Bytes: HlType.Bytes;
+					case Bytes: throw 'String type must be interned as an object';
 					case RawPtr: HlType.Bytes;
 					case ManagedBytes: throw 'Managed byte type must be handled by the outer type switch';
 					case Dyn: HlType.Dyn;
@@ -291,6 +299,31 @@ class HlSymbolTable {
 		});
 		typeIndices.set(key, index);
 		return index;
+	}
+
+	/**
+	 * HashLink's standard String layout, `_STRING` in native signatures: UTF-16 data plus its length in
+	 * code units, so length and indexing never rescan the data. Natives recognize it by name and shape.
+	 */
+	function internStringObject(key:String):Int {
+		var fields = [
+			{name: internString("bytes"), type: internType(RawPtr)},
+			{name: internString("length"), type: internType(I32)}
+		], index = types.length;
+		types.push(HlTypeDef.Object(internString("String"), -1, 0, fields, [], []));
+		typeIndices.set(key, index);
+		return index;
+	}
+
+	/** Length in UTF-16 code units, independent of the host's own String encoding. */
+	public static function utf16Length(value:String):Int {
+		var bytes = haxe.io.Bytes.ofString(value), length = 0;
+		for (index in 0...bytes.length) {
+			var byte = bytes.get(index);
+			if ((byte & 0xC0) != 0x80)
+				length += byte >= 0xF0 ? 2 : 1;
+		}
+		return length;
 	}
 
 	public function internEnum(enumDecl:IrEnum):Int {

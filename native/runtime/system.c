@@ -3,7 +3,7 @@ extern bool hl_sys_put_env( vbyte *name, vbyte *value );
 extern int hl_sys_command( vbyte *command );
 extern void hl_sys_print( vbyte *value );
 
-HL_PRIM vbyte *HL_NAME(__sys_system_name)( void ) {
+HL_PRIM vstring *HL_NAME(__sys_system_name)( void ) {
 #if defined(_WIN32)
 	return realtime_string_from_utf8("Windows");
 #elif defined(__APPLE__)
@@ -17,7 +17,7 @@ HL_PRIM vbyte *HL_NAME(__sys_system_name)( void ) {
 #endif
 }
 
-HL_PRIM vbyte *HL_NAME(__sys_get_env)( vbyte *name ) {
+HL_PRIM vstring *HL_NAME(__sys_get_env)( vstring *name ) {
 	char *owned;
 	vbyte *argument = realtime_platform_argument(name,&owned);
 	vbyte *result = hl_sys_get_env(argument);
@@ -25,7 +25,7 @@ HL_PRIM vbyte *HL_NAME(__sys_get_env)( vbyte *name ) {
 	return realtime_string_from_platform(result);
 }
 
-HL_PRIM bool HL_NAME(__sys_put_env)( vbyte *name, vbyte *value ) {
+HL_PRIM bool HL_NAME(__sys_put_env)( vstring *name, vstring *value ) {
 	char *owned_name, *owned_value;
 	vbyte *name_argument = realtime_platform_argument(name,&owned_name);
 	vbyte *value_argument = realtime_platform_argument(value,&owned_value);
@@ -35,7 +35,7 @@ HL_PRIM bool HL_NAME(__sys_put_env)( vbyte *name, vbyte *value ) {
 	return result;
 }
 
-HL_PRIM int HL_NAME(__sys_command)( vbyte *command ) {
+HL_PRIM int HL_NAME(__sys_command)( vstring *command ) {
 	char *owned;
 	vbyte *argument = realtime_platform_argument(command,&owned);
 	int result = hl_sys_command(argument);
@@ -43,10 +43,10 @@ HL_PRIM int HL_NAME(__sys_command)( vbyte *command ) {
 	return result;
 }
 
-HL_PRIM void HL_NAME(__sys_print)( vbyte *value ) {
+HL_PRIM void HL_NAME(__sys_print)( vstring *value ) {
 	/* Unlike paths and process strings, sys_print always accepts HashLink's
 	   UTF-16 string representation and performs its own console conversion. */
-	hl_sys_print(value);
+	hl_sys_print((vbyte *)realtime_string_data(value));
 }
 
 typedef struct realtime_file_output { FILE *stream; } realtime_file_output;
@@ -63,9 +63,9 @@ HL_PRIM realtime_file_output *HL_NAME(__sys_stderr)( void ) {
 	return &realtime_stderr;
 }
 
-HL_PRIM void HL_NAME(__file_output_write_string)( realtime_file_output *output, vbyte *value ) {
+HL_PRIM void HL_NAME(__file_output_write_string)( realtime_file_output *output, vstring *value ) {
 	if( output == NULL || output->stream == NULL ) hl_error("Invalid file output");
-	const char *utf8 = value == NULL ? "" : hl_to_utf8((const uchar *)value);
+	const char *utf8 = value == NULL ? "" : realtime_string_utf8(value);
 	size_t length = strlen(utf8);
 	if( length > 0 && fwrite(utf8,1,length,output->stream) != length ) hl_error("Could not write file output");
 }

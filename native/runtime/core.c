@@ -1,3 +1,59 @@
+/* A Haxe String is a HashLink String object: UTF-16 data plus its length in code units. The data
+   stays NUL-terminated so C consumers such as hl_to_utf8 can read it directly. */
+static inline int realtime_string_length( vstring *value ) {
+	return value == NULL ? 0 : value->length;
+}
+
+static inline const uchar *realtime_string_data( vstring *value ) {
+	return value == NULL ? NULL : value->bytes;
+}
+
+static inline bool realtime_is_string( vdynamic *value ) {
+	return value != NULL && hl_is_string_type(value->t);
+}
+
+/* Wraps already NUL-terminated data without copying it. */
+static vstring *realtime_string_wrap( uchar *data, int length ) {
+	vstring *result = hl_alloc_string(data,length);
+	if( result == NULL ) hl_fatal("HashLink String type is not registered");
+	return result;
+}
+
+/* A new String with `length` uninitialized code units, returned through `data`. */
+static vstring *realtime_string_alloc( int length, uchar **data ) {
+	uchar *output = (uchar *)hl_alloc_bytes((length + 1) * (int)sizeof(uchar));
+	output[length] = 0;
+	if( data != NULL ) *data = output;
+	return realtime_string_wrap(output,length);
+}
+
+static vstring *realtime_string_copy( const uchar *data, int length ) {
+	uchar *output;
+	vstring *result = realtime_string_alloc(length,&output);
+	if( length > 0 ) memcpy(output,data,length * sizeof(uchar));
+	return result;
+}
+
+/* Copies a NUL-terminated UTF-16 buffer; NULL stays NULL. */
+static vstring *realtime_string_of_ustr( const uchar *data ) {
+	return data == NULL ? NULL : realtime_string_copy(data,(int)ustrlen(data));
+}
+
+/* Wraps an array of NUL-terminated UTF-16 buffers, as HashLink's own natives return, as Strings. */
+static varray *realtime_string_array( varray *buffers ) {
+	if( buffers == NULL ) return NULL;
+	varray *result = hl_alloc_array(hl_string_type, buffers->size);
+	uchar **source = hl_aptr(buffers, uchar *);
+	vstring **target = hl_aptr(result, vstring *);
+	for( int i = 0; i < buffers->size; i++ )
+		target[i] = source[i] == NULL ? NULL : realtime_string_wrap(source[i], (int)ustrlen(source[i]));
+	return result;
+}
+
+static const char *realtime_string_utf8( vstring *value ) {
+	return value == NULL ? NULL : hl_to_utf8(value->bytes);
+}
+
 typedef struct realtime_string_map realtime_string_map;
 
 HL_PRIM bool HL_NAME(__math_is_nan)( double value ) {

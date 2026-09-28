@@ -1,4 +1,4 @@
-HL_PRIM int64_t HL_NAME(__int64_parse)(vbyte *value) {
+HL_PRIM int64_t HL_NAME(__int64_parse)(vstring *value) {
 	if (value == NULL)
 		hl_error("Cannot parse a null Int64 string");
 	char *text = realtime_utf8_copy(value), *end = NULL;
@@ -11,7 +11,7 @@ HL_PRIM int64_t HL_NAME(__int64_parse)(vbyte *value) {
 	return (int64_t)parsed;
 }
 
-HL_PRIM vbyte *HL_NAME(__int64_to_string)(int64_t value) {
+HL_PRIM vstring *HL_NAME(__int64_to_string)(int64_t value) {
 	char text[32];
 	snprintf(text, sizeof(text), "%lld", (long long)value);
 	return realtime_string_from_utf8(text);

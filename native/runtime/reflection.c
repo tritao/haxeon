@@ -2,14 +2,14 @@ extern vdynamic *hl_obj_get_field(vdynamic *object, int field);
 extern bool hl_obj_has_field(vdynamic *object, int field);
 extern varray *hl_obj_fields(vdynamic *object);
 
-HL_PRIM vdynamic *HL_NAME(__reflect_field)(vdynamic *object, vbyte *name) {
-	return name ? hl_obj_get_field(object, hl_hash(name)) : NULL;
+HL_PRIM vdynamic *HL_NAME(__reflect_field)(vdynamic *object, vstring *name) {
+	return name ? hl_obj_get_field(object, hl_hash((vbyte *)name->bytes)) : NULL;
 }
 
-HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vbyte *name,
+HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vstring *name,
 		vdynamic *value) {
 	if (!name) hl_error("Null field name");
-	int field = hl_hash(name);
+	int field = hl_hash((vbyte *)name->bytes);
 	if (!value) {
 		hl_dyn_setp(object, field, &hlt_dyn, NULL);
 		return;
@@ -30,8 +30,8 @@ HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vbyte *name,
 	}
 }
 
-HL_PRIM bool HL_NAME(__reflect_has_field)(vdynamic *object, vbyte *name) {
-	return name && hl_obj_has_field(object, hl_hash(name));
+HL_PRIM bool HL_NAME(__reflect_has_field)(vdynamic *object, vstring *name) {
+	return name && hl_obj_has_field(object, hl_hash((vbyte *)name->bytes));
 }
 
 HL_PRIM int HL_NAME(__reflect_field_count)(vdynamic *object) {
@@ -39,10 +39,11 @@ HL_PRIM int HL_NAME(__reflect_field_count)(vdynamic *object) {
 	return fields ? fields->size : 0;
 }
 
-HL_PRIM vbyte *HL_NAME(__reflect_field_name)(vdynamic *object, int index) {
+HL_PRIM vstring *HL_NAME(__reflect_field_name)(vdynamic *object, int index) {
 	varray *fields = hl_obj_fields(object);
 	if (!fields || index < 0 || index >= fields->size) return NULL;
-	return hl_aptr(fields, vbyte *)[index];
+	uchar *name = hl_aptr(fields, uchar *)[index];
+	return name == NULL ? NULL : realtime_string_wrap(name, (int)ustrlen(name));
 }
 
 HL_PRIM vdynamic *HL_NAME(__reflect_dynamic_object)(void) {
@@ -54,7 +55,7 @@ HL_PRIM bool HL_NAME(__reflect_is_function)(vdynamic *value) {
 }
 
 HL_PRIM bool HL_NAME(__reflect_is_object)(vdynamic *value) {
-	if (!value) return false;
+	if (!value || realtime_is_string(value)) return false;
 	switch (value->t->kind) {
 	case HOBJ:
 	case HARRAY:
@@ -84,6 +85,7 @@ HL_PRIM int HL_NAME(__reflect_array_length)(vdynamic *value) {
 
 HL_PRIM int HL_NAME(__json_value_kind)(vdynamic *value) {
 	if (!value) return 0;
+	if (realtime_is_string(value)) return 1;
 	switch (value->t->kind) {
 	case HBYTES: return 1;
 	case HBOOL: return 2;
