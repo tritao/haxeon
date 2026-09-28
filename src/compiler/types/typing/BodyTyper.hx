@@ -805,6 +805,19 @@ class BodyTyper {
 		predicates:Array<TypedSwitchPredicate>
 	}> {
 		return switch value {
+			case Variable(name, span):
+				var expectedEnum = enumName(expected), info = expectedEnum == null || !span.isBareReference
+					? null : enumCaseInfo(expectedEnum + "." + name);
+				if (info == null || info.params.length != 0)
+					return null;
+				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
+				{
+					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span),
+					enumName: info.enumName,
+					index: info.index,
+					bindings: [],
+					predicates: []
+				};
 			case Call(name, arguments, span):
 				var expectedEnum = enumName(expected);
 				var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
@@ -1734,13 +1747,7 @@ class BodyTyper {
 		return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
 	}
 
-	static function sourceIsBareReference(span:SourceSpan):Bool {
-		var source = span.file.slice(span.start, span.end);
-		var callStart = source.indexOf("(");
-		if (callStart >= 0)
-			source = source.substr(0, callStart);
-		return source.indexOf(".") < 0;
-	}
+	static function sourceIsBareReference(span:SourceSpan):Bool return span.isBareReference;
 
 	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (scope.resolve(name) != null)

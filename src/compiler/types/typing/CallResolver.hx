@@ -696,13 +696,7 @@ class CallResolver {
 		return found;
 	}
 
-	static function sourceIsBareReference(span:SourceSpan):Bool {
-		var source = span.file.slice(span.start, span.end);
-		var callStart = source.indexOf("(");
-		if (callStart >= 0)
-			source = source.substr(0, callStart);
-		return source.indexOf(".") < 0;
-	}
+	static function sourceIsBareReference(span:SourceSpan):Bool return span.isBareReference;
 
 	function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);

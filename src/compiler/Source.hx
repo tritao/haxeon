@@ -140,13 +140,17 @@ class SourceSpan {
 	public final file:SourceFile;
 	public final start:Int;
 	public final end:Int;
+	/** Parser-recorded qualification for a variable or named call reference. */
+	public final isBareReference:Bool;
 
-	public function new(file:SourceFile, start:Int, end:Int) {
+	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false) {
 		this.file = file;
 		this.start = start;
 		this.end = end;
+		this.isBareReference = isBareReference;
 	}
 
 	public function merge(other:SourceSpan):SourceSpan
-		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end);
+		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end,
+			isBareReference);
 }
