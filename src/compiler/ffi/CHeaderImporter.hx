@@ -275,7 +275,7 @@ class CHeaderImporter {
 					borrowedUtf8 = hasAnnotation(node, "hxi:returns_borrowed_utf8"),
 					owned = hasAnnotation(node, "hxi:owned");
 				addDocumentation(documentation, name, node);
-				var modelParameters:Array<HxiParameter> = [for (parameter in parameters) parameterModel(parameter)],
+				var modelParameters:Array<HxiParameter> = queriedArraysNullable([for (parameter in parameters) parameterModel(parameter)]),
 					resultMetadata:Map<String, Array<String>> = [],
 					ownership:HxiOwnership = Unspecified,
 					handleDisposition:HxiHandleDisposition = Unspecified;
@@ -300,6 +300,31 @@ class CHeaderImporter {
 			case _:
 				return null;
 		}
+	}
+
+	/**
+		An output array sized by an @inout count is queried with null storage
+		first, so its pointer is nullable, as an output buffer's is.
+	**/
+	static function queriedArraysNullable(parameters:Array<HxiParameter>):Array<HxiParameter> {
+		return [
+			for (parameter in parameters)
+				switch parameter.direction {
+					case OutArray(count) if (Lambda.exists(parameters, candidate -> candidate.name == count && candidate.direction == InOut)
+						&& !parameter.type.match(Nullable(_))):
+						{
+							name: parameter.name,
+							type: Nullable(parameter.type),
+							direction: parameter.direction,
+							ownership: parameter.ownership,
+							handleDisposition: parameter.handleDisposition,
+							retained: parameter.retained,
+							metadata: parameter.metadata,
+							span: parameter.span
+						};
+					case _: parameter;
+				}
+		];
 	}
 
 	static function parameterModel(parameter:Dynamic):HxiParameter {

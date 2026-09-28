@@ -86,6 +86,7 @@ int32_t sample_paths_many(const char *const *paths HXI_IN_UTF8_ARRAY(count), uin
 int32_t sample_read(uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT);
 int32_t sample_read_mixed(int32_t *_Nullable values HXI_OUT_ARRAY(count) HXI_INITIAL_CAPACITY(16), uint32_t *count HXI_INOUT,
 	uint8_t *_Nullable data HXI_OUT_BUFFER(size), uint32_t *size HXI_INOUT, int32_t *total HXI_OUT);
+int32_t sample_read_plain(uint32_t *values HXI_OUT_ARRAY(count), uint32_t *count HXI_INOUT);
 int32_t sample_apply(sample_binary_callback callback, int32_t left, int32_t right);
 int32_t sample_apply_nullable(sample_binary_callback _Nullable callback);
 void sample_set_retained(sample_binary_callback callback HXI_RETAINED);
