@@ -1659,8 +1659,41 @@ class Parser {
 		if (match(TokenKind.For))
 			return parseNestedArrayComprehension(previous().span);
 		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
-			return parseExpressionBranch();
+			return parseExpressionBranch(true);
 		return parseExpression();
+	}
+
+	/**
+	 * A comprehension body block that ends in an `if` without `else` yields a
+	 * value only when the condition holds, as in Haxe. It lowers to a nested,
+	 * flattened comprehension over a zero- or one-element array:
+	 * `{ S; if (c) v; }` becomes `for (y in { S; c ? [v] : []; }) y`.
+	 */
+	static function filteredComprehensionValue(statements:Array<AstStatement>, span:SourceSpan):Null<AstExpression> {
+		var yielded = yieldedValues(statements, span);
+		if (yielded == null)
+			return null;
+		var name = "__haxeon_yield";
+		return ArrayComprehension(name, null, yielded, null, Variable(name, span), true, span);
+	}
+
+	/** The block's values as an array of zero or one elements, or null when a path yields nothing expressible. */
+	static function yieldedValues(statements:Array<AstStatement>, span:SourceSpan):Null<AstExpression> {
+		if (statements.length == 0)
+			return null;
+		var last = statements[statements.length - 1],
+			prefix = statements.slice(0, statements.length - 1);
+		var result:Null<AstExpression> = switch last {
+			case AstStatement.Expression(value, valueSpan): ArrayLiteral([value], valueSpan);
+			case AstStatement.If(predicate, whenTrue, whenFalse, ifSpan):
+				var yes = yieldedValues(whenTrue, ifSpan);
+				var no = whenFalse.length == 0 ? ArrayLiteral([], ifSpan) : yieldedValues(whenFalse, ifSpan);
+				yes == null || no == null ? null : Conditional(predicate, yes, no, ifSpan);
+			case _: null;
+		};
+		if (result == null)
+			return null;
+		return prefix.length == 0 ? result : BlockExpression(prefix, result, span);
 	}
 
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
@@ -1683,7 +1716,7 @@ class Parser {
 		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
-	function parseExpressionBranch():AstExpression {
+	function parseExpressionBranch(comprehensionValue:Bool = false):AstExpression {
 		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
 		advance();
@@ -1715,6 +1748,13 @@ class Parser {
 		if (trailing != null) {
 			var end = consume(TokenKind.RightBrace).span;
 			return BlockExpression(trailing.statements, trailing.result, start.merge(end));
+		}
+		if (comprehensionValue && check(TokenKind.RightBrace)) {
+			var filtered = filteredComprehensionValue(statements, start.merge(current().span));
+			if (filtered != null) {
+				consume(TokenKind.RightBrace);
+				return filtered;
+			}
 		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
