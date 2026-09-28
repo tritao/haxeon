@@ -252,12 +252,17 @@ class Parser {
 		}
 		consume(TokenKind.LeftBrace);
 		var values = [];
+		// Haxe assigns omitted values: Int counts up from the previous literal (starting at 0); String uses the value's name.
+		var nextImplicitInt:Null<Int> = 0;
 		while (!check(TokenKind.RightBrace)) {
 			match(TokenKind.Var);
 			var valueName = consumeName();
-			consume(TokenKind.Assign);
-			var value = parseExpression(),
-				end = consume(TokenKind.Semicolon).span;
+			var value = if (match(TokenKind.Assign)) parseExpression(); else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
+			var end = consume(TokenKind.Semicolon).span;
+			nextImplicitInt = switch value {
+				case IntegerLiteral(literal, _): literal + 1;
+				default: null;
+			};
 			values.push({name: valueName.text, value: value, span: valueName.span.merge(end)});
 		}
 		var end = consume(TokenKind.RightBrace).span;
@@ -268,6 +273,19 @@ class Parser {
 			toTypes: toTypes,
 			values: values,
 			span: start.merge(end)
+		};
+	}
+
+	function implicitEnumAbstractValue(underlying:AstType, name:Token, nextInt:Null<Int>):AstExpression {
+		return switch underlying {
+			case IntType if (nextInt != null): IntegerLiteral(nextInt, name.span);
+			case IntType:
+				fail(name, 'Enum abstract value ${name.text} needs an explicit value after a non-literal value');
+				null;
+			case StringType: StringLiteral(name.text, name.span);
+			default:
+				fail(name, 'Enum abstract value ${name.text} needs an explicit value for this underlying type');
+				null;
 		};
 	}
 
@@ -562,7 +580,8 @@ class Parser {
 						if (initializer == null)
 							fail(current(), 'Field "$fieldName" requires a type or initializer');
 					}
-					var end = consume(TokenKind.Semicolon).span;
+					// Like local declarations, a braced initializer (block or switch) may omit the trailing semicolon.
+					var end = initializer == null ? consume(TokenKind.Semicolon).span : expressionEnd(initializer);
 					fields.push({
 						name: fieldName,
 						metadata: memberMetadata,
@@ -755,6 +774,9 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		// `inline` on a local function is an optimization hint; the function is compiled as an ordinary local function.
+		if (check(TokenKind.Inline) && peekKind(1) == TokenKind.Function)
+			advance();
 		if (match(TokenKind.Function)) {
 			var start = previous().span,
 				name = consume(TokenKind.Identifier).text;
@@ -1536,6 +1558,11 @@ class Parser {
 			var expression:AstExpression = Variable(name, referenceSpan);
 			return parsePostfix(expression);
 		}
+		// `{` opens an object literal when empty or starting with `name:`, and a block expression valued by its last expression otherwise.
+		if (check(TokenKind.LeftBrace)
+			&& peekKind(1) != TokenKind.RightBrace
+			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {

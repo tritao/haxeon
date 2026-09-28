@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.FlowAnalysis;
@@ -499,8 +500,14 @@ class StatementTyper {
 
 	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
-		var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false)),
-			originalIterable = typedIterable;
+		var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false));
+		// Haxe iterates any class instance or structure through its `iterator()` method.
+		switch typedIterable.type {
+			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):
+				typedIterable = unwrapNullable(typeExpression(MethodCall(iterable, "iterator", [], span), scope, null, false));
+			default:
+		}
+		var originalIterable = typedIterable;
 		var element:CompilerType = switch typedIterable.type {
 			case TArray(element): element;
 			case TIterator(element): element;
