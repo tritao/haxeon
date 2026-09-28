@@ -197,3 +197,7 @@ std-is-of-type-interface-array	42
 string-object-layout	42
 # String lengths count UTF-16 code units, including literals outside the BMP.
 string-utf16-length	42
+# Reflect reads and writes compiled class and anonymous record fields by name.
+reflect-typed-objects	42
+# Std.parseInt/parseFloat follow C strtol/strtod on every target.
+std-parse-number	42

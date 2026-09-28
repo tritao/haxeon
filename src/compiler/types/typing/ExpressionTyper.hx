@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.runtime.PlatformAbi;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -254,6 +255,9 @@ class ExpressionTyper {
 			default: "";
 		};
 		var isDynamic = objectExpected == null && isDynamicExpectation(expectedType);
+		// Targets without native dynamic objects (Wasm) allocate the stdlib's dynamic object class.
+		if (isDynamic)
+			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
 		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), resolvedResult, span);
 	}

@@ -472,7 +472,7 @@ class FrontendCompilation {
 				irCNatives.push(native);
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializersFrom(typedNew, initializationClasses),
-			entryPoint, irCNatives);
+			entryPoint, irCNatives, IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {

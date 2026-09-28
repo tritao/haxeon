@@ -26,7 +26,15 @@ class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
 		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
-			enumsFrom(typed), staticFieldsFrom(typed), staticInitializersFrom(typed), null, cNativesFrom(typed));
+			enumsFrom(typed), staticFieldsFrom(typed), staticInitializersFrom(typed), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
+	}
+
+	/** Objects `Reflect` may inspect by field name: classes and anonymous records, not closure storage. */
+	public static function reflectableObjectsFrom(typed:TypedProgram):Array<String> {
+		var names = [for (classDecl in typed.classes) if (!classDecl.isNativeValue) classDecl.name];
+		for (anonymous in typed.anonymousTypes)
+			names.push(anonymous.name);
+		return names;
 	}
 
 	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
@@ -260,8 +268,8 @@ class IrProgramAssembler {
 	}
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String,
-			?cNatives:Array<IrCNative>):IrProgram {
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
+			?reflectableObjects:Array<String>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -269,6 +277,7 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
+		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions);
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,

@@ -168,6 +168,30 @@ class IrBuilder {
 		return out;
 	}
 
+	public function constBool(value:Bool):IrValue {
+		var out = temporary(Bool);
+		emit(ConstBool(out, value));
+		return out;
+	}
+
+	public function constNull(type:IrType):IrValue {
+		var out = temporary(type);
+		emit(ConstNull(out));
+		return out;
+	}
+
+	public function typeValue(type:IrType):IrValue {
+		var out = temporary(TypeRef);
+		emit(TypeValue(out, type));
+		return out;
+	}
+
+	public function safeCast(value:IrValue, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(SafeCast(out, value));
+		return out;
+	}
+
 	public function toDyn(value:IrValue):IrValue {
 		var out = temporary(Dyn);
 		emit(ToDyn(out, value));

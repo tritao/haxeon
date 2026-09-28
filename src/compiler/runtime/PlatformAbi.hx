@@ -5,6 +5,9 @@ import compiler.types.Type.NominalKind;
 
 /** Host types whose implementation is supplied by the HashLink/Haxe platform. */
 class PlatformAbi {
+	/** Stdlib class implementing `{...}` literals typed as Dynamic where the runtime has no dynamic objects. */
+	public static inline final DYNAMIC_OBJECT_CLASS = "runtime.DynamicObject";
+
 	static final types:Map<String, Bool> = [
 		"haxe.io.Encoding" => true,
 		"haxe.io.Eof" => true,

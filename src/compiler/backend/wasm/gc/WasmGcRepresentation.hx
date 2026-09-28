@@ -191,6 +191,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					instructions.push(End);
 				instructions.push(End);
 				instructions;
+			case Abstract(_) if (value.type == Dyn):
+				// Abstracts with a concrete GC layout (maps, byte streams) narrow from anyref.
+				switch plan.valueType(output.type) {
+					case Ref(reference) if (reference.heap != Any): [LocalGet(valueLocal), RefCast(reference), LocalSet(destination)];
+					default: [LocalGet(valueLocal), LocalSet(destination)];
+				}
 			case Dyn, Abstract(_):
 				[LocalGet(valueLocal), LocalSet(destination)];
 			case _ if (output.type == value.type):

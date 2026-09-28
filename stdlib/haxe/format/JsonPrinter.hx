@@ -94,9 +94,6 @@ class JsonPrinter {
 	}
 
 	function writeObject(value:Dynamic):Void {
-		#if wasm
-		throw "Wasm JSON object reflection is not available";
-		#else
 		enter(value);
 		var fields = Reflect.fields(value);
 		output.add("{");
@@ -115,7 +112,6 @@ class JsonPrinter {
 			line();
 		output.add("}");
 		stack.pop();
-		#end
 	}
 
 	function enter(value:Dynamic):Void {

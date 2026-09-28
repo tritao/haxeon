@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
+import compiler.runtime.PlatformAbi;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedEnum;
@@ -57,7 +58,7 @@ class IrGenerator {
 			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
 	}
 
-	/** Enable dynamic allocation for `{}` literals on targets with runtime reflection. */
+	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
 
@@ -86,9 +87,10 @@ class IrGenerator {
 		return IrProgramAssembler.staticFieldsFrom(typed);
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String,
-			?cNatives:Array<IrCNative>):IrProgram
-		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives);
+			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
+			?reflectableObjects:Array<String>):IrProgram
+		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives,
+			reflectableObjects);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;
@@ -1182,6 +1184,22 @@ class IrGenerator {
 						], Void);
 					}
 					builder.load(objectName, IrType.Dyn);
+				} else if (isDynamic) {
+					// Targets without native dynamic objects (Wasm) use the stdlib's runtime.DynamicObject.
+					var objectType:IrType = Obj(PlatformAbi.DYNAMIC_OBJECT_CLASS),
+						object = builder.call('${PlatformAbi.DYNAMIC_OBJECT_CLASS}.create', [], objectType),
+						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
+					localTypes.set(objectName, objectType);
+					builder.store(objectName, object);
+					for (field in fields) {
+						var fieldValue = lowerExpression(field.value, builder, localTypes);
+						builder.call('${PlatformAbi.DYNAMIC_OBJECT_CLASS}.initialize', [
+							builder.load(objectName, objectType),
+							builder.constString(field.name),
+							builder.toDyn(fieldValue)
+						], Void);
+					}
+					builder.toDyn(builder.load(objectName, objectType));
 				} else {
 					var physicalName = switch expression.type {
 						case TAnonymous(name, _): name;

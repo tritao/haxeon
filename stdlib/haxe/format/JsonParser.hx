@@ -1,8 +1,13 @@
 /* Derived from the Haxe standard library JsonParser under the MIT license. */
 package haxe.format;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__reflect_dynamic_object")
 extern function jsonDynamicObject():Dynamic;
+#else
+function jsonDynamicObject():Dynamic
+	return new runtime.DynamicObject();
+#end
 
 class JsonParser {
 	public static function parse(text:String):Dynamic

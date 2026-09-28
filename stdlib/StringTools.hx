@@ -25,6 +25,7 @@ extern function stringToolsStartsWith(s:String, start:String):Bool;
 @:hlNative("haxeon_runtime", "__string_ends_with")
 extern function stringToolsEndsWith(s:String, end:String):Bool;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__string_replace")
 extern function stringToolsReplace(s:String, sub:String, by:String):String;
 
@@ -36,6 +37,34 @@ extern function stringToolsTrim(s:String):String;
 
 @:hlNative("haxeon_runtime", "__string_is_space")
 extern function stringToolsIsSpace(s:String, pos:Int):Bool;
+#else
+// Wasm implements these in Haxe with the HashLink runtime's semantics.
+function stringToolsReplace(s:String, sub:String, by:String):String
+	return sub.length == 0 ? s.split("").join(by) : s.split(sub).join(by);
+
+function stringToolsLtrim(s:String):String {
+	var start = 0;
+	while (start < s.length && s.charCodeAt(start) <= 32)
+		start++;
+	return s.substring(start);
+}
+
+function stringToolsTrim(s:String):String {
+	var start = 0, end = s.length;
+	while (start < end && s.charCodeAt(start) <= 32)
+		start++;
+	while (end > start && s.charCodeAt(end - 1) <= 32)
+		end--;
+	return s.substring(start, end);
+}
+
+function stringToolsIsSpace(s:String, pos:Int):Bool {
+	if (pos < 0 || pos >= s.length)
+		return false;
+	var code = s.charCodeAt(pos);
+	return (code > 8 && code < 14) || code == 32;
+}
+#end
 
 /** Common string helpers backed by the stable runtime ABI where necessary. */
 class StringTools {
