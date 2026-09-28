@@ -236,8 +236,15 @@ class IrProgramAssembler {
 		return objects;
 	}
 
-	static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool
-		return hasDirectFieldAccess(field.readAccess) || hasDirectFieldAccess(field.writeAccess);
+	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
+	static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
+		if (hasDirectFieldAccess(field.readAccess) || hasDirectFieldAccess(field.writeAccess))
+			return true;
+		for (metadata in field.metadata)
+			if (metadata.name == "isVar")
+				return true;
+		return false;
+	}
 
 	static function hasDirectFieldAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
 		return switch access {

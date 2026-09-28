@@ -191,13 +191,25 @@ class SemanticAssembly {
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
-				var importedType = ModuleAnalyzer.isWildcardImport(importPath) ? null : sourceTypeAliases.get(importPath);
-				if (importedType != null && enumCasesByType.exists(importedType))
-					for (caseName in enumCasesByType.get(importedType))
-						if (constructorTargets.exists(caseName))
-							ambiguousConstructors.set(caseName, true);
-						else
-							constructorTargets.set(caseName, importedType + "." + caseName);
+				if (ModuleAnalyzer.isWildcardImport(importPath))
+					continue;
+				var importedTypes:Array<String> = [];
+				var importedType = sourceTypeAliases.get(importPath);
+				if (importedType != null)
+					importedTypes.push(importedType);
+				// Importing a module imports every type declared in it, and with
+				// each enum its constructors, as in Haxe.
+				if (aliasesByModule.exists(importPath))
+					for (entry in aliasesByModule.get(importPath))
+						if (importedTypes.indexOf(entry.declarationName) < 0)
+							importedTypes.push(entry.declarationName);
+				for (type in importedTypes)
+					if (enumCasesByType.exists(type))
+						for (caseName in enumCasesByType.get(type))
+							if (constructorTargets.exists(caseName))
+								ambiguousConstructors.set(caseName, true);
+							else
+								constructorTargets.set(caseName, type + "." + caseName);
 			}
 			for (importPath in ast.imports) {
 				var importedModule = ModuleAnalyzer.importModulePath(importPath);

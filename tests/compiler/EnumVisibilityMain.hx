@@ -60,6 +60,28 @@ class EnumVisibilityMain {
 		switchedEnum.analyze("Main");
 		Sys.println("PASS: switched enum constructors win over same-named class fields");
 
+		var moduleImport = new Compiler();
+		moduleImport.update("foreign/Shape.hx",
+			"package foreign; enum Primitive { Box(size:Int); Sphere(radius:Int); } class Shape { public function new() {} }");
+		moduleImport.update("Main.hx",
+			'import foreign.Shape; class Main { static function size(value:Primitive):Int return switch value { case Box(size): size; case Sphere(radius): radius; }; static function main():Int { var made = Box(40); return size(made) + size(Sphere(2)); } }');
+		moduleImport.analyze("Main");
+		Sys.println("PASS: importing a module exposes the constructors of enums declared in it");
+
+		var subTypeImport = new Compiler();
+		subTypeImport.update("foreign/Shape.hx",
+			"package foreign; enum Primitive { Box(size:Int); } enum Other { Loose; } class Shape { public function new() {} }");
+		subTypeImport.update("Main.hx",
+			'import foreign.Shape.Primitive; class Main { static function include():foreign.Shape.Other return foreign.Shape.Other.Loose; static function main():Int { var made = Box(42); var loose = Loose; return 0; } }');
+		try {
+			subTypeImport.analyze("Main");
+			throw "a sub-type import exposed another enum's constructors";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1005")
+				throw error;
+		}
+		Sys.println("PASS: importing one module sub-type keeps the module's other enums hidden");
+
 		var hidden = new Compiler();
 		hidden.update("foreign/E.hx", "package foreign; enum E { Length; }");
 		hidden.update("Main.hx",

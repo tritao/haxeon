@@ -137,4 +137,58 @@ class StringTools {
 	public static inline function isSpace(s:String, pos:Int):Bool {
 		return stringToolsIsSpace(s, pos);
 	}
+
+	/**
+		Escapes `&`, `<` and `>` as HTML entities, plus `"` and `'` when `quotes` is true.
+		Characters are copied as UTF-16 code units, so non-ASCII text passes through unchanged.
+	**/
+	public static function htmlEscape(s:String, ?quotes:Bool):String {
+		var escapeQuotes = quotes == true, buf = new StringBuf(), start = 0;
+		for (index in 0...s.length) {
+			var entity = switch s.charCodeAt(index) {
+				case '&'.code: "&amp;";
+				case '<'.code: "&lt;";
+				case '>'.code: "&gt;";
+				case '"'.code if (escapeQuotes): "&quot;";
+				case '\''.code if (escapeQuotes): "&#039;";
+				default: null;
+			};
+			if (entity != null) {
+				buf.addSub(s, start, index - start);
+				buf.add(entity);
+				start = index + 1;
+			}
+		}
+		buf.addSub(s, start, s.length - start);
+		return buf.toString();
+	}
+
+	/** Unescapes the entities produced by `htmlEscape`; `htmlUnescape(htmlEscape(s)) == s` always holds. */
+	public static function htmlUnescape(s:String):String {
+		return s.split("&gt;")
+			.join(">")
+			.split("&lt;")
+			.join("<")
+			.split("&quot;")
+			.join('"')
+			.split("&#039;")
+			.join("'")
+			.split("&amp;")
+			.join("&");
+	}
+
+	/** Returns the UTF-16 code unit at `index`, or `-1` when `index` is outside the string. */
+	public static inline function fastCodeAt(s:String, index:Int):Int {
+		return s.charCodeAt(index);
+	}
+
+	/** Returns the UTF-16 code unit at `index`; `index` must be inside the string. */
+	public static inline function unsafeCodeAt(s:String, index:Int):Int {
+		return s.charCodeAt(index);
+	}
+
+	/** Tells whether `c`, as returned by `fastCodeAt`, marks the end of the string. */
+	public static inline function isEof(c:Int):Bool {
+		return c == -1;
+	}
 }

@@ -1,5 +1,6 @@
 extern vdynamic *hl_obj_get_field(vdynamic *object, int field);
 extern bool hl_obj_has_field(vdynamic *object, int field);
+extern bool hl_obj_delete_field(vdynamic *object, int field);
 extern varray *hl_obj_fields(vdynamic *object);
 
 HL_PRIM vdynamic *HL_NAME(__reflect_field)(vdynamic *object, vstring *name) {
@@ -32,6 +33,10 @@ HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vstring *name,
 
 HL_PRIM bool HL_NAME(__reflect_has_field)(vdynamic *object, vstring *name) {
 	return name && hl_obj_has_field(object, hl_hash((vbyte *)name->bytes));
+}
+
+HL_PRIM bool HL_NAME(__reflect_delete_field)(vdynamic *object, vstring *name) {
+	return name && hl_obj_delete_field(object, hl_hash((vbyte *)name->bytes));
 }
 
 HL_PRIM int HL_NAME(__reflect_field_count)(vdynamic *object) {

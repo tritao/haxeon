@@ -1556,8 +1556,11 @@ class BodyTyper {
 						if (usesAccessor)
 							accessor = className + "." + (read ? "get_" : "set_") + name;
 					}
-				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base,
-					declaration.span, session.representation.nominalSubstitutions(type)), name, read); else null;
+				if (accessor != null) {
+					// Inside its own accessor a property names its physical field (Haxe's `@:isVar` storage), not the accessor again.
+					accessor == session.currentContext.functionName ? null : accessor;
+				} else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base, declaration.span,
+					session.representation.nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
 

@@ -55,6 +55,9 @@ string-concat-mixed	42
 string-split	42
 string-split-edge	42
 reflect-compare-sort	42
+reflect-delete-field	42
+comprehension-block-filter	42
+sys-exit	42
 array-index-growth	42
 date-runtime	42
 sys-runtime	42
@@ -210,5 +213,11 @@ local-function-recursion	42
 # Array.pop and Array.shift return abstract elements intact.
 array-abstract-pop	42
 throw-lambda	52
+# Std-port syntax: implicit enum abstract values, unqualified enum abstract cases, block initializers, @:isVar, iterator() loops.
+std-port-syntax	42
+# Xml parses, queries, and prints URDF-like documents.
+xml-urdf	42
+# Xml reports parse errors with positions and edits node trees.
+xml-edit-errors	42
 local-function-defaults	42
 enum-abstract-switch	42
