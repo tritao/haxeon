@@ -211,3 +211,9 @@ local-function-recursion	42
 # Array.pop and Array.shift return abstract elements intact.
 array-abstract-pop	42
 throw-lambda	52
+# Std-port syntax: implicit enum abstract values, unqualified enum abstract cases, block initializers, @:isVar, iterator() loops.
+std-port-syntax	42
+# Xml parses, queries, and prints URDF-like documents.
+xml-urdf	42
+# Xml reports parse errors with positions and edits node trees.
+xml-edit-errors	42

@@ -3,6 +3,7 @@ package compiler.types;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstEnum;
+import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
@@ -83,7 +84,7 @@ class SignatureInference {
 		var methods:Array<AstFunction> = [],
 			byName:Map<String, AstFunction> = [];
 		for (method in classDecl.methods) {
-			methods.push(inferFieldBoundArguments(method, classDecl));
+			methods.push(inferFieldBoundArguments(accessorWithPropertyType(method, classDecl.fields), classDecl));
 		}
 		for (method in methods)
 			byName.set(method.name, method);
@@ -114,6 +115,57 @@ class SignatureInference {
 			inferred.push(inferFunction(method, enums, byName, classDecl));
 		}
 		return inferred;
+	}
+
+	/**
+		Haxe types an unannotated `get_x`/`set_x` accessor from the declared type of property `x`: the getter's result, and the
+		setter's value argument and result.
+	**/
+	static function accessorWithPropertyType(method:AstFunction, fields:Array<compiler.syntax.Ast.AstField>):AstFunction {
+		var isGetter = StringTools.startsWith(method.name, "get_"),
+			isSetter = StringTools.startsWith(method.name, "set_");
+		if (!isGetter && !isSetter)
+			return method;
+		var propertyName = method.name.substring(4),
+			propertyType:Null<AstType> = null;
+		for (field in fields)
+			if (field.name == propertyName
+				&& field.type != null
+				&& field.isStatic == method.isStatic
+				&& (isGetter ? field.readAccess == AstFieldAccess.GetAccess : field.writeAccess == AstFieldAccess.SetAccess))
+				propertyType = field.type;
+		if (propertyType == null)
+			return method;
+		var arguments = method.arguments;
+		if (isSetter) {
+			if (arguments.length != 1)
+				return method;
+			if (arguments[0].type == InferredType) {
+				var argument = arguments[0];
+				arguments = [
+					{
+						name: argument.name,
+						type: propertyType,
+						span: argument.span,
+						optional: argument.optional,
+						defaultValue: argument.defaultValue
+					}
+				];
+			}
+		} else if (arguments.length != 0)
+			return method;
+		return {
+			name: method.name,
+			isStatic: method.isStatic,
+			isExtern: method.isExtern,
+			metadata: method.metadata,
+			typeParameters: method.typeParameters,
+			typeConstraints: method.typeConstraints,
+			arguments: arguments,
+			result: method.result == InferredType ? propertyType : method.result,
+			statements: method.statements,
+			span: method.span
+		};
 	}
 
 	static function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>

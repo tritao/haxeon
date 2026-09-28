@@ -1028,13 +1028,30 @@ class BodyTyper {
 					if (expectedEnum != null)
 						info = enumCaseInfo(expectedEnum + "." + name);
 				}
-				if (info != null) null; else if (name == "_") null; else {
+				if (info != null) null; else if (name == "_") null; else if (enumAbstractValueNamed(expected, name)) null; else {
 					scope.define(name, expected, span);
 					bindCell(name, span, scope, expected);
 					scope.requireId(name);
 				}
 			default: null;
 		}
+	}
+
+	/**
+		Whether `name` is an enum abstract value over the subject's type, so an unqualified case name matches that constant
+		instead of binding the subject. Enum abstracts erase to their underlying type, so every declaration is consulted, as
+		for unqualified value expressions.
+	**/
+	function enumAbstractValueNamed(subject:CompilerType, name:String):Bool {
+		var underlying = switch subject {
+			case TNullable(element): element;
+			default: subject;
+		};
+		for (declaration in session.enumAbstractDecls)
+			for (value in declaration.values)
+				if (value.name == name && TypeRelations.equals(lowerType(declaration.underlying), underlying))
+					return true;
+		return false;
 	}
 
 	static function isSwitchCatchAll(value:AstExpression):Bool
@@ -1543,8 +1560,11 @@ class BodyTyper {
 						if (usesAccessor)
 							accessor = className + "." + (read ? "get_" : "set_") + name;
 					}
-				if (accessor != null) accessor; else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base,
-					declaration.span, session.representation.nominalSubstitutions(type)), name, read); else null;
+				if (accessor != null) {
+					// Inside its own accessor a property names its physical field (Haxe's `@:isVar` storage), not the accessor again.
+					accessor == session.currentContext.functionName ? null : accessor;
+				} else if (declaration.base != null) instancePropertyAccessor(session.declarations.resolve(declaration.base, declaration.span,
+					session.representation.nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
 
