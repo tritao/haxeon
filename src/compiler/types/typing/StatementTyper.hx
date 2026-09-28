@@ -163,7 +163,16 @@ class StatementTyper {
 				var expected = result == null ? context.inferredResult : result;
 				var value = typeExpression(expression, scope, expected, false),
 					output:Array<TypedStatement> = [];
-				if (expected != null && expected == TVoid && context.contextualVoidLambda) {
+				var thrown = switch value.expression {
+					case TThrowExpression(thrown): thrown;
+					default: null;
+				};
+				if (thrown != null) {
+					// `return throw e`, and an expression-bodied lambda whose body throws,
+					// never produce a value: a throw statement, which leaves the function's
+					// result to its other returns (or Void) instead of inferring Never.
+					output.push(TThrow(thrown, span));
+				} else if (expected != null && expected == TVoid && context.contextualVoidLambda) {
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
 				} else {
