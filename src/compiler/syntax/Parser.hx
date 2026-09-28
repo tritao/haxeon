@@ -1532,7 +1532,8 @@ class Parser {
 				name += "." + part.text;
 				end = part.span;
 			}
-			var expression:AstExpression = Variable(name, start.merge(end));
+			var referenceSpan = new SourceSpan(start.file, start.start, end.end, false);
+			var expression:AstExpression = Variable(name, referenceSpan);
 			return parsePostfix(expression);
 		}
 		if (match(TokenKind.LeftBrace)) {
@@ -1562,7 +1563,8 @@ class Parser {
 				name += "." + part.text;
 				end = part.span;
 			}
-			var expression:AstExpression = Variable(name, start.merge(end));
+			var referenceSpan = new SourceSpan(start.file, start.start, end.end, name.indexOf(".") < 0);
+			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
 				var arguments = [];
 				if (!check(TokenKind.RightParen)) {
@@ -1570,7 +1572,7 @@ class Parser {
 						arguments.push(parseExpression()) while (match(TokenKind.Comma));
 				}
 				var end = consume(TokenKind.RightParen).span;
-				expression = Call(name, arguments, start.merge(end));
+				expression = Call(name, arguments, new SourceSpan(referenceSpan.file, referenceSpan.start, end.end, referenceSpan.isBareReference));
 			}
 			return parsePostfix(expression);
 		}
@@ -1913,7 +1915,7 @@ class Parser {
 				}
 				var end = consume(TokenKind.RightParen).span;
 				expression = switch expression {
-					case Variable(name, start): Call(name, arguments, expressionSpan(expression).merge(end));
+					case Variable(name, start): Call(name, arguments, new SourceSpan(start.file, start.start, end.end, start.isBareReference));
 					default: ClosureCall(expression, arguments, expressionSpan(expression).merge(end));
 				};
 				continue;

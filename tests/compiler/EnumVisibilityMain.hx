@@ -1,8 +1,15 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceFile;
+import compiler.Source.SourceSpan;
 
 class EnumVisibilityMain {
 	static function main():Void {
+		var spanFile = new SourceFile("Span.hx", "reference()");
+		var bareReference = new SourceSpan(spanFile, 0, 9, true);
+		if (bareReference.merge(new SourceSpan(spanFile, 9, 11)).isBareReference)
+			throw "merged non-reference spans inherited a bare-reference marker";
+
 		var samePackage = new Compiler();
 		samePackage.addSourceRoot("tests/compiler");
 		samePackage.update("samepackage/SamePackageLookupMain.hx", sys.io.File.getContent("tests/compiler/samepackage/SamePackageLookupMain.hx"));
@@ -45,6 +52,13 @@ class EnumVisibilityMain {
 			'import foreign.E; class Main { static function include():other.E return other.E.Length; static function main():Int { var value:other.E = Length; return switch (value) { case Length: 42; }; } }');
 		expected.analyze("Main");
 		Sys.println("PASS: expected enum wins over a different imported constructor");
+
+		var switchedEnum = new Compiler();
+		switchedEnum.update("foreign/E.hx", "package foreign; enum E { Preview; Other; }");
+		switchedEnum.update("Main.hx",
+			'import foreign.E; class Main { static inline var Preview = "preview"; static function main():Int { var value:E = E.Preview; return switch (value) { case Preview: 42; case Other: 0; }; } }');
+		switchedEnum.analyze("Main");
+		Sys.println("PASS: switched enum constructors win over same-named class fields");
 
 		var hidden = new Compiler();
 		hidden.update("foreign/E.hx", "package foreign; enum E { Length; }");
