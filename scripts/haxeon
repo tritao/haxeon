@@ -12,6 +12,16 @@ fi
 export HAXEON_HOME="$root_dir"
 hashlink="$root_dir/.tools/hashlink/hl"
 if [[ -x "$hashlink" ]]; then
+	# A debug HDLL copied into out can be newer than the release build and
+	# still require symbols absent from the release libhl. Rebuild the release
+	# VM and HDLL as one pair before launching in that case.
+	if [[ "$(uname -s)" == Linux && -f "$root_dir/out/haxeon_runtime.hdll" ]] &&
+		LD_LIBRARY_PATH="$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+			ldd -r "$root_dir/out/haxeon_runtime.hdll" 2>&1 | grep -q 'undefined symbol: hl_string_type'; then
+		echo "haxeon: rebuilding mismatched HashLink and native runtime" >&2
+		cmake --preset release -S "$root_dir"
+		cmake --build "$root_dir/out/cmake/release" --target haxeon-native --clean-first
+	fi
 	cli="$root_dir/out/haxeon-cli.hl"
 	mkdir -p "$root_dir/out"
 	if [[ ! -f "$cli" || "$root_dir/scripts/haxeon" -nt "$cli" ]] ||
