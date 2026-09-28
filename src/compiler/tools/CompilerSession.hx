@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.Compiler;
+import compiler.ffi.HxiInterfaceOrder;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
@@ -70,7 +71,7 @@ class CompilerSession {
 				report("loading FFI projection " + source.path);
 				compiler.addFfiProjection(source.path, source.text);
 			}
-			for (source in interfaces) {
+			for (source in HxiInterfaceOrder.dependenciesFirst(interfaces)) {
 				report("loading FFI interface " + source.path);
 				compiler.addFfiInterface(source.path, source.text);
 			}

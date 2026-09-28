@@ -56,6 +56,7 @@ class TestCatalog {
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
+		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",
