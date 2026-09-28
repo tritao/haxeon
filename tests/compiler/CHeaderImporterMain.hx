@@ -64,6 +64,11 @@ class CHeaderImporterMain {
 		expect(first.indexOf("output: ptr<sample_handle> @out") >= 0, "output annotations should import as parameter directions");
 		expect(first.indexOf('data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout') >= 0,
 			"paired output-buffer annotations should retain their size parameter");
+		expect(first.indexOf('extern fn sample_read_mixed(values: nullable<ptr<i32>> @out_array("count") @initial_capacity(16), count: ptr<u32> @inout, '
+			+ 'data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout, total: ptr<i32> @out) -> i32;') >= 0,
+			"imported headers should keep several outputs and an initial capacity spelled through a macro");
+		expect(first.indexOf('extern fn sample_read_plain(values: nullable<ptr<u32>> @out_array("count"), count: ptr<u32> @inout) -> i32;') >= 0,
+			"queried output arrays should import as nullable pointers for their size query");
 		expect(first.indexOf('values: nullable<ptr<utf8>> @out_array("count"), count: ptr<u32> @inout') >= 0,
 			"counted UTF-8 pointer-array outputs should import with their count contract");
 		expect(first.indexOf('options: ptr<const<sample_options>> @in_array("count"), count: u32') >= 0

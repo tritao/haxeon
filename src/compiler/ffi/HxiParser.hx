@@ -157,6 +157,7 @@ class HxiParser {
 					"out_buffer",
 					"in_array",
 					"out_array",
+					"initial_capacity",
 					"borrowed",
 					"owned",
 					"retained"

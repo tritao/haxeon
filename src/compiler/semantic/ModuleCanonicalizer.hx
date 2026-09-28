@@ -457,7 +457,10 @@ class ModuleCanonicalizer {
 						{
 							name: argument.name,
 							type: canonicalType(argument.type, aliases),
-							span: argument.span
+							span: argument.span,
+							// A local function's optional parameters and defaults let calls omit them.
+							optional: argument.optional,
+							defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 						}
 				], [
 					for (statement in body)
@@ -478,11 +481,25 @@ class ModuleCanonicalizer {
 		return canonicalType(type, aliases);
 	}
 
+	/**
+		Marks an alias that only expressions resolve. An imported enum
+		constructor shares its short name's alias entry with types, so without
+		the mark a type position such as `catch (_:Dynamic)` would resolve to a
+		constructor named `Dynamic`.
+	**/
+	static final EXPRESSION_ONLY_PREFIX = "#expression:";
+
+	/** Aliases `name` to `target` in expressions, leaving type positions untouched. */
+	public static function addExpressionAlias(aliases:Map<String, String>, name:String, target:String):Void {
+		aliases.set(name, target);
+		aliases.set(EXPRESSION_ONLY_PREFIX + name, target);
+	}
+
 	public static function resolveTypeName(name:String, aliases:Null<Map<String, String>>):String {
 		if (aliases == null)
 			return name;
 		var availableAliases:Map<String, String> = aliases;
-		if (!availableAliases.exists(name))
+		if (!availableAliases.exists(name) || availableAliases.exists(EXPRESSION_ONLY_PREFIX + name))
 			return name;
 		return availableAliases.get(name);
 	}

@@ -52,6 +52,8 @@ class TestCatalog {
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
 		"EnumVisibilityMain",
+		"QualifiedStaticReceiverMain",
+		"EnumConstructorTypeNameMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",

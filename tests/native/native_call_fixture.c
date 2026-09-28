@@ -467,3 +467,82 @@ FIXTURE_API const uint8_t *native_fixture_invalid_data( void ) {
 FIXTURE_API size_t native_fixture_invalid_data_length( void ) {
 	return SIZE_MAX;
 }
+
+/* Several and queried outputs. Calls are counted so a test can tell one call from a query and a fill. */
+static uint32_t native_fixture_output_calls = 0;
+
+FIXTURE_API uint32_t native_fixture_output_calls_take( void ) {
+	uint32_t calls = native_fixture_output_calls;
+	native_fixture_output_calls = 0;
+	return calls;
+}
+
+/* Squares of 0..n-1 into a queried array: with too little capacity it reports n and writes nothing. */
+FIXTURE_API int32_t native_fixture_squares( int32_t n, int32_t *values, uint32_t *count ) {
+	++native_fixture_output_calls;
+	if( count == NULL || n < 0 ) return -1;
+	if( *count < (uint32_t)n || (n > 0 && values == NULL) ) {
+		*count = (uint32_t)n;
+		return 1;
+	}
+	for( int32_t index = 0; index < n; ++index )
+		values[index] = index * index;
+	*count = (uint32_t)n;
+	return 42;
+}
+
+/* n points (i, 2i) and 2n bytes through two queries, plus the coordinate total and the last point. */
+FIXTURE_API int32_t native_fixture_mixed( int32_t n, native_fixture_point *points, uint32_t *point_count,
+		uint8_t *bytes, uint32_t *byte_count, int32_t *total, native_fixture_point *last ) {
+	++native_fixture_output_calls;
+	if( point_count == NULL || byte_count == NULL || total == NULL || last == NULL || n < 0 ) return -1;
+	uint32_t points_needed = (uint32_t)n, bytes_needed = 2u * (uint32_t)n;
+	int too_small = *point_count < points_needed || *byte_count < bytes_needed
+		|| (n > 0 && (points == NULL || bytes == NULL));
+	*point_count = points_needed;
+	*byte_count = bytes_needed;
+	*total = -1;
+	last->x = last->y = -1;
+	if( too_small ) return 1;
+	*total = 0;
+	for( int32_t index = 0; index < n; ++index ) {
+		points[index].x = index;
+		points[index].y = 2 * index;
+		*total += 3 * index;
+		*last = points[index];
+	}
+	for( uint32_t index = 0; index < bytes_needed; ++index )
+		bytes[index] = (uint8_t)(100 + index);
+	return 42;
+}
+
+/* Breaks the query contract: always claims one element more than it was given. */
+FIXTURE_API int32_t native_fixture_greedy( int32_t *values, uint32_t *count ) {
+	++native_fixture_output_calls;
+	(void)values;
+	if( count == NULL ) return -1;
+	*count += 1;
+	return 42;
+}
+
+/* A fixed-capacity array beside an ordinary output. */
+FIXTURE_API int32_t native_fixture_fill_sum( uint64_t count, uint32_t *results, uint64_t *sum ) {
+	if( count > 1024 || (count != 0 && results == NULL) || sum == NULL ) return 0;
+	*sum = 0;
+	for( uint64_t index = 0; index < count; ++index ) {
+		results[index] = (uint32_t)(index + 10);
+		*sum += results[index];
+	}
+	return 42;
+}
+
+/* Two fixed-capacity arrays sized by one input array. */
+FIXTURE_API int32_t native_fixture_split_points( const native_fixture_point *values, uint64_t count, int32_t *xs,
+		int32_t *ys ) {
+	if( count > 1024 || (count != 0 && (values == NULL || xs == NULL || ys == NULL)) ) return 0;
+	for( uint64_t index = 0; index < count; ++index ) {
+		xs[index] = values[index].x;
+		ys[index] = values[index].y;
+	}
+	return 42;
+}

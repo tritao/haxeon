@@ -218,3 +218,5 @@ std-port-syntax	42
 xml-urdf	42
 # Xml reports parse errors with positions and edits node trees.
 xml-edit-errors	42
+local-function-defaults	42
+enum-abstract-switch	42

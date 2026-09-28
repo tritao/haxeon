@@ -275,7 +275,7 @@ class CHeaderImporter {
 					borrowedUtf8 = hasAnnotation(node, "hxi:returns_borrowed_utf8"),
 					owned = hasAnnotation(node, "hxi:owned");
 				addDocumentation(documentation, name, node);
-				var modelParameters:Array<HxiParameter> = [for (parameter in parameters) parameterModel(parameter)],
+				var modelParameters:Array<HxiParameter> = queriedArraysNullable([for (parameter in parameters) parameterModel(parameter)]),
 					resultMetadata:Map<String, Array<String>> = [],
 					ownership:HxiOwnership = Unspecified,
 					handleDisposition:HxiHandleDisposition = Unspecified;
@@ -300,6 +300,33 @@ class CHeaderImporter {
 			case _:
 				return null;
 		}
+	}
+
+	/**
+		An output array sized by an @inout count is queried with null storage
+		first, so its pointer is nullable, as an output buffer's is.
+	**/
+	static function queriedArraysNullable(parameters:Array<HxiParameter>):Array<HxiParameter> {
+		return [
+			for (parameter in parameters)
+				switch parameter.direction {
+					case OutArray(count)
+						if (Lambda.exists(parameters, candidate -> candidate.name == count && candidate.direction == InOut)
+							&& !parameter.type.match(Nullable(_))):
+						{
+							name: parameter.name,
+							type: Nullable(parameter.type),
+							direction: parameter.direction,
+							ownership: parameter.ownership,
+							handleDisposition: parameter.handleDisposition,
+							retained: parameter.retained,
+							metadata: parameter.metadata,
+							span: parameter.span
+						};
+					case _:
+						parameter;
+				}
+		];
 	}
 
 	static function parameterModel(parameter:Dynamic):HxiParameter {
@@ -332,8 +359,20 @@ class CHeaderImporter {
 				if (desugared != null)
 					qualified = desugared;
 				}
+			// Clang prints a nullability-attributed pointer with the annotation
+			// macro inside its type; the desugared type is the plain pointer.
+			var attributedArray = false;
+			switch direction.direction {
+				case OutArray(_):
+					var desugared:String = field(type, "desugaredQualType");
+					if (desugared != null && desugared != qualified) {
+						qualified = desugared;
+						attributedArray = true;
+					}
+				case _:
+			}
 			projected = mapType(qualified);
-			if ((switch direction.direction {
+			if ((attributedArray || switch direction.direction {
 				case OutBuffer(_): true;
 				case _: false;
 			}) && !StringTools.startsWith(projected, "nullable<"))
@@ -356,6 +395,9 @@ class CHeaderImporter {
 			metadata:Map<String, Array<String>> = [];
 		if (file == null || !FileSystem.exists(file))
 			return {direction: In, metadata: metadata};
+		var capacity = initialCapacity(parameter, file);
+		if (capacity != null)
+			metadata.set("initial_capacity", [capacity]);
 		for (child in children(parameter)) {
 			if (field(child, "kind") != "AnnotateAttr")
 				continue;
@@ -415,6 +457,30 @@ class CHeaderImporter {
 			}
 		}
 		return {direction: In, metadata: metadata};
+	}
+
+	/** The `hxi:initial_capacity=N` annotation on a queried output parameter, if any. */
+	static function initialCapacity(parameter:Dynamic, file:String):Null<String> {
+		for (child in children(parameter)) {
+			if (field(child, "kind") != "AnnotateAttr")
+				continue;
+			var range:Dynamic = field(child, "range"),
+				begin:Dynamic = field(range, "begin"),
+				end:Dynamic = field(range, "end"),
+				spellingBegin:Dynamic = field(begin, "spellingLoc"),
+				spellingEnd:Dynamic = field(end, "spellingLoc");
+			var annotation = sourceRange(file, spellingBegin == null ? begin : spellingBegin, spellingEnd == null ? end : spellingEnd),
+				pattern = ~/hxi:initial_capacity=([0-9]+)/;
+			if (annotation.indexOf("hxi:initial_capacity") < 0)
+				continue;
+			if (pattern.match(annotation))
+				return pattern.matched(1);
+			var argument = expansionArgument(parameter, child, "[0-9]+");
+			if (argument == null)
+				throw '${declarationLocation(parameter)}: could not resolve the initial capacity; it must be a decimal literal';
+			return argument;
+		}
+		return null;
 	}
 
 	static function fieldLengthField(entry:Dynamic):Null<String> {
@@ -631,7 +697,7 @@ class CHeaderImporter {
 		return sourceRange(file, spellingBegin == null ? begin : spellingBegin, spellingEnd == null ? end : spellingEnd);
 	}
 
-	static function expansionArgument(node:Dynamic, annotation:Dynamic):Null<String> {
+	static function expansionArgument(node:Dynamic, annotation:Dynamic, ?argumentPattern:String):Null<String> {
 		var range:Dynamic = field(annotation, "range"),
 			begin:Dynamic = field(range, "begin"),
 			expansion:Dynamic = field(begin, "expansionLoc"),
@@ -643,7 +709,8 @@ class CHeaderImporter {
 			file = field(node, "_hxiFile");
 		var source = File.getContent(file),
 			invocation = source.substring(offset, Std.int(Math.min(source.length, offset + 256))),
-			argument = ~/^[A-Za-z_][A-Za-z0-9_]*\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/;
+			argument = new EReg("^[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*(" + (argumentPattern == null ? "[A-Za-z_][A-Za-z0-9_]*" : argumentPattern) + ")\\s*\\)",
+				"");
 		return argument.match(invocation) ? argument.matched(1) : null;
 	}
 

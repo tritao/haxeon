@@ -34,6 +34,20 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 	fi
 )
 
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiOutputsMain \
+	"$repo_dir/out/hxi-outputs-test.hl" "$fixture_path"
+(
+	cd "$repo_dir/out"
+	set +e
+	"$repo_dir/.tools/hashlink/hl" hxi-outputs-test.hl
+	status=$?
+	set -e
+	if [[ $status -ne 42 ]]; then
+		echo "HXI multiple-output test returned $status, expected 42" >&2
+		exit 1
+	fi
+)
+
 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiRetainedMain \
 	"$repo_dir/out/hxi-retained-test.hl" "$fixture_path"
 (

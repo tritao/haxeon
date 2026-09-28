@@ -233,7 +233,7 @@ class SemanticAssembly {
 			// name in type positions such as `new Tabs()`.
 			for (caseName => target in constructorTargets)
 				if (!ambiguousConstructors.exists(caseName) && !aliases.exists(caseName))
-					aliases.set(caseName, target);
+					ModuleCanonicalizer.addExpressionAlias(aliases, caseName, target);
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,
 				enumAbstractStart = enumAbstracts.length,

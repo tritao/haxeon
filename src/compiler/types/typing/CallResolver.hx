@@ -683,16 +683,30 @@ class CallResolver {
 		var parts = splitPath(name),
 			receiverName:Null<String> = null,
 			receiver:Null<TypedExpression> = null,
-			methodName:Null<String> = null;
+			methodName:Null<String> = null,
+			firstMember = 1;
 		if (parts.length >= 2) {
 			methodName = parts[parts.length - 1];
 			if (!session.signatures.exists(name)) {
+				// A value in scope wins; otherwise the longest dotted prefix that
+				// names a type is the receiver, so "pkg.Type.FIELD.method()"
+				// types FIELD as a static member of pkg.Type.
 				receiverName = parts[0];
 				receiver = resolveCallReceiver(receiverName, span, scope);
+				var prefixLength = parts.length - 1;
+				while (receiver == null && prefixLength >= 1) {
+					var prefix = parts.slice(0, prefixLength).join(".");
+					if (isTypeReference(prefix)) {
+						receiverName = prefix;
+						receiver = new TypedExpression(TClassRef(prefix), TInstance(NominalKind.Class, prefix, []), span);
+						firstMember = prefixLength;
+					}
+					prefixLength--;
+				}
 			}
 		}
-		if (receiver != null && parts.length > 2)
-			for (index in 1...parts.length - 1)
+		if (receiver != null)
+			for (index in firstMember...parts.length - 1)
 				receiver = typeCallMemberWithFlow(receiver, parts[index], span, scope);
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
@@ -810,6 +824,10 @@ class CallResolver {
 
 	static function splitPath(path:String):Array<String>
 		return path.split(".");
+
+	/** Whether a qualified name denotes a type whose static members can be accessed. */
+	function isTypeReference(name:String):Bool
+		return session.classDecls.exists(name) || session.enumAbstractDecls.exists(name) || PlatformAbi.isType(name);
 
 	static function unwrapNullable(value:TypedExpression):TypedExpression
 		return switch value.type {

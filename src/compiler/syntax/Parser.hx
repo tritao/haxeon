@@ -863,12 +863,9 @@ class Parser {
 		}
 		if (match(TokenKind.Switch)) {
 			var start = previous().span;
-			var expression:AstExpression;
-			if (match(TokenKind.LeftParen)) {
-				expression = parseExpression();
-				consume(TokenKind.RightParen);
-			} else
-				expression = parseExpression();
+			// A parenthesized subject is an ordinary grouped expression, which
+			// also covers a type check such as `switch (value : Kind)`.
+			var expression = parseExpression();
 			consume(TokenKind.LeftBrace);
 			var cases = [];
 			while (match(TokenKind.Case)) {
@@ -1792,12 +1789,8 @@ class Parser {
 			statementSpan(block.statements[0]).merge(expressionSpan(block.result)));
 
 	function parseSwitchExpression(start:SourceSpan):AstExpression {
-		var subject:AstExpression;
-		if (match(TokenKind.LeftParen)) {
-			subject = parseExpression();
-			consume(TokenKind.RightParen);
-		} else
-			subject = parseExpression();
+		// A parenthesized subject is an ordinary grouped expression; see the statement form.
+		var subject = parseExpression();
 		consume(TokenKind.LeftBrace);
 		var cases = [];
 		while (match(TokenKind.Case)) {
