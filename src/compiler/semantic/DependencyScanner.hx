@@ -137,11 +137,14 @@ class DependencyScanner {
 				scanExpression(object, dependencies);
 			case Variable(name, _):
 				scanQualifiedDependency(name, dependencies);
-			case MethodCall(object, _, args, _):
+			case MethodCall(object, name, args, _):
+				scanArrayLibraryMethod(name, dependencies);
 				scanExpression(object, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
 			case Call(name, args, _):
+				if (name.indexOf(".") >= 0)
+					scanArrayLibraryMethod(compiler.QualifiedName.last(name), dependencies);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies);
@@ -168,6 +171,11 @@ class DependencyScanner {
 					scanStatement(statement, dependencies);
 			default:
 		}
+
+	/** A call that may be an array method implemented in the stdlib needs that module loaded. */
+	static function scanArrayLibraryMethod(methodName:String, dependencies:Map<String, Bool>):Void
+		if (compiler.runtime.ArrayLibrary.provides(methodName))
+			dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
 		addQualifiedOwner(name, dependencies);

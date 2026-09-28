@@ -7,6 +7,7 @@ import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
+import compiler.runtime.ArrayLibrary;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstArgument;
@@ -280,22 +281,105 @@ class CallResolver {
 		return coerceArguments(typed, [for (parameter in parameters) argumentType(parameter, substitutions)], name);
 	}
 
-	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
+	/**
+		Types a generic call's arguments while inferring its type parameters.
+		`leading` holds arguments that are already typed, such as the receiver
+		of an array method implemented as a library function. Lambda literals
+		are typed after the other arguments, so `values.map(x -> x * 2)` learns
+		`x : Int` from `values`; a type parameter that only the lambda's result
+		can decide (`S` in `map<T, S>(values:Array<T>, f:T->S)`) is inferred from
+		the lambda body.
+	**/
+	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>):{
 		arguments:Array<TypedExpression>,
 		substitutions:Map<String, CompilerType>
 	} {
 		var parameters = functionTypeParameters(fn),
 			substitutions:Map<String, CompilerType> = [],
-			typed:Array<TypedExpression> = [];
+			typed:Array<Null<TypedExpression>> = [],
+			offset = leading == null ? 0 : leading.length,
+			lambdas:Array<Int> = [];
+		if (leading != null)
+			for (index in 0...leading.length) {
+				inferTypeParameters(fn.arguments[index].type, leading[index].type, parameters, substitutions, leading[index].span);
+				typed.push(leading[index]);
+			}
 		for (index in 0...arguments.length) {
-			var expected:Null<CompilerType> = null;
+			if (isLambdaLiteral(arguments[index])) {
+				lambdas.push(index);
+				typed.push(null);
+				continue;
+			}
+			var declared = fn.arguments[offset + index],
+				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
-				expected = session.declarations.resolve(fn.arguments[index].type, fn.arguments[index].span, substitutions);
+				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
 			var argument = typeExpression(arguments[index], scope, expected, expected != null);
-			inferTypeParameters(fn.arguments[index].type, argument.type, parameters, substitutions, argument.span);
+			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
-		return {arguments: typed, substitutions: substitutions};
+		for (index in lambdas) {
+			var declared = fn.arguments[offset + index],
+				expected = lambdaExpectation(declared.type, declared.span, parameters, substitutions),
+				argument = typeExpression(arguments[index], scope, expected, expected != null);
+			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
+			typed[offset + index] = argument;
+		}
+		return {arguments: [for (argument in typed) requiredArgument(argument)], substitutions: substitutions};
+	}
+
+	static function requiredArgument(argument:Null<TypedExpression>):TypedExpression {
+		if (argument == null)
+			throw "Generic call argument was not typed";
+		return argument;
+	}
+
+	static function isLambdaLiteral(expression:AstExpression):Bool
+		return switch expression {
+			case Lambda(_, _, _): true;
+			default: false;
+		};
+
+	/**
+		The function type a lambda argument is typed against. Its parameter types
+		must be known; a result that still mentions an unbound type parameter is
+		left as Dynamic, which tells the lambda typer to infer it from the body.
+	**/
+	function lambdaExpectation(declared:AstType, span:SourceSpan, parameters:Array<String>, substitutions:Map<String, CompilerType>):Null<CompilerType> {
+		if (allTypeParametersBound(parameters, substitutions))
+			return session.declarations.resolve(declared, span, substitutions);
+		return switch declared {
+			case FunctionType(arguments, result):
+				for (argument in arguments)
+					if (mentionsUnbound(argument, parameters, substitutions))
+						return null;
+				var resolvedArguments = [
+					for (argument in arguments)
+						session.declarations.resolve(argument, span, substitutions)
+				];
+				CompilerType.TFunction(resolvedArguments,
+					mentionsUnbound(result, parameters, substitutions) ? TDynamic : session.declarations.resolve(result, span, substitutions));
+			default: null;
+		};
+	}
+
+	static function mentionsUnbound(type:AstType, parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool
+		return switch type {
+			case NamedType(name): parameters.indexOf(name) >= 0 && !substitutions.exists(name);
+			case AppliedType(_, arguments): anyMentionsUnbound(arguments, parameters, substitutions);
+			case ArrayType(element), NullableType(element): mentionsUnbound(element, parameters, substitutions);
+			case MapType(key, value): mentionsUnbound(key, parameters, substitutions) || mentionsUnbound(value, parameters, substitutions);
+			case FunctionType(arguments, result): mentionsUnbound(result, parameters,
+					substitutions) || anyMentionsUnbound(arguments, parameters, substitutions);
+			case AnonymousType(fields): anyMentionsUnbound([for (field in fields) field.type], parameters, substitutions);
+			default: false;
+		};
+
+	static function anyMentionsUnbound(types:Array<AstType>, parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool {
+		for (type in types)
+			if (mentionsUnbound(type, parameters, substitutions))
+				return true;
+		return false;
 	}
 
 	public function findMethod(className:String, name:String):Null<SemanticMethodInfo> {
@@ -1196,9 +1280,7 @@ class CallResolver {
 				comparator = coerce(typeExpressionValue(arguments[0], scope, comparatorType), comparatorType, "array comparator", "E1002");
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
 		}
-		if (name == "join") {
-			if (!sameType(element, TString))
-				fail("E1016", "Array.join currently requires String elements", span);
+		if (name == "join" && sameType(element, TString)) {
 			if (arguments.length != 1)
 				fail("E1008", "Array.join expects one separator", span);
 			var separator = coerce(typeExpressionValue(arguments[0], scope, TString), TString, "join separator", "E1002");
@@ -1224,7 +1306,24 @@ class CallResolver {
 				zero = new TypedExpression(TIntLiteral(0), TInt, span);
 			return new TypedExpression(TLessEqual(zero, index), TBool, span);
 		}
+		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
+		if (library != null)
+			return library;
 		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
+	}
+
+	/** `values.name(arguments)` as `haxeon.ArrayMethods.name(values, arguments)`, when the library defines it. */
+	function typeLibraryArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if (!ArrayLibrary.provides(name))
+			return null;
+		var methodKey = ArrayLibrary.CLASS_NAME + "." + name,
+			method = session.signatures.get(methodKey);
+		if (method == null)
+			return null;
+		if (arguments.length + 1 > method.arguments.length)
+			fail("E1008", 'Array.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}', span);
+		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver]);
+		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, ArrayLibrary.CLASS_NAME, true, prepared.substitutions);
 	}
 
 	function iterator(values:TypedExpression, element:CompilerType, span:SourceSpan):TypedExpression {
