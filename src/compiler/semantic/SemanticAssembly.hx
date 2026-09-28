@@ -183,8 +183,11 @@ class SemanticAssembly {
 			}
 			var locals:Map<String, Bool> = [],
 				aliases = context.importAliases(ast.imports, ast.importAliases);
+			// An explicit import outranks a same-named type elsewhere in the
+			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			for (sourceName => declarationName in sourceTypeAliases)
-				aliases.set(sourceName, declarationName);
+				if (!aliases.exists(sourceName))
+					aliases.set(sourceName, declarationName);
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
