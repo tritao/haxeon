@@ -53,6 +53,7 @@ class TestCatalog {
 		"FunctionTypeSyntaxMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",
+		"EnumConstructorTypeNameMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",
