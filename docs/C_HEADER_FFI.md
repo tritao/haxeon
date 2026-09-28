@@ -534,16 +534,18 @@ builds a retained native pointer table. The paired count parameter is omitted
 from the Haxe API and derived from the array length; counts wider than 32 bits
 are converted from the Haxe array length without narrowing.
 
-`@out_array("count")` supports fixed-capacity typed output arrays when `count`
-is an unsigned integer passed by value. The generated wrapper allocates the
-output storage, performs one native call, and returns `Array<T>` (alongside the
-native status when present). Scalar elements and pointer-free fixed-layout
-structures are supported. Haxeon bounds the allocation to 256 MiB and checks
-the requested count before calling native code. The existing UTF-8 pointer
-array query/fill convention remains supported with a nullable output pointer
-and an unsigned 32-bit `@inout` count; it projects as `Array<Null<String>>`.
-Unannotated pointer arrays remain ABI-visible but receive no managed array
-projection.
+`@out_array("count")` has two forms. When `count` is an unsigned integer
+passed by value, the array has that fixed capacity: the generated wrapper
+allocates it, performs one native call and returns every element as
+`Array<T>`. When `count` is a `ptr<u32> @inout`, the array is queried, like an
+output buffer (below): the count goes in as the capacity and comes back as the
+number of elements written, and the wrapper returns exactly those. A queried
+array must be a nullable pointer. Scalar elements and pointer-free
+fixed-layout structures are supported in both forms, and `ptr<utf8>` elements
+(projecting as `Array<Null<String>>`) in the queried form; queried bytes use
+`@out_buffer` instead. Haxeon bounds every allocation to 256 MiB and checks
+counts before calling native code. Unannotated pointer arrays remain
+ABI-visible but receive no managed array projection.
 
 Byte input arrays also receive a generated `<Function>_slice` companion. It
 accepts `haxe.io.Bytes`, an offset, and a length, validates the range, and
@@ -640,16 +642,45 @@ extern fn read(
 ) -> i32;
 ```
 
-The wrapper first calls the function with a null buffer and zero capacity,
-allocates the returned size, then calls it again with managed storage. The final
-`size` is validated against the allocation and trims the result when fewer bytes
-were written. Sizes are limited to 256 MiB. The size parameter must be
-`ptr<u32> @inout`; it and the buffer are hidden from the public Haxe signature.
-The first call's result is intentionally ignored, since many C APIs report
-insufficient capacity during a successful size query. Other input parameters
-are passed identically to both calls, so such functions must make their query
-invocation side-effect safe. Multiple output buffers and mixtures with other
-output parameters are rejected for now.
+Byte buffers and queried arrays share one protocol. By default the wrapper
+first calls the function with null storage and zero capacities, allocates the
+sizes it reports, then calls it again with managed storage. The final counts
+are validated against the allocations and trim the results when fewer
+elements were written. Sizes are limited to 256 MiB. Each count parameter
+must be `ptr<u32> @inout` and belong to one output; counts and storage are
+hidden from the public Haxe signature. The first call's result is
+intentionally ignored, since many C APIs report insufficient capacity during
+a successful size query. Other input parameters are passed identically to
+both calls, so such functions must make their query invocation side-effect
+safe.
+
+`@initial_capacity(n)` on a queried output lets such a function finish in one
+call. The first call then passes storage for `n` elements (and zero capacity
+for queried outputs without the annotation). If every reported count fits,
+that call's result is the answer; otherwise the wrapper reallocates to the
+reported counts and calls again. Functions that opt in must report the
+required count whenever it exceeds the capacity they were given, and must
+not treat storage that is too small as an error they cannot recover from. A
+count that still exceeds its capacity after the second call raises an error
+rather than truncating.
+
+A function can combine any number of output slots (`@out`, `@inout`),
+fixed-capacity arrays and queried outputs; the wrapper returns them together
+in its `<Function>OutResult`, in parameter order after `status`. Because a
+function with queried outputs may be called twice, it cannot also take other
+`@inout` parameters, `@owned` output slots or an owned result.
+
+```hxi
+extern fn read_ray(
+    ray: u32,
+    intervals: nullable<ptr<interval>> @out_array("interval_count") @initial_capacity(8),
+    interval_count: ptr<u32> @inout,
+    summary: ptr<ray_summary> @out
+) -> i32;
+```
+
+In C headers, `__attribute__((annotate("hxi:initial_capacity=" #n)))` with a
+literal `n` spells `@initial_capacity(n)`, typically through a macro.
 
 Named HXI `enum` and `flags` declarations use an explicit `i8`/`u8`, `i16`/`u16`,
 or `i32`/`u32` representation. Their values accept decimal and hexadecimal

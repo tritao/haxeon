@@ -422,7 +422,7 @@ class HxiParserMain {
 		var bufferSource = HxiProjection.source(buffers);
 		expect(bufferSource.indexOf("function read(seed:Int):ReadOutResult") >= 0
 			&& bufferSource.indexOf("__hxi_raw_read(seed, null, __out_size)") >= 0
-			&& bufferSource.indexOf("haxe.io.Bytes.alloc(__capacity)") >= 0,
+			&& bufferSource.indexOf("haxe.io.Bytes.alloc(__capacity_data)") >= 0,
 			"output buffers should project a bounded size-query and fill wrapper");
 		var bufferNatives = HxiProjection.cNatives(buffers),
 			bufferProgram = compiler.Frontend.compile("function main():Int return 0;");
@@ -500,6 +500,59 @@ class HxiParserMain {
 			"requires a writable element pointer");
 		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; struct item @layout(8, 8) { context: ptr<context> @offset(0) @borrowed; } extern fn read(values: ptr<item> @out_array("count"), count: u32) -> void; }',
 			"cannot contain structures with pointer fields");
+		var mixedText = 'interface mixed @target("portable-abi64") @library("mixed") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } '
+			+
+			'extern fn read(n: i32, points: nullable<ptr<point>> @out_array("pointCount"), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<point> @out) -> i32; '
+			+
+			'extern fn hinted(n: i32, points: nullable<ptr<point>> @out_array("pointCount") @initial_capacity(8), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout) -> i32; '
+			+ 'extern fn fill(count: u32, xs: ptr<i32> @out_array("count"), ys: ptr<i32> @out_array("count"), sum: ptr<u64> @out) -> void; }',
+			mixed = parseValidated("mixed-outputs.hxi", mixedText),
+			mixedSource = HxiProjection.source(mixed);
+		expect(mixedSource.indexOf("function read(n:Int):ReadOutResult") >= 0
+			&& mixedSource.indexOf("public var points:Array<point>;") >= 0
+			&& mixedSource.indexOf("public var bytes:haxe.io.Bytes;") >= 0
+			&& mixedSource.indexOf("public var total:Int;") >= 0
+			&& mixedSource.indexOf("public var last:point;") >= 0
+			&& mixedSource.indexOf("__hxi_raw_read(n, null, __out_pointCount, null, __out_byteCount, __out_total, __out_last);") >= 0
+			&& mixedSource.indexOf("__status = __hxi_raw_read(n, __out_points, __out_pointCount, __out_bytes, __out_byteCount, __out_total, __out_last);") >= 0
+			&& mixedSource.indexOf("return new ReadOutResult(__status, __items_points, __out_bytes, __hxi_struct_getI32(__out_total, 0), __out_last);") >= 0,
+			"queried arrays, buffers and output slots should share one query-and-fill wrapper");
+		expect(mixedSource.indexOf("var __capacity_points:Int = 8;") >= 0
+			&& mixedSource.indexOf("var __capacity_bytes:Int = 0;") >= 0
+			&& mixedSource.indexOf("if (__hxi_struct_getI32(__out_pointCount, 0) > __capacity_points || __hxi_struct_getI32(__out_byteCount, 0) > __capacity_bytes) {") >= 0,
+			"@initial_capacity should call once with storage and fill again only on overflow");
+		expect(mixedSource.indexOf("function fill(count:Int):FillOutResult") >= 0
+			&& mixedSource.indexOf("var __capacity_xs = count;") >= 0
+			&& mixedSource.indexOf("var __capacity_ys = count;") >= 0
+			&& mixedSource.indexOf("__hxi_raw_fill(count, __out_xs, __out_ys, __out_sum);") >= 0,
+			"fixed-capacity arrays should combine with each other and with output slots in one call");
+		var mixedNatives = HxiProjection.cNatives(mixed);
+		expect(mixedNatives[0].argumentModes[1] == Output
+			&& mixedNatives[0].argumentModes[2] == InputOutput
+			&& Type.enumEq(mixedNatives[0].argumentModes[3], BytesOutput(4))
+			&& mixedNatives[0].argumentModes[4] == BytesSize,
+			"each queried output should keep its own ABI modes");
+		var rewritten = HxiWriter.write(mixed);
+		expect(rewritten.indexOf('@out_array("pointCount") @initial_capacity(8)') >= 0
+			&& HxiWriter.write(HxiParser.parse("mixed-roundtrip.hxi", rewritten)) == rewritten,
+			"@initial_capacity should round-trip through HXI serialization");
+		var queriedArray = 'values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout';
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(a: nullable<ptr<i32>> @out_array("count"), b: nullable<ptr<u8>> @out_buffer("count"), count: ptr<u32> @inout) -> i32; }',
+			"cannot share the @inout count");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read($queriedArray, extra: ptr<i32> @inout) -> i32; }',
+			"cannot combine the @inout parameter");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn read($queriedArray, result: ptr<nullable<ptr<context>>> @out @owned("release")) -> i32; extern fn release(value: ptr<context>) -> void; }',
+			"cannot combine the owned output");
+		expectError('interface bad @target("x86_64-linux-gnu") { opaque context; extern fn read($queriedArray) -> ptr<context> @owned("release"); extern fn release(value: ptr<context>) -> void; }',
+			"cannot return an owned result");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(count: u32, values: ptr<i32> @out_array("count") @initial_capacity(4)) -> i32; }',
+			"requires an output buffer or array sized by an @inout count");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<i32>> @out_array("count") @initial_capacity(0), count: ptr<u32> @inout) -> i32; }',
+			"requires one positive integer element count");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: ptr<i32> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
+			"must be nullable for its size query");
+		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<u8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
+			"bytes use @out_buffer");
 		var narrowCount = parseValidated("narrow-array-count.hxi",
 			'interface narrow_array_count @target("portable-abi64") @library("narrow_array_count") { extern fn send(values: ptr<const<u16>> @in_array("count"), count: u8) -> i32; }');
 		expect(HxiProjection.source(narrowCount).indexOf("values.length > 255") >= 0,

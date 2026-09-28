@@ -82,9 +82,9 @@ typedef ProjectedCheckedFunction = {
 
 enum ProjectedOutputStrategy {
 	NoOutputWrapper;
+
+	/** One wrapper for every mix of values, fixed and queried arrays, and buffers. */
 	OutputValues;
-	OutputBuffer;
-	OutputArray;
 }
 
 typedef ProjectedFunction = {

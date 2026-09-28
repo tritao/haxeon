@@ -109,7 +109,8 @@ class HxiProjectionPlanner {
 			outputs:Array<ProjectedOutputResult> = [];
 		for (parameter in signature.semantics.parameters)
 			switch parameter.kind {
-				case OutputBuffer(size) | OutputStringArray(size):
+				// A typed array's count is derived only when it is an @inout query count.
+				case OutputBuffer(size) | OutputStringArray(size) | OutputArray(_, size):
 					derivedCountParameters.set(size, true);
 				case _:
 			}
@@ -220,23 +221,13 @@ class HxiProjectionPlanner {
 	}
 
 	static function outputStrategy(signature:HxiFunctionAbi):ProjectedOutputStrategy {
-		var hasOutput = false, isBuffer = false, isArray = false;
 		for (parameter in signature.semantics.parameters)
 			switch parameter.kind {
 				case InputValue(_) | RetainedCallback(_):
-				case InputArray(_, _) | InputBytes(_) | OutputValue(_) | OutputHandle(_, _, _) | InOutValue(_):
-					hasOutput = true;
-				case OutputBuffer(_):
-					hasOutput = true;
-					isBuffer = true;
-				case OutputArray(_, _):
-					hasOutput = true;
-					isArray = true;
-				case OutputStringArray(_):
-					hasOutput = true;
-					isArray = true;
+				case _:
+					return OutputValues;
 			}
-		return isArray ? OutputArray : isBuffer ? OutputBuffer : hasOutput ? OutputValues : NoOutputWrapper;
+		return NoOutputWrapper;
 	}
 
 	static function projectedResultType(signature:HxiFunctionAbi, profile:HxiProjectionProfile):String {

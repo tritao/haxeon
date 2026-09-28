@@ -265,8 +265,8 @@ class HxiValidator {
 					validateOwnershipMetadata(resultPolicy.metadata, 'result of function "$name"', span);
 					if (resultPolicy.metadata.exists("borrowed") && resultPolicy.metadata.exists("owned"))
 						fail('Function "$name" cannot combine @borrowed and @owned', span);
-					var outputBuffer:Null<{name:String, sizeParameter:String, span:SourceSpan}> = null,
-						outputArray:Null<{name:String, countParameter:String, span:SourceSpan}> = null;
+					var outputBuffers:Array<{name:String, sizeParameter:String, span:SourceSpan}> = [],
+						outputArrays:Array<{name:String, countParameter:String, span:SourceSpan}> = [];
 					for (parameter in parameters) {
 						validateParameterMetadata(parameter, false);
 						validateType(parameter.type, names, declarationsByName, parameter.span, false);
@@ -277,17 +277,13 @@ class HxiValidator {
 							}
 						switch parameter.direction {
 							case OutBuffer(sizeParameter):
-								if (outputBuffer != null)
-									fail('Function "$name" cannot declare more than one output buffer', parameter.span);
 								if (!bytePointerLike(parameter.type, declarationsByName))
 									fail('Output buffer "${parameter.name}" requires a byte pointer', parameter.span);
 								if (!nullablePointer(parameter.type))
 									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
-								outputBuffer = {name: parameter.name, sizeParameter: sizeParameter, span: parameter.span};
+								outputBuffers.push({name: parameter.name, sizeParameter: sizeParameter, span: parameter.span});
 							case OutArray(countParameter):
-								if (outputArray != null)
-									fail('Function "$name" cannot declare more than one output array', parameter.span);
-								outputArray = {name: parameter.name, countParameter: countParameter, span: parameter.span};
+								outputArrays.push({name: parameter.name, countParameter: countParameter, span: parameter.span});
 							case Out | InOut:
 								if (!pointerLike(parameter.type))
 									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
@@ -316,12 +312,37 @@ class HxiValidator {
 							case In:
 						}
 					}
-					if (outputArray != null)
-						validateOutputArray(name, outputArray, parameters, abi, span);
-					if (outputBuffer != null)
-						validateOutputBuffer(name, outputBuffer, parameters, abi, span);
-					if (outputArray != null && outputBuffer != null)
-						fail('Function "$name" cannot combine an output array with an output buffer', span);
+					// Outputs sized by an @inout count, keyed by that count.
+					var queried:Map<String, String> = [];
+					function query(output:String, count:String, outputSpan:SourceSpan):Void {
+						var other = queried.get(count);
+						if (other != null)
+							fail('Outputs "$other" and "$output" cannot share the @inout count "$count"', outputSpan);
+						queried.set(count, output);
+					}
+					for (buffer in outputBuffers) {
+						validateOutputBuffer(buffer, parameters, abi);
+						query(buffer.name, buffer.sizeParameter, buffer.span);
+					}
+					for (array in outputArrays)
+						if (validateOutputArray(array, parameters, abi))
+							query(array.name, array.countParameter, array.span);
+					// Queried outputs may call the function twice: inputs must not
+					// change between the calls, and nothing it hands over may be dropped.
+					var hasQueries = queried.keys().hasNext();
+					for (parameter in parameters) {
+						if (hasQueries && parameter.direction == InOut && !queried.exists(parameter.name))
+							fail('Function "$name" cannot combine the @inout parameter "${parameter.name}" with queried outputs, which may call it twice',
+								parameter.span);
+						if (hasQueries
+							&& parameter.direction == Out
+							&& transfersOwnership(parameter.ownership, parameter.handleDisposition))
+							fail('Function "$name" cannot combine the owned output "${parameter.name}" with queried outputs, which may call it twice',
+								parameter.span);
+						validateInitialCapacity(parameter, queried);
+					}
+					if (hasQueries && transfersOwnership(resultPolicy.ownership, resultPolicy.handleDisposition))
+						fail('Function "$name" cannot return an owned result alongside queried outputs, which may call it twice', span);
 					validateType(result, names, declarationsByName, span, true);
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
@@ -534,8 +555,7 @@ class HxiValidator {
 		}
 	}
 
-	static function validateOutputBuffer(functionName:String, buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
-			abi:HxiAbi, span:SourceSpan):Void {
+	static function validateOutputBuffer(buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>, abi:HxiAbi):Void {
 		var size:HxiParameter = null;
 		for (parameter in parameters)
 			if (parameter.name == buffer.sizeParameter)
@@ -553,28 +573,48 @@ class HxiValidator {
 			case _:
 				fail('Output buffer size parameter "${size.name}" must be ptr<u32>', size.span);
 		}
-		for (parameter in parameters)
-			switch parameter.direction {
-				case OutBuffer(_) | In:
-				case InOut if (parameter.name == size.name):
-				case _:
-					fail('Function "$functionName" cannot mix an output buffer with unrelated output parameters', span);
-			}
 	}
 
-	static function validateOutputArray(functionName:String, array:{name:String, countParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>,
-			abi:HxiAbi, span:SourceSpan):Void {
+	static function transfersOwnership(ownership:HxiOwnership, disposition:HxiHandleDisposition):Bool
+		return disposition == Owned || switch ownership {
+			case Owned(_): true;
+			case Borrowed | Unspecified: false;
+		};
+
+	/** An output's @initial_capacity: a positive element count, only on outputs sized by an @inout count. */
+	static function validateInitialCapacity(parameter:HxiParameter, queried:Map<String, String>):Void {
+		var values = parameter.metadata.get("initial_capacity");
+		if (values == null)
+			return;
+		var isQueried = false;
+		for (output in queried)
+			if (output == parameter.name)
+				isQueried = true;
+		if (!isQueried)
+			fail('@initial_capacity on "${parameter.name}" requires an output buffer or array sized by an @inout count', parameter.span);
+		var value = values.length == 1 ? Std.parseInt(values[0]) : null;
+		if (value == null || value <= 0 || value > 268435456 || Std.string(value) != values[0])
+			fail('@initial_capacity on "${parameter.name}" requires one positive integer element count', parameter.span);
+	}
+
+	/**
+		Validates an output array and returns whether it is queried: sized by
+		an @inout u32 count that goes in as its capacity and comes back as the
+		number of elements written. Otherwise its capacity is a count passed by
+		value.
+	**/
+	static function validateOutputArray(array:{name:String, countParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>, abi:HxiAbi):Bool {
 		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
 		if (count == null)
 			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"', array.span);
 		var outputType = arrayType(array.name, parameters),
 			isUtf8Array = utf8ArrayPointer(outputType),
-			legacyStringArray = count.direction == InOut;
-		if (isUtf8Array && !legacyStringArray)
+			queried = count.direction == InOut;
+		if (isUtf8Array && !queried)
 			fail('Output array count parameter "${count.name}" must use @inout', count.span);
-		if (legacyStringArray) {
-			if (!nullablePointer(outputType) || !isUtf8Array)
-				fail('Output array "${array.name}" with an @inout count requires a nullable UTF-8 pointer array', array.span);
+		if (queried) {
+			if (!nullablePointer(outputType))
+				fail('Output array "${array.name}" with an @inout count must be nullable for its size query', array.span);
 			var pointee = switch count.type {
 				case Pointer(value): value;
 				case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
@@ -592,27 +632,29 @@ class HxiValidator {
 				case _:
 					fail('Typed output array count parameter "${count.name}" requires an unsigned integer type', count.span);
 			}
+		}
+		if (!isUtf8Array) {
 			if (!writableArrayPointer(outputType))
 				fail('Typed output array "${array.name}" requires a writable element pointer', array.span);
-			var arrayParameter:HxiParameter = Lambda.find(parameters, parameter -> parameter.name == array.name);
-			var type = arrayParameter.type, element = arrayPointee(type);
-			if (element == null || !typedArrayElement(element, abi))
-				fail('Typed output array "${array.name}" requires a pointer to a fixed-layout scalar or structure element', array.span);
+			var element = arrayPointee(outputType);
+			if (element == null || !typedArrayElement(element, abi) || (queried && isByteElement(element)))
+				fail('Typed output array "${array.name}" requires a pointer to a fixed-layout scalar or structure element'
+					+ (queried ? " (or a UTF-8 pointer array; bytes use @out_buffer)" : ""),
+					array.span);
 			switch abi.classify(element) {
 				case AggregateValue(_, _, _) if (!pointerFreeArrayElement(element, abi.semanticDeclarations(), [])):
 					fail('Typed output array "${array.name}" cannot contain structures with pointer fields', array.span);
 				case _:
 			}
 		}
-		for (parameter in parameters)
-			switch parameter.direction {
-				case OutArray(_) | In:
-				case InArray(_) if (!legacyStringArray):
-				case InOut if (legacyStringArray && parameter.name == count.name):
-				case _:
-					fail('Function "$functionName" cannot mix an output array with unrelated directed parameters', span);
-			}
+		return queried;
 	}
+
+	static function isByteElement(type:HxiType):Bool
+		return switch stripConst(type) {
+			case Primitive("u8"): true;
+			case _: false;
+		};
 
 	static function arrayType(name:String, parameters:Array<HxiParameter>):HxiType {
 		var parameter:HxiParameter = Lambda.find(parameters, parameter -> parameter.name == name);
