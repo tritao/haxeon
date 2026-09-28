@@ -102,6 +102,12 @@ class Math {
 	public static inline function acos(value:Float):Float
 		return mathAtan2(mathSqrt(1.0 - value * value), value);
 
+	public static inline function asin(value:Float):Float
+		return mathAtan2(value, mathSqrt(1.0 - value * value));
+
+	public static inline function atan(value:Float):Float
+		return mathAtan2(value, 1.0);
+
 	public static inline function round(value:Float):Int
 		return mathRound(value);
 
