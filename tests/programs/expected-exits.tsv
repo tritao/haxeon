@@ -54,6 +54,7 @@ string-concat-mixed	42
 string-split	42
 string-split-edge	42
 reflect-compare-sort	42
+reflect-delete-field	42
 array-index-growth	42
 date-runtime	42
 sys-runtime	42

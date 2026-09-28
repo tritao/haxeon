@@ -42,6 +42,19 @@ class DynamicObject {
 	public function has(name:String):Bool
 		return indices.exists(name);
 
+	/** Removes a field, keeping the insertion order of the rest. */
+	public function remove(name:String):Bool {
+		var index = indices.get(name);
+		if (index == null)
+			return false;
+		names.splice(index, 1);
+		values.splice(index, 1);
+		indices.remove(name);
+		for (later in index...names.length)
+			indices.set(names[later], later);
+		return true;
+	}
+
 	public function count():Int
 		return names.length;
 
