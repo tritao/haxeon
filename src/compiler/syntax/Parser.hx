@@ -755,8 +755,12 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		// `inline` on a local function is only a hint; it is compiled as any local function.
+		var inlined = check(TokenKind.Inline) && peekKind(1) == TokenKind.Function;
+		if (inlined)
+			advance();
 		if (match(TokenKind.Function)) {
-			var start = previous().span,
+			var start = inlined ? tokens[position - 2].span : previous().span,
 				name = consume(TokenKind.Identifier).text;
 			consume(TokenKind.LeftParen);
 			var arguments = [];

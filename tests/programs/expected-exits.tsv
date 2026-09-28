@@ -41,6 +41,7 @@ bitwise	42
 bitwise-comparison-precedence	42
 type-annotation	42
 local-function	42
+inline-local-function	42
 map-literal	42
 map-comprehension	42
 switch-guard	42
