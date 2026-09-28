@@ -55,6 +55,7 @@ class TestCatalog {
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
+		"ImportedSecondaryEnumMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"CHeaderImporterMain",

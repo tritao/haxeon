@@ -206,10 +206,12 @@ class SemanticAssembly {
 				for (type in importedTypes)
 					if (enumCasesByType.exists(type))
 						for (caseName in enumCasesByType.get(type))
-							if (constructorTargets.exists(caseName))
-								ambiguousConstructors.set(caseName, true);
-							else
+							if (!constructorTargets.exists(caseName))
 								constructorTargets.set(caseName, type + "." + caseName);
+								// The same enum reached through its module and through
+							// its own import is not a clash.
+							else if (constructorTargets.get(caseName) != type + "." + caseName)
+								ambiguousConstructors.set(caseName, true);
 			}
 			for (importPath in ast.imports) {
 				var importedModule = ModuleAnalyzer.importModulePath(importPath);
@@ -527,14 +529,19 @@ class SemanticAssembly {
 			var constructorName = classDecl.name + ".new";
 			var owner = owners.get(constructorName);
 			var state = owner == null ? null : modules.get(owner);
-			if (state == null || state.irFunctions.exists(constructorName)) continue;
+			if (state == null || state.irFunctions.exists(constructorName))
+				continue;
 			var declaredConstructor = false;
-			for (method in classDecl.methods) if (method.name == "new") declaredConstructor = true;
-			if (declaredConstructor) continue;
-			for (field in classDecl.fields) if (!field.isStatic && field.initializer != null) {
-				invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
-				break;
-			}
+			for (method in classDecl.methods)
+				if (method.name == "new")
+					declaredConstructor = true;
+			if (declaredConstructor)
+				continue;
+			for (field in classDecl.fields)
+				if (!field.isStatic && field.initializer != null) {
+					invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
+					break;
+				}
 		}
 		for (name in bodyChanged.keys())
 			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
