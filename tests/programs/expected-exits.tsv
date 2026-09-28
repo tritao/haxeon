@@ -201,3 +201,7 @@ string-utf16-length	42
 reflect-typed-objects	42
 # Std.parseInt/parseFloat follow C strtol/strtod on every target.
 std-parse-number	42
+# Local functions may call themselves.
+local-function-recursion	42
+# Array.pop and Array.shift return abstract elements intact.
+array-abstract-pop	42

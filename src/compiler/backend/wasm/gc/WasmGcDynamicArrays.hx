@@ -285,7 +285,7 @@ class WasmGcDynamicArrays {
 	}
 
 	function objectsBaseFirst():Array<String> {
-		var depth:Map<String, Int> = [], bases:Map<String, Null<String>> = [];
+		var bases:Map<String, Null<String>> = [];
 		for (object in program.objects)
 			bases.set(object.name, object.base);
 		function depthOf(name:String):Int {
@@ -293,9 +293,7 @@ class WasmGcDynamicArrays {
 			return base == null || !bases.exists(base) ? 0 : depthOf(base) + 1;
 		}
 		var names = [for (object in program.objects) object.name];
-		for (name in names)
-			depth.set(name, depthOf(name));
-		names.sort((left, right) -> depth.get(left) - depth.get(right));
+		names.sort((left, right) -> depthOf(left) - depthOf(right));
 		return names;
 	}
 

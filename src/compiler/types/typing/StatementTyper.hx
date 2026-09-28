@@ -133,17 +133,25 @@ class StatementTyper {
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
 					statementIndex + 1) : session.declarations.resolve(declared, null, context.typeSubstitutions);
-				var predeclared = false;
+				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
 						case Lambda(_, _, _):
 							scope.define(name, declaredType, span, true, null, false, localFunctionParameters);
 							predeclared = true;
+							// A recursive local function reads itself through a cell bound before its closure exists.
+							bindCell(name, span, scope, declaredType);
+							recursiveCell = context.storage.cell(scope.requireId(name));
 						default:
 					}
 				var value = typeExpression(initializer, scope, declaredType, false);
 				if (declaredType != null)
 					value = coerce(value, declaredType, 'local "$name"', "E1002");
+				if (recursiveCell != null)
+					return [
+						TDeclare(scope.requireId(name), declaredType, span),
+						TCellAssign(scope.requireId(name), recursiveCell, value, span)
+					];
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 				if (!predeclared)

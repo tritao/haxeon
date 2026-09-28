@@ -28,6 +28,15 @@ class LexicalStorageAnalysis {
 	static function walkStatements(statements:Array<AstStatement>, environment:Map<String, String>, writes:Map<String, Bool>,
 			captures:Null<Map<String, Bool>>, exceptions:Null<Map<String, Bool>>):Void {
 		for (statement in statements) {
+			switch statement {
+				case VarDeclaration(name, _, Lambda(_, body, _), span) if (referencesLocal(body, name)):
+					// A recursive local function captures its own binding, so it lives in a cell that exists
+					// before the closure does.
+					environment.set(name, key(name, span));
+					if (captures != null)
+						captures.set(key(name, span), true);
+				default:
+			}
 			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
 				walkExpression(expression, environment, writes, captures, exceptions, false);
 			switch statement {
@@ -67,6 +76,12 @@ class LexicalStorageAnalysis {
 				default:
 			}
 		}
+	}
+
+	static function referencesLocal(body:Array<AstStatement>, name:String):Bool {
+		var names:Map<String, Bool> = [];
+		CaptureAnalysis.collectVariables(body, names);
+		return names.exists(name);
 	}
 
 	static function walkExpression(expression:AstExpression, environment:Map<String, String>, writes:Map<String, Bool>, captures:Null<Map<String, Bool>>,

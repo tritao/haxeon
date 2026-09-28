@@ -1576,7 +1576,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC array shift signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_shift_" + suffix || WasmGcTypePlan.typeKey(output.type) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_shift_" + suffix)
 				throw 'Wasm GC array shift "$name" does not match its $element array';
 			return arrayShift(element, argumentLocals[0], outputLocal);
 		}

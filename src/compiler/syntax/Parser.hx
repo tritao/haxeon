@@ -998,7 +998,7 @@ class Parser {
 	 * (no default, or a null default) is nullable, as for declared functions,
 	 * so a call that omits it can pass null.
 	 */
-	static function localParameterType(type:AstType, optional:Bool, defaultValue:Null<AstExpression>):AstType {
+	static function localParameterType(type:AstType, optional:Null<Bool>, defaultValue:Null<AstExpression>):AstType {
 		if (optional != true || !AstPredicates.isNullExpression(defaultValue))
 			return type;
 		return switch type {

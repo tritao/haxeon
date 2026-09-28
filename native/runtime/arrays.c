@@ -315,7 +315,7 @@ DEFINE_ARRAY_REVERSE(ref)
 
 #undef DEFINE_ARRAY_REVERSE
 
-#define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE) \
+#define DEFINE_ARRAY_MUTATION(SUFFIX, VALUE_TYPE, RESULT) \
 HL_PRIM int HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
 	if (array->size >= array->capacity) \
 		hl_array_reserve(array, array->size + 1); \
@@ -350,7 +350,7 @@ HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	VALUE_TYPE value = ((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1]; \
 	array->size--; \
 	memset(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), 0, hl_type_size(array->at)); \
-	return value; \
+	return RESULT(array, value); \
 } \
 HL_PRIM VALUE_TYPE HL_NAME(__array_shift_##SUFFIX)( varray *array ) { \
 	if (array->size <= 0) \
@@ -360,7 +360,7 @@ HL_PRIM VALUE_TYPE HL_NAME(__array_shift_##SUFFIX)( varray *array ) { \
 	array->size--; \
 	memmove(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride); \
 	memset(hl_aptr(array, vbyte) + array->size * stride, 0, stride); \
-	return value; \
+	return RESULT(array, value); \
 } \
 HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 	if (length < 0) \
@@ -375,14 +375,21 @@ HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 	array->size = length; \
 }
 
-DEFINE_ARRAY_MUTATION(i32, int)
-DEFINE_ARRAY_MUTATION(i64, int64_t)
-DEFINE_ARRAY_MUTATION(f64, double)
-DEFINE_ARRAY_MUTATION(bytes, vstring *)
-DEFINE_ARRAY_MUTATION(bool, bool)
-DEFINE_ARRAY_MUTATION(ref, vdynamic *)
+#define REALTIME_ARRAY_VALUE(array, value) (value)
+/* Reference storage holds abstracts (maps, byte buffers) unboxed; the Dynamic result boxes them by
+   the element type, as reads through Array<Dynamic> do. Objects are returned unchanged. */
+#define REALTIME_ARRAY_DYNAMIC(array, value) ((value) == NULL ? NULL : hl_make_dyn(&(value), (array)->at))
+
+DEFINE_ARRAY_MUTATION(i32, int, REALTIME_ARRAY_VALUE)
+DEFINE_ARRAY_MUTATION(i64, int64_t, REALTIME_ARRAY_VALUE)
+DEFINE_ARRAY_MUTATION(f64, double, REALTIME_ARRAY_VALUE)
+DEFINE_ARRAY_MUTATION(bytes, vstring *, REALTIME_ARRAY_VALUE)
+DEFINE_ARRAY_MUTATION(bool, bool, REALTIME_ARRAY_VALUE)
+DEFINE_ARRAY_MUTATION(ref, vdynamic *, REALTIME_ARRAY_DYNAMIC)
 
 #undef DEFINE_ARRAY_MUTATION
+#undef REALTIME_ARRAY_VALUE
+#undef REALTIME_ARRAY_DYNAMIC
 
 /* Array<Dynamic>, including arrays seen through an erased type parameter, may alias storage
    of any element type. These operations read and write through the array's own element type:

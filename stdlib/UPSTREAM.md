@@ -24,6 +24,7 @@
 | `haxe/io/BytesOutput.hx` | `std/haxe/io/BytesOutput.hx` | Limited to the supported primitive write operations; the source API uses a project-owned native stream representation. |
 | `sys/FileSystem.hx` | `std/sys/FileSystem.hx` | Limited to path queries and directory/file lifecycle operations; `fullPath` is retained as a compatibility alias for `absolutePath`, and operations use source-declared stable runtime bindings. |
 | `sys/io/File.hx` | `std/sys/io/File.hx` | Limited to whole-file text and byte reads/writes, including binary reads; operations use source-declared stable runtime bindings. |
+| `haxe/crypto/Base64.hx` | `std/haxe/crypto/Base64.hx` | Limited to standard-alphabet `encode` and `decode` over `Bytes`, implemented directly instead of through `BaseCode`. |
 | `haxe/CallStack.hx` | `std/haxe/CallStack.hx` | Provides the portable stack-item model and resolves caught exception stacks through HashLink's native capture. Current-call snapshots remain empty. |
 | `haxe/Exception.hx` | `std/haxe/Exception.hx` | Source-level exception object with message, previous-exception, native-value, and stack properties. |
 | `haxe/PosInfos.hx` | `std/haxe/PosInfos.hx` | Documentation abbreviated and fields made final for the supported immutable structure subset. |

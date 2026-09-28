@@ -974,7 +974,7 @@ class WasmLinearDynamicArrays {
 			elementType = builder.local("elementType", I32);
 		loadElementType(builder, array);
 		builder.localSet(elementType);
-		dispatchEncoded(builder, operation, array, positioned ? [position] : [], value, elementType, positioned ? null : I32);
+		dispatchEncoded(builder, operation, array, position == null ? [] : [position], value, elementType, positioned ? null : I32);
 		if (!positioned)
 			builder.return_();
 		return module.addFunction(builder.finish());
