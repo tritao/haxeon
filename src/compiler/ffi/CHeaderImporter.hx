@@ -310,8 +310,9 @@ class CHeaderImporter {
 		return [
 			for (parameter in parameters)
 				switch parameter.direction {
-					case OutArray(count) if (Lambda.exists(parameters, candidate -> candidate.name == count && candidate.direction == InOut)
-						&& !parameter.type.match(Nullable(_))):
+					case OutArray(count)
+						if (Lambda.exists(parameters, candidate -> candidate.name == count && candidate.direction == InOut)
+							&& !parameter.type.match(Nullable(_))):
 						{
 							name: parameter.name,
 							type: Nullable(parameter.type),
@@ -322,7 +323,8 @@ class CHeaderImporter {
 							metadata: parameter.metadata,
 							span: parameter.span
 						};
-					case _: parameter;
+					case _:
+						parameter;
 				}
 		];
 	}
