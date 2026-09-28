@@ -505,6 +505,22 @@ class SemanticAssembly {
 				}
 			}
 		}
+		// Rehydrated modules can retain field initializer fingerprints without
+		// retaining the generated constructor body. Treat that missing body as
+		// invalidated so normal typing and publication rebuild it.
+		for (classDecl in classes) {
+			var constructorName = classDecl.name + ".new";
+			var owner = owners.get(constructorName);
+			var state = owner == null ? null : modules.get(owner);
+			if (state == null || state.irFunctions.exists(constructorName)) continue;
+			var declaredConstructor = false;
+			for (method in classDecl.methods) if (method.name == "new") declaredConstructor = true;
+			if (declaredConstructor) continue;
+			for (field in classDecl.fields) if (!field.isStatic && field.initializer != null) {
+				invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
+				break;
+			}
+		}
 		for (name in bodyChanged.keys())
 			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
 		var reverseBodyDependencies:Map<String, Array<String>> = [];

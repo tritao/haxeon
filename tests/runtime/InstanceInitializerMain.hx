@@ -7,6 +7,11 @@ class InstanceInitializerMain {
 		var first = compiler.compile("Main");
 		if (!first.functionIndices.exists("Box.new"))
 			throw "Implicit constructor was not generated for an instance initializer";
+		compiler.modules.get("Main").irFunctions.remove("Box.new");
+		compiler.update("Main.hx", "class Box { public var value:Int = 40; } function main():Int { var box = new Box(); return box.value; }");
+		var recovered = compiler.compile("Main");
+		if (!recovered.regenerated.contains("Box.new"))
+			throw "Missing implicit constructor body was not rebuilt";
 		compiler.update("Main.hx", "class Box { public var value:Int; } function main():Int { return new Box().value; }");
 		var changed = compiler.compile("Main");
 		if (changed.functionIndices.exists("Box.new"))
