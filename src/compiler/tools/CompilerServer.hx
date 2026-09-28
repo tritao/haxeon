@@ -69,7 +69,7 @@ class CompilerServer {
 						if (Std.isOfType(error, CompileError)) {
 							var failure:CompileError = cast error,
 								diagnostic = failure.diagnostic;
-							message = diagnostic.span.file.path + ":" + diagnostic.span.start + ": " + diagnostic.code + ": " + diagnostic.message;
+							message = diagnostic.format();
 						}
 						send(client, {message: message});
 						send(client, {status: 1});

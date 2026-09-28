@@ -95,6 +95,19 @@ class TestMain {
 			|| unicodeSource.byteOffsetAt(1, 1) != 4
 			|| unicodeSource.lspPosition(4).character != 1)
 			throw "Unicode source indexing did not preserve byte and LSP offsets";
+		var diagnosticLines:Array<String> = [], line32 = "//" + StringTools.rpad("", "x", 30), line20 = "//" + StringTools.rpad("", "x", 18);
+		for (_ in 0...24)
+			diagnosticLines.push(line32);
+		diagnosticLines.push(line20);
+		var diagnosticSource = new SourceFile("line-813.hx", diagnosticLines.join("\n") + "\n#\n"),
+			lineDiagnostic:Null<compiler.Diagnostic.Diagnostic> = null;
+		try
+			new Lexer(diagnosticSource).tokenize()
+		catch (error:CompileError)
+			lineDiagnostic = error.diagnostic;
+		if (lineDiagnostic == null || lineDiagnostic.span.start != 813 || lineDiagnostic.span.file.lineAt(813) != 26
+			|| lineDiagnostic.format() != 'line-813.hx:26:1: E0001: Unexpected character "#"')
+			throw "Diagnostic formatting reported byte offset 813 instead of line 26, column 1";
 		var unicodeTokens = new Lexer(new SourceFile("unicode-token.hx", "\"é\"")).tokenize();
 		if (unicodeTokens[0].text != "\"é\"" || unicodeTokens[0].span.end != 4)
 			throw "Unicode tokenization did not preserve UTF-8 byte spans";

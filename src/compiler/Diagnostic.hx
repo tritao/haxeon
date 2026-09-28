@@ -35,6 +35,12 @@ class Diagnostic {
 		this.severity = severity;
 		this.fixes = fixes == null ? [] : fixes;
 	}
+
+	/** Human-readable location with one-based line and column, not a byte offset. */
+	public function format():String {
+		var location = span.file.lineColumnAt(span.start);
+		return '${span.file.path}:${location.line}:${location.column}: $code: $message';
+	}
 }
 
 /** Exception wrapper used to propagate one structured diagnostic internally. */
