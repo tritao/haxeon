@@ -58,6 +58,9 @@ extern function sysReadDir(path:String):Array<String>;
 @:hlNative("std", "sys_getpid")
 extern function sysGetPid():Int;
 
+@:hlNative("std", "sys_exit")
+extern function sysExit(code:Int):Void;
+
 @:hlNative("haxeon_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
 
@@ -137,6 +140,10 @@ class Sys {
 
 	public static inline function getPid():Int
 		return sysGetPid();
+
+	/** Ends the process with an exit code, without returning. */
+	public static inline function exit(code:Int):Void
+		sysExit(code);
 
 	public static inline function args():Array<String>
 		return sysArgs();
