@@ -457,7 +457,10 @@ class ModuleCanonicalizer {
 						{
 							name: argument.name,
 							type: canonicalType(argument.type, aliases),
-							span: argument.span
+							span: argument.span,
+							// A local function's optional parameters and defaults let calls omit them.
+							optional: argument.optional,
+							defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 						}
 				], [
 					for (statement in body)

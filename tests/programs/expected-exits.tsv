@@ -209,3 +209,4 @@ local-function-recursion	42
 # Array.pop and Array.shift return abstract elements intact.
 array-abstract-pop	42
 throw-lambda	52
+local-function-defaults	42
