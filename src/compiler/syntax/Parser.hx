@@ -1683,10 +1683,9 @@ class Parser {
 			prefix = statements.slice(0, statements.length - 1);
 		var result:Null<AstExpression> = switch last {
 			case AstStatement.Expression(value, valueSpan): ArrayLiteral([value], valueSpan);
-			case AstStatement.If(predicate, whenTrue, whenFalse, ifSpan):
-				var yes = yieldedValues(whenTrue, ifSpan);
-				var no = whenFalse.length == 0 ? ArrayLiteral([], ifSpan) : yieldedValues(whenFalse, ifSpan);
-				yes == null || no == null ? null : Conditional(predicate, yes, no, ifSpan);
+			case AstStatement.If(predicate, whenTrue, whenFalse, ifSpan): var yes = yieldedValues(whenTrue,
+					ifSpan); var no = whenFalse.length == 0 ? ArrayLiteral([],
+					ifSpan) : yieldedValues(whenFalse, ifSpan); yes == null || no == null ? null : Conditional(predicate, yes, no, ifSpan);
 			case _: null;
 		};
 		if (result == null)
