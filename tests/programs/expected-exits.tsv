@@ -106,6 +106,7 @@ map-basic	42
 map-int	42
 map-primitive-types	42
 map-object	42
+object-map-remove	42
 map-anonymous-enum	42
 wasm-gc-reuse	42
 wasm-gc-invariants	42
