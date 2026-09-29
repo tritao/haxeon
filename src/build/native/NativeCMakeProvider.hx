@@ -131,6 +131,18 @@ class NativeCMakeProvider {
 		return {actions: actions, artifactActions: artifactActions};
 	}
 
+	/** Where a shared CMake tree leaves its runtime libraries, or null when the package has no CMake provider. */
+	public static function sharedOutputDirectory(resolvedPackage:ResolvedPackage, context:LoweringContext):Null<String> {
+		var native = resolvedPackage.manifest.native;
+		if (native == null || native.cmake == null)
+			return null;
+		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source]));
+		return Path.join([
+			context.layout.sharedCMakeRoot(sharedName(source, native.cmake.target, context.environment.projectRoot)),
+			"out"
+		]);
+	}
+
 	/** Stable directory-safe identity of a CMake source and target, relative to the workspace when possible. */
 	static function sharedName(source:String, target:String, root:String):String {
 		var normalizedRoot = Path.addTrailingSlash(Path.normalize(root)),

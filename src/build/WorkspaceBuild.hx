@@ -8,6 +8,7 @@ import build.execution.ExecutionPlan;
 import build.WorkspaceManifest.WorkspaceProject;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
+import build.native.NativeCMakeProvider;
 import haxe.io.Path;
 import project.ResolvedProject;
 
@@ -89,4 +90,46 @@ class WorkspaceBuild {
 		}
 		return new LoweredWorkspace(environment, new ExecutionPlan([for (key in order) merged.get(key)]), lowered, raw, requestedBy);
 	}
+
+	/**
+	 * Adds one `test:<name>` action per project. It runs the project's module once its compile action, and
+	 * through it the native libraries the module loads, has finished. Output goes to a per-project log so
+	 * concurrent tests do not interleave; a failing test prints the tail of its log.
+	 */
+	public static function withTests(workspace:LoweredWorkspace, home:String):ExecutionPlan {
+		if (Sys.systemName() == "Windows")
+			throw "Workspace tests currently run on Linux and macOS only";
+		var actions = workspace.plan.actions.copy(),
+			context = new LoweringContext(workspace.environment, null, null, null, home, [], false, true),
+			hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
+			variable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+			existing = Sys.getEnv(variable);
+		for (member in workspace.projects) {
+			var compile:Null<ActionId> = null;
+			for (id in member.actions)
+				if (StringTools.startsWith(id.key(), "compile-project:"))
+					compile = id;
+			if (compile == null)
+				throw 'Workspace project "${member.name}" has no compile action to test';
+			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])];
+			for (resolvedPackage in member.project.packages.packages) {
+				directories.push(context.layout.packageRoot(resolvedPackage.name));
+				var sharedOutput = NativeCMakeProvider.sharedOutputDirectory(resolvedPackage, context);
+				if (sharedOutput != null)
+					directories.push(sharedOutput);
+			}
+			if (existing != null && existing.length > 0)
+				directories.push(existing);
+			var environment = [variable => directories.join(":")],
+				log = Path.join([workspace.environment.buildRoot, "tests", StringTools.replace(member.name, "/", "-") + ".log"]),
+				script = 'mkdir -p ${quote(Path.directory(log))} && ${quote(hashlink)} ${quote(member.output)} > ${quote(log)} 2>&1; status=$$?; '
+				+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+			actions.push(new ExecutionAction(new ActionId("test:" + member.name), [compile], [], [], 'Test ${member.name} (log: $log)',
+				Process("sh", ["-c", script], member.project.root, environment), true, true));
+		}
+		return new ExecutionPlan(actions);
+	}
+
+	static function quote(value:String):String
+		return "'" + StringTools.replace(value, "'", "'\\''") + "'";
 }

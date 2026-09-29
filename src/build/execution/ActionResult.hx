@@ -8,6 +8,9 @@ class ActionResult {
 	public final fingerprint:Null<String>;
 	public final message:Null<String>;
 
+	/** Wall-clock time the executor spent on this action; zero for skipped and blocked actions. */
+	public var elapsedMs = 0.0;
+
 	public function new(id:ActionId, exitCode:Int, skipped:Bool, blocked:Bool, ?fingerprint:String, ?message:String) {
 		this.id = id;
 		this.exitCode = exitCode;

@@ -218,8 +218,10 @@ class Executor implements ExecutionBackend {
 				Thread.create(function() {
 					// Always report and release: an exception escaping this thread would leave the
 					// scheduler waiting on the lock forever.
+					var actionStarted = Sys.time() * 1000.0;
 					var result = try executeAction(currentAction,
 						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
+					result.elapsedMs = Sys.time() * 1000.0 - actionStarted;
 					mutex.acquire();
 					finished.push({action: currentAction, result: result});
 					mutex.release();
