@@ -38,7 +38,8 @@ class HxiInterfaceOrderMain {
 			{path: "y.hxi", text: source("Y", ["Z"])},
 			{path: "z.hxi", text: source("Z", ["Y"])}
 		];
-		if (HxiInterfaceOrder.dependenciesFirst(odd).length != 3) throw "files were dropped";
+		if (HxiInterfaceOrder.dependenciesFirst(odd).length != 3)
+			throw "files were dropped";
 		Sys.println("PASS: unknown and cyclic dependencies are left for the compiler to report");
 	}
 }
