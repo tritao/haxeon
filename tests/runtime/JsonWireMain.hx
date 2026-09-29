@@ -12,7 +12,17 @@ class JsonWireMain {
 		compiler.update("Main.hx", 'import haxeon.wire.JsonWire; import haxeon.wire.MessagePack;
 @:wire enum State { @:id(1) Idle; @:id(2) Moving(steps:Array<Int>); }
 @:wire class Item { @:id(1) public var name:String; @:id(2) public var state:State; @:id(3) public var note:Null<String>; @:id(4) public var scores:Map<String, Int>; public function new() {} }
+@:wire typedef Point = { @:id(1) var x:Float; @:id(2) var y:Float; }
+abstract Distance(Float) from Float to Float {}
 function main():Int {
+  var point:Point = {x: 2.0, y: 3.0};
+  var pointAgain:Point = JsonWire.decode(JsonWire.encode(point));
+  if (pointAgain.x != 2.0 || pointAgain.y != 3.0) return 17;
+  var pointPacked:Point = MessagePack.decode(MessagePack.encode(point));
+  if (pointPacked.x != pointAgain.x || pointPacked.y != pointAgain.y) return 18;
+  var distance:Distance = 3.5;
+  var distanceAgain:Distance = JsonWire.decode(JsonWire.encode(distance));
+  if (distanceAgain != distance) return 19;
   var item = new Item(); item.name = "motor"; item.state = Moving([2, 3]); item.note = null; item.scores = ["b" => 2, "a" => 1];
   var json = JsonWire.encode(item);
   if (json.indexOf("1:name") < 0 || json.indexOf("2:Moving") < 0) return 1;

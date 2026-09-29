@@ -28,6 +28,9 @@ Fields required by the MessagePack schema fail when missing; missing nullable fi
 rejects unsupported versions. `Int64` and binary values use `i64:` and
 `base64:` tagged strings. Nonfinite floats use `float:` tagged strings.
 
-The generated JSON profile has the same current type restrictions as the
-MessagePack profile: `@:wire` classes and enums, arrays, supported maps, and
-the supported primitive types. Recursive wire schemas remain unsupported.
+The generated JSON and MessagePack profiles support `@:wire` classes, enums,
+and structural typedefs whose fields have `@:id(n)`, plus arrays, supported
+maps, abstracts over supported values, and the supported primitive types.
+Missing fields follow the same defaults and required-field rules as class
+records. Two `@:wire` typedefs with the same structural type are ambiguous
+and rejected. Recursive wire schemas remain unsupported.

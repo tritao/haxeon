@@ -92,6 +92,7 @@ class ModuleCanonicalizer {
 			packageName:Null<String>):compiler.syntax.Ast.AstTypeAlias
 		return {
 			name: qualifiedTypeName(packageName, alias.name),
+			metadata: alias.metadata,
 			typeParameters: alias.typeParameters,
 			typeConstraints: canonicalConstraints(alias.typeConstraints, aliases, alias.typeParameters),
 			type: canonicalType(alias.type, aliases, alias.typeParameters),
@@ -562,6 +563,7 @@ class ModuleCanonicalizer {
 							name: field.name,
 							type: canonicalType(field.type, aliases, typeParameters),
 							optional: field.optional,
+							metadata: field.metadata,
 							span: field.span
 						}
 				]);

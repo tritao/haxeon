@@ -72,7 +72,7 @@ class Parser {
 					advance();
 				if (match(TokenKind.Typedef))
 					aliases.push(parseTypeAlias(visibility == null ? previous()
-						.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private));
+						.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private, metadata));
 				else if (match(TokenKind.Enum)) {
 					var start = previous().span;
 					if (check(TokenKind.Identifier) && current().text == "abstract") {
@@ -289,7 +289,7 @@ class Parser {
 		};
 	}
 
-	function parseTypeAlias(start:SourceSpan, isPrivate:Bool):AstTypeAlias {
+	function parseTypeAlias(start:SourceSpan, isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstTypeAlias {
 		var name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
@@ -304,6 +304,7 @@ class Parser {
 		}
 		return {
 			name: name,
+			metadata: metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			type: type,
@@ -2059,8 +2060,9 @@ class Parser {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
 				var optional = false;
-				for (metadata in parseMetadata())
-					if (metadata.name == "optional")
+				var metadata = parseMetadata();
+				for (entry in metadata)
+					if (entry.name == "optional")
 						optional = true;
 				while (check(TokenKind.Question) || check(TokenKind.Final) || check(TokenKind.Var))
 					if (match(TokenKind.Question)) {
@@ -2076,6 +2078,7 @@ class Parser {
 					name: name.text,
 					type: type,
 					optional: optional,
+					metadata: metadata,
 					span: name.span.merge(previous().span)
 				});
 				if (!match(TokenKind.Comma))

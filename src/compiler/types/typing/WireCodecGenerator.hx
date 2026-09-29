@@ -13,6 +13,8 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypeRelations;
 import compiler.runtime.RuntimeType;
+import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.AstTypeAlias;
 import compiler.types.typing.TypingSession.WireCodecRequest;
 
 private typedef WireField = {
@@ -190,6 +192,8 @@ class WireCodecGenerator {
 			case TNullable(element): isRequestType(session, element);
 			case TArray(element): isRequestType(session, element) && RuntimeType.arrayName(element) != null;
 			case TMap(key, value): isMapKeyType(session, key) && isRequestType(session, value) && RuntimeType.mapName(key, value) != null;
+			case TAbstract(_, arguments, representation): arguments.length == 0 && isRequestType(session, representation);
+			case TAnonymous(_, _): wireAlias(session, type) != null;
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			case TInstance(NominalKind.Enum, name, arguments): arguments.length == 0 && isWireEnum(session, name);
 			default: false;
@@ -201,6 +205,73 @@ class WireCodecGenerator {
 			case TInstance(NominalKind.Enum, name, arguments): arguments.length == 0 && isNullaryWireEnum(session, name);
 			default: false;
 		};
+
+	static function wireAlias(session:TypingSession, type:CompilerType):Null<AstTypeAlias> {
+		var match:Null<AstTypeAlias> = null;
+		for (alias in session.declarations.aliases) {
+			if (alias.typeParameters.length != 0 || !switch alias.type {
+					case AnonymousType(_): true;
+					default: false;
+				})
+				continue;
+			var marked = false;
+			for (metadata in alias.metadata)
+				if (metadata.name == "wire") {
+					if (metadata.arguments.length != 0)
+						BodyTyper.fail("E1024", '@:wire does not accept arguments', metadata.span);
+					marked = true;
+				}
+			if (marked && TypeRelations.equals(session.declarations.resolve(AstType.NamedType(alias.name), alias.span), type)) {
+				if (match != null)
+					BodyTyper.fail("E1024", 'Wire typedefs "${match.name}" and "${alias.name}" have the same structural type', alias.span);
+				match = alias;
+			}
+		}
+		return match;
+	}
+
+	static function anonymousWireFields(session:TypingSession, type:CompilerType, span:SourceSpan):Array<WireField> {
+		var alias = wireAlias(session, type);
+		if (alias == null)
+			BodyTyper.fail("E1024", 'Anonymous record "$type" requires a @:wire typedef', span);
+		var sourceFields = switch alias.type {
+			case AnonymousType(fields): fields;
+			default: throw "Wire alias must be anonymous";
+		};
+		var resolvedFields = switch type {
+			case TAnonymous(_, fields): fields;
+			default: throw "Wire type must be anonymous";
+		};
+		var result:Array<WireField> = [], ids:Map<Int, String> = [];
+		for (source in sourceFields) {
+			var resolved = null;
+			for (candidate in resolvedFields)
+				if (candidate.name == source.name)
+					resolved = candidate;
+			if (resolved == null)
+				throw 'Missing resolved wire field ${source.name}';
+			var field:TypedField = {
+				name: source.name,
+				metadata: source.metadata,
+				type: resolved.type,
+				initializer: null,
+				inlineValue: null,
+				readAccess: null,
+				writeAccess: null,
+				isStatic: false,
+				isInline: false,
+				isFinal: false,
+				span: source.span
+			};
+			var id = fieldIdNamed(alias.name, field);
+			if (ids.exists(id))
+				BodyTyper.fail("E1024", 'Duplicate @:id($id) in ${alias.name}', source.span);
+			ids.set(id, source.name);
+			result.push({field: field, id: id});
+		}
+		result.sort(function(left, right) return Reflect.compare(left.id, right.id));
+		return result;
+	}
 
 	static function collectType(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
 			reachable:Map<String, CompilerType>, visiting:Map<String, Bool>, path:Array<String>, span:SourceSpan):Void {
@@ -219,6 +290,11 @@ class WireCodecGenerator {
 		visiting.set(key, true);
 		path.push(key);
 		switch type {
+			case TAbstract(_, _, representation):
+				collectType(session, representation, classes, enums, reachable, visiting, path, span);
+			case TAnonymous(_, _):
+				for (wireField in anonymousWireFields(session, type, span))
+					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path, wireField.field.span);
 			case TNullable(element):
 				collectType(session, element, classes, enums, reachable, visiting, path, span);
 			case TArray(element):
@@ -287,7 +363,18 @@ class WireCodecGenerator {
 		return result;
 	}
 
+	static function recordFields(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, span:SourceSpan):Array<WireField>
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): serializableFields(session, requiredClass(classes, name, span), span);
+			case TAnonymous(_, _): anonymousWireFields(session, type, span);
+			default: throw 'No wire record fields for "$type"';
+		};
+
 	static function fieldId(declaration:TypedClass, field:TypedField):Int {
+		return fieldIdNamed(declaration.name, field);
+	}
+
+	static function fieldIdNamed(owner:String, field:TypedField):Int {
 		var id:Null<Int> = null;
 		for (metadata in field.metadata) {
 			if (metadata.name != "id")
@@ -304,7 +391,7 @@ class WireCodecGenerator {
 			}
 		}
 		if (id == null)
-			BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" requires @:id(n)', field.span);
+			BodyTyper.fail("E1024", 'MessagePack record field "${owner}.${field.name}" requires @:id(n)', field.span);
 		if (id <= 0)
 			BodyTyper.fail("E1024", '@:id must be a positive integer', field.span);
 		return cast id;
@@ -425,6 +512,8 @@ class WireCodecGenerator {
 	static function encodeValueStatements(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>, writer:TypedExpression,
 			value:TypedExpression, type:CompilerType, span:SourceSpan):Array<TypedStatement> {
 		return switch type {
+			case TAbstract(_, _, representation):
+				encodeNestedValueStatements(writer, session.representation.boundaryCast(value, representation), representation, span);
 			case TNullable(element):
 				var nonNullValue = new TypedExpression(TCast(value), element, value.span);
 				[
@@ -474,9 +563,8 @@ class WireCodecGenerator {
 				mapBody.push(TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span), span));
 				result.push(TWhile(new TypedExpression(TLess(index, new TypedExpression(TArrayLength(keys), TInt, span)), TBool, span), mapBody, span));
 				result;
-			case TInstance(NominalKind.Class, name, _):
-				var declaration = requiredClass(classes, name, span),
-					fields = serializableFields(session, declaration, span),
+			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _):
+				var fields = recordFields(session, type, classes, span),
 					result:Array<TypedStatement> = [
 						expressionStatement(method(writer, "writeMapHeader", [intLiteral(fields.length, span)], TVoid, span), span)
 					];
@@ -537,6 +625,9 @@ class WireCodecGenerator {
 			reader = local("reader", readerType, request.span),
 			statements:Array<TypedStatement> = [];
 		switch type {
+			case TAbstract(_, _, representation):
+				var decoded = decodeValueExpression(session, classes, enums, reader, representation, request.span);
+				statements.push(TReturn(session.representation.boundaryCast(decoded, type), request.span));
 			case TNullable(element):
 				var decoded = decodeValueExpression(session, classes, enums, reader, element, request.span),
 					wrapped = new TypedExpression(TNullableWrap(decoded), type, request.span);
@@ -544,9 +635,13 @@ class WireCodecGenerator {
 					expressionStatement(method(reader, "readNil", [], TVoid, request.span), request.span),
 					TReturn(nullValue(type, request.span), request.span)
 				], [TReturn(wrapped, request.span)], request.span));
-			case TInstance(NominalKind.Class, name, _):
-				var declaration = requiredClass(classes, name, request.span),
-					fields = serializableFields(session, declaration, request.span),
+			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _):
+				var fields = recordFields(session, type, classes, request.span),
+					name = switch type {
+						case TInstance(_, value, _): value;
+						case TAnonymous(value, _): value;
+						default: "record";
+					},
 					countName = "__wire_count",
 					indexName = "__wire_index",
 					keyName = "__wire_key",
@@ -575,13 +670,26 @@ class WireCodecGenerator {
 							TThrow(stringLiteral('Missing required MessagePack field "${name}.${field.name}"', request.span), request.span)
 						], [], request.span));
 				}
-				var resultType = type,
-					newValue = new TypedExpression(TNew(name, [], false), resultType, request.span);
-				statements.push(TVar(resultName, newValue, request.span));
-				for (index in 0...fields.length)
-					statements.push(TFieldAssign(local(resultName, resultType, request.span), fields[index].field.name,
-						local(fieldLocal(index), fields[index].field.type, request.span), request.span));
-				statements.push(TReturn(local(resultName, resultType, request.span), request.span));
+				if (switch type {
+						case TAnonymous(_, _): true;
+						default: false;
+					}) {
+					var objectFields = [
+						for (index in 0...fields.length)
+							{
+								name: fields[index].field.name,
+								value: local(fieldLocal(index), fields[index].field.type, request.span)
+							}
+					];
+					statements.push(TReturn(new TypedExpression(TObjectLiteral(name, objectFields, false), type, request.span), request.span));
+					} else {
+					var newValue = new TypedExpression(TNew(name, [], false), type, request.span);
+					statements.push(TVar(resultName, newValue, request.span));
+					for (index in 0...fields.length)
+						statements.push(TFieldAssign(local(resultName, type, request.span), fields[index].field.name,
+							local(fieldLocal(index), fields[index].field.type, request.span), request.span));
+					statements.push(TReturn(local(resultName, type, request.span), request.span));
+				}
 			case TArray(element):
 				var countName = "__wire_count",
 					indexName = "__wire_index",
@@ -775,9 +883,8 @@ class WireCodecGenerator {
 	static function decodeValueExpression(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>, reader:TypedExpression,
 			type:CompilerType, span:SourceSpan):TypedExpression {
 		return switch type {
-			case TArray(_), TMap(_,
-				_), TInstance(NominalKind.Class, _,
-					_), TInstance(NominalKind.Enum, _, _): new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
+			case TArray(_), TMap(_, _), TAnonymous(_, _), TAbstract(_, _, _), TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _):
+				new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
 			default:
 				var methodName = primitiveReadMethod(type);
 				if (methodName == null)
@@ -805,7 +912,7 @@ class WireCodecGenerator {
 
 	static function requiresWirePresence(type:CompilerType):Bool
 		return switch type {
-			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _): true;
+			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _), TAnonymous(_, _), TAbstract(_, _, _): true;
 			default: false;
 		};
 
@@ -919,6 +1026,8 @@ class WireCodecGenerator {
 
 	static function typeKey(type:CompilerType):String
 		return switch type {
+			case TAbstract(name, _, _): "abstract_" + nominalKey(name);
+			case TAnonymous(name, _): "anonymous_" + nominalKey(name);
 			case TInt: "int";
 			case TInt64: "int64";
 			case TFloat: "float";
