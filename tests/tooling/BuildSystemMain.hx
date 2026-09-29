@@ -658,7 +658,10 @@ class BuildSystemMain {
 			base = Sys.getEnv("TEMP");
 		if (base == null || base == "")
 			base = ".";
-		var path = Path.join([base, 'haxeon-build-$name-${Std.int(Date.now().getTime())}']);
+		// The epoch in milliseconds does not fit in an Int, so the timestamp stays a Float; a stale directory
+		// left by an interrupted run is removed rather than making createDirectory fail.
+		var path = Path.join([base, 'haxeon-build-$name-${Std.string(Date.now().getTime())}']);
+		removeTree(path);
 		FileSystem.createDirectory(path);
 		return FileSystem.fullPath(path);
 	}
