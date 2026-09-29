@@ -402,14 +402,25 @@ class HlSymbolTable {
 		return index;
 	}
 
-	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>):Int {
+	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
 		var fields:Array<HlObjectField> = [
 			for (field in object.fields)
 				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects)}
-		], key = 'obj:${object.name}', index = typeIndices.exists(key) ? typeIndices.get(key) : types.length, global = globals.length + 1;
+		];
+		if (interfaceSlots != null)
+			for (slot in interfaceSlots) {
+				var virtualKey = 'virt:$slot';
+				if (!typeIndices.exists(virtualKey))
+					throw 'Interface "$slot" must be registered before "${object.name}"';
+				// HashLink recognizes an unnamed field of the interface's type as the cache for its virtual.
+				fields.push({name: internString(""), type: typeIndices.get(virtualKey)});
+			}
+		var key = 'obj:${object.name}',
+			index = typeIndices.exists(key) ? typeIndices.get(key) : types.length,
+			global = globals.length + 1;
 		var base = -1, slots:Map<String, Int> = [], nextSlot = 0;
 		if (object.base != null) {
 			var baseName = Std.string(object.base);

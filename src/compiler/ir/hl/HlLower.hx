@@ -45,6 +45,11 @@ class HlLower {
 	final functionIndices:Map<String, Int> = [];
 	final objectTypeIndices:Map<String, Int> = [];
 	final objects:Map<String, IrObject> = [];
+	final interfaceBases:Map<String, Array<String>> = [];
+
+	/** Interface cache slots appended to each object's own fields (see `interfaceSlotsFor`). */
+	final objectSlotCounts:Map<String, Int> = [];
+
 	final enumTypeIndices:Map<String, Int> = [];
 	final cNatives:Map<String, IrCNative> = [];
 	final cDispatchNatives:Array<IrNative> = [];
@@ -240,8 +245,10 @@ class HlLower {
 		internType(IrType.Bytes);
 		for (enumDecl in program.enums)
 			symbols.reserveEnum(enumDecl.name);
-		for (interfaceDecl in program.interfaces)
+		for (interfaceDecl in program.interfaces) {
 			symbols.reserveInterface(interfaceDecl.name);
+			interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
+		}
 		for (object in program.objects)
 			symbols.reserveObject(object.name);
 		var valueObjects:Map<String, Bool> = [];
@@ -285,7 +292,9 @@ class HlLower {
 						fieldsReady = false;
 				if (ready && fieldsReady) {
 					objects.set(object.name, object);
-					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects));
+					var slots = interfaceSlotsFor(object);
+					objectSlotCounts.set(object.name, slots.length);
+					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots));
 					progressed = true;
 				} else
 					remaining.push(object);
@@ -1220,7 +1229,42 @@ class HlLower {
 			throw 'Unknown IR object "$typeName"';
 		var descriptor = objects.get(typeName);
 		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
-		return descriptor.fields.length + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
+		return descriptor.fields.length + objectSlotCounts.get(typeName) + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
+	}
+
+	/** Every interface `object` implements, directly or through interface bases, that its base class does not already provide.
+	 * HashLink caches the virtual built for an interface conversion in an unnamed object field of that interface's type;
+	 * without one `ToVirtual` allocates a new virtual on every conversion.
+	 */
+	function interfaceSlotsFor(object:IrObject):Array<String> {
+		var inherited:Map<String, Bool> = [];
+		var baseName = object.base == null ? "" : Std.string(object.base);
+		while (baseName.length > 0 && objects.exists(baseName)) {
+			var base = objects.get(baseName);
+			for (name in closeInterfaces(base.interfaces))
+				inherited.set(name, true);
+			baseName = base.base == null ? "" : Std.string(base.base);
+		}
+		return [
+			for (name in closeInterfaces(object.interfaces))
+				if (!inherited.exists(name)) name
+		];
+	}
+
+	function closeInterfaces(names:Array<String>):Array<String> {
+		var result:Array<String> = [], seen:Map<String, Bool> = [];
+		function visit(name:String):Void {
+			if (seen.exists(name))
+				return;
+			seen.set(name, true);
+			result.push(name);
+			if (interfaceBases.exists(name))
+				for (base in interfaceBases.get(name))
+					visit(base);
+		}
+		for (name in names)
+			visit(name);
+		return result;
 	}
 
 	function addFunctionName(name:String, index:Int):Void {

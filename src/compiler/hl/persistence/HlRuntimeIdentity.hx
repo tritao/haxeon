@@ -21,8 +21,10 @@ typedef HlPersistentIdentity = {
 
 /** Encodes runtime manifests and persistent compiler identity state. */
 class HlRuntimeIdentity {
-	/** Version 7: Strings are HashLink String objects, so earlier type tables cannot be patched. */
-	public static inline final VERSION = 7;
+	/** Version 8: objects carry an unnamed field per implemented interface to cache its virtual, so earlier type tables cannot be patched.
+	 * Version 7: Strings are HashLink String objects.
+	 */
+	public static inline final VERSION = 8;
 
 	public static inline final RUNTIME_VERSION = 3;
 	static var sequence = 1;
