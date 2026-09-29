@@ -1198,8 +1198,8 @@ class BodyTyper {
 				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
 					scope) != null ? TCellLocal(scope.requireId(name),
 						requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
-				type, span, false, scope.mapKeySource(name),
-				scope.isCapture(name) || boundCell(name, scope) != null ? scope.resolveDeclared(name) : null);
+				type, span, false, scope.mapKeySource(name), scope.isCapture(name)
+				|| boundCell(name, scope) != null ? scope.resolveDeclared(name) : null);
 		} else {
 			var owner = context.lexicalOwner;
 			if (owner != null && name.indexOf(".") < 0) {
