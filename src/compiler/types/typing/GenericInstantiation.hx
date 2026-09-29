@@ -146,6 +146,9 @@ class GenericInstantiation {
 					default:
 				}
 			case AppliedType(name, patternArguments):
+				var projected = session.declarations.inheritance.project(actual, name);
+				if (projected != null)
+					actual = projected;
 				switch actual {
 					case TIterator(actualElement) if (name == "Iterator" && patternArguments.length == 1):
 						inferTypeParameters(patternArguments[0], actualElement, parameters, substitutions, span);

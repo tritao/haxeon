@@ -1438,6 +1438,8 @@ class TestMain {
 				throw "Generic nominal arguments were not preserved semantically";
 		}
 		Sys.println("PASS: generic class and interface arguments resolve semantically");
+		Frontend.compile('interface Source<T> { function get():T; } class IntSource implements Source<Int> { public function new() {} public function get():Int return 42; } function consume<T>(source:Source<T>):T return source.get(); function main():Int return consume(new IntSource());');
+		Sys.println("PASS: generic function arguments infer through implemented interfaces");
 		expectCompileError("interface Source<T> { function get():T; } class TextSource implements Source<String> { public function get():String return \"no\"; } function consume(value:Source<Int>):Int return 42; function main():Int return consume(new TextSource());",
 			'Type mismatch for argument 1 to "consume"');
 		var genericReloadCompiler = new Compiler();
