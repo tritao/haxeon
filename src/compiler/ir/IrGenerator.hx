@@ -68,6 +68,25 @@ class IrGenerator {
 	public static function bindNativeArrayChecks(enabled:Bool):Void
 		nativeArrayChecks = enabled;
 
+	/** `array.iterator()`, `map.keys()`, `map.values()` and `map.iterator()` iterate an array through the boxing runtime
+	 * iterator; iterating the array directly with an index loop is equivalent and allocates nothing per element.
+	 */
+	static function arrayIteratorSource(iterable:TypedExpression):TypedExpression {
+		switch iterable.expression {
+			case TCall("__iterator_new", [source]):
+				var array = switch source.expression {
+					case TToDynamic(inner): inner;
+					default: source;
+				};
+				switch array.type {
+					case TArray(_): return array;
+					default:
+				}
+			default:
+		}
+		return iterable;
+	}
+
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
 
@@ -378,7 +397,8 @@ class IrGenerator {
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
 					builder.select(afterBlock);
-				case TForIn(name, valueName, iterable, body, span):
+				case TForIn(name, valueName, sourceIterable, body, span):
+					var iterable = arrayIteratorSource(sourceIterable);
 					var arrayName = '$' + 'for-array:${span.start}',
 						mapName = '$' + 'for-map:${span.start}',
 						indexName = '$' + 'for-index:${span.start}',
@@ -1275,7 +1295,8 @@ class IrGenerator {
 					lowerMapSet(builder, callArguments[0], callArguments[1], callArguments[2], types.key, types.value);
 				}
 				builder.load(mapName, resultType);
-			case TArrayComprehension(keyName, valueName, iterable, condition, value, _):
+			case TArrayComprehension(keyName, valueName, sourceIterable, condition, value, _):
+				var iterable = arrayIteratorSource(sourceIterable);
 				var inputName = '$' + 'comprehension-input:${expression.span.start}',
 					mapName = '$' + 'comprehension-map:${expression.span.start}',
 					resultName = '$' + 'comprehension-result:${expression.span.start}',
