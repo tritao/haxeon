@@ -28,5 +28,9 @@ function main():Int {
 		failures += 64;
 	if (Gc.heapBytes() <= 0.0)
 		failures += 128;
+	var since = Gc.allocatedSinceCollection();
+	var extra:Array<Int> = [0, 1, 2, 3, 4, 5, 6, 7];
+	if (extra.length != 8 || Gc.allocatedSinceCollection() <= since)
+		failures += 256;
 	return failures == 0 ? 42 : failures;
 }

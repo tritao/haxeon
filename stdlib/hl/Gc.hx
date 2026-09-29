@@ -8,6 +8,7 @@ extern class Gc {
   @:hlNative("std", "gc_last_pause_micros") public static function lastPauseMicros():Float;
   @:hlNative("std", "gc_max_pause_micros") public static function maxPauseMicros():Float;
   @:hlNative("std", "gc_heap_bytes") public static function heapBytes():Float;
+  @:hlNative("std", "gc_allocated_since_collection") public static function allocatedSinceCollection():Float;
   @:hlNative("std", "gc_major") public static function major():Void;
   /** Enables or disables automatic collections. Disabled heaps grow until re-enabled, so pair with `major()` at idle points. */
   @:hlNative("std", "gc_enable") public static function enable(enabled:Bool):Void;
