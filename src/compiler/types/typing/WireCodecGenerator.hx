@@ -37,6 +37,16 @@ class WireCodecGenerator {
 	static inline final ENUM_COMPARE_PREFIX:String = "$wire:map-enum-compare:";
 	static inline final WRITER:String = "haxeon.wire.MessagePackWriter";
 	static inline final READER:String = "haxeon.wire.MessagePackReader";
+	static inline final JSON_WRITER:String = "haxeon.wire.JsonWireWriter";
+	static inline final JSON_READER:String = "haxeon.wire.JsonWireReader";
+	static var jsonMode:Bool = false;
+
+	static inline function writerClassName():String
+		return jsonMode ? JSON_WRITER : WRITER;
+
+	static inline function readerClassName():String
+		return jsonMode ? JSON_READER : READER;
+
 	static inline final DEFAULT_MAX_BYTES:Int = 16 * 1024 * 1024;
 	static inline final DEFAULT_MAX_CONTAINER:Int = 1000000;
 	static inline final DEFAULT_MAX_DEPTH:Int = 64;
@@ -50,8 +60,29 @@ class WireCodecGenerator {
 			session.wireCodecRequests.set(key, {type: type, origin: origin, span: span});
 	}
 
+	public static function requestJson(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
+		if (!isRequestType(session, type))
+			BodyTyper.fail("E1024", 'JSON does not support type "$type" in the current wire profile', span);
+		var key = typeKey(type);
+		if (!session.jsonCodecRequests.exists(key))
+			session.jsonCodecRequests.set(key, {type: type, origin: origin, span: span});
+	}
+
 	/** Generate wrappers and value codecs requested while typing source bodies. */
 	public static function generate(session:TypingSession, classes:Array<TypedClass>, enums:Array<TypedEnum>):Array<TypedFunction> {
+		jsonMode = false;
+		return generateRequested(session, classes, enums, session.wireCodecRequests);
+	}
+
+	public static function generateJson(session:TypingSession, classes:Array<TypedClass>, enums:Array<TypedEnum>):Array<TypedFunction> {
+		jsonMode = true;
+		var result = generateRequested(session, classes, enums, session.jsonCodecRequests);
+		jsonMode = false;
+		return result;
+	}
+
+	static function generateRequested(session:TypingSession, classes:Array<TypedClass>, enums:Array<TypedEnum>,
+			requested:Map<String, WireCodecRequest>):Array<TypedFunction> {
 		var classesByName:Map<String, TypedClass> = [];
 		for (classDecl in classes)
 			classesByName.set(classDecl.name, classDecl);
@@ -59,9 +90,11 @@ class WireCodecGenerator {
 		for (enumDecl in enums)
 			enumsByName.set(enumDecl.name, enumDecl);
 		var roots:Array<WireCodecRequest> = [
-			for (key in session.wireCodecRequests.keys())
-				cast session.wireCodecRequests.get(key)
+			for (key in requested.keys())
+				cast requested.get(key)
 		];
+		if (roots.length == 0)
+			return [];
 		roots.sort(function(left, right) return Reflect.compare(typeKey(left.type), typeKey(right.type)));
 		var reachable:Map<String, CompilerType> = [],
 			requests:Map<String, WireCodecRequest> = [],
@@ -133,11 +166,23 @@ class WireCodecGenerator {
 	public static function decodeName(type:CompilerType):String
 		return DECODE_PREFIX + typeKey(type);
 
+	public static function jsonEncodeName(type:CompilerType):String
+		return "$json:encode:" + typeKey(type);
+
+	public static function jsonDecodeName(type:CompilerType):String
+		return "$json:decode:" + typeKey(type);
+
+	static function rootEncodeName(type:CompilerType):String
+		return jsonMode ? jsonEncodeName(type) : encodeName(type);
+
+	static function rootDecodeName(type:CompilerType):String
+		return jsonMode ? jsonDecodeName(type) : decodeName(type);
+
 	static function valueEncodeName(type:CompilerType):String
-		return VALUE_ENCODE_PREFIX + typeKey(type);
+		return (jsonMode ? "$json:value-encode:" : VALUE_ENCODE_PREFIX) + typeKey(type);
 
 	static function valueDecodeName(type:CompilerType):String
-		return VALUE_DECODE_PREFIX + typeKey(type);
+		return (jsonMode ? "$json:value-decode:" : VALUE_DECODE_PREFIX) + typeKey(type);
 
 	static function isRequestType(session:TypingSession, type:CompilerType):Bool
 		return switch type {
@@ -314,19 +359,25 @@ class WireCodecGenerator {
 					intLiteral(0, request.span)),
 					TInt, request.span)),
 				TInt, request.span);
-		return generatedFunction(INT_COMPARE_NAME, [{name: "left", type: TInt}, {name: "right", type: TInt}], TInt, [TReturn(result, request.span)], request);
+		return generatedFunction(intCompareName(), [{name: "left", type: TInt}, {name: "right", type: TInt}], TInt, [TReturn(result, request.span)], request);
 	}
+
+	static function intCompareName():String
+		return jsonMode ? "$json:map-int-compare" : INT_COMPARE_NAME;
+
+	static function stringCompareName():String
+		return jsonMode ? "$json:map-string-compare" : STRING_COMPARE_NAME;
 
 	static function stringComparator(request:WireCodecRequest):TypedFunction {
 		var left = local("left", TString, request.span),
 			right = local("right", TString, request.span),
 			result = new TypedExpression(TCall("haxeon.wire.MessagePackWriter.compareUtf8", [left, right]), TInt, request.span);
-		return generatedFunction(STRING_COMPARE_NAME, [{name: "left", type: TString}, {name: "right", type: TString}], TInt, [TReturn(result, request.span)],
+		return generatedFunction(stringCompareName(), [{name: "left", type: TString}, {name: "right", type: TString}], TInt, [TReturn(result, request.span)],
 			request);
 	}
 
 	static function enumComparatorName(type:CompilerType):String
-		return ENUM_COMPARE_PREFIX + typeKey(type);
+		return (jsonMode ? "$json:map-enum-compare:" : ENUM_COMPARE_PREFIX) + typeKey(type);
 
 	static function enumIdExpression(value:TypedExpression, cases:Array<WireEnumCase>, span:SourceSpan):TypedExpression {
 		var result:TypedExpression = intLiteral(0, span);
@@ -355,15 +406,15 @@ class WireCodecGenerator {
 
 	static function mapKeyComparator(type:CompilerType, span:SourceSpan):TypedExpression
 		return switch type {
-			case TString: new TypedExpression(TFunctionRef(STRING_COMPARE_NAME), TFunction([TString, TString], TInt), span);
-			case TInt: new TypedExpression(TFunctionRef(INT_COMPARE_NAME), TFunction([TInt, TInt], TInt), span);
+			case TString: new TypedExpression(TFunctionRef(stringCompareName()), TFunction([TString, TString], TInt), span);
+			case TInt: new TypedExpression(TFunctionRef(intCompareName()), TFunction([TInt, TInt], TInt), span);
 			case TInstance(NominalKind.Enum, _, _): new TypedExpression(TFunctionRef(enumComparatorName(type)), TFunction([type, type], TInt), span);
 			default: throw 'No MessagePack map key comparator for "$type"';
 		};
 
 	static function valueEncoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
 			request:WireCodecRequest):TypedFunction {
-		var writerType = classType(WRITER),
+		var writerType = classType(writerClassName()),
 			valueType = type,
 			writer = local("writer", writerType, request.span),
 			value = local("value", valueType, request.span),
@@ -432,7 +483,10 @@ class WireCodecGenerator {
 				for (wireField in fields) {
 					var field = wireField.field,
 						fieldValue = new TypedExpression(TField(value, field.name), field.type, field.span);
-					result.push(expressionStatement(method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span), span));
+					result.push(expressionStatement(jsonMode ? method(writer, "writeFieldKey",
+						[intLiteral(wireField.id, span), stringLiteral(field.name, span)], TVoid,
+						span) : method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span),
+						span));
 					result = result.concat(encodeNestedValueStatements(writer, fieldValue, field.type, field.span));
 				}
 				result;
@@ -448,7 +502,10 @@ class WireCodecGenerator {
 				for (caseIndex in 0...cases.length) {
 					var wireCase = cases[cases.length - caseIndex - 1],
 						branch:Array<TypedStatement> = [
-							expressionStatement(method(writer, "writeInt", [intLiteral(wireCase.id, span)], TVoid, span), span),
+							expressionStatement(jsonMode ? method(writer, "writeFieldKey",
+								[intLiteral(wireCase.id, span), stringLiteral(wireCase.caseDecl.name, span)], TVoid,
+								span) : method(writer, "writeInt", [intLiteral(wireCase.id, span)], TVoid, span),
+								span),
 							expressionStatement(method(writer, "writeArrayHeader", [intLiteral(wireCase.caseDecl.params.length, span)], TVoid, span), span)
 						];
 					for (fieldIndex in 0...wireCase.caseDecl.params.length) {
@@ -476,7 +533,7 @@ class WireCodecGenerator {
 
 	static function valueDecoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
 			request:WireCodecRequest):TypedFunction {
-		var readerType = classType(READER),
+		var readerType = classType(readerClassName()),
 			reader = local("reader", readerType, request.span),
 			statements:Array<TypedStatement> = [];
 		switch type {
@@ -608,27 +665,27 @@ class WireCodecGenerator {
 	}
 
 	static function encoder(type:CompilerType, request:WireCodecRequest):TypedFunction {
-		var writerType = classType(WRITER),
+		var writerType = classType(writerClassName()),
 			writerName = "__wire_writer",
 			value = local("value", type, request.span),
 			writer = local(writerName, writerType, request.span),
 			statements:Array<TypedStatement> = [
-				TVar(writerName, new TypedExpression(TNew(WRITER, [intLiteral(DEFAULT_MAX_BYTES, request.span)], true), writerType, request.span),
+				TVar(writerName, new TypedExpression(TNew(writerClassName(), [intLiteral(DEFAULT_MAX_BYTES, request.span)], true), writerType, request.span),
 					request.span),
 				TExpression(new TypedExpression(TCall(valueEncodeName(type), [writer, value]), TVoid, request.span), request.span),
-				TReturn(method(writer, "getBytes", [], TBytes, request.span), request.span)
+				TReturn(method(writer, jsonMode ? "getString" : "getBytes", [], jsonMode ? TString : TBytes, request.span), request.span)
 			];
-		return generatedFunction(encodeName(type), [{name: "value", type: type}], TBytes, statements, request);
+		return generatedFunction(rootEncodeName(type), [{name: "value", type: type}], jsonMode ? TString : TBytes, statements, request);
 	}
 
 	static function decoder(type:CompilerType, request:WireCodecRequest):TypedFunction {
-		var readerType = classType(READER),
+		var readerType = classType(readerClassName()),
 			readerName = "__wire_reader",
 			resultName = "__wire_result",
-			bytes = local("bytes", TBytes, request.span),
+			bytes = local("bytes", jsonMode ? TString : TBytes, request.span),
 			reader = local(readerName, readerType, request.span),
 			statements:Array<TypedStatement> = [
-				TVar(readerName, new TypedExpression(TNew(READER, [
+				TVar(readerName, new TypedExpression(TNew(readerClassName(), [
 					                                      bytes, intLiteral(DEFAULT_MAX_CONTAINER, request.span),
 					intLiteral(DEFAULT_MAX_DEPTH, request.span),     intLiteral(DEFAULT_MAX_BYTES, request.span)
 				],
@@ -641,7 +698,7 @@ class WireCodecGenerator {
 				], [], request.span),
 				TReturn(local(resultName, type, request.span), request.span)
 			];
-		return generatedFunction(decodeName(type), [{name: "bytes", type: TBytes}], type, statements, request);
+		return generatedFunction(rootDecodeName(type), [{name: "bytes", type: jsonMode ? TString : TBytes}], type, statements, request);
 	}
 
 	static function decodeMapBody(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>, fields:Array<WireField>,

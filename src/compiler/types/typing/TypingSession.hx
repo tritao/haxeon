@@ -45,6 +45,7 @@ class TypingSession {
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
 	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
+	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];

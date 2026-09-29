@@ -116,6 +116,8 @@ class TestCatalog {
 			mainCase("runtime", "language-features", "LanguageFeaturesMain", "language-features.hl", 42,
 				"self-hosted FFI language constructs compiled and executed"),
 			mainCase("runtime", "json", "JsonMain", "json.hl", 42, "JSON parsing, printing, reflection, Unicode, and rejection executed"),
+			mainCase("runtime", "json-wire", "JsonWireMain", "json-wire.hl", 42,
+				"generated JSON and MessagePack codecs round-trip the same values and handle unknown fields"),
 			mainCase("tooling", "utest-basic", "UtestMain", "utest-basic.hl", 0, "utest-compatible assertions and runner executed"),
 			mainCase("tooling", "utest-failure", "UtestMain", "utest-failure.hl", 5, "utest-compatible runner reports assertion failures",
 				["{output}", "tests/programs/utest-failure.hx"]),

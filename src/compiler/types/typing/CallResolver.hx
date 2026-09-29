@@ -913,6 +913,25 @@ class CallResolver {
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.jsonEncodeName(value.type), [value]), TString, span);
+		}
+		if (name == "JsonWire.decode" || name == "haxeon.wire.JsonWire.decode") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var resultType = switch expectedType {
+				case null, TNull:
+					throw new CompileError(new Diagnostic("E1009", "JsonWire.decode requires an expected result type", span));
+				case type: type;
+			};
+			var source = coerce(typeExpressionValue(arguments[0], scope), TString, "JsonWire.decode input", "E1002");
+			WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(resultType), [source]), resultType, span);
+		}
 		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);

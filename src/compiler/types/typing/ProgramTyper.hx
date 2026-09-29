@@ -203,6 +203,8 @@ class ProgramTyper {
 			typedFunctions.push(lambda);
 		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
+		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
+			typedFunctions.push(codec);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterBodies = AllocationMeter.sample();
