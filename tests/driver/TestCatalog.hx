@@ -118,6 +118,8 @@ class TestCatalog {
 			mainCase("runtime", "json", "JsonMain", "json.hl", 42, "JSON parsing, printing, reflection, Unicode, and rejection executed"),
 			mainCase("runtime", "json-wire", "JsonWireMain", "json-wire.hl", 42,
 				"generated JSON and MessagePack codecs round-trip the same values and handle unknown fields"),
+			mainCase("runtime", "structural-equality", "EqualityMain", "structural-equality.hl", 42,
+				"generated structural equality compares nested typedefs, enum payload arrays, maps, and floats"),
 			mainCase("tooling", "utest-basic", "UtestMain", "utest-basic.hl", 0, "utest-compatible assertions and runner executed"),
 			mainCase("tooling", "utest-failure", "UtestMain", "utest-failure.hl", 5, "utest-compatible runner reports assertion failures",
 				["{output}", "tests/programs/utest-failure.hx"]),

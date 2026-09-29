@@ -1035,6 +1035,8 @@ class TestMain {
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
 			'MessagePack.decode requires an expected result type');
+		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Equality.equals(new Thing(), new Thing()) ? 1 : 0;',
+			'Structural equality does not support type "TInstance(class,Thing,[])"');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',

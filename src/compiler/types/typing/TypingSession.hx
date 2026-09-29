@@ -23,6 +23,12 @@ typedef WireCodecRequest = {
 	final span:SourceSpan;
 }
 
+typedef EqualityRequest = {
+	final type:CompilerType;
+	final origin:String;
+	final span:SourceSpan;
+}
+
 /** Mutable semantic state shared by all typing phases for one compilation. */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
@@ -46,6 +52,7 @@ class TypingSession {
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
 	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
+	public final equalityRequests:Map<String, EqualityRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];

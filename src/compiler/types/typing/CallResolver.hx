@@ -913,6 +913,14 @@ class CallResolver {
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "Equality.equals" || name == "haxeon.Equality.equals") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
+			var left = typeExpressionValue(arguments[0], scope),
+				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
+			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+		}
 		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
