@@ -1172,6 +1172,11 @@ class BodyTyper {
 	function constantPatternKey(value:TypedExpression):Null<String>
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
+			case TFloatLiteral(v): 'float:$v';
+			case TIntToFloat(inner): switch inner.expression {
+				case TIntLiteral(v): 'float:$v';
+				default: null;
+			};
 			case TBoolLiteral(v): 'bool:$v';
 			case TStringLiteral(v): 'string:$v';
 			case TEnumLiteral(name, index): 'enum:$name:$index';
@@ -1281,14 +1286,28 @@ class BodyTyper {
 							if (value.name == name)
 								return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 					}
-					var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null;
-					for (candidate in session.enumAbstractDecls)
+					// Enum abstracts lower to their underlying type, so a switch over
+					// one cannot name it here. Among several abstracts declaring the
+					// value, the one in the current type's own package wins: its
+					// types are visible without an import, as in Haxe.
+					var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
+						ambiguous = false,
+						samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+					var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
+					for (candidateName => candidate in session.enumAbstractDecls)
 						for (value in candidate.values)
 							if (value.name == name) {
 								if (unqualifiedAbstract != null)
-									fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+									ambiguous = true;
 								unqualifiedAbstract = candidate;
+								if (pathBeforeLast(candidateName) == ownerPackage)
+									samePackage.push(candidate);
 							}
+					if (ambiguous) {
+						if (samePackage.length != 1)
+							fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+						unqualifiedAbstract = samePackage[0];
+					}
 					if (unqualifiedAbstract != null)
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)

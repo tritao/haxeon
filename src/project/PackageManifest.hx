@@ -27,11 +27,14 @@ class NativeCMakeManifest {
 	public final source:String;
 	public final target:String;
 	public final inputs:Array<String>;
+	/** Name of a CMake shared-library target whose runtime file Haxeon exposes. */
+	public final library:Null<String>;
 
-	public function new(source:String, target:String, ?inputs:Array<String>) {
+	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String) {
 		this.source = source;
 		this.target = target;
 		this.inputs = inputs == null ? [] : inputs.copy();
+		this.library = library;
 	}
 }
 
@@ -148,8 +151,11 @@ class PackageManifest {
 			if (cmakeData != null) {
 				if (!isObject(cmakeData))
 					throw '$path "native.cmake" must be an object';
+				var library = optionalNullableString(cmakeData, "library", '$path native.cmake');
+				if (library != null && (library.indexOf("/") >= 0 || library.indexOf("\\") >= 0 || library == "." || library == ".."))
+					throw '$path native.cmake "library" must be a library name';
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
-					requiredString(cmakeData, "target", '$path native.cmake'), stringArray(cmakeData, "inputs", '$path native.cmake', []));
+					requiredString(cmakeData, "target", '$path native.cmake'), stringArray(cmakeData, "inputs", '$path native.cmake', []), library);
 			}
 			if (nativeSources.length == 0 && cmake == null)
 				throw '$path "native" requires "sources" or "cmake"';

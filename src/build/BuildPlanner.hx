@@ -99,6 +99,8 @@ class BuildPlanner {
 				if (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null) {
 					sharedDetails.set("cmake.source", resolvedPackage.manifest.native.cmake.source);
 					sharedDetails.set("cmake.target", resolvedPackage.manifest.native.cmake.target);
+					if (resolvedPackage.manifest.native.cmake.library != null)
+						sharedDetails.set("cmake.library", resolvedPackage.manifest.native.cmake.library);
 				}
 				artifacts.push(new Artifact(sharedId, objects, sharedDetails));
 			}

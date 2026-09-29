@@ -27,7 +27,8 @@ class NativeCMakeProvider {
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			buildDirectory = Path.join([layout.packageRoot(resolvedPackage.name), "cmake"]),
-			output = layout.haxeonNativeLibraryPath(resolvedPackage.name),
+			output = native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name)
+				: layout.cmakeSharedLibraryPath(resolvedPackage.name, native.cmake.library),
 			outputDirectory = Path.directory(output),
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
 			configureArguments = [
@@ -42,6 +43,10 @@ class NativeCMakeProvider {
 			configureId = new ActionId('native-cmake-configure:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment);
+		if (native.cmake.library != null) {
+			configureArguments.push("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + outputDirectory);
+			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + outputDirectory);
+		}
 		if (context.environment.target.os == TargetOs.Windows) {
 			configureArguments.push("-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=" + outputDirectory);
 			configureArguments.push("-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG=" + outputDirectory);
