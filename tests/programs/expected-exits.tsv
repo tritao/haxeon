@@ -82,6 +82,7 @@ virtual-dispatch	71
 enum-basic	42
 enum-payload	42
 enum-payload-pattern	42
+enum-float-payload-pattern	42
 generic-enum-field	42
 nullable-basic	42
 nullable-guard-return	42

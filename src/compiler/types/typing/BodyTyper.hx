@@ -1171,6 +1171,11 @@ class BodyTyper {
 	function constantPatternKey(value:TypedExpression):Null<String>
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
+			case TFloatLiteral(v): 'float:$v';
+			case TIntToFloat(inner): switch inner.expression {
+				case TIntLiteral(v): 'float:$v';
+				default: null;
+			};
 			case TBoolLiteral(v): 'bool:$v';
 			case TStringLiteral(v): 'string:$v';
 			case TEnumLiteral(name, index): 'enum:$name:$index';
