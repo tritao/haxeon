@@ -26,7 +26,8 @@ class NativeCMakeProvider {
 		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
-			ninja = ninjaAvailable(context.environment.target.os),
+			ninja = ninjaAvailable(context.environment.target.os, context.compilerHome),
+			ninjaProgram = ninjaExecutable(context.compilerHome),
 			// CMake rejects a cache created by another generator, so Ninja trees get their own directory.
 			buildTree = ninja ? "cmake-ninja" : "cmake",
 			// Workspace builds identify a CMake tree by what it builds, so packages that request the same
@@ -54,7 +55,7 @@ class NativeCMakeProvider {
 				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE=" + configuration
-			].concat(ninja ? ["-G", "Ninja"] : []),
+			].concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment);
@@ -83,7 +84,7 @@ class NativeCMakeProvider {
 				native.cmake.target,
 				"--config",
 				configuration
-			], runDirectory, new Map()), true, true)
+			], runDirectory, new Map()), true, true, ninja)
 		], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)
@@ -155,23 +156,45 @@ class NativeCMakeProvider {
 		return name + "--" + target;
 	}
 
-	static var ninjaProbe:Null<Bool>;
+	static final ninjaVersions = new Map<String, String>();
+
+	/** The pinned Ninja under `.tools` when bootstrapped, otherwise whatever `ninja` resolves to on PATH. */
+	public static function ninjaExecutable(home:String):String {
+		var pinned = Path.join([home, ".tools", "ninja", "ninja"]);
+		return sys.FileSystem.exists(pinned) ? pinned : "ninja";
+	}
+
+	/** Output of `ninja --version`, or null when the executable cannot run. */
+	static function ninjaVersion(executable:String):Null<String> {
+		if (!ninjaVersions.exists(executable))
+			ninjaVersions.set(executable, try {
+				var process = new sys.io.Process(executable, ["--version"]),
+					output = StringTools.trim(process.stdout.readAll().toString()),
+					status = process.exitCode();
+				process.close();
+				status == 0 ? output : "";
+			} catch (_:Dynamic) "");
+		var version = ninjaVersions.get(executable);
+		return version == "" ? null : version;
+	}
+
+	/** Ninja 1.13 added the GNU jobserver client, which lets it share Haxeon's token pool. */
+	public static function ninjaSupportsJobserver(executable:String):Bool {
+		var version = ninjaVersion(executable);
+		if (version == null)
+			return false;
+		var parts = version.split("."), major = Std.parseInt(parts[0]), minor = parts.length > 1 ? Std.parseInt(parts[1]) : 0;
+		return major != null && minor != null && (major > 1 || (major == 1 && minor >= 13));
+	}
 
 	/**
 	 * Ninja builds in parallel by default, while `cmake --build` on the Makefiles generator is serial
 	 * without `-j`. Windows keeps its default generator so MSVC does not need a prepared environment.
 	 */
-	static function ninjaAvailable(os:TargetOs):Bool {
+	static function ninjaAvailable(os:TargetOs, home:String):Bool {
 		if (os == TargetOs.Windows || Sys.getEnv("HAXEON_CMAKE_GENERATOR") == "default")
 			return false;
-		if (ninjaProbe == null)
-			ninjaProbe = try {
-				var process = new sys.io.Process("ninja", ["--version"]);
-				var status = process.exitCode();
-				process.close();
-				status == 0;
-			} catch (_:Dynamic) false;
-		return ninjaProbe;
+		return ninjaVersion(ninjaExecutable(home)) != null;
 	}
 
 	static function cmakeLinkInput(outputDirectory:String, output:String, os:TargetOs, abi:TargetAbi):String {

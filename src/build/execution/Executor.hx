@@ -159,6 +159,12 @@ class Executor implements ExecutionBackend {
 	/** Upper bound on simultaneous compiler actions, each of which holds a compiler heap. 0 means no limit. */
 	public var maxConcurrentCompilers = 0;
 
+	/**
+	 * Shared token pool. When set, each action holds a token while it runs and Ninja builds draw further
+	 * tokens from the same pool, so the machine sees one job limit however many tools run at once.
+	 */
+	public var jobServer:Null<JobServer>;
+
 	#if (target.threaded && !eval)
 	/**
 	 * Work-queue scheduler. Whenever a worker is free, the ready action on the longest remaining chain
@@ -218,10 +224,13 @@ class Executor implements ExecutionBackend {
 				Thread.create(function() {
 					// Always report and release: an exception escaping this thread would leave the
 					// scheduler waiting on the lock forever.
+					var server = jobServer, holdsToken = server != null && server.acquire();
 					var actionStarted = Sys.time() * 1000.0;
 					var result = try executeAction(currentAction,
 						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
 					result.elapsedMs = Sys.time() * 1000.0 - actionStarted;
+					if (holdsToken)
+						server.release();
 					mutex.acquire();
 					finished.push({action: currentAction, result: result});
 					mutex.release();
@@ -257,6 +266,18 @@ class Executor implements ExecutionBackend {
 		return new ExecutionResult(results, Sys.time() * 1000.0 - started);
 	}
 	#end
+
+	function withJobServer(action:ExecutionAction, variables:Map<String, String>):Map<String, String> {
+		var server = jobServer;
+		if (server == null || !action.jobserverClient)
+			return variables;
+		var result = new Map<String, String>();
+		if (variables != null)
+			for (key in variables.keys())
+				result.set(key, variables.get(key));
+		result.set("MAKEFLAGS", server.makeFlags);
+		return result;
+	}
 
 	/** Length of the longest chain of dependents below each action, counting itself. */
 	static function chainDepths(plan:ExecutionPlan):Map<String, Int> {
@@ -320,7 +341,7 @@ class Executor implements ExecutionBackend {
 			ensureOutputDirectories(action);
 			var status = switch action.action {
 				case Process(command, arguments, cwd, variables):
-					ProcessRunner.run(command, arguments, cwd, variables);
+					ProcessRunner.run(command, arguments, cwd, withJobServer(action, variables));
 				case Compiler(_, _, _, _, invoke):
 					invoke();
 			};

@@ -138,6 +138,35 @@ if(NOT EXISTS "${TOOLS_DIR}/formatter/run.js")
   file(ARCHIVE_EXTRACT INPUT "${formatter_archive}" DESTINATION "${TOOLS_DIR}/formatter")
 endif()
 
+# Ninja 1.13 can join Haxeon's job server, so native builds share one job limit with Haxeon's own
+# actions; older system copies cannot. Windows builds keep their Visual Studio generator.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+  set(NINJA_VERSION "1.13.2")
+  if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    set(ninja_asset "ninja-mac.zip")
+    set(ninja_sha256 "c99048673aa765960a99cf10c6ddb9f1fad506099ff0a0e137ad8960a88f321b")
+  elseif(linux_host_arch MATCHES "^(aarch64|arm64)$")
+    set(ninja_asset "ninja-linux-aarch64.zip")
+    set(ninja_sha256 "fd2cacc8050a7f12a16a2e48f9e06fca5c14fc4c2bee2babb67b58be17a607fc")
+  else()
+    set(ninja_asset "ninja-linux.zip")
+    set(ninja_sha256 "5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6")
+  endif()
+  set(ninja_archive "${TOOLS_DIR}/ninja-${NINJA_VERSION}-${ninja_asset}")
+  download_checked(
+    "https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/${ninja_asset}"
+    "${ninja_archive}"
+    "${ninja_sha256}"
+  )
+  if(NOT EXISTS "${TOOLS_DIR}/ninja/ninja")
+    file(MAKE_DIRECTORY "${TOOLS_DIR}/ninja")
+    file(ARCHIVE_EXTRACT INPUT "${ninja_archive}" DESTINATION "${TOOLS_DIR}/ninja")
+    file(CHMOD "${TOOLS_DIR}/ninja/ninja"
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+  endif()
+  run_checked("Ninja version check" "${TOOLS_DIR}/ninja/ninja" --version)
+endif()
+
 run_checked("Native CMake configuration"
   "${CMAKE_COMMAND}" --preset "${native_preset}" -S "${HAXEON_ROOT}")
 run_checked("Native build"

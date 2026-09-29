@@ -17,6 +17,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionPlan;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.Executor;
+import build.execution.JobServer;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
@@ -38,7 +39,9 @@ import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
 #if (target.threaded && !eval)
+import sys.thread.Lock;
 import sys.thread.Mutex;
+import sys.thread.Thread;
 #end
 
 class BuildSystemMain {
@@ -51,6 +54,8 @@ class BuildSystemMain {
 		testIndependentActionsRunConcurrently();
 		testDependentStartsWithoutWaitingForSlowSibling();
 		testCompilerConcurrencyLimit();
+		testJobServerTokens();
+		testExecutorSharesJobServerTokens();
 		#end
 		testFingerprintsAndSkipping();
 		testArtifactCache();
@@ -261,6 +266,64 @@ class BuildSystemMain {
 			result = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([slow, quick, dependent]));
 		expect(result.exitCode == 0 && result.actions.length == 3, "the work queue should finish every action");
 		expect(!slowFinishedWhenDependentStarted, "a ready dependent should start while a slow sibling still runs, not wait for a wave to end");
+		removeTree(root);
+	}
+
+	static function testJobServerTokens():Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		var root = temporaryDirectory("jobserver"), server = JobServer.start(root, 2);
+		expect(server != null, "a job server should start on hosts with FIFOs");
+		expect(server.makeFlags.indexOf("--jobserver-auth=fifo:" + server.path) >= 0, "clients find the pool through MAKEFLAGS");
+		expect(server.acquire() && server.acquire(), "a pool of two tokens hands out two tokens");
+		var third = false, finished = new Lock();
+		Thread.create(function() {
+			third = server.acquire();
+			finished.release();
+		});
+		expect(!finished.wait(0.4), "a third acquire must block while both tokens are held");
+		server.release();
+		expect(finished.wait(5) && third, "releasing a token should wake the blocked acquire");
+		server.release();
+		server.release();
+		expect(server.acquire() && server.acquire(), "returned tokens are usable again");
+		server.stop();
+		expect(!FileSystem.exists(server.path), "stopping the server removes its FIFO");
+		removeTree(root);
+	}
+
+	static function testExecutorSharesJobServerTokens():Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		var root = temporaryDirectory("jobserver-executor"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			server = JobServer.start(root, 2),
+			mutex = new Mutex(),
+			active = 0,
+			peakActive = 0,
+			invoke = function():Int {
+				mutex.acquire();
+				active++;
+				if (active > peakActive)
+					peakActive = active;
+				mutex.release();
+				Sys.sleep(0.1);
+				mutex.acquire();
+				active--;
+				mutex.release();
+				return 0;
+			},
+			executor = new Executor(environment, 4, _ -> {});
+		executor.jobServer = server;
+		var result = executor.execute(new ExecutionPlan([
+			action("token-a", [], "token A", invoke),
+			action("token-b", [], "token B", invoke),
+			action("token-c", [], "token C", invoke),
+			action("token-d", [], "token D", invoke)
+		]));
+		server.stop();
+		expect(result.exitCode == 0 && result.actions.length == 4, "actions sharing a job server should all complete");
+		expect(peakActive == 2, 'two tokens should cap four workers at two running actions, saw $peakActive');
 		removeTree(root);
 	}
 

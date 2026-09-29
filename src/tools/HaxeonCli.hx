@@ -8,6 +8,8 @@ import build.Target;
 import build.NativeTargetSupport;
 import build.WorkspaceBuild;
 import build.execution.Executor;
+import build.execution.JobServer;
+import build.native.NativeCMakeProvider;
 import build.WorkspaceManifest;
 import build.execution.ProcessRunner;
 import project.PackageLockfile;
@@ -501,9 +503,23 @@ class HaxeonCli {
 			var execution = subcommand == "test" ? WorkspaceBuild.withTests(lowered, haxeonHome()) : lowered.plan,
 				executor = new Executor(lowered.environment, jobs);
 			executor.maxConcurrentCompilers = compilers;
+			var ninja = NativeCMakeProvider.ninjaExecutable(haxeonHome()), server:Null<JobServer> = null;
+			if (NativeCMakeProvider.ninjaSupportsJobserver(ninja))
+				server = JobServer.start(Path.join([lowered.environment.buildRoot, ".haxeon"]), jobs);
+			executor.jobServer = server;
 			Sys.println('Workspace ${subcommand}: ${selected.length} projects, ${execution.actions.length} actions, $jobs jobs (planned in ${Std.int(elapsed)} ms)');
-			var result = executor.execute(execution),
-				failed = [for (item in result.actions) if (!item.succeeded()) item];
+			Sys.println(server != null ? 'Job server: $jobs tokens shared with Ninja' : 'Job server: off (needs Ninja 1.13+; native builds use their own parallelism)');
+			var result:build.execution.ActionResult.ExecutionResult;
+			try {
+				result = executor.execute(execution);
+			} catch (error:Dynamic) {
+				if (server != null)
+					server.stop();
+				throw error;
+			}
+			if (server != null)
+				server.stop();
+			var failed = [for (item in result.actions) if (!item.succeeded()) item];
 			if (subcommand == "test") {
 				var tests = [for (item in result.actions) if (StringTools.startsWith(item.id.key(), "test:")) item];
 				Sys.println("Tests:");

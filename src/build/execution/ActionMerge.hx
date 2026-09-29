@@ -30,13 +30,15 @@ class ActionMerge {
 			problems.push('outputs [${existing.outputs.join(", ")}] vs [${incoming.outputs.join(", ")}]');
 		if (commandLine(existing) != commandLine(incoming))
 			problems.push('command "${commandLine(existing)}" vs "${commandLine(incoming)}"');
-		if (existing.alwaysRun != incoming.alwaysRun || existing.fingerprintDependencies != incoming.fingerprintDependencies)
+		if (existing.alwaysRun != incoming.alwaysRun
+			|| existing.fingerprintDependencies != incoming.fingerprintDependencies
+			|| existing.jobserverClient != incoming.jobserverClient)
 			problems.push("scheduling flags differ");
 		if (problems.length > 0)
 			throw 'Action ${existing.id} differs between $earlier and $later: ${problems.join("; ")}';
 		return new ExecutionAction(existing.id, union(existing.dependencies, incoming.dependencies, id -> id.key()),
 			union(existing.inputs, incoming.inputs, path -> path), existing.outputs, existing.description, existing.action, existing.fingerprintDependencies,
-			existing.alwaysRun);
+			existing.alwaysRun, existing.jobserverClient);
 	}
 
 	static function union<T>(left:Array<T>, right:Array<T>, key:T->String):Array<T> {
