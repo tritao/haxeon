@@ -6,6 +6,8 @@ import build.HaxeonProjectBuild;
 import build.HaxeonNativePackageBuild;
 import build.Target;
 import build.NativeTargetSupport;
+import build.WorkspaceBuild;
+import build.WorkspaceManifest;
 import build.execution.ProcessRunner;
 import project.PackageLockfile;
 import project.PackageResolver;
@@ -110,6 +112,7 @@ class HaxeonCli {
 				case "fmt": fmt(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
+				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
 				case "help", "--help", "-h": usage();
 				case _:
@@ -438,6 +441,68 @@ class HaxeonCli {
 		var result = capture(adb, ["devices", "-l"]);
 		Sys.print(result.output);
 		return result.status;
+	}
+
+	/** `haxeon workspace plan`: lower every member project onto one graph and report what the merge saves. */
+	static function workspaceCommand(arguments:Array<String>):Int {
+		var subcommand = arguments.length == 0 ? "" : arguments.shift(),
+			path = "materia.workspace.json",
+			skipTags:Array<String> = [],
+			only:Array<String> = [],
+			showActions = false;
+		if (subcommand != "plan")
+			throw 'Usage: haxeon workspace plan [--workspace PATH] [--skip-tag TAG] [--only NAME] [--actions]';
+		var index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--actions")
+				showActions = true;
+			else if (argument == "--workspace" || argument == "--skip-tag" || argument == "--only") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				if (argument == "--workspace")
+					path = value;
+				else if (argument == "--skip-tag")
+					skipTags.push(value);
+				else
+					only.push(value);
+			} else
+				throw 'Unknown workspace option "$argument"';
+		}
+		var workspace = WorkspaceManifest.load(resolvePath(path, Sys.getCwd())),
+			selected = [
+				for (member in workspace.projects) {
+					var skipped = only.length > 0 ? only.indexOf(member.name) < 0 : false;
+					for (tag in skipTags)
+						if (member.hasTag(tag))
+							skipped = true;
+					if (!skipped) member;
+				}
+			];
+		if (selected.length == 0)
+			throw "No workspace projects selected";
+		var started = Sys.time() * 1000.0,
+			lowered = WorkspaceBuild.lower(workspace, selected, manifest -> discoverProject(manifest), haxeonHome(), []),
+			elapsed = Sys.time() * 1000.0 - started;
+		var shared = [for (action in lowered.plan.actions) if (lowered.requestedBy.get(action.id.key()).length > 1) action],
+			cmake = [for (action in lowered.plan.actions) if (StringTools.startsWith(action.id.key(), "native-cmake-")) action];
+		Sys.println('Workspace ${workspace.path}: ${selected.length} projects');
+		for (member in lowered.projects)
+			Sys.println('  ${member.name}: ${member.actions.length} actions');
+		Sys.println('Actions: ${lowered.rawActionCount} requested -> ${lowered.plan.actions.length} after merging (${lowered.rawActionCount - lowered.plan.actions.length} shared)');
+		Sys.println('CMake actions: ${cmake.length} (each project would otherwise run its own)');
+		if (shared.length > 0) {
+			Sys.println("Shared actions:");
+			for (action in shared) {
+				var users = lowered.requestedBy.get(action.id.key());
+				Sys.println('  ${action.id}  x${users.length}: ${users.join(", ")}');
+			}
+		}
+		if (showActions)
+			Sys.print(lowered.plan.toDebugString());
+		Sys.println('Planned in ${Std.int(elapsed)} ms');
+		return 0;
 	}
 
 	static function build(arguments:Array<String>, launch:Bool):Int {
@@ -1257,6 +1322,8 @@ class HaxeonCli {
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
 		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
+		Sys.println("  workspace plan [--workspace PATH] [--skip-tag TAG] [--only NAME] [--actions]");
+		Sys.println("                                    Merge the workspace's projects into one build graph");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
 		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
 		Sys.println("  --device SERIAL                Select Android device for run");

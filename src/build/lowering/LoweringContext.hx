@@ -15,8 +15,12 @@ class LoweringContext {
 	public final extraDefines:Array<String>;
 	public final selfHosted:Bool;
 
+	/** Lower CMake packages onto workspace-wide trees keyed by (source, target) instead of per package. */
+	public final sharedNative:Bool;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
-			?extraDefines:Array<String>, ?selfHosted:Bool) {
+			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool) {
+		this.sharedNative = sharedNative == true;
 		this.environment = environment;
 		this.layout = new TargetLayout(environment);
 		this.cmakePreset = cmakePreset == null ? Std.string(environment.profile) : cmakePreset;
