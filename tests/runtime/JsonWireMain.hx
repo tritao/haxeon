@@ -14,12 +14,15 @@ class JsonWireMain {
 @:wire class Item { @:id(1) public var name:String; @:id(2) public var state:State; @:id(3) public var note:Null<String>; @:id(4) public var scores:Map<String, Int>; public function new() {} }
 @:wire typedef Point = { @:id(1) var x:Float; @:id(2) var y:Float; }
 abstract Distance(Float) from Float to Float {}
-@:wire typedef Frozen = { @:id(1) var values:haxe.ds.ReadOnlyArray<Int>; }
+@:wire typedef Frozen = { @:id(1) var values:haxe.ds.ReadOnlyArray<Int>; @:id(2) @:optional var extra:haxe.ds.ReadOnlyArray<Int>; }
 function main():Int {
-  var frozen:Frozen = {values: [4, 5]};
+  var frozen:Frozen = {values: [4, 5], extra: null};
   var frozenJson:Frozen = JsonWire.decode(JsonWire.encode(frozen));
   var frozenPacked:Frozen = MessagePack.decode(MessagePack.encode(frozen));
-  if (frozenJson.values[0] != 4 || frozenPacked.values[1] != 5) return 20;
+  if (frozenJson.values[0] != 4 || frozenPacked.values[1] != 5 || frozenJson.extra != null || frozenPacked.extra != null) return 20;
+  frozen.extra = [8];
+  var filled:Frozen = JsonWire.decode(JsonWire.encode(frozen));
+  if (filled.extra[0] != 8) return 21;
   var point:Point = {x: 2.0, y: 3.0};
   var pointAgain:Point = JsonWire.decode(JsonWire.encode(point));
   if (pointAgain.x != 2.0 || pointAgain.y != 3.0) return 17;

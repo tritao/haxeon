@@ -513,7 +513,14 @@ class WireCodecGenerator {
 			value:TypedExpression, type:CompilerType, span:SourceSpan):Array<TypedStatement> {
 		return switch type {
 			case TAbstract(_, _, representation):
-				encodeNestedValueStatements(writer, session.representation.boundaryCast(value, representation), representation, span);
+				var encoded = encodeNestedValueStatements(writer,
+					session.representation.boundaryCast(value, representation), representation, span);
+				switch representation {
+					case TArray(_), TMap(_, _), TAnonymous(_, _), TInstance(_, _, _):
+						[TIf(isNullValue(value, type, span),
+							[expressionStatement(method(writer, "writeNil", [], TVoid, span), span)], encoded, span)];
+					default: encoded;
+				}
 			case TNullable(element):
 				var nonNullValue = new TypedExpression(TCast(value), element, value.span);
 				[
@@ -627,7 +634,15 @@ class WireCodecGenerator {
 		switch type {
 			case TAbstract(_, _, representation):
 				var decoded = decodeValueExpression(session, classes, enums, reader, representation, request.span);
-				statements.push(TReturn(session.representation.boundaryCast(decoded, type), request.span));
+				var result = TReturn(session.representation.boundaryCast(decoded, type), request.span);
+				switch representation {
+					case TArray(_), TMap(_, _), TAnonymous(_, _), TInstance(_, _, _):
+						statements.push(TIf(method(reader, "isNil", [], TBool, request.span), [
+							expressionStatement(method(reader, "readNil", [], TVoid, request.span), request.span),
+							TReturn(nullValue(type, request.span), request.span)
+						], [result], request.span));
+					default: statements.push(result);
+				}
 			case TNullable(element):
 				var decoded = decodeValueExpression(session, classes, enums, reader, element, request.span),
 					wrapped = new TypedExpression(TNullableWrap(decoded), type, request.span);
