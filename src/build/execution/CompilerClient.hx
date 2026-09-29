@@ -1,6 +1,7 @@
 package build.execution;
 
 import haxe.Json;
+import haxe.crypto.Sha256;
 import haxe.io.Path;
 import haxe.SysTools;
 import sys.FileSystem;
@@ -27,27 +28,19 @@ class CompilerClient {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw "Could not make the compiler session directory private";
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
-			var identity = new ExecutionAction(new ActionId("compiler-session-v5" + (profilePort == null ? "" : ":profile:" + profilePort)), [],
-				[compilerSource, Path.join([home, "stdlib"])], [], projectRoot, ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
-				key = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
+			// The worker program depends only on the compiler, so every project shares one artifact; each
+			// project gets its own worker process so it keeps its incremental compiler state.
+			var identity = new ExecutionAction(new ActionId("compiler-session-v6" + (profilePort == null ? "" : ":profile:" + profilePort)), [],
+				[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
+				version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
+				key = version + "-" + Sha256.encode(projectRoot).substr(0, 16),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
 			if (connection == null) {
-				var workerArtifact = Path.join([directory, key + ".hl"]),
+				var workerArtifact = Path.join([directory, version + ".hl"]),
 					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
-				if (!FileSystem.exists(workerArtifact)) {
-					var compileStatus = ProcessRunner.run(command, [
-						"-cp",
-						compilerSource,
-						"-hl",
-						workerArtifact,
-						"-main",
-						"compiler.tools.CompilerServer"
-					], home, new Map());
-					if (compileStatus != 0)
-						throw "Could not compile the persistent compiler worker";
-				}
+				ensureWorkerArtifact(command, compilerSource, workerArtifact, home);
 				var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 					libraryPath = [
 						Path.join([home, "out"]),
@@ -89,7 +82,8 @@ class CompilerClient {
 				if (connection == null)
 					throw "Compiler worker did not become ready; see " + logPath;
 			}
-			shutdownObsoleteWorkers(directory, statePath);
+			retireWorkers(directory, version, key);
+			markUsed(statePath);
 			var socket = connection.socket;
 			socket.setTimeout(600);
 			var bytes = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, arguments: arguments}));
@@ -102,6 +96,7 @@ class CompilerClient {
 					Sys.println(response.message);
 				if (response.status != null) {
 					socket.close();
+					markUsed(statePath);
 					return response.status;
 				}
 			}
@@ -134,29 +129,102 @@ class CompilerClient {
 		}
 	}
 
-	static function shutdownObsoleteWorkers(directory:String, currentStatePath:String):Void {
+	#if (target.threaded && !eval)
+	static final artifactMutex = new sys.thread.Mutex();
+	#end
+
+	/** Compiles the worker program once per compiler version; concurrent callers wait for the first to finish. */
+	static function ensureWorkerArtifact(command:String, compilerSource:String, workerArtifact:String, home:String):Void {
+		#if (target.threaded && !eval)
+		artifactMutex.acquire();
+		#end
+		try {
+			if (!FileSystem.exists(workerArtifact)) {
+				// Build beside the target and rename, so another Haxeon process never sees a partial file.
+				var temporary = workerArtifact + ".tmp." + Std.string(Std.random(1000000)),
+					compileStatus = ProcessRunner.run(command, [
+						"-cp",
+						compilerSource,
+						"-hl",
+						temporary,
+						"-main",
+						"compiler.tools.CompilerServer"
+					], home, new Map());
+				if (compileStatus != 0)
+					throw "Could not compile the persistent compiler worker";
+				FileSystem.rename(temporary, workerArtifact);
+			}
+		} catch (error:Dynamic) {
+			#if (target.threaded && !eval)
+			artifactMutex.release();
+			#end
+			throw error;
+		}
+		#if (target.threaded && !eval)
+		artifactMutex.release();
+		#end
+	}
+
+	/** Workers kept resident per compiler version before the least recently used one is retired. */
+	static function residentLimit():Int {
+		var value = Sys.getEnv("HAXEON_COMPILER_WORKERS"), parsed = value == null ? null : Std.parseInt(value);
+		return parsed == null || parsed < 1 ? 6 : parsed;
+	}
+
+	/**
+	 * Retires workers of other compiler versions, which can never be reused, and the least recently used
+	 * workers beyond the resident limit. Workers of the current version are never probed with a
+	 * connection: one that drops without a request makes the worker reset its incremental state.
+	 */
+	static function retireWorkers(directory:String, version:String, currentKey:String):Void {
+		var resident:Array<{statePath:String, modified:Float}> = [];
 		for (entry in FileSystem.readDirectory(directory)) {
-			if (!StringTools.endsWith(entry, ".json"))
+			if (!StringTools.endsWith(entry, ".json") || entry == currentKey + ".json")
 				continue;
 			var statePath = Path.join([directory, entry]);
-			if (statePath == currentStatePath)
-				continue;
-			var connection = connect(statePath);
-			if (connection == null)
-				continue;
-			try {
-				var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, shutdown: true}));
-				connection.socket.output.writeInt32(request.length);
-				connection.socket.output.write(request);
-				connection.socket.output.flush();
-				connection.socket.setTimeout(1);
-				connection.socket.input.readLine();
-				connection.socket.close();
-			} catch (_:Dynamic) {
-				try
-					connection.socket.close()
-				catch (_:Dynamic) {}
-			}
+			if (StringTools.startsWith(entry, version + "-"))
+				resident.push({statePath: statePath, modified: FileSystem.stat(statePath).mtime.getTime()});
+			else
+				shutdownWorker(statePath);
+		}
+		resident.sort((left, right) -> left.modified < right.modified ? -1 : (left.modified > right.modified ? 1 : 0));
+		// The current worker counts against the limit as well.
+		var excess = resident.length + 1 - residentLimit();
+		for (index in 0...(excess > 0 ? excess : 0))
+			shutdownWorker(resident[index].statePath);
+	}
+
+	/** Refreshes a worker's state file so retirement can order workers by last use. */
+	static function markUsed(statePath:String):Void {
+		// Replace atomically: a reader that saw a half-written state file would think the worker is gone.
+		try {
+			var temporary = statePath + ".touch." + Std.string(Std.random(1000000));
+			File.saveContent(temporary, File.getContent(statePath));
+			FileSystem.rename(temporary, statePath);
+		} catch (_:Dynamic) {}
+	}
+
+	static function shutdownWorker(statePath:String):Void {
+		var connection = connect(statePath);
+		if (connection == null) {
+			// Nothing is listening, so this state file was left by a worker that already exited.
+			try
+				FileSystem.deleteFile(statePath)
+			catch (_:Dynamic) {}
+			return;
+		}
+		try {
+			var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, shutdown: true}));
+			connection.socket.output.writeInt32(request.length);
+			connection.socket.output.write(request);
+			connection.socket.output.flush();
+			connection.socket.setTimeout(1);
+			connection.socket.input.readLine();
+			connection.socket.close();
+		} catch (_:Dynamic) {
+			try
+				connection.socket.close()
+			catch (_:Dynamic) {}
 		}
 	}
 }
