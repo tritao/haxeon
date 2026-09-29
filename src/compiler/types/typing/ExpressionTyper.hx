@@ -244,7 +244,12 @@ class ExpressionTyper {
 		if (objectExpected == null) {
 			var inferred:Array<AnonymousField> = [
 				for (field in typedFields)
-					{name: field.name, type: field.value.type, optional: false, isFinal: false}
+					{
+						name: field.name,
+						type: field.value.type,
+						optional: false,
+						isFinal: false
+					}
 			];
 			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
 			resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);

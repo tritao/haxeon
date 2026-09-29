@@ -27,8 +27,8 @@ class NativeCMakeProvider {
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			buildDirectory = Path.join([layout.packageRoot(resolvedPackage.name), "cmake"]),
-			output = native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name)
-				: layout.cmakeSharedLibraryPath(resolvedPackage.name, native.cmake.library),
+			output = native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
+				native.cmake.library),
 			outputDirectory = Path.directory(output),
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
 			configureArguments = [

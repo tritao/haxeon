@@ -341,27 +341,30 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
 		for (object in plan.program.objects) {
 			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Obj(object.name), plan.objectType(object.name));
-			if (exact) for (candidate in plan.program.objects) {
-				var base = candidate.base;
-				while (base != null && base != object.name) {
-					var next:Null<String> = null;
-					for (parent in plan.program.objects) if (parent.name == base) next = parent.base;
-					base = next;
+			if (exact)
+				for (candidate in plan.program.objects) {
+					var base = candidate.base;
+					while (base != null && base != object.name) {
+						var next:Null<String> = null;
+						for (parent in plan.program.objects)
+							if (parent.name == base)
+								next = parent.base;
+						base = next;
+					}
+					if (base == object.name) {
+						body.push(LocalGet(typeLocal));
+						body.push(I32Const(WasmModuleSupport.typeId(Obj(object.name))));
+						body.push(I32Eq);
+						body.push(If(null));
+						body.push(LocalGet(valueLocal));
+						body.push(RefTest({nullable: false, heap: Type(plan.objectType(candidate.name))}));
+						body.push(If(null));
+						body.push(I32Const(0));
+						body.push(LocalSet(outputLocal));
+						body.push(End);
+						body.push(End);
+					}
 				}
-				if (base == object.name) {
-					body.push(LocalGet(typeLocal));
-					body.push(I32Const(WasmModuleSupport.typeId(Obj(object.name))));
-					body.push(I32Eq);
-					body.push(If(null));
-					body.push(LocalGet(valueLocal));
-					body.push(RefTest({nullable: false, heap: Type(plan.objectType(candidate.name))}));
-					body.push(If(null));
-					body.push(I32Const(0));
-					body.push(LocalSet(outputLocal));
-					body.push(End);
-					body.push(End);
-				}
-			}
 		}
 		for (enumDecl in plan.program.enums)
 			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Enum(enumDecl.name), plan.enumType(enumDecl.name));
@@ -1105,8 +1108,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		if (name == "__std_is_of_type" || name == "__std_is_exact_type" || name == "__exception_matches") {
 			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)
 				throw 'Invalid Wasm GC $name signature';
-			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal,
-				name == "__std_is_exact_type");
+			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");
 		}
 		if (name == "__reflect_is_object") {
 			if (output.type != Bool || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)

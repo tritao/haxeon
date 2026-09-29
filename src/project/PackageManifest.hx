@@ -27,6 +27,7 @@ class NativeCMakeManifest {
 	public final source:String;
 	public final target:String;
 	public final inputs:Array<String>;
+
 	/** Name of a CMake shared-library target whose runtime file Haxeon exposes. */
 	public final library:Null<String>;
 

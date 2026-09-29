@@ -2376,34 +2376,35 @@ class WasmLinearRuntime {
 			builder.localGet(typeId);
 			builder.emit(I32Eq);
 			builder.localSet(result);
-			if (name != "__std_is_exact_type") for (object in program.objects) {
-				var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
-				var base = object.base;
-				while (base != null) {
-					accepted.push(WasmModuleSupport.typeId(Obj(base)));
-					var next:Null<String> = null;
-					for (candidate in program.objects)
-						if (candidate.name == base)
-							next = candidate.base;
-					base = next;
-				}
-				for (interfaceName in object.interfaces)
-					accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
-				builder.localGet(value);
-				builder.emit(I32Load(0));
-				builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
-				builder.emit(I32Eq);
-				builder.if_(function(builder) {
-					for (index in 0...accepted.length) {
-						builder.localGet(typeId);
-						builder.i32Const(accepted[index]);
-						builder.emit(I32Eq);
-						if (index > 0)
-							builder.emit(I32Or);
+			if (name != "__std_is_exact_type")
+				for (object in program.objects) {
+					var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
+					var base = object.base;
+					while (base != null) {
+						accepted.push(WasmModuleSupport.typeId(Obj(base)));
+						var next:Null<String> = null;
+						for (candidate in program.objects)
+							if (candidate.name == base)
+								next = candidate.base;
+						base = next;
 					}
-					builder.localSet(result);
-				});
-			}
+					for (interfaceName in object.interfaces)
+						accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
+					builder.localGet(value);
+					builder.emit(I32Load(0));
+					builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
+					builder.emit(I32Eq);
+					builder.if_(function(builder) {
+						for (index in 0...accepted.length) {
+							builder.localGet(typeId);
+							builder.i32Const(accepted[index]);
+							builder.emit(I32Eq);
+							if (index > 0)
+								builder.emit(I32Or);
+						}
+						builder.localSet(result);
+					});
+				}
 		});
 		builder.localGet(result);
 		builder.return_();

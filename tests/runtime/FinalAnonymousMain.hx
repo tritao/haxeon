@@ -17,7 +17,8 @@ class FinalAnonymousMain {
 			compiler.compile("Main");
 			throw "Final anonymous field accepted mutation";
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1024") throw error;
+			if (error.diagnostic.code != "E1024")
+				throw error;
 		}
 		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; value.x++; return 42; }');
@@ -25,7 +26,8 @@ class FinalAnonymousMain {
 			compiler.compile("Main");
 			throw "Final anonymous field accepted increment";
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1024") throw error;
+			if (error.diagnostic.code != "E1024")
+				throw error;
 		}
 		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; return value.x == 2.0 ? 42 : 1; }');

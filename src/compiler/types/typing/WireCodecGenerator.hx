@@ -513,12 +513,12 @@ class WireCodecGenerator {
 			value:TypedExpression, type:CompilerType, span:SourceSpan):Array<TypedStatement> {
 		return switch type {
 			case TAbstract(_, _, representation):
-				var encoded = encodeNestedValueStatements(writer,
-					session.representation.boundaryCast(value, representation), representation, span);
+				var encoded = encodeNestedValueStatements(writer, session.representation.boundaryCast(value, representation), representation, span);
 				switch representation {
 					case TArray(_), TMap(_, _), TAnonymous(_, _), TInstance(_, _, _):
-						[TIf(isNullValue(value, type, span),
-							[expressionStatement(method(writer, "writeNil", [], TVoid, span), span)], encoded, span)];
+						[
+							TIf(isNullValue(value, type, span), [expressionStatement(method(writer, "writeNil", [], TVoid, span), span)], encoded, span)
+						];
 					default: encoded;
 				}
 			case TNullable(element):

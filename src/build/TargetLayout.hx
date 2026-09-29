@@ -53,8 +53,10 @@ class TargetLayout {
 
 	/** CMake's default shared-library filename, placed in the package runtime directory. */
 	public function cmakeSharedLibraryPath(packageName:String, libraryName:String):String
-		return Path.join([packageRoot(packageName),
-			(environment.target.os == TargetOs.Windows ? "" : "lib") + libraryName + environment.toolchain.sharedLibrarySuffix]);
+		return Path.join([
+			packageRoot(packageName),
+			(environment.target.os == TargetOs.Windows ? "" : "lib") + libraryName + environment.toolchain.sharedLibrarySuffix
+		]);
 
 	public function haxeonNativeLibraryPath(packageName:String):String {
 		if (environment.target.isAndroid())

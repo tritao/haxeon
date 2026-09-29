@@ -51,14 +51,15 @@ class CompilerSession {
 			});
 		if (configuration != identity)
 			reset();
-		if (compiler != null) for (path in request.paths) {
-			var before = sourceTexts.get(path);
-			var after = readChanged(path);
-			if (before != null && after != before && hasStructuralDeclaration(before, after)) {
-				reset();
-				break;
+		if (compiler != null)
+			for (path in request.paths) {
+				var before = sourceTexts.get(path);
+				var after = readChanged(path);
+				if (before != null && after != before && hasStructuralDeclaration(before, after)) {
+					reset();
+					break;
+				}
 			}
-		}
 		if (compiler == null) {
 			interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}];
 			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}];
@@ -115,7 +116,8 @@ class CompilerSession {
 			}
 		}
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
-		for (path in request.paths) sourceTexts.set(path, read(path));
+		for (path in request.paths)
+			sourceTexts.set(path, read(path));
 		return compiler;
 	}
 
@@ -138,21 +140,29 @@ class CompilerSession {
 		var result:Array<String> = [];
 		var depth = 0, capturing = false, bodyDepth = 0;
 		for (token in tokens) {
-			if (!capturing && depth == 0 && (token.kind == TokenKind.Typedef ||
-				token.kind == TokenKind.Enum || (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
+			if (!capturing
+				&& depth == 0
+				&& (token.kind == TokenKind.Typedef
+					|| token.kind == TokenKind.Enum
+					|| (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
 				capturing = true;
 				bodyDepth = 0;
 			}
 			if (capturing) {
 				result.push(token.text);
-				if (token.kind == TokenKind.LeftBrace) bodyDepth++;
+				if (token.kind == TokenKind.LeftBrace)
+					bodyDepth++;
 				else if (token.kind == TokenKind.RightBrace) {
 					bodyDepth--;
-					if (bodyDepth == 0) capturing = false;
-				} else if (token.kind == TokenKind.Semicolon && bodyDepth == 0) capturing = false;
+					if (bodyDepth == 0)
+						capturing = false;
+				} else if (token.kind == TokenKind.Semicolon && bodyDepth == 0)
+					capturing = false;
 			}
-			if (token.kind == TokenKind.LeftBrace) depth++;
-			else if (token.kind == TokenKind.RightBrace) depth--;
+			if (token.kind == TokenKind.LeftBrace)
+				depth++;
+			else if (token.kind == TokenKind.RightBrace)
+				depth--;
 		}
 		return result.join("\x1f");
 	}

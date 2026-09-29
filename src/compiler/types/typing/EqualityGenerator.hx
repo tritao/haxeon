@@ -211,12 +211,10 @@ class EqualityGenerator {
 		};
 	}
 
-	static function referenceGuards(type:CompilerType, left:TypedExpression, right:TypedExpression,
-			span:SourceSpan):Array<TypedStatement> {
+	static function referenceGuards(type:CompilerType, left:TypedExpression, right:TypedExpression, span:SourceSpan):Array<TypedStatement> {
 		var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
 		return [
-			TIf(new TypedExpression(TCall("__reference_equal", [left, right]), TBool, span),
-				[TReturn(bool(true, span), span)], [], span),
+			TIf(new TypedExpression(TCall("__reference_equal", [left, right]), TBool, span), [TReturn(bool(true, span), span)], [], span),
 			TIf(equal(left, nil, span), [TReturn(bool(false, span), span)], [], span),
 			TIf(equal(right, nil, span), [TReturn(bool(false, span), span)], [], span)
 		];

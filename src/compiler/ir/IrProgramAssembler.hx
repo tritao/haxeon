@@ -385,8 +385,13 @@ class IrProgramAssembler {
 				result: Bool
 			});
 		if (needsExactTypeTestRuntime)
-			program.natives.push({name: "__std_is_exact_type", library: "haxeon_runtime",
-				symbol: "__std_is_exact_type", arguments: [Dyn, TypeRef], result: Bool});
+			program.natives.push({
+				name: "__std_is_exact_type",
+				library: "haxeon_runtime",
+				symbol: "__std_is_exact_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
 		if (needsArrayRuntime) {
 			program.natives.push({
 				name: "__array_alloc_i32",
