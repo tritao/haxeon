@@ -122,6 +122,7 @@ class ClosureTyper {
 				var capturedType = scope.resolve(name);
 				if (capturedType != null) {
 					var captureType:CompilerType = capturedType;
+					var declaredCaptureType = scope.resolveDeclared(name);
 					var cellClass:Null<String> = null;
 					if (boundCell(name, scope) != null)
 						cellClass = boundCell(name, scope);
@@ -130,10 +131,10 @@ class ClosureTyper {
 					if (cellClass == null && (outerContext.assigned.exists(name) || lambdaAssignments.exists(name))) {
 						var newCellClass = '$' + 'cell:' + outerContext.name + ':' + name;
 						var bindingId = scope.requireId(name);
-						cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture, captureType);
+						cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture,
+							declaredCaptureType == null ? captureType : declaredCaptureType);
 					}
 					var bindingId = scope.requireId(name),
-						declaredCaptureType = scope.resolveDeclared(name),
 						captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
 							scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
 							CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);

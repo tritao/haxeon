@@ -478,6 +478,9 @@ class TestMain {
 		var nullablePrimitiveCaptureProgram = Frontend.compile('function capture(value:Null<Int>):Int { var callback = function() { return value == null ? 0 : value; }; return callback(); } function main():Int return capture(42);');
 		if (new IrInterpreter(nullablePrimitiveCaptureProgram).run("main") != 42)
 			throw "A flow-narrowed nullable primitive capture used the wrong closure storage type";
+		var nullableMutableCaptureProgram = Frontend.compile('function main():Int { var value:Null<Int> = null; var set = function() { value = 42; }; set(); if (value == null) return 0; return value; }');
+		if (new IrInterpreter(nullableMutableCaptureProgram).run("main") != 42)
+			throw "A flow-narrowed nullable mutable capture used the wrong cell storage type";
 		Frontend.compile('function invoke(?done:Void->Void):Void { var outer = function() { var inner = function() { if (done != null) done(); }; inner(); }; outer(); } function main():Int { invoke(); return 0; }');
 		Frontend.compile('function main():Int { var value = 0; var update = function() { value = 42; }; update(); return value; }');
 		expectCompileError('function invoke(?done:Void->Void):Void { var outer = function() { done(); }; outer(); } function main():Int { invoke(); return 0; }',
