@@ -1301,7 +1301,34 @@ class IrGenerator {
 				localTypes.set(resultName, resultType);
 				localTypes.set(indexName, I32);
 				localTypes.set(keyName, lowerType(keyType));
+				// `a...b` counts from the start value instead of materializing an Array<Int>.
+				var rangeBounds:Null<{start:TypedExpression, end:TypedExpression}> = null;
 				if (valueName == null)
+					switch iterable.expression {
+						case TRange(start, end): rangeBounds = {start: start, end: end};
+						default:
+					}
+				var rangeStartName = '$' + 'comprehension-range-start:${expression.span.start}',
+					rangeLengthName = '$' + 'comprehension-range-length:${expression.span.start}';
+				if (rangeBounds != null) {
+					var endName = '$' + 'comprehension-range-end:${expression.span.start}';
+					for (name in [rangeStartName, rangeLengthName, endName])
+						localTypes.set(name, I32);
+					builder.store(rangeStartName, lowerExpression(rangeBounds.start, builder, localTypes));
+					builder.store(endName, lowerExpression(rangeBounds.end, builder, localTypes));
+					var positiveLength = builder.createBlock(),
+						emptyLength = builder.createBlock(),
+						lengthKnown = builder.createBlock();
+					var difference = builder.sub(builder.load(endName, I32), builder.load(rangeStartName, I32));
+					builder.branch(builder.less(difference, builder.constInt(0)), emptyLength, positiveLength);
+					builder.select(emptyLength);
+					builder.store(rangeLengthName, builder.constInt(0));
+					builder.jump(lengthKnown);
+					builder.select(positiveLength);
+					builder.store(rangeLengthName, builder.sub(builder.load(endName, I32), builder.load(rangeStartName, I32)));
+					builder.jump(lengthKnown);
+					builder.select(lengthKnown);
+				} else if (valueName == null)
 					builder.store(inputName, lowerExpression(iterable, builder, localTypes));
 				else {
 					var loweredMapType = lowerType(iterable.type);
@@ -1316,7 +1343,8 @@ class IrGenerator {
 				};
 				var capacity = !iterator
 					&& condition == null
-					&& !flattened ? builder.arraySize(builder.load(inputName, inputType)) : builder.constInt(0);
+					&& !flattened ? (rangeBounds != null ? builder.load(rangeLengthName,
+						I32) : builder.arraySize(builder.load(inputName, inputType))) : builder.constInt(0);
 				builder.store(resultName, lowerArrayAllocation(builder, resultElement, capacity));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
@@ -1325,12 +1353,16 @@ class IrGenerator {
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
 				var index = builder.load(indexName, I32);
-				if (iterator)
+				if (rangeBounds != null)
+					builder.branch(builder.less(index, builder.load(rangeLengthName, I32)), bodyBlock, afterBlock);
+				else if (iterator)
 					builder.branch(builder.iteratorHasNext(builder.load(inputName, inputType)), bodyBlock, afterBlock);
 				else
 					builder.branch(builder.less(index, builder.arraySize(builder.load(inputName, inputType))), bodyBlock, afterBlock);
 				builder.select(bodyBlock);
-				if (iterator) {
+				if (rangeBounds != null)
+					builder.store(keyName, builder.add(builder.load(rangeStartName, I32), builder.load(indexName, I32)));
+				else if (iterator) {
 					var next = builder.iteratorNext(builder.load(inputName, inputType), lowerType(keyType));
 					builder.store(keyName, next);
 				} else

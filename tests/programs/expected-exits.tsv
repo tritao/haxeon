@@ -224,3 +224,4 @@ local-function-defaults	42
 enum-abstract-switch	42
 range-counted-loop	22
 gc-controls	42
+range-comprehension	65
