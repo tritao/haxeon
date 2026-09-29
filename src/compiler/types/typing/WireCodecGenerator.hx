@@ -192,7 +192,7 @@ class WireCodecGenerator {
 			case TNullable(element): isRequestType(session, element);
 			case TArray(element): isRequestType(session, element) && RuntimeType.arrayName(element) != null;
 			case TMap(key, value): isMapKeyType(session, key) && isRequestType(session, value) && RuntimeType.mapName(key, value) != null;
-			case TAbstract(_, arguments, representation): arguments.length == 0 && isRequestType(session, representation);
+			case TAbstract(_, _, representation): isRequestType(session, representation);
 			case TAnonymous(_, _): wireAlias(session, type) != null;
 			case TInstance(NominalKind.Class, name, arguments): arguments.length == 0 && isWireClass(session, name);
 			case TInstance(NominalKind.Enum, name, arguments): arguments.length == 0 && isWireEnum(session, name);
@@ -1026,7 +1026,8 @@ class WireCodecGenerator {
 
 	static function typeKey(type:CompilerType):String
 		return switch type {
-			case TAbstract(name, _, _): "abstract_" + nominalKey(name);
+			case TAbstract(name, arguments, _):
+				"abstract_" + nominalKey(name) + (arguments.length == 0 ? "" : "_" + [for (argument in arguments) typeSegment(typeKey(argument))].join("_"));
 			case TAnonymous(name, _): "anonymous_" + nominalKey(name);
 			case TInt: "int";
 			case TInt64: "int64";
