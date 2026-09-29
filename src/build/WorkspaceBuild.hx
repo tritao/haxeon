@@ -22,11 +22,19 @@ class LoweredWorkspaceProject {
 
 	public final actions:Array<ActionId>;
 
-	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>) {
+	/** See `WorkspaceProject.cacheTests` and `testInputs`. */
+	public final cacheTests:Bool;
+
+	public final testInputs:Array<String>;
+
+	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true,
+			?testInputs:Array<String>) {
 		this.name = name;
 		this.project = project;
 		this.output = output;
 		this.actions = actions.copy();
+		this.cacheTests = cacheTests;
+		this.testInputs = testInputs == null ? [] : testInputs.copy();
 	}
 }
 
@@ -86,7 +94,7 @@ class WorkspaceBuild {
 				ids.push(action.id);
 				raw++;
 			}
-			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids));
+			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids, member.cacheTests, member.testInputs));
 		}
 		return new LoweredWorkspace(environment, new ExecutionPlan([for (key in order) merged.get(key)]), lowered, raw, requestedBy);
 	}
@@ -96,14 +104,15 @@ class WorkspaceBuild {
 	 * through it the native libraries the module loads, has finished. Output goes to a per-project log so
 	 * concurrent tests do not interleave; a failing test prints the tail of its log.
 	 */
-	public static function withTests(workspace:LoweredWorkspace, home:String):ExecutionPlan {
+	public static function withTests(workspace:LoweredWorkspace, home:String, useCache:Bool = true):ExecutionPlan {
 		if (Sys.systemName() == "Windows")
 			throw "Workspace tests currently run on Linux and macOS only";
 		var actions = workspace.plan.actions.copy(),
 			context = new LoweringContext(workspace.environment, null, null, null, home, [], false, true),
 			hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 			variable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
-			existing = Sys.getEnv(variable);
+			existing = Sys.getEnv(variable),
+			runtime = runtimeFiles(home);
 		for (member in workspace.projects) {
 			var compile:Null<ActionId> = null;
 			for (id in member.actions)
@@ -111,23 +120,51 @@ class WorkspaceBuild {
 					compile = id;
 			if (compile == null)
 				throw 'Workspace project "${member.name}" has no compile action to test';
-			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])];
+			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])],
+				// What a passing run depends on besides the compile action: the module, the HashLink runtime,
+				// the native libraries it loads, and the files beside its project. The project directory
+				// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
+				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
 			for (resolvedPackage in member.project.packages.packages) {
-				directories.push(context.layout.packageRoot(resolvedPackage.name));
+				var packageRoot = context.layout.packageRoot(resolvedPackage.name);
+				directories.push(packageRoot);
+				inputs.push(packageRoot);
 				var sharedOutput = NativeCMakeProvider.sharedOutputDirectory(resolvedPackage, context);
-				if (sharedOutput != null)
+				if (sharedOutput != null) {
 					directories.push(sharedOutput);
+					inputs.push(sharedOutput);
+				}
 			}
 			if (existing != null && existing.length > 0)
 				directories.push(existing);
-			var environment = [variable => directories.join(":")],
-				log = Path.join([workspace.environment.buildRoot, "tests", StringTools.replace(member.name, "/", "-") + ".log"]),
-				script = 'mkdir -p ${quote(Path.directory(log))} && ${quote(hashlink)} ${quote(member.output)} > ${quote(log)} 2>&1; status=$$?; '
-				+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
-			actions.push(new ExecutionAction(new ActionId("test:" + member.name), [compile], [], [], 'Test ${member.name} (log: $log)',
-				Process("sh", ["-c", script], member.project.root, environment), true, true));
+			var testsDirectory = Path.join([workspace.environment.buildRoot, "tests"]),
+				safeName = StringTools.replace(member.name, "/", "-"),
+				environment = [variable => directories.join(":")],
+				log = Path.join([testsDirectory, safeName + ".log"]),
+				stamp = Path.join([testsDirectory, safeName + ".passed"]),
+				// The stamp exists only while the last run of this action passed; the executor skips the run
+				// when it exists and every input is unchanged since a passing run.
+				script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)} > ${quote(log)} 2>&1; status=$$?; '
+				+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+			actions.push(new ExecutionAction(new ActionId("test:" + member.name), [compile], inputs, [stamp], 'Test ${member.name} (log: $log)',
+				Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
 		}
 		return new ExecutionPlan(actions);
+	}
+
+	/** HashLink and Haxeon runtime libraries a module loads, without the many compiled programs beside them. */
+	static function runtimeFiles(home:String):Array<String> {
+		var files:Array<String> = [];
+		for (directory in [Path.join([home, ".tools", "hashlink"]), Path.join([home, "out"])])
+			if (sys.FileSystem.exists(directory) && sys.FileSystem.isDirectory(directory))
+				for (entry in sys.FileSystem.readDirectory(directory)) {
+					var path = Path.join([directory, entry]);
+					if (!sys.FileSystem.isDirectory(path)
+						&& (entry == "hl" || StringTools.endsWith(entry, ".hdll") || StringTools.endsWith(entry, ".so") || entry.indexOf(".so.") > 0
+							|| StringTools.endsWith(entry, ".dylib")))
+						files.push(path);
+				}
+		return files;
 	}
 
 	static function quote(value:String):String

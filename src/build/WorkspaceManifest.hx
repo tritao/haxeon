@@ -14,10 +14,24 @@ class WorkspaceProject {
 
 	public final tags:Array<String>;
 
-	public function new(name:String, manifestPath:String, tags:Array<String>) {
+	/**
+	 * Whether a passing test run may be skipped while its inputs are unchanged. Turn it off for suites that
+	 * are not hermetic, such as ones that depend on the clock, the network or a peer process.
+	 */
+	public final cacheTests:Bool;
+
+	/**
+	 * Extra files a test reads at run time, absolute. Its module, the runtime, its native libraries and its
+	 * own project directory are always inputs; list data that lives elsewhere.
+	 */
+	public final testInputs:Array<String>;
+
+	public function new(name:String, manifestPath:String, tags:Array<String>, cacheTests:Bool = true, ?testInputs:Array<String>) {
 		this.name = name;
 		this.manifestPath = manifestPath;
 		this.tags = tags.copy();
+		this.cacheTests = cacheTests;
+		this.testInputs = testInputs == null ? [] : testInputs.copy();
 	}
 
 	public function hasTag(tag:String):Bool
@@ -66,7 +80,11 @@ class WorkspaceManifest {
 			if (seen.exists(name))
 				throw 'Duplicate workspace project name "$name"';
 			seen.set(name, true);
-			projects.push(new WorkspaceProject(name, manifestPath, tags == null ? [] : tags));
+			var cache:Null<Bool> = Reflect.field(entry, "cache"),
+				inputs:Null<Array<String>> = Reflect.field(entry, "inputs"),
+				projectDirectory = Path.directory(manifestPath);
+			projects.push(new WorkspaceProject(name, manifestPath, tags == null ? [] : tags, cache != false,
+				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([projectDirectory, input]))]));
 		}
 		return new WorkspaceManifest(absolute, root, Path.normalize(Path.join([root, buildDir == null ? "build/workspace" : buildDir])), projects);
 	}

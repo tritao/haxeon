@@ -454,14 +454,17 @@ class HaxeonCli {
 			only:Array<String> = [],
 			showActions = false,
 			jobs = cpuCount(),
-			compilers = 3;
+			compilers = 3,
+			noTestCache = false;
 		if (subcommand != "plan" && subcommand != "build" && subcommand != "test")
-			throw 'Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--actions]';
+			throw 'Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--no-test-cache] [--actions]';
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--actions")
 				showActions = true;
+			else if (argument == "--no-test-cache")
+				noTestCache = true;
 			else if (argument == "--workspace" || argument == "--skip-tag" || argument == "--only" || argument == "--jobs" || argument == "--compilers") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
@@ -500,7 +503,7 @@ class HaxeonCli {
 			lowered = WorkspaceBuild.lower(workspace, selected, manifest -> discoverProject(manifest), haxeonHome(), []),
 			elapsed = Sys.time() * 1000.0 - started;
 		if (subcommand != "plan") {
-			var execution = subcommand == "test" ? WorkspaceBuild.withTests(lowered, haxeonHome()) : lowered.plan,
+			var execution = subcommand == "test" ? WorkspaceBuild.withTests(lowered, haxeonHome(), !noTestCache) : lowered.plan,
 				executor = new Executor(lowered.environment, jobs);
 			executor.maxConcurrentCompilers = compilers;
 			var ninja = NativeCMakeProvider.ninjaExecutable(haxeonHome()), server:Null<JobServer> = null;
@@ -524,7 +527,7 @@ class HaxeonCli {
 				var tests = [for (item in result.actions) if (StringTools.startsWith(item.id.key(), "test:")) item];
 				Sys.println("Tests:");
 				for (item in tests)
-					Sys.println('  ${item.succeeded() ? "pass" : (item.blocked ? "blocked" : "FAIL")}  ${item.id.key().substr(5)}');
+					Sys.println('  ${item.succeeded() ? (item.skipped ? "pass (cached)" : "pass") : (item.blocked ? "blocked" : "FAIL")}  ${item.id.key().substr(5)}');
 			}
 			var timed = [for (item in result.actions) if (item.elapsedMs > 0) item];
 			timed.sort((left, right) -> left.elapsedMs > right.elapsedMs ? -1 : (left.elapsedMs < right.elapsedMs ? 1 : 0));
@@ -1384,7 +1387,7 @@ class HaxeonCli {
 		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
 		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");
-		Sys.println("       [--jobs N] [--compilers N] [--actions]");
+		Sys.println("       [--jobs N] [--compilers N] [--no-test-cache] [--actions]");
 		Sys.println("                                    Merge the workspace's projects into one build graph;");
 		Sys.println("                                    build or test run it with shared native builds");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
