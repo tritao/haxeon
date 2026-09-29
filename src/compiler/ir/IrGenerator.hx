@@ -406,12 +406,29 @@ class IrGenerator {
 						case TMap(key, _): lowerType(key);
 						default: throw 'For-in iterable is not an array';
 					};
-					localTypes.set(arrayName, arrayType);
+					// `a...b` counts directly instead of materializing an Array<Int>.
+					var rangeEnd:Null<TypedExpression> = null,
+						rangeEndName = '$' + 'for-end:${span.start}';
+					var rangeStart:Null<TypedExpression> = null;
+					if (valueName == null)
+						switch iterable.expression {
+							case TRange(start, end):
+								rangeStart = start;
+								rangeEnd = end;
+							default:
+						}
+					var counted = rangeEnd != null;
+					if (!counted)
+						localTypes.set(arrayName, arrayType);
 					localTypes.set(indexName, I32);
 					localTypes.set(breakFlag, Bool);
 					localTypes.set(name, elementType);
 					builder.debugLocal(name, span, statementsScopeEnd(body, span.end));
-					if (valueName == null)
+					if (counted) {
+						localTypes.set(rangeEndName, I32);
+						builder.store(indexName, builder.sub(lowerExpression(rangeStart, builder, localTypes), builder.constInt(1)));
+						builder.store(rangeEndName, lowerExpression(rangeEnd, builder, localTypes));
+					} else if (valueName == null)
 						builder.store(arrayName, lowerExpression(iterable, builder, localTypes));
 					else {
 						var loweredMapType = lowerType(iterable.type);
@@ -421,7 +438,7 @@ class IrGenerator {
 						builder.store(mapName, lowerExpression(iterable, builder, localTypes));
 						builder.store(arrayName, lowerMapKeys(builder, localTypes, builder.load(mapName, loweredMapType), mapKey, mapValue));
 					}
-					if (!iterator)
+					if (!iterator && !counted)
 						builder.store(indexName, builder.constInt(-1));
 					builder.store(breakFlag, builder.constBool(false));
 					var conditionBlock = builder.createBlock(),
@@ -432,7 +449,11 @@ class IrGenerator {
 					builder.select(conditionBlock);
 					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
 					builder.select(checkBlock);
-					if (iterator)
+					if (counted) {
+						var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
+						builder.store(indexName, indexValue);
+						builder.branch(builder.less(indexValue, builder.load(rangeEndName, I32)), bodyBlock, afterBlock);
+					} else if (iterator)
 						builder.branch(builder.iteratorHasNext(builder.load(arrayName, arrayType)), bodyBlock, afterBlock);
 					else {
 						var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
@@ -441,7 +462,9 @@ class IrGenerator {
 						builder.branch(builder.less(indexValue, builder.arraySize(arrayValue)), bodyBlock, afterBlock);
 					}
 					builder.select(bodyBlock);
-					if (iterator) {
+					if (counted)
+						initializeLocal(name, builder.load(indexName, I32), builder, localTypes);
+					else if (iterator) {
 						var next = builder.iteratorNext(builder.load(arrayName, arrayType), elementType);
 						initializeLocal(name, next, builder, localTypes);
 					} else {
