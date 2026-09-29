@@ -10,6 +10,75 @@ HL_PRIM vstring *HL_NAME(__string_concat)( vstring *left, vstring *right ) {
 	return result;
 }
 
+/* Concatenates `count` strings with a single allocation. NULL operands count as empty, like __string_concat. */
+static vstring *realtime_string_concat_many( vstring **parts, int count ) {
+	int total = 0;
+	for( int index = 0; index < count; index++ )
+		total += realtime_string_length(parts[index]);
+	uchar *output;
+	vstring *result = realtime_string_alloc(total,&output);
+	for( int index = 0; index < count; index++ ) {
+		int length = realtime_string_length(parts[index]);
+		if( length > 0 ) {
+			memcpy(output,parts[index]->bytes,length * sizeof(uchar));
+			output += length;
+		}
+	}
+	return result;
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat3)( vstring *s0, vstring *s1, vstring *s2 ) {
+	vstring *parts[3] = { s0, s1, s2 };
+	return realtime_string_concat_many(parts,3);
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat4)( vstring *s0, vstring *s1, vstring *s2, vstring *s3 ) {
+	vstring *parts[4] = { s0, s1, s2, s3 };
+	return realtime_string_concat_many(parts,4);
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat5)( vstring *s0, vstring *s1, vstring *s2, vstring *s3, vstring *s4 ) {
+	vstring *parts[5] = { s0, s1, s2, s3, s4 };
+	return realtime_string_concat_many(parts,5);
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat6)( vstring *s0, vstring *s1, vstring *s2, vstring *s3, vstring *s4, vstring *s5 ) {
+	vstring *parts[6] = { s0, s1, s2, s3, s4, s5 };
+	return realtime_string_concat_many(parts,6);
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat7)( vstring *s0, vstring *s1, vstring *s2, vstring *s3, vstring *s4, vstring *s5, vstring *s6 ) {
+	vstring *parts[7] = { s0, s1, s2, s3, s4, s5, s6 };
+	return realtime_string_concat_many(parts,7);
+}
+
+HL_PRIM vstring *HL_NAME(__string_concat8)( vstring *s0, vstring *s1, vstring *s2, vstring *s3, vstring *s4, vstring *s5, vstring *s6, vstring *s7 ) {
+	vstring *parts[8] = { s0, s1, s2, s3, s4, s5, s6, s7 };
+	return realtime_string_concat_many(parts,8);
+}
+
+extern int hl_format_double( uchar *output, double value );
+
+/* Formats a Float like Std.string, without boxing it. */
+HL_PRIM vstring *HL_NAME(__string_from_f64)( double value ) {
+	uchar buffer[40];
+	int length = hl_format_double(buffer,value);
+	return realtime_string_copy(buffer,length);
+}
+
+/* Formats an Int without boxing it or going through a temporary UTF-8 buffer. */
+HL_PRIM vstring *HL_NAME(__string_from_int)( int value ) {
+	uchar buffer[12];
+	int position = 12;
+	unsigned int magnitude = value < 0 ? 0u - (unsigned int)value : (unsigned int)value;
+	do {
+		buffer[--position] = (uchar)('0' + magnitude % 10);
+		magnitude /= 10;
+	} while( magnitude != 0 );
+	if( value < 0 ) buffer[--position] = (uchar)'-';
+	return realtime_string_copy(buffer + position,12 - position);
+}
+
 HL_PRIM int HL_NAME(__string_length)( vstring *value ) {
 	return realtime_string_length(value);
 }

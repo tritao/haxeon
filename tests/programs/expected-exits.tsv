@@ -228,3 +228,4 @@ range-comprehension	65
 iterator-index-loop	42
 interface-conversion-cache	42
 profile-span	42
+string-concat-chain	42

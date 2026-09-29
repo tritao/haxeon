@@ -290,6 +290,7 @@ class IrProgramAssembler {
 			needsArrayCastRuntime = false,
 			needsAnyArrayRuntime = false,
 			needsStringRuntime = false,
+			stringFastPathNames:Map<String, Bool> = [],
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
@@ -320,6 +321,11 @@ class IrProgramAssembler {
 								|| name == "__string_char_at" || name == "__string_char_code_at" || name == "__string_from_char_code"
 								|| name == "__string_substring" || name == "__string_to_lower_case" || name == "__string_to_upper_case")
 								needsStringRuntime = true;
+							if (name == "__string_from_int"
+								|| name == "__string_from_f64"
+								|| StringTools.startsWith(name, "__string_concat")
+								&& name != "__string_concat")
+								stringFastPathNames.set(name, true);
 							if (StringTools.startsWith(name, "__map_")) {
 								var operationStart = lastSeparatorCode(name, 95);
 								if (operationStart > 0)
@@ -580,6 +586,19 @@ class IrProgramAssembler {
 				});
 			}
 		}
+		var fastPathNames = [for (name in stringFastPathNames.keys()) name];
+		fastPathNames.sort(Reflect.compare);
+		for (name in fastPathNames)
+			if (!hasNative(natives, name)) {
+				var operands = name == "__string_from_int" ? [I32] : name == "__string_from_f64" ? [F64] : [for (_ in 0...Std.parseInt(name.substr("__string_concat".length))) Bytes];
+				program.natives.push({
+					name: name,
+					library: "haxeon_runtime",
+					symbol: name,
+					arguments: operands,
+					result: Bytes
+				});
+			}
 		if (needsStringRuntime)
 			program.natives.push({
 				name: "__string_concat",

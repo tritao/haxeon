@@ -68,6 +68,48 @@ class IrGenerator {
 	public static function bindNativeArrayChecks(enabled:Bool):Void
 		nativeArrayChecks = enabled;
 
+	/** HashLink runtime natives that concatenate several strings with one allocation and format an Int without boxing it. */
+	public static function bindNativeStringFastPaths(enabled:Bool):Void
+		nativeStringFastPaths = enabled;
+
+	static var nativeStringFastPaths = false;
+
+	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
+	static function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
+		switch expression.expression {
+			case TAdd(left, right) if (lowerType(expression.type) == Bytes):
+				collectStringConcatOperands(left, into);
+				collectStringConcatOperands(right, into);
+			case TStringLiteral(text):
+				var last = into.length == 0 ? null : into[into.length - 1];
+				switch last == null ? null : last.expression {
+					case TStringLiteral(previous): into[into.length - 1] = new TypedExpression(TStringLiteral(previous + text), last.type, last.span);
+					default: into.push(expression);
+				}
+			default:
+				into.push(expression);
+		}
+	}
+
+	static function lowerStringConcat(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var leaves:Array<TypedExpression> = [];
+		collectStringConcatOperands(expression, leaves);
+		if (leaves.length == 1)
+			return lowerExpression(leaves[0], builder, localTypes);
+		var values = lowerOperands(leaves, builder, localTypes);
+		var accumulated:CfgValue = values[0], index = 1;
+		while (index < values.length) {
+			// A concat native takes at most 8 operands, one of which is the running result.
+			var take = nativeStringFastPaths ? Std.int(Math.min(values.length - index, 7)) : 1;
+			var group:Array<CfgValue> = [accumulated];
+			for (offset in 0...take)
+				group.push(values[index + offset]);
+			index += take;
+			accumulated = group.length == 2 ? builder.call("__string_concat", group, Bytes) : builder.call('__string_concat${group.length}', group, Bytes);
+		}
+		return accumulated;
+	}
+
 	/** `array.iterator()`, `map.keys()`, `map.values()` and `map.iterator()` iterate an array through the boxing runtime
 	 * iterator; iterating the array directly with an index loop is equivalent and allocates nothing per element.
 	 */
@@ -85,6 +127,18 @@ class IrGenerator {
 			default:
 		}
 		return iterable;
+	}
+
+	/** The Int or Float inside `Std.string(value)`'s boxing conversion, so it can be formatted without the box. */
+	static function stringifiedPrimitive(argument:TypedExpression):Null<TypedExpression> {
+		return switch argument.expression {
+			case TToDynamic(inner):
+				switch inner.type {
+					case TInt | TFloat: inner;
+					default: null;
+				}
+			default: null;
+		};
 	}
 
 	public static function generate(typed:TypedProgram):IrProgram
@@ -912,11 +966,11 @@ class IrGenerator {
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
+			case TAdd(a, b) if (lowerType(expression.type) == Bytes):
+				lowerStringConcat(expression, builder, localTypes);
 			case TAdd(a, b):
-				var operands = lowerOperands([a, b], builder, localTypes),
-					left = operands[0],
-					right = operands[1];
-				lowerType(expression.type) == Bytes ? builder.call("__string_concat", [left, right], Bytes) : builder.add(left, right);
+				var operands = lowerOperands([a, b], builder, localTypes);
+				builder.add(operands[0], operands[1]);
 			case TSub(a, b):
 				var values = lowerOperands([a, b], builder, localTypes);
 				builder.sub(values[0], values[1]);
@@ -1011,6 +1065,9 @@ class IrGenerator {
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
+			case TCall("__std_string" | "Std.string", [argument]) if (nativeStringFastPaths && stringifiedPrimitive(argument) != null):
+				var primitive = stringifiedPrimitive(argument);
+				builder.call(primitive.type == TInt ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
 			case TCall("__reference_equal", [left, right]):
 				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
 			case TCall("__std_is_of_type", args):
