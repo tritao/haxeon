@@ -21,10 +21,12 @@ class ProcessRunner {
 
 	public static function run(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>, forwardOutput:Bool = true):Int {
 		#if (target.threaded && !eval)
-		var previousDirectory = Sys.getCwd(),
-			oldEnvironment = new Map<String, Null<String>>(),
+		var oldEnvironment = new Map<String, Null<String>>(),
 			process:Process = null;
 		launchMutex.acquire();
+		// Read under the lock: another launch may have the process in its own working directory, and recording
+		// that one as "previous" would leave this process in a directory that is later deleted.
+		var previousDirectory = Sys.getCwd();
 		try {
 			if (cwd != null
 				&& cwd != ""
