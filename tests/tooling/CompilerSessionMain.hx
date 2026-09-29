@@ -111,10 +111,24 @@ class CompilerSessionMain {
 		File.saveContent(generic, File.getContent(generic).split("return 7;").join("return 11;"));
 		compile();
 		compareFresh(12);
+		var shape = root + "/Shape.hx", holder = root + "/Holder.hx", shapeMain = root + "/ShapeMain.hx";
+		File.saveContent(shape, "typedef Shape = { var x:Int; }");
+		File.saveContent(holder,
+			"class Holder { public var values:Array<Shape> = []; public function new() {} public function size():Int return values.length; }");
+		File.saveContent(shapeMain, "class ShapeMain { public static function main():Int return new Holder().size(); }");
+		var shapeArgs = ["--target=hl", "--entry=ShapeMain", "--root=" + root,
+			shapeMain, holder, shape, "--output=" + root + "/shape.hl"],
+			shapeSession = new CompilerSession(), shapeMessages:Array<String> = [];
+		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
+		shapeMessages = [];
+		File.saveContent(shape, "typedef Shape = { var x:Int; ?y:Int; }");
+		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
+		expect(shapeMessages.indexOf("reusing compiler session") < 0,
+			"a typedef shape edit must reset cached field ABI");
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);
-		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, and generic invalidation");
+		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic and typedef invalidation");
 	}
 
 	static function expect(condition:Bool, message:String):Void {

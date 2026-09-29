@@ -16,6 +16,7 @@ class CompilerSession {
 	var compiler:Null<Compiler>;
 	var configuration:Null<String>;
 	var writerCache = new HlWriterCache();
+	var sourceTexts:Map<String, String> = [];
 
 	public function new() {}
 
@@ -23,6 +24,7 @@ class CompilerSession {
 		compiler = null;
 		configuration = null;
 		writerCache = new HlWriterCache();
+		sourceTexts = [];
 	}
 
 	public function encodeHashLink(code:HlCode):haxe.io.Bytes
@@ -46,6 +48,14 @@ class CompilerSession {
 			});
 		if (configuration != identity)
 			reset();
+		if (compiler != null) for (path in request.paths) {
+			var before = sourceTexts.get(path);
+			var after = readChanged(path);
+			if (before != null && after != before && hasStructuralDeclaration(before, after)) {
+				reset();
+				break;
+			}
+		}
 		if (compiler == null) {
 			interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}];
 			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}];
@@ -58,6 +68,15 @@ class CompilerSession {
 				if (Path.isAbsolute(path) && !FileSystem.exists(path)) {
 					reset();
 					break;
+				}
+				if (Path.isAbsolute(path)) {
+					var changed = readChanged(path);
+					if (changed != state.source.text && hasStructuralDeclaration(state.source.text, changed)) {
+						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
+						// Rebuild that semantic graph until transitive shape invalidation is complete.
+						reset();
+						break;
+					}
 				}
 			}
 		}
@@ -93,6 +112,7 @@ class CompilerSession {
 			}
 		}
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
+		for (path in request.paths) sourceTexts.set(path, read(path));
 		return compiler;
 	}
 
@@ -106,4 +126,11 @@ class CompilerSession {
 		// from the bytes they compile, independent of filesystem timestamp behavior.
 		return File.getContent(path);
 	}
+
+	static function hasStructuralDeclaration(before:String, after:String):Bool
+		return hasDeclaration(before) || hasDeclaration(after);
+
+	static function hasDeclaration(source:String):Bool
+		return source.indexOf("typedef ") >= 0 || source.indexOf("enum ") >= 0 ||
+			source.indexOf("abstract ") >= 0;
 }
