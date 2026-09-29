@@ -26,9 +26,9 @@ HL_PRIM vstring *HL_NAME(__sys_get_env)( vstring *name ) {
 }
 
 HL_PRIM bool HL_NAME(__sys_put_env)( vstring *name, vstring *value ) {
-	char *owned_name, *owned_value;
+	char *owned_name, *owned_value = NULL;
 	vbyte *name_argument = realtime_platform_argument(name,&owned_name);
-	vbyte *value_argument = realtime_platform_argument(value,&owned_value);
+	vbyte *value_argument = value == NULL ? NULL : realtime_platform_argument(value,&owned_value);
 	bool result = hl_sys_put_env(name_argument,value_argument);
 	free(owned_name);
 	free(owned_value);

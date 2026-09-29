@@ -561,6 +561,7 @@ DEFINE_PRIM(_STRING,__array_join_bytes,_ARR _STRING);
 DEFINE_PRIM(_STRING,__string_substring,_STRING _I32 _I32);
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
 DEFINE_PRIM(_BOOL,__std_is_of_type,_DYN _TYPE);
+DEFINE_PRIM(_BOOL,__std_is_exact_type,_DYN _TYPE);
 DEFINE_PRIM(_ABSTRACT(hl_process),__process_run,_STRING _ARR);
 DEFINE_PRIM(_STRING,__process_read_stdout,_ABSTRACT(hl_process));
 DEFINE_PRIM(_STRING,__process_read_stderr,_ABSTRACT(hl_process));

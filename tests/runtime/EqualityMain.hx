@@ -17,6 +17,9 @@ enum Chain { End; Link(value:Int, next:Null<Chain>); }
 abstract Millimetres(Float) from Float to Float { public inline function new(value:Float) this = value; }
 typedef Sample = { label:String, point:Point, motions:Array<Motion>, weights:Map<String, Int> };
 typedef Maybe = { @:optional note:String; };
+typedef StrictArray = { values:Array<Int>; };
+class Base { public function new() {} }
+class Derived extends Base { public function new() { super(); } }
 function main():Int {
   var first:Sample = { label: "arm", point: { x: 1.0, y: 2.0 }, motions: [Steps([3, 4]), Stopped], weights: ["a" => 1, "b" => 2] };
   var second:Sample = { label: "arm", point: { x: 1.0, y: 2.0 }, motions: [Steps([3, 4]), Stopped], weights: ["b" => 2, "a" => 1] };
@@ -54,6 +57,14 @@ function main():Int {
   var distanceLeft = new Millimetres(12.5);
   var distanceRight = new Millimetres(12.5);
   if (!Equality.equals(distanceLeft, distanceRight)) return 15;
+  var strictLeft:StrictArray = { values: null };
+  var strictRight:StrictArray = { values: null };
+  if (!Equality.equals(strictLeft, strictRight)) return 16;
+  strictRight.values = [1];
+  if (Equality.equals(strictLeft, strictRight)) return 17;
+  if (!Std.isExactType(new Base(), Base)) return 18;
+  if (Std.isExactType(new Derived(), Base)) return 19;
+  if (!Std.isExactType(new Derived(), Derived)) return 20;
   return 42;
 }');
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));

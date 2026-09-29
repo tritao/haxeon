@@ -149,7 +149,7 @@ class EqualityGenerator {
 					index = local("__equality_index", TInt, span),
 					leftElement = new TypedExpression(TIndex(left, index), element, span),
 					rightElement = new TypedExpression(TIndex(right, index), element, span);
-				[
+				referenceGuards(type, left, right, span).concat([
 					ifFalse(equal(length, otherLength, span), span),
 					TVar("__equality_index", integer(0, span), span),
 					TWhile(new TypedExpression(TLess(index, length), TBool, span), [
@@ -157,7 +157,7 @@ class EqualityGenerator {
 						TAssign("__equality_index", new TypedExpression(TAdd(index, integer(1, span)), TInt, span), span)
 					], span),
 					TReturn(bool(true, span), span)
-				];
+				]);
 			case TMap(keyType, valueType):
 				var key = local("__equality_key", keyType, span),
 					leftSize = new TypedExpression(TCollectionCall(left, "size", []), TInt, span),
@@ -166,16 +166,16 @@ class EqualityGenerator {
 					exists = new TypedExpression(TCollectionCall(right, "exists", [key]), TBool, span),
 					leftValue = new TypedExpression(TMapGet(left, key), valueType, span),
 					rightValue = new TypedExpression(TMapGet(right, key), valueType, span);
-				[
+				referenceGuards(type, left, right, span).concat([
 					ifFalse(equal(leftSize, rightSize, span), span),
 					TForIn("__equality_key", null, keys, [
 						ifFalse(exists, span),
 						ifFalse(call(valueType, leftValue, rightValue, span), span)
 					], span),
 					TReturn(bool(true, span), span)
-				];
+				]);
 			case TAnonymous(_, fields):
-				var result:Array<TypedStatement> = [];
+				var result:Array<TypedStatement> = referenceGuards(type, left, right, span);
 				for (field in fields)
 					result.push(ifFalse(call(field.type, new TypedExpression(TField(left, field.name), field.type, span),
 						new TypedExpression(TField(right, field.name), field.type, span), span),
@@ -186,7 +186,8 @@ class EqualityGenerator {
 				var declaration = session.enumDecls.get(name),
 					leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 					rightIndex = new TypedExpression(TEnumIndex(right), TInt, span),
-					result:Array<TypedStatement> = [ifFalse(equal(leftIndex, rightIndex, span), span)];
+					result:Array<TypedStatement> = referenceGuards(type, left, right, span);
+				result.push(ifFalse(equal(leftIndex, rightIndex, span), span));
 				for (constructorIndex in 0...declaration.cases.length) {
 					var constructor = declaration.cases[constructorIndex],
 						body:Array<TypedStatement> = [];
@@ -208,6 +209,17 @@ class EqualityGenerator {
 			default:
 				throw 'No structural equality generator for "$type"';
 		};
+	}
+
+	static function referenceGuards(type:CompilerType, left:TypedExpression, right:TypedExpression,
+			span:SourceSpan):Array<TypedStatement> {
+		var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
+		return [
+			TIf(new TypedExpression(TCall("__reference_equal", [left, right]), TBool, span),
+				[TReturn(bool(true, span), span)], [], span),
+			TIf(equal(left, nil, span), [TReturn(bool(false, span), span)], [], span),
+			TIf(equal(right, nil, span), [TReturn(bool(false, span), span)], [], span)
+		];
 	}
 
 	static function ifFalse(condition:TypedExpression, span:SourceSpan):TypedStatement

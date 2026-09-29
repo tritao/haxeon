@@ -33,7 +33,8 @@ class CompilerSessionMain {
 				+ (previousPath == null ? "" : separator + previousPath));
 			expect(Sys.command(runtime, [output]) == expected, "incremental bytecode must execute the edited program");
 			expect(Sys.command(runtime, [fresh]) == expected, "fresh bytecode must execute the same program");
-			Sys.putEnv(variable, previousPath == null ? "" : previousPath);
+			Sys.putEnv(variable, previousPath);
+			expect(Sys.getEnv(variable) == previousPath, "runtime library path must be restored exactly");
 			expect(File.getContent(output + ".functions").indexOf("\tMain.main\n") >= 0, "incremental bytecode must publish its stable function map");
 			expect(File.getContent(fresh + ".functions").indexOf("\tMain.main\n") >= 0, "fresh bytecode must publish its function map");
 		}
@@ -138,7 +139,7 @@ class CompilerSessionMain {
 		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
 			"a comment edit must retain the compiler session");
 		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "comment-edited program must execute");
-		Sys.putEnv(variable, previousPath == null ? "" : previousPath);
+		Sys.putEnv(variable, previousPath);
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);

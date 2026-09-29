@@ -131,7 +131,7 @@ class WasmLinearRuntime {
 							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, program));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
-						case "__std_is_of_type", "__exception_matches":
+						case "__std_is_of_type", "__std_is_exact_type", "__exception_matches":
 							functions.set(native.name, addTypeTest(module, native.name, program));
 						case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayCopy(module, native.name, 4, allocator));
@@ -2376,7 +2376,7 @@ class WasmLinearRuntime {
 			builder.localGet(typeId);
 			builder.emit(I32Eq);
 			builder.localSet(result);
-			for (object in program.objects) {
+			if (name != "__std_is_exact_type") for (object in program.objects) {
 				var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
 				var base = object.base;
 				while (base != null) {

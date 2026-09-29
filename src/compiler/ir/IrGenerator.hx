@@ -968,10 +968,19 @@ class IrGenerator {
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
+			case TCall("__reference_equal", [left, right]):
+				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
 			case TCall("__std_is_of_type", args):
 				if (args.length != 2)
 					throw "Std.isOfType intrinsic requires value and type operands";
 				builder.call("__std_is_of_type", [
+					lowerExpression(args[0], builder, localTypes),
+					builder.typeValue(lowerType(args[1].type))
+				], Bool);
+			case TCall("__std_is_exact_type", args):
+				if (args.length != 2)
+					throw "Std.isExactType intrinsic requires value and type operands";
+				builder.call("__std_is_exact_type", [
 					lowerExpression(args[0], builder, localTypes),
 					builder.typeValue(lowerType(args[1].type))
 				], Bool);

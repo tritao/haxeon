@@ -13,6 +13,15 @@ HL_PRIM bool HL_NAME(__std_is_of_type)(vdynamic *value, hl_type *type) {
 	return false;
 }
 
+HL_PRIM bool HL_NAME(__std_is_exact_type)(vdynamic *value, hl_type *type) {
+	if( value == NULL || type == NULL ) return false;
+	if( value->t->kind == HVIRTUAL ) {
+		vdynamic *concrete = ((vvirtual*)value)->value;
+		return concrete != NULL && concrete->t == type;
+	}
+	return value->t == type;
+}
+
 static vbyte **array_int_storage(vobj *object) {
 	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
 	return (vbyte **)((char *)object + runtime->fields_indexes[0]);

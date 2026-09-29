@@ -202,4 +202,9 @@ class Std {
 	public static function isOfType(value:Dynamic, type:Dynamic):Bool {
 		return false;
 	}
+
+	/** True only when the runtime class is exactly the requested class. */
+	public static function isExactType(value:Dynamic, type:Dynamic):Bool {
+		return false;
+	}
 }

@@ -1059,7 +1059,7 @@ class CallResolver {
 			// intrinsic so every backend has one verified call signature.
 			return new TypedExpression(TCall("__dynamic_equal", [left, right]), TBool, span);
 		}
-		if (name == "Std.isOfType") {
+		if (name == "Std.isOfType" || name == "Std.isExactType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
 			var targetName = switch arguments[1] {
@@ -1070,6 +1070,8 @@ class CallResolver {
 			};
 			if (scope.resolve(targetName) != null)
 				fail("E1009", "Std.isOfType expects a type as its second argument", span);
+			if (name == "Std.isExactType" && !session.classDecls.exists(targetName))
+				fail("E1009", "Std.isExactType expects a class as its second argument", span);
 			var targetType:CompilerType = switch targetName {
 				case "Int": TInt;
 				case "Float": TFloat;
@@ -1085,7 +1087,7 @@ class CallResolver {
 			};
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
-			return new TypedExpression(TCall("__std_is_of_type", [value, target]), TBool, span);
+			return new TypedExpression(TCall(name == "Std.isExactType" ? "__std_is_exact_type" : "__std_is_of_type", [value, target]), TBool, span);
 		}
 		if (name == "Reflect.compare") {
 			if (arguments.length != 2)

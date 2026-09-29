@@ -292,6 +292,7 @@ class IrProgramAssembler {
 			needsStringRuntime = false,
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
+			needsExactTypeTestRuntime = false,
 			needsDynamicObjectRuntime = false,
 			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in allFunctions)
@@ -303,6 +304,8 @@ class IrProgramAssembler {
 								needsExceptionRuntime = true;
 							if (name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
+							if (name == "__std_is_exact_type")
+								needsExactTypeTestRuntime = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
 							if (StringTools.startsWith(name, "__array_"))
@@ -381,6 +384,9 @@ class IrProgramAssembler {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
+		if (needsExactTypeTestRuntime)
+			program.natives.push({name: "__std_is_exact_type", library: "haxeon_runtime",
+				symbol: "__std_is_exact_type", arguments: [Dyn, TypeRef], result: Bool});
 		if (needsArrayRuntime) {
 			program.natives.push({
 				name: "__array_alloc_i32",
