@@ -6,6 +6,9 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
+import compiler.Source.SourceFile;
+import compiler.syntax.Lexer;
+import compiler.syntax.Token.TokenKind;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -128,9 +131,29 @@ class CompilerSession {
 	}
 
 	static function hasStructuralDeclaration(before:String, after:String):Bool
-		return hasDeclaration(before) || hasDeclaration(after);
+		return structuralDeclarations(before) != structuralDeclarations(after);
 
-	static function hasDeclaration(source:String):Bool
-		return source.indexOf("typedef ") >= 0 || source.indexOf("enum ") >= 0 ||
-			source.indexOf("abstract ") >= 0;
+	static function structuralDeclarations(source:String):String {
+		var tokens = new Lexer(new SourceFile("<session-shapes>", source)).tokenize();
+		var result:Array<String> = [];
+		var depth = 0, capturing = false, bodyDepth = 0;
+		for (token in tokens) {
+			if (!capturing && depth == 0 && (token.kind == TokenKind.Typedef ||
+				token.kind == TokenKind.Enum || (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
+				capturing = true;
+				bodyDepth = 0;
+			}
+			if (capturing) {
+				result.push(token.text);
+				if (token.kind == TokenKind.LeftBrace) bodyDepth++;
+				else if (token.kind == TokenKind.RightBrace) {
+					bodyDepth--;
+					if (bodyDepth == 0) capturing = false;
+				} else if (token.kind == TokenKind.Semicolon && bodyDepth == 0) capturing = false;
+			}
+			if (token.kind == TokenKind.LeftBrace) depth++;
+			else if (token.kind == TokenKind.RightBrace) depth--;
+		}
+		return result.join("\x1f");
+	}
 }

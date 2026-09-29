@@ -120,11 +120,25 @@ class CompilerSessionMain {
 			shapeMain, holder, shape, "--output=" + root + "/shape.hl"],
 			shapeSession = new CompilerSession(), shapeMessages:Array<String> = [];
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
+		var runtime = FileSystem.fullPath(".tools/hashlink/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+		var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+		var previousPath = Sys.getEnv(variable);
+		Sys.putEnv(variable, FileSystem.fullPath("out") + ":" + FileSystem.fullPath(".tools/hashlink") +
+			(previousPath == null ? "" : ":" + previousPath));
+		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "initial typedef program must execute");
 		shapeMessages = [];
 		File.saveContent(shape, "typedef Shape = { var x:Int; ?y:Int; }");
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
 		expect(shapeMessages.indexOf("reusing compiler session") < 0,
 			"a typedef shape edit must reset cached field ABI");
+		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "edited typedef program must execute");
+		shapeMessages = [];
+		File.saveContent(shape, "// enum in a comment\ntypedef Shape = { var x:Int; ?y:Int; }");
+		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
+		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
+			"a comment edit must retain the compiler session");
+		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "comment-edited program must execute");
+		Sys.putEnv(variable, previousPath == null ? "" : previousPath);
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);
