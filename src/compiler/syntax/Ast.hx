@@ -25,7 +25,7 @@ enum AstType {
 }
 
 /** One field declared by an anonymous structural type. */
-typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final metadata:Array<AstMetadata>; final span:SourceSpan;}
+typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final isFinal:Bool; final metadata:Array<AstMetadata>; final span:SourceSpan;}
 
 /** Function parameter syntax, including its optional default expression. */
 typedef AstArgument = {

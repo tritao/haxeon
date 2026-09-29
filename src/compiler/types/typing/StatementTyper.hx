@@ -307,6 +307,7 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
@@ -364,6 +365,7 @@ class StatementTyper {
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
@@ -675,6 +677,15 @@ class StatementTyper {
 			case TArray(_): true;
 			default: false;
 		};
+
+	static function rejectFinalAnonymousFieldMutation(type:CompilerType, name:String, span:SourceSpan):Void
+		switch type {
+			case TAnonymous(_, fields):
+				for (field in fields)
+					if (field.name == name && field.isFinal)
+						fail("E1024", 'Final anonymous field "$name" cannot be assigned', span);
+			default:
+		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));

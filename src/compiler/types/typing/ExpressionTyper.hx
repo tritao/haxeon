@@ -244,7 +244,7 @@ class ExpressionTyper {
 		if (objectExpected == null) {
 			var inferred:Array<AnonymousField> = [
 				for (field in typedFields)
-					{name: field.name, type: field.value.type, optional: false}
+					{name: field.name, type: field.value.type, optional: false, isFinal: false}
 			];
 			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
 			resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
@@ -759,7 +759,15 @@ class ExpressionTyper {
 			case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
 			case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
 			case TStaticField(owner, name): TPostfixStaticField(owner, name, delta);
-			case TField(object, name): TPostfixField(object, name, delta);
+			case TField(object, name):
+				switch object.type {
+					case TAnonymous(_, fields):
+						for (field in fields)
+							if (field.name == name && field.isFinal)
+								fail("E1024", 'Final anonymous field "$name" cannot be assigned', span);
+					default:
+				}
+				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:
 				fail("E1018", "Postfix increment target is not assignable", span);

@@ -563,6 +563,7 @@ class ModuleCanonicalizer {
 							name: field.name,
 							type: canonicalType(field.type, aliases, typeParameters),
 							optional: field.optional,
+							isFinal: field.isFinal,
 							metadata: field.metadata,
 							span: field.span
 						}

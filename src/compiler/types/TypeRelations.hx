@@ -208,7 +208,7 @@ class TypeRelations {
 			var found = false;
 			for (candidate in right)
 				if (candidate.name == field.name) {
-					if (candidate.optional != field.optional || !equals(field.type, candidate.type))
+					if (candidate.optional != field.optional || candidate.isFinal != field.isFinal || !equals(field.type, candidate.type))
 						return false;
 					found = true;
 				}

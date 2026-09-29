@@ -576,7 +576,7 @@ class SignatureInference {
 			return false;
 		for (index in 0...left.length) {
 			var field = left[index], other = right[index];
-			if (field.name != other.name || field.optional != other.optional || !sameType(field.type, other.type))
+			if (field.name != other.name || field.optional != other.optional || field.isFinal != other.isFinal || !sameType(field.type, other.type))
 				return false;
 		}
 		return true;

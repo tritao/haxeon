@@ -271,7 +271,8 @@ class DeclarationIndex {
 							name: field.name,
 							type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
 								substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
-							optional: field.optional
+							optional: field.optional,
+							isFinal: field.isFinal
 						}
 				];
 				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));

@@ -14,7 +14,7 @@ class SemanticSignature {
 	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>):String {
 		var ordered = fields.copy();
 		ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
-		return '{${[for (field in ordered) (field.optional ? "?" : "") + field.name + ":" + type(field.type)].join(",")}}';
+		return '{${[for (field in ordered) (field.optional ? "?" : "") + (field.isFinal ? "final " : "") + field.name + ":" + type(field.type)].join(",")}}';
 	}
 
 	public static function type(semanticType:CompilerType):String

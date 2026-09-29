@@ -2060,6 +2060,7 @@ class Parser {
 			var fields = [];
 			while (!check(TokenKind.RightBrace)) {
 				var optional = false;
+				var isFinal = false;
 				var metadata = parseMetadata();
 				for (entry in metadata)
 					if (entry.name == "optional")
@@ -2069,7 +2070,9 @@ class Parser {
 						if (optional)
 							fail(previous(), "Duplicate optional field marker");
 						optional = true;
-					} else
+					} else if (match(TokenKind.Final))
+						isFinal = true;
+					else
 						advance();
 				var name = consume(TokenKind.Identifier);
 				consume(TokenKind.Colon);
@@ -2078,6 +2081,7 @@ class Parser {
 					name: name.text,
 					type: type,
 					optional: optional,
+					isFinal: isFinal,
 					metadata: metadata,
 					span: name.span.merge(previous().span)
 				});
