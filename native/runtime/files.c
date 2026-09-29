@@ -1,4 +1,5 @@
 extern vbyte *hl_sys_get_cwd( void );
+extern void hl_sys_profile_span( int code, uchar *name );
 extern vbyte *hl_sys_full_path( vbyte *path );
 extern vbyte *hl_sys_exe_path( void );
 extern bool hl_sys_exists( vbyte *path );
@@ -40,6 +41,10 @@ static vstring *realtime_string_from_platform( vbyte *value ) {
 #else
 	return realtime_string_from_utf8((const char *)value);
 #endif
+}
+
+HL_PRIM void HL_NAME(__sys_profile_span)( int code, vstring *name ) {
+	hl_sys_profile_span(code,name == NULL ? NULL : name->bytes);
 }
 
 HL_PRIM vstring *HL_NAME(__sys_get_cwd)( void ) {

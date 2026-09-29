@@ -476,6 +476,7 @@ DEFINE_PRIM(_STRING,__file_get_content,_STRING);
 DEFINE_PRIM(_VOID,__file_save_content,_STRING _STRING);
 DEFINE_PRIM(_VOID,__file_append_content,_STRING _STRING);
 DEFINE_PRIM(_STRING,__file_write_atomic,_STRING _ABSTRACT(realtime_bytes) _BOOL);
+DEFINE_PRIM(_VOID,__sys_profile_span,_I32 _STRING);
 DEFINE_PRIM(_STRING,__sys_get_cwd,_NO_ARG);
 DEFINE_PRIM(_STRING,__sys_full_path,_STRING);
 DEFINE_PRIM(_STRING,__sys_exe_path,_NO_ARG);

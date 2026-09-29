@@ -9,9 +9,9 @@ class ProfileSpan {
   public static function end(name:String):Void emit(SPAN_END, name);
 
   static function emit(code:Int, name:String):Void {
-    nativeProfileSpan(code, name.bytes);
+    nativeProfileSpan(code, name);
   }
 }
 
-@:hlNative("std", "sys_profile_span")
-extern function nativeProfileSpan(code:Int, name:hl.Bytes):Void;
+@:hlNative("haxeon_runtime", "__sys_profile_span")
+extern function nativeProfileSpan(code:Int, name:String):Void;
