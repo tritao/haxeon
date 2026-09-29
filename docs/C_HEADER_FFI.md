@@ -207,6 +207,10 @@ for MinGW) into the generated thunk library. The CMake target should therefore
 produce the package's declared `<package>.hdll` output and its matching import
 archive in the same native output directory.
 
+For an HXI interface that calls an ordinary CMake shared library directly,
+declare `native.cmake.library` with that target's library name. Haxeon places
+the resulting library on the dependent program's runtime search path.
+
 NativeKit integration currently uses its stable public C ABI through the C
 importer. Its `nkui::DisplayList` implementation is an internal C++ class:
 its methods are not `noexcept`, and the shared UI library hides its C++ symbols.

@@ -399,6 +399,12 @@ its own source, header, generated-file, and library dependencies. Configure
 fingerprints cover `CMakeLists.txt` and explicit `native.cmake.inputs`; use those
 inputs for additional configuration files, rather than entire source trees.
 CMake package stamps are never shared as if they were complete library artifacts.
+
+Set `native.cmake.library` to the name of an ordinary shared-library CMake
+target when the package's HXI interface loads that library directly. Haxeon
+places the library in the package's native runtime directory and includes that
+directory when running dependents. Omit `library` for CMake targets that produce
+the package's `<package>.hdll` output themselves.
 Native implementation changes do not invalidate independently compiled bytecode;
 Haxe sources, FFI interfaces/projections, compiler sources, and the standard
 library still do. Failed native builds still block the project build and launch.
