@@ -1494,7 +1494,7 @@ class HxiHaxeEmitter {
 						name: parameter.name,
 						count: count,
 						initialCapacity: initialCapacity(parameter),
-						stride: strings ? Std.int(abi.pointerBits / 8) : element.size,
+						stride: element == null ? Std.int(abi.pointerBits / 8) : element.size,
 						buffer: false,
 						strings: strings,
 						element: element
@@ -1502,7 +1502,7 @@ class HxiHaxeEmitter {
 					pass('__out_${parameter.name}');
 					values.push({
 						name: parameter.name,
-						type: strings ? outputArrayType() : 'Array<${element.haxeType}>',
+						type: element == null ? outputArrayType() : 'Array<${element.haxeType}>',
 						expression: '__items_${parameter.name}'
 					});
 				case OutArray(count):
@@ -1607,7 +1607,7 @@ class HxiHaxeEmitter {
 					var items = '__items_${query.name}',
 						read = query.strings ? '__hxi_struct_get_utf8($storage, __index * ${query.stride}, true)' : arrayValueRead(query.element, storage,
 							'__index', moduleName);
-					output.add('\tvar $items:${query.strings ? outputArrayType() : 'Array<${query.element.haxeType}>'} = [];\n');
+					output.add('\tvar $items:${query.element == null ? outputArrayType() : 'Array<${query.element.haxeType}>'} = [];\n');
 					output.add('\tfor (__index in 0...$length) $items.push($read);\n');
 				}
 			}
@@ -1658,7 +1658,11 @@ class HxiHaxeEmitter {
 		var result:Map<String, String> = [];
 		for (parameter in parameters)
 			switch parameter.direction {
-				case OutBuffer(count) | OutArray(count):
+				case OutBuffer(count):
+					var countParameter = Lambda.find(parameters, value -> value.name == count);
+					if (countParameter != null && countParameter.direction == InOut)
+						result.set(count, parameter.name);
+				case OutArray(count):
 					var countParameter = Lambda.find(parameters, value -> value.name == count);
 					if (countParameter != null && countParameter.direction == InOut)
 						result.set(count, parameter.name);

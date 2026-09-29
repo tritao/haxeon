@@ -244,7 +244,7 @@ class WireCodecGenerator {
 		};
 		var result:Array<WireField> = [], ids:Map<Int, String> = [];
 		for (source in sourceFields) {
-			var resolved = null;
+			var resolved:Null<compiler.types.Type.AnonymousField> = null;
 			for (candidate in resolvedFields)
 				if (candidate.name == source.name)
 					resolved = candidate;
@@ -689,7 +689,7 @@ class WireCodecGenerator {
 						case TAnonymous(_, _): true;
 						default: false;
 					}) {
-					var objectFields = [
+					var objectFields:Array<compiler.types.TypedAst.TypedObjectField> = [
 						for (index in 0...fields.length)
 							{
 								name: fields[index].field.name,

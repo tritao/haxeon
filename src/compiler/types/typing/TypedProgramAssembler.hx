@@ -60,7 +60,7 @@ class TypedProgramAssembler {
 		};
 	}
 
-	public function runtimeDependencies():Array<{final functionName:String; final target:String;}>
+	public function runtimeDependencies():Array<{var functionName:String; var target:String;}>
 		return session.runtimeDependencyTracker.ordered();
 
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {

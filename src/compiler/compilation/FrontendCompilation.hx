@@ -609,7 +609,7 @@ class FrontendCompilation {
 		return module;
 	}
 
-	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{final functionName:String; final target:String;}>,
+	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
 			typed:TypedProgram, owners:Map<String, String>, names:Array<String>, rollbackModules:Map<String, ModuleState>):Bool {
 		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
 		for (fn in typed.functions)

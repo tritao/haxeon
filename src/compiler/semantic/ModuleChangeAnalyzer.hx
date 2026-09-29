@@ -208,12 +208,13 @@ class ModuleChangeAnalyzer {
 				baseName:Null<String> = null;
 			if (base != null)
 				baseName = SemanticSignature.parsed(base, ast.aliases);
-			var classFields = [
+			var classFields:Array<compiler.types.TypeRegistry.DeclaredField> = [
 				for (field in classDecl.fields)
 					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}
-			], classMethods = [
-				for (method in classDecl.methods)
-					{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
+			],
+				classMethods:Array<compiler.types.TypeRegistry.DeclaredMethod> = [
+					for (method in classDecl.methods)
+						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)

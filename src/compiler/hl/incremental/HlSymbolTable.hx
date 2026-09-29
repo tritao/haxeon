@@ -3,6 +3,8 @@ package compiler.hl.incremental;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
 import compiler.hl.HlCode.HlObjectMethod;
+import compiler.hl.HlCode.HlObjectField;
+import compiler.hl.HlCode.HlEnumConstructor;
 import compiler.hl.HlType;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrObject;
@@ -170,7 +172,7 @@ class HlSymbolTable {
 	}
 
 	static function orderedMap(values:Map<String, Int>):Array<HlNamedIndex> {
-		var result = [for (name => index in values) {name: name, index: index}];
+		var result:Array<HlNamedIndex> = [for (name => index in values) {name: name, index: index}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
 	}
@@ -306,7 +308,7 @@ class HlSymbolTable {
 	 * code units, so length and indexing never rescan the data. Natives recognize it by name and shape.
 	 */
 	function internStringObject(key:String):Int {
-		var fields = [
+		var fields:Array<HlObjectField> = [
 			{name: internString("bytes"), type: internType(RawPtr)},
 			{name: internString("length"), type: internType(I32)}
 		], index = types.length;
@@ -331,7 +333,7 @@ class HlSymbolTable {
 		if (typeIndices.exists(key) && !pendingTypes.exists(key))
 			return typeIndices.get(key);
 		ensureWritable();
-		var constructors = [
+		var constructors:Array<HlEnumConstructor> = [
 			for (constructor in enumDecl.cases)
 				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
 		];
@@ -404,7 +406,7 @@ class HlSymbolTable {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
-		var fields = [
+		var fields:Array<HlObjectField> = [
 			for (field in object.fields)
 				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects)}
 		], key = 'obj:${object.name}', index = typeIndices.exists(key) ? typeIndices.get(key) : types.length, global = globals.length + 1;

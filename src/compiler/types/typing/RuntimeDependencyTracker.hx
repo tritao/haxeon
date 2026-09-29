@@ -15,8 +15,8 @@ class RuntimeDependencyTracker {
 		targets.set(target, true);
 	}
 
-	public function ordered():Array<{final functionName:String; final target:String;}> {
-		var result = [
+	public function ordered():Array<{var functionName:String; var target:String;}> {
+		var result:Array<{var functionName:String; var target:String;}> = [
 			for (functionName => targets in dependencies)
 				for (target in targets.keys())
 					{functionName: functionName, target: target}

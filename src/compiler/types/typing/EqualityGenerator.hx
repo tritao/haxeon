@@ -39,6 +39,8 @@ class EqualityGenerator {
 			var type = reachable.get(key), request = requests.get(key);
 			if (request == null) {
 				var first = session.equalityRequests.get(requestKeys[0]);
+				if (first == null)
+					throw "Missing equality request";
 				request = {type: type, origin: first.origin, span: first.span};
 			}
 			result.push(compareFunction(session, type, request));
@@ -187,6 +189,8 @@ class EqualityGenerator {
 					leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 					rightIndex = new TypedExpression(TEnumIndex(right), TInt, span),
 					result:Array<TypedStatement> = referenceGuards(type, left, right, span);
+				if (declaration == null)
+					throw 'Missing enum declaration "$name"';
 				result.push(ifFalse(equal(leftIndex, rightIndex, span), span));
 				for (constructorIndex in 0...declaration.cases.length) {
 					var constructor = declaration.cases[constructorIndex],

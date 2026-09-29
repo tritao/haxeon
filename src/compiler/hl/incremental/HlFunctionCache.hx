@@ -66,12 +66,12 @@ class HlFunctionCache {
 	}
 
 	public function exportState():HlFunctionCacheState {
-		var ids = [for (name => id in stableIds) {name: name, id: id}],
-			signatureState = [for (name => value in signatures) {name: name, signature: value}],
-			functionState = [
-				for (name => fn in functions)
-					{name: name, bytes: IrFunctionStateCodec.encode(fn)}
-			];
+		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {name: name, id: id}];
+		var signatureState:Array<HlFunctionSignatureState> = [for (name => value in signatures) {name: name, signature: value}];
+		var functionState:Array<HlCachedFunctionState> = [
+			for (name => fn in functions)
+				{name: name, bytes: IrFunctionStateCodec.encode(fn)}
+		];
 		ids.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		signatureState.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		functionState.sort(function(a, b) return Reflect.compare(a.name, b.name));

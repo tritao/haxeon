@@ -174,8 +174,8 @@ class CHeaderImporter {
 					if (field(entry, "_hxiFile") == null)
 						Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
 					addDocumentation(documentation, '$enumName.$entryName', entry);
-					entries.push({name: entryName, value: Int64.parseString(projectedValue), span: sourceSpan(entry)});
-					nextValue = Int64.add(Int64.parseString(projectedValue), Int64.parseString("1"));
+					entries.push({name: entryName, value: parseProjectedInt64(projectedValue), span: sourceSpan(entry)});
+					nextValue = Int64.add(parseProjectedInt64(projectedValue), Int64.parseString("1"));
 				}
 				return Enumeration(enumName, typeFromProjection(representation), field(node, "_hxiFlags") == true, entries, sourceSpan(node));
 			case "EnumConstantDecl":
@@ -852,8 +852,8 @@ class CHeaderImporter {
 
 	static function projectedIntegerValue(node:Dynamic, value:String, allowUnsigned64:Bool = false):String {
 		if (allowUnsigned64 && StringTools.startsWith(value, "-")) {
-			var parsedNegative = Int64.parseString(value);
-			if (Int64.compare(parsedNegative, Int64.parseString("-9223372036854775808")) < 0)
+			var parsedNegative = parseProjectedInt64(value);
+			if (Int64.compare(parsedNegative, parseProjectedInt64("-9223372036854775808")) < 0)
 				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit Haxe Int64';
 			return Int64.toStr(parsedNegative);
 		}
@@ -861,9 +861,9 @@ class CHeaderImporter {
 			if (compareDecimal(value, "18446744073709551615") > 0)
 				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit unsigned integer';
 			value = "-" + subtractDecimal("18446744073709551616", value);
-			return Int64.toStr(Int64.parseString(value));
+			return Int64.toStr(parseProjectedInt64(value));
 		}
-		var parsed = Int64.parseString(value),
+		var parsed = parseProjectedInt64(value),
 			minimum = Int64.parseString("-2147483648"),
 			maximum = Int64.parseString(allowUnsigned64 ? "9223372036854775807" : "4294967295");
 		if (Int64.compare(parsed, minimum) < 0 || Int64.compare(parsed, maximum) > 0)
@@ -872,6 +872,9 @@ class CHeaderImporter {
 			parsed = Int64.sub(parsed, Int64.parseString("4294967296"));
 		return Int64.toStr(parsed);
 	}
+
+	static function parseProjectedInt64(value:String):Int64
+		return value == "-9223372036854775808" ? Int64.make(-2147483648, 0) : Int64.parseString(value);
 
 	static function compareDecimal(left:String, right:String):Int {
 		left = stripDecimalZeros(left);

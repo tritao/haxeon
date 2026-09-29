@@ -20,7 +20,7 @@ typedef TyperPhaseMetrics = {
 typedef MeasuredTypedProgram = {
 	final program:TypedProgram;
 	final metrics:TyperPhaseMetrics;
-	final runtimeDependencies:Array<{final functionName:String; final target:String;}>;
+	final runtimeDependencies:Array<{var functionName:String; var target:String;}>;
 
 	/** Purity/no-return answers each freshly typed function's body depended on, keyed by that
 	 * function's own name. See `TypingSession.purityQueries`/`noReturnQueries`.
