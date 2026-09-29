@@ -786,9 +786,20 @@ class HlLower {
 						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case MethodCall(output, object, methodName, arguments):
 						var receiver = requireRegister(object, registers),
-							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]);
-						instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes), requireObjectMethod(object, methodName),
-							methodArguments));
+							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
+							valueMethod = valueMethodFunction(object, methodName);
+						if (valueMethod != null) {
+							// A value class has no prototype to dispatch through and cannot be subclassed, so its methods are direct calls.
+							var destination = defineRegister(output, registers, registerTypes),
+								functionIndex = requireFunction(valueMethod);
+							switch methodArguments.length {
+								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, methodArguments[0]));
+								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, methodArguments[0], methodArguments[1]));
+								default: instructions.push(HlInstruction.CallN(destination, functionIndex, methodArguments));
+							}
+						} else
+							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
+								requireObjectMethod(object, methodName), methodArguments));
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
 					case FieldGet(output, object, fieldName):
@@ -1212,6 +1223,21 @@ class HlLower {
 		if (baseName.length > 0)
 			return requireObjectFieldByType(baseName, name);
 		throw 'Unknown IR field "$typeName.$name"';
+	}
+
+	/** The implementing function of `name` when `value` is an instance of a value class, whose methods are not virtual. */
+	function valueMethodFunction(value:IrValue, name:String):Null<String> {
+		var typeName = switch value.type {
+			case Obj(objectName): objectName;
+			default: return null;
+		};
+		var descriptor = objects.get(typeName);
+		if (descriptor == null || !descriptor.isValue)
+			return null;
+		for (method in descriptor.methods)
+			if (method.name == name)
+				return method.functionName;
+		return null;
 	}
 
 	function requireObjectMethod(value:IrValue, name:String):Int {
