@@ -325,6 +325,9 @@ class ExpressionTyper {
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = typeExpressionCallback(iterable, scope, null, false);
+		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
+		if (forwardedArray != null)
+			typedIterable = session.representation.boundaryCast(typedIterable, forwardedArray);
 		// Haxe iterates any class instance or structure through its `iterator()` method.
 		switch typedIterable.type {
 			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):
@@ -462,6 +465,9 @@ class ExpressionTyper {
 	public function typeIndex(array:AstExpression, offset:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedArray = unwrapNullable(typeExpressionCallback(array, scope, null, false)),
 			typedIndex = typeExpressionCallback(offset, scope, null, false);
+		var forwardedArray = AbstractForwarding.arrayStorage(session, typedArray.type, null);
+		if (forwardedArray != null)
+			typedArray = session.representation.boundaryCast(typedArray, forwardedArray);
 		return switch typedArray.type {
 			case TMap(key, value):
 				if (session.mapName(key, value) == null)

@@ -1466,6 +1466,9 @@ class BodyTyper {
 		}
 		if (name == "length" && isArray(typedObject.type))
 			return new TypedExpression(TArrayLength(typedObject), TInt, span);
+		var forwardedArray = AbstractForwarding.arrayStorage(session, typedObject.type, name);
+		if (name == "length" && forwardedArray != null)
+			return new TypedExpression(TArrayLength(session.representation.boundaryCast(typedObject, forwardedArray)), TInt, span);
 		if (name == "length" && sameType(typedObject.type, TString))
 			return new TypedExpression(TStringLength(typedObject), TInt, span);
 		if (name == "code")

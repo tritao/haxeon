@@ -501,6 +501,9 @@ class StatementTyper {
 	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
 		var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false));
+		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
+		if (forwardedArray != null)
+			typedIterable = session.representation.boundaryCast(typedIterable, forwardedArray);
 		// Haxe iterates any class instance or structure through its `iterator()` method.
 		switch typedIterable.type {
 			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):

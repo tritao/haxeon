@@ -130,6 +130,9 @@ class CallResolver {
 			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
 			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)), platformMethod.result, span);
 		}
+		var forwardedArray = AbstractForwarding.arrayStorage(session, receiver.type, name);
+		if (forwardedArray != null)
+			return typeArrayMethod(session.representation.boundaryCast(receiver, forwardedArray), name, arguments, span, scope);
 		var abstractCall = typeAbstractMethodCall(receiver, name, arguments, span, scope);
 		if (abstractCall != null)
 			return abstractCall;
