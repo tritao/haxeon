@@ -104,6 +104,90 @@ class CallResolver {
 		return coerceArguments(typed, expected, name);
 	}
 
+	/** Resolve an abstract's declared @:op method using the semantic operand types. */
+	public function typeAbstractOperator(symbol:String, operands:Array<TypedExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		var owners:Array<String> = [];
+		for (operand in operands)
+			switch operand.type {
+				case TAbstract(name, _, underlying):
+					if ((underlying == TInt || underlying == TFloat) && owners.indexOf(name) < 0)
+						owners.push(name);
+				default:
+			}
+		var selected:Null<{
+			key:String,
+			method:AstFunction,
+			expected:Array<CompilerType>,
+			score:Int
+		}> = null, ambiguous:Null<String> = null;
+		for (owner in owners) {
+			var declaration = requiredMapValue(session.declarations.abstracts, owner);
+			for (method in declaration.methods) {
+				if (!method.isStatic || method.arguments.length != operands.length || method.metadata == null)
+					continue;
+				var matches = false;
+				for (metadata in method.metadata)
+					if (metadata.name == "op" && metadata.arguments.length == 1 && operatorSymbol(metadata.arguments[0]) == symbol)
+						matches = true;
+				if (!matches)
+					continue;
+				var expected = [for (argument in method.arguments) argumentType(argument, null)], score = 0, compatible = true;
+				for (index in 0...operands.length) {
+					if (TypeRelations.equals(operands[index].type, expected[index]))
+						score++;
+					else if (!session.relations.isAssignable(operands[index].type, expected[index]))
+						compatible = false;
+				}
+				if (!compatible)
+					continue;
+				var key = owner + "." + method.name;
+				if (selected != null && selected.score == score && ambiguous == null)
+					ambiguous = key;
+				if (selected == null || score > selected.score) {
+					ambiguous = null;
+					selected = {
+						key: key,
+						method: method,
+						expected: expected,
+						score: score
+					};
+				}
+			}
+		}
+		if (selected == null)
+			return null;
+		if (ambiguous != null)
+			fail("E1010", 'Ambiguous abstract operator "$symbol" between "${selected.key}" and "$ambiguous"', span);
+		var resultType = lowerType(selected.method.result);
+		if ((symbol == "<" || symbol == "<=" || symbol == ">" || symbol == ">=" || symbol == "==" || symbol == "!=")
+			&& resultType != TBool)
+			fail("E1011", 'Abstract comparison operator "$symbol" must return Bool', selected.method.span);
+		var arguments = [
+			for (index in 0...operands.length)
+				coerce(operands[index], selected.expected[index], "abstract operator", "E1010")
+		];
+		if (!session.isPureCall(selected.key))
+			scope.invalidateAllExpressions();
+		return new TypedExpression(TCall(selected.key, arguments), resultType, span);
+	}
+
+	static function operatorSymbol(expression:AstExpression):Null<String>
+		return switch expression {
+			case Add(_, _, _): "+";
+			case Sub(_, _, _): "-";
+			case Mul(_, _, _): "*";
+			case Div(_, _, _): "/";
+			case Mod(_, _, _): "%";
+			case Less(_, _, _): "<";
+			case LessEqual(_, _, _): "<=";
+			case Greater(_, _, _): ">";
+			case GreaterEqual(_, _, _): ">=";
+			case Equal(_, _, _): "==";
+			case NotEqual(_, _, _): "!=";
+			case Negate(_, _): "u-";
+			default: null;
+		};
+
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {

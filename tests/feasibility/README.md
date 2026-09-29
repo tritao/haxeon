@@ -6,10 +6,10 @@
 `@:op(A < B)` on an `abstract Millimetres(Float)`.
 
 Run `scripts/haxeon run --project tests/feasibility/operators/haxeon.json`.
-At `bd014aec`, compilation stops at `a + b` with E1010, "Arithmetic requires
-matching numeric operands". H4 is therefore required before PR2's unit
-types can use these operators. Later expressions have not yet been checked
-independently.
+At `bd014aec`, compilation stopped at `a + b` with E1010, "Arithmetic requires
+matching numeric operands". H4 added dispatch through the abstract's declared
+`@:op` methods. The probe now compiles and runs; the runtime suite also covers
+Int and Float abstracts, unary negation, comparisons, and invalid declarations.
 
 ## FFI struct output array
 

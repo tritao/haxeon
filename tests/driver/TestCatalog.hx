@@ -122,6 +122,8 @@ class TestCatalog {
 				"generated structural equality compares nested typedefs, enum payload arrays, maps, and floats"),
 			mainCase("runtime", "read-only-array", "ReadOnlyArrayMain", "read-only-array.hl", 42,
 				"forwarded reads, indexing, and iteration work without exposing array mutation"),
+			mainCase("runtime", "abstract-operators", "AbstractOperatorsMain", "abstract-operators.hl", 42,
+				"numeric abstracts dispatch declared arithmetic, unary, and comparison operators"),
 			mainCase("tooling", "utest-basic", "UtestMain", "utest-basic.hl", 0, "utest-compatible assertions and runner executed"),
 			mainCase("tooling", "utest-failure", "UtestMain", "utest-failure.hl", 5, "utest-compatible runner reports assertion failures",
 				["{output}", "tests/programs/utest-failure.hx"]),

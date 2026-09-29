@@ -127,10 +127,10 @@ class ExpressionTyper {
 			case Negate(value, span): negate(value, span, scope, expectedType);
 			case Less(left, right, span): comparison(left, right, scope, 0, span);
 			case LessEqual(left, right, span): comparison(left, right, scope, 1, span);
-			case Greater(left, right, span): comparison(right, left, scope, 0, span);
-			case GreaterEqual(left, right, span): comparison(right, left, scope, 1, span);
+			case Greater(left, right, span): comparison(left, right, scope, 0, span, ">", true);
+			case GreaterEqual(left, right, span): comparison(left, right, scope, 1, span, ">=", true);
 			case Equal(left, right, span): comparison(left, right, scope, 2, span);
-			case NotEqual(left, right, span): new TypedExpression(TNot(comparison(left, right, scope, 2, span)), TBool, span);
+			case NotEqual(left, right, span): notEqual(left, right, scope, span);
 			case Not(value, span): logicalNot(value, span, scope);
 			case And(left, right, span): logical(left, right, scope, true, span);
 			case Or(left, right, span): logical(left, right, scope, false, span);
@@ -732,6 +732,9 @@ class ExpressionTyper {
 
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedValue = typeExpressionCallback(value, scope, expectedType == TInt64 ? TInt64 : null, false);
+		var overloaded = callResolver.typeAbstractOperator("u-", [typedValue], span, scope);
+		if (overloaded != null)
+			return overloaded;
 		if (!isNumeric(typedValue.type))
 			fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
 		return new TypedExpression(TNegate(typedValue), typedValue.type, span);
@@ -827,6 +830,9 @@ class ExpressionTyper {
 	public function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan, expected:Null<CompilerType>):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		var overloaded = callResolver.typeAbstractOperator(add ? "+" : "-", [left, right], span, scope);
+		if (overloaded != null)
+			return overloaded;
 		if (expected != null && isNumeric(expected)) {
 			if (left.type == TDynamic)
 				left = coerce(left, expected, "arithmetic operand", "E1010");
@@ -860,6 +866,9 @@ class ExpressionTyper {
 	public function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
+		if (overloaded != null)
+			return overloaded;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span, operation != 2);
@@ -869,6 +878,9 @@ class ExpressionTyper {
 	public function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		var overloaded = callResolver.typeAbstractOperator("%", [left, right], span, scope);
+		if (overloaded != null)
+			return overloaded;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Modulo requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
@@ -908,9 +920,24 @@ class ExpressionTyper {
 		return new TypedExpression(expression, operandType, span);
 	}
 
-	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
+	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan, ?symbol:String,
+			reversed:Bool = false):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, left.type, false);
+		if (symbol == null)
+			symbol = operation == 0 ? "<" : operation == 1 ? "<=" : "==";
+		var overloaded = callResolver.typeAbstractOperator(symbol, [left, right], span, scope);
+		if (overloaded != null)
+			return overloaded;
+		return compareTyped(left, right, operation, span, reversed);
+	}
+
+	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (reversed) {
+			var original = left;
+			left = right;
+			right = original;
+		}
 		if (operation == 2
 			&& ((sameType(left.type, TNull) && !isNullable(right.type) && right.type != TNull && !TypeRelations.isReference(right.type))
 				|| (sameType(right.type, TNull) && !isNullable(left.type) && left.type != TNull && !TypeRelations.isReference(left.type))))
@@ -977,6 +1004,15 @@ class ExpressionTyper {
 			case 1: TLessEqual(left, right);
 			default: TEqual(left, right);
 		}, TBool, span);
+	}
+
+	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
+		var left = typeExpressionCallback(a, scope, null, false),
+			right = typeExpressionCallback(b, scope, left.type, false),
+			overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
+		if (overloaded != null)
+			return overloaded;
+		return new TypedExpression(TNot(compareTyped(left, right, 2, span, false)), TBool, span);
 	}
 
 	public function isNumeric(type:CompilerType):Bool
