@@ -26,7 +26,9 @@ class NativeCMakeProvider {
 		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
-			buildDirectory = Path.join([layout.packageRoot(resolvedPackage.name), "cmake"]),
+			ninja = ninjaAvailable(context.environment.target.os),
+			// CMake rejects a cache created by another generator, so Ninja trees get their own directory.
+			buildDirectory = Path.join([layout.packageRoot(resolvedPackage.name), ninja ? "cmake-ninja" : "cmake"]),
 			output = native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
 				native.cmake.library),
 			outputDirectory = Path.directory(output),
@@ -39,7 +41,7 @@ class NativeCMakeProvider {
 				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE=" + configuration
-			],
+			].concat(ninja ? ["-G", "Ninja"] : []),
 			configureId = new ActionId('native-cmake-configure:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment);
@@ -114,6 +116,25 @@ class NativeCMakeProvider {
 				artifactActions.set(artifact.id.key(), [linkId]);
 			}
 		return {actions: actions, artifactActions: artifactActions};
+	}
+
+	static var ninjaProbe:Null<Bool>;
+
+	/**
+	 * Ninja builds in parallel by default, while `cmake --build` on the Makefiles generator is serial
+	 * without `-j`. Windows keeps its default generator so MSVC does not need a prepared environment.
+	 */
+	static function ninjaAvailable(os:TargetOs):Bool {
+		if (os == TargetOs.Windows || Sys.getEnv("HAXEON_CMAKE_GENERATOR") == "default")
+			return false;
+		if (ninjaProbe == null)
+			ninjaProbe = try {
+				var process = new sys.io.Process("ninja", ["--version"]);
+				var status = process.exitCode();
+				process.close();
+				status == 0;
+			} catch (_:Dynamic) false;
+		return ninjaProbe;
 	}
 
 	static function cmakeLinkInput(outputDirectory:String, output:String, os:TargetOs, abi:TargetAbi):String {
