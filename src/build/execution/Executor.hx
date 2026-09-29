@@ -33,6 +33,15 @@ class Executor implements ExecutionBackend {
 		for (action in plan.actions)
 			for (dependency in action.dependencies)
 				dependedOn.set(dependency.key(), true);
+		#if (target.threaded && !eval)
+		return executeQueued(plan);
+		#else
+		return executeWaves(plan);
+		#end
+	}
+
+	/** Single-threaded targets run ready actions in barrier-separated waves. */
+	function executeWaves(plan:ExecutionPlan):ExecutionResult {
 		var started = Sys.time() * 1000.0;
 		var pending = new Map<String, ExecutionAction>(),
 			completed = new Map<String, ActionResult>(),
@@ -70,28 +79,6 @@ class Executor implements ExecutionBackend {
 				waveResults = new Map<String, ActionResult>();
 			for (action in wave)
 				print('[${action.id}] ${action.description}');
-			#if (target.threaded && !eval)
-			var lock = new Lock(), waveMutex = new Mutex();
-			for (action in wave) {
-				var currentAction = action;
-				var dependencyFingerprints = [
-					for (dependency in currentAction.dependencies)
-						fingerprints.get(dependency.key())
-				];
-				Thread.create(function() {
-					// Always report and release: an exception escaping this thread would leave the
-					// wave waiting on the lock forever.
-					var result = try executeAction(currentAction,
-						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
-					waveMutex.acquire();
-					waveResults.set(currentAction.id.key(), result);
-					waveMutex.release();
-					lock.release();
-				});
-			}
-			for (_ in wave)
-				lock.wait();
-			#else
 			var processActions:Array<{action:ExecutionAction, fingerprint:String}> = [],
 				processTasks:Array<{
 					command:String,
@@ -153,7 +140,6 @@ class Executor implements ExecutionBackend {
 					}
 				}
 			}
-			#end
 			for (action in wave) {
 				var result = waveResults.get(action.id.key());
 				completed.set(action.id.key(), result);
@@ -169,6 +155,138 @@ class Executor implements ExecutionBackend {
 		}
 		return new ExecutionResult(results, Sys.time() * 1000.0 - started);
 	}
+
+	/** Upper bound on simultaneous compiler actions, each of which holds a compiler heap. 0 means no limit. */
+	public var maxConcurrentCompilers = 0;
+
+	#if (target.threaded && !eval)
+	/**
+	 * Work-queue scheduler. Whenever a worker is free, the ready action on the longest remaining chain
+	 * starts, so a slow action never idles the other workers behind a wave barrier.
+	 */
+	function executeQueued(plan:ExecutionPlan):ExecutionResult {
+		var started = Sys.time() * 1000.0,
+			pending = new Map<String, ExecutionAction>(),
+			completed = new Map<String, ActionResult>(),
+			fingerprints = new Map<String, String>(),
+			results:Array<ActionResult> = [],
+			depth = chainDepths(plan),
+			finished:Array<{action:ExecutionAction, result:ActionResult}> = [],
+			mutex = new Mutex(),
+			signal = new Lock(),
+			running = 0,
+			runningCompilers = 0;
+		for (action in plan.actions)
+			pending.set(action.id.key(), action);
+
+		while (pending.iterator().hasNext() || running > 0) {
+			var propagated = true;
+			while (propagated) {
+				var newlyBlocked:Array<{action:ExecutionAction, failure:ActionResult}> = [];
+				for (action in pending) {
+					var failure = failedDependency(action, completed);
+					if (failure != null)
+						newlyBlocked.push({action: action, failure: failure});
+				}
+				newlyBlocked.sort((left, right) -> Reflect.compare(left.action.id.key(), right.action.id.key()));
+				propagated = newlyBlocked.length > 0;
+				for (blocked in newlyBlocked) {
+					var result = new ActionResult(blocked.action.id, blocked.failure.exitCode, false, true, null,
+						'Blocked by failed dependency ${blocked.failure.id}');
+					completed.set(blocked.action.id.key(), result);
+					results.push(result);
+					pending.remove(blocked.action.id.key());
+				}
+			}
+			var ready = [for (action in pending) if (dependenciesSucceeded(action, completed)) action];
+			ready.sort((left, right) -> {
+				var difference = depth.get(right.id.key()) - depth.get(left.id.key());
+				return difference != 0 ? difference : Reflect.compare(left.id.key(), right.id.key());
+			});
+			for (action in ready) {
+				if (running >= workerCount)
+					break;
+				var compiler = isCompiler(action);
+				if (compiler && maxConcurrentCompilers > 0 && runningCompilers >= maxConcurrentCompilers)
+					continue;
+				pending.remove(action.id.key());
+				running++;
+				if (compiler)
+					runningCompilers++;
+				print('[${action.id}] ${action.description}');
+				var currentAction = action, dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
+				Thread.create(function() {
+					// Always report and release: an exception escaping this thread would leave the
+					// scheduler waiting on the lock forever.
+					var result = try executeAction(currentAction,
+						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
+					mutex.acquire();
+					finished.push({action: currentAction, result: result});
+					mutex.release();
+					signal.release();
+				});
+			}
+			if (running == 0) {
+				if (pending.iterator().hasNext())
+					throw "Execution plan has unresolved dependencies";
+				break;
+			}
+			signal.wait();
+			mutex.acquire();
+			var batch = finished.splice(0, finished.length);
+			mutex.release();
+			// One release per finished action, but a batch may hold several: the surplus wakes are harmless.
+			batch.sort((left, right) -> Reflect.compare(left.action.id.key(), right.action.id.key()));
+			for (item in batch) {
+				var result = item.result;
+				running--;
+				if (isCompiler(item.action))
+					runningCompilers--;
+				completed.set(item.action.id.key(), result);
+				results.push(result);
+				if (result.fingerprint != null)
+					fingerprints.set(item.action.id.key(), result.fingerprint);
+				if (result.skipped)
+					print('[${result.id}] clean (fingerprint match)');
+				else if (!result.succeeded() && !result.blocked)
+					print('[${result.id}] failed: ${result.message}');
+			}
+		}
+		return new ExecutionResult(results, Sys.time() * 1000.0 - started);
+	}
+	#end
+
+	/** Length of the longest chain of dependents below each action, counting itself. */
+	static function chainDepths(plan:ExecutionPlan):Map<String, Int> {
+		var dependents = new Map<String, Array<String>>(), depth = new Map<String, Int>();
+		for (action in plan.actions)
+			for (dependency in action.dependencies) {
+				var list = dependents.get(dependency.key());
+				if (list == null) {
+					list = [];
+					dependents.set(dependency.key(), list);
+				}
+				list.push(action.id.key());
+			}
+		// `plan.actions` lists dependencies first, so walking it backwards sees every dependent before its dependency.
+		var index = plan.actions.length;
+		while (index > 0) {
+			index--;
+			var key = plan.actions[index].id.key(), longest = 0, list = dependents.get(key);
+			if (list != null)
+				for (dependent in list)
+					if (depth.get(dependent) > longest)
+						longest = depth.get(dependent);
+			depth.set(key, longest + 1);
+		}
+		return depth;
+	}
+
+	static function isCompiler(action:ExecutionAction):Bool
+		return switch action.action {
+			case Compiler(_, _, _, _, _): true;
+			case Process(_, _, _, _): false;
+		};
 
 	public function name():String
 		return "native";

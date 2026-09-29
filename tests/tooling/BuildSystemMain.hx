@@ -49,6 +49,8 @@ class BuildSystemMain {
 		testIndependentProcessActionsRunConcurrently();
 		#if (target.threaded && !eval)
 		testIndependentActionsRunConcurrently();
+		testDependentStartsWithoutWaitingForSlowSibling();
+		testCompilerConcurrencyLimit();
 		#end
 		testFingerprintsAndSkipping();
 		testArtifactCache();
@@ -235,6 +237,60 @@ class BuildSystemMain {
 			action("parallel-b", [], "parallel B", invoke)
 		]));
 		expect(result.exitCode == 0 && peakActive == 2, "independent ready actions should overlap on threaded targets");
+		removeTree(root);
+	}
+
+	static function testDependentStartsWithoutWaitingForSlowSibling():Void {
+		var root = temporaryDirectory("work-queue"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			slowFinished = false,
+			slowFinishedWhenDependentStarted = true,
+			slow = action("slow", [], "slow", () -> {
+				Sys.sleep(0.4);
+				slowFinished = true;
+				0;
+			}),
+			quick = action("quick", [], "quick", () -> {
+				Sys.sleep(0.02);
+				0;
+			}),
+			dependent = action("dependent", [quick.id], "dependent", () -> {
+				slowFinishedWhenDependentStarted = slowFinished;
+				0;
+			}),
+			result = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([slow, quick, dependent]));
+		expect(result.exitCode == 0 && result.actions.length == 3, "the work queue should finish every action");
+		expect(!slowFinishedWhenDependentStarted, "a ready dependent should start while a slow sibling still runs, not wait for a wave to end");
+		removeTree(root);
+	}
+
+	static function testCompilerConcurrencyLimit():Void {
+		var root = temporaryDirectory("compiler-limit"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			mutex = new Mutex(),
+			active = 0,
+			peakActive = 0,
+			invoke = function():Int {
+				mutex.acquire();
+				active++;
+				if (active > peakActive)
+					peakActive = active;
+				mutex.release();
+				Sys.sleep(0.05);
+				mutex.acquire();
+				active--;
+				mutex.release();
+				return 0;
+			},
+			executor = new Executor(environment, 3, _ -> {});
+		executor.maxConcurrentCompilers = 1;
+		var result = executor.execute(new ExecutionPlan([
+			action("limit-a", [], "limit A", invoke),
+			action("limit-b", [], "limit B", invoke),
+			action("limit-c", [], "limit C", invoke)
+		]));
+		expect(result.exitCode == 0 && result.actions.length == 3, "limited compiler actions should all still run");
+		expect(peakActive == 1, "maxConcurrentCompilers should serialize compiler actions even with idle workers");
 		removeTree(root);
 	}
 	#end
