@@ -589,12 +589,18 @@ class SemanticAssembly {
 						dependents.push(owner);
 					}
 		}
+		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
 				work.push(name);
 				invalidate(invalid, invalidationReasons, name, GenericOrigin, name);
 			}
+		// An invalidated generic origin loses its cached specializations, and only a retyped caller requests one again,
+		// so its callers are invalidated however the origin was (a changed body, or a layout it depends on).
+		for (name in [for (name in invalid.keys()) name])
+			if (genericOrigins.exists(name) && !bodyChanged.exists(name))
+				work.push(name);
 		for (name in purityDrifted.keys()) {
 			work.push(name);
 			invalidate(invalid, invalidationReasons, name, PurityDependency, name);
@@ -609,19 +615,36 @@ class SemanticAssembly {
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
 			if (changedId != null && reverseBodyDependencies.exists(changedId))
-				for (owner in reverseBodyDependencies.get(changedId))
+				for (ownerName in reverseBodyDependencies.get(changedId)) {
+					var owner = enclosingFunction(ownerName);
 					if (!invalid.exists(owner)) {
 						work.push(owner);
 						invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId,
 							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
 					}
+				}
+			if (genericOrigins.exists(changed)) {
+				// A call through a local (`context.resourceState(...)`) has no resolvable name before typing, so the callers
+				// that must request this origin's dropped specializations again come from the IR they were lowered to.
+				if (genericCallers == null)
+					genericCallers = callersOfSpecializations(modules, names);
+				var requesting = genericCallers.get(changed);
+				if (requesting != null)
+					for (caller in requesting)
+						if (!invalid.exists(caller)) {
+							work.push(caller);
+							invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "specialization-request");
+						}
+			}
 			if (reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
-				for (caller in callers)
+				for (callerName in callers) {
+					var caller = enclosingFunction(callerName);
 					if (!invalid.exists(caller)) {
 						work.push(caller);
 						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "provisional-call");
 					}
+				}
 			}
 		}
 		var invalidated:Map<String, Bool> = [];
@@ -685,6 +708,59 @@ class SemanticAssembly {
 			canonicalName = ModuleCanonicalizer.qualifiedTypeName(packageName, declarationName);
 		target.set(sourceName, canonicalName);
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
+	}
+
+	/** The functions whose lowered bodies call or refer to a specialization, by the generic function it was made from. */
+	static function callersOfSpecializations(modules:Map<String, ModuleState>, names:Array<String>):Map<String, Array<String>> {
+		var result:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
+			if (state == null)
+				continue;
+			for (functionName => fn in state.irFunctions) {
+				var caller = enclosingFunction(functionName),
+					seen:Map<String, Bool> = [];
+				for (block in fn.blocks)
+					for (located in block.instructions) {
+						var target = switch located.value {
+							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): name;
+							default: null;
+						};
+						if (target == null || !StringTools.startsWith(target, "$generic:"))
+							continue;
+						var origin = enclosingFunction(target);
+						if (seen.exists(origin))
+							continue;
+						seen.set(origin, true);
+						var callers = result.get(origin);
+						if (callers == null) {
+							callers = [];
+							result.set(origin, callers);
+						}
+						callers.push(caller);
+					}
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * A lambda is retyped with the function it is written in, so a dependency recorded on the lambda invalidates that function.
+	 * Lambda names read `$lambda:<enclosing>:<id>`, and the enclosing name can itself be a generic specialization.
+	 */
+	static function enclosingFunction(name:String):String {
+		while (StringTools.startsWith(name, "$lambda:")) {
+			var end = name.lastIndexOf(":");
+			if (end <= 8)
+				break;
+			name = name.substring(8, end);
+		}
+		if (StringTools.startsWith(name, "$generic:")) {
+			var bracket = name.indexOf("[", 9);
+			if (bracket > 0)
+				name = name.substring(9, bracket);
+		}
+		return name;
 	}
 
 	static function addReverseCall(reverseCalls:Map<String, Array<String>>, callee:String, caller:String):Void {
