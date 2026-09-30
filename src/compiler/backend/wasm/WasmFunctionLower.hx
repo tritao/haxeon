@@ -1044,6 +1044,10 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
+			case Call(output, name, arguments) if (WasmModuleSupport.hostCNative(context.program, name) != null):
+				var host = WasmModuleSupport.hostCNative(context.program, name);
+				lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
+					closureTypes);
 			case Call(output, name, arguments):
 				var runtimeName = name;
 				for (native in context.program.natives)

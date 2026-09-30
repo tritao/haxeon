@@ -20,6 +20,21 @@
  * IN THE SOFTWARE.
  */
 
+#if wasm
+/** A point in time, in milliseconds since the Unix epoch, read from the Wasm host. */
+class Date {
+	final time:Float;
+
+	function new(time:Float)
+		this.time = time;
+
+	public static function now():Date
+		return new Date(haxeon.wasm.HaxeonHost.date_now());
+
+	public function getTime():Float
+		return time;
+}
+#else
 /** Supported date value backed by the stable runtime ABI. */
 extern abstract Date(hl.Abstract<"realtime_date">) {
 	@:hlNative("haxeon_runtime", "__date_now")
@@ -28,3 +43,4 @@ extern abstract Date(hl.Abstract<"realtime_date">) {
 	@:hlNative("haxeon_runtime", "__date_get_time")
 	public function getTime():Float;
 }
+#end

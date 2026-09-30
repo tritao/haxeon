@@ -623,7 +623,7 @@ class WasmGcModuleBuilder {
 			return true;
 		for (native in program.natives)
 			if (native.name == name)
-				return isSupportedGcRuntimeNative(native.symbol);
+				return isSupportedGcRuntimeNative(native.symbol) || WasmModuleSupport.hostCNative(program, native.name) != null;
 		return false;
 	}
 

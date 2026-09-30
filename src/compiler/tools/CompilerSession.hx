@@ -36,9 +36,19 @@ class CompilerSession {
 	public function writeHashLink(code:HlCode, path:String):Void
 		HlWriter.writeFile(code, path, writerCache);
 
+	/** Wasm guests import their host services through this stdlib interface. */
+	static function hostInterfaces(target:String):{interfaces:Array<String>, projections:Array<String>}
+		return switch target {
+			case "wasm32" | "wasm-gc" | "wasmgc": {interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi"], projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap"]};
+			case _: {interfaces: [], projections: []};
+		};
+
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
-		var interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}],
-			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}],
+		var host = hostInterfaces(request.target),
+			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
+			projectionPaths = request.ffiProjections.concat(host.projections);
+		var interfaces = [for (path in interfacePaths) {path: path, text: read(path)}],
+			projections = [for (path in projectionPaths) {path: path, text: read(path)}],
 			identity = Json.stringify({
 				target: request.target,
 				entry: request.entry,
@@ -61,8 +71,8 @@ class CompilerSession {
 				}
 			}
 		if (compiler == null) {
-			interfaces = [for (path in request.ffiInterfaces) {path: path, text: read(path)}];
-			projections = [for (path in request.ffiProjections) {path: path, text: read(path)}];
+			interfaces = [for (path in interfacePaths) {path: path, text: read(path)}];
+			projections = [for (path in projectionPaths) {path: path, text: read(path)}];
 		}
 		// Modules resolved lazily (notably stdlib) have absolute source paths.
 		// Refresh those too: retaining only the explicit manifest would cache stale imports.

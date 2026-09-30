@@ -39,6 +39,25 @@ class WasmModuleSupport {
 		}
 	}
 
+	/**
+	 * The HaxeonHost C function a runtime native calls on Wasm (see stdlib/haxeon/wasm/HaxeonHost.hxi), so a host
+	 * never reads how a backend lays out Haxe values: `trace` prints through HaxeonHost.print.
+	 */
+	public static function hostCNative(program:IrProgram, nativeName:String):Null<IrCNative> {
+		var hostSymbol:Null<String> = null;
+		for (native in program.natives)
+			if (native.name == nativeName)
+				hostSymbol = switch native.symbol {
+					case "__sys_print": "print";
+					case _: null;
+				};
+		if (hostSymbol != null)
+			for (native in program.cNatives)
+				if (native.library == "haxeon_host" && native.symbol == hostSymbol)
+					return native;
+		return null;
+	}
+
 	public static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
 		for (fn in program.functions)
@@ -67,6 +86,10 @@ class WasmModuleSupport {
 						switch located.value {
 							case CNativeCall(_, name, _):
 								result.set(name, true);
+							case Call(_, name, _):
+								var host = hostCNative(program, name);
+								if (host != null)
+									result.set(host.name, true);
 							default:
 						}
 		return result;
@@ -315,6 +338,7 @@ class WasmModuleSupport {
 							roots.push(dependency);
 							added = true;
 						}
+
 			if (!added)
 				return reachable;
 			reachable = reachableFunctions(program, entry, roots);
