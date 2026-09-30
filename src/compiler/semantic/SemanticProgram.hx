@@ -88,7 +88,12 @@ class SemanticProgram {
 				if (selected.exists(name) && currentMethod != null)
 					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
 			}
-			classes[index] = cast copyWithMethods(decl, methods);
+			var next:Dynamic = copyWithMethods(decl, methods);
+			// An instance field initializer is typed as part of `new`, so an edit to one reports `new` as
+			// changed while the initializer itself lives in the field, not in any method body.
+			if (selected.exists(decl.name + ".new"))
+				Reflect.setField(next, "fields", withInitializers(decl.fields, replacement.fields));
+			classes[index] = cast next;
 		}
 		var currentAbstracts = [for (decl in current.abstracts) decl.name => decl],
 			abstracts = program.abstracts.copy();
@@ -142,6 +147,28 @@ class SemanticProgram {
 			shapeConnectionMs: 0.0,
 			signatureTypingMs: 0.0
 		});
+	}
+
+	static function withInitializers(fields:Array<compiler.syntax.Ast.AstField>,
+			current:Array<compiler.syntax.Ast.AstField>):Array<compiler.syntax.Ast.AstField> {
+		var currentByName = [for (field in current) field.name => field];
+		return [
+			for (field in fields) {
+				var replacement = field.isStatic ? null : currentByName.get(field.name);
+				replacement == null ? field : {
+					name: field.name,
+					metadata: field.metadata,
+					type: field.type,
+					initializer: replacement.initializer,
+					readAccess: field.readAccess,
+					writeAccess: field.writeAccess,
+					isStatic: field.isStatic,
+					isInline: field.isInline,
+					isFinal: field.isFinal,
+					span: replacement.span
+				};
+			}
+		];
 	}
 
 	static function copyWithMethods<T>(declaration:T, methods:Array<AstFunction>):T {

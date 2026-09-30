@@ -94,6 +94,7 @@ class TestCatalog {
 		"BuildSystemMain",
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",
+		"FieldInitializerEditMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];
