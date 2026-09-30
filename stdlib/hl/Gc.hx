@@ -16,4 +16,10 @@ extern class Gc {
   @:hlNative("std", "gc_set_mark_threshold") public static function setMarkThreshold(fraction:Float):Void;
   @:hlNative("std", "gc_get_mark_threshold") public static function markThreshold():Float;
   @:hlNative("std", "gc_dump_memory") public static function dump(path:hl.Bytes):Void;
+  /** Counts every allocation by type from now on; `stackEveryBytes` > 0 also samples call stacks once per that many allocated bytes. */
+  @:hlNative("std", "gc_census_start") public static function censusStart(stackEveryBytes:Int):Void;
+  @:hlNative("std", "gc_census_stop") public static function censusStop():Void;
+  @:hlNative("std", "gc_census_reset") public static function censusReset():Void;
+  /** Writes the census as JSON (per-type counts and bytes, sampled stacks with resolved names) to a UTF-8 path. */
+  @:hlNative("std", "gc_census_dump") public static function censusDump(path:hl.Bytes):Void;
 }
