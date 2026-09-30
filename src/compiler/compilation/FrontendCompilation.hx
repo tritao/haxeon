@@ -123,7 +123,8 @@ class FrontendCompilation {
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGraph = AllocationMeter.sample();
 
-		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged),
+		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged,
+			indexSemantics),
 			canonicalProgram = semanticAssembly.canonicalProgram,
 			functions = semanticAssembly.functions,
 			owners = semanticAssembly.owners,
