@@ -311,7 +311,7 @@ class IrInliner {
 			if (found)
 				break;
 		}
-		if (!found)
+		if (!found && !IrCopyElision.hasCopies(fn.blocks))
 			return fn;
 		var blocks:Array<IrBlock> = [], nextValue = 0, nextBlock = 0;
 		for (block in fn.blocks) {
@@ -369,6 +369,12 @@ class IrInliner {
 			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, objects, replaced.nextValue)};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
+		var consult = function(name:String):Void {
+			var original = byName.get(name);
+			if (original != null && frames.length > 0)
+				frames[frames.length - 1].set(name, original);
+		};
+		new IrCopyElision(byName, objects, consult).run(blocks);
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint);
 	}
 

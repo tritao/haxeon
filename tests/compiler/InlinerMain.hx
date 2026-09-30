@@ -62,8 +62,8 @@ class InlinerMain {
 		IrVerifier.verify(flowProgram);
 		for (name in ["branches", "loops"])
 			expect(allocations(programFunction(flowProgram, name)) == 1, '$name allocates once, and needs phis to replace it');
-		// An argument is a copy, so handing the object to a call that is not inlined costs a second allocation.
-		expect(allocations(programFunction(flowProgram, "late")) == 2, "late keeps its object and the copy it passes to keep");
+		// An argument is a copy, but keep only reads it and stores nothing, so the copy is dropped.
+		expect(allocations(programFunction(flowProgram, "late")) == 1, "late passes its object to keep without copying it");
 		for (name in ["perIteration", "perIterationNested"])
 			expect(allocations(programFunction(flowProgram, name)) == 0, '$name allocates every iteration, so it should be replaced even with phis');
 		expect(allocations(programFunction(flowProgram, "guarded")) <= 1, "an object in a function with exception handling is handled safely");
@@ -80,6 +80,44 @@ class InlinerMain {
 		var boxedProgram = Frontend.compile(slotSource);
 		IrInliner.run(boxedProgram, new IrInlineCache());
 		expect(allocations(programFunction(boxedProgram, "H.set")) == 1, "a target without inline value fields keeps the allocation");
+		// A copy stays whenever the callee could observe the difference.
+		var readsOnlyBody = "function readsOnly(b:Box):Int { var t = 0; for (i in 0...3) t += b.v * i; return t; }";
+		var elisionSource = (readsOnlyBody:String) -> ("@:value class Box { public var v:Int; public function new(v:Int) this.v = v; } "
+			+ "class Sink { public static var kept:Box = new Box(0); } "
+			+ readsOnlyBody
+			+ " "
+			+ "function writes(b:Box):Int { for (i in 0...3) b.v = b.v + i; return b.v; } "
+			+ "function escapes(b:Box):Int { Sink.kept = b; return 1; } "
+			+ "function storesElsewhere(b:Box, other:Box):Int { var t = 0; for (i in 0...3) { other.v = other.v + 1; t += b.v; } return t; } "
+			+ "function noise():Int return 3; "
+			+ "function pureCaller(x:Box):Int return readsOnly(x); "
+			+ "function writeCaller(x:Box):Int return writes(x); "
+			+ "function escapeCaller(x:Box):Int return escapes(x); "
+			+ "function storeCaller(x:Box, y:Box):Int return storesElsewhere(x, y); "
+			+ "function gapCaller(x:Box):Int { return readsOnlyWith(x, noise()); } "
+			+ "function readsOnlyWith(b:Box, n:Int):Int { var t = 0; for (i in 0...n) t += b.v; return t; } "
+			+
+			"function main():Int { var a = new Box(2); var b = new Box(3); return pureCaller(a) + writeCaller(a) + escapeCaller(a) + storeCaller(a, b) + gapCaller(a); }");
+		var elisionProgram = Frontend.compile(elisionSource(readsOnlyBody));
+		var elisionOriginals = elisionProgram.functions.copy(),
+			elisionCache = new IrInlineCache();
+		IrInliner.run(elisionProgram, elisionCache);
+		IrVerifier.verify(elisionProgram);
+		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 0, "a read-only, store-free callee gets the source itself");
+		// Editing the callee so that it writes its parameter must give the caller its copy back.
+		var writingBody = "function readsOnly(b:Box):Int { var t = 0; for (i in 0...3) { b.v = b.v + 1; t += b.v; } return t; }";
+		var editedElision = Frontend.compile(elisionSource(writingBody));
+		var elisionHybrid:Array<IrFunction> = [];
+		for (fn in elisionOriginals)
+			elisionHybrid.push(fn.name == "readsOnly" ? programFunction(editedElision, "readsOnly") : fn);
+		elisionProgram.functions = elisionHybrid;
+		var elisionChanged = IrInliner.run(elisionProgram, elisionCache);
+		expect(elisionChanged.indexOf("pureCaller") >= 0, "a caller whose callee started writing its parameter is reported as changed");
+		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 1, "the caller gets its copy back once the callee writes the parameter");
+		expect(allocations(programFunction(elisionProgram, "writeCaller")) == 1, "a callee that writes its parameter must get a copy");
+		expect(allocations(programFunction(elisionProgram, "escapeCaller")) == 1, "a callee that stores its parameter must get a copy");
+		// Both arguments are copies: one is written by the callee, and the other could alias what the callee stores into.
+		expect(allocations(programFunction(elisionProgram, "storeCaller")) == 2, "a callee that stores elsewhere could alias the source, so it gets a copy");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();

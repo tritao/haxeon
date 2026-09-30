@@ -56,6 +56,19 @@ function bump(span:Span):Int {
 	return span.start;
 }
 
+function reads(span:Span):Int {
+	var total = 0;
+	for (i in 0...3)
+		total += span.start + span.length;
+	return total;
+}
+
+// Writes to the holder's own span while reading its parameter: the parameter must be a copy taken before the call.
+function readAfterOtherWrite(span:Span, holder:Holder):Int {
+	holder.span.start = 500;
+	return span.start;
+}
+
 function main():Int {
 	var failures = 0;
 	var h = new Holder();
@@ -107,5 +120,12 @@ function main():Int {
 	var shared = h.frozen;
 	if (fresh.start != 4 || shared.a != 3 || shared.b != 4)
 		failures += 256;
+	// A read-only callee sees the current contents.
+	if (reads(h.span) != 3 * (7 + 7))
+		failures += 512;
+	// A callee that changes the source while it runs still sees the value from the moment of the call.
+	h.span.start = 11;
+	if (readAfterOtherWrite(h.span, h) != 11 || h.span.start != 500)
+		failures += 1024;
 	return failures == 0 ? 42 : failures;
 }

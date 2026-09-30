@@ -60,6 +60,13 @@ class CfgBuilder {
 	public function generated(reason:String, ?anchor:SourceSpan):Void
 		provenance = SourceProvenance.generated(reason, anchor);
 
+	/** Mark what is emitted until `restoreSource` as generated for `reason`, keeping the current source location. */
+	public function beginGenerated(reason:String):SourceProvenance {
+		var previous = provenance;
+		provenance = new SourceProvenance(previous.location, CompilerGenerated(reason));
+		return previous;
+	}
+
 	/** Enter a nested source context and return the token needed to restore it. */
 	public function enterSource(span:SourceSpan):SourceProvenance {
 		var previous = provenance;

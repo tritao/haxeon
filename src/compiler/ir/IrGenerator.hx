@@ -876,12 +876,22 @@ class IrGenerator {
 	}
 
 	/** A new instance with the same field values; nested value classes that need copying are copied in turn. */
+	/** Origin reason on the instructions of a value copy, so a later pass can recognize and drop unneeded ones. */
+	public static inline var ValueCopyReason = "value-copy";
+
 	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout):CfgValue {
+		var previous = builder.beginGenerated(ValueCopyReason);
+		var copy = copyFields(builder, source, layout);
+		builder.restoreSource(previous);
+		return copy;
+	}
+
+	static function copyFields(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout):CfgValue {
 		var copy = builder.newObject(layout.name);
 		for (field in layout.fields) {
 			var value = builder.fieldGet(source, field.name, lowerType(field.type));
 			if (field.nested != null)
-				value = copyValue(builder, value, field.nested);
+				value = copyFields(builder, value, field.nested);
 			builder.fieldSet(copy, field.name, value);
 		}
 		return copy;
