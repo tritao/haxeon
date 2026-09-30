@@ -1133,6 +1133,15 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
+		if (name == "haxe.Int64.fromFloat") {
+			if (arguments.length != 1 || arguments[0].type != F64 || output.type != I64)
+				throw "Invalid haxe.Int64.fromFloat Wasm native signature";
+			// HashLink's C cast is undefined outside the Int64 range; Wasm saturates instead of trapping.
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64TruncSatF64S);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.toInt") {
 			if (arguments.length != 1 || output.type != I32)
 				throw "Invalid haxe.Int64.toInt Wasm native signature";

@@ -24,6 +24,7 @@ package sys.io;
 
 import haxe.io.Bytes;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__file_get_content")
 extern function fileGetContent(path:String):String;
 
@@ -38,6 +39,23 @@ extern function fileAppendContent(path:String, content:String):Void;
 
 @:hlNative("haxeon_runtime", "__file_save_bytes")
 extern function fileSaveBytes(path:String, bytes:Bytes):Void;
+#else
+// Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
+function fileGetContent(path:String):String
+	return runtime.MemoryFileSystem.getContent(path);
+
+function fileGetBytes(path:String):Bytes
+	return runtime.MemoryFileSystem.getBytes(path);
+
+function fileSaveContent(path:String, content:String):Void
+	runtime.MemoryFileSystem.saveContent(path, content);
+
+function fileAppendContent(path:String, content:String):Void
+	runtime.MemoryFileSystem.appendContent(path, content);
+
+function fileSaveBytes(path:String, bytes:Bytes):Void
+	runtime.MemoryFileSystem.saveBytes(path, bytes);
+#end
 
 /** Supported whole-file operations backed by the stable runtime ABI. */
 class File {

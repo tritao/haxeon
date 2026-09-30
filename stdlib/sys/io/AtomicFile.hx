@@ -2,8 +2,14 @@ package sys.io;
 
 import haxe.io.Bytes;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__file_write_atomic")
 extern function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>;
+#else
+/** Wasm publishes into the session's in-memory filesystem, where a single store is atomic. */
+function writeAtomicBytes(path:String, content:Bytes, replace:Bool):Null<String>
+	return runtime.MemoryFileSystem.writeAtomic(path, content, replace);
+#end
 
 /** Durable whole-file publication. The destination is changed only after all
     bytes have been written and flushed. */

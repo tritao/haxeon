@@ -47,6 +47,18 @@ haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
 	--root=tests/programs tests/programs/wasm-std-string-fields.hx
 haxeon_compile_async \
+	--target=wasm32 --output=out/wasm-cli-memory-filesystem.wasm --entry=wasm-memory-filesystem \
+	--root=tests/programs tests/programs/wasm-memory-filesystem.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-gc-cli-memory-filesystem.wasm --entry=wasm-memory-filesystem \
+	--root=tests/programs tests/programs/wasm-memory-filesystem.hx
+haxeon_compile_async \
+	--target=wasm32 --output=out/wasm-cli-ereg-engine.wasm --entry=wasm-ereg-engine \
+	--root=tests/programs tests/programs/wasm-ereg-engine.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-gc-cli-ereg-engine.wasm --entry=wasm-ereg-engine \
+	--root=tests/programs tests/programs/wasm-ereg-engine.hx
+haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 haxeon_compile_async \
@@ -177,6 +189,10 @@ const cases = [
   ["out/wasm-backend-std-string-i64.wasm", 42],
 	["out/wasm-cli-std-string-fields.wasm", 42],
 	["out/wasm-gc-cli-std-string-fields.wasm", 42],
+	["out/wasm-cli-memory-filesystem.wasm", 42],
+	["out/wasm-gc-cli-memory-filesystem.wasm", 42],
+	["out/wasm-cli-ereg-engine.wasm", 42],
+	["out/wasm-gc-cli-ereg-engine.wasm", 42],
   ["out/wasm-backend-method.wasm", 42],
   ["out/wasm-backend-global.wasm", 42],
   ["out/wasm-backend-float-global.wasm", 42],

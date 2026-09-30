@@ -1,5 +1,6 @@
 package hl;
 
+#if !wasm
 /** Cumulative HashLink GC counters for lightweight interval measurements. */
 extern class Gc {
   @:hlNative("std", "gc_total_allocated") public static function totalAllocated():Float;
@@ -23,3 +24,55 @@ extern class Gc {
   /** Writes the census as JSON (per-type counts and bytes, sampled stacks with resolved names) to a UTF-8 path. */
   @:hlNative("std", "gc_census_dump") public static function censusDump(path:hl.Bytes):Void;
 }
+#else
+/**
+ * Wasm has no HashLink collector to control or observe: Wasm32 collects on its own allocation
+ * budget and Wasm GC leaves collection to the engine. Controls are accepted and ignored, and
+ * counters read zero, so profiling code runs unchanged but measures nothing.
+ */
+class Gc {
+	static var threshold = 0.2;
+
+	public static function totalAllocated():Float
+		return 0.0;
+
+	public static function collections():Float
+		return 0.0;
+
+	public static function markMicros():Float
+		return 0.0;
+
+	public static function lastPauseMicros():Float
+		return 0.0;
+
+	public static function maxPauseMicros():Float
+		return 0.0;
+
+	public static function heapBytes():Float
+		return 0.0;
+
+	public static function allocatedSinceCollection():Float
+		return 0.0;
+
+	public static function major():Void {}
+
+	public static function enable(enabled:Bool):Void {}
+
+	/** Remembered with HashLink's clamping so a read returns what was set; it has no effect. */
+	public static function setMarkThreshold(fraction:Float):Void
+		threshold = fraction < 0.05 ? 0.05 : fraction > 4.0 ? 4.0 : fraction;
+
+	public static function markThreshold():Float
+		return threshold;
+
+	public static function dump(path:hl.Bytes):Void {}
+
+	public static function censusStart(stackEveryBytes:Int):Void {}
+
+	public static function censusStop():Void {}
+
+	public static function censusReset():Void {}
+
+	public static function censusDump(path:hl.Bytes):Void {}
+}
+#end

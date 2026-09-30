@@ -168,6 +168,10 @@ enum WasmInstruction {
 	F32DemoteF64;
 	I32WrapI64;
 	I32TruncF64S;
+
+	/** Truncate toward zero, clamping out-of-range values and mapping NaN to zero instead of trapping. */
+	I64TruncSatF64S;
+
 	I32ReinterpretF32;
 	F32ReinterpretI32;
 	I64ReinterpretF64;

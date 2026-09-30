@@ -504,6 +504,10 @@ class WasmValidator {
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I32);
+				case I64TruncSatF64S:
+					pop(stack, F64, fn);
+					if (reachable)
+						stack.push(I64);
 				case I32ReinterpretF32:
 					pop(stack, F32, fn);
 					if (reachable)

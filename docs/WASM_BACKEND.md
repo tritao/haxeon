@@ -120,6 +120,24 @@ encoding for those runtimes; the NativeKit GC web showcase selects this
 compatibility mode by default. Leave the variable unset (or set it to `0`) to
 exercise the standardized encoding.
 
+## Standard library on Wasm
+
+Where HashLink calls a native runtime, the Wasm stdlib substitutes Haxe code
+under `#if wasm`, shared by both targets:
+
+- `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem` and the `Sys` path
+  operations use `runtime.MemoryFileSystem`, a session-only in-memory store
+  that a host-backed store can later replace. Failures follow the HashLink
+  runtime's booleans and error messages.
+- `EReg` uses `runtime.Regex`, a backtracking engine for the common PCRE subset;
+  unsupported syntax throws when the pattern is compiled.
+- `Std.random` is a fixed-seed xorshift generator; `Reflect.compare` follows
+  `hl_dyn_compare` for null, strings, numbers and booleans.
+- `hl.Gc` controls are ignored and its counters read zero. `Sys.getEnv` returns
+  null, `Sys.systemName` is `"Web"`, and `Sys.executablePath` is empty.
+
+Threads, `sys.io.Process` and `Sys.command` remain unsupported.
+
 ## Building and testing
 
 Bootstrap the pinned local compiler tools once:

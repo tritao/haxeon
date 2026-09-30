@@ -3,24 +3,46 @@ private typedef ERegMatch = {
 	final len:Int;
 }
 
+#if !wasm
+private typedef RegexHandle = hl.Abstract<"ereg">;
+
 @:hlNative("haxeon_runtime", "__regexp_new")
-extern function regexpNew(pattern:String, options:String):hl.Abstract<"ereg">;
+extern function regexpNew(pattern:String, options:String):RegexHandle;
 
 @:hlNative("haxeon_runtime", "__regexp_match")
-extern function regexpMatch(expression:hl.Abstract<"ereg">, value:String, position:Int, length:Int):Bool;
+extern function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_pos")
-extern function regexpMatchedPos(expression:hl.Abstract<"ereg">, group:Int):Int;
+extern function regexpMatchedPos(expression:RegexHandle, group:Int):Int;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_length")
-extern function regexpMatchedLength(expression:hl.Abstract<"ereg">, group:Int):Int;
+extern function regexpMatchedLength(expression:RegexHandle, group:Int):Int;
 
 @:hlNative("haxeon_runtime", "__regexp_matched_num")
-extern function regexpMatchedNum(expression:hl.Abstract<"ereg">):Int;
+extern function regexpMatchedNum(expression:RegexHandle):Int;
+#else
+// Wasm has no PCRE2: runtime.Regex matches in Haxe. See it for the supported syntax.
+private typedef RegexHandle = runtime.Regex;
+
+function regexpNew(pattern:String, options:String):RegexHandle
+	return new runtime.Regex(pattern, options);
+
+function regexpMatch(expression:RegexHandle, value:String, position:Int, length:Int):Bool
+	return expression.match(value, position, length);
+
+function regexpMatchedPos(expression:RegexHandle, group:Int):Int
+	return expression.matchedPos(group);
+
+function regexpMatchedLength(expression:RegexHandle, group:Int):Int
+	return expression.matchedLength(group);
+
+function regexpMatchedNum(expression:RegexHandle):Int
+	return expression.matchedNum();
+#end
 
 /** PCRE2-backed regular expressions with Haxe-compatible global iteration. */
 class EReg {
-	final expression:hl.Abstract<"ereg">;
+	final expression:RegexHandle;
 	final global:Bool;
 	var last:String = "";
 	var hasMatch:Bool = false;
@@ -126,6 +148,32 @@ class EReg {
 		return result;
 	}
 
+	/** Replaces each match (or only the first, without `g`) with what `f` returns for it. */
+	public function map(value:String, f:EReg->String):String {
+		var output = new StringBuf(), offset = 0;
+		while (offset < value.length) {
+			if (!matchSub(value, offset)) {
+				output.add(value.substring(offset));
+				offset = value.length;
+				break;
+			}
+			var position = regexpMatchedPos(expression, 0), length = regexpMatchedLength(expression, 0);
+			output.add(value.substring(offset, position));
+			output.add(f(this));
+			if (length == 0) {
+				var next = nextScalarOffset(value, position);
+				output.add(value.substring(position, next));
+				offset = next;
+			} else
+				offset = position + length;
+			if (!global)
+				break;
+		}
+		if (!global && offset < value.length)
+			output.add(value.substring(offset));
+		return output.toString();
+	}
+
 	function expandReplacement(replacement:String):String {
 		var output = new StringBuf(), index = 0;
 		while (index < replacement.length) {
@@ -153,9 +201,17 @@ class EReg {
 
 	static function nextScalarOffset(value:String, offset:Int):Int {
 		if (offset >= value.length) return value.length;
+		#if wasm
+		// Wasm strings are UTF-8: skip the continuation bytes of a multibyte scalar.
+		var next = offset + 1;
+		while (next < value.length && (value.charCodeAt(next) & 0xC0) == 0x80)
+			next++;
+		return next;
+		#else
 		var first = value.charCodeAt(offset);
 		return first >= 0xD800 && first <= 0xDBFF && offset + 1 < value.length
 			&& value.charCodeAt(offset + 1) >= 0xDC00 && value.charCodeAt(offset + 1) <= 0xDFFF ? offset + 2 : offset + 1;
+		#end
 	}
 
 	public static function escape(value:String):String {
