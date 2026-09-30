@@ -318,7 +318,7 @@ class IrScalarReplacement {
 					if (entries.indexOf(id) < 0)
 						entries.push(id);
 					var parent = graph.immediate.get(runner);
-					if (parent == runner)
+					if (parent == null || parent == runner)
 						break;
 					runner = parent;
 					guard++;
@@ -426,6 +426,8 @@ class IrScalarReplacement {
 		var walk:Int->Map<String, IrValue>->Void = null;
 		walk = function(blockId:Int, incoming:Map<String, IrValue>):Void {
 			var block = graph.blocks.get(blockId);
+			if (block == null)
+				throw "Scalar replacement walked to an unknown block";
 			var current:Map<String, IrValue> = [for (name => value in incoming) name => value];
 			if (phis.exists(blockId))
 				for (name => output in phis.get(blockId))

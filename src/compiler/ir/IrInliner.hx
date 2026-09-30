@@ -470,7 +470,10 @@ class IrInliner {
 		var copies:Array<Located<IrInstruction>> = [];
 		for (located in source.instructions)
 			copies.push(new Located(remap(located.value, use, noBlocks), located.provenance));
-		var returned:IrValue = switch source.terminator.value {
+		var terminator = source.terminator;
+		if (terminator == null)
+			throw "A straight-line callee must end in a terminator";
+		var returned:IrValue = switch terminator.value {
 			case Return(value): use(value);
 			default: throw "A straight-line callee must return";
 		};
@@ -576,10 +579,12 @@ class IrInliner {
 		};
 		var cloned:Array<IrBlock> = [], returned:Array<IrPhiInput> = [];
 		for (block in callee.blocks) {
-			var copy = new IrBlock(blockIds.get(block.id));
+			var copy = new IrBlock(target(block.id));
 			for (located in block.instructions)
 				copy.instructions.push(new Located(remap(located.value, use, target), located.provenance));
 			var terminator = block.terminator;
+			if (terminator == null)
+				throw "Inliner found a callee block without a terminator";
 			switch terminator.value {
 				case Return(value):
 					returned.push({block: copy.id, value: use(value)});
@@ -607,7 +612,10 @@ class IrInliner {
 		head.terminator = new Located(Jump(cloned[0].id), call.provenance);
 		// Everything that used to leave the head now leaves the continuation, so successor phis name the new predecessor.
 		var successors:Array<Int> = [];
-		switch continuation.terminator.value {
+		var continued = continuation.terminator;
+		if (continued == null)
+			throw "Inliner found a call site without a terminator";
+		switch continued.value {
 			case Jump(destination):
 				successors.push(destination);
 			case Branch(_, whenTrue, whenFalse):

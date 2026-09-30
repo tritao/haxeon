@@ -82,11 +82,18 @@ class IrGenerator {
 				collectStringConcatOperands(left, into);
 				collectStringConcatOperands(right, into);
 			case TStringLiteral(text):
-				var last = into.length == 0 ? null : into[into.length - 1];
-				switch last == null ? null : last.expression {
-					case TStringLiteral(previous): into[into.length - 1] = new TypedExpression(TStringLiteral(previous + text), last.type, last.span);
-					default: into.push(expression);
+				var folded = false;
+				if (into.length > 0) {
+					var last = into[into.length - 1];
+					switch last.expression {
+						case TStringLiteral(previous):
+							into[into.length - 1] = new TypedExpression(TStringLiteral(previous + text), last.type, last.span);
+							folded = true;
+						default:
+					}
 				}
+				if (!folded)
+					into.push(expression);
 			default:
 				into.push(expression);
 		}
@@ -1091,6 +1098,8 @@ class IrGenerator {
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
 			case TCall("__std_string" | "Std.string", [argument]) if (nativeStringFastPaths && stringifiedPrimitive(argument) != null):
 				var primitive = stringifiedPrimitive(argument);
+				if (primitive == null)
+					throw "The Std.string fast path lost its primitive operand";
 				builder.call(primitive.type == TInt ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
 			case TCall("__reference_equal", [left, right]):
 				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));

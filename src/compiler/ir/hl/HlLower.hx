@@ -1254,8 +1254,11 @@ class HlLower {
 		if (!objects.exists(typeName))
 			throw 'Unknown IR object "$typeName"';
 		var descriptor = objects.get(typeName);
-		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
-		return descriptor.fields.length + objectSlotCounts.get(typeName) + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
+		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base),
+			slotCount = objectSlotCounts.get(typeName);
+		if (slotCount == null)
+			throw 'Missing interface slot count for IR object "$typeName"';
+		return descriptor.fields.length + slotCount + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
 	}
 
 	/** Every interface `object` implements, directly or through interface bases, that its base class does not already provide.
@@ -1267,6 +1270,8 @@ class HlLower {
 		var baseName = object.base == null ? "" : Std.string(object.base);
 		while (baseName.length > 0 && objects.exists(baseName)) {
 			var base = objects.get(baseName);
+			if (base == null)
+				break;
 			for (name in closeInterfaces(base.interfaces))
 				inherited.set(name, true);
 			baseName = base.base == null ? "" : Std.string(base.base);
