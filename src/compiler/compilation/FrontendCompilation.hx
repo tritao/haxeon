@@ -309,11 +309,14 @@ class FrontendCompilation {
 			// An unchanged caller can retain a call to a generated specialization.
 			// Such bodies are absent from this request's typedNew, but must survive
 			// pruning as long as their source origin still exists and is unchanged.
+			// "Unchanged" means not semantically invalidated: an origin that is only re-selected because
+			// another function in its module changed is retyped, but the callers that were not retyped
+			// never request its specializations again, so the cached bodies must stay.
 			var retainedSpecializations:Map<String, Bool> = [];
 			var hasRetainedSpecializations = false;
 			for (cached => fn in state.typedFunctions) {
 				var origin = fn.genericOrigin;
-				if (origin != null && owners.exists(origin) && !selected.exists(origin)) {
+				if (origin != null && owners.exists(origin) && !invalidated.exists(origin)) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 					retainedSpecializations.set(cached, true);
