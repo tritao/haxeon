@@ -39,14 +39,14 @@ class TypeRelations {
 				case TNull, TVoid, TNever: Incompatible;
 				default: FromDynamic;
 			};
-		if (actual == TNull && isReference(expected))
+		if (actual == TNull && acceptsNull(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
-			case TNullable(element) if (isReference(expected) && isAssignable(element, expected)):
+			case TNullable(element) if (acceptsNull(expected) && isAssignable(element, expected)):
 				return UnwrapNullable;
 			default:
 		}
@@ -76,7 +76,7 @@ class TypeRelations {
 			return true;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
-		if (actual == TNull && isReference(expected))
+		if (actual == TNull && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
 			return true;
@@ -85,11 +85,11 @@ class TypeRelations {
 				case TNull, TVoid, TNever: false;
 				default: true;
 			};
-		if (actual == TNull && isReference(expected))
+		if (actual == TNull && acceptsNull(expected))
 			return true;
 		switch actual {
 			case TNullable(element):
-				if (isReference(expected) && isAssignable(element, expected))
+				if (acceptsNull(expected) && isAssignable(element, expected))
 					return true;
 			default:
 		}
@@ -250,6 +250,32 @@ class TypeRelations {
 			case TAbstract(_, _, representation): isReference(representation);
 			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
+			default: false;
+		};
+
+	/** Reference types hold null, except @:value classes: their instances are stored inline in fields and are never null. */
+	function acceptsNull(type:CompilerType):Bool
+		return isReference(type) && !isValueClass(type);
+
+	/** Whether `type` is a class declared `@:value`, which is a plain (non-record) value structure. */
+	public function isValueClass(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _):
+				var declaration = declarations.classes.get(name);
+				if (declaration == null) false; else {
+					var found = false;
+					for (entry in declaration.metadata)
+						if (entry.name == "value")
+							found = true;
+					found;
+				}
+			default: false;
+		};
+
+	/** `Null<V>` for a value class V, which cannot be stored in an inline field. */
+	public function isNullableValueClass(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element): isValueClass(element);
 			default: false;
 		};
 

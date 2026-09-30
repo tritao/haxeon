@@ -230,3 +230,4 @@ interface-conversion-cache	42
 profile-span	42
 string-concat-chain	42
 value-class-method	42
+value-class-null	42

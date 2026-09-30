@@ -325,6 +325,10 @@ class ProgramTyper {
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in native value record fields', field.span);
+			if (!field.isStatic && session.relations.isNullableValueClass(type))
+				BodyTyper.fail("E1022",
+					'Field "${classDecl.name}.${field.name}" cannot be Null<V> for value class V: value fields are stored inline and cannot be null',
+					field.span);
 			var initializer:Null<TypedExpression> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;

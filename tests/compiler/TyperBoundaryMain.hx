@@ -29,6 +29,13 @@ class TyperBoundaryMain {
 		expect(hasRuntimeDependency(measured.runtimeDependencies, "main", "Std"), "Float string conversion should retain the Std runtime dependency");
 		assertDiagnostic("function main():Int { var value:Int; return value; }", "E1023", "may be used before assignment");
 		assertDiagnostic("function identity(value:Int):Int return value; function main():Int return identity(\"wrong\");", "E1009", "argument 1");
+		// Value class instances are stored inline in fields, so null cannot reach one; it used to segfault at runtime.
+		var value = "@:value class V { public var x:Int; public function new(x:Int) this.x = x; } ";
+		assertDiagnostic(value
+			+ "class H { public var v:V; public function new() v = new V(1); } function main():Int { var h = new H(); h.v = null; return 0; }", "E1002",
+			"");
+		assertDiagnostic(value + "class H { public var v:V; public function new(?v:V) this.v = v; } function main():Int { return 0; }", "E1002", "");
+		assertDiagnostic(value + "class H { public var v:Null<V>; public function new() {} } function main():Int { return 0; }", "E1022", "cannot be Null<V>");
 		Sys.println("PASS: Typer subsystem boundaries preserve typed output and diagnostics");
 	}
 
