@@ -61,7 +61,10 @@ class BackendAssembly {
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)
 			token.check();
+		// The assembler can also fall back to a fresh module on its own (a new runtime native moves every
+		// slot), and a patch is only meaningful against the layout the running module has.
 		var patchBytes = reloadReasons.length > 0
+			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
 				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);

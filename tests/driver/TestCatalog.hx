@@ -91,6 +91,7 @@ class TestCatalog {
 		"UtestDiscoveryMain",
 		"BuildSystemMain",
 		"ArtifactBuildMain",
+		"LiveNativeShiftMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];
