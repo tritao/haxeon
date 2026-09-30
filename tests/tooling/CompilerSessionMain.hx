@@ -47,8 +47,10 @@ class CompilerSessionMain {
 		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0 && edited.metrics.signatureTypingMs == 0.0,
 			"an explicitly typed class-method body edit must reuse validated declarations");
 		expect(File.getBytes(output).compare(HlWriter.encode(edited.module)) == 0, "cached HashLink function encoding must match canonical serialization");
-		expect(functionByName(initial, "Main.main") == functionByName(edited, "Main.main"),
-			"backend assembly must reuse functions from unchanged source files");
+		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
+		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");
+		expect(compiler.ir.IrInliner.enabled ? !mainReused : mainReused,
+			"backend assembly must reuse functions from unchanged source files, except callers that inlined an edited callee");
 		compareFresh(9);
 		var lazy = root + "/Lazy.hx";
 		File.saveContent(lazy, "class Lazy { public static function value():Int { return 23; } }");

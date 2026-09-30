@@ -20,11 +20,15 @@ class IrFunction {
 	public final blocks:Array<IrBlock>;
 	public final debugBindings:Array<IrDebugBinding>;
 
-	public function new(name, arguments, result, blocks, ?debugBindings) {
+	/** Declared `inline` in source; the inliner allows a larger body for such a function. */
+	public final inlineHint:Bool;
+
+	public function new(name, arguments, result, blocks, ?debugBindings, inlineHint = false) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
 		this.blocks = blocks;
 		this.debugBindings = debugBindings == null ? [] : debugBindings;
+		this.inlineHint = inlineHint;
 	}
 }

@@ -1604,6 +1604,9 @@ class TestMain {
 		}
 		var genericAbiCompiler = new Compiler();
 		genericAbiCompiler.update("Main.hx", genericAbiSource);
+		// This test reads the calls in the IR, which the inliner would remove.
+		var inliningWas = compiler.ir.IrInliner.enabled;
+		compiler.ir.IrInliner.enabled = false;
 		var genericAbiBuild = genericAbiCompiler.compile("Main"),
 			dynamicIdentity:Null<IrFunction> = null,
 			intIdentity:Null<IrFunction> = null,
@@ -1635,6 +1638,7 @@ class TestMain {
 				}
 		if (!dynamicCallFound || !intCallFound)
 			throw "IR call operands did not match their generic specialization ABI types";
+		compiler.ir.IrInliner.enabled = inliningWas;
 		Sys.println("PASS: generic function typed AST and IR ABI representations");
 		var shapedGenericProgram = new Parser(new Lexer(new SourceFile("generic-shapes.hx",
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))

@@ -33,6 +33,7 @@ class TestCatalog {
 	static final compilerMains = [
 		"TestMain",
 		"AuditVerifierMain",
+		"InlinerMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",
@@ -154,6 +155,8 @@ class TestCatalog {
 			mainCase("runtime", "namespace", "NamespaceMain", "namespace.hl", 42, "qualified nominal namespaces executed"),
 			mainCase("runtime", "instance-module", "InstanceModuleMain", "instance-module.hl", 42, "incremental instance class executed"),
 			hxmlCase("runtime", "static-field", "tests/hxml/static-field-test.hxml", "static-field-test.hl", 0, "static fields lower to persistent globals"),
+			hxmlCase("runtime", "inline-patch", "tests/hxml/inline-patch-test.hxml", "inline-patch-test.hl", 0,
+				"a callee edit patches every function that inlined it"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),
 			mainCase("runtime", "array-bounds", "ArrayBoundsMain", "array-bounds.hl", null, "HashLink array bounds check rejected invalid index"),
 		];

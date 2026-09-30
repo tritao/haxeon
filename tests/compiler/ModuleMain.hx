@@ -2,6 +2,7 @@ import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
 import compiler.ir.hl.HlLower;
 import compiler.Compiler;
+import compiler.ir.IrInliner;
 import compiler.Diagnostic.CompileError;
 import sys.io.File;
 import compiler.types.Type.CompilerType;
@@ -77,15 +78,21 @@ class ModuleMain {
 			throw "Cached IR was not tied to its source revision";
 		if (compiler.modules.get("Math").irVersions.get("Math.add") != 2)
 			throw "Edited function IR was not regenerated";
-		if (result.changedFunctions.length != 1 || result.changedFunctions[0] != result.functionIds.get("Math.add"))
+		// Typing and IR regeneration touch only the edited function. With inlining, the caller that inlined it changes too.
+		var expectedChanged = IrInliner.enabled ? 2 : 1;
+		if (result.changedFunctions.length != expectedChanged
+			|| result.changedFunctions.indexOf(result.functionIds.get("Math.add")) < 0
+			|| IrInliner.enabled
+			&& result.changedFunctions.indexOf(result.functionIds.get("main")) < 0)
 			throw 'Wrong changed stable functions: ${result.changedFunctions}';
 		if (result.patchBytes == null)
 			throw "Compatible body edit did not emit HLP bytes";
-		if (result.metrics.changedFunctions != 1 || result.metrics.patchBytes != result.patchBytes.length)
+		if (result.metrics.changedFunctions != expectedChanged || result.metrics.patchBytes != result.patchBytes.length)
 			throw "Compile metrics did not describe the compatible patch";
 		var decodedPatch = HlPatchReader.decode(result.patchBytes);
-		if (decodedPatch.functions.length != 1 || decodedPatch.functions[0].functionIndex != mathId)
-			throw "Compiler HLP did not contain exactly the changed function";
+		var patchedIndices = [for (patched in decodedPatch.functions) patched.functionIndex];
+		if (decodedPatch.functions.length != expectedChanged || patchedIndices.indexOf(mathId) < 0)
+			throw "Compiler HLP did not contain exactly the changed function and the callers that inlined it";
 		if (result.requiresReload)
 			throw "Body edit unexpectedly requires reload";
 		if (compiler.modules.get("Unused").parseVersion != 0 || compiler.modules.get("Unused").typeVersion != 0)
@@ -239,6 +246,9 @@ class ModuleMain {
 			throw "Dynamic method body edit did not emit HLP bytes";
 		if (HlPatchReader.decode(methodBuild.patchBytes).functions.length == 0)
 			throw "Dynamic method HLP patch was empty";
+		// A call relocation only exists while the call does, so keep the inliner out of this check.
+		var inliningWas = IrInliner.enabled;
+		IrInliner.enabled = false;
 		var callManyCompiler = new Compiler();
 		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(10, 20, 12); }");
 		callManyCompiler.compile("Main");
@@ -250,6 +260,7 @@ class ModuleMain {
 			callManyRelocations += fn.relocations.length;
 		if (callManyRelocations != 1)
 			throw "OCallN stable relocation was not emitted";
+		IrInliner.enabled = inliningWas;
 		var validationCompiler = new Compiler();
 		validationCompiler.registerNative("clock", "std", "sys_time", [], TFloat);
 		validationCompiler.update("Main.hx", "function main():Int { return 42; }");

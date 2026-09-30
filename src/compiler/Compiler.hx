@@ -205,6 +205,8 @@ class Compiler {
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
+	public var inlineCache:compiler.ir.IrInliner.IrInlineCache = new compiler.ir.IrInliner.IrInlineCache();
+
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
 	var assembler:HlModuleAssembler;
@@ -801,6 +803,7 @@ class Compiler {
 		candidate.types = snapshot.types;
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
+		candidate.inlineCache = inlineCache.copy();
 		candidate.publishedAbi = snapshot.publishedAbi;
 		candidate.compiledOnce = snapshot.compiledOnce;
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
@@ -819,6 +822,7 @@ class Compiler {
 		types = candidate.types;
 		objectCache = candidate.objectCache;
 		lastTypedProgram = candidate.lastTypedProgram;
+		inlineCache = candidate.inlineCache;
 		publishedAbi = candidate.publishedAbi;
 		compiledOnce = candidate.compiledOnce;
 		rehydrationBaseline = candidate.rehydrationBaseline;

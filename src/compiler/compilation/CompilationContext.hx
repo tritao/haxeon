@@ -90,6 +90,9 @@ class CompilationContext {
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
 
+	public function inlineCache():compiler.ir.IrInliner.IrInlineCache
+		return owner.inlineCache;
+
 	public function irCNatives():Array<IrCNative>
 		return owner.irCNatives();
 

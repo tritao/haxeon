@@ -1,0 +1,523 @@
+package compiler.ir;
+
+import compiler.ir.Ir;
+import compiler.ir.IrFunction;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
+import compiler.ir.codec.IrFunctionStateCodec;
+
+/** An inlined function together with everything its result depended on. */
+class InlineMemo {
+	public final source:IrFunction;
+	public final fingerprint:String;
+
+	/** The pristine callee functions consulted, transitively; the result is valid only while all are unchanged. */
+	public final dependencies:Array<IrFunction>;
+
+	public final result:IrFunction;
+
+	public function new(source:IrFunction, fingerprint:String, dependencies:Array<IrFunction>, result:IrFunction) {
+		this.source = source;
+		this.fingerprint = fingerprint;
+		this.dependencies = dependencies;
+		this.result = result;
+	}
+}
+
+/**
+ * Per-session inliner state. `memo` keeps a function's inlined form while it and every callee it looked at are
+ * unchanged, so unchanged functions keep their identity between compiles; `published` is the inlined form each
+ * function had after the last successful compile, which is what a patch has to be computed against.
+ */
+class IrInlineCache {
+	public var memo:Map<String, InlineMemo> = [];
+	public var published:Map<String, IrFunction> = [];
+
+	public function new() {}
+
+	public function copy():IrInlineCache {
+		var result = new IrInlineCache();
+		for (name => entry in memo)
+			result.memo.set(name, entry);
+		for (name => fn in published)
+			result.published.set(name, fn);
+		return result;
+	}
+}
+
+/**
+ * Inlines small callees into their callers. See docs/INLINING_AND_VALUE_TYPES.md.
+ *
+ * The pass never mutates a function it was given: cached IR is shared between compiles and transaction snapshots, so a
+ * caller that changes is rebuilt as a new IrFunction and unchanged callers keep their identity. Decisions depend only
+ * on IR content and on the (sorted) order of `program.functions`, so an incremental build matches a clean one.
+ */
+class IrInliner {
+	/** Instruction budget for a callee without an `inline` hint. */
+	public static inline var SmallBudget = 24;
+
+	/** Instruction budget for a callee declared `inline`. */
+	public static inline var HintBudget = 96;
+
+	static inline var MaxBlocks = 12;
+	static inline var MaxInlinesPerFunction = 48;
+	static inline var MaxFunctionInstructions = 3000;
+	static inline var MaxChainDepth = 24;
+
+	/** Off unless enabled; the incremental-safety rules in the design note must hold before it is on by default. */
+	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") == "1";
+
+	final byName:Map<String, IrFunction> = [];
+	final done:Map<String, IrFunction> = [];
+	final dependenciesOf:Map<String, Array<IrFunction>> = [];
+	final impure:Map<String, Bool> = [];
+	final visiting:Map<String, Bool> = [];
+	final objects:Map<String, IrObject> = [];
+	final entryPoint:String;
+	final cache:IrInlineCache;
+	final fingerprint:String;
+	final nextMemo:Map<String, InlineMemo> = [];
+
+	/** One entry per function being inlined: the callee functions it has consulted so far. */
+	final frames:Array<Map<String, IrFunction>> = [];
+
+	final frameNames:Array<String> = [];
+	final frameImpure:Array<Bool> = [];
+	var depth = 0;
+
+	function new(program:IrProgram, cache:IrInlineCache) {
+		entryPoint = program.entryPoint;
+		this.cache = cache;
+		for (fn in program.functions)
+			byName.set(fn.name, fn);
+		var lines:Array<String> = [entryPoint];
+		for (object in program.objects) {
+			objects.set(object.name, object);
+			if (object.isValue)
+				lines.push(object.name + ":" + [for (method in object.methods) method.name + "=" + method.functionName].join(","));
+		}
+		lines.sort(Reflect.compare);
+		fingerprint = lines.join(";");
+	}
+
+	/**
+	 * Replaces every function that had a call inlined and returns the names whose inlined form differs from the one
+	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
+	 * not change, because a callee they inlined did.
+	 */
+	public static function run(program:IrProgram, cache:IrInlineCache):Array<String> {
+		var inliner = new IrInliner(program, cache),
+			functions:Array<IrFunction> = [],
+			changed:Array<String> = [];
+		var published:Map<String, IrFunction> = [];
+		for (fn in program.functions) {
+			var result = inliner.inlinedVersion(fn.name),
+				previous = cache.published.get(fn.name);
+			if (previous != null && previous != result) {
+				// Generated functions (initializers, the entry) are rebuilt on every compile; only different bytes count.
+				if (IrFunctionStateCodec.encode(previous).compare(IrFunctionStateCodec.encode(result)) == 0)
+					result = previous;
+				else
+					changed.push(fn.name);
+			} else if (previous == null)
+				changed.push(fn.name);
+			functions.push(result);
+			published.set(fn.name, result);
+		}
+		program.functions = functions;
+		cache.memo = inliner.nextMemo;
+		cache.published = published;
+		return changed;
+	}
+
+	function inlinedVersion(name:String):IrFunction {
+		var known = done.get(name);
+		if (known != null) {
+			consultResult(name);
+			return known;
+		}
+		var original = byName.get(name);
+		if (original == null)
+			return null;
+		var memo = cache.memo.get(name);
+		if (memo != null && memo.source == original && memo.fingerprint == fingerprint && dependenciesCurrent(memo.dependencies)) {
+			done.set(name, memo.result);
+			dependenciesOf.set(name, memo.dependencies);
+			nextMemo.set(name, memo);
+			consultResult(name);
+			return memo.result;
+		}
+		visiting.set(name, true);
+		depth++;
+		frames.push([]);
+		frameNames.push(name);
+		frameImpure.push(false);
+		var result = inlineCalls(original);
+		var consulted = frames.pop(), isImpure = frameImpure.pop();
+		frameNames.pop();
+		depth--;
+		visiting.remove(name);
+		var dependencies:Array<IrFunction> = [];
+		var names = [for (dependencyName in consulted.keys()) dependencyName];
+		names.sort(Reflect.compare);
+		for (dependencyName in names)
+			dependencies.push(consulted.get(dependencyName));
+		done.set(name, result);
+		dependenciesOf.set(name, dependencies);
+		if (isImpure)
+			impure.set(name, true);
+		else
+			nextMemo.set(name, new InlineMemo(original, fingerprint, dependencies, result));
+		consultResult(name);
+		return result;
+	}
+
+	function dependenciesCurrent(dependencies:Array<IrFunction>):Bool {
+		for (dependency in dependencies)
+			if (byName.get(dependency.name) != dependency)
+				return false;
+		return true;
+	}
+
+	/** Records `name`'s pristine body and everything its inlined form depended on in the function being inlined. */
+	function consultResult(name:String):Void {
+		if (frames.length == 0)
+			return;
+		var frame = frames[frames.length - 1];
+		var original = byName.get(name);
+		if (original != null)
+			frame.set(name, original);
+		var dependencies = dependenciesOf.get(name);
+		if (dependencies != null)
+			for (dependency in dependencies)
+				frame.set(dependency.name, dependency);
+		if (impure.exists(name))
+			frameImpure[frameImpure.length - 1] = true;
+	}
+
+	/** The function a call resolves to when it can be inlined, else null. */
+	function calleeOf(instruction:IrInstruction):Null<IrFunction> {
+		var target:Null<String> = null, argumentCount = -1;
+		switch instruction {
+			case Call(_, functionName, arguments):
+				target = functionName;
+				argumentCount = arguments.length;
+			case MethodCall(_, object, methodName, arguments):
+				// Only a value class is final, so only its methods resolve statically.
+				switch object.type {
+					case Obj(typeName):
+						var descriptor = objects.get(typeName);
+						if (descriptor != null && descriptor.isValue) for (method in descriptor.methods)
+							if (method.name == methodName) {
+								target = method.functionName;
+								argumentCount = arguments.length + 1;
+							}
+					default:
+				}
+			default:
+		}
+		if (target == null || !byName.exists(target))
+			return null;
+		var original = byName.get(target);
+		if (frames.length > 0)
+			frames[frames.length - 1].set(target, original);
+		if (visiting.exists(target)) {
+			// Skipping the function being inlined is context-free; skipping an ancestor depends on the order of the walk.
+			if (frameNames.length == 0 || frameNames[frameNames.length - 1] != target)
+				frameImpure[frameImpure.length - 1] = true;
+			return null;
+		}
+		if (depth > MaxChainDepth) {
+			if (frameImpure.length > 0)
+				frameImpure[frameImpure.length - 1] = true;
+			return null;
+		}
+		if (original.arguments.length != argumentCount || !looksInlinable(original))
+			return null;
+		var candidate = inlinedVersion(target);
+		return candidate != null && fits(candidate) ? candidate : null;
+	}
+
+	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
+	function looksInlinable(fn:IrFunction):Bool {
+		if (StringTools.startsWith(fn.name, "__") || fn.name == entryPoint)
+			return false;
+		return countInstructions(fn) <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
+	}
+
+	function fits(fn:IrFunction):Bool {
+		if (fn.blocks.length > MaxBlocks || countInstructions(fn) > (fn.inlineHint ? HintBudget : SmallBudget))
+			return false;
+		var returns = 0;
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				switch located.value {
+					case BeginTry(_, _), EndTry(_), Catch(_):
+						return false;
+					default:
+				}
+			var terminator = block.terminator;
+			if (terminator == null)
+				return false;
+			switch terminator.value {
+				case Return(_):
+					returns++;
+				default:
+			}
+		}
+		return returns > 0;
+	}
+
+	static function countInstructions(fn:IrFunction):Int {
+		var total = 0;
+		for (block in fn.blocks)
+			total += block.instructions.length;
+		return total;
+	}
+
+	function inlineCalls(fn:IrFunction):IrFunction {
+		// Runtime helpers (initializers, the entry) are patched specially; nothing is ever inlined into them.
+		if (StringTools.startsWith(fn.name, "__"))
+			return fn;
+		var found = false;
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				if (calleeOf(located.value) != null) {
+					found = true;
+					break;
+				}
+			if (found)
+				break;
+		}
+		if (!found)
+			return fn;
+		var blocks:Array<IrBlock> = [], nextValue = 0, nextBlock = 0;
+		for (block in fn.blocks) {
+			var copy = new IrBlock(block.id);
+			for (located in block.instructions) {
+				copy.instructions.push(located);
+				var output = IrOperands.output(located.value);
+				if (output != null && output.id >= nextValue)
+					nextValue = output.id + 1;
+				for (input in IrOperands.inputs(located.value))
+					if (input.id >= nextValue)
+						nextValue = input.id + 1;
+			}
+			copy.terminator = block.terminator;
+			blocks.push(copy);
+			if (block.id >= nextBlock)
+				nextBlock = block.id + 1;
+		}
+		for (argument in fn.arguments)
+			if (argument.id >= nextValue)
+				nextValue = argument.id + 1;
+		var index = 0, inlines = 0, instructions = countInstructions(fn);
+		while (index < blocks.length) {
+			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
+			if (inlines < MaxInlinesPerFunction && instructions < MaxFunctionInstructions)
+				for (candidate in 0...block.instructions.length) {
+					callee = calleeOf(block.instructions[candidate].value);
+					if (callee != null) {
+						position = candidate;
+						break;
+					}
+				}
+			if (callee == null) {
+				index++;
+				continue;
+			}
+			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock);
+			nextValue = expansion.nextValue;
+			nextBlock = expansion.nextBlock;
+			inlines++;
+			instructions += countInstructions(callee);
+			// Continue with the first inlined block; calls left in it were not candidates.
+			index++;
+		}
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint);
+	}
+
+	/**
+	 * Replaces the call at `blocks[index].instructions[position]` by a copy of `callee`. The block keeps the
+	 * instructions before the call and jumps into the copy; a fresh continuation block takes the instructions after the
+	 * call and the original terminator, and merges the returned values with a phi.
+	 */
+	function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int):{nextValue:Int, nextBlock:Int} {
+		var head = blocks[index],
+			call = head.instructions[position],
+			callOutput:IrValue = null,
+			actuals:Array<IrValue> = [];
+		switch call.value {
+			case Call(out, _, arguments):
+				callOutput = out;
+				actuals = arguments;
+			case MethodCall(out, object, _, arguments):
+				callOutput = out;
+				actuals = [object].concat(arguments);
+			default:
+				throw "Inliner expected a call";
+		}
+		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [];
+		for (argumentIndex in 0...callee.arguments.length)
+			values.set(callee.arguments[argumentIndex].id, actuals[argumentIndex]);
+		// Every definition first, so phis and back edges can refer to values defined later in block order.
+		for (block in callee.blocks) {
+			blockIds.set(block.id, nextBlock++);
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null) {
+					values.set(output.id, new IrValue(nextValue++, output.name, output.type));
+				}
+			}
+		}
+		var continuation = new IrBlock(nextBlock++);
+		var use = function(value:IrValue):IrValue {
+			var mapped = values.get(value.id);
+			if (mapped == null)
+				throw "Inliner found an undefined callee value";
+			return mapped;
+		};
+		var target = function(id:Int):Int {
+			var mapped = blockIds.get(id);
+			if (mapped == null)
+				throw "Inliner found an unknown callee block";
+			return mapped;
+		};
+		var cloned:Array<IrBlock> = [], returned:Array<IrPhiInput> = [];
+		for (block in callee.blocks) {
+			var copy = new IrBlock(blockIds.get(block.id));
+			for (located in block.instructions)
+				copy.instructions.push(new Located(remap(located.value, use, target), located.provenance));
+			var terminator = block.terminator;
+			switch terminator.value {
+				case Return(value):
+					returned.push({block: copy.id, value: use(value)});
+					copy.terminator = new Located(Jump(continuation.id), terminator.provenance);
+				case Throw(value):
+					copy.terminator = new Located(Throw(use(value)), terminator.provenance);
+				case Rethrow(value):
+					copy.terminator = new Located(Rethrow(use(value)), terminator.provenance);
+				case Jump(destination):
+					copy.terminator = new Located(Jump(target(destination)), terminator.provenance);
+				case Branch(condition, whenTrue, whenFalse):
+					copy.terminator = new Located(Branch(use(condition), target(whenTrue), target(whenFalse)), terminator.provenance);
+			}
+			cloned.push(copy);
+		}
+		// The continuation defines the call's output, then runs whatever followed the call.
+		if (callOutput.type == Void)
+			continuation.instructions.push(new Located(ConstVoid(callOutput), call.provenance));
+		else
+			continuation.instructions.push(new Located(Phi(callOutput, returned), call.provenance));
+		for (rest in position + 1...head.instructions.length)
+			continuation.instructions.push(head.instructions[rest]);
+		continuation.terminator = head.terminator;
+		head.instructions.resize(position);
+		head.terminator = new Located(Jump(cloned[0].id), call.provenance);
+		// Everything that used to leave the head now leaves the continuation, so successor phis name the new predecessor.
+		var successors:Array<Int> = [];
+		switch continuation.terminator.value {
+			case Jump(destination):
+				successors.push(destination);
+			case Branch(_, whenTrue, whenFalse):
+				successors.push(whenTrue);
+				successors.push(whenFalse);
+			default:
+		}
+		for (located in continuation.instructions)
+			switch located.value {
+				case BeginTry(catchBlock, afterBlock):
+					successors.push(catchBlock);
+					successors.push(afterBlock);
+				default:
+			}
+		for (candidate in blocks)
+			if (successors.indexOf(candidate.id) >= 0)
+				retargetPhis(candidate, head.id, continuation.id);
+		var insertion:Array<IrBlock> = cloned.concat([continuation]);
+		var at = index + 1;
+		for (added in insertion) {
+			blocks.insert(at, added);
+			at++;
+		}
+		return {nextValue: nextValue, nextBlock: nextBlock};
+	}
+
+	static function retargetPhis(block:IrBlock, from:Int, to:Int):Void {
+		for (position in 0...block.instructions.length) {
+			var located = block.instructions[position];
+			switch located.value {
+				case Phi(output, inputs):
+					var changed = false, updated:Array<IrPhiInput> = [];
+					for (input in inputs) {
+						if (input.block == from) {
+							changed = true;
+							updated.push({block: to, value: input.value});
+						} else
+							updated.push(input);
+					}
+					if (changed)
+						block.instructions[position] = new Located(Phi(output, updated), located.provenance);
+				default:
+			}
+		}
+	}
+
+	static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
+		return switch instruction {
+			case Phi(out, inputs): Phi(use(out), [for (input in inputs) {block: block(input.block), value: use(input.value)}]);
+			case ConstVoid(out): ConstVoid(use(out));
+			case ConstInt(out, value): ConstInt(use(out), value);
+			case ConstFloat(out, value): ConstFloat(use(out), value);
+			case ConstString(out, value): ConstString(use(out), value);
+			case StaticDataAddress(out, bytes): StaticDataAddress(use(out), bytes);
+			case PointerOffset(out, pointer, offset): PointerOffset(use(out), use(pointer), use(offset));
+			case MemoryLoad(out, pointer, size, signed): MemoryLoad(use(out), use(pointer), size, signed);
+			case MemoryStore(pointer, value, size): MemoryStore(use(pointer), use(value), size);
+			case ConstBool(out, value): ConstBool(use(out), value);
+			case ConstNull(out): ConstNull(use(out));
+			case TypeValue(out, type): TypeValue(use(out), type);
+			case ToDyn(out, value): ToDyn(use(out), use(value));
+			case IntToFloat(out, value): IntToFloat(use(out), use(value));
+			case IntToInt64(out, value): IntToInt64(use(out), use(value));
+			case FloatToInt(out, value): FloatToInt(use(out), use(value));
+			case SafeCast(out, value): SafeCast(use(out), use(value));
+			case BeginTry(_, _), EndTry(_), Catch(_): throw "Inliner cannot copy exception handling";
+			case GlobalGet(out, name): GlobalGet(use(out), name);
+			case GlobalSet(name, value): GlobalSet(name, use(value));
+			case Add(out, a, b): Add(use(out), use(a), use(b));
+			case Sub(out, a, b): Sub(use(out), use(a), use(b));
+			case Mul(out, a, b): Mul(use(out), use(a), use(b));
+			case Div(out, a, b): Div(use(out), use(a), use(b));
+			case Mod(out, a, b): Mod(use(out), use(a), use(b));
+			case BitAnd(out, a, b): BitAnd(use(out), use(a), use(b));
+			case BitXor(out, a, b): BitXor(use(out), use(a), use(b));
+			case BitOr(out, a, b): BitOr(use(out), use(a), use(b));
+			case ShiftLeft(out, a, b): ShiftLeft(use(out), use(a), use(b));
+			case ShiftRight(out, a, b): ShiftRight(use(out), use(a), use(b));
+			case UnsignedShiftRight(out, a, b): UnsignedShiftRight(use(out), use(a), use(b));
+			case Less(out, a, b): Less(use(out), use(a), use(b));
+			case LessEqual(out, a, b): LessEqual(use(out), use(a), use(b));
+			case Equal(out, a, b): Equal(use(out), use(a), use(b));
+			case Call(out, name, arguments): Call(use(out), name, [for (argument in arguments) use(argument)]);
+			case CNativeCall(out, name, arguments): CNativeCall(use(out), name, [for (argument in arguments) use(argument)]);
+			case StaticClosure(out, name): StaticClosure(use(out), name);
+			case InstanceClosure(out, name, receiver): InstanceClosure(use(out), name, use(receiver));
+			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
+			case ToVirtual(out, value): ToVirtual(use(out), use(value));
+			case MethodCall(out, object, name, arguments): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)]);
+			case NewObject(out, typeName): NewObject(use(out), typeName);
+			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);
+			case FieldSet(object, name, value): FieldSet(use(object), name, use(value));
+			case ArrayGet(out, array, index): ArrayGet(use(out), use(array), use(index));
+			case ArraySet(array, index, value): ArraySet(use(array), use(index), use(value));
+			case ArraySize(out, array): ArraySize(use(out), use(array));
+			case IteratorNew(out, array): IteratorNew(use(out), use(array));
+			case IteratorHasNext(out, iterator): IteratorHasNext(use(out), use(iterator));
+			case IteratorNext(out, iterator): IteratorNext(use(out), use(iterator));
+			case MakeEnum(out, typeName, constructor, arguments): MakeEnum(use(out), typeName, constructor, [for (argument in arguments) use(argument)]);
+			case EnumIndex(out, value): EnumIndex(use(out), use(value));
+			case EnumField(out, value, constructor, field): EnumField(use(out), use(value), constructor, field);
+		};
+	}
+}

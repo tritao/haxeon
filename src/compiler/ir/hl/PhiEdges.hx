@@ -63,7 +63,7 @@ class PhiEdges {
 						copy.instructions.push(instruction);
 				}
 		}
-		return new IrFunction(fn.name, fn.arguments, fn.result, result.concat(added), fn.debugBindings);
+		return new IrFunction(fn.name, fn.arguments, fn.result, result.concat(added), fn.debugBindings, fn.inlineHint);
 	}
 
 	static function edgeId(edges:Map<String, Int>, key:String):Int {

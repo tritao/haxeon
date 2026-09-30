@@ -6,6 +6,7 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
+import compiler.ir.IrInliner;
 import compiler.ir.IrProgramAssembler;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
@@ -474,6 +475,13 @@ class FrontendCompilation {
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializersFrom(typedNew, initializationClasses),
 			entryPoint, irCNatives, IrProgramAssembler.reflectableObjectsFrom(typedNew));
+		if (IrInliner.enabled) {
+			// A caller whose inlined callee changed is re-lowered and patched even though its own source did not.
+			for (name in IrInliner.run(ir, context.inlineCache()))
+				if (regenerated.indexOf(name) < 0)
+					regenerated.push(name);
+			regenerated.sort(Reflect.compare);
+		}
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
