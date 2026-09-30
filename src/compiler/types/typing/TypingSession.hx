@@ -118,14 +118,14 @@ class TypingSession {
 
 	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
 	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
-			owner:Null<String>):Bool {
+			owner:Null<String>, ?privateMaps:Array<String>):Bool {
 		var inference = localPurity;
 		if (inference == null) {
 			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls, isDeclaredPure, isTypeName);
 			localPurity = inference;
 		}
 		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(inference, arguments, body,
-			owner == null ? "$local" : owner + ".$local", outerLocals);
+			owner == null ? "$local" : owner + ".$local", outerLocals, privateMaps);
 		if (dependencies == null)
 			return false;
 		for (key in dependencies)

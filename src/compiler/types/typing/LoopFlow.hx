@@ -17,15 +17,23 @@ class LoopFlow {
 	public static function enterExpressions(session:TypingSession, scope:Scope, expressions:Array<AstExpression>, span:SourceSpan):Void
 		enter(session, scope, [for (expression in expressions) Expression(expression, span)]);
 
-	/** Forget, in `scope`, every fact the loop made of `statements` could invalidate. */
-	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>):Void {
+	/**
+	 * Forget, in `scope`, every fact the loop made of `statements` could invalidate. `loopVariables` are the names the
+	 * loop itself binds (a for-in's element), which are locals of the body even though the loop scope is not open yet.
+	 */
+	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>, ?loopVariables:Array<String>):Void {
 		var assigned:Map<String, Bool> = [];
 		CaptureAnalysis.collectAssignedLocals(statements, assigned);
 		for (name in assigned.keys()) {
 			scope.invalidate(name);
 			scope.invalidateExpressionsForLocal(name);
 		}
-		if (!session.bodyIsPure([], statements, scope.visibleLocalNames(), session.currentContext.lexicalOwner))
+		var locals = scope.visibleLocalNames();
+		if (loopVariables != null)
+			for (name in loopVariables)
+				if (name != null)
+					locals.push(name);
+		if (!session.bodyIsPure([], statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames()))
 			scope.invalidateAllExpressions();
 		if (AstScan.mayRemoveMapEntries(statements))
 			scope.invalidateExpressionNamespaceCompletely("map-entry:");

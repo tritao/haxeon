@@ -6,7 +6,7 @@ import compiler.Diagnostic.CompileError;
  * nothing in the body can undo it.
  */
 class LoopFlowMain {
-	static final prelude = "class Holder { public var value:Null<Int> = 5; public function new() {} } function reset(h:Holder):Void { h.value = null; } function drop(h:Holder):Int { h.value = null; return 1; } ";
+	static final prelude = "class Holder { public var value:Null<Int> = 5; public function new() {} } function reset(h:Holder):Void { h.value = null; } function drop(h:Holder):Int { h.value = null; return 1; } class Sink { public static var kept:Map<String, Int>; } function keep(m:Map<String, Int>):Void { Sink.kept = m; } ";
 
 	static function main():Void {
 		expectCompiles("a read-only loop keeps a field fact",
@@ -29,6 +29,14 @@ class LoopFlowMain {
 		expectCompiles("a local only read in the loop stays narrowed",
 			"var x:Null<Int> = 1; var i = 0; if (x != null) { while (i < 2) { var z:Int = x; i++; } var w:Int = x; } return 0;");
 
+		expectCompiles("filling a private map in a loop is not a change to anything else",
+			"var h = new Holder(); var m:Map<String, Int> = new Map(); if (h.value != null) { for (k in [\"a\", \"b\"]) { m.set(k, 1); } var z:Int = h.value; } return 0;");
+		expectCompiles("nor is reading its entries with the loop's own variable",
+			"var h = new Holder(); var m:Map<String, Int> = new Map(); m.set(\"a\", 1); if (h.value != null) { for (k in [\"a\"]) { var v = m.get(k); m[k] = 2; var z:Int = h.value; } } return 0;");
+		expectError("a real effect next to the private map operation still clears the fact",
+			"var h = new Holder(); var m:Map<String, Int> = new Map(); if (h.value != null) { for (k in [\"a\"]) { m.set(k, 1); reset(h); } var z:Int = h.value; } return 0;");
+		expectError("a map a callee could reach is not private, so filling it counts",
+			"var h = new Holder(); var m:Map<String, Int> = new Map(); keep(m); if (h.value != null) { for (k in [\"a\"]) { m.set(k, 1); } var z:Int = h.value; } return 0;");
 		expectCompiles("keys of a private map keep their entries across calls",
 			"var m:Map<String, Int> = new Map(); m.set(\"a\", 1); var h = new Holder(); for (k in m.keys()) { reset(h); var v:Int = m.get(k); } return 0;");
 		expectCompiles("removing only the visited key leaves the rest",

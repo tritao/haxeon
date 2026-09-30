@@ -186,6 +186,10 @@ class Scope {
 		return false;
 	}
 
+	/** Source names of the visible locals that are maps only this function can reach. */
+	public function visiblePrivateMapNames():Array<String>
+		return [for (value in visibleValues()) if (isPrivateMap(value.id)) value.source];
+
 	public function refineExpression(path:String, type:CompilerType, stable:Bool = false):Void
 		facts.refine('$' + 'expression:$path', type, stable);
 

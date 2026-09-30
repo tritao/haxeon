@@ -54,12 +54,15 @@ class PurityInference {
 
 	/** For calls through a local function whose body is known: the functions that body calls, or null when it has a direct effect. */
 	public static function localBodyDependencies(inference:PurityInference, arguments:Array<AstArgument>, body:Array<AstStatement>, functionName:String,
-			?outerLocals:Array<String>):Null<Array<String>> {
+			?outerLocals:Array<String>, ?privateMaps:Array<String>):Null<Array<String>> {
 		var walker = new PurityWalker(inference, functionName);
 		walker.declare("this");
 		if (outerLocals != null)
 			for (name in outerLocals)
 				walker.declare(name);
+		if (privateMaps != null)
+			for (name in privateMaps)
+				walker.privateMaps.set(name, true);
 		for (argument in arguments) {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
@@ -263,6 +266,9 @@ private typedef LocalFact = {
 private class PurityWalker {
 	public final dependencies:Map<String, Bool> = [];
 
+	/** Outer locals that are maps nothing else can reach: operating on one changes no state anyone else can see. */
+	public final privateMaps:Map<String, Bool> = [];
+
 	final inference:PurityInference;
 	final functionName:String;
 
@@ -371,6 +377,7 @@ private class PurityWalker {
 				pure;
 			case Assignment(name, value, _): isLocal(name) && expression(value);
 			case Increment(name, _, _): isLocal(name);
+			case IndexAssignment(Variable(name, _), key, value, _) if (privateMaps.exists(name) && isLocal(name)): expression(key) && expression(value);
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
@@ -456,6 +463,8 @@ private class PurityWalker {
 						declare(item);
 					return (filter == null || expression(filter)) && expression(result);
 				});
+			case Call(name, arguments, _) if (isPrivateMapOperation(name)):
+				all(arguments);
 			case Call(name, arguments, _):
 				if (!all(arguments))
 					return false;
@@ -466,6 +475,9 @@ private class PurityWalker {
 					return false;
 				dependencies.set(key, true);
 				true;
+			case MethodCall(Variable(local, _), name, arguments, _)
+				if (privateMaps.exists(local) && isLocal(local) && MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name) >= 0):
+				all(arguments);
 			case MethodCall(object, name, arguments, _):
 				var key = switch object {
 					case Variable("this", _): inference.resolveOwnMethod(name, functionName);
@@ -487,6 +499,15 @@ private class PurityWalker {
 					default: false;
 				}
 		};
+	}
+
+	/** The parser may spell `map.set(k, v)` as a call to the dotted name `map.set`. */
+	function isPrivateMapOperation(name:String):Bool {
+		var dot = name.indexOf(".");
+		if (dot <= 0 || name.indexOf(".", dot + 1) >= 0)
+			return false;
+		var local = name.substr(0, dot);
+		return privateMaps.exists(local) && isLocal(local) && MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name.substr(dot + 1)) >= 0;
 	}
 
 	/** A property read runs its getter; plain field reads have no effect. */

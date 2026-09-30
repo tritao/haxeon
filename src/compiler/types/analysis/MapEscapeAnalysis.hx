@@ -14,7 +14,7 @@ import compiler.syntax.Ast.AstType;
  * other than as a map receiver. A lambda, which may run at any time, may only use operations that cannot remove an entry.
  */
 class MapEscapeAnalysis {
-	static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator", "copy"];
+	public static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator", "copy"];
 
 	final declarations:Map<String, Int> = [];
 	final fresh:Map<String, Bool> = [];

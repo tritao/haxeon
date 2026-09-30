@@ -531,7 +531,7 @@ class StatementTyper {
 			default:
 		}
 		var originalIterable = typedIterable;
-		LoopFlow.enter(session, scope, body);
+		LoopFlow.enter(session, scope, body, [name, valueName]);
 		var element:CompilerType = switch typedIterable.type {
 			case TArray(element): element;
 			case TIterator(element): element;
