@@ -77,6 +77,10 @@ class IrInliner {
 	final visiting:Map<String, Bool> = [];
 	final objects:Map<String, IrObject> = [];
 	final entryPoint:String;
+
+	/** Direct subclasses of each class, for resolving a virtual call when every override agrees. */
+	final subclasses:Map<String, Array<String>> = [];
+
 	final cache:IrInlineCache;
 	final fingerprint:String;
 	final nextMemo:Map<String, InlineMemo> = [];
@@ -96,6 +100,18 @@ class IrInliner {
 		var lines:Array<String> = [entryPoint, "packed=" + packedValueFields];
 		for (object in program.objects) {
 			objects.set(object.name, object);
+			if (object.base != null) {
+				var base = Std.string(object.base);
+				if (!subclasses.exists(base))
+					subclasses.set(base, []);
+				subclasses.get(base).push(object.name);
+			}
+			if (!object.isValue)
+				lines.push(object.name
+					+ "<"
+					+ Std.string(object.base)
+					+ ":"
+					+ [for (method in object.methods) method.name + "=" + method.functionName].join(","));
 			if (object.isValue)
 				lines.push(object.name + ":" + [for (method in object.methods) method.name + "=" + method.functionName].join(",") + ":" + [
 					for (field in object.fields)
@@ -209,17 +225,8 @@ class IrInliner {
 				target = functionName;
 				argumentCount = arguments.length;
 			case MethodCall(_, object, methodName, arguments):
-				// Only a value class is final, so only its methods resolve statically.
-				switch object.type {
-					case Obj(typeName):
-						var descriptor = objects.get(typeName);
-						if (descriptor != null && descriptor.isValue) for (method in descriptor.methods)
-							if (method.name == methodName) {
-								target = method.functionName;
-								argumentCount = arguments.length + 1;
-							}
-					default:
-				}
+				target = resolveMethod(object, methodName);
+				argumentCount = arguments.length + 1;
 			default:
 		}
 		if (target == null || !byName.exists(target))
@@ -246,6 +253,47 @@ class IrInliner {
 		// HashLink's JIT keeps registers only inside a basic block, so a branching body costs more spliced in than called;
 		// only a straight-line body, or one the author marked inline, is worth it.
 		return isStraightLine(candidate) || candidate.inlineHint ? candidate : null;
+	}
+
+	/**
+	 * The function a method call reaches, when the receiver's class and all its subclasses run the same one. A value
+	 * class is final, so its methods always resolve. Anything else can be overridden only by a class in this program:
+	 * patches cannot add classes, so a live module cannot introduce another override.
+	 */
+	public function resolveMethod(receiver:IrValue, method:String):Null<String> {
+		var typeName = switch receiver.type {
+			case Obj(name): name;
+			default: return null;
+		};
+		var target:Null<String> = null, work = [typeName], visited = 0;
+		while (work.length > 0 && visited < 256) {
+			var name = work.pop();
+			visited++;
+			var implementation = implementationIn(name, method);
+			if (implementation == null || (target != null && target != implementation))
+				return null;
+			target = implementation;
+			var children = subclasses.get(name);
+			if (children != null)
+				for (child in children)
+					work.push(child);
+		}
+		return work.length > 0 ? null : target;
+	}
+
+	function implementationIn(typeName:String, method:String):Null<String> {
+		var name:Null<String> = typeName, steps = 0;
+		while (name != null && steps < 64) {
+			var descriptor = objects.get(name);
+			if (descriptor == null)
+				return null;
+			for (candidate in descriptor.methods)
+				if (candidate.name == method)
+					return candidate.functionName;
+			name = descriptor.base == null ? null : Std.string(descriptor.base);
+			steps++;
+		}
+		return null;
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
@@ -374,7 +422,7 @@ class IrInliner {
 			if (original != null && frames.length > 0)
 				frames[frames.length - 1].set(name, original);
 		};
-		new IrCopyElision(byName, objects, consult).run(blocks);
+		new IrCopyElision(byName, resolveMethod, consult).run(blocks);
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint);
 	}
 

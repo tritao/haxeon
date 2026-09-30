@@ -37,12 +37,12 @@ class IrCopyElision {
 	];
 
 	final byName:Map<String, IrFunction>;
-	final objects:Map<String, IrObject>;
+	final resolve:IrValue->String->Null<String>;
 	final consult:String->Void;
 
-	public function new(byName:Map<String, IrFunction>, objects:Map<String, IrObject>, consult:String->Void) {
+	public function new(byName:Map<String, IrFunction>, resolve:IrValue->String->Null<String>, consult:String->Void) {
 		this.byName = byName;
-		this.objects = objects;
+		this.resolve = resolve;
 		this.consult = consult;
 	}
 
@@ -245,18 +245,8 @@ class IrCopyElision {
 		}
 	}
 
-	function valueMethod(receiver:IrValue, method:String):Null<String> {
-		switch receiver.type {
-			case Obj(typeName):
-				var descriptor = objects.get(typeName);
-				if (descriptor != null && descriptor.isValue)
-					for (candidate in descriptor.methods)
-						if (candidate.name == method)
-							return candidate.functionName;
-			default:
-		}
-		return null;
-	}
+	function valueMethod(receiver:IrValue, method:String):Null<String>
+		return resolve(receiver, method);
 
 	/** Parameter `index` of `name` is only read: never written, stored, returned or otherwise let out. */
 	function readsOnly(name:String, index:Int, visiting:Array<String>, depth:Int):Bool {

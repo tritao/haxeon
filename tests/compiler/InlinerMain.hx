@@ -118,6 +118,19 @@ class InlinerMain {
 		expect(allocations(programFunction(elisionProgram, "escapeCaller")) == 1, "a callee that stores its parameter must get a copy");
 		// Both arguments are copies: one is written by the callee, and the other could alias what the callee stores into.
 		expect(allocations(programFunction(elisionProgram, "storeCaller")) == 2, "a callee that stores elsewhere could alias the source, so it gets a copy");
+		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.
+		var hierarchy = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
+			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "
+			+ "override public function get():Int return n + 100; } class Leaf { public var v:Int; public function new(v:Int) this.v = v; "
+			+ "public function value():Int return v; } class LeafChild extends Leaf { public function new(v:Int) super(v); } "
+			+ "function viaBase(b:Base):Int return b.get() + b.twice(); function viaLeaf(l:Leaf):Int return l.value() + 1; "
+			+ "function main():Int return viaBase(new Derived(1)) + viaLeaf(new LeafChild(2));");
+		IrInliner.run(hierarchy, new IrInlineCache());
+		IrVerifier.verify(hierarchy);
+		var baseCalls = callsIn(programFunction(hierarchy, "viaBase"));
+		expect(baseCalls.indexOf("get") >= 0, "an overridden method must stay a virtual call");
+		expect(baseCalls.indexOf("twice") < 0, "an inherited method nobody overrides resolves and inlines");
+		expect(callsIn(programFunction(hierarchy, "viaLeaf")).indexOf("value") < 0, "a method with no override in the program resolves and inlines");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();

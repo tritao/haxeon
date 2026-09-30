@@ -237,3 +237,4 @@ value-scalar-replace	42
 value-scalar-flow	42
 value-field-store	42
 value-copy-semantics	42
+inline-devirtualize	42

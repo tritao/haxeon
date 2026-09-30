@@ -44,6 +44,7 @@ class ActionFingerprint {
 				appendCommand(fields, command, arguments, cwd, environment, digests);
 			case Compiler(command, arguments, cwd, environment, _):
 				appendCommand(fields, command, arguments, cwd, environment, digests);
+				appendCompilerOptions(fields);
 		}
 		for (input in action.inputs) {
 			fields.add('input:$input');
@@ -54,6 +55,12 @@ class ActionFingerprint {
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
 		return fields.digest();
+	}
+
+	/** Options the compiler reads from its environment change what it emits, so a cached output is only valid for them. */
+	static function appendCompilerOptions(fields:FingerprintFields):Void {
+		var inlining = Sys.getEnv("HAXEON_INLINE");
+		fields.add("inline:" + (inlining == null ? "" : inlining));
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
@@ -70,6 +77,7 @@ class ActionFingerprint {
 				appendPortableCommand(fields, command, arguments, environment, action, digests);
 			case Compiler(command, arguments, _, environment, _):
 				appendPortableCommand(fields, command, arguments, environment, action, digests);
+				appendCompilerOptions(fields);
 		}
 		var inputIndex = 0;
 		for (input in action.inputs) {
