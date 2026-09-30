@@ -52,6 +52,7 @@ class WasmLinearModuleBuilder {
 	var freeHead:Int;
 	var markStackTop:Int;
 	var gcBudget:Int;
+	var gcLiveBytes:Int;
 	var allocationCount:Int;
 	var allocationBytes:Int;
 	var largestAllocation:Int;
@@ -162,9 +163,12 @@ class WasmLinearModuleBuilder {
 		markStackTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		gcBudget = -1;
+		gcLiveBytes = -1;
 		if (options.wasmGcStress != true) {
 			gcBudget = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
+			gcLiveBytes = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		}
 		allocationCount = -1;
 		allocationBytes = -1;
@@ -203,6 +207,7 @@ class WasmLinearModuleBuilder {
 			freeHead: freeHead,
 			markStackTop: markStackTop,
 			gcBudget: gcBudget,
+			gcLiveBytes: gcLiveBytes,
 			allocationCount: allocationCount,
 			allocationBytes: allocationBytes,
 			largestAllocation: largestAllocation,

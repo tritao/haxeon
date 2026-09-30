@@ -550,9 +550,11 @@ class WasmLinearGc {
 			trace = context.traceFunction,
 			markStackTop = context.markStackTop,
 			rootGlobals = context.rootGlobals,
-			collectionCount = context.collectionCount;
+			collectionCount = context.collectionCount,
+			gcLiveBytes = context.gcLiveBytes;
 		var type:WasmFunctionType = {parameters: [], results: []},
 			builder = new WasmFunctionBuilder("__haxeon_gc_collect", type),
+			liveBytes = builder.local("liveBytes", I32),
 			rootFrame = builder.local("rootFrame", I32),
 			rootCount = builder.local("rootCount", I32),
 			rootIndex = builder.local("rootIndex", I32),
@@ -734,6 +736,10 @@ class WasmLinearGc {
 						builder.i32Const(WasmLayout.GC_BLOCK_MARKED);
 						builder.emit(I32And);
 						builder.ifElse(function(builder) {
+							builder.localGet(liveBytes);
+							builder.localGet(previousFreeBlock);
+							builder.i32Add();
+							builder.localSet(liveBytes);
 							flushFreeRun(builder);
 							builder.i32Const(0);
 							builder.localSet(freeRunStart);
@@ -763,6 +769,10 @@ class WasmLinearGc {
 			});
 		});
 		flushFreeRun(builder);
+		if (gcLiveBytes >= 0) {
+			builder.localGet(liveBytes);
+			builder.globalSet(builder.global(gcLiveBytes));
+		}
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}

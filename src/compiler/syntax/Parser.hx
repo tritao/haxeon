@@ -1658,7 +1658,7 @@ class Parser {
 		var field:Null<String> = null;
 		if (kind == OffsetOf) {
 			var token = consume(TokenKind.StringLiteral);
-			field = decodeString(token.text);
+			field = decodeString(token.text, token.span);
 		}
 		var end = consume(TokenKind.RightParen).span;
 		return parsePostfix(NativeLayoutQuery(kind, type, field, name.span.merge(end)));
@@ -2160,7 +2160,7 @@ class Parser {
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.StringLiteral) {
 			advance();
 			var tag = consume(TokenKind.StringLiteral),
-				value = decodeString(tag.text);
+				value = decodeString(tag.text, tag.span);
 			consume(TokenKind.Greater);
 			return NativeAbstractType(name, value);
 		}
@@ -2381,7 +2381,7 @@ class Parser {
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}
 
-	static function decodeString(text:String):String {
+	static function decodeString(text:String, span:SourceSpan):String {
 		var out = "", i = 1;
 		while (i < text.length - 1) {
 			var c = text.charAt(i++);
@@ -2389,29 +2389,128 @@ class Parser {
 				out += c;
 				continue;
 			}
-			var escaped = text.charAt(i++);
-			out += switch escaped {
-				case "n": "\n";
-				case "r": "\r";
-				case "t": "\t";
-				case "\"": "\"";
-				case "\\": "\\";
-				default: escaped;
-			};
+			var escape = readEscape(text, i, text.length - 1, span);
+			out += escape.value;
+			i = escape.next;
 		}
 		return out;
 	}
 
+	/**
+	 * Decodes the escape whose character after the backslash is at `index`; `end` bounds the literal's content.
+	 * Besides the single-character escapes it reads `\xHH`, `\uHHHH`, `\u{H...}` and three-digit octal `\NNN`
+	 * (first digit 0-3) as Unicode code points, and joins a `\uD83D\uDE00` surrogate pair into one character.
+	 * Any other escaped character stands for itself.
+	 */
+	static function readEscape(text:String, index:Int, end:Int, span:SourceSpan):{value:String, next:Int} {
+		if (index >= end)
+			return {value: "\\", next: index};
+		var escaped = text.charAt(index);
+		switch escaped {
+			case "n":
+				return {value: "\n", next: index + 1};
+			case "r":
+				return {value: "\r", next: index + 1};
+			case "t":
+				return {value: "\t", next: index + 1};
+			case "x":
+				var code = hexDigits(text, index + 1, 2, end);
+				if (code < 0)
+					invalidEscape("\\x needs two hexadecimal digits", span);
+				return {value: codePointString(code, span), next: index + 3};
+			case "u":
+				if (index + 1 < end && text.charAt(index + 1) == "{") {
+					var close = text.indexOf("}", index + 2);
+					if (close < 0 || close >= end || close == index + 2 || close - index - 2 > 6)
+						invalidEscape("\\u{...} needs one to six hexadecimal digits", span);
+					var braced = hexDigits(text, index + 2, close - index - 2, end);
+					if (braced < 0)
+						invalidEscape("\\u{...} needs one to six hexadecimal digits", span);
+					return {value: codePointString(braced, span), next: close + 1};
+				}
+				var unit = hexDigits(text, index + 1, 4, end);
+				if (unit < 0)
+					invalidEscape("\\u needs four hexadecimal digits", span);
+				if (unit >= 0xD800 && unit <= 0xDBFF && index + 6 < end && text.charAt(index + 5) == "\\" && text.charAt(index + 6) == "u") {
+					var low = hexDigits(text, index + 7, 4, end);
+					if (low >= 0xDC00 && low <= 0xDFFF)
+						return {value: codePointString(0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00), span), next: index + 11};
+				}
+				return {value: codePointString(unit, span), next: index + 5};
+			case "0", "1", "2", "3":
+				var octal = 0, digits = 0;
+				while (digits < 3 && index + digits < end) {
+					var digit = text.charCodeAt(index + digits) - "0".code;
+					if (digit < 0 || digit > 7)
+						break;
+					octal = octal * 8 + digit;
+					digits++;
+				}
+				if (digits != 3)
+					invalidEscape("an octal escape needs three digits", span);
+				return {value: codePointString(octal, span), next: index + 3};
+			default:
+				return {value: escaped, next: index + 1};
+		}
+	}
+
+	/** The value of exactly `count` hexadecimal digits at `start`, or -1 when they are not all there. */
+	static function hexDigits(text:String, start:Int, count:Int, end:Int):Int {
+		if (count <= 0 || start + count > end)
+			return -1;
+		var value = 0;
+		for (offset in 0...count) {
+			var code = text.charCodeAt(start + offset), digit = -1;
+			if (code >= "0".code && code <= "9".code)
+				digit = code - "0".code;
+			else if (code >= "a".code && code <= "f".code)
+				digit = code - "a".code + 10;
+			else if (code >= "A".code && code <= "F".code)
+				digit = code - "A".code + 10;
+			if (digit < 0)
+				return -1;
+			value = value * 16 + digit;
+		}
+		return value;
+	}
+
+	/** One Unicode code point as a string, encoded as UTF-8 so it reads the same on every host. */
+	static function codePointString(code:Int, span:SourceSpan):String {
+		if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
+			invalidEscape("U+" + StringTools.hex(code, 4) + " is not a Unicode scalar value", span);
+		var bytes = new haxe.io.BytesBuffer();
+		if (code < 0x80)
+			bytes.addByte(code);
+		else if (code < 0x800) {
+			bytes.addByte(0xC0 | (code >> 6));
+			bytes.addByte(0x80 | (code & 0x3F));
+		} else if (code < 0x10000) {
+			bytes.addByte(0xE0 | (code >> 12));
+			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.addByte(0x80 | (code & 0x3F));
+		} else {
+			bytes.addByte(0xF0 | (code >> 18));
+			bytes.addByte(0x80 | ((code >> 12) & 0x3F));
+			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.addByte(0x80 | (code & 0x3F));
+		}
+		return bytes.getBytes().toString();
+	}
+
+	static function invalidEscape(message:String, span:SourceSpan):Void
+		throw new CompileError(new Diagnostic("E0001", 'Invalid escape sequence: $message', span));
+
 	static function parseStringExpression(token:Token):AstExpression {
 		var text = token.text;
 		if (text.charAt(0) != "'" || text.indexOf("$") < 0)
-			return StringLiteral(decodeString(text), token.span);
+			return StringLiteral(decodeString(text, token.span), token.span);
 		var parts:Array<AstExpression> = [], literal = "", index = 1, end = text.length - 1;
 		while (index < end) {
 			var character = text.charAt(index);
 			if (character == "\\") {
-				literal += decodeEscape(text.charAt(index + 1));
-				index += 2;
+				var escape = readEscape(text, index + 1, end, token.span);
+				literal += escape.value;
+				index = escape.next;
 				continue;
 			}
 			if (character != "$") {
@@ -2456,17 +2555,6 @@ class Parser {
 		if (value.length > 0 || parts.length == 0)
 			parts.push(StringLiteral(value, span));
 	}
-
-	static function decodeEscape(escaped:String):String
-		return switch escaped {
-			case "n": "\n";
-			case "r": "\r";
-			case "t": "\t";
-			case "\"": "\"";
-			case "'": "'";
-			case "\\": "\\";
-			default: escaped;
-		};
 
 	static function interpolationEnd(text:String, start:Int, end:Int, span:SourceSpan):Int {
 		var depth = 1, index = start, quote = "";

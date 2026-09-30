@@ -96,14 +96,18 @@ class FieldInference {
 		return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
 	}
 
-	/** `enums` lets an initializer that names an enum constructor, such as `Kind.Rapid`, give the field that enum's type. */
+	/**
+	 * `enums` and `enumAbstracts` let an initializer that names an enum constructor or an enum abstract value, such
+	 * as `Kind.Rapid`, give the field that enum's (or abstract's) type.
+	 */
 	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
-			?enums:Map<String, compiler.syntax.Ast.AstEnum>):AstType {
-		return resolveField(field, owner, classes, aliases, enums == null ? [] : enums, []);
+			?enums:Map<String, compiler.syntax.Ast.AstEnum>, ?enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):AstType {
+		return resolveField(field, owner, classes, aliases, enums == null ? [] : enums, enumAbstracts == null ? [] : enumAbstracts, []);
 	}
 
 	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
-			enums:Map<String, compiler.syntax.Ast.AstEnum>, resolving:Map<String, Bool>):AstType {
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
+			resolving:Map<String, Bool>):AstType {
 		var inferred = parsedType(field);
 		if (inferred != InferredType)
 			return inferred;
@@ -111,7 +115,7 @@ class FieldInference {
 		if (resolving.exists(key))
 			throw new CompileError(new Diagnostic("E1002", 'Cyclic field type inference through "$key"', field.span));
 		resolving.set(key, true);
-		var enumType = enumConstructorType(field.initializer, owner, classes, aliases, enums);
+		var enumType = enumConstructorType(field.initializer, owner, classes, aliases, enums, enumAbstracts);
 		if (enumType != null) {
 			resolving.remove(key);
 			return enumType;
@@ -135,18 +139,20 @@ class FieldInference {
 		if (target == null)
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" from unknown static field "${reference.owner}.${reference.name}"', field.span));
-		var result = resolveField(target, targetOwner, classes, aliases, enums, resolving);
+		var result = resolveField(target, targetOwner, classes, aliases, enums, enumAbstracts, resolving);
 		resolving.remove(key);
 		return result;
 	}
 
 	/**
-	 * The enum named by an initializer that is one of its constructors (`Kind.Rapid`, `Kind.Feed(3)`), or null
-	 * when it is not one. A class of that name takes precedence, and a generic enum is left alone: its type
-	 * arguments would have to come from the constructor's arguments.
+	 * The enum named by an initializer that is one of its constructors (`Kind.Rapid`, `Kind.Feed(3)`), or the
+	 * enum abstract named by one of its values (`Mode.Fast`); null when it is neither. A class of that name
+	 * takes precedence, and a generic enum is left alone: its type arguments would have to come from the
+	 * constructor's arguments.
 	 */
 	static function enumConstructorType(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>):Null<AstType> {
+			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>,
+			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):Null<AstType> {
 		var path:Null<String> = null, hasArguments = false;
 		switch expression {
 			case Member(Variable(owner, _), name, _):
@@ -167,7 +173,16 @@ class FieldInference {
 			caseName = path.substring(separator + 1);
 		if (classes.exists(resolveOwner(written, currentOwner, classes, aliases)))
 			return null;
-		var resolved = resolveEnum(written, currentOwner, aliases, enums);
+		if (!hasArguments) {
+			var abstractName = resolveDeclaration(written, currentOwner, aliases, enumAbstracts);
+			if (abstractName != null) {
+				for (value in enumAbstracts.get(abstractName).values)
+					if (value.name == caseName)
+						return NamedType(written);
+				return null;
+			}
+		}
+		var resolved = resolveDeclaration(written, currentOwner, aliases, enums);
 		if (resolved == null)
 			return null;
 		var declaration = enums.get(resolved);
@@ -179,7 +194,7 @@ class FieldInference {
 		return null;
 	}
 
-	static function resolveEnum(name:String, currentOwner:String, aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>):Null<String> {
+	static function resolveDeclaration<T>(name:String, currentOwner:String, aliases:Map<String, String>, enums:Map<String, T>):Null<String> {
 		if (aliases.exists(name) && enums.exists(aliases.get(name)))
 			return aliases.get(name);
 		if (enums.exists(name))
