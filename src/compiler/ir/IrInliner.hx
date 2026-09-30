@@ -67,6 +67,9 @@ class IrInliner {
 	/** Off unless enabled; the incremental-safety rules in the design note must hold before it is on by default. */
 	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") == "1";
 
+	/** Set for targets that store a value class field inline in its parent and hand out a pointer into it (HashLink). */
+	public static var packedValueFields:Bool = false;
+
 	final byName:Map<String, IrFunction> = [];
 	final done:Map<String, IrFunction> = [];
 	final dependenciesOf:Map<String, Array<IrFunction>> = [];
@@ -90,7 +93,7 @@ class IrInliner {
 		this.cache = cache;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		var lines:Array<String> = [entryPoint];
+		var lines:Array<String> = [entryPoint, "packed=" + packedValueFields];
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.isValue)
@@ -362,6 +365,8 @@ class IrInliner {
 		if (substitutions.keys().hasNext())
 			bindings = substitute(blocks, substitutions, bindings);
 		var replaced = IrScalarReplacement.run(blocks, objects, nextValue);
+		if (packedValueFields)
+			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, objects, replaced.nextValue)};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint);

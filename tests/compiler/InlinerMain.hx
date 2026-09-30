@@ -65,6 +65,19 @@ class InlinerMain {
 		for (name in ["perIteration", "perIterationNested"])
 			expect(allocations(programFunction(flowProgram, name)) == 0, '$name allocates every iteration, so it should be replaced even with phis');
 		expect(allocations(programFunction(flowProgram, "guarded")) <= 1, "an object in a function with exception handling is handled safely");
+		// Where a value field is stored inline, `field = new V(...)` writes into the slot instead of allocating.
+		var slotSource = "@:value class S { public var a:Int; public var b:Int; public function new(a:Int, b:Int) { this.a = a; this.b = b; } } "
+			+ "class H { public var s:S; public function new() { s = new S(0, 0); } public function set(a:Int):Void { s = new S(a, 1); } } "
+			+ "function main():Int { var h = new H(); h.set(3); return h.s.a; }";
+		IrInliner.packedValueFields = true;
+		var slotProgram = Frontend.compile(slotSource);
+		IrInliner.run(slotProgram, new IrInlineCache());
+		IrVerifier.verify(slotProgram);
+		expect(allocations(programFunction(slotProgram, "H.set")) == 0, "storing a new value into an inline field should not allocate");
+		IrInliner.packedValueFields = false;
+		var boxedProgram = Frontend.compile(slotSource);
+		IrInliner.run(boxedProgram, new IrInlineCache());
+		expect(allocations(programFunction(boxedProgram, "H.set")) == 1, "a target without inline value fields keeps the allocation");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();

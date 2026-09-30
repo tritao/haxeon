@@ -57,6 +57,151 @@ class IrScalarReplacement {
 		return {substitutions: substitutions, nextValue: nextValue};
 	}
 
+	/**
+	 * For targets where a value class field is stored inline in its parent and reading it yields a pointer into the
+	 * parent (HashLink), `dest.field = new V(...)` allocates a struct only to copy it into place. When the new
+	 * instance is only written and then stored, write its fields straight into the parent's slot instead: take the
+	 * slot with FieldGet, then FieldSet each field (unwritten fields get the zero `New` would have given them).
+	 */
+	public static function constructInPlace(blocks:Array<IrBlock>, objects:Map<String, IrObject>, nextValue:Int):Int {
+		for (block in blocks) {
+			var position = 0;
+			while (position < block.instructions.length) {
+				var located = block.instructions[position];
+				switch located.value {
+					case NewObject(object, typeName):
+						var descriptor = objects.get(typeName);
+						if (descriptor != null && descriptor.isValue && !hasValueField(descriptor, objects)) {
+							var store = storeOnly(blocks, block, position, object);
+							if (store != null && parentSlotIsInline(store.destination, store.field, typeName, objects)) {
+								nextValue = placeInSlot(block, position, object, descriptor, store, nextValue);
+								continue;
+							}
+						}
+					default:
+				}
+				position++;
+			}
+		}
+		return nextValue;
+	}
+
+	/** The single store of `object` into another object's field, when every other use is a write to one of its own fields. */
+	static function storeOnly(blocks:Array<IrBlock>, home:IrBlock, allocation:Int, object:IrValue):Null<{position:Int, destination:IrValue, field:String}> {
+		var found:Null<{position:Int, destination:IrValue, field:String}> = null;
+		for (block in blocks) {
+			for (position in 0...block.instructions.length) {
+				var instruction = block.instructions[position].value;
+				switch instruction {
+					case Phi(_, inputs):
+						for (input in inputs)
+							if (input.value.id == object.id)
+								return null;
+					default:
+				}
+				var uses = 0;
+				for (input in IrOperands.inputs(instruction))
+					if (input.id == object.id)
+						uses++;
+				if (uses == 0)
+					continue;
+				if (block != home || position <= allocation)
+					return null;
+				switch instruction {
+					case FieldSet(target, _, value) if (target.id == object.id && value.id != object.id):
+					case FieldSet(target, name, value) if (value.id == object.id && target.id != object.id && uses == 1 && found == null):
+						found = {position: position, destination: target, field: name};
+					default:
+						return null;
+				}
+			}
+			var terminator = block.terminator;
+			if (terminator == null)
+				continue;
+			switch terminator.value {
+				case Return(value), Throw(value), Rethrow(value):
+					if (value.id == object.id)
+						return null;
+				case Branch(condition, _, _):
+					if (condition.id == object.id)
+						return null;
+				case Jump(_):
+			}
+		}
+		if (found == null)
+			return null;
+		// Every write to the new instance must come before the store, or the copy would have missed it.
+		for (position in found.position + 1...home.instructions.length)
+			switch home.instructions[position].value {
+				case FieldSet(target, _, _) if (target.id == object.id):
+					return null;
+				default:
+			}
+		return found;
+	}
+
+	static function parentSlotIsInline(destination:IrValue, field:String, typeName:String, objects:Map<String, IrObject>):Bool {
+		var parentName = switch destination.type {
+			case Obj(name): name;
+			default: return false;
+		};
+		var parent = objects.get(parentName);
+		if (parent == null)
+			return false;
+		for (candidate in parent.fields)
+			if (candidate.name == field)
+				return switch candidate.type {
+					case Obj(name): name == typeName;
+					default: false;
+				};
+		return false;
+	}
+
+	static function placeInSlot(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, store:{position:Int, destination:IrValue, field:String},
+			nextValue:Int):Int {
+		// The latest write to each field before the store is the value the copy would have carried.
+		var written:Map<String, IrValue> = [];
+		for (position in allocation + 1...store.position)
+			switch block.instructions[position].value {
+				case FieldSet(target, name, value) if (target.id == object.id):
+					written.set(name, value);
+				default:
+			}
+		var provenance = block.instructions[store.position].provenance;
+		var slot = new IrValue(nextValue++, store.field, Obj(descriptor.name));
+		var emitted:Array<Located<IrInstruction>> = [new Located(FieldGet(slot, store.destination, store.field), provenance)];
+		for (field in descriptor.fields) {
+			var value = written.get(field.name);
+			if (value == null) {
+				value = new IrValue(nextValue++, object.name + "." + field.name, field.type);
+				emitted.push(new Located(zeroValue(value, field.type), provenance));
+			}
+			emitted.push(new Located(FieldSet(slot, field.name, value), provenance));
+		}
+		var rewritten:Array<Located<IrInstruction>> = [];
+		for (position in 0...block.instructions.length) {
+			if (position == allocation)
+				continue;
+			var instruction = block.instructions[position];
+			if (position == store.position) {
+				for (added in emitted)
+					rewritten.push(added);
+				continue;
+			}
+			if (position > allocation && position < store.position)
+				switch instruction.value {
+					case FieldSet(target, _, _) if (target.id == object.id):
+						continue;
+					default:
+				}
+			rewritten.push(instruction);
+		}
+		block.instructions.resize(0);
+		for (kept in rewritten)
+			block.instructions.push(kept);
+		return nextValue;
+	}
+
 	static function allocationPosition(block:IrBlock, object:IrValue):Int {
 		for (position in 0...block.instructions.length)
 			switch block.instructions[position].value {
