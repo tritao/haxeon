@@ -18,10 +18,10 @@ class WasmLinearAllocator {
 	static function addAllocator(context:WasmLinearContext):Int {
 		var module = context.module,
 			collector = context.collectorFunction,
-			heapStart = context.heapStart,
 			heapTop = context.heapTop,
 			freeHead = context.freeHead,
 			gcBudget = context.gcBudget,
+			gcLiveBytes = context.gcLiveBytes,
 			gcStress = context.options.wasmGcStress == true,
 			allocationCount = context.allocationCount,
 			allocationBytes = context.allocationBytes,
@@ -41,21 +41,23 @@ class WasmLinearAllocator {
 			nextFreeBlock = builder.local("nextFreeBlock", I32),
 			alignedPayloadSize = builder.local("alignedPayloadSize", I32),
 			reusedBlock = builder.local("reusedBlock", I32),
-			heapUsed = builder.local("heapUsed", I32);
+			nextBudget = builder.local("nextBudget", I32);
 
+		// The next collection comes after allocating as many bytes as the last collection kept, so the heap settles
+		// near twice its live size. Budgeting the whole heap span instead exceeded the free list by the live bytes
+		// every cycle and grew the heap by that much even when nothing leaked; budgeting the free space as well let
+		// fragmentation raise every following budget. With imported memory nothing else bounded that growth.
 		function replenishBudget(builder:WasmFunctionBuilder):Void {
-			builder.globalGet(builder.global(heapTop));
-			builder.i32Const(heapStart);
-			builder.i32Sub();
-			builder.localSet(heapUsed);
-			builder.localGet(heapUsed);
+			builder.globalGet(builder.global(gcLiveBytes));
+			builder.localSet(nextBudget);
+			builder.localGet(nextBudget);
 			builder.i32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET);
 			builder.emit(I32LtS);
 			builder.if_(function(builder) {
 				builder.i32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET);
-				builder.localSet(heapUsed);
+				builder.localSet(nextBudget);
 			});
-			builder.localGet(heapUsed);
+			builder.localGet(nextBudget);
 			builder.localGet(requestedSize);
 			builder.i32Sub();
 			builder.globalSet(builder.global(gcBudget));
