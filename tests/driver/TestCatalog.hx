@@ -34,6 +34,7 @@ class TestCatalog {
 		"TestMain",
 		"AuditVerifierMain",
 		"InlinerMain",
+		"FinalFieldMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",
