@@ -156,6 +156,8 @@ class TestCatalog {
 				["{root}/out/plugin-runtime.hl"]),
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml", "static-init-order-test.hl", 0,
 				"static initializers respect dependency order"),
+			hxmlCase("runtime", "string-escapes", "tests/hxml/string-escapes-test.hxml", "string-escapes-test.hl", 0,
+				"string escapes decode hex, unicode, octal and quote forms in both literal kinds"),
 			hxmlCase("runtime", "enum-field-inference", "tests/hxml/enum-field-inference-test.hxml", "enum-field-inference-test.hl", 0,
 				"fields initialized with enum constructors or enum abstract values infer their type"),
 			hxmlCase("runtime", "enum-abstract-declared-type", "tests/hxml/enum-abstract-declared-type-test.hxml", "enum-abstract-declared-type-test.hl", 0,
