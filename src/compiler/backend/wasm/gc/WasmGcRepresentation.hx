@@ -1174,6 +1174,58 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
 			]);
 		}
+		if (name == "getI8" || name == "getU8" || name == "getI16" || name == "getU16") {
+			if (output.type != I32 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI small integer getter signature";
+			var width = name == "getI8" || name == "getU8" ? 8 : 16,
+				signed = name == "getI8" || name == "getI16";
+			var body = managedByteGet(argumentLocals[0], argumentLocals[1], outputLocal);
+			if (width == 16) {
+				// Little-endian, like the C records these fields belong to.
+				var high = allocateLocal(I32), next = allocateLocal(I32);
+				body = body.concat([LocalGet(argumentLocals[1]), I32Const(1), I32Add, LocalSet(next)])
+					.concat(managedByteGet(argumentLocals[0], next, high))
+					.concat([
+						LocalGet(outputLocal),
+						LocalGet(high),
+						I32Const(8),
+						I32Shl,
+						I32Or,
+						LocalSet(outputLocal)
+					]);
+			}
+			if (signed)
+				body = body.concat([
+					LocalGet(outputLocal),
+					I32Const(32 - width),
+					I32Shl,
+					I32Const(32 - width),
+					I32ShrS,
+					LocalSet(outputLocal)
+				]);
+			return body;
+		}
+		if (name == "setI8" || name == "setU8" || name == "setI16" || name == "setU16") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != I32
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI small integer setter signature";
+			// Byte-array stores keep the low eight bits of the value.
+			var body = managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+			if (name == "setI16" || name == "setU16") {
+				var high = allocateLocal(I32), next = allocateLocal(I32);
+				body = body.concat([
+					LocalGet(argumentLocals[2]),
+					I32Const(8),
+					I32ShrU,
+					LocalSet(high),
+					LocalGet(argumentLocals[1]),
+					I32Const(1),
+					I32Add,
+					LocalSet(next)
+				]).concat(managedByteSet(argumentLocals[0], next, high));
+			}
+			return body;
+		}
 		if (name == "__bytes_get_i32" || name == "getI32") {
 			if (output.type != I32 || arguments.length != 2 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || argumentLocals.length != 2)
 				throw "Invalid Wasm GC Bytes.getInt32 signature";

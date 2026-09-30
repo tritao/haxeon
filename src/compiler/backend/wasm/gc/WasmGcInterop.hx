@@ -4,6 +4,7 @@ import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.WasmRepresentation.WasmInteropRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
+import compiler.backend.wasm.WasmCAbi;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.ir.Ir.IrCNative;
@@ -213,15 +214,18 @@ class WasmGcInterop implements WasmInteropRepresentation {
 					usesScratchBridge = true;
 				case Value:
 			}
-		if (usesScratchBridge && (moduleInterop.scratchAllocator < 0 || moduleInterop.scratchTop < 0))
-			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
 		var bytePointerResult = native.result == ManagedBytes && native.pointerLength != null,
 			byteStringResult = native.result == Bytes;
 		if (bytePointerResult && pointerLengthImportIndex < 0)
 			throw 'Wasm GC C native "${native.name}" has no imported byte-result length function';
 		if (bytePointerResult && native.pointerOwnership == "owned" && pointerReleaseImportIndex < 0)
 			throw 'Wasm GC C native "${native.name}" has no imported byte-result release function';
-		var fixedAggregateResult = native.fixedResult != null;
+		var fixedAggregateResult = native.fixedResult != null,
+			abi = WasmCAbi.of(native);
+		if (fixedAggregateResult)
+			usesScratchBridge = true;
+		if (usesScratchBridge && (moduleInterop.scratchAllocator < 0 || moduleInterop.scratchTop < 0))
+			throw 'Wasm GC C native "${native.name}" requires a configured linear scratch bridge';
 		var body:Array<WasmInstruction> = [],
 			savedTop = usesScratchBridge ? allocateLocal(I32) : -1,
 			bytePointers:Array<Null<Int>> = [];
@@ -402,18 +406,37 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				case _:
 					throw 'Wasm GC C native "${native.name}" has an unsupported argument direction';
 			}
+		// A record result lands in scratch storage: the C function writes it through a leading result pointer, or
+		// returns its single scalar, which is stored there.
+		var resultRecord = fixedAggregateResult ? allocateLocal(I32) : -1;
+		if (fixedAggregateResult) {
+			var layout = native.fixedResult;
+			// The pointer is either the leading argument or the address the scalar is stored to after the call.
+			body = body.concat([
+				I32Const(layout.size),
+				I32Const(layout.alignment),
+				Call(moduleInterop.scratchAllocator),
+				LocalTee(resultRecord)
+			]);
+		}
 		for (index in 0...arguments.length) {
 			var pointer = bytePointers[index];
 			body.push(LocalGet(pointer == null ? argumentLocals[index] : pointer));
+			body = body.concat(abi.lowerArgument(index));
 		}
 		var nativePointerResult = isNativePointerType(native.result),
-			resultLocal = native.result == Void ? -1 : allocateLocal(bytePointerResult
+			resultLocal = native.result == Void ? -1 : fixedAggregateResult ? resultRecord : allocateLocal(bytePointerResult
 				|| byteStringResult
-				|| fixedAggregateResult
 				|| nativePointerResult ? I32 : plan.valueType(native.result));
 		body.push(Call(importIndex));
-		if (resultLocal >= 0)
-			body.push(LocalSet(resultLocal));
+		if (fixedAggregateResult) {
+			if (abi.directResult != null)
+				body.push(abi.directResult.store);
+		} else {
+			body = body.concat(abi.raiseResult());
+			if (resultLocal >= 0)
+				body.push(LocalSet(resultLocal));
+		}
 		for (index in 0...arguments.length)
 			switch native.argumentModes[index] {
 				case BytesInputOutput(_) | BytesSize:

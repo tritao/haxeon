@@ -137,6 +137,9 @@ haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-hxi-value-records.wasm --entry=wasm32-value-records \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
 haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-hxi-value-records.wasm --entry=wasm32-value-records \
+	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
 haxeon_compile_async \
@@ -232,6 +235,7 @@ const cases = [
 	["out/wasm-cli-hxi-retained.wasm", 42],
 	["out/wasm-cli-hxi-retained-imported.wasm", 42],
 	["out/wasm-cli-hxi-value-records.wasm", 42],
+	["out/wasm-cli-gc-hxi-value-records.wasm", 42],
 	["out/wasm-cli-try-catch.wasm", 42],
 	["out/wasm-cli-try-nested.wasm", 42],
 	["out/wasm-cli-try-bounds.wasm", 42],
@@ -280,7 +284,8 @@ const cases = [
         return length === expected.length && expected.every((value, index) => actual[index] === value) ? 42 : 0;
       }};
     }
-    if (relative.endsWith("wasm-cli-hxi-value-records.wasm"))
+    // Both backends call these records through the same Wasm32 C ABI.
+    if (relative.endsWith("wasm-cli-hxi-value-records.wasm") || relative.endsWith("wasm-cli-gc-hxi-value-records.wasm"))
       imports.wasm32_value_records = {
         read_point: pointer => {
           if (pointer % 4 !== 0)
@@ -401,14 +406,13 @@ const cases = [
           const view = new DataView(moduleInstance.exports.memory.buffer);
           return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
         },
-        make_point: seed => {
-          const pointer = 1024;
+        // A record result is written through the leading result pointer, as clang's Wasm32 C ABI returns it.
+        make_point: (pointer, seed) => {
+          if (pointer % 4 !== 0)
+            throw new Error("record result pointer is not four-byte aligned");
           const view = new DataView(moduleInstance.exports.memory.buffer);
           view.setInt32(pointer, seed, true);
           view.setInt32(pointer + 4, seed + 2, true);
-          view.setUint32(pointer + 8, 0, true);
-          view.setUint32(pointer + 12, 0, true);
-          return pointer;
         },
         borrowed_context: () => 0x1234,
         owned_context: () => 0x5678,
@@ -549,9 +553,12 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
+      const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && hasMemory)
+          || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
