@@ -182,7 +182,8 @@ class IrGenerator {
 
 	public static function generateFunction(fn:TypedFunction):IrFunction {
 		try {
-			var cfg = generateCfg(fn), built = SsaBuilder.build(cfg);
+			var cfg = generateCfg(fn),
+				built = IrStringLiterals.hoist(SsaBuilder.build(cfg));
 			return fn.isInline == true ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, true) : built;
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
