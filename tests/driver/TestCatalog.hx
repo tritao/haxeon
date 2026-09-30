@@ -187,6 +187,8 @@ class TestCatalog {
 			mainCase("runtime", "import", "ImportMain", "import.hl", 42, "package-qualified import executed"),
 			mainCase("runtime", "import-class", "ImportClassMain", "import-class.hl", 42, "imported nominal class executed"),
 			mainCase("runtime", "namespace", "NamespaceMain", "namespace.hl", 42, "qualified nominal namespaces executed"),
+			mainCase("runtime", "module-sub-type", "ModuleSubTypeMain", "module-sub-type.hl", 42,
+				"a secondary type named through its module resolves in the current package"),
 			mainCase("runtime", "instance-module", "InstanceModuleMain", "instance-module.hl", 42, "incremental instance class executed"),
 			hxmlCase("runtime", "static-field", "tests/hxml/static-field-test.hxml", "static-field-test.hl", 0, "static fields lower to persistent globals"),
 			hxmlCase("runtime", "inline-patch", "tests/hxml/inline-patch-test.hxml", "inline-patch-test.hl", 0,

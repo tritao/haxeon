@@ -131,6 +131,15 @@ class ModuleAnalyzer {
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
+			// `Module.SubType` names a module of this package, as a bare type name does.
+			if (packageName != null && isModuleRelativePath(dependency)) {
+				var relativeModule = sourceModuleForDependency(packageName + "." + dependency);
+				if (relativeModule != null) {
+					dependencies.remove(dependency);
+					dependencies.set(relativeModule, true);
+					continue;
+				}
+			}
 			var sourceModule = sourceModuleForDependency(dependency);
 			if (sourceModule == null
 				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0)) {
@@ -339,6 +348,12 @@ class ModuleAnalyzer {
 		}
 
 	function sourceModuleForType(typeName:String, packageName:Null<String>):Null<String> {
+		// `Module.SubType` resolves through this package first, then as an absolute path.
+		if (packageName != null && isModuleRelativePath(typeName)) {
+			var relative = sourceModuleForDependency(packageName + "." + typeName);
+			if (relative != null)
+				return relative;
+		}
 		var qualified = typeName.indexOf(".") < 0 && packageName != null ? packageName + "." + typeName : typeName,
 			module = sourceModuleForDependency(qualified);
 		if (module != null)
@@ -413,6 +428,14 @@ class ModuleAnalyzer {
 
 	public function loadSourceModuleDependency(path:String):Null<String>
 		return sourceModuleForDependency(path);
+
+	/** A dotted type path that starts with a module or type name (capitalised), not a package. */
+	static function isModuleRelativePath(path:String):Bool {
+		if (path.indexOf(".") < 0)
+			return false;
+		var first = StringTools.fastCodeAt(path, 0);
+		return first >= "A".code && first <= "Z".code;
+	}
 
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
