@@ -43,6 +43,7 @@ class TestCatalog {
 		"IrProgramAssemblerMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",
+		"DeclarationAliasCacheMain",
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
 		"TyperBoundaryMain",

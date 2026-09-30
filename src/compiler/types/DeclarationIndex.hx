@@ -342,13 +342,39 @@ class DeclarationIndex {
 		return TInstance(kind, name, []);
 	}
 
+	/**
+	 * Non-generic aliases resolved with no type-parameter substitutions. Resolving an alias rebuilds its whole
+	 * type tree, including the spelled-out name of every anonymous type in it, and large projects mention the
+	 * same aliases thousands of times.
+	 *
+	 * Validity rests on two facts. The alias table is filled once, in the constructor, and never changed, so an
+	 * entry cannot go stale; an index that learned to add or replace aliases in place would have to clear this
+	 * cache. And resolution failures throw before anything is stored, so a cached value is always a complete,
+	 * error-free result. Results are shared between mentions, which is safe because the types are immutable.
+	 */
+	final resolvedAliases:Map<String, CompilerType> = [];
+
 	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
+		var cacheable = alias.typeParameters.length == 0 && isEmpty(substitutions);
+		if (cacheable) {
+			var cached = resolvedAliases.get(alias.name);
+			if (cached != null)
+				return cached;
+		}
 		if (resolving.exists(alias.name))
 			fail('Cyclic type alias involving "${alias.name}"', alias.span);
 		resolving.set(alias.name, true);
 		var resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
 		resolving.remove(alias.name);
+		if (cacheable)
+			resolvedAliases.set(alias.name, resolved);
 		return resolved;
+	}
+
+	static function isEmpty(substitutions:Map<String, CompilerType>):Bool {
+		for (_ in substitutions.keys())
+			return false;
+		return true;
 	}
 
 	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Map<String, Bool>,
