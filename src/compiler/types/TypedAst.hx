@@ -276,6 +276,10 @@ typedef TypedFunction = {
 	final owner:Null<String>;
 	final isStatic:Bool;
 	final isConstructor:Bool;
+
+	/** Declared `inline`. */
+	final ?isInline:Bool;
+
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
 	final statements:Array<TypedStatement>;

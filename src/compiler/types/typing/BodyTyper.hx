@@ -297,6 +297,7 @@ class BodyTyper {
 			owner: owner,
 			isStatic: isStatic,
 			isConstructor: isConstructor,
+			isInline: fn.isInline == true,
 			arguments: arguments,
 			result: result,
 			statements: statements,

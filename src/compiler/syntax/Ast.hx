@@ -271,6 +271,10 @@ typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
 	final ?isExtern:Bool;
+
+	/** Declared `inline`; the inliner treats it as a strong hint. */
+	final ?isInline:Bool;
+
 	final ?metadata:Array<AstMetadata>;
 	final ?typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;

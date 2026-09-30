@@ -89,8 +89,10 @@ class Parser {
 				else if (check(TokenKind.Identifier) && current().text == "abstract") {
 					var start = advance().span;
 					abstracts.push(parseAbstract(start, externDeclaration, metadata));
-				} else
-					functions.push(parseFunction(false, externDeclaration, metadata));
+				} else {
+					var inlineFunction = match(TokenKind.Inline);
+					functions.push(parseFunction(false, externDeclaration, metadata, inlineFunction));
+				}
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -208,16 +210,18 @@ class Parser {
 		var methods = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata();
-			var isStatic = false;
+			var isStatic = false, isInline = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline) || check(TokenKind.Static)) {
 				if (match(TokenKind.Static))
 					isStatic = true;
+				else if (match(TokenKind.Inline))
+					isInline = true;
 				else
 					advance();
 			}
 			var functionStart = consume(TokenKind.Function).span,
 				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata));
+			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata, isInline));
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -378,14 +382,15 @@ class Parser {
 		return name;
 	}
 
-	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
+	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
+			isInline:Bool = false):AstFunction {
 		var start = consume(TokenKind.Function).span,
 			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata);
+		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata, isInline);
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
-			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstFunction {
+			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -436,6 +441,7 @@ class Parser {
 			name: name,
 			isStatic: isStatic,
 			isExtern: isExtern,
+			isInline: isInline,
 			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
@@ -563,7 +569,7 @@ class Parser {
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,
 						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata));
+					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata, isInline));
 				} else {
 					var fieldStart = current().span;
 					match(TokenKind.Var);
@@ -754,6 +760,7 @@ class Parser {
 				name: methodName,
 				isStatic: false,
 				isExtern: false,
+				isInline: false,
 				metadata: methodMetadata,
 				typeParameters: typeParameters,
 				typeConstraints: typeConstraints,

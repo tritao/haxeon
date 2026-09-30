@@ -158,6 +158,7 @@ class SignatureInference {
 			name: method.name,
 			isStatic: method.isStatic,
 			isExtern: method.isExtern,
+			isInline: method.isInline,
 			metadata: method.metadata,
 			typeParameters: method.typeParameters,
 			typeConstraints: method.typeConstraints,

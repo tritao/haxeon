@@ -19,6 +19,7 @@ class ModuleCanonicalizer {
 			name: name,
 			isStatic: fn.isStatic,
 			isExtern: fn.isExtern,
+			isInline: fn.isInline,
 			metadata: fn.metadata,
 			typeParameters: fn.typeParameters,
 			typeConstraints: fn.typeConstraints == null ? null : [
@@ -174,6 +175,7 @@ class ModuleCanonicalizer {
 			name: name,
 			isStatic: method.isStatic,
 			isExtern: method.isExtern,
+			isInline: method.isInline,
 			metadata: method.metadata,
 			typeParameters: method.typeParameters,
 			typeConstraints: method.typeConstraints == null ? null : [

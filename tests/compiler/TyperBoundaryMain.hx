@@ -36,6 +36,16 @@ class TyperBoundaryMain {
 			"");
 		assertDiagnostic(value + "class H { public var v:V; public function new(?v:V) this.v = v; } function main():Int { return 0; }", "E1002", "");
 		assertDiagnostic(value + "class H { public var v:Null<V>; public function new() {} } function main():Int { return 0; }", "E1022", "cannot be Null<V>");
+		// `inline` on functions and methods is recorded on the typed function (the inliner uses it as a hint).
+		var inlineProgram = Typer.type(parse("InlineFlag.hx",
+			"inline function f():Int return 1; function g():Int return 2; " +
+			"class C { public inline function m():Int return 3; public function n():Int return 4; public function new() {} } " +
+			"function main():Int return f() + g() + new C().m() + new C().n();"));
+		var inlineFlags:Map<String, Bool> = [];
+		for (fn in inlineProgram.functions)
+			inlineFlags.set(fn.name, fn.isInline == true);
+		expect(inlineFlags.get("f") == true && inlineFlags.get("C.m") == true, "inline functions and methods should carry the inline flag");
+		expect(inlineFlags.get("g") == false && inlineFlags.get("C.n") == false, "ordinary functions and methods should not carry the inline flag");
 		Sys.println("PASS: Typer subsystem boundaries preserve typed output and diagnostics");
 	}
 
