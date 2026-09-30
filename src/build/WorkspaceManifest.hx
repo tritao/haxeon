@@ -66,7 +66,8 @@ class WorkspaceManifest {
 			entries:Null<Array<Dynamic>> = Reflect.field(document, "projects");
 		if (entries == null || entries.length == 0)
 			throw 'Workspace file $absolute must list at least one project';
-		var projects:Array<WorkspaceProject> = [], seen = new Map<String, Bool>();
+		var projects:Array<WorkspaceProject> = [],
+			seen = new Map<String, Bool>();
 		for (entry in entries) {
 			var relative:Null<String> = Reflect.field(entry, "path");
 			if (relative == null || relative.length == 0)

@@ -10,7 +10,8 @@ import build.execution.ExecutionAction.ActionKind;
 class ActionMerge {
 	/** Collapses duplicate ids within one lowering, keeping first-seen order. */
 	public static function dedupe(actions:Array<ExecutionAction>):Array<ExecutionAction> {
-		var byKey = new Map<String, ExecutionAction>(), order:Array<String> = [];
+		var byKey = new Map<String, ExecutionAction>(),
+			order:Array<String> = [];
 		for (action in actions) {
 			var key = action.id.key(), existing = byKey.get(key);
 			if (existing == null) {

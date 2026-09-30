@@ -27,8 +27,7 @@ class LoweredWorkspaceProject {
 
 	public final testInputs:Array<String>;
 
-	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true,
-			?testInputs:Array<String>) {
+	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true, ?testInputs:Array<String>) {
 		this.name = name;
 		this.project = project;
 		this.output = output;
@@ -67,12 +66,8 @@ class LoweredWorkspace {
 class WorkspaceBuild {
 	public static function lower(workspace:WorkspaceManifest, projects:Array<WorkspaceProject>, resolve:String->ResolvedProject, home:String,
 			defines:Array<String>):LoweredWorkspace {
-		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Release),
-			merged = new Map<String, ExecutionAction>(),
-			order:Array<String> = [],
-			requestedBy = new Map<String, Array<String>>(),
-			lowered:Array<LoweredWorkspaceProject> = [],
-			raw = 0;
+		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Release), merged = new Map<String, ExecutionAction>(),
+			order:Array<String> = [], requestedBy = new Map<String, Array<String>>(), lowered:Array<LoweredWorkspaceProject> = [], raw = 0;
 		for (member in projects) {
 			var project = resolve(member.manifestPath);
 			if (project.manifest.target != "host")
@@ -120,10 +115,9 @@ class WorkspaceBuild {
 					compile = id;
 			if (compile == null)
 				throw 'Workspace project "${member.name}" has no compile action to test';
-			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])],
-				// What a passing run depends on besides the compile action: the module, the HashLink runtime,
-				// the native libraries it loads, and the files beside its project. The project directory
-				// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
+			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
+			// the native libraries it loads, and the files beside its project. The project directory
+			// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
 				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
 			for (resolvedPackage in member.project.packages.packages) {
 				var packageRoot = context.layout.packageRoot(resolvedPackage.name);
@@ -141,11 +135,10 @@ class WorkspaceBuild {
 				safeName = StringTools.replace(member.name, "/", "-"),
 				environment = [variable => directories.join(":")],
 				log = Path.join([testsDirectory, safeName + ".log"]),
-				stamp = Path.join([testsDirectory, safeName + ".passed"]),
-				// The stamp exists only while the last run of this action passed; the executor skips the run
-				// when it exists and every input is unchanged since a passing run.
+				stamp = Path.join([testsDirectory, safeName + ".passed"]), // The stamp exists only while the last run of this action passed; the executor skips the run
+			// when it exists and every input is unchanged since a passing run.
 				script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)} > ${quote(log)} 2>&1; status=$$?; '
-				+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+					+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
 			actions.push(new ExecutionAction(new ActionId("test:" + member.name), [compile], inputs, [stamp], 'Test ${member.name} (log: $log)',
 				Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
 		}
@@ -160,7 +153,10 @@ class WorkspaceBuild {
 				for (entry in sys.FileSystem.readDirectory(directory)) {
 					var path = Path.join([directory, entry]);
 					if (!sys.FileSystem.isDirectory(path)
-						&& (entry == "hl" || StringTools.endsWith(entry, ".hdll") || StringTools.endsWith(entry, ".so") || entry.indexOf(".so.") > 0
+						&& (entry == "hl"
+							|| StringTools.endsWith(entry, ".hdll")
+							|| StringTools.endsWith(entry, ".so")
+							|| entry.indexOf(".so.") > 0
 							|| StringTools.endsWith(entry, ".dylib")))
 						files.push(path);
 				}

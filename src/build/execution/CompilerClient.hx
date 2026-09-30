@@ -167,7 +167,8 @@ class CompilerClient {
 
 	/** Workers kept resident per compiler version before the least recently used one is retired. */
 	static function residentLimit():Int {
-		var value = Sys.getEnv("HAXEON_COMPILER_WORKERS"), parsed = value == null ? null : Std.parseInt(value);
+		var value = Sys.getEnv("HAXEON_COMPILER_WORKERS"),
+			parsed = value == null ? null : Std.parseInt(value);
 		return parsed == null || parsed < 1 ? 6 : parsed;
 	}
 

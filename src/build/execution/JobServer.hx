@@ -57,8 +57,7 @@ class JobServer {
 	}
 
 	/** Blocks until a token is available. The caller must `release` it. */
-	public function acquire():Bool
-		// One byte at a time: a larger read would swallow tokens that belong to other jobs.
+	public function acquire():Bool // One byte at a time: a larger read would swallow tokens that belong to other jobs.
 		return ProcessRunner.run("sh", ["-c", 'dd if="$$0" of=/dev/null bs=1 count=1 2>/dev/null', path], "", new Map(), false) == 0;
 
 	public function release():Void
