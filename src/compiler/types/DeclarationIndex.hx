@@ -43,6 +43,18 @@ typedef TypeParameterSymbol = {
 	final span:SourceSpan;
 }
 
+/**
+ * A typedef of an anonymous structure whose fields are still being resolved. A reference to the typedef from inside
+ * its own fields closes the loop on `fields` itself, which is filled in when resolution finishes.
+ */
+class OpenStructure {
+	public final fields:Array<AnonymousField> = [];
+	public final depth:Int;
+
+	public function new(depth:Int)
+		this.depth = depth;
+}
+
 /** Shared owner of source declarations and parsed-type resolution. */
 class DeclarationIndex {
 	public final aliases:Map<String, AstTypeAlias> = [];
@@ -56,6 +68,13 @@ class DeclarationIndex {
 	public final conversions:AbstractConversionGraph;
 
 	final aliasSpans:Map<String, SourceSpan> = [];
+
+	/**
+	 * Typedefs of an anonymous structure that lie on a cycle of typedef references, found from the declarations alone so
+	 * that a structure's name never depends on which typedef happened to be resolved first.
+	 */
+	final recursiveAliases:Map<String, Bool>;
+
 	final fallbackSpan:SourceSpan;
 
 	public static function validated(program:AstProgram):DeclarationIndex
@@ -108,6 +127,7 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			declare(DeclarationKind.Function, fn.name, fn.span);
+		recursiveAliases = findRecursiveAliases();
 		inheritance = new NominalInheritance(this);
 		conversions = new AbstractConversionGraph(this, false);
 		if (validate) {
@@ -265,22 +285,34 @@ class DeclarationIndex {
 						resolveInner(argument, span, resolving, substitutions)
 				], resolveInner(result, span, resolving, substitutions));
 			case AnonymousType(parsedFields):
-				var fields:Array<AnonymousField> = [
-					for (field in parsedFields)
-						{
-							name: field.name,
-							type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
-								substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
-							optional: field.optional,
-							isFinal: field.isFinal
-						}
-				];
-				fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
-				for (i in 1...fields.length)
-					if (fields[i - 1].name == fields[i].name)
-						fail('Duplicate anonymous field "${fields[i].name}"', span);
+				var fields:Array<AnonymousField> = [];
+				fillAnonymousFields(parsedFields, span, resolving, substitutions, fields);
 				TAnonymous(compiler.semantic.SemanticSignature.anonymousTypeName(fields), fields);
 		};
+
+	/**
+	 * Resolves declared fields into `target`, sorted by name. The fields are built aside and copied in at the end, so
+	 * a structure that refers to itself sees an empty `target` until it is complete, never a partial one.
+	 */
+	function fillAnonymousFields(parsedFields:Array<compiler.syntax.Ast.AstAnonymousField>, span:SourceSpan, resolving:Map<String, Bool>,
+			substitutions:Map<String, CompilerType>, target:Array<AnonymousField>):Void {
+		var fields:Array<AnonymousField> = [
+			for (field in parsedFields)
+				{
+					name: field.name,
+					type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
+						substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
+					optional: field.optional,
+					isFinal: field.isFinal
+				}
+		];
+		fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
+		for (i in 1...fields.length)
+			if (fields[i - 1].name == fields[i].name)
+				fail('Duplicate anonymous field "${fields[i].name}"', span);
+		for (field in fields)
+			target.push(field);
+	}
 
 	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
@@ -354,6 +386,30 @@ class DeclarationIndex {
 	 */
 	final resolvedAliases:Map<String, CompilerType> = [];
 
+	/** Typedefs of anonymous structures whose fields are being resolved, by alias name and type arguments. */
+	final openStructures:Map<String, OpenStructure> = [];
+
+	/** For each typedef instantiation being resolved, how many structures were open when it began. */
+	final entered:Map<String, Int> = [];
+
+	/** How many structures are open now; the next one opened gets this as its depth. */
+	var openDepth = 0;
+
+	static inline final NO_STRUCTURE:Int = 0x3fffffff;
+
+	/**
+	 * The shallowest open structure referred to since the current alias began, or NO_STRUCTURE. A result that refers to
+	 * a structure still being resolved is incomplete until that structure finishes, so it must not be cached; a result
+	 * that refers to none is complete however deeply it is nested.
+	 */
+	var shallowestReferenced:Int = NO_STRUCTURE;
+
+	/**
+	 * A typedef may refer to itself through the fields of the anonymous structure it declares, as Haxe allows:
+	 * `typedef Tree = {children:Array<Tree>}`. A cycle is expandable exactly when it passes through such a structure,
+	 * whichever typedef in it is resolved first: `A = Array<B>, B = {a:A}` is fine. A cycle that never enters a structure
+	 * (`A = B, B = A`, `A = Array<A>`) could never be expanded and is an error.
+	 */
 	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
 		var cacheable = alias.typeParameters.length == 0 && isEmpty(substitutions);
 		if (cacheable) {
@@ -361,14 +417,149 @@ class DeclarationIndex {
 			if (cached != null)
 				return cached;
 		}
-		if (resolving.exists(alias.name))
-			fail('Cyclic type alias involving "${alias.name}"', alias.span);
-		resolving.set(alias.name, true);
-		var resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
-		resolving.remove(alias.name);
-		if (cacheable)
+		var key = structureKey(alias, substitutions), reentering = false;
+		if (resolving.exists(alias.name)) {
+			var open = openStructures.get(key);
+			if (open != null) {
+				if (open.depth < shallowestReferenced)
+					shallowestReferenced = open.depth;
+				return TAnonymous(compiler.semantic.SemanticSignature.recursiveAnonymousName(key), open.fields);
+			}
+			// Another round of the same instantiation is only worth expanding if a structure was entered since the last one.
+			var entryDepth = entered.get(key);
+			if (entryDepth == null || openDepth <= entryDepth)
+				fail('Cyclic type alias involving "${alias.name}"', alias.span);
+			reentering = true;
+		}
+		if (!reentering)
+			resolving.set(alias.name, true);
+		var outerReferenced = shallowestReferenced,
+			outerEntry = entered.get(key),
+			opened = false,
+			enclosing:Null<OpenStructure> = null,
+			resolved:CompilerType;
+		shallowestReferenced = NO_STRUCTURE;
+		entered.set(key, openDepth);
+		try {
+			switch alias.type {
+				case AnonymousType(parsedFields):
+					var open = new OpenStructure(openDepth);
+					enclosing = openStructures.get(key);
+					openStructures.set(key, open);
+					openDepth++;
+					opened = true;
+					fillAnonymousFields(parsedFields, alias.span, resolving, substitutions, open.fields);
+					openDepth--;
+					restoreOpenStructure(key, enclosing);
+					opened = false;
+					resolved = TAnonymous(recursiveAliases.exists(alias.name) ? compiler.semantic.SemanticSignature.recursiveAnonymousName(key) : compiler.semantic.SemanticSignature.anonymousTypeName(open.fields),
+						open.fields);
+				default:
+					resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
+			}
+		} catch (error:Dynamic) {
+			// A failed resolution must leave the index as it found it: the next one starts from these counters.
+			if (opened) {
+				openDepth--;
+				restoreOpenStructure(key, enclosing);
+			}
+			restoreEntry(key, outerEntry);
+			shallowestReferenced = outerReferenced;
+			throw error;
+		}
+		restoreEntry(key, outerEntry);
+		if (!reentering)
+			resolving.remove(alias.name);
+		// Structures at depth < openDepth are the ones still open around this alias.
+		var dependsOnOpen = shallowestReferenced < openDepth;
+		if (outerReferenced < shallowestReferenced)
+			shallowestReferenced = outerReferenced;
+		if (cacheable && !dependsOnOpen)
 			resolvedAliases.set(alias.name, resolved);
 		return resolved;
+	}
+
+	function restoreEntry(key:String, outer:Null<Int>):Void {
+		if (outer == null)
+			entered.remove(key);
+		else
+			entered.set(key, outer);
+	}
+
+	/** The typedefs of anonymous structures that can reach themselves through typedef references. */
+	function findRecursiveAliases():Map<String, Bool> {
+		var edges:Map<String, Array<String>> = [],
+			result:Map<String, Bool> = [];
+		for (name => alias in aliases) {
+			var referenced:Array<String> = [];
+			collectAliasReferences(alias.type, alias.typeParameters, referenced);
+			edges.set(name, referenced);
+		}
+		for (name => alias in aliases) {
+			var anonymous = switch alias.type {
+				case AnonymousType(_): true;
+				default: false;
+			};
+			if (!anonymous)
+				continue;
+			var seen:Map<String, Bool> = [], pending = edges.get(name).copy();
+			while (pending.length > 0) {
+				var next = pending.pop();
+				if (next == name) {
+					result.set(name, true);
+					break;
+				}
+				if (seen.exists(next))
+					continue;
+				seen.set(next, true);
+				for (target in edges.get(next))
+					pending.push(target);
+			}
+		}
+		return result;
+	}
+
+	function collectAliasReferences(type:AstType, parameters:Array<String>, into:Array<String>):Void
+		switch type {
+			case NamedType(name):
+				if (aliases.exists(name) && parameters.indexOf(name) < 0)
+					into.push(name);
+			case AppliedType(name, arguments):
+				if (aliases.exists(name) && parameters.indexOf(name) < 0)
+					into.push(name);
+				for (argument in arguments)
+					collectAliasReferences(argument, parameters, into);
+			case ArrayType(element), NullableType(element):
+				collectAliasReferences(element, parameters, into);
+			case MapType(key, value):
+				collectAliasReferences(key, parameters, into);
+				collectAliasReferences(value, parameters, into);
+			case FunctionType(arguments, result):
+				for (argument in arguments)
+					collectAliasReferences(argument, parameters, into);
+				collectAliasReferences(result, parameters, into);
+			case AnonymousType(fields):
+				for (field in fields)
+					collectAliasReferences(field.type, parameters, into);
+			default:
+		}
+
+	/** Identifies one instantiation of a typedef, so a reference can only close the loop on the instantiation it sits in. */
+	static function structureKey(alias:AstTypeAlias, substitutions:Map<String, CompilerType>):String {
+		if (alias.typeParameters.length == 0)
+			return alias.name;
+		var arguments = [
+			for (parameter in alias.typeParameters)
+				substitutions.exists(parameter) ? compiler.semantic.SemanticSignature.type(substitutions.get(parameter)) : "?"
+		];
+		return alias.name + "<" + arguments.join(",") + ">";
+	}
+
+	function restoreOpenStructure(key:String, enclosing:Null<OpenStructure>):Void {
+		if (enclosing == null)
+			openStructures.remove(key);
+		else
+			openStructures.set(key, enclosing);
 	}
 
 	static function isEmpty(substitutions:Map<String, CompilerType>):Bool {

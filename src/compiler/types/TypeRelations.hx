@@ -18,6 +18,17 @@ enum ConversionPlan {
 	Incompatible;
 }
 
+/** Two anonymous structures whose comparison is in progress. */
+class FieldPair {
+	public final left:Array<compiler.types.Type.AnonymousField>;
+	public final right:Array<compiler.types.Type.AnonymousField>;
+
+	public function new(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>) {
+		this.left = left;
+		this.right = right;
+	}
+}
+
 /** All semantic equality, assignability, and implicit-conversion decisions. */
 class TypeRelations {
 	final declarations:DeclarationIndex;
@@ -148,10 +159,18 @@ class TypeRelations {
 	}
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
+		return equalsWithin(left, right, null);
+
+	/**
+	 * `visiting` lists the pairs of anonymous structures being compared. A structure can contain itself, so meeting
+	 * a pair again on the way down means the comparison has come full circle without finding a difference: it holds.
+	 * The list is allocated only when the first anonymous structure is reached.
+	 */
+	static function equalsWithin(left:CompilerType, right:CompilerType, visiting:Null<Array<FieldPair>>):Bool
 		return switch left {
 			case TAbstract(name, arguments, _):
 				switch right {
-					case TAbstract(other, otherArguments, _): Std.string(name) == Std.string(other) && sameTypes(arguments, otherArguments);
+					case TAbstract(other, otherArguments, _): Std.string(name) == Std.string(other) && sameTypes(arguments, otherArguments, visiting);
 					default: false;
 				}
 			case TTypeParameter(owner, name): switch right {
@@ -163,59 +182,79 @@ class TypeRelations {
 					case TNativeScalar(other): name == other;
 					default: false;
 				};
-			case TInstance(kind, name, arguments): sameNominal(right, kind, Std.string(name), arguments);
+			case TInstance(kind, name, arguments): sameNominal(right, kind, Std.string(name), arguments, visiting);
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
-			case TNullable(element): sameUnary(right, element, true);
-			case TArray(element): sameUnary(right, element, false);
+			case TNullable(element): sameUnary(right, element, true, visiting);
+			case TArray(element): sameUnary(right, element, false, visiting);
 			case TIterator(element): switch right {
-					case TIterator(other): equals(element, other);
+					case TIterator(other): equalsWithin(element, other, visiting);
 					default: false;
 				};
 			case TMap(key, value):
 				switch right {
-					case TMap(otherKey, otherValue): equals(key, otherKey) && equals(value, otherValue);
+					case TMap(otherKey, otherValue): equalsWithin(key, otherKey, visiting) && equalsWithin(value, otherValue, visiting);
 					default: false;
 				}
-			case TFunction(arguments, result): sameFunction(right, arguments, result);
+			case TFunction(arguments, result): sameFunction(right, arguments, result, visiting);
 			case TAnonymous(_, fields):
 				switch right {
-					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields);
+					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields, visiting);
 					default: false;
 				}
 			default: left == right;
 		};
 
-	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>):Bool
+	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>,
+			visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
 			case TInstance(otherKind, other, otherArguments): Std.string(kind) == Std.string(otherKind) && name == Std.string(other) && sameTypes(arguments,
-					otherArguments);
+					otherArguments, visiting);
 			default: false;
 		};
 
-	static function sameTypes(left:Array<CompilerType>, right:Array<CompilerType>):Bool {
+	static function sameTypes(left:Array<CompilerType>, right:Array<CompilerType>, visiting:Null<Array<FieldPair>>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length)
-			if (!equals(left[index], right[index]))
+			if (!equalsWithin(left[index], right[index], visiting))
 				return false;
 		return true;
 	}
 
-	static function sameAnonymousFields(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>):Bool {
+	static function sameAnonymousFields(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>,
+			visiting:Null<Array<FieldPair>>):Bool {
+		// Types resolved from one declaration share their field array, which settles most comparisons at once.
+		if (left == right)
+			return true;
 		if (left.length != right.length)
 			return false;
+		var inProgress = visiting == null ? [] : visiting;
+		for (pair in inProgress)
+			if (pair.left == left && pair.right == right)
+				return true;
+		inProgress.push(new FieldPair(left, right));
+		var same = true;
 		for (field in left) {
 			var found = false;
 			for (candidate in right)
 				if (candidate.name == field.name) {
-					if (candidate.optional != field.optional || candidate.isFinal != field.isFinal || !equals(field.type, candidate.type))
-						return false;
+					if (candidate.optional != field.optional
+						|| candidate.isFinal != field.isFinal
+						|| !equalsWithin(field.type, candidate.type, inProgress)) {
+						same = false;
+						break;
+					}
 					found = true;
 				}
-			if (!found)
-				return false;
+			if (!same)
+				break;
+			if (!found) {
+				same = false;
+				break;
+			}
 		}
-		return true;
+		inProgress.pop();
+		return same;
 	}
 
 	static function sameNativeAbstract(type:CompilerType, name:String):Bool
@@ -224,22 +263,22 @@ class TypeRelations {
 			default: false;
 		};
 
-	static function sameUnary(type:CompilerType, element:CompilerType, nullable:Bool):Bool
+	static function sameUnary(type:CompilerType, element:CompilerType, nullable:Bool, visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
-			case TNullable(other) if (nullable): equals(element, other);
-			case TArray(other) if (!nullable): equals(element, other);
+			case TNullable(other) if (nullable): equalsWithin(element, other, visiting);
+			case TArray(other) if (!nullable): equalsWithin(element, other, visiting);
 			default: false;
 		};
 
-	static function sameFunction(type:CompilerType, arguments:Array<CompilerType>, result:CompilerType):Bool
+	static function sameFunction(type:CompilerType, arguments:Array<CompilerType>, result:CompilerType, visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
 			case TFunction(otherArguments, otherResult):
 				if (arguments.length != otherArguments.length) false; else {
 					var same = true;
 					for (index in 0...arguments.length)
-						if (!equals(arguments[index], otherArguments[index]))
+						if (!equalsWithin(arguments[index], otherArguments[index], visiting))
 							same = false;
-					same && equals(result, otherResult)
+					same && equalsWithin(result, otherResult, visiting)
 					;
 				}
 			default: false;

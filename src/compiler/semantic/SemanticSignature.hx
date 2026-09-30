@@ -12,6 +12,16 @@ class SemanticSignature {
 		return '$' + 'anon:' + anonymousFields(fields);
 
 	/**
+	 * A structure that contains itself cannot be spelled out from its fields, since the spelling would never end.
+	 * It is named after the typedef that declares it instead.
+	 */
+	public static function recursiveAnonymousName(declaration:String):String
+		return '$' + 'anon:rec:' + declaration;
+
+	public static function isRecursiveAnonymousName(name:String):Bool
+		return StringTools.startsWith(name, '$' + 'anon:rec:');
+
+	/**
 	 * How many anonymous shapes have been spelled out. Spelling costs time proportional to the shape's size,
 	 * so tests use this to check that a shape is spelled once per declaration, not once per mention.
 	 */

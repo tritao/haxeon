@@ -44,6 +44,7 @@ class TestCatalog {
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",
 		"DeclarationAliasCacheMain",
+		"RecursiveTypedefMain",
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
 		"TyperBoundaryMain",

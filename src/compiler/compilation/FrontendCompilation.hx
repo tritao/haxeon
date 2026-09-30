@@ -701,28 +701,36 @@ class FrontendCompilation {
 
 	static function addResolvedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
 			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext):Void
+		addResolvedTypeDependencyWithin(result, owner, kind, type, context, []);
+
+	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
+	static function addResolvedTypeDependencyWithin(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext, explored:Array<Array<compiler.types.Type.AnonymousField>>):Void
 		switch type {
 			case TAbstract(name, arguments, representation):
 				addResolvedNamedTypeDependency(result, owner, kind, name, context);
 				for (argument in arguments)
-					addResolvedTypeDependency(result, owner, kind, argument, context);
-				addResolvedTypeDependency(result, owner, kind, representation, context);
+					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
+				addResolvedTypeDependencyWithin(result, owner, kind, representation, context, explored);
 			case TInstance(_, name, arguments):
 				addResolvedNamedTypeDependency(result, owner, kind, name, context);
 				for (argument in arguments)
-					addResolvedTypeDependency(result, owner, kind, argument, context);
+					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
 			case TNullable(element), TArray(element), TIterator(element):
-				addResolvedTypeDependency(result, owner, kind, element, context);
+				addResolvedTypeDependencyWithin(result, owner, kind, element, context, explored);
 			case TMap(key, value):
-				addResolvedTypeDependency(result, owner, kind, key, context);
-				addResolvedTypeDependency(result, owner, kind, value, context);
+				addResolvedTypeDependencyWithin(result, owner, kind, key, context, explored);
+				addResolvedTypeDependencyWithin(result, owner, kind, value, context, explored);
 			case TFunction(arguments, resultType):
 				for (argument in arguments)
-					addResolvedTypeDependency(result, owner, kind, argument, context);
-				addResolvedTypeDependency(result, owner, kind, resultType, context);
+					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
+				addResolvedTypeDependencyWithin(result, owner, kind, resultType, context, explored);
 			case TAnonymous(_, fields):
-				for (field in fields)
-					addResolvedTypeDependency(result, owner, kind, field.type, context);
+				if (explored.indexOf(fields) < 0) {
+					explored.push(fields);
+					for (field in fields)
+						addResolvedTypeDependencyWithin(result, owner, kind, field.type, context, explored);
+				}
 			default:
 		}
 
