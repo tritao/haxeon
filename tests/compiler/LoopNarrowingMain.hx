@@ -37,6 +37,17 @@ class LoopNarrowingMain {
 			+ "function main():Int { "
 			+ chain
 			+ "while (sum < 1) { sum += n.value; } return sum; }");
+		// The loop ends when the condition is false, so what a false condition proves holds after it.
+		var wait = "var x:Null<Int> = null; var i = 0; ";
+		expectValue("a loop that waits for a value leaves it non-null",
+			"function main():Int { " + wait + "while (x == null) { i++; if (i > 2) x = 42; } var z:Int = x; return z; }");
+		expectValue("a do-while does too", "function main():Int { " + wait + "do { i++; if (i > 2) x = 42; } while (x == null); var z:Int = x; return z; }");
+		expectValue("a break in a nested loop is that loop's",
+			"function main():Int { " + wait + "while (x == null) { for (j in 0...2) { if (j == 1) break; } x = 42; } var z:Int = x; return z; }");
+		expectCompileError("a break can leave with the condition still true",
+			"function main():Int { " + wait + "while (x == null) { i++; if (i > 2) break; } var z:Int = x; return z; }");
+		expectCompileError("a compound condition proves nothing when false",
+			"function main():Int { " + wait + "while (x == null && i < 5) { i++; } var z:Int = x; return z; }");
 		Sys.println("PASS: loop conditions narrow the loop body");
 	}
 

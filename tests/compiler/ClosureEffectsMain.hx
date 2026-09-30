@@ -16,6 +16,10 @@ class ClosureEffectsMain {
 		expectCompiles("a local function that only reads keeps the fact",
 			"var h = new Holder(); var peek = function():Int return h.value == null ? 0 : 1; if (h.value != null) { var y = peek(); var z:Int = h.value; return z + y; } return 0;");
 
+		expectCompiles("a local function that only counts in a captured local keeps a field fact",
+			"var h = new Holder(); var calls = 0; var tick = function():Void { calls++; }; if (h.value != null) { tick(); var z:Int = h.value; return z + calls; } return 0;");
+		expectError("but it clears what is known about the local it writes",
+			"var x:Null<Int> = 1; var clear = function():Void { x = null; }; if (x != null) { clear(); var z:Int = x; return z; } return 0;");
 		expectError("a local function that writes the field clears the fact",
 			"var h = new Holder(); var poke = function():Void { h.value = null; }; if (h.value != null) { poke(); var z:Int = h.value; return z; } return 0;");
 		expectError("a local function that removes a map entry clears the fact",

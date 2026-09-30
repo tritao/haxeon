@@ -1197,6 +1197,15 @@ class BodyTyper {
 		return if (type != null) {
 			if (!scope.isAssigned(name))
 				fail("E1023", 'Local "$name" may be used before assignment', span);
+			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.
+			if (type == TNull) {
+				var declared = scope.resolveDeclared(name);
+				if (declared != null)
+					switch declared {
+						case TNullable(_): return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), declared, span);
+						default:
+					}
+			}
 			new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
 				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
 					scope) != null ? TCellLocal(scope.requireId(name),

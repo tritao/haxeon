@@ -14,6 +14,9 @@ import compiler.syntax.Ast.AstStatement;
 typedef LocalFunction = {
 	final arguments:Array<AstArgument>;
 	final body:Array<AstStatement>;
+
+	/** Locals visible where it was declared: assigning one of them changes no object, so it is no effect on flow facts. */
+	final outerLocals:Array<String>;
 }
 
 private typedef ScopeValue = {

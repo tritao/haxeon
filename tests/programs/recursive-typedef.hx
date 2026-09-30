@@ -28,7 +28,8 @@ function walkLinks(first:Null<Link>):Int {
 		total += current.value;
 		current = current.next;
 	}
-	return total;
+	// The loop only ends once the condition is false, so the walker is known to be null here.
+	return current == null ? total : -1;
 }
 
 function payloads(envelope:Envelope<Int>):Int {

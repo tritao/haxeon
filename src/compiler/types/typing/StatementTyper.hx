@@ -141,7 +141,7 @@ class StatementTyper {
 						var assignments:Map<String, Bool> = [];
 						CaptureAnalysis.collectAssignedLocals(statements.slice(statementIndex + 1), assignments);
 						CaptureAnalysis.collectAssignedLocals(body, assignments);
-						if (!assignments.exists(name)) localFunction = {arguments: arguments, body: body};
+						if (!assignments.exists(name)) localFunction = {arguments: arguments, body: body, outerLocals: scope.visibleLocalNames()};
 					default:
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
@@ -501,6 +501,9 @@ class StatementTyper {
 		// The condition is evaluated right before every iteration, so what it proves holds where the body starts.
 		var typedBody = typeStatements(body, FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall), result);
 		context.loopDepth--;
+		// The loop ends when the condition is false, unless a break leaves it first.
+		if (!AstScan.breaksOut(body))
+			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TWhile(typedCondition, typedBody, span);
 	}
 
@@ -515,6 +518,8 @@ class StatementTyper {
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "Do-while condition must be Bool", span);
 		scope.mergeAssignmentsFrom([bodyScope]);
+		if (!AstScan.breaksOut(body))
+			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TDoWhile(typedBody, typedCondition, span);
 	}
 

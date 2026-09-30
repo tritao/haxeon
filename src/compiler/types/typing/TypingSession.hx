@@ -114,7 +114,7 @@ class TypingSession {
 	 * function's: no direct effects and only pure callees, judged against the answers this session already gives.
 	 */
 	public function localFunctionIsPure(local:compiler.types.analysis.Scope.LocalFunction, owner:Null<String>):Bool
-		return bodyIsPure(local.arguments, local.body, [], owner);
+		return bodyIsPure(local.arguments, local.body, local.outerLocals, owner);
 
 	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
 	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,

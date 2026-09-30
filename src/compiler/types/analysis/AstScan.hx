@@ -51,6 +51,36 @@ class AstScan {
 		return false;
 	}
 
+	/** Whether a `break` in these statements leaves the loop they are the body of; breaks of nested loops are theirs. */
+	public static function breaksOut(statements:Array<AstStatement>):Bool {
+		for (statement in statements)
+			switch statement {
+				case Break(_):
+					return true;
+				case If(_, yes, no, _):
+					if (breaksOut(yes) || breaksOut(no))
+						return true;
+				case Try(tryBranch, catches, _):
+					if (breaksOut(tryBranch))
+						return true;
+					for (caught in catches)
+						if (breaksOut(caught.statements))
+							return true;
+				case Switch(_, cases, defaultBranch, _, _):
+					for (entry in cases)
+						if (breaksOut(entry.statements))
+							return true;
+					if (breaksOut(defaultBranch))
+						return true;
+				default:
+			}
+		// A block expression is a statement list too; look for a break anywhere inside one to stay on the safe side.
+		return anyExpression(statements, expression -> switch expression {
+			case BlockExpression(inner, _, _): breaksOut(inner);
+			default: false;
+		});
+	}
+
 	/**
 	 * Whether the statements call something named `remove` or `clear`, which may take entries out of a map. A removal of
 	 * `visitedKey` itself is not counted when given: it only takes out the entry the loop is already past.
