@@ -1799,7 +1799,8 @@ class BodyTyper {
 	function findBareEnumAbstract(name:String, underlying:Null<CompilerType>, span:SourceSpan, lenient:Bool):Null<compiler.syntax.Ast.AstEnumAbstract> {
 		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
 			ambiguous = false,
-			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
+			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
 		for (candidateName => candidate in session.enumAbstractDecls) {
 			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
@@ -1809,6 +1810,7 @@ class BodyTyper {
 					if (found != null)
 						ambiguous = true;
 					found = candidate;
+					declaredBy.push(candidateName);
 					if (pathBeforeLast(candidateName) == ownerPackage)
 						samePackage.push(candidate);
 				}
@@ -1817,7 +1819,12 @@ class BodyTyper {
 			if (samePackage.length != 1) {
 				if (lenient)
 					return null;
-				fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+				declaredBy.sort(Reflect.compare);
+				fail("E1005",
+					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}' +
+					(samePackage.length > 1 ? ", and more than one of them is in the current package" : ", and none of them is in the current package") +
+					'. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
+					span);
 			}
 			found = samePackage[0];
 		}
