@@ -174,6 +174,16 @@ class SemanticIndex {
 			if (symbol.name == symbolName)
 				signatures.set(symbol.id, {label: label, parameters: parameters, result: result});
 
+	function indexInheritedConstructor(fn:TypedFunction, classId:Null<SemanticSymbolId>):Void {
+		if (classId == null || signatures.exists(classId))
+			return;
+		var owner = fn.owner == null ? "" : fn.owner, parameters = [
+			for (argument in fn.arguments)
+				sourceLocalName(argument.name) + ":" + displayType(argument.type)
+		];
+		signatures.set(classId, {label: sourceName(owner) + "(" + parameters.join(", ") + ")", parameters: parameters, result: sourceName(owner)});
+	}
+
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
 			?token:CancellationToken):Void {
 		var started = Sys.time();
@@ -188,6 +198,9 @@ class SemanticIndex {
 		if (fn.owner != null)
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
+		if (functionId == null && fn.isConstructor && fn.owner != null)
+			// A constructor the class inherits is not written anywhere in the module, so the class stands for it.
+			indexInheritedConstructor(fn, resolve(fn.owner));
 		if (functionId != null) {
 			declarationTypes.set(functionId, fn.result);
 			var parameters = [

@@ -58,7 +58,48 @@ class ImplicitConstructorMain {
 		}
 		expect(incompatible, "a caller of the inherited constructor sees the new signature");
 
+		// The same holds across edits: gaining, losing or changing the base constructor, and explicit constructors in between.
+		var edits = new Compiler();
+		edits.update("Base.hx", "class Base { public var n:Int; }");
+		edits.update("Derived.hx", "class Derived extends Base {}");
+		edits.update("Main.hx", "function main():Int { var d = new Derived(); return 42; }");
+		expectValue(edits, "a base without a constructor");
+		edits.update("Base.hx", "class Base { public var n:Int = 0; public function new(n:Int) { this.n = n; } }");
+		edits.update("Main.hx", "function main():Int { var d = new Derived(40); return d.n + 2; }");
+		expectValue(edits, "a base that gains one");
+		edits.update("Base.hx", "class Base { public var n:Int = 40; }");
+		edits.update("Main.hx", "function main():Int { var d = new Derived(); return d.n + 2; }");
+		expectValue(edits, "a base that loses it again, keeping an initializer");
+		var chain = new Compiler();
+		chain.update("Base.hx", "class Base { public var n:Int; public function new(n:Int) { this.n = n; } }");
+		chain.update("Middle.hx", "class Middle extends Base {}");
+		chain.update("Leaf.hx", "class Leaf extends Middle {}");
+		chain.update("Main.hx", "function main():Int { var d = new Leaf(40); return d.n + 2; }");
+		expectValue(chain, "a chain of implicit constructors");
+		chain.update("Base.hx", "class Base { public var n:Int; public function new(n:Int, k:Int = 2) { this.n = n + k - 2; } }");
+		expectValue(chain, "a base constructor that gains an optional argument");
+		chain.update("Middle.hx", "class Middle extends Base { public function new(n:Int) { super(n, 2); } }");
+		expectValue(chain, "a middle class that then writes its own constructor");
+		var explicit = new Compiler();
+		explicit.update("Base.hx", "class Base { public var n:Int; public function new(n:Int) { this.n = n; } }");
+		explicit.update("Derived.hx", "class Derived extends Base { public function new(n:Int) { super(n); } }");
+		explicit.update("Main.hx", "function main():Int { var d = new Derived(40); return d.n + 2; }");
+		expectValue(explicit, "an explicit derived constructor");
+		explicit.update("Base.hx", "class Base { public var n:Int; public function new() { this.n = 40; } }");
+		var stale = false;
+		try {
+			explicit.compile("Main");
+		} catch (_:CompileError) {
+			stale = true;
+		}
+		expect(stale, "an explicit constructor whose super call no longer matches is reported");
+
 		Sys.println("PASS: implicit constructors");
+	}
+
+	static function expectValue(compiler:Compiler, label:String):Void {
+		var value = new IrInterpreter(compiler.compile("Main").ir).run("main");
+		expect(value == 42, label + " returned " + value + " instead of 42");
 	}
 
 	static function declared(name:String, base:Null<String>, arguments:Array<String>, typeParameters:Array<String>, initializer:Bool = false):AstClass {

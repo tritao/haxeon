@@ -85,6 +85,7 @@ class TestCatalog {
 		"FormatterMain",
 		"FormatterGoldenMain",
 		"LanguageServiceMain",
+		"ImplicitConstructorServiceMain",
 		"ProtocolMain",
 		"LspProtocolMain",
 		"UtestDiscoveryMain",
