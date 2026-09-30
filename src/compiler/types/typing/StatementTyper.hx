@@ -13,7 +13,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.analysis.AstScan;
 import compiler.types.analysis.ControlFlow;
-import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
@@ -138,10 +138,9 @@ class StatementTyper {
 				}
 				switch lambda {
 					case Lambda(arguments, body, _):
-						var assignments:Map<String, Bool> = [];
-						CaptureAnalysis.collectAssignedLocals(statements.slice(statementIndex + 1), assignments);
-						CaptureAnalysis.collectAssignedLocals(body, assignments);
-						if (!assignments.exists(name)) localFunction = {arguments: arguments, body: body, outerLocals: scope.visibleLocalNames()};
+						var self = LexicalStorageAnalysis.key(name, span),
+							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
+						if (!assignments.exists(self)) localFunction = {arguments: arguments, body: body, outerLocals: scope.visibleLocalNames()};
 					default:
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,

@@ -4,7 +4,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.Source.SourceSpan;
 import compiler.types.analysis.AstScan;
-import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.Scope;
 
 /**
@@ -22,12 +22,13 @@ class LoopFlow {
 	 * loop itself binds (a for-in's element), which are locals of the body even though the loop scope is not open yet.
 	 */
 	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>, ?loopVariables:Array<String>):Void {
-		var assigned:Map<String, Bool> = [];
-		CaptureAnalysis.collectAssignedLocals(statements, assigned);
-		for (name in assigned.keys()) {
-			scope.invalidate(name);
-			scope.invalidateExpressionsForLocal(name);
-		}
+		var visible = scope.visibleDeclarations(),
+			assigned = AssignedDeclarations.within(statements, visible).declarations;
+		for (name => declaration in visible)
+			if (assigned.exists(declaration)) {
+				scope.invalidate(name);
+				scope.invalidateExpressionsForLocal(name);
+			}
 		var locals = scope.visibleLocalNames();
 		if (loopVariables != null)
 			for (name in loopVariables)

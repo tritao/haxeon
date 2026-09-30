@@ -14,7 +14,7 @@ import compiler.types.Type.AnonymousField;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
-import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
@@ -248,7 +248,8 @@ class BodyTyper {
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
-		CaptureAnalysis.collectAssignedLocals(fn.statements, context.assigned);
+		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
+			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, MutableCapture);
 		}

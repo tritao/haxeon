@@ -53,12 +53,12 @@ class Scope {
 	}
 
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false,
-			?localFunction:LocalFunction):Void {
+			?localFunction:LocalFunction, ?declaration:String):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
-			declaration: BindingWalker.key(name, span),
+			declaration: declaration == null ? BindingWalker.key(name, span) : declaration,
 			declared: type,
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
 			receiver: receiver,
@@ -153,8 +153,9 @@ class Scope {
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String,
-			?storageType:CompilerType, ?localFunction:LocalFunction):Void {
-		define(name, type, span, true, bindingId, false, localFunction);
+			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):Void {
+		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
+		define(name, type, span, true, bindingId, false, localFunction, declaration);
 		captures.set(name, true);
 		if (storageType != null)
 			captureStorageTypes.set(requireId(name), storageType);
@@ -341,6 +342,20 @@ class Scope {
 			throw 'Missing binding "$id" while merging flow facts';
 		var refined = facts.resolve(id);
 		return refined == null ? value.declared : refined;
+	}
+
+	/** The declaration the local `name` refers to here, in `BindingWalker.key` form. */
+	public function declarationOf(name:String):Null<String> {
+		var value = resolveLocal(name);
+		return value == null ? null : value.declaration;
+	}
+
+	/** Every visible local's name with its declaration; where a name is declared more than once, the innermost wins. */
+	public function visibleDeclarations():Map<String, String> {
+		var result:Map<String, String> = [];
+		for (value in visibleValues())
+			result.set(value.source, value.declaration);
+		return result;
 	}
 
 	/** Source names of every local visible here, including `this`. */

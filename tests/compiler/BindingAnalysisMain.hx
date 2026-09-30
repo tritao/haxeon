@@ -4,6 +4,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.MapEscapeAnalysis;
@@ -93,6 +94,20 @@ class BindingAnalysisMain {
 		expect(!privacy.isPrivate(declaration(fn, "m", 0)), "a lambda that removes entries makes the map reachable");
 		expect(privacy.isPrivate(declaration(fn, "g", 0)), "a lambda that only reads does not");
 		expect(privacy.isPrivate(declaration(fn, "e", 0)), "an empty literal typed as a map is a map");
+
+		// Assigned declarations: a write counts for the variable it resolves to, whichever name it shares.
+		fn = parse("function main():Void {
+			var x = 1;
+			var y = 1;
+			var box = {n: 0};
+			if (true) { var x = 2; x = 3; }
+			var f = function():Void { y++; box.n = 4; };
+		}");
+		var assigned = AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
+		expect(!assigned.exists(declaration(fn, "x", 0)), "writing an inner x does not write the outer one");
+		expect(assigned.exists(declaration(fn, "x", 1)), "but it writes the inner one");
+		expect(assigned.exists(declaration(fn, "y", 0)), "an increment inside a lambda writes the captured local");
+		expect(!assigned.exists(declaration(fn, "box", 0)), "assigning a field of a local does not write the local");
 
 		Sys.println("PASS: binding-aware analyses");
 	}

@@ -37,6 +37,8 @@ class LoopFlowMain {
 			"var h = new Holder(); var m:Map<String, Int> = new Map(); if (h.value != null) { for (k in [\"a\"]) { m.set(k, 1); reset(h); } var z:Int = h.value; } return 0;");
 		expectError("a map a callee could reach is not private, so filling it counts",
 			"var h = new Holder(); var m:Map<String, Int> = new Map(); keep(m); if (h.value != null) { for (k in [\"a\"]) { m.set(k, 1); } var z:Int = h.value; } return 0;");
+		expectCompiles("a same-named variable declared inside the loop does not disturb the narrowed one",
+			"var x:Null<Int> = 1; if (x != null) { for (i in 0...2) { var x = 5; x = 6; } var z:Int = x; } return 0;");
 		expectCompiles("keys of a private map keep their entries across calls",
 			"var m:Map<String, Int> = new Map(); m.set(\"a\", 1); var h = new Holder(); for (k in m.keys()) { reset(h); var v:Int = m.get(k); } return 0;");
 		expectCompiles("removing only the visited key leaves the rest",

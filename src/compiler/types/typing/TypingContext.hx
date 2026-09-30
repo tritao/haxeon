@@ -11,7 +11,9 @@ class TypingContext {
 	public var name(get, never):String;
 	public var lexicalOwner(get, never):Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
-	public final assigned:Map<String, Bool> = [];
+
+	/** Declarations (see `BindingWalker.key`) the body assigns, including from lambdas: they may need a cell to be captured. */
+	public final assignedDeclarations:Map<String, Bool> = [];
 
 	/** The function's root lexical scope and resolved receiver, when it has one. */
 	public var scope:Null<Scope>;

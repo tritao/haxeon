@@ -17,7 +17,7 @@ import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.LexicalStorageAnalysis;
@@ -97,7 +97,12 @@ class ClosureTyper {
 		}
 		var free = FreeVariables.of(arguments, body),
 			freeVariables = free.names,
-			lambdaAssignments = free.assigned;
+			lambdaAssignments:Map<String, Bool> = [];
+		for (name in free.assigned.keys()) {
+			var written = scope.declarationOf(name);
+			if (written != null)
+				lambdaAssignments.set(written, true);
+		}
 		// An unqualified instance method in a lambda is resolved through the lexical receiver even without a `this` reference in the syntax.
 		if (scope.resolve("this") != null)
 			for (name in freeVariables.keys())
@@ -123,7 +128,10 @@ class ClosureTyper {
 					cellClass = boundCell(name, scope);
 				if (cellClass == null && scope.isCellCapture(name))
 					cellClass = scope.requireCellClass(name);
-				if (cellClass == null && (outerContext.assigned.exists(name) || lambdaAssignments.exists(name))) {
+				var captured = scope.declarationOf(name);
+				if (cellClass == null
+					&& captured != null
+					&& (outerContext.assignedDeclarations.exists(captured) || lambdaAssignments.exists(captured))) {
 					var newCellClass = '$' + 'cell:' + outerContext.name + ':' + name;
 					var bindingId = scope.requireId(name);
 					cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture,
@@ -134,7 +142,7 @@ class ClosureTyper {
 						scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
 						CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 				lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name));
+					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name), scope.declarationOf(name));
 				if (cellClass != null)
 					captureCells.set(name, cellClass);
 				captureTypes.set(name, captureType);
@@ -155,7 +163,7 @@ class ClosureTyper {
 		}
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
-				capture.bindingId, capture.storageType, scope.localFunction(capture.field));
+				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
 		var lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
@@ -163,7 +171,10 @@ class ClosureTyper {
 		context.receiver = typedBodyScope.resolve("this");
 		context.expectedReturnType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
 		context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
-		CaptureAnalysis.collectAssignedLocals(body, context.assigned);
+		for (declaration in AssignedDeclarations.ofFunction(arguments, body).declarations.keys())
+			context.assignedDeclarations.set(declaration, true);
+		for (declaration in lambdaAssignments.keys())
+			context.assignedDeclarations.set(declaration, true);
 		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
 		for (binding in lambdaStorage.mutableCaptures.keys())
 			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + binding, MutableCapture);

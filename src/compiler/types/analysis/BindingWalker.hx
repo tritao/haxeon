@@ -67,6 +67,10 @@ class BindingWalker {
 		return declaration;
 	}
 
+	/** Makes a name visible as the given declaration without reporting a declaration, for a scope entered from outside. */
+	function bind(name:String, declaration:String):Void
+		environments[environments.length - 1].set(name, declaration);
+
 	function scoped(action:() -> Void):Void {
 		environments.push([]);
 		action();
