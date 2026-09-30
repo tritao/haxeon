@@ -69,6 +69,7 @@ class TestCatalog {
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
+		"EnumAbstractValueShadowedByClassMain",
 		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
