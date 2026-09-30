@@ -37,18 +37,19 @@ class NativeLayoutMain {
 			pair64 = requireLayout(pair.nativeLayouts, "portable-abi64"),
 			outer32 = requireLayout(outer.nativeLayouts, "portable-abi32"),
 			outer64 = requireLayout(outer.nativeLayouts, "portable-abi64");
-		expect(pair32.size == 16
-			&& pair32.alignment == 4
-			&& field(pair32.fields, "value").offset == 4
-			&& field(pair32.fields, "ratio").offset == 12,
-			"32-bit C record layout must align 64-bit integers to four bytes");
+		// portable-abi32 is the Wasm32 C ABI, which aligns 64-bit integers to eight bytes.
+		expect(pair32.size == 24
+			&& pair32.alignment == 8
+			&& field(pair32.fields, "value").offset == 8
+			&& field(pair32.fields, "ratio").offset == 16,
+			"32-bit portable C record layout must align 64-bit integers to eight bytes, as Wasm32 does");
 		expect(pair64.size == 24
 			&& pair64.alignment == 8
 			&& field(pair64.fields, "value").offset == 8
 			&& field(pair64.fields, "ratio").offset == 16,
 			"64-bit C record layout must preserve padding and field offsets");
-		expect(outer32.size == 32
-			&& field(outer32.fields, "second").offset == 16
+		expect(outer32.size == 48
+			&& field(outer32.fields, "second").offset == 24
 			&& outer64.size == 48
 			&& field(outer64.fields, "second").offset == 24,
 			"nested native records must contribute their target-specific layout");
@@ -56,13 +57,18 @@ class NativeLayoutMain {
 			&& requireLayout(longValue.nativeLayouts, "portable-abi64").size == 8,
 			"C long fields must follow the target ABI integer width");
 		var typed32 = Typer.typeLibrary(program, "portable-abi32"),
+			typedI386 = Typer.typeLibrary(program, "i686-linux-gnu"),
 			typed64 = Typer.typeLibrary(program, "portable-abi64"),
 			windows64 = Typer.typeLibrary(program, "x86_64-pc-windows-msvc");
-		expect(constantReturn(typed32.functions, "pairSize") == 16
-			&& constantReturn(typed32.functions, "pairAlignment") == 4
-			&& constantReturn(typed32.functions, "valueOffset") == 4
+		expect(constantReturn(typed32.functions, "pairSize") == 24
+			&& constantReturn(typed32.functions, "pairAlignment") == 8
+			&& constantReturn(typed32.functions, "valueOffset") == 8
 			&& constantReturn(typed32.functions, "longSize") == 4,
 			"native layout intrinsics must fold to the selected 32-bit ABI facts");
+		expect(constantReturn(typedI386.functions, "pairSize") == 16
+			&& constantReturn(typedI386.functions, "pairAlignment") == 4
+			&& constantReturn(typedI386.functions, "valueOffset") == 4,
+			"System V i386 C records must align 64-bit integers to four bytes");
 		expect(constantReturn(typed64.functions, "pairSize") == 24
 			&& constantReturn(typed64.functions, "pairAlignment") == 8
 			&& constantReturn(typed64.functions, "valueOffset") == 8
@@ -79,7 +85,7 @@ class NativeLayoutMain {
 			'function main():Int return sizeof<Pair>();');
 		var compiled = targetCompiler.compile("NativeLayoutMain"),
 			compiledPair = requireClass(targetCompiler.lastTypedProgram.classes, "Pair");
-		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 16 && compiled.module.ints.indexOf(16) >= 0,
+		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 24 && compiled.module.ints.indexOf(24) >= 0,
 			"CLI target selection must reach typing and lower layout intrinsics as constants");
 		var hxiTargetCompiler = new Compiler();
 		hxiTargetCompiler.addFfiInterface("native-layout-target.hxi", 'interface target @target("x86_64-pc-windows-msvc") { }');
@@ -98,7 +104,7 @@ class NativeLayoutMain {
 
 		for (target in ["portable-abi32", "portable-abi64"]) {
 			var imported = HxiParser.parse("native-layout.hxi",
-				'interface native @target("$target") { struct Pair @layout(${target == "portable-abi32" ? "16, 4" : "24, 8"}) { tag: u8 @offset(0); value: i64 @offset(${target == "portable-abi32" ? "4" : "8"}); ratio: f32 @offset(${target == "portable-abi32" ? "12" : "16"}); } }');
+				'interface native @target("$target") { struct Pair @layout(24, 8) { tag: u8 @offset(0); value: i64 @offset(8); ratio: f32 @offset(16); } }');
 			HxiValidator.validate(imported, []);
 			var importedLayout = HxiAbi.forInterface(imported).layout(HxiType.Named("Pair")),
 				declaredLayout = requireLayout(pair.nativeLayouts, target);
