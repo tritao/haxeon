@@ -88,6 +88,14 @@ HL_PRIM double HL_NAME(__math_atan2)(double y, double x) {
 	return atan2(y, x);
 }
 
+HL_PRIM double HL_NAME(__math_exp)(double value) {
+	return exp(value);
+}
+
+HL_PRIM double HL_NAME(__math_log)(double value) {
+	return log(value);
+}
+
 HL_PRIM double HL_NAME(__math_fmod)(double value, double modulus) {
 	return fmod(value, modulus);
 }

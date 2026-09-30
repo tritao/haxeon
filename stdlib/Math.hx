@@ -43,6 +43,12 @@ extern function mathSqrt(value:Float):Float;
 @:pure @:hlNative("haxeon_runtime", "__math_atan2")
 extern function mathAtan2(y:Float, x:Float):Float;
 
+@:pure @:hlNative("haxeon_runtime", "__math_exp")
+extern function mathExp(value:Float):Float;
+
+@:pure @:hlNative("haxeon_runtime", "__math_log")
+extern function mathLog(value:Float):Float;
+
 @:pure @:hlNative("haxeon_runtime", "__math_round")
 extern function mathRound(value:Float):Int;
 
@@ -107,6 +113,14 @@ class Math {
 
 	public static inline function atan(value:Float):Float
 		return mathAtan2(value, 1.0);
+
+	/** e raised to `value`. */
+	public static inline function exp(value:Float):Float
+		return mathExp(value);
+
+	/** Natural logarithm: NaN below zero, negative infinity at zero. */
+	public static inline function log(value:Float):Float
+		return mathLog(value);
 
 	public static inline function round(value:Float):Int
 		return mathRound(value);

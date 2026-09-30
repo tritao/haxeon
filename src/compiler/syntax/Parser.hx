@@ -968,6 +968,26 @@ class Parser {
 			}
 			position = saved;
 		}
+		// A bare block is a nested scope, not an expression: it need not end in a
+		// value (`{ var x = f(); for (...) g(x); }`). Blocks whose last statement
+		// is an expression keep parsing as block expressions, so their value is
+		// unchanged. The scope lowers to `if (true) { ... }`, which already opens one.
+		if (check(TokenKind.LeftBrace)
+			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon)
+			&& peekKind(1) != TokenKind.RightBrace) {
+			var saved = position;
+			var start = current().span, block = tryParseExpression();
+			var isValue = block != null && switch block {
+				case BlockExpression(_, _, _): true;
+				default: false;
+			};
+			position = saved;
+			if (!isValue) {
+				var statements = parseStatementOrBlock(),
+					span = start.merge(previous().span);
+				return If(BoolLiteral(true, start), statements, [], span);
+			}
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1019,6 +1039,23 @@ class Parser {
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
+		// `try return value catch ...` and `try throw error catch ...`: the
+		// semicolon before `catch` is optional, as for an expression body.
+		if (match(TokenKind.Return)) {
+			var start = previous().span;
+			if (check(TokenKind.Semicolon) || check(TokenKind.Catch)) {
+				match(TokenKind.Semicolon);
+				return [ReturnVoid(start)];
+			}
+			var value = parseExpression();
+			match(TokenKind.Semicolon);
+			return [Return(value, start.merge(expressionSpan(value)))];
+		}
+		if (match(TokenKind.Throw)) {
+			var start = previous().span, value = parseExpression();
+			match(TokenKind.Semicolon);
+			return [Throw(value, start.merge(expressionSpan(value)))];
+		}
 		var expression = parseExpression();
 		match(TokenKind.Semicolon);
 		return [Expression(expression, expressionSpan(expression))];
