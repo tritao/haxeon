@@ -1229,6 +1229,11 @@ class BodyTyper {
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
 			if (enumLiteral != null)
 				return enumLiteral;
+			// A value of the enum abstract that is expected here outranks a class of the same name, as a
+			// value of an expected enum does above; the class stays reachable wherever no value is expected.
+			var abstractValue = sourceIsBareReference(span) ? expectedEnumAbstractValue(name, expectedType, span) : null;
+			if (abstractValue != null)
+				return abstractValue;
 			var inferredEnumLiteral = uniqueEnumLiteral(name, span);
 			if (inferredEnumLiteral != null)
 				return inferredEnumLiteral;
@@ -1302,27 +1307,8 @@ class BodyTyper {
 								return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 					}
 					// Enum abstracts lower to their underlying type, so a switch over
-					// one cannot name it here. Among several abstracts declaring the
-					// value, the one in the current type's own package wins: its
-					// types are visible without an import, as in Haxe.
-					var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
-						ambiguous = false,
-						samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
-					var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-					for (candidateName => candidate in session.enumAbstractDecls)
-						for (value in candidate.values)
-							if (value.name == name) {
-								if (unqualifiedAbstract != null)
-									ambiguous = true;
-								unqualifiedAbstract = candidate;
-								if (pathBeforeLast(candidateName) == ownerPackage)
-									samePackage.push(candidate);
-							}
-					if (ambiguous) {
-						if (samePackage.length != 1)
-							fail("E1005", 'Ambiguous enum abstract value "$name"', span);
-						unqualifiedAbstract = samePackage[0];
-					}
+					// one cannot name it here; look the value up among them all.
+					var unqualifiedAbstract = findBareEnumAbstract(name, null, span, false);
 					if (unqualifiedAbstract != null)
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
@@ -1781,6 +1767,61 @@ class BodyTyper {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The enum abstract value a bare name picks out where a value of `expectedType` is wanted. Enum
+	 * abstracts lower to their underlying type, so the expected type only says which underlying type the
+	 * value must have; the abstracts over it that declare the name compete as in `findBareEnumAbstract`.
+	 * Null when nothing is expected or the name is not such a value (an ambiguous name is left to the
+	 * ordinary lookup, which reports it). Only called for a bare reference.
+	 */
+	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
+		if (expectedType == null)
+			return null;
+		// A name written bare can arrive qualified by the class it also names; the value is its last segment.
+		var valueName = lastPathSegment(name);
+		var declaration = findBareEnumAbstract(valueName, expectedType, span, true);
+		if (declaration == null)
+			return null;
+		for (value in declaration.values)
+			if (value.name == valueName)
+				return typeExpression(value.value, new Scope(), lowerType(declaration.underlying));
+		return null;
+	}
+
+	/**
+	 * The enum abstract a bare value name belongs to, optionally only among those over `underlying`.
+	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
+	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
+	 * error, or null when `lenient`.
+	 */
+	function findBareEnumAbstract(name:String, underlying:Null<CompilerType>, span:SourceSpan, lenient:Bool):Null<compiler.syntax.Ast.AstEnumAbstract> {
+		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
+			ambiguous = false,
+			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
+		for (candidateName => candidate in session.enumAbstractDecls) {
+			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
+				continue;
+			for (value in candidate.values)
+				if (value.name == name) {
+					if (found != null)
+						ambiguous = true;
+					found = candidate;
+					if (pathBeforeLast(candidateName) == ownerPackage)
+						samePackage.push(candidate);
+				}
+		}
+		if (ambiguous) {
+			if (samePackage.length != 1) {
+				if (lenient)
+					return null;
+				fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+			}
+			found = samePackage[0];
+		}
+		return found;
 	}
 
 	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {
