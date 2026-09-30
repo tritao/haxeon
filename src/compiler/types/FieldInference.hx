@@ -251,8 +251,9 @@ class FieldInference {
 	 * unqualified in the owning class) or static calls, with the literal rules: `/` gives Float,
 	 * `%` and the bit operators need Int, `+` joins two Strings. Null when an operand is anything else.
 	 */
-	static function operandType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, resolving:Map<String, Bool>):Null<AstType> {
+	static function operandType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
+			resolving:Map<String, Bool>):Null<AstType> {
 		function numeric(type:Null<AstType>):Bool
 			return type == IntType || type == FloatType;
 		function pair(left:AstExpression, right:AstExpression):Null<AstType> {
@@ -272,9 +273,8 @@ class FieldInference {
 			case Add(left, right, _):
 				var leftType = operandType(left, owner, classes, aliases, enums, enumAbstracts, resolving),
 					rightType = operandType(right, owner, classes, aliases, enums, enumAbstracts, resolving);
-				if (leftType == StringType && rightType == StringType) StringType;
-				else if (numeric(leftType) && numeric(rightType)) (leftType == FloatType || rightType == FloatType ? FloatType : IntType);
-				else null;
+				if (leftType == StringType && rightType == StringType) StringType; else if (numeric(leftType) && numeric(rightType)) (leftType == FloatType
+					|| rightType == FloatType ? FloatType : IntType); else null;
 			case Div(left, right, _): pair(left, right) == null ? null : FloatType;
 			case Sub(left, right, _), Mul(left, right, _): pair(left, right);
 			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
@@ -286,8 +286,9 @@ class FieldInference {
 	}
 
 	/** Type of a static field an operand names, qualified or as a bare name in the owning class. */
-	static function staticFieldType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, resolving:Map<String, Bool>):Null<AstType> {
+	static function staticFieldType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
+			resolving:Map<String, Bool>):Null<AstType> {
 		var reference = staticFieldReference(expression);
 		if (reference == null)
 			reference = switch expression {

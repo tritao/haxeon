@@ -587,7 +587,8 @@ class TestMain {
 			+ 'function main():Int { var radian:Float = Units.TURN; var count:Int = Units.COUNT + Units.BACK + Units.MASK; '
 			+ 'var half:Float = Units.HALF; var name:String = Units.NAME; return count; }');
 		expectCompileError('class Units { public static final HALF = Other.N / 2; } class Other { public static final N:Int = 4; } '
-			+ 'function main():Int { var half:Int = Units.HALF; return half; }', 'Type mismatch for local "half"');
+			+ 'function main():Int { var half:Int = Units.HALF; return half; }',
+			'Type mismatch for local "half"');
 		expectCompileError('class Invalid { static final value = Other.S * 2; } class Other { public static final S = "b"; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value = Other.F % 2; } class Other { public static final F = 3.5; } function main():Int { return 0; }',
