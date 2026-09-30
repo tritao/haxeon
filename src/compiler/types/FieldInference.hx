@@ -18,12 +18,14 @@ class FieldInference {
 		return switch initializer {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
-			case Negate(value, _): negatedType(field, value);
+			case Negate(value, _): isLiteralOperand(value) ? negatedType(field, value) : InferredType;
 			case StringLiteral(_, _): StringType;
 			case Add(left, right, _) if (isConstantString(left) && isConstantString(right)): StringType;
 			case BoolLiteral(_, _): BoolType;
 			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _),
-				ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): constantNumericType(field, initializer);
+				ShiftRight(_, _, _), UnsignedShiftRight(_, _, _):
+				// Operands naming static fields or calls are typed once declarations resolve.
+				hasOnlyLiteralOperands(initializer) ? constantNumericType(field, initializer) : InferredType;
 			case New(typeName, _, _): NamedType(typeName);
 			case NewGeneric(typeName, typeArguments, _, _): AppliedType(typeName, typeArguments);
 			case NewArray(element, _, _): ArrayType(element);
@@ -120,6 +122,13 @@ class FieldInference {
 			resolving.remove(key);
 			return enumType;
 		}
+		if (isOperator(field.initializer)) {
+			var operatorType = operandType(field.initializer, owner, classes, aliases, enums, enumAbstracts, resolving);
+			if (operatorType == null)
+				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
+			resolving.remove(key);
+			return operatorType;
+		}
 		var reference = staticFieldReference(field.initializer);
 		if (reference == null) {
 			var callType = staticCallResult(field.initializer, owner, classes, aliases);
@@ -212,6 +221,89 @@ class FieldInference {
 				found = candidate;
 			}
 		return found;
+	}
+
+	static function isOperator(expression:AstExpression):Bool
+		return switch expression {
+			case Negate(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _),
+				ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
+			default: false;
+		};
+
+	static function isLiteralOperand(expression:AstExpression):Bool
+		return switch expression {
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _): true;
+			default: false;
+		};
+
+	/** Whether every leaf of an operator expression is a literal, so it types without declarations. */
+	static function hasOnlyLiteralOperands(expression:AstExpression):Bool
+		return switch expression {
+			case Negate(value, _): hasOnlyLiteralOperands(value);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
+				hasOnlyLiteralOperands(left) && hasOnlyLiteralOperands(right);
+			default: isLiteralOperand(expression);
+		};
+
+	/**
+	 * Type of an operator initializer whose operands are literals, static fields (qualified, or
+	 * unqualified in the owning class) or static calls, with the literal rules: `/` gives Float,
+	 * `%` and the bit operators need Int, `+` joins two Strings. Null when an operand is anything else.
+	 */
+	static function operandType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, resolving:Map<String, Bool>):Null<AstType> {
+		function numeric(type:Null<AstType>):Bool
+			return type == IntType || type == FloatType;
+		function pair(left:AstExpression, right:AstExpression):Null<AstType> {
+			var leftType = operandType(left, owner, classes, aliases, enums, enumAbstracts, resolving),
+				rightType = operandType(right, owner, classes, aliases, enums, enumAbstracts, resolving);
+			if (!numeric(leftType) || !numeric(rightType))
+				return null;
+			return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
+		}
+		return switch expression {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case StringLiteral(_, _): StringType;
+			case Negate(value, _):
+				var type = operandType(value, owner, classes, aliases, enums, enumAbstracts, resolving);
+				numeric(type) ? type : null;
+			case Add(left, right, _):
+				var leftType = operandType(left, owner, classes, aliases, enums, enumAbstracts, resolving),
+					rightType = operandType(right, owner, classes, aliases, enums, enumAbstracts, resolving);
+				if (leftType == StringType && rightType == StringType) StringType;
+				else if (numeric(leftType) && numeric(rightType)) (leftType == FloatType || rightType == FloatType ? FloatType : IntType);
+				else null;
+			case Div(left, right, _): pair(left, right) == null ? null : FloatType;
+			case Sub(left, right, _), Mul(left, right, _): pair(left, right);
+			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
+				pair(left, right) == IntType ? IntType : null;
+			case Call(_, _, _): staticCallResult(expression, owner, classes, aliases);
+			default: staticFieldType(expression, owner, classes, aliases, enums, enumAbstracts, resolving);
+		};
+	}
+
+	/** Type of a static field an operand names, qualified or as a bare name in the owning class. */
+	static function staticFieldType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, resolving:Map<String, Bool>):Null<AstType> {
+		var reference = staticFieldReference(expression);
+		if (reference == null)
+			reference = switch expression {
+				case Variable(name, _) if (name.indexOf(".") < 0): {owner: owner, name: name};
+				default: null;
+			};
+		if (reference == null)
+			return null;
+		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
+			targetClass = classes.get(targetOwner);
+		if (targetClass == null)
+			return null;
+		for (candidate in targetClass.fields)
+			if (candidate.isStatic && candidate.name == reference.name)
+				return resolveField(candidate, targetOwner, classes, aliases, enums, enumAbstracts, resolving);
+		return null;
 	}
 
 	static function staticCallResult(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,

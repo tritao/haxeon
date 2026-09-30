@@ -579,6 +579,19 @@ class TestMain {
 			'Cyclic field type inference through "First.value"');
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
+		// Operator initializers may name static fields: qualified, bare in the owning class, or across classes.
+		Frontend.compile('class Units { public static final RADIAN = Other.F / 180; public static final TURN = RADIAN * 360; '
+			+ 'public static final COUNT = Other.N + 1; public static final BACK = -Other.N; public static final HALF = Other.N / 2; '
+			+ 'public static final MASK = Other.N | 1; public static final NAME = "a" + Other.S; } '
+			+ 'class Other { public static final N:Int = 4; public static final F = 3.5; public static final S = "b"; } '
+			+ 'function main():Int { var radian:Float = Units.TURN; var count:Int = Units.COUNT + Units.BACK + Units.MASK; '
+			+ 'var half:Float = Units.HALF; var name:String = Units.NAME; return count; }');
+		expectCompileError('class Units { public static final HALF = Other.N / 2; } class Other { public static final N:Int = 4; } '
+			+ 'function main():Int { var half:Int = Units.HALF; return half; }', 'Type mismatch for local "half"');
+		expectCompileError('class Invalid { static final value = Other.S * 2; } class Other { public static final S = "b"; } function main():Int { return 0; }',
+			'Cannot infer type of field "value" from this initializer');
+		expectCompileError('class Invalid { static final value = Other.F % 2; } class Other { public static final F = 3.5; } function main():Int { return 0; }',
+			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
 			'Type mismatch for static field "Invalid.value"');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
