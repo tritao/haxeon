@@ -317,6 +317,10 @@ class Scope {
 		return refined == null ? value.declared : refined;
 	}
 
+	/** Source names of every local visible here, including `this`. */
+	public function visibleLocalNames():Array<String>
+		return [for (value in visibleValues()) value.source];
+
 	function visibleValues():Array<ScopeValue> {
 		var outer = parent,
 			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();

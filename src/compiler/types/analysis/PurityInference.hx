@@ -53,10 +53,13 @@ class PurityInference {
 	}
 
 	/** For calls through a local function whose body is known: the functions that body calls, or null when it has a direct effect. */
-	public static function localBodyDependencies(inference:PurityInference, arguments:Array<AstArgument>, body:Array<AstStatement>,
-			functionName:String):Null<Array<String>> {
+	public static function localBodyDependencies(inference:PurityInference, arguments:Array<AstArgument>, body:Array<AstStatement>, functionName:String,
+			?outerLocals:Array<String>):Null<Array<String>> {
 		var walker = new PurityWalker(inference, functionName);
 		walker.declare("this");
+		if (outerLocals != null)
+			for (name in outerLocals)
+				walker.declare(name);
 		for (argument in arguments) {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;

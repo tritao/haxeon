@@ -18,8 +18,10 @@ class MapEntryFactsMain {
 		expectError("a map handed to a function may lose the entry", "if (m.exists(k)) { drain(m); return m.get(k); } return 0;");
 		expectError("a map stored in an object may lose the entry",
 			"var holder = {inner: m}; if (m.exists(k)) { b.bump(); return m.get(k); } return holder.inner.size();");
-		expectError("a map a lambda captures may lose the entry",
-			"var f = function():Int return m.size(); if (m.exists(k)) { b.bump(); return m.get(k); } return f();");
+		expectCompiles("a lambda that only reads the map cannot remove entries",
+			"var f = function():Int return m.size(); if (m.exists(k)) { b.bump(); return m.get(k) + f() - f(); } return 0;");
+		expectError("a lambda that removes entries may lose the entry",
+			"var f = function():Void { m.remove(\"a\"); }; if (m.exists(k)) { b.bump(); return m.get(k); } return 0;");
 		expectError("a map parameter may be reachable from the caller", "return read(m); ",
 			"function read(m:Map<String, Int>):Int { var b = new Box(); if (m.exists(\"a\")) { b.bump(); return m.get(\"a\"); } return 0; } ");
 		expectError("a map that is reassigned is not known to be private",

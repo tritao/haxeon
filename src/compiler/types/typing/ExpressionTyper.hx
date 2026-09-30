@@ -16,6 +16,7 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchExpressionCase;
 import compiler.syntax.Ast.AstType;
+import compiler.types.analysis.AstScan;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.Scope;
 import compiler.types.Type.AnonymousField;
@@ -341,7 +342,9 @@ class ExpressionTyper {
 		}
 		var originalIterable = typedIterable,
 			loopScope = new Scope(scope),
-			keyType:Null<CompilerType> = null;
+			keyType:Null<CompilerType> = null,
+			bodyExpressions = predicate == null ? [value] : [predicate, value];
+		LoopFlow.enterExpressions(session, scope, bodyExpressions, span);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)
@@ -376,14 +379,15 @@ class ExpressionTyper {
 		var map = valueName == null ? CallResolver.mapKeyIteratorSource(originalIterable) : null;
 		if (map == null)
 			map = valueName == null ? FlowAnalysis.mapKeySource(originalIterable, scope) : null;
-		if (valueName == null) {
+		if (valueName == null
+			&& !AstScan.mayRemoveMapEntries([for (expression in bodyExpressions) Expression(expression, span)], keyName)) {
 			if (map != null) {
 				var key = new TypedExpression(TLocal(loopScope.requireId(keyName)), keyType, span),
 					entryPath = FlowAnalysis.mapEntryPath(map, key);
 				if (entryPath != null)
 					switch map.type {
 						case TMap(_, value):
-							loopScope.refineExpression(entryPath, value);
+							loopScope.refineExpression(entryPath, value, FlowAnalysis.entryFactsSurviveCalls(scope, map));
 						default:
 					}
 			}
@@ -411,6 +415,7 @@ class ExpressionTyper {
 			originalIterable = typedIterable,
 			loopScope = new Scope(scope),
 			itemType:Null<CompilerType> = null;
+		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)

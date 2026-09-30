@@ -56,6 +56,8 @@ class TestCatalog {
 		"FunctionTypeSyntaxMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",
+		"LoopFlowMain",
+		"DiagnosticLocationMain",
 		"ClosureEffectsMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",
