@@ -2,6 +2,7 @@ package compiler.types.analysis;
 
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 
 /**
  * Finds local maps that nothing else can reach, judged from source names alone.
@@ -10,7 +11,7 @@ import compiler.syntax.Ast.AstStatement;
  * map created in this function that is only ever used as the receiver of map operations cannot be reached from a
  * callee, so its facts are unaffected by calls. Anything unusual disqualifies a name: two declarations of it (also
  * through shadowing by a lambda, loop or catch variable), a parameter of the same name, a reassignment, or any use
- * other than as a map receiver, including every use inside a lambda.
+ * other than as a map receiver. A lambda, which may run at any time, may only use operations that cannot remove an entry.
  */
 class MapEscapeAnalysis {
 	static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator", "copy"];
@@ -51,9 +52,9 @@ class MapEscapeAnalysis {
 
 	static function scanStatement(statement:AstStatement, state:MapEscapeAnalysis, inLambda:Bool):Void {
 		switch statement {
-			case VarDeclaration(name, _, initializer, _):
+			case VarDeclaration(name, declared, initializer, _):
 				state.declare(name);
-				if (createsMap(initializer))
+				if (createsMap(initializer) || isEmptyLiteralOfMap(declared, initializer))
 					state.fresh.set(name, true);
 				scanExpression(initializer, state, inLambda);
 			case UninitializedDeclaration(name, _, _):
@@ -64,14 +65,14 @@ class MapEscapeAnalysis {
 			case Increment(name, _, _):
 				state.escape(root(name));
 			case IndexAssignment(receiver, key, value, _):
-				scanReceiver(receiver, state, inLambda);
+				scanReceiver(receiver, "set", state, inLambda);
 				scanExpression(key, state, inLambda);
 				scanExpression(value, state, inLambda);
 			case ForIn(name, valueName, iterable, body, _):
 				state.declare(name);
 				if (valueName != null)
 					state.declare(valueName);
-				scanReceiver(iterable, state, inLambda);
+				scanReceiver(iterable, "iterator", state, inLambda);
 				scanStatements(body, state, inLambda);
 			case If(test, yes, no, _):
 				scanExpression(test, state, inLambda);
@@ -104,32 +105,38 @@ class MapEscapeAnalysis {
 		}
 	}
 
-	/** A position where a map may appear without being handed to anyone else. */
-	static function scanReceiver(expression:AstExpression, state:MapEscapeAnalysis, inLambda:Bool):Void {
+	/**
+	 * A position where a map may appear without being handed to anyone else. Inside a lambda, which may run at any time,
+	 * only operations that cannot take an entry out are allowed: presence facts survive reads and `set`.
+	 */
+	static function scanReceiver(expression:AstExpression, operation:String, state:MapEscapeAnalysis, inLambda:Bool):Void {
 		switch expression {
-			case Variable(_, _) if (!inLambda):
+			case Variable(_, _) if (!inLambda || !removesEntries(operation)):
 			default:
 				scanExpression(expression, state, inLambda);
 		}
 	}
+
+	static function removesEntries(operation:String):Bool
+		return operation == "remove" || operation == "clear";
 
 	static function scanExpression(expression:AstExpression, state:MapEscapeAnalysis, inLambda:Bool):Void {
 		switch expression {
 			case Variable(name, _):
 				state.escape(root(name));
 			case MethodCall(receiver, name, arguments, _) if (MAP_OPERATIONS.indexOf(name) >= 0):
-				scanReceiver(receiver, state, inLambda);
+				scanReceiver(receiver, name, state, inLambda);
 				for (argument in arguments)
 					scanExpression(argument, state, inLambda);
 			case Call(name, arguments, _) if (name.indexOf(".") > 0):
 				// `map.get(key)` parses as a call whose name starts with the receiver local.
 				var dot = name.indexOf("."), method = name.substr(dot + 1);
-				if (inLambda || method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0)
+				if ((inLambda && removesEntries(method)) || method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0)
 					state.escape(name.substr(0, dot));
 				for (argument in arguments)
 					scanExpression(argument, state, inLambda);
 			case Index(receiver, key, _):
-				scanReceiver(receiver, state, inLambda);
+				scanReceiver(receiver, "get", state, inLambda);
 				scanExpression(key, state, inLambda);
 			case Lambda(arguments, body, _):
 				for (argument in arguments)
@@ -149,6 +156,16 @@ class MapEscapeAnalysis {
 					scanExpression(child, state, inLambda);
 		}
 	}
+
+	/** `var m:Map<K, V> = [];` is an empty map, not an array. */
+	static function isEmptyLiteralOfMap(declared:Null<AstType>, initializer:AstExpression):Bool
+		return switch initializer {
+			case ArrayLiteral(values, _) if (values.length == 0): switch declared {
+					case MapType(_, _): true;
+					default: false;
+				};
+			default: false;
+		};
 
 	static function createsMap(initializer:AstExpression):Bool
 		return switch initializer {

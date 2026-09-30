@@ -51,6 +51,7 @@ class CompileError {
 		this.diagnostic = diagnostic;
 	}
 
+	/** Located, so an error nobody catches still says where it happened. */
 	public function toString():String
-		return diagnostic.message;
+		return diagnostic.format();
 }

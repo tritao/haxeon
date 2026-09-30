@@ -11,6 +11,7 @@ import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.analysis.AstScan;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.CaptureAnalysis;
 import compiler.types.analysis.FlowAnalysis;
@@ -490,6 +491,7 @@ class StatementTyper {
 	}
 
 	public function typeWhile(predicate:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
 		var typedCondition = typeExpression(predicate, scope, null, false);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "While condition must be Bool", span);
@@ -503,6 +505,7 @@ class StatementTyper {
 	}
 
 	public function typeDoWhile(body:Array<AstStatement>, predicate:AstExpression, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
 		var bodyScope = new Scope(scope), context = session.currentContext;
 		context.loopEarlyExits[context.loopDepth] = false;
 		context.loopDepth++;
@@ -528,6 +531,7 @@ class StatementTyper {
 			default:
 		}
 		var originalIterable = typedIterable;
+		LoopFlow.enter(session, scope, body);
 		var element:CompilerType = switch typedIterable.type {
 			case TArray(element): element;
 			case TIterator(element): element;
@@ -547,7 +551,8 @@ class StatementTyper {
 		var loopScope = new Scope(scope);
 		loopScope.define(name, element, span);
 		bindCell(name, span, loopScope, element);
-		if (valueName == null) {
+		// Keys come from a snapshot, so an entry the body removes may still be visited later.
+		if (valueName == null && !AstScan.mayRemoveMapEntries(body, name)) {
 			var map = mapKeyIteratorSource(originalIterable);
 			if (map == null)
 				map = FlowAnalysis.mapKeySource(originalIterable, scope);
@@ -557,7 +562,7 @@ class StatementTyper {
 				if (entryPath != null)
 					switch map.type {
 						case TMap(_, value):
-							loopScope.refineExpression(entryPath, value);
+							loopScope.refineExpression(entryPath, value, FlowAnalysis.entryFactsSurviveCalls(scope, map));
 						default:
 					}
 			}

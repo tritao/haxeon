@@ -113,18 +113,26 @@ class TypingSession {
 	 * Whether calling this local function can change state that flow facts describe. Its body is read like any other
 	 * function's: no direct effects and only pure callees, judged against the answers this session already gives.
 	 */
-	public function localFunctionIsPure(local:compiler.types.analysis.Scope.LocalFunction, owner:Null<String>):Bool {
+	public function localFunctionIsPure(local:compiler.types.analysis.Scope.LocalFunction, owner:Null<String>):Bool
+		return bodyIsPure(local.arguments, local.body, [], owner);
+
+	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
+	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
+			owner:Null<String>):Bool {
 		var inference = localPurity;
 		if (inference == null) {
 			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls, isDeclaredPure, isTypeName);
 			localPurity = inference;
 		}
-		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(inference, local.arguments, local.body,
-			owner == null ? "$local" : owner + ".$local");
+		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(inference, arguments, body,
+			owner == null ? "$local" : owner + ".$local", outerLocals);
 		if (dependencies == null)
 			return false;
 		for (key in dependencies)
-			if (key == compiler.types.analysis.PurityInference.TO_STRING || !isPureCall(key))
+			// Typing a string conversion clears no facts either, so neither does depending on one.
+			if (key != compiler.types.analysis.PurityInference.TO_STRING
+				&& key != "Std.string"
+				&& !(isPureCall(key) || isNoReturnCall(key)))
 				return false;
 		return true;
 	}
