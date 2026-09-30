@@ -20,6 +20,7 @@ import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.analysis.Scope;
+import compiler.types.analysis.ClosureEffects;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.TypedAst.TypedExpression;
@@ -654,11 +655,29 @@ class CallResolver {
 					span) : typeDefaultExpression(defaultValue, functionType.arguments[index], callableName));
 			}
 		typedArguments = coerceArguments(typedArguments, functionType.arguments, callableName == null ? "function expression" : callableName);
+		var effects = calledClosureEffects(callee, callableName, scope);
 		for (captured in session.currentContext.storage.candidateSourceNames())
-			scope.invalidate(captured);
+			if (effects == null || effects.unknown || effects.writes.exists(captured))
+				scope.invalidate(captured);
 		if (invalidateAllExpressions)
 			scope.invalidateAllExpressions();
 		return new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
+	}
+
+	/**
+	 * What the closure being called can assign, when it is known: a lambda called where it is written, or a local
+	 * function that is never reassigned. Null for any other function value, which may assign anything captured.
+	 */
+	function calledClosureEffects(callee:AstExpression, callableName:Null<String>, scope:Scope):Null<ClosureEffects> {
+		switch callee {
+			case Lambda(arguments, body, _):
+				return ClosureEffects.of(arguments, body, scope);
+			default:
+		}
+		var known = callableName == null ? null : scope.localFunction(callableName);
+		if (known == null)
+			return null;
+		return ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn, [known]);
 	}
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {

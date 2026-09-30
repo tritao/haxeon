@@ -143,7 +143,12 @@ class StatementTyper {
 					case Lambda(arguments, body, _):
 						var self = LexicalStorageAnalysis.key(name, span),
 							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
-						if (!assignments.exists(self)) localFunction = {arguments: arguments, body: body, outerLocals: scope.visibleLocalNames()};
+						if (!assignments.exists(self)) localFunction = {
+							arguments: arguments,
+							body: body,
+							outerLocals: scope.visibleLocalNames(),
+							declaredIn: scope
+						};
 					default:
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
