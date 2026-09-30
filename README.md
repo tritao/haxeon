@@ -358,7 +358,8 @@ is forwarded from `<output>.watch.log`. This mode restarts the process.
 `run --watch --live` keeps a stable host process and applies compatible HLP
 patches between application pump steps. The project entry class must expose
 static `start(arguments:String):Void`, `tick():Int` (nonzero while running),
-`saveState():String`, `close():Int`, and `restoreState(state:String):Void`.
+`saveState():String`, `close():Int`, and `restoreState(state:String):Void`, and,
+like any entry class, a `main` (the live host never calls it).
 The host calls `start` once, then `tick` repeatedly. A structural change reloads
 the module through those state methods. Non-Haxe changes restart the process.
 The output path must be separate from any ordinary app build output.
