@@ -94,7 +94,10 @@ class IrInliner {
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.isValue)
-				lines.push(object.name + ":" + [for (method in object.methods) method.name + "=" + method.functionName].join(","));
+				lines.push(object.name + ":" + [for (method in object.methods) method.name + "=" + method.functionName].join(",") + ":" + [
+					for (field in object.fields)
+						field.name + "=" + Std.string(field.type)
+				].join(","));
 		}
 		lines.sort(Reflect.compare);
 		fingerprint = lines.join(";");
@@ -235,7 +238,11 @@ class IrInliner {
 		if (original.arguments.length != argumentCount || !looksInlinable(original))
 			return null;
 		var candidate = inlinedVersion(target);
-		return candidate != null && fits(candidate) ? candidate : null;
+		if (candidate == null || !fits(candidate))
+			return null;
+		// HashLink's JIT keeps registers only inside a basic block, so a branching body costs more spliced in than called;
+		// only a straight-line body, or one the author marked inline, is worth it.
+		return isStraightLine(candidate) || candidate.inlineHint ? candidate : null;
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
@@ -266,6 +273,18 @@ class IrInliner {
 			}
 		}
 		return returns > 0;
+	}
+
+	static function isStraightLine(fn:IrFunction):Bool {
+		if (fn.blocks.length != 1)
+			return false;
+		var terminator = fn.blocks[0].terminator;
+		if (terminator == null)
+			return false;
+		return switch terminator.value {
+			case Return(_): true;
+			default: false;
+		};
 	}
 
 	static function countInstructions(fn:IrFunction):Int {
@@ -311,7 +330,7 @@ class IrInliner {
 		for (argument in fn.arguments)
 			if (argument.id >= nextValue)
 				nextValue = argument.id + 1;
-		var index = 0, inlines = 0, instructions = countInstructions(fn);
+		var index = 0, inlines = 0, instructions = countInstructions(fn), substitutions:Map<Int, IrValue> = [];
 		while (index < blocks.length) {
 			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
 			if (inlines < MaxInlinesPerFunction && instructions < MaxFunctionInstructions)
@@ -326,15 +345,249 @@ class IrInliner {
 				index++;
 				continue;
 			}
+			inlines++;
+			instructions += countInstructions(callee);
+			if (isStraightLine(callee)) {
+				// Splice into the calling block: no new block, no phi. Rescan the block; the spliced calls were not candidates.
+				nextValue = splice(block, position, callee, substitutions, nextValue);
+				continue;
+			}
 			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock);
 			nextValue = expansion.nextValue;
 			nextBlock = expansion.nextBlock;
-			inlines++;
-			instructions += countInstructions(callee);
 			// Continue with the first inlined block; calls left in it were not candidates.
 			index++;
 		}
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint);
+		var bindings = fn.debugBindings;
+		if (substitutions.keys().hasNext())
+			bindings = substitute(blocks, substitutions, bindings);
+		var replaced = scalarReplace(blocks, nextValue);
+		if (replaced.substitutions.keys().hasNext())
+			bindings = substitute(blocks, replaced.substitutions, bindings);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint);
+	}
+
+	/**
+	 * Removes allocations of value class instances that never leave their block: when an object is only created,
+	 * written with FieldSet and read with FieldGet in one block, each field becomes an SSA value. A field read before
+	 * any write takes the zero value HashLink's `New` would have given it.
+	 */
+	function scalarReplace(blocks:Array<IrBlock>, nextValue:Int):{substitutions:Map<Int, IrValue>} {
+		var substitutions:Map<Int, IrValue> = [];
+		for (block in blocks) {
+			var position = 0;
+			while (position < block.instructions.length) {
+				var located = block.instructions[position];
+				switch located.value {
+					case NewObject(object, typeName):
+						var descriptor = objects.get(typeName);
+						if (descriptor != null
+							&& descriptor.isValue
+							&& !hasValueField(descriptor)
+							&& confinedToBlock(blocks, block, position, object)) {
+							nextValue = replaceObject(block, position, object, descriptor, substitutions, nextValue);
+							continue;
+						}
+					default:
+				}
+				position++;
+			}
+		}
+		return {substitutions: substitutions};
+	}
+
+	/** A nested value class field defaults to a zeroed struct, not null, so its default read is not a constant. */
+	function hasValueField(descriptor:IrObject):Bool {
+		for (field in descriptor.fields)
+			switch field.type {
+				case Obj(name):
+					var nested = objects.get(name);
+					if (nested == null || nested.isValue)
+						return true;
+				default:
+			}
+		return false;
+	}
+
+	/** True when every use of `object` is a FieldGet or a FieldSet target in `block`, after its allocation. */
+	static function confinedToBlock(blocks:Array<IrBlock>, home:IrBlock, allocation:Int, object:IrValue):Bool {
+		for (block in blocks)
+			for (position in 0...block.instructions.length) {
+				var instruction = block.instructions[position].value;
+				switch instruction {
+					case Phi(_, inputs):
+						for (input in inputs)
+							if (input.value.id == object.id)
+								return false;
+					default:
+				}
+				var uses = 0;
+				for (input in IrOperands.inputs(instruction))
+					if (input.id == object.id)
+						uses++;
+				if (uses == 0)
+					continue;
+				if (block != home || position <= allocation)
+					return false;
+				switch instruction {
+					case FieldGet(_, target, _) if (target.id == object.id):
+					case FieldSet(target, _, value) if (target.id == object.id && value.id != object.id):
+					default:
+						return false;
+				}
+			}
+		for (block in blocks) {
+			var terminator = block.terminator;
+			if (terminator == null)
+				continue;
+			switch terminator.value {
+				case Return(value), Throw(value), Rethrow(value):
+					if (value.id == object.id)
+						return false;
+				case Branch(condition, _, _):
+					if (condition.id == object.id)
+						return false;
+				case Jump(_):
+			}
+		}
+		return true;
+	}
+
+	function replaceObject(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
+		var current:Map<String, IrValue> = [],
+			fieldTypes:Map<String, IrType> = [];
+		for (field in descriptor.fields)
+			fieldTypes.set(field.name, field.type);
+		var rewritten:Array<Located<IrInstruction>> = [];
+		for (position in 0...block.instructions.length) {
+			var located = block.instructions[position];
+			if (position == allocation)
+				continue;
+			switch located.value {
+				case FieldSet(target, name, value) if (target.id == object.id):
+					current.set(name, resolve(value, substitutions));
+					continue;
+				case FieldGet(out, target, name) if (target.id == object.id):
+					var known = current.get(name);
+					if (known == null) {
+						var type = fieldTypes.get(name);
+						var zero = new IrValue(nextValue++, out.name, out.type);
+						rewritten.push(new Located(zeroValue(zero, type), located.provenance));
+						current.set(name, zero);
+						known = zero;
+					}
+					substitutions.set(out.id, known);
+					continue;
+				default:
+			}
+			rewritten.push(located);
+		}
+		block.instructions.resize(0);
+		for (kept in rewritten)
+			block.instructions.push(kept);
+		return nextValue;
+	}
+
+	static function zeroValue(output:IrValue, type:IrType):IrInstruction {
+		return switch type {
+			case F64: ConstFloat(output, 0.0);
+			case Bool: ConstBool(output, false);
+			case I32, I64: ConstInt(output, 0);
+			default: ConstNull(output);
+		};
+	}
+
+	/** Replaces the call at `block.instructions[position]` by the callee's instructions; the result is substituted for the call's output. */
+	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
+		var call = block.instructions[position],
+			callOutput:IrValue = null,
+			actuals:Array<IrValue> = [];
+		switch call.value {
+			case Call(out, _, arguments):
+				callOutput = out;
+				actuals = arguments;
+			case MethodCall(out, object, _, arguments):
+				callOutput = out;
+				actuals = [object].concat(arguments);
+			default:
+				throw "Inliner expected a call";
+		}
+		var source = callee.blocks[0], values:Map<Int, IrValue> = [];
+		for (argumentIndex in 0...callee.arguments.length)
+			values.set(callee.arguments[argumentIndex].id, resolve(actuals[argumentIndex], substitutions));
+		for (located in source.instructions) {
+			var output = IrOperands.output(located.value);
+			if (output != null)
+				values.set(output.id, new IrValue(nextValue++, output.name, output.type));
+		}
+		var use = function(value:IrValue):IrValue {
+			var mapped = values.get(value.id);
+			if (mapped == null)
+				throw "Inliner found an undefined callee value";
+			return mapped;
+		};
+		var noBlocks = function(id:Int):Int {
+			throw "A straight-line callee has no blocks to remap";
+		};
+		var copies:Array<Located<IrInstruction>> = [];
+		for (located in source.instructions)
+			copies.push(new Located(remap(located.value, use, noBlocks), located.provenance));
+		var returned:IrValue = switch source.terminator.value {
+			case Return(value): use(value);
+			default: throw "A straight-line callee must return";
+		};
+		if (callOutput.type == Void)
+			copies.push(new Located(ConstVoid(callOutput), call.provenance));
+		else
+			substitutions.set(callOutput.id, returned);
+		block.instructions.splice(position, 1);
+		var at = position;
+		for (copy in copies) {
+			block.instructions.insert(at, copy);
+			at++;
+		}
+		return nextValue;
+	}
+
+	static function resolve(value:IrValue, substitutions:Map<Int, IrValue>):IrValue {
+		var current = value, steps = 0;
+		while (substitutions.exists(current.id) && steps < 4096) {
+			current = substitutions.get(current.id);
+			steps++;
+		}
+		return current;
+	}
+
+	/** Rewrites every use of a spliced call's output to the value the callee returned. */
+	function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>, bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
+		var use = function(value:IrValue):IrValue return resolve(value, substitutions);
+		var sameBlock = function(id:Int):Int return id;
+		for (block in blocks) {
+			for (position in 0...block.instructions.length) {
+				var located = block.instructions[position];
+				block.instructions[position] = new Located(remap(located.value, use, sameBlock), located.provenance);
+			}
+			var terminator = block.terminator;
+			if (terminator != null)
+				block.terminator = new Located(switch terminator.value {
+					case Return(value): Return(use(value));
+					case Throw(value): Throw(use(value));
+					case Rethrow(value): Rethrow(use(value));
+					case Jump(target): Jump(target);
+					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
+				}, terminator.provenance);
+		}
+		return [
+			for (binding in bindings)
+				{
+					identity: binding.identity,
+					name: binding.name,
+					value: use(binding.value),
+					path: binding.path,
+					scopeStart: binding.scopeStart,
+					scopeEnd: binding.scopeEnd
+				}
+		];
 	}
 
 	/**
@@ -482,7 +735,10 @@ class IrInliner {
 			case IntToInt64(out, value): IntToInt64(use(out), use(value));
 			case FloatToInt(out, value): FloatToInt(use(out), use(value));
 			case SafeCast(out, value): SafeCast(use(out), use(value));
-			case BeginTry(_, _), EndTry(_), Catch(_): throw "Inliner cannot copy exception handling";
+			// Callees with handlers are never cloned (see fits); these arise when a caller is rewritten in place.
+			case BeginTry(catchBlock, afterBlock): BeginTry(block(catchBlock), block(afterBlock));
+			case EndTry(catchBlock): EndTry(block(catchBlock));
+			case Catch(out): Catch(use(out));
 			case GlobalGet(out, name): GlobalGet(use(out), name);
 			case GlobalSet(name, value): GlobalSet(name, use(value));
 			case Add(out, a, b): Add(use(out), use(a), use(b));

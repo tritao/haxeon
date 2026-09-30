@@ -35,6 +35,15 @@ class InlinerMain {
 		expect(callsIn(after.get("fib")).indexOf("fib") >= 0, "recursion must not be unrolled away");
 		expect(before.get("main") != after.get("main"), "the original main must be left untouched for the IR cache");
 		expect(callsIn(before.get("main")).indexOf("twice") >= 0, "the cached IR of main must still contain the call");
+		// Scalar replacement removes an allocation that never leaves its block, and only then.
+		var scalarProgram = Frontend.compile("@:value class P { public var a:Int; public var b:Int; public function new(a:Int, b:Int) { this.a = a; this.b = b; } "
+			+ "public function sum():Int return a + b; } function keep(p:P):Int { var t = 0; for (i in 0...3) t += p.a * i; return t; } "
+			+ "function gone():Int { var p = new P(1, 2); return p.sum(); } "
+			+ "function escapes():Int { var p = new P(1, 2); return keep(p); } function main():Int return gone() + escapes();");
+		IrInliner.run(scalarProgram, new IrInlineCache());
+		IrVerifier.verify(scalarProgram);
+		expect(allocations(programFunction(scalarProgram, "gone")) == 0, "an object used only through fields in one block should be scalar replaced");
+		expect(allocations(programFunction(scalarProgram, "escapes")) == 1, "an object passed to a call that is not inlined must stay allocated");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();
@@ -64,6 +73,18 @@ class InlinerMain {
 			if (fn.name == name)
 				return fn;
 		throw 'Missing function $name';
+	}
+
+	static function allocations(fn:IrFunction):Int {
+		var count = 0;
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case NewObject(_, _):
+						count++;
+					default:
+				}
+		return count;
 	}
 
 	static function callsIn(fn:IrFunction):Array<String> {
