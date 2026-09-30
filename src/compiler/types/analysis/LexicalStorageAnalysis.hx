@@ -1,198 +1,112 @@
 package compiler.types.analysis;
 
+import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
+import compiler.types.analysis.BindingWalker.BindingKind;
 
 typedef LexicalStorageRequirements = {
 	final mutableCaptures:Map<String, Bool>;
 	final exceptionCells:Map<String, Bool>;
 }
 
-/** Resolves storage requirements to declaration-site identities before typing. */
-class LexicalStorageAnalysis {
-	public static function key(name:String, span:compiler.Source.SourceSpan):String
-		return '$name@${span.start}';
+/**
+ * Resolves storage requirements to declaration-site identities before typing.
+ *
+ * A local needs a cell when a lambda captures it and it is written somewhere, when a local function refers to itself,
+ * or when it is written inside a `try` it was declared outside of, so the value survives the exception edge.
+ */
+class LexicalStorageAnalysis extends BindingWalker {
+	public static function key(name:String, span:SourceSpan):String
+		return BindingWalker.key(name, span);
 
 	public static function analyze(statements:Array<AstStatement>, arguments:Array<AstArgument>):LexicalStorageRequirements {
-		var environment:Map<String, String> = [];
-		for (argument in arguments)
-			environment.set(argument.name, key(argument.name, argument.span));
-		var writes:Map<String, Bool> = [];
-		walkStatements(statements, copy(environment), writes, null, null);
-		var captures:Map<String, Bool> = [], exceptions:Map<String, Bool> = [];
-		walkStatements(statements, copy(environment), writes, captures, exceptions);
-		return {mutableCaptures: captures, exceptionCells: exceptions};
+		var first = new LexicalStorageAnalysis(null);
+		first.walkFunction(arguments, statements);
+		var storage = new LexicalStorageAnalysis(first.writtenDeclarations);
+		storage.walkFunction(arguments, statements);
+		return {mutableCaptures: storage.captures, exceptionCells: storage.exceptions};
 	}
 
-	static function walkStatements(statements:Array<AstStatement>, environment:Map<String, String>, writes:Map<String, Bool>,
-			captures:Null<Map<String, Bool>>, exceptions:Null<Map<String, Bool>>):Void {
-		for (statement in statements) {
-			switch statement {
-				case VarDeclaration(name, _, Lambda(_, body, _), span) if (referencesLocal(body, name)):
-					// A recursive local function captures its own binding, so it lives in a cell that exists
-					// before the closure does.
-					environment.set(name, key(name, span));
-					if (captures != null)
-						captures.set(key(name, span), true);
-				default:
-			}
-			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
-				walkExpression(expression, environment, writes, captures, exceptions, false);
-			switch statement {
-				case VarDeclaration(name, _, _, span), UninitializedDeclaration(name, _, span):
-					environment.set(name, key(name, span));
-				case Assignment(name, _, _), Increment(name, _, _):
-					markWrite(name, environment, writes);
-				case If(_, yes, no, _):
-					walkStatements(yes, copy(environment), writes, captures, exceptions);
-					walkStatements(no, copy(environment), writes, captures, exceptions);
-				case While(_, body, _), DoWhile(body, _, _):
-					walkStatements(body, copy(environment), writes, captures, exceptions);
-				case ForIn(name, valueName, _, body, span):
-					var loop = copy(environment);
-					loop.set(name, key(name, span));
-					if (valueName != null)
-						loop.set(valueName, key(valueName, span));
-					walkStatements(body, loop, writes, captures, exceptions);
-				case Try(tryBranch, catches, _):
-					if (exceptions != null) {
-						var protectedWrites:Map<String, Bool> = [];
-						walkStatements(tryBranch, copy(environment), protectedWrites, null, null);
-						for (binding in protectedWrites.keys())
-							if (containsValue(environment, binding))
-								exceptions.set(binding, true);
-					}
-					walkStatements(tryBranch, copy(environment), writes, captures, exceptions);
-					for (caught in catches) {
-						var catchEnvironment = copy(environment);
-						catchEnvironment.set(caught.name, key(caught.name, caught.span));
-						walkStatements(caught.statements, catchEnvironment, writes, captures, exceptions);
-					}
-				case Switch(_, cases, fallback, _, _):
-					for (entry in cases)
-						walkStatements(entry.statements, copy(environment), writes, captures, exceptions);
-					walkStatements(fallback, copy(environment), writes, captures, exceptions);
-				default:
-			}
-		}
+	/** Declarations assigned anywhere, found by the first pass. Null during that pass. */
+	final knownWrites:Null<Map<String, Bool>>;
+
+	final writtenDeclarations:Map<String, Bool> = [];
+	final captures:Map<String, Bool> = [];
+	final exceptions:Map<String, Bool> = [];
+	final declaredInLambda:Map<String, Int> = [];
+	final declaredInTry:Map<String, Int> = [];
+
+	/** Local functions whose own body the walk is inside. */
+	final enclosingFunctions:Array<String> = [];
+
+	function new(knownWrites:Null<Map<String, Bool>>) {
+		super();
+		this.knownWrites = knownWrites;
 	}
 
-	static function referencesLocal(body:Array<AstStatement>, name:String):Bool {
-		var names:Map<String, Bool> = [];
-		CaptureAnalysis.collectVariables(body, names);
-		return names.exists(name);
+	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
+		declaredInLambda.set(declaration, lambdaDepth);
+		declaredInTry.set(declaration, tryDepth);
 	}
 
-	static function walkExpression(expression:AstExpression, environment:Map<String, String>, writes:Map<String, Bool>, captures:Null<Map<String, Bool>>,
-			exceptions:Null<Map<String, Bool>>, insideLambda:Bool):Void {
-		switch expression {
-			case Variable(name, _):
-				if (insideLambda && captures != null) {
-					var binding = environment.get(root(name));
-					if (binding != null && writes.exists(binding))
-						captures.set(binding, true);
-				}
-			case PostfixIncrement(target, _, _):
-				walkExpression(target, environment, writes, captures, exceptions, insideLambda);
-				switch target {
-					case Variable(name, _): markWrite(name, environment, writes);
-					default:
-				}
-			case Lambda(arguments, body, _):
-				var lambdaEnvironment = copy(environment);
-				for (argument in arguments)
-					lambdaEnvironment.set(argument.name, key(argument.name, argument.span));
-				var nestedCaptures:Null<Map<String, Bool>> = captures == null ? null : [];
-				walkStatementsInLambda(body, lambdaEnvironment, writes, nestedCaptures, exceptions);
-				if (captures != null)
-					for (binding in nestedCaptures.keys())
-						if (containsValue(environment, binding))
-							captures.set(binding, true);
-			case BlockExpression(statements, value, _):
-				var block = copy(environment);
-				walkStatements(statements, block, writes, captures, exceptions);
-				walkExpression(value, block, writes, captures, exceptions, insideLambda);
-			case And(left, right, _):
-				walkLogicalExpression(left, right, true, environment, writes, captures, exceptions, insideLambda);
-			case Or(left, right, _):
-				walkLogicalExpression(left, right, false, environment, writes, captures, exceptions, insideLambda);
-			default:
-				for (child in compiler.syntax.AstChildren.expressions(expression))
-					walkExpression(child, environment, writes, captures, exceptions, insideLambda);
-		}
+	override function statement(value:AstStatement):Void {
+		var localFunction = switch value {
+			case VarDeclaration(name, _, Lambda(_, _, _), span): key(name, span);
+			default: null;
+		};
+		if (localFunction != null)
+			enclosingFunctions.push(localFunction);
+		super.statement(value);
+		if (localFunction != null)
+			enclosingFunctions.pop();
 	}
 
-	static function walkLogicalExpression(left:AstExpression, right:AstExpression, and:Bool, environment:Map<String, String>, writes:Map<String, Bool>,
-			captures:Null<Map<String, Bool>>, exceptions:Null<Map<String, Bool>>, insideLambda:Bool):Void {
-		var pending:Array<AstExpression> = [right, left];
-		while (pending.length > 0) {
-			var current:AstExpression = cast pending.pop();
-			switch current {
-				case And(nestedLeft, nestedRight, _) if (and):
-					pending.push(nestedRight);
-					pending.push(nestedLeft);
-				case Or(nestedLeft, nestedRight, _) if (!and):
-					pending.push(nestedRight);
-					pending.push(nestedLeft);
-				default:
-					walkExpression(current, environment, writes, captures, exceptions, insideLambda);
-			}
-		}
-	}
-
-	static function walkStatementsInLambda(statements:Array<AstStatement>, environment:Map<String, String>, writes:Map<String, Bool>,
-			captures:Null<Map<String, Bool>>, exceptions:Null<Map<String, Bool>>):Void {
-		for (statement in statements) {
-			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
-				walkExpression(expression, environment, writes, captures, exceptions, true);
-			switch statement {
-				case VarDeclaration(name, _, _, span), UninitializedDeclaration(name, _, span):
-					environment.set(name, key(name, span));
-				case Assignment(name, _, _), Increment(name, _, _):
-					markWrite(name, environment, writes);
-					if (captures != null) {
-						var binding = environment.get(root(name));
-						if (binding != null)
-							captures.set(binding, true);
-					}
-				case If(_, yes, no, _):
-					walkStatementsInLambda(yes, copy(environment), writes, captures, exceptions);
-					walkStatementsInLambda(no, copy(environment), writes, captures, exceptions);
-				case While(_, body, _), DoWhile(body, _, _):
-					walkStatementsInLambda(body, copy(environment), writes, captures, exceptions);
-				case Try(yes, catches, _):
-					walkStatementsInLambda(yes, copy(environment), writes, captures, exceptions);
-					for (caught in catches) {
-						var catchEnvironment = copy(environment);
-						catchEnvironment.set(caught.name, key(caught.name, caught.span));
-						walkStatementsInLambda(caught.statements, catchEnvironment, writes, captures, exceptions);
-					}
-				default:
-			}
-		}
-	}
-
-	static function markWrite(name:String, environment:Map<String, String>, writes:Map<String, Bool>):Void {
-		if (name.indexOf(".") >= 0)
+	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void {
+		if (declaration == null)
 			return;
-		var binding = environment.get(name);
-		if (binding != null)
-			writes.set(binding, true);
+		if (!refersToItself(declaration) && knownWrites != null && isCaptured(declaration) && knownWrites.exists(declaration))
+			captures.set(declaration, true);
 	}
 
-	static function root(name:String):String {
-		var dot = name.indexOf(".");
-		return dot < 0 ? name : name.substring(0, dot);
+	/** A local function that refers to itself, even by calling itself, lives in a cell that exists before the closure does. */
+	function refersToItself(declaration:String):Bool {
+		if (enclosingFunctions.indexOf(declaration) < 0 || !insideLambda())
+			return false;
+		captures.set(declaration, true);
+		return true;
 	}
 
-	static function copy(source:Map<String, String>):Map<String, String>
-		return [for (name => binding in source) name => binding];
+	override function written(name:String, declaration:Null<String>, span:SourceSpan):Void {
+		if (declaration == null || name.indexOf(".") >= 0)
+			return;
+		writtenDeclarations.set(declaration, true);
+		if (knownWrites != null && isCaptured(declaration))
+			captures.set(declaration, true);
+		if (knownWrites != null && tryDepth > tryDepthOf(declaration))
+			exceptions.set(declaration, true);
+	}
 
-	static function containsValue(environment:Map<String, String>, expected:String):Bool {
-		for (binding in environment)
-			if (binding == expected)
-				return true;
-		return false;
+	/** Calls of plain names and `local.method(...)` do not read the local as a value. */
+	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void {
+		if (declaration != null)
+			refersToItself(declaration);
+	}
+
+	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {}
+
+	function isCaptured(declaration:String):Bool
+		return insideLambda() && lambdaDepth > lambdaDepthOf(declaration);
+
+	function lambdaDepthOf(declaration:String):Int {
+		var depth = declaredInLambda.get(declaration);
+		return depth == null ? 0 : depth;
+	}
+
+	function tryDepthOf(declaration:String):Int {
+		var depth = declaredInTry.get(declaration);
+		return depth == null ? 0 : depth;
 	}
 }

@@ -247,10 +247,8 @@ class BodyTyper {
 		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
-		var storage = CaptureAnalysis.analyze(fn.statements, [for (argument in fn.arguments) argument.name]);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
-		for (name in storage.assigned.keys())
-			context.assigned.set(name, true);
+		CaptureAnalysis.collectAssignedLocals(fn.statements, context.assigned);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, MutableCapture);
 		}
@@ -258,7 +256,7 @@ class BodyTyper {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
 		}
 		var scope = new Scope();
-		scope.setPrivateMaps(MapEscapeAnalysis.privateMaps(fn.statements, [for (argument in fn.arguments) argument.name]));
+		scope.setMapPrivacy(MapEscapeAnalysis.analyze(fn.arguments, fn.statements));
 		context.scope = scope;
 		var isConstructor = owner != null && session.classDecls.exists(owner) && fn.name == "new";
 		if (abstractReceiver != null) {
@@ -1195,6 +1193,9 @@ class BodyTyper {
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var type = scope.resolve(name);
 		return if (type != null) {
+			if (!scope.privateMapUseIsKnown(name, span))
+				fail("E9001", 'Internal compiler error: "$name" was analysed as a map nothing else can reach, but this use was not seen by that analysis',
+					span);
 			if (!scope.isAssigned(name))
 				fail("E1023", 'Local "$name" may be used before assignment', span);
 			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.

@@ -15,6 +15,17 @@ class MapEntryFactsMain {
 		expectCompiles("and across several", "if (!m.exists(k)) return 0; b.bump(); b.bump(); return m.get(k);");
 		expectCompiles("a key the map was given keeps it across a call", "m.set(\"b\", 42); b.bump(); return m.get(\"b\");");
 
+		// Declarations are told apart by scope, not by name.
+		expectCompiles("sibling blocks may each declare a private map of the same name",
+			"var flag = true; if (flag) { var parts:Map<String, Int> = new Map(); parts.set(\"a\", 42); if (parts.exists(k)) { b.bump(); return parts.get(k); } } " +
+			"else { var parts:Map<String, Int> = new Map(); parts.set(\"a\", 42); if (parts.exists(k)) { b.bump(); return parts.get(k); } } return 0;");
+		expectCompiles("a loop variable of the same name is another variable",
+			"var total = 0; for (m in [1, 2]) { total += m; } if (m.exists(k)) { b.bump(); return m.get(k); } return total;");
+		expectCompiles("so is a lambda parameter",
+			"var f = function(m:Int):Int return m + 1; if (m.exists(k)) { b.bump(); return m.get(k) + f(0) - 1; } return 0;");
+		expectCompiles("so is a catch variable", "try { b.bump(); } catch (m:Dynamic) { b.bump(); } if (m.exists(k)) { b.bump(); return m.get(k); } return 0;");
+		expectError("an inner private map does not make an escaping outer one safe",
+			"{ var m:Map<String, Int> = new Map(); m.set(\"z\", 1); } drain(m); if (m.exists(k)) { b.bump(); return m.get(k); } return 0;");
 		expectError("a map handed to a function may lose the entry", "if (m.exists(k)) { drain(m); return m.get(k); } return 0;");
 		expectError("a map stored in an object may lose the entry",
 			"var holder = {inner: m}; if (m.exists(k)) { b.bump(); return m.get(k); } return holder.inner.size();");

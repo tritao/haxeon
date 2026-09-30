@@ -21,6 +21,10 @@ typedef LocalFunction = {
 
 private typedef ScopeValue = {
 	final source:String;
+
+	/** The declaration's identity, as `BindingWalker` names it; see `MapPrivacy`. */
+	final declaration:String;
+
 	final declared:CompilerType;
 	final id:String;
 	final receiver:Bool;
@@ -54,6 +58,7 @@ class Scope {
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
+			declaration: BindingWalker.key(name, span),
 			declared: type,
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
 			receiver: receiver,
@@ -168,25 +173,39 @@ class Scope {
 			facts.refine(local.id, type);
 	}
 
-	/** Source names of maps only this function can reach; see MapEscapeAnalysis. Set on the function's outermost scope. */
-	var privateMaps:Null<Map<String, Bool>> = null;
+	/** Which local maps only this function can reach; see MapEscapeAnalysis. Set on the function's outermost scope. */
+	var privacy:Null<MapPrivacy> = null;
 
-	public function setPrivateMaps(names:Map<String, Bool>):Void
-		privateMaps = names;
+	public function setMapPrivacy(value:MapPrivacy):Void
+		privacy = value;
+
+	function mapPrivacy():Null<MapPrivacy> {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var found = scope.privacy;
+			if (found != null)
+				return found;
+			scope = scope.parent;
+		}
+		return null;
+	}
+
+	/**
+	 * The typer met a use of `name` at `span`. Returns false when it resolves to a private map but the analysis that
+	 * made it private did not see this use as a map operand: the two scopings then disagree, and treating the map as
+	 * private could be wrong.
+	 */
+	public function privateMapUseIsKnown(name:String, span:SourceSpan):Bool {
+		var value = resolveLocal(name), found = mapPrivacy();
+		if (value == null || found == null || !found.isPrivate(value.declaration))
+			return true;
+		return found.isOperandUse(name, span);
+	}
 
 	/** Whether the local with binding `id` is a map that calls cannot reach. */
 	public function isPrivateMap(id:String):Bool {
-		var value = resolveById(id);
-		if (value == null)
-			return false;
-		var scope:Null<Scope> = this;
-		while (scope != null) {
-			var names = scope.privateMaps;
-			if (names != null)
-				return names.exists(value.source);
-			scope = scope.parent;
-		}
-		return false;
+		var value = resolveById(id), found = mapPrivacy();
+		return value != null && found != null && found.isPrivate(value.declaration);
 	}
 
 	/** Source names of the visible locals that are maps only this function can reach. */

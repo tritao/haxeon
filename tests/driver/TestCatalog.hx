@@ -58,6 +58,7 @@ class TestCatalog {
 		"MapEntryFactsMain",
 		"LoopFlowMain",
 		"DiagnosticLocationMain",
+		"BindingAnalysisMain",
 		"ClosureEffectsMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",

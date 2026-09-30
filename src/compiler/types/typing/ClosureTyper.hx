@@ -18,6 +18,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.Scope;
@@ -74,8 +75,7 @@ class ClosureTyper {
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
-			lambdaScope = new Scope(),
-			declared:Map<String, Bool> = [];
+			lambdaScope = new Scope();
 		for (i in 0...arguments.length) {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
@@ -94,14 +94,10 @@ class ClosureTyper {
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
 			lambdaScope.define(localName, argumentType, argument.span);
 			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
-			if (argument.name != "_")
-				declared.set(argument.name, true);
 		}
-		CaptureAnalysis.collectDeclaredLocals(body, declared);
-		var freeVariables:Map<String, Bool> = [];
-		CaptureAnalysis.collectVariables(body, freeVariables);
-		var lambdaAssignments:Map<String, Bool> = [];
-		CaptureAnalysis.collectAssignedLocals(body, lambdaAssignments);
+		var free = FreeVariables.of(arguments, body),
+			freeVariables = free.names,
+			lambdaAssignments = free.assigned;
 		// An unqualified instance method in a lambda is resolved through the lexical receiver even without a `this` reference in the syntax.
 		if (scope.resolve("this") != null)
 			for (name in freeVariables.keys())
@@ -117,41 +113,40 @@ class ClosureTyper {
 		// Map iteration order differs between hosts; sort so closure layouts are deterministic.
 		var freeNames = [for (name in freeVariables.keys()) name];
 		freeNames.sort(Reflect.compare);
-		for (name in freeNames)
-			if (!declared.exists(name)) {
-				var capturedType = scope.resolve(name);
-				if (capturedType != null) {
-					var captureType:CompilerType = capturedType;
-					var declaredCaptureType = scope.resolveDeclared(name);
-					var cellClass:Null<String> = null;
-					if (boundCell(name, scope) != null)
-						cellClass = boundCell(name, scope);
-					if (cellClass == null && scope.isCellCapture(name))
-						cellClass = scope.requireCellClass(name);
-					if (cellClass == null && (outerContext.assigned.exists(name) || lambdaAssignments.exists(name))) {
-						var newCellClass = '$' + 'cell:' + outerContext.name + ':' + name;
-						var bindingId = scope.requireId(name);
-						cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture,
-							declaredCaptureType == null ? captureType : declaredCaptureType);
-					}
-					var bindingId = scope.requireId(name),
-						captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
-							scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
-							CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
-					lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-						declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name));
-					if (cellClass != null)
-						captureCells.set(name, cellClass);
-					captureTypes.set(name, captureType);
-					captures.push({
-						field: name,
-						bindingId: bindingId,
-						type: captureType,
-						storageType: declaredCaptureType == null ? captureType : declaredCaptureType,
-						source: captureSource
-					});
+		for (name in freeNames) {
+			var capturedType = scope.resolve(name);
+			if (capturedType != null) {
+				var captureType:CompilerType = capturedType;
+				var declaredCaptureType = scope.resolveDeclared(name);
+				var cellClass:Null<String> = null;
+				if (boundCell(name, scope) != null)
+					cellClass = boundCell(name, scope);
+				if (cellClass == null && scope.isCellCapture(name))
+					cellClass = scope.requireCellClass(name);
+				if (cellClass == null && (outerContext.assigned.exists(name) || lambdaAssignments.exists(name))) {
+					var newCellClass = '$' + 'cell:' + outerContext.name + ':' + name;
+					var bindingId = scope.requireId(name);
+					cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture,
+						declaredCaptureType == null ? captureType : declaredCaptureType);
 				}
+				var bindingId = scope.requireId(name),
+					captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
+						scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
+						CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
+				lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
+					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name));
+				if (cellClass != null)
+					captureCells.set(name, cellClass);
+				captureTypes.set(name, captureType);
+				captures.push({
+					field: name,
+					bindingId: bindingId,
+					type: captureType,
+					storageType: declaredCaptureType == null ? captureType : declaredCaptureType,
+					source: captureSource
+				});
 			}
+		}
 		var typedBodyScope = new Scope();
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;

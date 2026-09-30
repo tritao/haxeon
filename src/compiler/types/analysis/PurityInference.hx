@@ -62,7 +62,8 @@ class PurityInference {
 				walker.declare(name);
 		if (privateMaps != null)
 			for (name in privateMaps)
-				walker.privateMaps.set(name, true);
+				if (!hasArgument(arguments, name))
+					walker.privateMaps.set(name, true);
 		for (argument in arguments) {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
@@ -72,6 +73,13 @@ class PurityInference {
 		if (!walker.statements(body))
 			return null;
 		return [for (key in walker.dependencies.keys()) key];
+	}
+
+	static function hasArgument(arguments:Array<AstArgument>, name:String):Bool {
+		for (argument in arguments)
+			if (argument.name == name)
+				return true;
+		return false;
 	}
 
 	public static function create(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, enums:Map<String, AstEnum>,
@@ -377,7 +385,7 @@ private class PurityWalker {
 				pure;
 			case Assignment(name, value, _): isLocal(name) && expression(value);
 			case Increment(name, _, _): isLocal(name);
-			case IndexAssignment(Variable(name, _), key, value, _) if (privateMaps.exists(name) && isLocal(name)): expression(key) && expression(value);
+			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key) && expression(value);
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
@@ -475,8 +483,8 @@ private class PurityWalker {
 					return false;
 				dependencies.set(key, true);
 				true;
-			case MethodCall(Variable(local, _), name, arguments, _)
-				if (privateMaps.exists(local) && isLocal(local) && MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name) >= 0):
+			case MethodCall(Variable(local, _), name, arguments, _) if (isOuterPrivateMap(local)
+				&& MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name) >= 0):
 				all(arguments);
 			case MethodCall(object, name, arguments, _):
 				var key = switch object {
@@ -501,13 +509,29 @@ private class PurityWalker {
 		};
 	}
 
+	/**
+	 * Whether `name` refers to one of the private maps of the enclosing function, not to something the body declares
+	 * under the same name, which is a different variable.
+	 */
+	function isOuterPrivateMap(name:String):Bool {
+		if (!privateMaps.exists(name))
+			return false;
+		var index = scopes.length;
+		while (index > 0) {
+			index--;
+			if (scopes[index].exists(name))
+				return index == 0;
+		}
+		return false;
+	}
+
 	/** The parser may spell `map.set(k, v)` as a call to the dotted name `map.set`. */
 	function isPrivateMapOperation(name:String):Bool {
 		var dot = name.indexOf(".");
 		if (dot <= 0 || name.indexOf(".", dot + 1) >= 0)
 			return false;
 		var local = name.substr(0, dot);
-		return privateMaps.exists(local) && isLocal(local) && MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name.substr(dot + 1)) >= 0;
+		return isOuterPrivateMap(local) && MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name.substr(dot + 1)) >= 0;
 	}
 
 	/** A property read runs its getter; plain field reads have no effect. */
