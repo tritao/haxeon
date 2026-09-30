@@ -1,7 +1,13 @@
 package haxe;
 
+#if wasm
+// Wasm has no runtime symbolizer yet, so caught exceptions carry no stack.
+function nativeExceptionStack():Array<String>
+	return [];
+#else
 @:hlNative("haxeon_runtime", "__exception_stack")
 extern function nativeExceptionStack():Array<String>;
+#end
 
 /** One portable call-stack entry. */
 enum StackItem {

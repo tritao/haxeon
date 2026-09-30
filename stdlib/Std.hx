@@ -149,8 +149,30 @@ function digitValue(code:Int):Int
 @:hlNative("haxeon_runtime", "__std_int_f64")
 extern function stdIntFloat(value:Float):Int;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__std_random")
 extern function stdRandom(limit:Int):Int;
+#else
+/**
+ * Wasm draws from a xorshift32 generator with a fixed seed, so every session sees the same
+ * sequence, as HashLink's unseeded C `rand()` does. It is not suitable for anything secret.
+ */
+function stdRandom(limit:Int):Int {
+	if (limit <= 0)
+		return 0;
+	var state = RandomState.state;
+	state ^= state << 13;
+	state ^= state >>> 17;
+	state ^= state << 5;
+	RandomState.state = state;
+	// Drop the sign bit so the remainder is never negative.
+	return (state >>> 1) % limit;
+}
+
+private class RandomState {
+	public static var state = 0x2545F491;
+}
+#end
 
 @:hlNative("haxeon_runtime", "__std_string")
 extern function stdString(value:Dynamic):String;

@@ -32,6 +32,10 @@ typedef EqualityRequest = {
 /** Mutable semantic state shared by all typing phases for one compilation. */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
+
+	/** The enum abstract a bare value name being typed right now must belong to; see `EnumAbstractHints`. */
+	public var abstractHint:Null<String>;
+
 	public var methodInfo:Map<String, SemanticMethodInfo> = [];
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
@@ -126,15 +130,34 @@ class TypingSession {
 	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
 	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
 			owner:Null<String>, ?privateMaps:Array<String>):Bool {
+		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(localPurityInference(), arguments, body,
+			owner == null ? "$local" : owner + ".$local", outerLocals, privateMaps);
+		return dependencies != null && dependenciesArePure(dependencies);
+	}
+
+	/**
+		For a loop body: the fields it stores to and whether it stores to an element (array or map), when that is all
+		it does to state anyone else can see; null when it may have any other effect.
+	 */
+	public function bodyStores(body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>, owner:Null<String>,
+			?privateMaps:Array<String>):Null<{fields:Array<String>, indexed:Bool}> {
+		var found = compiler.types.analysis.PurityInference.localBodyStores(localPurityInference(), body, owner == null ? "$local" : owner + ".$local",
+			outerLocals, privateMaps);
+		if (found == null || !dependenciesArePure(found.dependencies))
+			return null;
+		return {fields: found.fields, indexed: found.indexed};
+	}
+
+	function localPurityInference():compiler.types.analysis.PurityInference {
 		var inference = localPurity;
 		if (inference == null) {
 			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls, isDeclaredPure, isTypeName);
 			localPurity = inference;
 		}
-		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(inference, arguments, body,
-			owner == null ? "$local" : owner + ".$local", outerLocals, privateMaps);
-		if (dependencies == null)
-			return false;
+		return inference;
+	}
+
+	function dependenciesArePure(dependencies:Array<String>):Bool {
 		for (key in dependencies)
 			// Typing a string conversion clears no facts either, so neither does depending on one.
 			if (key != compiler.types.analysis.PurityInference.TO_STRING

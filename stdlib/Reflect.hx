@@ -19,8 +19,62 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+#if !wasm
 @:hlNative("haxeon_runtime", "__reflect_compare")
 extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
+#else
+/**
+ * HashLink's `hl_dyn_compare` order: null first, strings bytewise, numbers by value, and
+ * `0xAABBCCDD` (HashLink's invalid-comparison result) for NaN or mismatched primitive kinds.
+ * HashLink orders distinct objects by address, which Wasm does not expose; they compare as 1.
+ */
+function reflectCompare(left:Dynamic, right:Dynamic):Int {
+	if (left == null)
+		return right == null ? 0 : -1;
+	if (right == null)
+		return 1;
+	if (Std.isOfType(left, String) || Std.isOfType(right, String)) {
+		if (!Std.isOfType(left, String) || !Std.isOfType(right, String))
+			return DynamicOrder.INVALID;
+		// Typed as strings, Reflect.compare lowers to the bytewise string comparison intrinsic.
+		var leftText:String = left, rightText:String = right;
+		var order = Reflect.compare(leftText, rightText);
+		return order < 0 ? -1 : order > 0 ? 1 : 0;
+	}
+	if (Std.isOfType(left, Int) && Std.isOfType(right, Int)) {
+		var leftValue:Int = left, rightValue:Int = right;
+		return leftValue == rightValue ? 0 : leftValue > rightValue ? 1 : -1;
+	}
+	var leftNumber = Std.isOfType(left, Int) || Std.isOfType(left, Float),
+		rightNumber = Std.isOfType(right, Int) || Std.isOfType(right, Float);
+	if (leftNumber || rightNumber) {
+		if (!leftNumber || !rightNumber)
+			return DynamicOrder.INVALID;
+		var leftValue = numberValue(left), rightValue = numberValue(right);
+		return leftValue == rightValue ? 0 : leftValue > rightValue ? 1 : leftValue < rightValue ? -1 : DynamicOrder.INVALID;
+	}
+	if (Std.isOfType(left, Bool) || Std.isOfType(right, Bool)) {
+		if (!Std.isOfType(left, Bool) || !Std.isOfType(right, Bool))
+			return DynamicOrder.INVALID;
+		var leftValue:Bool = left, rightValue:Bool = right;
+		return leftValue == rightValue ? 0 : leftValue ? 1 : -1;
+	}
+	return left == right ? 0 : 1;
+}
+
+/** A boxed Int or Float as a Float; Wasm boxes keep the two kinds apart. */
+function numberValue(value:Dynamic):Float {
+	if (Std.isOfType(value, Int)) {
+		var integer:Int = value;
+		return integer;
+	}
+	return value;
+}
+
+private class DynamicOrder {
+	public static inline var INVALID = 0xAABBCCDD;
+}
+#end
 
 @:hlNative("std", "fun_compare")
 extern function reflectCompareMethods(left:Dynamic, right:Dynamic):Bool;

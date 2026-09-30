@@ -139,6 +139,8 @@ class HlWriter {
 			}
 			output.write(encoded);
 		}
+		if (cache != null)
+			cache.retainFunctions(code.functions);
 		writeConstants(code);
 		writeDebugSections(code);
 	}

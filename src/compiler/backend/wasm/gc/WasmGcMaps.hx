@@ -132,9 +132,12 @@ class WasmGcMaps {
 			LocalSet(4),
 			Block(null),
 			Loop(null),
+			// Unequal lengths end the scan at once, before it can index past the shorter key.
 			LocalGet(4),
 			LocalGet(2),
 			I32LtS,
+			LocalGet(5),
+			I32And,
 			I32Eqz,
 			BrIf(1),
 			LocalGet(0),

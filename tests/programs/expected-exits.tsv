@@ -247,3 +247,6 @@ map-copy	42
 capture-shadowing	42
 compound-shift-assign	42
 field-initializer-dynamic	42
+stdlib-runtime-helpers	42
+ereg-patterns	42
+virtual-call-without-implementors	42

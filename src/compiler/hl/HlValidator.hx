@@ -120,6 +120,8 @@ class HlValidator {
 				cache.markSnapshotValidated(snapshot.content, snapshot.sourceHash);
 			snapshotHashes.set(snapshot.sourceHash, true);
 		}
+		if (cache != null)
+			cache.retainSnapshots([for (snapshot in code.sourceSnapshots) snapshot.content]);
 		if (code.sourceSnapshots.length > 0) {
 			var encoded = HlWriter.encodeSourceSnapshots(code.sourceSnapshots), found = false;
 			for (section in code.debugSections)

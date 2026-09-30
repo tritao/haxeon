@@ -548,8 +548,10 @@ class ExpressionTyper {
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
-						false), typedSubject.type, "switch case", "E1019") : pattern.value;
+					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(EnumAbstractHints.typed(session,
+						EnumAbstractHints.declaredAs(session, typedSubject), switchCase.value,
+						() -> typeExpressionCallback(switchCase.value, scope, typedSubject.type, false)),
+						typedSubject.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
 				caseIndex = typedCases.length,
@@ -949,7 +951,7 @@ class ExpressionTyper {
 	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan, ?symbol:String,
 			reversed:Bool = false):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
-			right = typeExpressionCallback(b, scope, left.type, false);
+			right = EnumAbstractHints.typed(session, EnumAbstractHints.declaredAs(session, left), b, () -> typeExpressionCallback(b, scope, left.type, false));
 		if (symbol == null)
 			symbol = operation == 0 ? "<" : operation == 1 ? "<=" : "==";
 		var overloaded = callResolver.typeAbstractOperator(symbol, [left, right], span, scope);
@@ -1034,7 +1036,7 @@ class ExpressionTyper {
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
-			right = typeExpressionCallback(b, scope, left.type, false),
+			right = EnumAbstractHints.typed(session, EnumAbstractHints.declaredAs(session, left), b, () -> typeExpressionCallback(b, scope, left.type, false)),
 			overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;

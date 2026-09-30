@@ -13,5 +13,4 @@ string-utf16-length	skip	Wasm Strings count UTF-8 bytes; HashLink counts UTF-16 
 object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
 sys-exit	skip	Sys.exit needs the host sys_exit import, which the Wasm harness does not provide
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
-interface-conversion-cache	skip	Uses HashLink GC counters that have no Wasm counterpart
 profile-span	skip	Profile spans are a HashLink diagnostics feature

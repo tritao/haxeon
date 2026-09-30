@@ -101,6 +101,10 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringIndexOf(module, native.name));
 						case "__string_index_of_from":
 							functions.set(native.name, addStringIndexOf(module, native.name, true));
+						case "__string_last_index_of":
+							functions.set(native.name, addStringLastIndexOf(module, native.name));
+						case "__string_last_index_of_from":
+							functions.set(native.name, addStringLastIndexOf(module, native.name, true));
 						case "__string_substring":
 							if (!functions.exists(native.name))
 								functions.set(native.name, addStringSubstring(module, native.name, allocator));
@@ -2688,6 +2692,123 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/** Mirrors the HashLink runtime: null operands give -1 and an empty needle matches at the clamped start. */
+	static function addStringLastIndexOf(module:WasmModule, name:String, fromStart = false):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			needle = builder.parameter("needle", 1),
+			start = fromStart ? builder.parameter("start", 2) : null,
+			valueLength = builder.local("valueLength", I32),
+			needleLength = builder.local("needleLength", I32),
+			index = builder.local("index", I32),
+			inner = builder.local("inner", I32);
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.localGet(needle);
+		builder.i32Eqz();
+		builder.emit(I32Or);
+		if (start != null) {
+			builder.localGet(start);
+			builder.i32Const(0);
+			builder.emit(I32LtS);
+			builder.emit(I32Or);
+		}
+		builder.if_(function(builder) {
+			builder.i32Const(-1);
+			builder.return_();
+		});
+		builder.localGet(value);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(valueLength);
+		builder.localGet(needle);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(needleLength);
+		// The last candidate is the clamped start, or the final position the needle fits at.
+		builder.localGet(valueLength);
+		builder.localSet(index);
+		if (start != null) {
+			builder.localGet(start);
+			builder.localGet(valueLength);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(start);
+				builder.localSet(index);
+			});
+		}
+		builder.localGet(needleLength);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.localGet(index);
+			builder.return_();
+		});
+		builder.localGet(valueLength);
+		builder.localGet(needleLength);
+		builder.i32Sub();
+		builder.localGet(index);
+		builder.emit(I32LtS);
+		builder.if_(function(builder) {
+			builder.localGet(valueLength);
+			builder.localGet(needleLength);
+			builder.i32Sub();
+			builder.localSet(index);
+		});
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.i32Const(0);
+				builder.emit(I32LtS);
+				builder.emit(BrIf(1));
+				builder.i32Const(0);
+				builder.localSet(inner);
+				builder.block(function(builder) {
+					builder.loop(function(builder) {
+						builder.localGet(inner);
+						builder.localGet(needleLength);
+						builder.emit(I32Eq);
+						builder.emit(BrIf(1));
+						builder.localGet(value);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(index);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.localGet(needle);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.emit(I32Eq);
+						builder.i32Eqz();
+						builder.emit(BrIf(1));
+						builder.localGet(inner);
+						builder.i32Const(1);
+						builder.i32Add();
+						builder.localSet(inner);
+						builder.emit(Br(0));
+					});
+				});
+				builder.localGet(inner);
+				builder.localGet(needleLength);
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					builder.localGet(index);
+					builder.return_();
+				});
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Sub();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.i32Const(-1);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}

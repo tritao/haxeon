@@ -274,7 +274,11 @@ class BodyTyper {
 			scope.define(argument.name, type, argument.span);
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
+			var declaredAbstract = EnumAbstractHints.named(session, argument.type);
+			if (declaredAbstract != null)
+				context.declaredAbstracts.set(scope.requireId(argument.name), declaredAbstract);
 		}
+		context.declaredResultAbstract = EnumAbstractHints.named(session, fn.result);
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -1777,10 +1781,21 @@ class BodyTyper {
 	 * ordinary lookup, which reports it). Only called for a bare reference.
 	 */
 	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
-		if (expectedType == null)
-			return null;
 		// A name written bare can arrive qualified by the class it also names; the value is its last segment.
 		var valueName = lastPathSegment(name);
+		// The other side's declared type names the abstract: that is the one the value belongs to, however
+		// many others declare the name. The hint is spent here so typing the value cannot leak it.
+		var hinted = session.abstractHint;
+		session.abstractHint = null;
+		if (hinted != null) {
+			var hintedDeclaration = session.enumAbstractDecls.get(hinted);
+			if (hintedDeclaration != null)
+				for (value in hintedDeclaration.values)
+					if (value.name == valueName)
+						return typeExpression(value.value, new Scope(), lowerType(hintedDeclaration.underlying));
+		}
+		if (expectedType == null)
+			return null;
 		var declaration = findBareEnumAbstract(valueName, expectedType, span, true);
 		if (declaration == null)
 			return null;
@@ -1799,7 +1814,8 @@ class BodyTyper {
 	function findBareEnumAbstract(name:String, underlying:Null<CompilerType>, span:SourceSpan, lenient:Bool):Null<compiler.syntax.Ast.AstEnumAbstract> {
 		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
 			ambiguous = false,
-			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
+			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
 		for (candidateName => candidate in session.enumAbstractDecls) {
 			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
@@ -1809,6 +1825,7 @@ class BodyTyper {
 					if (found != null)
 						ambiguous = true;
 					found = candidate;
+					declaredBy.push(candidateName);
 					if (pathBeforeLast(candidateName) == ownerPackage)
 						samePackage.push(candidate);
 				}
@@ -1817,7 +1834,12 @@ class BodyTyper {
 			if (samePackage.length != 1) {
 				if (lenient)
 					return null;
-				fail("E1005", 'Ambiguous enum abstract value "$name"', span);
+				declaredBy.sort(Reflect.compare);
+				fail("E1005",
+					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}' +
+					(samePackage.length > 1 ? ", and more than one of them is in the current package" : ", and none of them is in the current package") +
+					'. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
+					span);
 			}
 			found = samePackage[0];
 		}

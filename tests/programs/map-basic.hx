@@ -4,6 +4,9 @@ function main():Int {
 	values.set("other", 7);
 	if (values.size() != 2)
 		return 0;
+	// Keys shorter or longer than a stored key must miss without reading past either key.
+	if (values.exists("ans") || values.exists("answers"))
+		return 0;
 	var foundAnswer = false, foundOther = false, valueCount = 0;
 	for (value in values.values()) {
 		valueCount++;

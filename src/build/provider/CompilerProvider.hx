@@ -90,7 +90,10 @@ class CompilerProvider {
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment,
 				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
 					environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
-						project.root, () -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment))),
+						project.root,
+						() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
+							runtimeLibraryEnvironment(context.compilerHome),
+							() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)))),
 			false);
 	}
 
