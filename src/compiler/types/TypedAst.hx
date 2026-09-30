@@ -42,6 +42,10 @@ enum TypedExpressionKind {
 	TUnreachable;
 	TVoidLiteral;
 	TNullableWrap(value:TypedExpression);
+
+	/** A value class instance bound to a new storage location: a distinct copy, so the two never alias. */
+	TCopy(value:TypedExpression, layout:ValueCopyLayout);
+
 	TIntToFloat(value:TypedExpression);
 	TIntToInt64(value:TypedExpression);
 	TFloatToInt(value:TypedExpression);
@@ -361,6 +365,9 @@ enum TypedCaptureSource {
 	CaptureCellEnvironmentField(name:String, cellClass:String);
 	CaptureExpression(expression:TypedExpression);
 }
+
+/** Stored fields to copy for a value class, with the layout of nested mutable value classes that need copying too. */
+typedef ValueCopyLayout = {final name:String; final fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}>;}
 
 /** A closure capture tied to its resolved lexical binding and storage source. */
 typedef TypedCapture = {

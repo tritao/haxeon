@@ -22,6 +22,23 @@ in. HashLink has no stack structs, so removing those temporaries has to happen i
   parameters and returns are still allowed because they are pointers. Before this, `h.v = null`, an unguarded optional
   parameter stored into a field, and a `Null<V>` field all crashed with SIGSEGV at address 0.
 
+## Value semantics
+
+A value class has copy semantics on every target. Binding an instance to a new location gives that location its own
+copy: a variable (`var b = a`, also with an inferred type), an argument, a return value, or a store into a field, array
+element or map. Writes through a place still write in place (`h.span.start = 3`, and a method called on a place
+mutates it), so a receiver is not copied. A fresh value (a `new`, a call result) is not copied again.
+
+The typer inserts a `TCopy` node where `coerce` binds a place to a mutable value class, and the IR generator expands it
+to a new object with the same field values, copying nested mutable value classes in turn. A class whose fields are all
+`final` (and hold no mutable value class) is shared, since it cannot be told from its copy. Before this, HashLink
+stored value fields inline and handed out pointers into the parent while Wasm used ordinary references, so
+`var alias = h.span; h.span = new Span(5, 6)` meant two different things; the parity suite now runs the same value
+class programs on all three targets with no skips.
+
+Not covered yet: the loop variable of `for (x in values)`, generic value classes, and structural `==` on value
+classes (it is still reference equality).
+
 ## Plan
 
 Four stages, each with a measurable checkpoint. Each stage must keep the full driver suite and Wasm parity green.

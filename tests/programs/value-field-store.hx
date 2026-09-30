@@ -48,10 +48,10 @@ function main():Int {
 	h.wide = new Wide(11);
 	if (h.wide.a != 11 || h.wide.b != 0.0 || h.wide.flag)
 		failures += 4;
-	// A reference taken to the slot before the store sees the new contents, exactly as before.
-	var alias = h.span;
+	// A copy taken before the store keeps the old contents.
+	var copy = h.span;
 	h.span = new Span(5, 6);
-	if (alias.start != 5 || alias.length != 6)
+	if (copy.start != 40 || copy.length != 7 || h.span.start != 5)
 		failures += 8;
 	// Values computed from the old contents are read before they are overwritten.
 	h.span = new Span(h.span.length, h.span.start);

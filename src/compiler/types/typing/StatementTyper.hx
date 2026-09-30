@@ -148,6 +148,8 @@ class StatementTyper {
 				var value = typeExpression(initializer, scope, declaredType, false);
 				if (declaredType != null)
 					value = coerce(value, declaredType, 'local "$name"', "E1002");
+				else
+					value = ValueCopy.bind(session, value, value.type);
 				if (recursiveCell != null)
 					return [
 						TDeclare(scope.requireId(name), declaredType, span),

@@ -27,7 +27,7 @@ class ConversionResolver {
 			default:
 		}
 		return switch session.relations.conversion(value.type, expected) {
-			case Identity: value;
+			case Identity: ValueCopy.bind(session, value, expected);
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
 			case IntToInt64:

@@ -60,9 +60,9 @@ class FlowAnalysis {
 				TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_), TStaticField(_, _), TFunctionRef(_), TLambda(_, _, _),
 				TNewMap(_, _):
 				false;
-			case TEnumIndex(value), TEnumField(value, _, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value),
-				TToDynamic(value), TNegate(value), TNot(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value),
-				TStringLength(value), TStringFromCharCode(value), TNewArray(_, value), TMethodRef(value, _), TField(value, _):
+			case TCopy(value, _), TEnumIndex(value), TEnumField(value, _, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value),
+				TFloatToInt(value), TToDynamic(value), TNegate(value), TNot(value), TCast(value), TAbiCast(value), TToInterface(value, _),
+				TArrayLength(value), TStringLength(value), TStringFromCharCode(value), TNewArray(_, value), TMethodRef(value, _), TField(value, _):
 				mayHaveEffect(value, isPureCall);
 			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right), TBitAnd(left, right), TBitXor(left, right),
 				TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right), TUnsignedShiftRight(left, right), TLess(left, right),

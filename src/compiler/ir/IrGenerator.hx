@@ -7,6 +7,7 @@ import compiler.runtime.RuntimeType;
 import compiler.runtime.PlatformAbi;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.ValueCopyLayout;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
@@ -874,8 +875,21 @@ class IrGenerator {
 		}
 	}
 
+	/** A new instance with the same field values; nested value classes that need copying are copied in turn. */
+	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout):CfgValue {
+		var copy = builder.newObject(layout.name);
+		for (field in layout.fields) {
+			var value = builder.fieldGet(source, field.name, lowerType(field.type));
+			if (field.nested != null)
+				value = copyValue(builder, value, field.nested);
+			builder.fieldSet(copy, field.name, value);
+		}
+		return copy;
+	}
+
 	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
+			case TCopy(value, layout): copyValue(builder, lowerExpression(value, builder, localTypes), layout);
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
 			case TFloatLiteral(value): builder.constFloat(value, lowerType(expression.type));
 			case TStringLiteral(value): builder.constString(value);
