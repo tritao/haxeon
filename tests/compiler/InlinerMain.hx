@@ -44,6 +44,27 @@ class InlinerMain {
 		IrVerifier.verify(scalarProgram);
 		expect(allocations(programFunction(scalarProgram, "gone")) == 0, "an object used only through fields in one block should be scalar replaced");
 		expect(allocations(programFunction(scalarProgram, "escapes")) == 1, "an object passed to a call that is not inlined must stay allocated");
+		// Uses spread over branches and loops turn fields into phis. That only pays when the allocation runs repeatedly, so an
+		// object created once keeps its allocation and one created inside a loop loses it.
+		var flowProgram = Frontend.compile("@:value class Acc { public var count:Int; public var total:Int; public function new() {} "
+			+ "public function add(v:Int):Void { count = count + 1; total = total + v; } } "
+			+ "function keep(a:Acc):Int { var t = 0; for (i in 0...3) t += a.total * i; return t; } "
+			+ "function branches(flag:Bool):Int { var a = new Acc(); a.add(1); if (flag) a.add(2); return a.total; } "
+			+ "function loops(n:Int):Int { var a = new Acc(); for (i in 0...n) a.add(i); return a.total + a.count; } "
+			+
+			"function perIteration(n:Int):Int { var t = 0; for (i in 0...n) { var a = new Acc(); a.add(i); if (i % 2 == 0) a.add(1); t += a.total; } return t; } "
+			+
+			"function perIterationNested(n:Int):Int { var t = 0; for (i in 0...n) { var a = new Acc(); for (j in 0...3) a.add(j); t += a.total + a.count; } return t; } "
+			+ "function late(n:Int):Int { var a = new Acc(); for (i in 0...n) a.add(i); return keep(a); } "
+			+ "function guarded(n:Int):Int { var a = new Acc(); try { a.add(n); } catch (e:Dynamic) { return -1; } return a.total; } "
+			+ "function main():Int return branches(true) + loops(3) + perIteration(4) + perIterationNested(2) + late(3) + guarded(2);");
+		IrInliner.run(flowProgram, new IrInlineCache());
+		IrVerifier.verify(flowProgram);
+		for (name in ["branches", "loops", "late"])
+			expect(allocations(programFunction(flowProgram, name)) == 1, '$name allocates once, and needs phis to replace it');
+		for (name in ["perIteration", "perIterationNested"])
+			expect(allocations(programFunction(flowProgram, name)) == 0, '$name allocates every iteration, so it should be replaced even with phis');
+		expect(allocations(programFunction(flowProgram, "guarded")) <= 1, "an object in a function with exception handling is handled safely");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();
