@@ -350,7 +350,8 @@ class CallResolver {
 		var typed:Array<TypedExpression> = [];
 		for (i in 0...arguments.length) {
 			var supplied = argumentType(parameters[i], substitutions),
-				value = typeExpression(arguments[i], scope, supplied, false);
+				value = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, parameters[i].type), arguments[i],
+					() -> typeExpression(arguments[i], scope, supplied, false));
 			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"', "E1009"));
 		}
 		for (i in arguments.length...parameters.length) {
@@ -401,7 +402,8 @@ class CallResolver {
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
-			var argument = typeExpression(arguments[index], scope, expected, expected != null);
+			var argument = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, declared.type), arguments[index],
+				() -> typeExpression(arguments[index], scope, expected, expected != null));
 			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}

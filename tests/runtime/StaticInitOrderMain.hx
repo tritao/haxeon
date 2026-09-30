@@ -35,6 +35,30 @@ class StaticInitOrderMain {
 		if (Runtime.callInt(live, chunked.functionIds.get("main")) != 82)
 			throw "Static initializer order changed across chunks";
 		Runtime.dispose(live);
+		// A dependency declared later in the same module, in the same class, or behind a call still runs first.
+		var forward = [
+			"a class declared later" =>
+			"class A { public static final X:Int = B.X; } class B { public static final X:Int = 7; } function main():Int { return A.X; }",
+			"a field declared later in the same class" =>
+			"class A { public static final X:Int = Y; public static final Y:Int = 7; } function main():Int { return A.X; }",
+			"a static read behind a call" =>
+			"class A { public static final X:Int = B.get(); } class B { static final V:Int = 7; public static function get():Int return V; } " +
+			"function main():Int { return A.X; }",
+			"a static read behind a method call" =>
+			"class A { public static final X:Int = new B().get(); } class B { public function new() {} public function get():Int return C.V; } " +
+			"class C { public static final V:Int = 7; } function main():Int { return A.X; }",
+			"a dependency cycle" =>
+			"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int { return 7; }"
+		];
+		for (description => source in forward) {
+			compiler = new Compiler();
+			compiler.update("Main.hx", source);
+			var ordered = compiler.compile("Main");
+			live = Runtime.load(HlWriter.encode(ordered.module), ordered.runtimeIdentity);
+			if (Runtime.callInt(live, ordered.functionIds.get("main")) != 7)
+				throw 'Static initializers ran before their dependency: $description';
+			Runtime.dispose(live);
+		}
 		Sys.println("PASS: static initializers respect dependency order");
 	}
 }

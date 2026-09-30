@@ -50,6 +50,33 @@ class HlWriterCache {
 	public function markValidated(fn:HlFunction):Void
 		validatedFunctions.set(fn, true);
 
+	/**
+	 * Keeps encoded bodies and validation marks only for the functions of the module just written, so a
+	 * long-lived session releases the functions an edit replaced.
+	 */
+	public function retainFunctions(active:Array<HlFunction>):Void {
+		var keptFunctions = new ObjectMap<HlFunction, Bytes>(),
+			keptValidated = new ObjectMap<HlFunction, Bool>();
+		for (fn in active) {
+			var encoded = functions.get(fn);
+			if (encoded != null)
+				keptFunctions.set(fn, encoded);
+			if (validatedFunctions.exists(fn))
+				keptValidated.set(fn, true);
+		}
+		functions = keptFunctions;
+		validatedFunctions = keptValidated;
+	}
+
+	/** Keeps snapshot validation marks only for the snapshots of the module just validated. */
+	public function retainSnapshots(active:Array<Bytes>):Void {
+		var kept = new ObjectMap<Bytes, Int>();
+		for (content in active)
+			if (validatedSnapshots.exists(content))
+				kept.set(content, validatedSnapshots.get(content));
+		validatedSnapshots = kept;
+	}
+
 	public function isSnapshotValidated(content:Bytes, sourceHash:Int):Bool
 		return validatedSnapshots.get(content) == sourceHash;
 

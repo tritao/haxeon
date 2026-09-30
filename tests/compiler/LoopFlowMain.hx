@@ -6,7 +6,7 @@ import compiler.Diagnostic.CompileError;
  * nothing in the body can undo it.
  */
 class LoopFlowMain {
-	static final prelude = "class Holder { public var value:Null<Int> = 5; public function new() {} } function reset(h:Holder):Void { h.value = null; } function drop(h:Holder):Int { h.value = null; return 1; } class Sink { public static var kept:Map<String, Int>; } function keep(m:Map<String, Int>):Void { Sink.kept = m; } ";
+	static final prelude = "class Holder { public var value:Null<Int> = 5; public function new() {} } function reset(h:Holder):Void { h.value = null; } function drop(h:Holder):Int { h.value = null; return 1; } class Sink { public static var kept:Map<String, Int>; } class Pair { public var value:Null<Int> = 5; public var count:Int = 0; public function new() {} } class Outer { public var inner:Holder = new Holder(); public function new() {} } class Watched { public var value:Null<Int> = 5; public var other(default, set):Int = 0; public function new() {} function set_other(v:Int):Int { value = null; return other = v; } } function keep(m:Map<String, Int>):Void { Sink.kept = m; } ";
 
 	static function main():Void {
 		expectCompiles("a read-only loop keeps a field fact",
@@ -49,6 +49,21 @@ class LoopFlowMain {
 			"var m:Map<String, Int> = new Map(); m.set(\"a\", 1); for (k in m.keys()) { m.clear(); var v:Int = m.get(k); } return 0;");
 		expectError("an entry proved before a loop that removes it",
 			"var m:Map<String, Int> = new Map(); m.set(\"a\", 1); var i = 0; if (m.exists(\"a\")) { while (i < 2) { var v:Int = m.get(\"a\"); m.remove(\"a\"); i++; } } return 0;");
+		expectCompiles("an array element store keeps a field fact, in and after the loop",
+			"var h = new Holder(); var out = [0, 0]; if (h.value != null) { for (i in 0...2) { out[i] = h.value; } var z:Int = h.value; } return 0;");
+		expectCompiles("so does a store to a differently named field",
+			"var p = new Pair(); if (p.value != null) { for (i in 0...2) { var z:Int = p.value; p.count = i; } var w:Int = p.value; } return 0;");
+		expectError("storing null to the narrowed field clears it for the next iteration",
+			"var h = new Holder(); if (h.value != null) { for (i in 0...2) { var z:Int = h.value; h.value = null; } } return 0;");
+		expectError("and after the loop", "var h = new Holder(); if (h.value != null) { for (i in 0...2) { h.value = null; } var z:Int = h.value; } return 0;");
+		expectError("even through another name for the same object",
+			"var h = new Holder(); var g = h; if (h.value != null) { for (i in 0...2) { var z:Int = h.value; g.value = null; } } return 0;");
+		expectError("a store to a field with a setter runs code, so it counts as a call",
+			"var w = new Watched(); if (w.value != null) { for (i in 0...2) { var z:Int = w.value; w.other = i; } } return 0;");
+		expectCompiles("incrementing another field keeps it",
+			"var p = new Pair(); if (p.value != null) { for (i in 0...2) { var z:Int = p.value; p.count++; } } return 0;");
+		expectError("replacing an object on the path clears facts read through it",
+			"var o = new Outer(); var other = new Holder(); other.value = null; if (o.inner.value != null) { for (i in 0...2) { var z:Int = o.inner.value; o.inner = other; } } return 0;");
 		Sys.println("PASS: loops and flow facts");
 	}
 

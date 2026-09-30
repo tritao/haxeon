@@ -37,8 +37,8 @@ typedef SemanticAssemblyResult = {
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
 class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
-			structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
+			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>, structuralChanged:Map<String, Bool>,
+			refreshUnchangedModules:Bool = true):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		#if haxeon
 		var allocatedAtStart = hl.Gc.totalAllocated();
@@ -98,10 +98,13 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
-		var classDeclarations:Map<String, AstClass> = [];
+		var classDeclarations:Map<String, AstClass> = [],
+			enumDeclarations:Map<String, compiler.syntax.Ast.AstEnum> = [];
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (enumDecl in parsed.enums)
+					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name), enumDecl);
 				for (classDecl in parsed.classes)
 					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name), classDecl);
 			}
@@ -385,7 +388,8 @@ class SemanticAssembly {
 					canonicalFields.push({
 						name: field.name,
 						metadata: field.metadata,
-						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
+						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
+							enumDeclarations), classAliases,
 							classDecl.typeParameters),
 						initializer: initializer,
 						readAccess: field.readAccess,
@@ -664,8 +668,14 @@ class SemanticAssembly {
 				invalidModules.set(moduleName, true);
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
-			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name))
+			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name)) {
+				// The refresh exists to rebuild a module's semantic index, which only editor services read. Without one, a
+				// function that was typed and lowered from this revision of its module's source has nothing to redo: its
+				// body, spans and dependencies are unchanged (anything that did change is invalid by another reason).
+				if (!refreshUnchangedModules && typedAtCurrentRevision(modules.get(owner), fn.name))
+					continue;
 				invalidate(invalid, invalidationReasons, fn.name, ModuleSemanticSnapshot, owner);
+			}
 		}
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
@@ -709,6 +719,12 @@ class SemanticAssembly {
 		target.set(sourceName, canonicalName);
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
 	}
+
+	static function typedAtCurrentRevision(state:Null<ModuleState>, name:String):Bool
+		return state != null
+			&& state.typedFunctions.exists(name)
+			&& state.typedSourceRevisions.get(name) == state.revision
+			&& (state.irFunctions.exists(name) || state.pendingIrFunctions.exists(name));
 
 	/** The functions whose lowered bodies call or refer to a specialization, by the generic function it was made from. */
 	static function callersOfSpecializations(modules:Map<String, ModuleState>, names:Array<String>):Map<String, Array<String>> {

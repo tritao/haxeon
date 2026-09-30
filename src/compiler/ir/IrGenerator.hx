@@ -152,8 +152,8 @@ class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
 
-	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>):Array<IrFunction>
-		return IrProgramAssembler.staticInitializersFrom(typed, classOrder);
+	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction>
+		return IrProgramAssembler.staticInitializersFrom(typed, classOrder, program);
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
 		return IrProgramAssembler.enumsFrom(typed);

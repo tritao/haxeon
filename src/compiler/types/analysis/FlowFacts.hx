@@ -12,6 +12,7 @@ class FlowFacts {
 	final invalidatedNamespaces:Array<String> = [];
 	final erasedNamespaces:Array<String> = [];
 	final erasedMentions:Array<String> = [];
+	final invalidatedFields:Array<String> = [];
 
 	public function new(?parent:FlowFacts)
 		this.parent = parent;
@@ -51,6 +52,8 @@ class FlowFacts {
 		for (prefix in invalidatedNamespaces)
 			if (StringTools.startsWith(bindingId, prefix))
 				return parent == null ? null : parent.resolveStable(bindingId);
+		if (mentionsInvalidatedField(bindingId))
+			return parent == null ? null : parent.resolveStable(bindingId);
 		var outer = parent;
 		return outer == null ? null : outer.resolve(bindingId);
 	}
@@ -149,4 +152,42 @@ class FlowFacts {
 
 	public function invalidateAllExpressions():Void
 		invalidateNamespace("$expression:");
+
+	/**
+	 * Forgets the expression facts a store to any object's field `field` could falsify: every path with a `field`
+	 * segment, whatever the receiver, since another name may alias it. Like `invalidateAllExpressions`, facts calls
+	 * cannot change survive.
+	 */
+	public function invalidateField(field:String):Void {
+		for (bindingId in refinedTypes.keys())
+			if (mentionsField(bindingId, field))
+				refinedTypes.remove(bindingId);
+		invalidatedFields.push(field);
+	}
+
+	/** Whether an expression fact's path has a `.field` segment, ending the path or followed by `.` or a map-entry `:`. */
+	static function mentionsField(bindingId:String, field:String):Bool {
+		if (!StringTools.startsWith(bindingId, '$' + 'expression:'))
+			return false;
+		var segment = "." + field, from = 0;
+		while (true) {
+			var at = bindingId.indexOf(segment, from);
+			if (at < 0)
+				return false;
+			var end = at + segment.length;
+			if (end == bindingId.length)
+				return true;
+			var next = bindingId.charAt(end);
+			if (next == "." || next == ":")
+				return true;
+			from = at + 1;
+		}
+	}
+
+	function mentionsInvalidatedField(bindingId:String):Bool {
+		for (field in invalidatedFields)
+			if (mentionsField(bindingId, field))
+				return true;
+		return false;
+	}
 }

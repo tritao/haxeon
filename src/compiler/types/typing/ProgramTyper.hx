@@ -251,14 +251,20 @@ class ProgramTyper {
 		if (selected == null)
 			return cached;
 		var parsedByName = [for (decl in parsed) decl.name => decl];
+		// A class is refreshed when a selected function is named under it. Checking that against every selected name for
+		// every class is quadratic (millions of string concatenations in a large program), so collect the dotted prefixes
+		// of the selected names once: a class is changed when its name is one of them.
+		var owners:Map<String, Bool> = [];
+		for (name in selected.keys()) {
+			var dot = name.indexOf(".");
+			while (dot >= 0) {
+				owners.set(name.substr(0, dot), true);
+				dot = name.indexOf(".", dot + 1);
+			}
+		}
 		return [
 			for (cachedClass in cached) {
-				var changed = false;
-				for (name in selected.keys())
-					if (StringTools.startsWith(name, cachedClass.name + ".")) {
-						changed = true;
-						break;
-					}
+				var changed = owners.exists(cachedClass.name);
 				if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
 					var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
 						cachedMethods = [for (method in cachedClass.methods) method.name => method];
@@ -345,8 +351,9 @@ class ProgramTyper {
 					if (!field.isStatic)
 						scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
 					try {
-						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
-							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+						initializer = bodyTyper.coerce(EnumAbstractHints.typed(session, EnumAbstractHints.named(session, field.type), parsedInitializer,
+							() -> bodyTyper.typeExpression(parsedInitializer, scope, type)),
+							type, (field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
 						throw error;

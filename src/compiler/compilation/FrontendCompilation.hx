@@ -123,7 +123,8 @@ class FrontendCompilation {
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGraph = AllocationMeter.sample();
 
-		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged),
+		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged,
+			indexSemantics),
 			canonicalProgram = semanticAssembly.canonicalProgram,
 			functions = semanticAssembly.functions,
 			owners = semanticAssembly.owners,
@@ -476,8 +477,9 @@ class FrontendCompilation {
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializersFrom(typedNew, initializationClasses),
-			entryPoint, irCNatives, IrProgramAssembler.reflectableObjectsFrom(typedNew));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
+			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
+			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		if (IrInliner.enabled) {
 			// A caller whose inlined callee changed is re-lowered and patched even though its own source did not.

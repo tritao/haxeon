@@ -34,8 +34,17 @@ class LoopFlow {
 			for (name in loopVariables)
 				if (name != null)
 					locals.push(name);
-		if (!session.bodyIsPure([], statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames()))
+		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames());
+		if (stores == null)
 			scope.invalidateAllExpressions();
+		else {
+			// Stores forget only what the same store forgets in straight-line code, and also map-entry facts, which a
+			// later iteration's store could falsify. An array element carries no facts.
+			for (field in stores.fields)
+				scope.invalidateField(field);
+			if (stores.indexed)
+				scope.invalidateExpressionNamespace("map-entry:");
+		}
 		if (AstScan.mayRemoveMapEntries(statements))
 			scope.invalidateExpressionNamespaceCompletely("map-entry:");
 	}
