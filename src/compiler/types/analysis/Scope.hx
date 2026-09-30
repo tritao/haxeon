@@ -158,6 +158,27 @@ class Scope {
 			facts.refine(local.id, type);
 	}
 
+	/** Source names of maps only this function can reach; see MapEscapeAnalysis. Set on the function's outermost scope. */
+	var privateMaps:Null<Map<String, Bool>> = null;
+
+	public function setPrivateMaps(names:Map<String, Bool>):Void
+		privateMaps = names;
+
+	/** Whether the local with binding `id` is a map that calls cannot reach. */
+	public function isPrivateMap(id:String):Bool {
+		var value = resolveById(id);
+		if (value == null)
+			return false;
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var names = scope.privateMaps;
+			if (names != null)
+				return names.exists(value.source);
+			scope = scope.parent;
+		}
+		return false;
+	}
+
 	public function refineExpression(path:String, type:CompilerType, stable:Bool = false):Void
 		facts.refine('$' + 'expression:$path', type, stable);
 
@@ -173,14 +194,21 @@ class Scope {
 	public function invalidateExpressionNamespace(path:String):Void
 		facts.invalidateNamespace('$' + 'expression:$path');
 
+	/** Unlike the namespace form, also forgets facts that calls cannot change. */
+	public function invalidateExpressionNamespaceCompletely(path:String):Void
+		facts.invalidateNamespaceCompletely('$' + 'expression:$path');
+
 	/** Calls may mutate any reachable object, but cannot directly reassign uncaptured locals. */
 	public function invalidateAllExpressions():Void
 		facts.invalidateAllExpressions();
 
 	public function invalidateExpressionsForLocal(name:String):Void {
 		var local = resolveLocal(name);
-		if (local != null)
+		if (local != null) {
 			facts.invalidatePrefix('$' + 'expression:' + local.id);
+			// Map entries keyed by this local are filed under the map, so they only mention it.
+			facts.invalidateMentioning(':' + local.id);
+		}
 	}
 
 	public function invalidate(name:String):Void {

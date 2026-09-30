@@ -10,6 +10,8 @@ class FlowFacts {
 	final invalidated:Map<String, Bool> = [];
 	final invalidatedPrefixes:Array<String> = [];
 	final invalidatedNamespaces:Array<String> = [];
+	final erasedNamespaces:Array<String> = [];
+	final erasedMentions:Array<String> = [];
 
 	public function new(?parent:FlowFacts)
 		this.parent = parent;
@@ -40,6 +42,11 @@ class FlowFacts {
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
 				return null;
 		if (invalidated.exists(bindingId))
+			return null;
+		for (prefix in erasedNamespaces)
+			if (StringTools.startsWith(bindingId, prefix))
+				return null;
+		if (mentionsErased(bindingId))
 			return null;
 		for (prefix in invalidatedNamespaces)
 			if (StringTools.startsWith(bindingId, prefix))
@@ -81,6 +88,11 @@ class FlowFacts {
 				return null;
 		if (invalidated.exists(bindingId))
 			return null;
+		for (prefix in erasedNamespaces)
+			if (StringTools.startsWith(bindingId, prefix))
+				return null;
+		if (mentionsErased(bindingId))
+			return null;
 		if (stableRefinedTypes.exists(bindingId))
 			return stableRefinedTypes.get(bindingId);
 		return parent == null ? null : parent.resolveStable(bindingId);
@@ -101,6 +113,38 @@ class FlowFacts {
 			if (StringTools.startsWith(bindingId, prefix))
 				refinedTypes.remove(bindingId);
 		invalidatedNamespaces.push(prefix);
+	}
+
+	/** Forgets every fact under `prefix`, including stable ones, in this branch and the branches it extends. */
+	public function invalidateNamespaceCompletely(prefix:String):Void {
+		for (bindingId in refinedTypes.keys())
+			if (StringTools.startsWith(bindingId, prefix))
+				refinedTypes.remove(bindingId);
+		for (bindingId in stableRefinedTypes.keys())
+			if (StringTools.startsWith(bindingId, prefix))
+				stableRefinedTypes.remove(bindingId);
+		erasedNamespaces.push(prefix);
+	}
+
+	/** Forgets every expression fact whose path mentions `fragment`, such as a map entry keyed by a reassigned local. */
+	public function invalidateMentioning(fragment:String):Void {
+		var expressionPrefix = '$' + 'expression:';
+		for (bindingId in refinedTypes.keys())
+			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
+				refinedTypes.remove(bindingId);
+		for (bindingId in stableRefinedTypes.keys())
+			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
+				stableRefinedTypes.remove(bindingId);
+		erasedMentions.push(fragment);
+	}
+
+	function mentionsErased(bindingId:String):Bool {
+		if (!StringTools.startsWith(bindingId, '$' + 'expression:'))
+			return false;
+		for (fragment in erasedMentions)
+			if (bindingId.indexOf(fragment) >= 0)
+				return true;
+		return false;
 	}
 
 	public function invalidateAllExpressions():Void

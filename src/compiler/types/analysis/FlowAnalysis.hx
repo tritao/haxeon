@@ -34,7 +34,7 @@ class FlowAnalysis {
 		}
 		var mapEntry = mapExistence(condition);
 		if (mapEntry != null && truthy == mapEntry.existsWhenTrue) {
-			scope.refineExpression(mapEntry.path, mapEntry.valueType);
+			scope.refineExpression(mapEntry.path, mapEntry.valueType, entryFactsSurviveCalls(scope, mapEntry.map));
 			return;
 		}
 		var typeTest = typeTest(condition);
@@ -109,6 +109,13 @@ class FlowAnalysis {
 		};
 	}
 
+	/** Facts about entries of a map that calls cannot reach stay true across calls. */
+	public static function entryFactsSurviveCalls(scope:Scope, map:TypedExpression):Bool
+		return switch map.expression {
+			case TLocal(name), TCellLocal(name, _): scope.isPrivateMap(name);
+			default: false;
+		};
+
 	static function refinePath(scope:Scope, path:String, type:CompilerType):Void {
 		if (path.indexOf(".") < 0)
 			scope.refine(path, type);
@@ -116,17 +123,32 @@ class FlowAnalysis {
 			scope.refineExpression(path, type);
 	}
 
-	static function mapExistence(condition:TypedExpression):Null<{path:String, valueType:CompilerType, existsWhenTrue:Bool}> {
+	static function mapExistence(condition:TypedExpression):Null<{
+		path:String,
+		valueType:CompilerType,
+		existsWhenTrue:Bool,
+		map:TypedExpression
+	}> {
 		return switch condition.expression {
 			case TCollectionCall(receiver, "exists", [key]):
 				var path = mapEntryPath(receiver, key);
 				switch receiver.type {
-					case TMap(_, valueType) if (path != null): {path: path, valueType: valueType, existsWhenTrue: true};
+					case TMap(_, valueType) if (path != null): {
+							path: path,
+							valueType: valueType,
+							existsWhenTrue: true,
+							map: receiver
+						};
 					default: null;
 				}
 			case TNot(value):
 				var existence = mapExistence(value);
-				existence == null ? null : {path: existence.path, valueType: existence.valueType, existsWhenTrue: !existence.existsWhenTrue};
+				existence == null ? null : {
+					path: existence.path,
+					valueType: existence.valueType,
+					existsWhenTrue: !existence.existsWhenTrue,
+					map: existence.map
+				};
 			default: null;
 		};
 	}

@@ -244,6 +244,7 @@ class StatementTyper {
 		}
 		if (!sameType(current, TInt) && !sameType(current, TFloat))
 			fail("E1018", 'Increment requires a numeric local "$name"', span);
+		scope.invalidateExpressionsForLocal(name);
 		if (scope.isCapture(name)) {
 			if (!scope.isCellCapture(name))
 				fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
@@ -350,7 +351,7 @@ class StatementTyper {
 				var value = coerce(typeExpression(expression, scope, mapValue, false), mapValue, "map value", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
 				if (entryPath != null)
-					scope.refineExpression(entryPath, mapValue);
+					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
 				TMapAssign(typedArray, typedIndex, value, span);
 			default:
 				if (typedIndex.type == TNever)
