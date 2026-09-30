@@ -484,7 +484,8 @@ class StatementTyper {
 		var context = session.currentContext;
 		context.loopEarlyExits[context.loopDepth] = true;
 		context.loopDepth++;
-		var typedBody = typeStatements(body, new Scope(scope), result);
+		// The condition is evaluated right before every iteration, so what it proves holds where the body starts.
+		var typedBody = typeStatements(body, FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall), result);
 		context.loopDepth--;
 		return TWhile(typedCondition, typedBody, span);
 	}

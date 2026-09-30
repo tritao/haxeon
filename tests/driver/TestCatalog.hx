@@ -54,6 +54,7 @@ class TestCatalog {
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
+		"LoopNarrowingMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",

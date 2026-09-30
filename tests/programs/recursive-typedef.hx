@@ -20,6 +20,17 @@ function sumLinks(link:Null<Link>):Int {
 	return link.value + sumLinks(link.next);
 }
 
+// A loop condition narrows the variable it tests for the body, as in Haxe.
+function walkLinks(first:Null<Link>):Int {
+	var total = 0;
+	var current = first;
+	while (current != null) {
+		total += current.value;
+		current = current.next;
+	}
+	return total;
+}
+
 function payloads(envelope:Envelope<Int>):Int {
 	var total = envelope.payload;
 	for (reply in envelope.replies)
@@ -38,6 +49,9 @@ function main():Int {
 	var chain:Link = {value: 10, next: {value: 20, next: {value: 12, next: null}}};
 	if (sumLinks(chain) != 42)
 		return 2;
+
+	if (walkLinks(chain) != 42)
+		return 7;
 
 	var mutual:Left = {id: 1, right: {id: 2, left: {id: 3, right: null}}};
 	var right = mutual.right;
