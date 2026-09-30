@@ -921,8 +921,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		resultType:IrType
 	}>, receiverLocal:Int, destination:Int,
 			argumentLocals:Array<Int>):WasmLoweringResult {
+		// No class in the program implements the interface, so no receiver can reach this call; trap like Wasm32.
 		if (targets.length == 0)
-			throw 'Wasm GC interface method on ${Std.string(receiver.type)} has no implementations';
+			return [Unreachable];
 		var instructions:Array<WasmInstruction> = [];
 		for (index in 0...targets.length) {
 			var target = targets[index],
