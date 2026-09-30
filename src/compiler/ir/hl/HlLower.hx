@@ -371,6 +371,8 @@ class HlLower {
 				debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
 			spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
 		}
+		if (debugCache != null)
+			debugCache.endGeneration();
 		var allocationAfterSpanGroups = AllocationMeter.sample();
 		code.debugSections.push({
 			kind: HlWriter.OPCODE_SOURCE_SPANS,
