@@ -13,8 +13,11 @@ import haxe.crypto.Sha256;
 
 /** Generates structural comparisons for the statically known type at each call site. */
 class EqualityGenerator {
-	public static function equalsName(type:CompilerType):String
-		return "$equality:" + Sha256.encode(Std.string(type)).substr(0, 32);
+	public static function equalsName(type:CompilerType):String {
+		// Std.string would never finish on a structure that contains itself; its spelling names such a structure instead.
+		var spelling = compiler.semantic.SemanticSignature.type(type);
+		return "$equality:" + Sha256.encode(spelling.indexOf("$anon:rec:") >= 0 ? spelling : Std.string(type)).substr(0, 32);
+	}
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var key = equalsName(type);

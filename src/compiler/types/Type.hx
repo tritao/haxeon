@@ -42,6 +42,17 @@ enum CompilerType {
 	TIterator(element:CompilerType);
 	TMap(key:CompilerType, value:CompilerType);
 	TFunction(arguments:Array<CompilerType>, result:CompilerType);
+
+	/**
+	 * A structural record type. The structure can contain itself: `typedef Tree = {children:Array<Tree>}` resolves to
+	 * a value whose `children` element is this very constructor, sharing the same `fields` array. Such a type is
+	 * named after its typedef (`SemanticSignature.recursiveAnonymousName`) rather than spelled from its fields.
+	 *
+	 * Any code that walks a type through `fields` must therefore stop when it meets a structure it is already inside:
+	 * compare by pairs in progress (`TypeRelations.equals`), or remember the `fields` arrays already explored
+	 * (`NativeLayout.containsNativeLayoutType`). Never stringify a `CompilerType` with `Std.string`; use
+	 * `SemanticSignature.type`, which stops at the name.
+	 */
 	TAnonymous(name:String, fields:Array<AnonymousField>);
 }
 

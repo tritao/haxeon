@@ -1190,6 +1190,7 @@ class SemanticIndex {
 					+ "<"
 					+ [for (argument in arguments) displayType(argument)].join(",") + ">";
 			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",") + ")->" + displayType(result);
+			case TAnonymous(name, _) if (SemanticSignature.isRecursiveAnonymousName(name)): name;
 			default: Std.string(type);
 		};
 

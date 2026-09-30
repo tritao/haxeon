@@ -21,22 +21,29 @@ class NativeLayout {
 		};
 
 	public static function containsNativeLayoutType(type:CompilerType):Bool
+		return containsNativeLayoutWithin(type, null);
+
+	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
+	static function containsNativeLayoutWithin(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
 			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
 			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
-				containsNativeLayoutType(representation);
-			case TMap(key, value): containsNativeLayoutType(key) || containsNativeLayoutType(value);
+				containsNativeLayoutWithin(representation, explored);
+			case TMap(key, value): containsNativeLayoutWithin(key, explored) || containsNativeLayoutWithin(value, explored);
 			case TFunction(arguments, result):
-				var found = containsNativeLayoutType(result);
+				var found = containsNativeLayoutWithin(result, explored);
 				for (argument in arguments)
-					if (containsNativeLayoutType(argument))
+					if (containsNativeLayoutWithin(argument, explored))
 						found = true;
 				found;
 			case TAnonymous(_, fields):
-				var found = false;
-				for (field in fields)
-					if (containsNativeLayoutType(field.type))
-						found = true;
+				var walked = explored == null ? [] : explored, found = false;
+				if (walked.indexOf(fields) < 0) {
+					walked.push(fields);
+					for (field in fields)
+						if (containsNativeLayoutWithin(field.type, walked))
+							found = true;
+				}
 				found;
 			case _: false;
 		};

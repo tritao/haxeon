@@ -416,7 +416,9 @@ class HlSymbolTable {
 				if (!typeIndices.exists(virtualKey))
 					throw 'Interface "$slot" must be registered before "${object.name}"';
 				// HashLink recognizes an unnamed field of the interface's type as the cache for its virtual.
-				fields.push({name: internString(""), type: typeIndices.get(virtualKey)});
+				// Read the index before interning: the call could change the table the existence check just covered.
+				var virtualType = typeIndices.get(virtualKey);
+				fields.push({name: internString(""), type: virtualType});
 			}
 		var key = 'obj:${object.name}',
 			index = typeIndices.exists(key) ? typeIndices.get(key) : types.length,

@@ -119,7 +119,9 @@ The current subset includes:
 - `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
 - Array iteration and comprehensions
 - Exceptions
-- Simple `typedef` aliases and generics
+- Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
+  (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
+  A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
 String addition, equality, `.length`, `indexOf`, and `substring` use the
