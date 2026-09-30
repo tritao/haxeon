@@ -245,3 +245,4 @@ map-clear-reuse	42
 implicit-constructor	42
 map-copy	42
 capture-shadowing	42
+compound-shift-assign	42

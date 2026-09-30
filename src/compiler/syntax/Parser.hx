@@ -918,7 +918,15 @@ class Parser {
 					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a variable", expressionSpan(target)));
 				};
 			}
-			var assignmentKind = match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : match(TokenKind.StarAssign) ? 3 : match(TokenKind.SlashAssign) ? 4 : match(TokenKind.PercentAssign) ? 5 : match(TokenKind.AndAssign) ? 6 : match(TokenKind.OrAssign) ? 7 : match(TokenKind.XorAssign) ? 8 : -1;
+			// `<<=`, `>>=` and `>>>=` arrive as separate adjacent tokens, like the shifts themselves.
+			var shiftKind = shiftAssignmentKind();
+			if (shiftKind > 0) {
+				advance();
+				advance();
+				if (shiftKind == 11)
+					advance();
+			}
+			var assignmentKind = shiftKind > 0 ? shiftKind : match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : match(TokenKind.StarAssign) ? 3 : match(TokenKind.SlashAssign) ? 4 : match(TokenKind.PercentAssign) ? 5 : match(TokenKind.AndAssign) ? 6 : match(TokenKind.OrAssign) ? 7 : match(TokenKind.XorAssign) ? 8 : -1;
 			if (assignmentKind >= 0) {
 				var value = parseExpression(), end = expressionEnd(value);
 				// Normalize compound lvalues before duplicating their read and write.
@@ -940,6 +948,9 @@ class Parser {
 						case 5: Mod(target, value, operationSpan);
 						case 6: BitAnd(target, value, operationSpan);
 						case 7: BitOr(target, value, operationSpan);
+						case 9: ShiftLeft(target, value, operationSpan);
+						case 10: ShiftRight(target, value, operationSpan);
+						case 11: UnsignedShiftRight(target, value, operationSpan);
 						default: BitXor(target, value, operationSpan);
 					},
 					assignment = switch target {
@@ -1181,8 +1192,10 @@ class Parser {
 
 	function parseComparison():AstExpression {
 		var expression = parseBitOr();
-		if (check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual) || check(TokenKind.EqualEqual)
-			|| check(TokenKind.NotEqual)) {
+		// The `<` of `<<=` (and the `>` of `>>=`, `>>>=`) starts a compound assignment, not a comparison.
+		if ((check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual)
+			|| check(TokenKind.EqualEqual) || check(TokenKind.NotEqual))
+			&& shiftAssignmentKind() < 0) {
 			var operation = advance().kind;
 			var right = parseBitOr();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
@@ -1200,7 +1213,7 @@ class Parser {
 
 	function parseShift():AstExpression {
 		var expression = parseAdditive();
-		while (isAdjacentPair(TokenKind.Less) || isAdjacentPair(TokenKind.Greater)) {
+		while ((isAdjacentPair(TokenKind.Less) || isAdjacentPair(TokenKind.Greater)) && shiftAssignmentKind() < 0) {
 			var leftShift = check(TokenKind.Less),
 				unsigned = !leftShift && isAdjacentTriple(TokenKind.Greater);
 			advance();
@@ -1213,6 +1226,19 @@ class Parser {
 				span) : unsigned ? UnsignedShiftRight(expression, right, span) : ShiftRight(expression, right, span);
 		}
 		return expression;
+	}
+
+	/** 9 for `<<=`, 10 for `>>=`, 11 for `>>>=`, or -1; nothing is consumed. */
+	function shiftAssignmentKind():Int {
+		if (check(TokenKind.Less) && peekKind(1) == TokenKind.LessEqual && current().span.end == tokens[position + 1].span.start)
+			return 9;
+		if (check(TokenKind.Greater) && peekKind(1) == TokenKind.GreaterEqual && current().span.end == tokens[position + 1].span.start)
+			return 10;
+		if (isAdjacentPair(TokenKind.Greater)
+			&& peekKind(2) == TokenKind.GreaterEqual
+			&& tokens[position + 1].span.end == tokens[position + 2].span.start)
+			return 11;
+		return -1;
 	}
 
 	function isAdjacentPair(kind:TokenKind):Bool
