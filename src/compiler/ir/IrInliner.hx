@@ -662,7 +662,7 @@ class IrInliner {
 		}
 	}
 
-	public static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
+	static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
 		return switch instruction {
 			case Phi(out, inputs): Phi(use(out), [for (input in inputs) {block: block(input.block), value: use(input.value)}]);
 			case ConstVoid(out): ConstVoid(use(out));
