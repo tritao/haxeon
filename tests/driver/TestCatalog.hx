@@ -37,6 +37,7 @@ class TestCatalog {
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"IncrementalSnapshotMain",
+		"DeterministicNamesMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",

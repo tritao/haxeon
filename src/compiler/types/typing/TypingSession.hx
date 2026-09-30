@@ -56,7 +56,14 @@ class TypingSession {
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
-	public var functionAdapterCounter:Int = 0;
+
+	/**
+	 * Function adapters already made in each body, so an adapter's name depends on its position in its own function. A
+	 * counter shared by the whole typing run made the name depend on how many adapters other functions had made before it,
+	 * which differs between a build that types everything and one that retypes only what changed.
+	 */
+	public final functionAdapterCounts:Map<String, Int> = [];
+
 	public final representation:TypeRepresentation;
 
 	public var currentContext(get, never):TypingContext;

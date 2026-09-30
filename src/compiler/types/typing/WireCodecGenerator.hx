@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -109,6 +110,14 @@ class WireCodecGenerator {
 			rootKeys.set(key, true);
 			collectType(session, request.type, classesByName, enumsByName, reachable, visiting, path, request.span);
 		}
+		// The call site that happened to ask first would make a generated function's source span (and so its identity and
+		// debug mappings) depend on the order functions were typed in, which differs between a build that types everything
+		// and one that retypes only what changed. Diagnostics above keep the site; generated code gets a span of the type.
+		for (index in 0...roots.length) {
+			var request = roots[index];
+			roots[index] = {type: request.type, origin: request.origin, span: canonicalSpan(session, request.type, classesByName, enumsByName)};
+			requests.set(typeKey(request.type), roots[index]);
+		}
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
@@ -118,7 +127,7 @@ class WireCodecGenerator {
 		for (key in keys) {
 			var type = reachable.get(key), request = requests.get(key);
 			if (request == null)
-				request = {type: type, origin: roots[0].origin, span: roots[0].span};
+				request = {type: type, origin: roots[0].origin, span: canonicalSpan(session, type, classesByName, enumsByName)};
 			if (switch type {
 					case TMap(TInt, _): true;
 					default: false;
@@ -145,10 +154,12 @@ class WireCodecGenerator {
 				result.push(decoder(type, request));
 			}
 		}
+		// The comparators are shared by every codec, so nothing in which codecs a run happened to request may reach them.
+		var shared:WireCodecRequest = {type: roots[0].type, origin: roots[0].origin, span: canonicalSpan(session, TInt, classesByName, enumsByName)};
 		if (needsIntComparator)
-			result.push(intComparator(roots[0]));
+			result.push(intComparator(shared));
 		if (needsStringComparator)
-			result.push(stringComparator(roots[0]));
+			result.push(stringComparator(shared));
 		var enumComparatorKeys = [for (key in enumComparatorTypes.keys()) key];
 		enumComparatorKeys.sort(Reflect.compare);
 		for (key in enumComparatorKeys) {
@@ -157,10 +168,41 @@ class WireCodecGenerator {
 					case TInstance(NominalKind.Enum, name, _): name;
 					default: throw "Enum comparator requires an enum map key";
 				};
-			result.push(enumComparator(enumType, requiredEnum(enumsByName, enumName, roots[0].span), roots[0]));
+			result.push(enumComparator(enumType, requiredEnum(enumsByName, enumName, shared.span), shared));
 		}
 		return result;
 	}
+
+	static var syntheticSpan:Null<SourceSpan> = null;
+
+	/** The span of what the codec is for: a wire typedef, class or enum declaration, or a fixed one for types without. */
+	static function canonicalSpan(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>):SourceSpan {
+		var declared:Null<SourceSpan> = declarationSpan(session, type, classes, enums);
+		if (declared != null)
+			return declared;
+		if (syntheticSpan == null)
+			syntheticSpan = new SourceSpan(new SourceFile("<generated>", ""), 0, 0);
+		return syntheticSpan;
+	}
+
+	static function declarationSpan(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>):Null<SourceSpan>
+		return switch type {
+			case TAnonymous(_, _):
+				var alias = wireAlias(session, type);
+				alias == null ? null : alias.span;
+			case TInstance(NominalKind.Class, name, _):
+				classes.exists(name) ? classes.get(name).span : null;
+			case TInstance(NominalKind.Enum, name, _):
+				enums.exists(name) ? enums.get(name).span : null;
+			case TNullable(element), TArray(element):
+				declarationSpan(session, element, classes, enums);
+			case TMap(key, value):
+				var inValue = declarationSpan(session, value, classes, enums);
+				inValue != null ? inValue : declarationSpan(session, key, classes, enums);
+			case TAbstract(_, _, representation):
+				declarationSpan(session, representation, classes, enums);
+			default: null;
+		};
 
 	public static function encodeName(type:CompilerType):String
 		return ENCODE_PREFIX + typeKey(type);
