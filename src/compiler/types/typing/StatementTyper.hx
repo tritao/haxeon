@@ -246,6 +246,7 @@ class StatementTyper {
 			if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
 				fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
 			assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
+			FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 			var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
 				one:TypedExpression = sameType(staticField.type,
 					TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0), TFloat, span),
@@ -322,10 +323,12 @@ class StatementTyper {
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
+		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
+				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var value = coerce(typeExpression(expression, scope, staticField.type, false), staticField.type, 'field "$name"', "E1002");
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
@@ -380,10 +383,12 @@ class StatementTyper {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
+		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
+				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:

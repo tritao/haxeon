@@ -768,7 +768,9 @@ class ExpressionTyper {
 			case TLocal(name): TPostfixLocal(name, delta);
 			case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
 			case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
-			case TStaticField(owner, name): TPostfixStaticField(owner, name, delta);
+			case TStaticField(owner, name):
+				FinalFieldRules.rejectStaticMutation(session, owner, name, span);
+				TPostfixStaticField(owner, name, delta);
 			case TField(object, name):
 				switch object.type {
 					case TAnonymous(_, fields):
@@ -777,6 +779,7 @@ class ExpressionTyper {
 								fail("E1024", 'Final anonymous field "$name" cannot be assigned', span);
 					default:
 				}
+				FinalFieldRules.rejectInstanceMutation(session, object, name, span);
 				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:
