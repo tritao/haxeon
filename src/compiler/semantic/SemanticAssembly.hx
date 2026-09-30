@@ -436,6 +436,35 @@ class SemanticAssembly {
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
+		// A class without a constructor has its base class's: give it one, so it is typed, tracked and invalidated like any other.
+		var changedSignatures:Map<String, Bool> = [for (name in signatureChanged.keys()) name => true];
+		for (constructor in ImplicitConstructors.add(classes)) {
+			var qualified = constructor.owner + ".new",
+				baseConstructor = constructor.base + ".new";
+			// Its signature is the base constructor's, so it changes whenever that does; the class stands for it to callers.
+			if (changedSignatures.exists(baseConstructor)) {
+				changedSignatures.set(qualified, true);
+				changedSignatures.set(constructor.owner, true);
+			}
+			functions.push({
+				name: qualified,
+				isStatic: false,
+				metadata: [],
+				arguments: constructor.method.arguments,
+				result: constructor.method.result,
+				statements: constructor.method.statements,
+				span: constructor.method.span
+			});
+			var callers = reverseCalls.get(baseConstructor);
+			if (callers == null) {
+				callers = [];
+				reverseCalls.set(baseConstructor, callers);
+			}
+			callers.push(qualified);
+			for (declaration in classes)
+				if (declaration.name == constructor.owner && declaration.typeParameters.length > 0)
+					genericOrigins.set(qualified, true);
+		}
 
 		// Purity and no-return are whole-program facts, but typed bodies are cached between
 		// incremental compiles. Recompute both fresh from the current canonical program (cheap:
@@ -560,7 +589,7 @@ class SemanticAssembly {
 						dependents.push(owner);
 					}
 		}
-		var work:Array<String> = [for (name in signatureChanged.keys()) name], workCursor = 0;
+		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
 				work.push(name);
@@ -574,7 +603,7 @@ class SemanticAssembly {
 			if (token != null)
 				token.check();
 			var changed = work[workCursor++];
-			if (signatureChanged.exists(changed))
+			if (changedSignatures.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed, context.resolveSemanticSymbol(changed));
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);

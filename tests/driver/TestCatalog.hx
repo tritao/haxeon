@@ -59,6 +59,7 @@ class TestCatalog {
 		"LoopFlowMain",
 		"DiagnosticLocationMain",
 		"BindingAnalysisMain",
+		"ImplicitConstructorMain",
 		"ClosureEffectsMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",

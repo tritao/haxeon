@@ -242,3 +242,4 @@ value-field-gc	42
 recursive-typedef	42
 map-entry-facts	42
 map-clear-reuse	42
+implicit-constructor	42

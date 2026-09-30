@@ -24,12 +24,6 @@ class MapEscapeAnalysis extends BindingWalker {
 	final escaped:Map<String, Bool> = [];
 	final operandUses:Map<String, Bool> = [];
 
-	// Explicit on purpose: a subclass without a constructor never runs its base class's field initializers (a compiler
-	// bug), which would leave the walker's scopes null.
-	function new() {
-		super();
-	}
-
 	public static function analyze(arguments:Array<AstArgument>, body:Array<AstStatement>):MapPrivacy {
 		var analysis = new MapEscapeAnalysis();
 		analysis.walkFunction(arguments, body);

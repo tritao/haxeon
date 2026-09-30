@@ -22,10 +22,6 @@ class FreeVariables extends BindingWalker {
 		return result;
 	}
 
-	function new() {
-		super();
-	}
-
 	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void {
 		if (declaration == null)
 			names.set(BindingWalker.rootOf(name), true);
