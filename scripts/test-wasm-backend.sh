@@ -333,6 +333,11 @@ const cases = [
           if (typeof value !== "number")
             throw new Error("a single-f64 record must travel as an f64");
           return value / 2;
+        },
+        scale_f32: (value, factor) => {
+          if (value === 0.1 || value !== Math.fround(0.1) || factor !== 4)
+            throw new Error("C float arguments must travel as f32");
+          return value * factor;
         }
       };
 

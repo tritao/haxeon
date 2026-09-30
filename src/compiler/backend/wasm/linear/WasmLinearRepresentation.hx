@@ -118,6 +118,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (fixed == null) {
 			pushNativeArguments(body, abi, arguments, argumentLocals);
 			body.push(Call(importIndex));
+			body = body.concat(abi.raiseResult());
 			if (outputLocal >= 0)
 				body.push(LocalSet(outputLocal));
 			return body;
@@ -153,9 +154,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmLinearCAbi, arguments:Array<IrValue>, argumentLocals:Array<Int>):Void {
 		for (index in 0...arguments.length) {
 			nativeArgument(body, arguments[index], argumentLocals[index]);
-			var direct = abi.directArguments[index];
-			if (direct != null)
-				body.push(direct.load);
+			for (instruction in abi.lowerArgument(index))
+				body.push(instruction);
 		}
 	}
 

@@ -28,5 +28,9 @@ function main():Int {
 	measure.set_value(84.5);
 	if (Wasm32ValueRecords.half(measure).get_value() != 42.25)
 		return 0;
+	// C floats cross as f32 values: the host sees 0.1 rounded to single precision.
+	var scaled = Wasm32ValueRecords.scale(0.1, 4.0);
+	if (Math.abs(scaled - 0.4) > 1e-6)
+		return 0;
 	return 42;
 }

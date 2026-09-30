@@ -20,24 +20,25 @@ class WasmLinearCScalar {
 	/** The scalar for a descriptor element code, as HxiHaxeEmitter writes them. */
 	public static function ofCode(code:String):Null<WasmLinearCScalar>
 		return switch code {
-			case "1": new WasmLinearCScalar(I32, I32Load8S(0), I32Store8(0));
-			case "2": new WasmLinearCScalar(I32, I32Load8U(0), I32Store8(0));
-			case "3": new WasmLinearCScalar(I32, I32Load16S(0), I32Store16(0));
-			case "4": new WasmLinearCScalar(I32, I32Load16U(0), I32Store16(0));
-			case "5" | "6" | "11" | "13" | "14": new WasmLinearCScalar(I32, I32Load(0), I32Store(0));
-			case "7" | "8": new WasmLinearCScalar(I64, I64Load(0), I64Store(0));
-			case "9": new WasmLinearCScalar(F32, F32Load(0), F32Store(0));
-			case "10": new WasmLinearCScalar(F64, F64Load(0), F64Store(0));
+			case "1": new WasmLinearCScalar(WasmValueType.I32, I32Load8S(0), I32Store8(0));
+			case "2": new WasmLinearCScalar(WasmValueType.I32, I32Load8U(0), I32Store8(0));
+			case "3": new WasmLinearCScalar(WasmValueType.I32, I32Load16S(0), I32Store16(0));
+			case "4": new WasmLinearCScalar(WasmValueType.I32, I32Load16U(0), I32Store16(0));
+			case "5" | "6" | "11" | "13" | "14": new WasmLinearCScalar(WasmValueType.I32, I32Load(0), I32Store(0));
+			case "7" | "8": new WasmLinearCScalar(WasmValueType.I64, I64Load(0), I64Store(0));
+			case "9": new WasmLinearCScalar(WasmValueType.F32, F32Load(0), F32Store(0));
+			case "10": new WasmLinearCScalar(WasmValueType.F64, F64Load(0), F64Store(0));
 			case _: null;
 		};
 }
 
 /**
- * How a C native's by-value records cross the Wasm32 C ABI, as clang and Emscripten lay them out.
+ * How a C native's by-value records and floats cross the Wasm32 C ABI, as clang and Emscripten lay them out.
  *
  * A record that holds a single scalar, possibly through nested records or one-element arrays, travels
  * as that scalar in both directions. Any other record argument is passed as a pointer to its bytes, and
- * any other record result is written through a pointer the caller passes before the arguments.
+ * any other record result is written through a pointer the caller passes before the arguments. C floats
+ * are f32 values at the boundary, although linear Wasm keeps Float32 values as f64.
  */
 class WasmLinearCAbi {
 	/** For each argument, the scalar a by-value record travels as, or null when it is not such a record. */
@@ -49,10 +50,21 @@ class WasmLinearCAbi {
 	/** The native returns a record through a pointer passed as its first argument. */
 	public final indirectResult:Bool;
 
-	function new(directArguments:Array<Null<WasmLinearCScalar>>, directResult:Null<WasmLinearCScalar>, indirectResult:Bool) {
+	/** Signature descriptor code of a C float. */
+	static inline var FLOAT = "9";
+
+	/** Arguments and a result that are C floats, which linear Wasm keeps as f64 values. */
+	final floatArguments:Array<Bool>;
+
+	final floatResult:Bool;
+
+	function new(directArguments:Array<Null<WasmLinearCScalar>>, directResult:Null<WasmLinearCScalar>, indirectResult:Bool, floatArguments:Array<Bool>,
+			floatResult:Bool) {
 		this.directArguments = directArguments;
 		this.directResult = directResult;
 		this.indirectResult = indirectResult;
+		this.floatArguments = floatArguments;
+		this.floatResult = floatResult;
 	}
 
 	public static function of(native:IrCNative):WasmLinearCAbi {
@@ -63,15 +75,20 @@ class WasmLinearCAbi {
 		if (split.length != 2)
 			throw 'C native "${native.name}" has an invalid signature "${native.signature}"';
 		var argumentDescriptors = split[0].length == 0 ? [] : topLevel(split[0], ","),
-			hasRecords = native.fixedResult != null;
-		for (mode in native.argumentModes)
-			switch mode {
+			plain = [for (_ in native.arguments) null],
+			unconverted = [for (_ in native.arguments) false],
+			floatResult = split[1] == FLOAT && native.fixedResult == null,
+			adjusted = native.fixedResult != null || floatResult;
+		for (index in 0...native.argumentModes.length)
+			switch native.argumentModes[index] {
 				case FixedValue(_, _, _):
-					hasRecords = true;
+					adjusted = true;
+				case Value if (index < argumentDescriptors.length && argumentDescriptors[index] == FLOAT):
+					adjusted = true;
 				case _:
 			}
-		if (!hasRecords)
-			return new WasmLinearCAbi([for (_ in native.arguments) null], null, false);
+		if (!adjusted)
+			return new WasmLinearCAbi(plain, null, false, unconverted, false);
 		if (argumentDescriptors.length != native.arguments.length)
 			throw 'C native "${native.name}" signature has ${argumentDescriptors.length} arguments, not ${native.arguments.length}';
 		var directArguments = [
@@ -82,11 +99,14 @@ class WasmLinearCAbi {
 					case _:
 						null;
 				}
-		];
+		], floatArguments = [
+			for (index in 0...argumentDescriptors.length)
+				native.argumentModes[index] == Value && argumentDescriptors[index] == FLOAT
+			];
 		if (native.fixedResult == null)
-			return new WasmLinearCAbi(directArguments, null, false);
+			return new WasmLinearCAbi(directArguments, null, false, floatArguments, floatResult);
 		var directResult = singleScalar(split[1]);
-		return new WasmLinearCAbi(directArguments, directResult, directResult == null);
+		return new WasmLinearCAbi(directArguments, directResult, directResult == null, floatArguments, false);
 	}
 
 	/** The import's Wasm parameter and result types, given the types of its IR arguments and result. */
@@ -94,19 +114,29 @@ class WasmLinearCAbi {
 		var lowered = [
 			for (index in 0...parameters.length) {
 				var direct = directArguments[index];
-				direct == null ? parameters[index] : direct.type;
+				direct != null ? direct.type : floatArguments[index] ? WasmValueType.F32 : parameters[index];
 			}
 		];
 		if (indirectResult)
-			return {parameters: [I32].concat(lowered), results: []};
-		return {parameters: lowered, results: directResult == null ? results : [directResult.type]};
+			return {parameters: [WasmValueType.I32].concat(lowered), results: []};
+		return {parameters: lowered, results: directResult != null ? [directResult.type] : floatResult ? [WasmValueType.F32] : results};
 	}
 
+	/** Converts argument `index`, already on the stack as its linear Wasm value, to its C form. */
+	public function lowerArgument(index:Int):Array<WasmInstruction> {
+		var direct = directArguments[index];
+		return direct != null ? [direct.load] : floatArguments[index] ? [F32DemoteF64] : [];
+	}
+
+	/** Converts a scalar result on the stack from its C form to its linear Wasm value. */
+	public function raiseResult():Array<WasmInstruction>
+		return floatResult ? [F64PromoteF32] : [];
+
 	public function adjustsCall():Bool {
-		if (indirectResult || directResult != null)
+		if (indirectResult || directResult != null || floatResult)
 			return true;
-		for (direct in directArguments)
-			if (direct != null)
+		for (index in 0...directArguments.length)
+			if (directArguments[index] != null || floatArguments[index])
 				return true;
 		return false;
 	}

@@ -22,4 +22,5 @@ interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_re
 	extern fn makeGapped(seed: i32) -> gapped @symbol("make_gapped");
 	extern fn nextId(value: id64) -> id64 @symbol("next_id");
 	extern fn half(value: real) -> real @symbol("half");
+	extern fn scale(value: f32, factor: f32) -> f32 @symbol("scale_f32");
 }
