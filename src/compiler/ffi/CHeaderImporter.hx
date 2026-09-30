@@ -22,7 +22,7 @@ typedef CLayout = ClangRecordLayouts.RecordLayout;
 
 /** Imports the ABI-visible subset of a C header into a raw typed HXI model. */
 class CHeaderImporter {
-	static final sourceCache:Map<String, String> = [];
+	static final sourceCache:Map<String, haxe.io.Bytes> = [];
 	static final sourceFiles:Map<String, SourceFile> = [];
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
@@ -435,8 +435,7 @@ class CHeaderImporter {
 						offset:Dynamic = field(expansion, "offset"),
 						expansionFile:String = field(expansion, "file");
 					if (offset != null) {
-						var expansionSource = File.getContent(expansionFile == null ? file : expansionFile),
-							invocation = expansionSource.substring(offset, Std.int(Math.min(expansionSource.length, offset + 256))),
+						var invocation = byteSlice(File.getBytes(expansionFile == null ? file : expansionFile), offset, offset + 256),
 							pattern = ~/^[A-Za-z_][A-Za-z0-9_]*\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/;
 						if (pattern.match(invocation))
 							argument = pattern.matched(1);
@@ -633,14 +632,48 @@ class CHeaderImporter {
 			return null;
 		var source = sourceCache.get(file);
 		if (source == null) {
-			source = File.getContent(file);
+			source = File.getBytes(file);
 			sourceCache.set(file, source);
 		}
-		var start = source.lastIndexOf("/**", Std.int(offset));
+		var start = lastByteIndexOf(source, "/**", Std.int(offset));
 		if (start < 0)
 			return null;
-		var close = source.indexOf("*/", start + 3);
-		return close < 0 ? null : source.substring(start + 3, close);
+		var close = byteIndexOf(source, "*/", start + 3);
+		return close < 0 ? null : byteSlice(source, start + 3, close);
+	}
+
+	/** Clang reports byte offsets, so header text is sliced as bytes: multibyte characters must not shift them. */
+	static function byteSlice(source:haxe.io.Bytes, start:Int, end:Int):String {
+		var first = Std.int(Math.max(0, Math.min(source.length, start))),
+			last = Std.int(Math.max(first, Math.min(source.length, end)));
+		return source.getString(first, last - first);
+	}
+
+	static function byteIndexOf(source:haxe.io.Bytes, needle:String, from:Int):Int {
+		var pattern = haxe.io.Bytes.ofString(needle);
+		for (index in Std.int(Math.max(0, from))...source.length - pattern.length + 1)
+			if (matchesAt(source, pattern, index))
+				return index;
+		return -1;
+	}
+
+	/** Last occurrence starting at or before `from`. */
+	static function lastByteIndexOf(source:haxe.io.Bytes, needle:String, from:Int):Int {
+		var pattern = haxe.io.Bytes.ofString(needle),
+			index = Std.int(Math.min(from, source.length - pattern.length));
+		while (index >= 0) {
+			if (matchesAt(source, pattern, index))
+				return index;
+			index--;
+		}
+		return -1;
+	}
+
+	static function matchesAt(source:haxe.io.Bytes, pattern:haxe.io.Bytes, index:Int):Bool {
+		for (offset in 0...pattern.length)
+			if (source.get(index + offset) != pattern.get(offset))
+				return false;
+		return true;
 	}
 
 	static function fieldTypeProjection(entry:Dynamic, qualifiedType:String):String {
@@ -708,9 +741,7 @@ class CHeaderImporter {
 		if (file == null)
 			file = field(node, "_hxiFile");
 		// Clang reports byte offsets; slice the raw bytes so non-ASCII text earlier in the header cannot shift them.
-		var source = File.getBytes(file),
-			start:Int = Std.int(offset),
-			invocation = source.getString(start, Std.int(Math.min(source.length, start + 256)) - start),
+		var invocation = byteSlice(File.getBytes(file), offset, offset + 256),
 			argument = new EReg("^[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*(" + (argumentPattern == null ? "[A-Za-z_][A-Za-z0-9_]*" : argumentPattern) + ")\\s*\\)",
 				"");
 		return argument.match(invocation) ? argument.matched(1) : null;
@@ -723,8 +754,8 @@ class CHeaderImporter {
 		if (start == null || finish == null)
 			return "";
 		var sourceFile:String = field(begin, "file"),
-			source = File.getContent(sourceFile == null ? defaultFile : sourceFile);
-		return source.substring(start, finish + (tokenLength == null ? 1 : tokenLength));
+			source = File.getBytes(sourceFile == null ? defaultFile : sourceFile);
+		return byteSlice(source, start, finish + (tokenLength == null ? 1 : tokenLength));
 	}
 
 	static function locationPath(node:Dynamic):Null<String> {
