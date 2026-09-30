@@ -107,7 +107,30 @@ class TypingSession {
 	/** Static and module functions inferred pure by `PurityInference`. */
 	public var inferredPureFunctions:Map<String, Bool> = [];
 
+	var localPurity:Null<compiler.types.analysis.PurityInference> = null;
+
+	/**
+	 * Whether calling this local function can change state that flow facts describe. Its body is read like any other
+	 * function's: no direct effects and only pure callees, judged against the answers this session already gives.
+	 */
+	public function localFunctionIsPure(local:compiler.types.analysis.Scope.LocalFunction, owner:Null<String>):Bool {
+		var inference = localPurity;
+		if (inference == null) {
+			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls, isDeclaredPure, isTypeName);
+			localPurity = inference;
+		}
+		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(inference, local.arguments, local.body,
+			owner == null ? "$local" : owner + ".$local");
+		if (dependencies == null)
+			return false;
+		for (key in dependencies)
+			if (key == compiler.types.analysis.PurityInference.TO_STRING || !isPureCall(key))
+				return false;
+		return true;
+	}
+
 	public function inferPureFunctions():Void {
+		localPurity = null;
 		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls, declarations.abstracts, enumDecls, isDeclaredPure,
 			isTypeName);
 	}

@@ -757,8 +757,12 @@ class CallResolver {
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
 			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
-		if (scope.resolve(name) != null)
-			return typeClosureCall(Variable(name, span), arguments, span, scope, name, false);
+		if (scope.resolve(name) != null) {
+			// A local function runs a known body, so a call through it only clears facts when that body might.
+			var local = scope.localFunction(name);
+			return typeClosureCall(Variable(name, span), arguments, span, scope, name, local == null || !session.localFunctionIsPure(local,
+				session.currentContext.lexicalOwner));
+		}
 		if (name.indexOf(".") < 0) {
 			var fieldCall = typeImplicitFunctionFieldCall(name, arguments, span, scope);
 			if (fieldCall != null)

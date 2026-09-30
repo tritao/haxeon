@@ -84,7 +84,9 @@ class CompilerSession {
 				}
 			}
 		}
-		if (compiler == null) {
+		// `report` is caller code, so nothing proved about the field survives a call to it; a local does.
+		var existing = compiler;
+		if (existing == null) {
 			compiler = new Compiler();
 			compiler.enablePublicationTracking();
 			CompilerIntrinsics.register(compiler);
@@ -106,12 +108,12 @@ class CompilerSession {
 			configuration = identity;
 		} else {
 			report("reusing compiler session");
-			for (name => state in compiler.modules) {
+			for (name => state in existing.modules) {
 				var path = state.source.path;
 				if (Path.isAbsolute(path)) {
 					var changed = readChanged(path);
 					if (changed != null)
-						compiler.refreshLoadedSource(name, changed);
+						existing.refreshLoadedSource(name, changed);
 				}
 			}
 		}

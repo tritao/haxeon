@@ -52,6 +52,26 @@ class PurityInference {
 				constructors.set(enumCase.name, true);
 	}
 
+	/** For calls through a local function whose body is known: the functions that body calls, or null when it has a direct effect. */
+	public static function localBodyDependencies(inference:PurityInference, arguments:Array<AstArgument>, body:Array<AstStatement>,
+			functionName:String):Null<Array<String>> {
+		var walker = new PurityWalker(inference, functionName);
+		walker.declare("this");
+		for (argument in arguments) {
+			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
+				return null;
+			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), inference.classNameOfType(argument.type),
+				PurityWalker.isIterableType(argument.type));
+		}
+		if (!walker.statements(body))
+			return null;
+		return [for (key in walker.dependencies.keys()) key];
+	}
+
+	public static function create(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, enums:Map<String, AstEnum>,
+			isAnnotatedPure:String->Bool, isTypeName:String->Bool):PurityInference
+		return new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName);
+
 	/** Returns inferred-pure static and module function keys. */
 	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, abstracts:Map<String, AstAbstract>,
 			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool):Map<String, Bool> {

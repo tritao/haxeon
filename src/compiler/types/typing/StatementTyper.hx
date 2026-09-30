@@ -17,6 +17,7 @@ import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
 import compiler.types.analysis.Scope;
+import compiler.types.analysis.Scope.LocalFunction;
 import compiler.types.TypedAst.TypedCatch;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
@@ -123,13 +124,23 @@ class StatementTyper {
 				bindCell(name, span, scope, declaredType);
 				[TDeclare(scope.requireId(name), declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
-				var localFunctionParameters:Null<Array<compiler.syntax.Ast.AstArgument>> = null;
+				var localFunction:Null<LocalFunction> = null;
+				// A lambda with a declared result type is bound through a typed local; look through that wrapper.
+				var lambda = initializer;
 				switch initializer {
-					case Lambda(arguments, body, _) if ([for (argument in arguments) if (argument.optional == true) argument].length > 0):
+					case BlockExpression(wrapper, Variable(_, _), _) if (wrapper.length == 1):
+						switch wrapper[0] {
+							case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
+							default:
+						}
+					default:
+				}
+				switch lambda {
+					case Lambda(arguments, body, _):
 						var assignments:Map<String, Bool> = [];
 						CaptureAnalysis.collectAssignedLocals(statements.slice(statementIndex + 1), assignments);
 						CaptureAnalysis.collectAssignedLocals(body, assignments);
-						if (!assignments.exists(name)) localFunctionParameters = arguments;
+						if (!assignments.exists(name)) localFunction = {arguments: arguments, body: body};
 					default:
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
@@ -138,7 +149,7 @@ class StatementTyper {
 				if (declaredType != null)
 					switch initializer {
 						case Lambda(_, _, _):
-							scope.define(name, declaredType, span, true, null, false, localFunctionParameters);
+							scope.define(name, declaredType, span, true, null, false, localFunction);
 							predeclared = true;
 							// A recursive local function reads itself through a cell bound before its closure exists.
 							bindCell(name, span, scope, declaredType);
@@ -158,7 +169,7 @@ class StatementTyper {
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 				if (!predeclared)
-					scope.define(name, value.type, span, true, null, false, localFunctionParameters);
+					scope.define(name, value.type, span, true, null, false, localFunction);
 				scope.setMapKeySource(name, value.mapKeySource);
 				bindCell(name, span, scope, value.type);
 				[TVar(scope.requireId(name), value, span)];

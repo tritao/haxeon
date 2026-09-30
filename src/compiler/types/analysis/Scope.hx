@@ -7,14 +7,21 @@ import compiler.Diagnostic.CompileError;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstStatement;
 
 /** Resolved local binding identity and its declared semantic type. */
+/** A local declared as a function that is never reassigned, so a call through it runs exactly this body. */
+typedef LocalFunction = {
+	final arguments:Array<AstArgument>;
+	final body:Array<AstStatement>;
+}
+
 private typedef ScopeValue = {
 	final source:String;
 	final declared:CompilerType;
 	final id:String;
 	final receiver:Bool;
-	final functionParameters:Null<Array<AstArgument>>;
+	final localFunction:Null<LocalFunction>;
 }
 
 /**
@@ -39,7 +46,7 @@ class Scope {
 	}
 
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false,
-			?functionParameters:Array<AstArgument>):Void {
+			?localFunction:LocalFunction):Void {
 		if (values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
@@ -47,7 +54,7 @@ class Scope {
 			declared: type,
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
 			receiver: receiver,
-			functionParameters: functionParameters
+			localFunction: localFunction
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
@@ -138,8 +145,8 @@ class Scope {
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String,
-			?storageType:CompilerType, ?functionParameters:Array<AstArgument>):Void {
-		define(name, type, span, true, bindingId, false, functionParameters);
+			?storageType:CompilerType, ?localFunction:LocalFunction):Void {
+		define(name, type, span, true, bindingId, false, localFunction);
 		captures.set(name, true);
 		if (storageType != null)
 			captureStorageTypes.set(requireId(name), storageType);
@@ -258,9 +265,14 @@ class Scope {
 		return value == null ? null : value.id;
 	}
 
-	public function localFunctionParameters(name:String):Null<Array<AstArgument>> {
+	public function localFunction(name:String):Null<LocalFunction> {
 		var value = resolveLocal(name);
-		return value == null ? null : value.functionParameters;
+		return value == null ? null : value.localFunction;
+	}
+
+	public function localFunctionParameters(name:String):Null<Array<AstArgument>> {
+		var found = localFunction(name);
+		return found == null ? null : found.arguments;
 	}
 
 	public function requireId(name:String):String {
