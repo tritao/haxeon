@@ -29,6 +29,20 @@ class ModuleCanonicalizerMain {
 			default: false;
 		}, "import aliases should preserve qualified member suffixes");
 
+		// An assignment target is a dotted name, and an imported class in it is qualified like any other reference.
+		function assigned(name:String, locals:Map<String, Bool>, aliases:Null<Map<String, String>>):String
+			return switch ModuleCanonicalizer.canonicalStatement(Assignment(name, IntegerLiteral(1, canonical.span), canonical.span), "demo.Main",
+				"demo.Main", locals, aliases) {
+				case Assignment(target, _, _): target;
+				default: "?";
+			};
+		var imports:Map<String, String> = ["Cache" => "lib.Cache"];
+		expect(assigned("Cache.hits", locals, imports) == "lib.Cache.hits", "an imported class in an assignment target should be qualified");
+		expect(assigned("hits", locals, imports) == "hits", "a bare assignment target is never an import");
+		expect(assigned("owner.hits", locals, imports) == "owner.hits", "a receiver that is not an import is left alone");
+		expect(assigned("Cache.hits", ["Cache" => true], imports) == "Cache.hits", "a name declared in the module shadows an import in an assignment target");
+		expect(assigned("Cache.hits", locals, null) == "Cache.hits", "without imports an assignment target is unchanged");
+
 		Sys.println("PASS: module syntax canonicalization");
 	}
 

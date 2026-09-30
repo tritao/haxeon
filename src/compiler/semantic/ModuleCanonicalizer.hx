@@ -278,13 +278,34 @@ class ModuleCanonicalizer {
 				].join(',') + '}';
 		};
 
+	/**
+	 * The qualified name of the imported type or member that `path` starts with, or null. A path that starts with a name
+	 * declared in this module is left alone: that is how a local declaration shadows an import. Reads, member chains and
+	 * assignment targets all qualify a dotted path this way, so they must agree.
+	 */
+	static function importedReference(path:String, locals:Map<String, Bool>, aliases:Null<Map<String, String>>):Null<String>
+		return locals.exists(compiler.QualifiedName.first(path)) ? null : resolveOptionalExpressionAlias(path, aliases);
+
+	/**
+	 * An assignment target is a name, not an expression, so `Cache.entries = x` reaches here as the dotted string
+	 * "Cache.entries" and its receiver must be qualified like any other reference to an imported class. A bare name is
+	 * a local, a field of `this`, or a static of the enclosing class, and is never an import.
+	 */
+	static function canonicalAssignmentTarget(name:String, locals:Map<String, Bool>, aliases:Null<Map<String, String>>):String {
+		if (name.indexOf(".") < 0)
+			return name;
+		var imported = importedReference(name, locals, aliases);
+		return imported == null ? name : imported;
+	}
+
 	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:Map<String, Bool>, ?aliases:Map<String, String>):AstStatement
 		return switch s {
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
 				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
-			case Assignment(n, e, span): Assignment(n, canonicalExpression(e, module, entry, locals, aliases), span);
+			case Assignment(n, e,
+				span): Assignment(canonicalAssignmentTarget(n, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
 					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
@@ -344,19 +365,14 @@ class ModuleCanonicalizer {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_): e;
 			case Variable(name, span):
-				var dot = name.indexOf("."),
-					prefix = compiler.QualifiedName.first(name),
-					imported:Null<String> = null;
-				if (!locals.exists(prefix))
-					imported = resolveOptionalExpressionAlias(name, aliases);
+				var imported = importedReference(name, locals, aliases);
 				if (imported != null) Variable(imported,
-					span); else if (dot < 0 && locals.exists(name)) Variable(module == entry
-					&& name == "main" ? "main" : module + "." + name, span); else e;
+					span); else if (name.indexOf(".") < 0 && locals.exists(name)) Variable(module == entry
+					&& name == "main" ? "main" : module + "." + name,
+					span); else e;
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
-					prefix = qualifiedName == null ? null : compiler.QualifiedName.first(qualifiedName),
-					imported = qualifiedName == null
-						|| locals.exists(prefix) ? null : resolveOptionalExpressionAlias(qualifiedName, aliases);
+					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases);
 				if (imported != null) Variable(imported, s); else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
 			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
