@@ -126,6 +126,20 @@ class HlModuleAssembler {
 		return result;
 	}
 
+	/**
+	 * Forgets every published symbol index. Interned object types record the slot of each method, so once
+	 * the slot layout has moved they would point every method table at a neighbouring function; a module
+	 * that cannot be patched must intern its types afresh against the new layout.
+	 */
+	function discardPublishedSymbols():Void {
+		symbols = new HlSymbolTable();
+		loweredFunctions = [];
+		publishedInts = 0;
+		publishedFloats = 0;
+		publishedStrings = 0;
+		publishedTypes = 0;
+	}
+
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		cache.update(program.functions);
@@ -151,6 +165,7 @@ class HlModuleAssembler {
 		if (reuseLowered && runtimeNatives.length != previousNatives.length) {
 			reload = true;
 			reuseLowered = false;
+			discardPublishedSymbols();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
 		}
 		var layout:Map<String, Int> = [], next = 0;
@@ -164,6 +179,7 @@ class HlModuleAssembler {
 				if (previous != null && previous.functionIndex != layout.get(fn.name)) {
 					reload = true;
 					reuseLowered = false;
+					discardPublishedSymbols();
 					break;
 				}
 			}

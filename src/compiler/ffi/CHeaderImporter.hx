@@ -707,8 +707,10 @@ class CHeaderImporter {
 			return null;
 		if (file == null)
 			file = field(node, "_hxiFile");
-		var source = File.getContent(file),
-			invocation = source.substring(offset, Std.int(Math.min(source.length, offset + 256))),
+		// Clang reports byte offsets; slice the raw bytes so non-ASCII text earlier in the header cannot shift them.
+		var source = File.getBytes(file),
+			start:Int = Std.int(offset),
+			invocation = source.getString(start, Std.int(Math.min(source.length, start + 256)) - start),
 			argument = new EReg("^[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*(" + (argumentPattern == null ? "[A-Za-z_][A-Za-z0-9_]*" : argumentPattern) + ")\\s*\\)",
 				"");
 		return argument.match(invocation) ? argument.matched(1) : null;
