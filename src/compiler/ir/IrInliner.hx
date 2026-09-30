@@ -137,7 +137,7 @@ class IrInliner {
 				previous = cache.published.get(fn.name);
 			if (previous != null && previous != result) {
 				// Generated functions (initializers, the entry) are rebuilt on every compile; only different bytes count.
-				if (IrFunctionStateCodec.encode(previous).compare(IrFunctionStateCodec.encode(result)) == 0)
+				if (sameBytes(previous, result))
 					result = previous;
 				else
 					changed.push(fn.name);
@@ -150,6 +150,15 @@ class IrInliner {
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
 		return changed;
+	}
+
+	/** Whether both encode to the same bytes; a function that cannot be encoded (an unterminated dead block) counts as different. */
+	static function sameBytes(a:IrFunction, b:IrFunction):Bool {
+		try {
+			return IrFunctionStateCodec.encode(a).compare(IrFunctionStateCodec.encode(b)) == 0;
+		} catch (_:Dynamic) {
+			return false;
+		}
 	}
 
 	function inlinedVersion(name:String):IrFunction {

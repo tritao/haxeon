@@ -13,6 +13,12 @@ private typedef Connection = {final socket:Socket; final token:String;}
 
 /** Starts/reuses a private project worker. Unsupported hosts retain the one-shot compiler. */
 class CompilerClient {
+	/** The worker reads HAXEON_INLINE once at startup, so a different setting needs a different worker. */
+	static function inlineOption():String {
+		var value = Sys.getEnv("HAXEON_INLINE");
+		return value == null ? "" : value;
+	}
+
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
 			fallback:Void->Int):Int {
 		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0" || (Sys.systemName() != "Linux" && Sys.systemName() != "Mac"))
@@ -30,7 +36,8 @@ class CompilerClient {
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
 			// project gets its own worker process so it keeps its incremental compiler state.
-			var identity = new ExecutionAction(new ActionId("compiler-session-v6" + (profilePort == null ? "" : ":profile:" + profilePort)), [],
+			var identity = new ExecutionAction(new ActionId("compiler-session-v7:inline=" + inlineOption()
+				+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
 				[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
 				version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
 				key = version + "-" + Sha256.encode(projectRoot).substr(0, 16),
