@@ -157,7 +157,7 @@ class TestCatalog {
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml", "static-init-order-test.hl", 0,
 				"static initializers respect dependency order"),
 			hxmlCase("runtime", "enum-field-inference", "tests/hxml/enum-field-inference-test.hxml", "enum-field-inference-test.hl", 0,
-				"fields initialized with enum constructors infer the enum type"),
+				"fields initialized with enum constructors or enum abstract values infer their type"),
 			hxmlCase("runtime", "enum-abstract-declared-type", "tests/hxml/enum-abstract-declared-type-test.hxml", "enum-abstract-declared-type-test.hl", 0,
 				"a declared enum abstract type decides which abstract a bare value name belongs to"),
 			hxmlCase("runtime", "map-values", "tests/hxml/map-values-test.hxml", "map-values-test.hl", 0,
