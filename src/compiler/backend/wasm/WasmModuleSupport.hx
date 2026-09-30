@@ -31,10 +31,8 @@ class WasmModuleSupport {
 		for (native in program.cNatives) {
 			if (!used.exists(native.name))
 				continue;
-			var type:WasmFunctionType = {
-				parameters: [for (argument in native.arguments) requireValueType(argument)],
-				results: resultTypes(native.result)
-			};
+			var type:WasmFunctionType = compiler.backend.wasm.linear.WasmLinearCAbi.of(native)
+				.importType([for (argument in native.arguments) requireValueType(argument)], resultTypes(native.result));
 			var importModule = native.library == null || native.library == "" ? "env" : native.library,
 				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 			functions.set(native.name, module.addImport(importModule, importName, type));

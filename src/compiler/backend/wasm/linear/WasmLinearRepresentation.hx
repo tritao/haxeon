@@ -111,16 +111,23 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
-		var fixed = native.fixedResult;
-		if (fixed == null)
+		var abi = WasmLinearCAbi.of(native), fixed = native.fixedResult;
+		if (!abi.adjustsCall())
 			return UseDefault;
+		var body:Array<WasmInstruction> = [];
+		if (fixed == null) {
+			pushNativeArguments(body, abi, arguments, argumentLocals);
+			body.push(Call(importIndex));
+			if (outputLocal >= 0)
+				body.push(LocalSet(outputLocal));
+			return body;
+		}
 		if (native.result != ManagedBytes || outputLocal < 0)
 			throw 'Linear Wasm C native "${native.name}" has an invalid fixed aggregate result contract';
-		var body:Array<WasmInstruction> = [],
-			allocationSize = WasmLayout.STRING_DATA_OFFSET + fixed.size;
-		// Linear Wasm C-native imports return a pointer to the raw aggregate. Materialize
-		// that pointer as a managed Bytes value before the generated HXI wrapper attaches
-		// the projected fixed-layout record to it.
+		var allocationSize = WasmLayout.STRING_DATA_OFFSET + fixed.size;
+		// The record result lands in a managed Bytes value that the generated HXI wrapper then attaches the
+		// projected fixed-layout record to. The native either returns its single scalar, stored here, or
+		// writes the record through the pointer it receives first.
 		body.push(I32Const(allocationSize));
 		body.push(Call(allocator));
 		body.push(LocalSet(outputLocal));
@@ -136,12 +143,20 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		body.push(LocalGet(outputLocal));
 		body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 		body.push(I32Add);
-		for (index in 0...arguments.length)
-			nativeArgument(body, arguments[index], argumentLocals[index]);
+		pushNativeArguments(body, abi, arguments, argumentLocals);
 		body.push(Call(importIndex));
-		body.push(I32Const(fixed.size));
-		body.push(MemoryCopy);
+		if (abi.directResult != null)
+			body.push(abi.directResult.store);
 		return body;
+	}
+
+	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmLinearCAbi, arguments:Array<IrValue>, argumentLocals:Array<Int>):Void {
+		for (index in 0...arguments.length) {
+			nativeArgument(body, arguments[index], argumentLocals[index]);
+			var direct = abi.directArguments[index];
+			if (direct != null)
+				body.push(direct.load);
+		}
 	}
 
 	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult

@@ -304,12 +304,11 @@ const cases = [
           const view = new DataView(moduleInstance.exports.memory.buffer);
           return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
         },
-        make_point: seed => {
-          const pointer = 512;
+        // Record results other than a single scalar are written through a leading result pointer.
+        make_point: (pointer, seed) => {
           const view = new DataView(moduleInstance.exports.memory.buffer);
           view.setInt32(pointer, seed, true);
           view.setInt32(pointer + 4, seed + 2, true);
-          return pointer;
         },
         sum_gapped: pointer => {
           const view = new DataView(moduleInstance.exports.memory.buffer);
@@ -319,13 +318,21 @@ const cases = [
               return 0;
           return view.getInt8(pointer) + view.getInt32(pointer + 8, true);
         },
-        make_gapped: seed => {
-          const pointer = 544;
+        make_gapped: (pointer, seed) => {
           const view = new DataView(moduleInstance.exports.memory.buffer);
           new Uint8Array(moduleInstance.exports.memory.buffer, pointer, 12).fill(0);
           view.setInt8(pointer, 3);
           view.setInt32(pointer + 8, seed, true);
-          return pointer;
+        },
+        next_id: value => {
+          if (typeof value !== "bigint")
+            throw new Error("a single-u64 record must travel as an i64");
+          return value + 1n;
+        },
+        half: value => {
+          if (typeof value !== "number")
+            throw new Error("a single-f64 record must travel as an f64");
+          return value / 2;
         }
       };
 

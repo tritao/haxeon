@@ -7,6 +7,12 @@ interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_re
 		tag: i8 @offset(0);
 		value: i32 @offset(8);
 	}
+	struct id64 @layout(8, 8) {
+		value: u64 @offset(0);
+	}
+	struct real @layout(8, 8) {
+		value: f64 @offset(0);
+	}
 	extern fn read(value: ptr<const<point>>) -> i32 @symbol("read_point");
 	extern fn write(value: ptr<point> @out) -> void @symbol("write_point");
 	extern fn update(value: ptr<point> @inout) -> void @symbol("update_point");
@@ -14,4 +20,6 @@ interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_re
 	extern fn make(seed: i32) -> point @symbol("make_point");
 	extern fn sumGapped(value: gapped) -> i32 @symbol("sum_gapped");
 	extern fn makeGapped(seed: i32) -> gapped @symbol("make_gapped");
+	extern fn nextId(value: id64) -> id64 @symbol("next_id");
+	extern fn half(value: real) -> real @symbol("half");
 }
