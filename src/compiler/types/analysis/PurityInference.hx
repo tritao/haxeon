@@ -19,6 +19,7 @@ class PurityInference {
 	final isAnnotatedPure:String->Bool;
 	final isTypeName:String->Bool;
 	final getters:Map<String, Array<String>> = [];
+	final setters:Map<String, Bool> = [];
 	final constructors:Map<String, Bool> = [];
 	final classes:Map<String, AstClass>;
 	final overridden:Map<String, Bool>;
@@ -50,6 +51,16 @@ class PurityInference {
 		for (enumDecl in enums)
 			for (enumCase in enumDecl.cases)
 				constructors.set(enumCase.name, true);
+		for (classDecl in classes)
+			for (field in classDecl.fields)
+				if (field.writeAccess == SetAccess || field.writeAccess == DynamicAccess)
+					setters.set(field.name, true);
+		// Abstracts and interfaces declare setters as methods only; a name match over-approximates safely.
+		for (name in signatures.keys()) {
+			var simple = compiler.QualifiedName.last(name);
+			if (StringTools.startsWith(simple, "set_"))
+				setters.set(simple.substr(4), true);
+		}
 	}
 
 	/** For calls through a local function whose body is known: the functions that body calls, or null when it has a direct effect. */
@@ -74,6 +85,38 @@ class PurityInference {
 			return null;
 		return [for (key in walker.dependencies.keys()) key];
 	}
+
+	/**
+		Like `localBodyDependencies`, for a loop body whose facts must survive its own iterations: element and plain
+		field stores are allowed and reported instead of making the body impure. Null when the body has any other
+		direct effect, or stores to a field some type gives a setter (a setter call can do anything).
+	 */
+	public static function localBodyStores(inference:PurityInference, body:Array<AstStatement>, functionName:String, outerLocals:Array<String>,
+			?privateMaps:Array<String>):Null<{
+			dependencies:Array<String>,
+			fields:Array<String>,
+			indexed:Bool
+		}> {
+		var walker = new PurityWalker(inference, functionName);
+		walker.stores = {fields: [], indexed: false};
+		walker.declare("this");
+		for (name in outerLocals)
+			walker.declare(name);
+		if (privateMaps != null)
+			for (name in privateMaps)
+				walker.privateMaps.set(name, true);
+		if (!walker.statements(body))
+			return null;
+		return {
+			dependencies: [for (key in walker.dependencies.keys()) key],
+			fields: [for (field in walker.stores.fields.keys()) field],
+			indexed: walker.stores.indexed
+		};
+		}
+
+	/** Whether assigning a field of this name may run a setter on some type: a `set_` method or a `set`/`dynamic` field. */
+	public function mayHaveSetter(field:String):Bool
+		return setters.exists(field);
 
 	static function hasArgument(arguments:Array<AstArgument>, name:String):Bool {
 		for (argument in arguments)
@@ -277,6 +320,9 @@ private class PurityWalker {
 	/** Outer locals that are maps nothing else can reach: operating on one changes no state anyone else can see. */
 	public final privateMaps:Map<String, Bool> = [];
 
+	/** When set, element and plain field stores are recorded here instead of rejected (see `localBodyStores`). */
+	public var stores:Null<{fields:Map<String, Bool>, indexed:Bool}> = null;
+
 	final inference:PurityInference;
 	final functionName:String;
 
@@ -383,9 +429,14 @@ private class PurityWalker {
 				else
 					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type));
 				pure;
+			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name) && expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
+			case Increment(name, _, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 			case Increment(name, _, _): isLocal(name);
 			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key) && expression(value);
+			case IndexAssignment(target, key, value, _) if (stores != null): stores.indexed = true; expression(target) && expression(key) && expression(value);
+			case FieldAssignment(object, field, value, _) if (stores != null && !inference.mayHaveSetter(field)): stores.fields.set(field,
+					true); expression(object) && expression(value);
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
@@ -503,10 +554,32 @@ private class PurityWalker {
 				true;
 			case PostfixIncrement(target, _, _):
 				switch target {
+					case Variable(name, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 					case Variable(name, _): isLocal(name);
+					case Member(object, field, _) if (stores != null && !inference.mayHaveSetter(field)):
+						stores.fields.set(field, true);
+						expression(object);
 					default: false;
 				}
 		};
+	}
+
+	/**
+		The parser spells `a.b.c = v` as an assignment to the dotted name. In store-recording mode that is a store to
+		field `c`, allowed when no type gives `c` a setter and reading `a.b` runs no impure getter.
+	 */
+	function dottedFieldStore(path:String):Bool {
+		var segments = path.split(".");
+		if (segments.length < 2)
+			return false;
+		var field = segments[segments.length - 1];
+		if (inference.mayHaveSetter(field))
+			return false;
+		for (index in 1...segments.length - 1)
+			if (!readsProperty(segments[index]))
+				return false;
+		stores.fields.set(field, true);
+		return true;
 	}
 
 	/**

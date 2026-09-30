@@ -236,6 +236,10 @@ class Scope {
 	public function invalidateAllExpressions():Void
 		facts.invalidateAllExpressions();
 
+	/** A store to some object's `field` may falsify any fact read through a field of that name. */
+	public function invalidateField(field:String):Void
+		facts.invalidateField(field);
+
 	public function invalidateExpressionsForLocal(name:String):Void {
 		var local = resolveLocal(name);
 		if (local != null) {
