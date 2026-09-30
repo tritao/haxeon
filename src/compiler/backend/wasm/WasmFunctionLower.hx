@@ -1334,16 +1334,12 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		for (object in program.objects) {
-			if (!implementsInterface(program, object.name, interfaceName))
-				continue;
-			var functionName = findMethod(program, object.name, methodName);
+		var index = WasmProgramIndex.of(program);
+		for (object in index.implementorsOf(interfaceName)) {
+			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
 				var functionIndex = functions.get(functionName),
-					targetFunction:Null<IrFunction> = null;
-				for (candidate in program.functions)
-					if (candidate.name == functionName)
-						targetFunction = candidate;
+					targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
 						throw 'Wasm interface target "$functionName" has no Haxe function signature';
@@ -1372,16 +1368,12 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		for (object in program.objects) {
-			if (!isObjectSubtype(program, object.name, staticType))
-				continue;
-			var functionName = findMethod(program, object.name, methodName);
+		var index = WasmProgramIndex.of(program);
+		for (object in index.subtypesOf(staticType)) {
+			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
 				var functionIndex = functions.get(functionName),
-					targetFunction:Null<IrFunction> = null;
-				for (candidate in program.functions)
-					if (candidate.name == functionName)
-						targetFunction = candidate;
+					targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
 						throw 'Wasm class target "$functionName" has no Haxe function signature';
@@ -1398,54 +1390,20 @@ class WasmFunctionLower {
 		return result;
 	}
 
-	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (object in program.objects)
-			if (object.name == actual)
-				return object.base != null && isObjectSubtype(program, object.base, expected);
-		return false;
-	}
+	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).isObjectSubtype(actual, expected);
 
-	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int {
-		for (object in program.objects)
-			if (object.name == typeName)
-				return object.base == null ? 0 : objectInheritanceDepth(program, object.base) + 1;
-		return 0;
-	}
+	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int
+		return WasmProgramIndex.of(program).inheritanceDepth(typeName);
 
-	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String> {
-		for (object in program.objects)
-			if (object.name == objectName) {
-				for (method in object.methods)
-					if (method.name == methodName)
-						return method.functionName;
-				return object.base == null ? null : findMethod(program, object.base, methodName);
-			}
-		return null;
-	}
+	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String>
+		return WasmProgramIndex.of(program).findMethod(objectName, methodName);
 
-	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool {
-		for (object in program.objects)
-			if (object.name == objectName) {
-				for (implemented in object.interfaces)
-					if (interfaceExtends(program, implemented, interfaceName))
-						return true;
-				return object.base != null && implementsInterface(program, object.base, interfaceName);
-			}
-		return false;
-	}
+	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool
+		return WasmProgramIndex.of(program).implementsInterface(objectName, interfaceName);
 
-	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (interfaceDecl in program.interfaces)
-			if (interfaceDecl.name == actual)
-				for (base in interfaceDecl.bases)
-					if (interfaceExtends(program, base, expected))
-						return true;
-		return false;
-	}
+	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	public static function typeId(type:IrType):Int {
 		var identity = switch type {
