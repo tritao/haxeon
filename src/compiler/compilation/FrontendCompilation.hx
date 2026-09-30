@@ -622,6 +622,8 @@ class FrontendCompilation {
 		return module;
 	}
 
+	static inline var INITIALIZER_SUFFIX = ".__init";
+
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
 			typed:TypedProgram, owners:Map<String, String>, names:Array<String>, rollbackModules:Map<String, ModuleState>):Bool {
 		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
@@ -636,11 +638,19 @@ class FrontendCompilation {
 				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
 			if (names.indexOf(target) >= 0)
 				continue;
-			var fn = typedByName.get(dependency.functionName);
-			if (fn == null)
+			var fn = typedByName.get(dependency.functionName),
+				owner:Null<String> = null;
+			if (fn != null)
+				owner = resolveFunctionModule(fn, owners, typedByName, []);
+			else if (StringTools.endsWith(dependency.functionName, INITIALIZER_SUFFIX)) {
+				// A field initializer is typed in a pseudo-body named "Class.__init", which is not a function of its own:
+				// its dependencies belong to the module that owns the class.
+				var className = dependency.functionName.substr(0, dependency.functionName.length - INITIALIZER_SUFFIX.length);
+				owner = owners.get(className + ".new");
+			}
+			if (owner == null)
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
-			var owner = resolveFunctionModule(fn, owners, typedByName, []),
-				state = context.writableState(owner, rollbackModules);
+			var state = context.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
 				state.dependencies.push(target);
 				state.dependencies.sort(Reflect.compare);
