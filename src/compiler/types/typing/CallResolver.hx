@@ -757,8 +757,12 @@ class CallResolver {
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
 			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
-		if (scope.resolve(name) != null)
-			return typeClosureCall(Variable(name, span), arguments, span, scope, name, false);
+		if (scope.resolve(name) != null) {
+			// A local function runs a known body, so a call through it only clears facts when that body might.
+			var local = scope.localFunction(name);
+			return typeClosureCall(Variable(name, span), arguments, span, scope, name, local == null || !session.localFunctionIsPure(local,
+				session.currentContext.lexicalOwner));
+		}
 		if (name.indexOf(".") < 0) {
 			var fieldCall = typeImplicitFunctionFieldCall(name, arguments, span, scope);
 			if (fieldCall != null)
@@ -1518,7 +1522,7 @@ class CallResolver {
 				value = coerce(typeExpressionValue(arguments[1], scope, mapType.value), mapType.value, "map value", "E1002");
 			var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
 			if (entryPath != null)
-				scope.refineExpression(entryPath, mapType.value);
+				scope.refineExpression(entryPath, mapType.value, FlowAnalysis.entryFactsSurviveCalls(scope, receiver));
 			return new TypedExpression(TCollectionCall(receiver, "set", [key, value]), TVoid, span);
 		}
 		if (name == "copy") {
@@ -1553,7 +1557,7 @@ class CallResolver {
 				fail("E1008", "Map.clear expects no arguments", span);
 			var entriesPath = FlowAnalysis.mapEntriesPath(receiver);
 			if (entriesPath != null)
-				scope.invalidateExpressionNamespace(entriesPath);
+				scope.invalidateExpressionNamespaceCompletely(entriesPath);
 			return new TypedExpression(TCollectionCall(receiver, "clear", []), TVoid, span);
 		}
 		if (name == "size") {
@@ -1567,9 +1571,10 @@ class CallResolver {
 		return switch name {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
 			case "remove":
-				var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
-				if (entryPath != null)
-					scope.invalidateExpressionValue(entryPath);
+				// Another key spelling may name the same entry, so removing any key forgets what is known about all of them.
+				var entriesPath = FlowAnalysis.mapEntriesPath(receiver);
+				if (entriesPath != null)
+					scope.invalidateExpressionNamespaceCompletely(entriesPath);
 				new TypedExpression(TCollectionCall(receiver, "remove", [key]), TBool, span);
 			case "get":
 				var entryPath = FlowAnalysis.mapEntryPath(receiver, key),

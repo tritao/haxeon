@@ -15,6 +15,7 @@ import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.CaptureAnalysis;
+import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
@@ -257,6 +258,7 @@ class BodyTyper {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
 		}
 		var scope = new Scope();
+		scope.setPrivateMaps(MapEscapeAnalysis.privateMaps(fn.statements, [for (argument in fn.arguments) argument.name]));
 		context.scope = scope;
 		var isConstructor = owner != null && session.classDecls.exists(owner) && fn.name == "new";
 		if (abstractReceiver != null) {

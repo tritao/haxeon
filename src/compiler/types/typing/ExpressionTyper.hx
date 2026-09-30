@@ -778,6 +778,11 @@ class ExpressionTyper {
 				fail("E1018", "Postfix increment target is not assignable", span);
 				TPostfixLocal("", delta);
 		};
+		switch target {
+			case Variable(name, _):
+				scope.invalidateExpressionsForLocal(name);
+			default:
+		}
 		return new TypedExpression(operation, typedTarget.type, span);
 	}
 

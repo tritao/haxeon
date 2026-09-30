@@ -55,6 +55,8 @@ class TestCatalog {
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
 		"LoopNarrowingMain",
+		"MapEntryFactsMain",
+		"ClosureEffectsMain",
 		"EnumVisibilityMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",

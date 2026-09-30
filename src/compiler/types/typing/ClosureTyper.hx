@@ -139,7 +139,7 @@ class ClosureTyper {
 							scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
 							CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 					lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-						declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunctionParameters(name));
+						declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name));
 					if (cellClass != null)
 						captureCells.set(name, cellClass);
 					captureTypes.set(name, captureType);
@@ -160,7 +160,7 @@ class ClosureTyper {
 		}
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
-				capture.bindingId, capture.storageType, scope.localFunctionParameters(capture.field));
+				capture.bindingId, capture.storageType, scope.localFunction(capture.field));
 		var lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
