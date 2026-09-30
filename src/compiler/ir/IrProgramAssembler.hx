@@ -682,6 +682,13 @@ class IrProgramAssembler {
 				result: Void
 			});
 			program.natives.push({
+				name: '__${mapName}_copy',
+				library: "haxeon_runtime",
+				symbol: '__${mapName}_copy',
+				arguments: [mapType],
+				result: mapType
+			});
+			program.natives.push({
 				name: '__${mapName}_size',
 				library: "haxeon_runtime",
 				symbol: '__${mapName}_size',

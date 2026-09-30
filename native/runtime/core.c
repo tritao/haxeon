@@ -112,6 +112,7 @@ extern varray *hl_hbvalues( realtime_string_map *map );
 extern int hl_hbsize( realtime_string_map *map );
 extern bool hl_hbremove( realtime_string_map *map, uchar *key );
 extern void hl_hbclear( realtime_string_map *map );
+extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
 
 static void realtime_raise_module_exception( void ) {
 	/* A module exception owns generation-specific type metadata. Never let that
@@ -133,6 +134,7 @@ extern varray *hl_hivalues( realtime_int_map *map );
 extern int hl_hisize( realtime_int_map *map );
 extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
+extern realtime_int_map *hl_hicopy( realtime_int_map *map );
 
 typedef struct {
 	int offset;

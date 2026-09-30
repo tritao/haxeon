@@ -24,6 +24,7 @@ class WasmGcMaps {
 			case "values": addProjectionForNative(module, name, plan, native, map, mapType, mapReference, false);
 			case "remove": addRemove(module, name, plan, map, mapType, mapReference, ensureFind(module, functions, plan, mapName));
 			case "clear": addClear(module, name, plan, map, mapType, mapReference);
+			case "copy": addCopy(module, name, plan, map, mapType, mapReference);
 			case "size": module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: [I32]}, [],
 					[LocalGet(0), StructGet(mapType, 0), Return]));
 			default: throw 'Unknown Wasm GC map operation "$operation"';
@@ -324,6 +325,53 @@ class WasmGcMaps {
 		body.push(Return);
 		return module.addFunction(new WasmFunction(name, {parameters: [mapReference, plan.valueType(map.keyType)], results: [resultType]}, [{type: I32}],
 			body));
+	}
+
+	/** A new map with the same entries: arrays of the source's capacity, the used prefix copied, no rehash. */
+	static function addCopy(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType):Int {
+		var keyArray = plan.arrayType(map.keyType),
+			valueArray = plan.arrayType(map.valueType),
+			keyStorage = plan.arrayStorageType(map.keyType),
+			valueStorage = plan.arrayStorageType(map.valueType),
+			body:Array<WasmInstruction> = [];
+		appendNewArray(body, plan, map.keyType, [LocalGet(0), StructGet(mapType, 1)]);
+		body.push(LocalSet(1));
+		appendNewArray(body, plan, map.valueType, [LocalGet(0), StructGet(mapType, 1)]);
+		body.push(LocalSet(2));
+		appendArrayCopy(body, keyStorage, [
+			LocalGet(1),
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
+		], [I32Const(0)], [
+			LocalGet(0),
+			StructGet(mapType, 2),
+			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(keyStorage)})
+		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+		appendArrayCopy(body, valueStorage, [
+			LocalGet(2),
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
+		], [I32Const(0)], [
+			LocalGet(0),
+			StructGet(mapType, 3),
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)})
+		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+		body = body.concat([
+			LocalGet(0),
+			StructGet(mapType, 0),
+			LocalGet(0),
+			StructGet(mapType, 1),
+			LocalGet(1),
+			LocalGet(2),
+			StructNew(mapType),
+			Return
+		]);
+		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: [mapReference]}, [
+			{type: Ref({nullable: false, heap: Type(keyArray)})},
+			{type: Ref({nullable: false, heap: Type(valueArray)})}
+		], body));
 	}
 
 	static function addClear(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType):Int {

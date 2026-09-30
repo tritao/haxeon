@@ -1811,6 +1811,7 @@ class WasmLinearRuntime {
 			case "remove": addMapRemove(module, name, keyType, valueType, entrySize, stringEqual,
 					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
 			case "clear": addMapClear(module, name);
+			case "copy": addMapCopy(module, name, mapName, entrySize, allocator);
 			case "size": addMapSize(module, name);
 			default: throw 'Unknown Wasm map operation "$operation"';
 		};
@@ -2254,6 +2255,53 @@ class WasmLinearRuntime {
 	static function addMapClear(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: []}, [],
 			[LocalGet(0), I32Const(0), I32Store(WasmLayout.MAP_COUNT_OFFSET)]));
+
+	/** A new map with the same entries: header and entries block allocated like addMapAlloc, then the used entries copied. */
+	static function addMapCopy(module:WasmModule, name:String, mapName:String, entrySize:Int, allocator:Int):Int {
+		// Locals: 0 = source, 1 = new map, 2 = new entries block.
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}], [
+			I32Const(WasmLayout.MAP_HEADER_SIZE),
+			Call(allocator),
+			LocalSet(1),
+			LocalGet(1),
+			I32Const(WasmModuleSupport.typeId(Abstract(mapName))),
+			I32Store(0),
+			LocalGet(1),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_COUNT_OFFSET),
+			I32Store(WasmLayout.MAP_COUNT_OFFSET),
+			LocalGet(1),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_CAPACITY_OFFSET),
+			I32Store(WasmLayout.MAP_CAPACITY_OFFSET),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_CAPACITY_OFFSET),
+			I32Const(entrySize),
+			I32Mul,
+			Call(allocator),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+			I32Sub,
+			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
+			I32Add,
+			LocalGet(1),
+			I32Store(0),
+			LocalGet(2),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_COUNT_OFFSET),
+			I32Const(entrySize),
+			I32Mul,
+			MemoryCopy,
+			LocalGet(1),
+			LocalGet(2),
+			I32Store(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(1),
+			Return
+		]));
+	}
 
 	static function addMapSize(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],

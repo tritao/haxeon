@@ -1528,11 +1528,7 @@ class CallResolver {
 		if (name == "copy") {
 			if (arguments.length != 0)
 				fail("E1008", "Map.copy expects no arguments", span);
-			var keyName = '$' + 'map-copy-key:${span.start}',
-				valueName = '$' + 'map-copy-value:${span.start}';
-			return new TypedExpression(TMapComprehension(keyName, valueName, receiver, null, new TypedExpression(TLocal(keyName), mapType.key, span),
-				new TypedExpression(TLocal(valueName), mapType.value, span)),
-				receiver.type, span);
+			return new TypedExpression(TCollectionCall(receiver, "copy", []), receiver.type, span);
 		}
 		if (name == "keys") {
 			if (arguments.length != 0)
