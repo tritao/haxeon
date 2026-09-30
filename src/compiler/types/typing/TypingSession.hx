@@ -32,6 +32,10 @@ typedef EqualityRequest = {
 /** Mutable semantic state shared by all typing phases for one compilation. */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
+
+	/** The enum abstract a bare value name being typed right now must belong to; see `EnumAbstractHints`. */
+	public var abstractHint:Null<String>;
+
 	public var methodInfo:Map<String, SemanticMethodInfo> = [];
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];

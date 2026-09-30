@@ -351,8 +351,9 @@ class ProgramTyper {
 					if (!field.isStatic)
 						scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
 					try {
-						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
-							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+						initializer = bodyTyper.coerce(EnumAbstractHints.typed(session, EnumAbstractHints.named(session, field.type), parsedInitializer,
+							() -> bodyTyper.typeExpression(parsedInitializer, scope, type)),
+							type, (field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
 						throw error;

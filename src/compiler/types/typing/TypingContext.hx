@@ -24,6 +24,13 @@ class TypingContext {
 	public final storage = new BindingStoragePlan();
 
 	public final localExpectedTypes:Map<String, CompilerType> = [];
+
+	/** Binding ID to the enum abstract a parameter or local was declared as (the type itself lowers to the underlying one). */
+	public final declaredAbstracts:Map<String, String> = [];
+
+	/** The enum abstract the function declares as its result, if any. */
+	public var declaredResultAbstract:Null<String>;
+
 	public var loopDepth:Int = 0;
 	public final loopEarlyExits:Array<Bool> = [];
 	public var expectedReturnType:CompilerType = TVoid;

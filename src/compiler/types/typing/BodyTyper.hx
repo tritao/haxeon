@@ -274,7 +274,11 @@ class BodyTyper {
 			scope.define(argument.name, type, argument.span);
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
+			var declaredAbstract = EnumAbstractHints.named(session, argument.type);
+			if (declaredAbstract != null)
+				context.declaredAbstracts.set(scope.requireId(argument.name), declaredAbstract);
 		}
+		context.declaredResultAbstract = EnumAbstractHints.named(session, fn.result);
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -1777,10 +1781,21 @@ class BodyTyper {
 	 * ordinary lookup, which reports it). Only called for a bare reference.
 	 */
 	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
-		if (expectedType == null)
-			return null;
 		// A name written bare can arrive qualified by the class it also names; the value is its last segment.
 		var valueName = lastPathSegment(name);
+		// The other side's declared type names the abstract: that is the one the value belongs to, however
+		// many others declare the name. The hint is spent here so typing the value cannot leak it.
+		var hinted = session.abstractHint;
+		session.abstractHint = null;
+		if (hinted != null) {
+			var hintedDeclaration = session.enumAbstractDecls.get(hinted);
+			if (hintedDeclaration != null)
+				for (value in hintedDeclaration.values)
+					if (value.name == valueName)
+						return typeExpression(value.value, new Scope(), lowerType(hintedDeclaration.underlying));
+		}
+		if (expectedType == null)
+			return null;
 		var declaration = findBareEnumAbstract(valueName, expectedType, span, true);
 		if (declaration == null)
 			return null;
