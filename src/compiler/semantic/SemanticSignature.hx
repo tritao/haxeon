@@ -75,8 +75,11 @@ class SemanticSignature {
 		return fn.name
 			+ (typeParameters == null
 				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
-			+ "("
-			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
+			+ "(" // Whether an argument may be omitted is part of the signature: callers are checked against the arity range.
+			+ [
+				for (argument in fn.arguments)
+					(argument.optional == true || argument.defaultValue != null ? "?" : "") + parsedType(argument.type, definitions, [])
+			].join(",") + ")->" + parsedType(fn.result, definitions, []);
 	}
 
 	static function parsedConstraint(fn:AstFunction, parameter:String, definitions:Map<String, AstType>):String {
