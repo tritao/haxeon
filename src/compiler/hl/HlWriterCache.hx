@@ -18,6 +18,7 @@ class HlWriterCache {
 	var prefixGlobals:Dynamic;
 	var prefixNativeKey = "";
 	var prefixFunctions = -1;
+	var prefixConstants = -1;
 	var prefixEntryPoint = -1;
 
 	public function new() {}
@@ -67,6 +68,7 @@ class HlWriterCache {
 			&& prefixGlobals == code.globals
 			&& prefixNativeKey == nativeKey
 			&& prefixFunctions == code.functions.length
+			&& prefixConstants == code.constants.length
 			&& prefixEntryPoint == code.entryPoint ? prefix : null;
 	}
 
@@ -82,6 +84,7 @@ class HlWriterCache {
 				'${native.library}:${native.name}:${native.type}:${native.functionIndex}'
 		].join("|");
 		prefixFunctions = code.functions.length;
+		prefixConstants = code.constants.length;
 		prefixEntryPoint = code.entryPoint;
 	}
 

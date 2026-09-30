@@ -48,7 +48,8 @@ class BackendAssembly {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
+		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null, null,
+			true) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();

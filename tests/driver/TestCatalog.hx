@@ -161,6 +161,7 @@ class TestCatalog {
 				"compiler-owned Int/Float/Bool/String array allocation executed"),
 			mainCase("runtime", "value-struct", "ValueStructMain", "value-struct.hl", 42, "HSTRUCT value and HPACKED embedded field executed"),
 			mainCase("runtime", "string", "StringMain", "string.hl", 42, "compiler-owned string concatenation executed"),
+			mainCase("runtime", "string-constants", "StringConstantsMain", "string-constants.hl", 42, "literals are created once in a build nothing patches"),
 			mainCase("runtime", "import", "ImportMain", "import.hl", 42, "package-qualified import executed"),
 			mainCase("runtime", "import-class", "ImportClassMain", "import-class.hl", 42, "imported nominal class executed"),
 			mainCase("runtime", "namespace", "NamespaceMain", "namespace.hl", 42, "qualified nominal namespaces executed"),

@@ -11,12 +11,19 @@ class HlCode {
 	public var globals:Array<Int> = [];
 	public var natives:Array<HlNative> = [];
 	public var functions:Array<HlFunction> = [];
+
+	/** Objects the VM creates when the module loads, each stored in one global. */
+	public var constants:Array<HlConstant> = [];
+
 	public var debugSections:Array<HlDebugSection> = [];
 	public var sourceSnapshots:Array<HlSourceSnapshot> = [];
 	public var entryPoint:Int = 0;
 
 	public function new() {}
 }
+
+/** A constant object: `fields` are table indices, in the object's field order (an int index, a string index, a type index or a global). */
+typedef HlConstant = {final global:Int; final fields:Array<Int>;}
 
 /** Independently versioned, length-delimited HLB debug metadata. */
 typedef HlDebugSection = {final kind:Int; final version:Int; final flags:Int; final payload:haxe.io.Bytes;}

@@ -139,8 +139,18 @@ class HlWriter {
 			}
 			output.write(encoded);
 		}
+		writeConstants(code);
 		writeDebugSections(code);
 	}
+
+	/** Constants follow the functions in the HLB layout. */
+	function writeConstants(code:HlCode):Void
+		for (constant in code.constants) {
+			writeUnsignedIndex(constant.global);
+			writeUnsignedIndex(constant.fields.length);
+			for (field in constant.fields)
+				writeUnsignedIndex(field);
+		}
 
 	function writePrefix(code:HlCode):Void {
 		output.writeString("HLB");
@@ -154,7 +164,7 @@ class HlWriter {
 		writeUnsignedIndex(code.globals.length);
 		writeUnsignedIndex(code.natives.length);
 		writeUnsignedIndex(code.functions.length);
-		writeUnsignedIndex(0); // constants
+		writeUnsignedIndex(code.constants.length);
 		writeUnsignedIndex(code.entryPoint);
 
 		for (value in code.ints)

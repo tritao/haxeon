@@ -519,6 +519,22 @@ class HlSymbolTable {
 		return index;
 	}
 
+	/** Globals named after a string literal hold that literal's String object, created once when the module loads. */
+	public static inline final STRING_CONSTANT_PREFIX = "$string:";
+
+	public function internStringConstant(value:String):Int
+		return internGlobal(STRING_CONSTANT_PREFIX + value, IrType.Bytes);
+
+	/** The literal globals, in index order, with the literal each one holds. */
+	public function stringConstantGlobals():Array<{global:Int, value:String}> {
+		var result:Array<{global:Int, value:String}> = [];
+		for (name => index in globalIndices)
+			if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
+				result.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
+		result.sort(function(left, right) return left.global < right.global ? -1 : left.global > right.global ? 1 : 0);
+		return result;
+	}
+
 	public function requireGlobalIndex(name:String):Int {
 		if (!globalIndices.exists(name))
 			throw 'Unknown static field global "$name"';

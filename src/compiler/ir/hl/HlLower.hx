@@ -71,8 +71,8 @@ class HlLower {
 	}
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
-			?debugCache:HlDebugMetadataCache):MeasuredHlCode {
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
+			stringConstants:Bool = false):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -93,10 +93,11 @@ class HlLower {
 			IrVerifier.verifyFunctions(program, selected);
 			affected = [for (name in selected.keys()) name];
 		}
-		var verifiedAt = Sys.time() * 1000.0,
-			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache),
-			code = lowerer.lowerProgram(program);
+		var verifiedAt = Sys.time() * 1000.0, allocationAfterVerification = AllocationMeter.sample(),
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache), code = {
+				lowerer.stringConstants = stringConstants;
+				lowerer.lowerProgram(program);
+			};
 		return {
 			code: code,
 			metrics: {
@@ -116,6 +117,13 @@ class HlLower {
 	final cachedFunctions:Null<Map<String, HlFunction>>;
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
+
+	/**
+	 * Literals become globals holding one String object each, created when the module loads, instead of a new String at every
+	 * evaluation. A patch cannot add globals, so this is only for builds nothing will patch.
+	 */
+	var stringConstants = false;
+
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
 	var debugMs = 0.0;
@@ -374,6 +382,15 @@ class HlLower {
 		var allocationAfterDebug = AllocationMeter.sample();
 
 		code.entryPoint = requireFunction(program.entryPoint);
+		if (stringConstants)
+			for (literal in symbols.stringConstantGlobals())
+				code.constants.push({
+					global: literal.global,
+					fields: [
+						symbols.internString(literal.value),
+						symbols.internInt(HlSymbolTable.utf16Length(literal.value))
+					]
+				});
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
 		code.strings = symbols.strings;
@@ -1090,6 +1107,10 @@ class HlLower {
 	 * so literals allocate a fresh String over the module's interned, immutable UTF-16 data.
 	 */
 	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
+		if (stringConstants) {
+			instructions.push(HlInstruction.GlobalGet(destination, symbols.internStringConstant(value)));
+			return;
+		}
 		var data = temporaryRegister(IrType.RawPtr, registerTypes),
 			length = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.LoadString(data, internString(value)));

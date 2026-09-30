@@ -65,13 +65,17 @@ class HlModuleAssembler {
 	var runtimeNatives:Array<IrNative> = [];
 	final debugMetadata:HlDebugMetadataCache;
 
-	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache) {
+	/** Literals are created once when the module loads; only for a module that is never patched. */
+	final stringConstants:Bool;
+
+	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache, stringConstants:Bool = false) {
+		this.stringConstants = stringConstants;
 		cache = new HlFunctionCache(stableIds);
 		debugMetadata = sharedDebugMetadata == null ? new HlDebugMetadataCache() : sharedDebugMetadata;
 	}
 
 	public function copy():HlModuleAssembler {
-		var result = new HlModuleAssembler(null, debugMetadata);
+		var result = new HlModuleAssembler(null, debugMetadata, stringConstants);
 		result.symbols = symbols.fork();
 		result.cache = cache.copy();
 		result.initialized = initialized;
@@ -176,7 +180,7 @@ class HlModuleAssembler {
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
-			runtimeNatives, debugMetadata),
+			runtimeNatives, debugMetadata, stringConstants),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
 		loweredFunctions = [];
