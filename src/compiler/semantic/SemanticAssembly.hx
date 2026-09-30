@@ -98,10 +98,13 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
-		var classDeclarations:Map<String, AstClass> = [];
+		var classDeclarations:Map<String, AstClass> = [],
+			enumDeclarations:Map<String, compiler.syntax.Ast.AstEnum> = [];
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (enumDecl in parsed.enums)
+					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name), enumDecl);
 				for (classDecl in parsed.classes)
 					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name), classDecl);
 			}
@@ -385,7 +388,8 @@ class SemanticAssembly {
 					canonicalFields.push({
 						name: field.name,
 						metadata: field.metadata,
-						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
+						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
+							enumDeclarations), classAliases,
 							classDecl.typeParameters),
 						initializer: initializer,
 						readAccess: field.readAccess,

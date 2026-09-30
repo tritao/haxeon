@@ -155,6 +155,8 @@ class TestCatalog {
 				["{root}/out/plugin-runtime.hl"]),
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml", "static-init-order-test.hl", 0,
 				"static initializers respect dependency order"),
+			hxmlCase("runtime", "enum-field-inference", "tests/hxml/enum-field-inference-test.hxml", "enum-field-inference-test.hl", 0,
+				"fields initialized with enum constructors infer the enum type"),
 			hxmlCase("runtime", "map-values", "tests/hxml/map-values-test.hxml", "map-values-test.hl", 0,
 				"string map value iteration preserves nested captures"),
 			hxmlCase("runtime", "instance-initializer", "tests/hxml/instance-initializer-test.hxml", "instance-initializer-test.hl", 0,
