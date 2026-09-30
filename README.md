@@ -438,7 +438,8 @@ standard-library changes select a fresh worker. Workers exit after
 shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`, or
 `HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
 logs, so the resident limits below apply to the whole machine. Set
-`HAXEON_COMPILER_SERVER=0` to use one-shot compilation. Windows, explicit `--self-hosted` builds, and unavailable workers
+`HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
+as a HashLink program compiled once per compiler version (Windows interprets it). Windows, explicit `--self-hosted` builds, and unavailable workers
 retain the one-shot path. The normal CLI's local fingerprint checks run before
 contacting a worker, so unchanged bytecode is still skipped entirely.
 

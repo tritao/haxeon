@@ -32,10 +32,7 @@ class CompilerClient {
 			if (profilePort != null
 				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1 || Std.parseInt(profilePort) > 65535))
 				throw "HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535";
-			var directory = sessionDirectory();
-			FileSystem.createDirectory(directory);
-			if (Sys.command("chmod", ["700", directory]) != 0)
-				throw "Could not make the compiler session directory private";
+			var directory = preparedSessionDirectory();
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
 			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
@@ -50,7 +47,7 @@ class CompilerClient {
 				var workerArtifact = Path.join([directory, version + ".hl"]),
 					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
-				ensureWorkerArtifact(command, compilerSource, workerArtifact, home);
+				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
 				var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 					libraryPath = [
 						Path.join([home, "out"]),
@@ -143,26 +140,24 @@ class CompilerClient {
 	static final artifactMutex = new sys.thread.Mutex();
 	#end
 
-	/** Compiles the worker program once per compiler version; concurrent callers wait for the first to finish. */
-	static function ensureWorkerArtifact(command:String, compilerSource:String, workerArtifact:String, home:String):Void {
+	/**
+	 * Compiles one compiler program once per compiler version; concurrent callers wait for the first to finish.
+	 * Each use refreshes its modification time, so stale-file cleanup only removes programs nobody runs.
+	 */
+	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String, mainClass:String):Void {
 		#if (target.threaded && !eval)
 		artifactMutex.acquire();
 		#end
 		try {
-			if (!FileSystem.exists(workerArtifact)) {
+			if (FileSystem.exists(artifact)) {
+				Sys.command("touch", ["-c", artifact]);
+			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
-				var temporary = workerArtifact + ".tmp." + Std.string(Std.random(1000000)),
-					compileStatus = ProcessRunner.run(command, [
-						"-cp",
-						compilerSource,
-						"-hl",
-						temporary,
-						"-main",
-						"compiler.tools.CompilerServer"
-					], home, new Map());
+				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
+					compileStatus = ProcessRunner.run(command, ["-cp", compilerSource, "-hl", temporary, "-main", mainClass], home, new Map());
 				if (compileStatus != 0)
-					throw "Could not compile the persistent compiler worker";
-				FileSystem.rename(temporary, workerArtifact);
+					throw "Could not compile " + mainClass;
+				FileSystem.rename(temporary, artifact);
 			}
 		} catch (error:Dynamic) {
 			#if (target.threaded && !eval)
@@ -173,6 +168,43 @@ class CompilerClient {
 		#if (target.threaded && !eval)
 		artifactMutex.release();
 		#end
+	}
+
+	/**
+	 * Compiles once without a resident worker by running the compiler as a HashLink program, which is several
+	 * times faster than interpreting it. `fallback` (the interpreter) remains for hosts without that path.
+	 */
+	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String,
+			environment:Map<String, String>, fallback:Void->Int):Int {
+		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
+			return fallback();
+		var hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
+			artifact:String;
+		try {
+			if (!FileSystem.exists(hashlink))
+				throw "missing " + hashlink;
+			var directory = preparedSessionDirectory(),
+				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [], [compilerSource, Path.join([home, "stdlib"])], [], "",
+					ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map()));
+			artifact = Path.join([
+				directory,
+				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"
+			]);
+			ensureArtifact(command, compilerSource, artifact, home, "compiler.tools.HaxeonCompiler");
+		} catch (error:Dynamic) {
+			Sys.println("Compiled one-shot compiler unavailable; interpreting the compiler: " + Std.string(error));
+			return fallback();
+		}
+		return ProcessRunner.run(hashlink, [artifact].concat(arguments), home, environment);
+	}
+
+	/** The session directory, created private to this user. */
+	static function preparedSessionDirectory():String {
+		var directory = sessionDirectory();
+		FileSystem.createDirectory(directory);
+		if (Sys.command("chmod", ["700", directory]) != 0)
+			throw "Could not make the compiler session directory private";
+		return directory;
 	}
 
 	/** The per-user directory holding worker programs, connection metadata, and logs. */
@@ -295,7 +327,7 @@ class CompilerClient {
 		}
 	}
 
-	/** Drops worker programs of versions no worker runs anymore, and logs of exited workers, after a day. */
+	/** Drops compiler programs no worker runs and nobody used for a day, and logs of workers gone for a day. */
 	static function removeStaleFiles(directory:String, liveVersions:Map<String, Bool>):Void {
 		var cutoff = (Sys.time() - 24 * 60 * 60) * 1000;
 		for (entry in FileSystem.readDirectory(directory)) {

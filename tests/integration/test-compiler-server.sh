@@ -105,9 +105,14 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         run(13)
         assert json.loads(next(states.glob('*.json')).read_text())['token'] != old_token
         fallback = dict(env, HAXEON_COMPILER_SERVER='0')
-        assert 'reusing compiler session' not in build(extra=('--output=build/fallback.hl',), environment=fallback)
+        workers = set(states.glob('*.hl'))
+        output = build(extra=('--output=build/fallback.hl',), environment=fallback)
+        assert 'reusing compiler session' not in output and 'interpreting the compiler' not in output, output
         run(13, 'fallback.hl')
-        print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, restart, and one-shot fallback')
+        assert len(set(states.glob('*.hl')) - workers) == 1, 'one-shot build did not use a compiled compiler'
+        source('unknown_value')
+        build(success=False, extra=('--output=build/fallback.hl',), environment=fallback)
+        print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, restart, and compiled one-shot fallback')
     finally:
         for state in states.glob('*.json'):
             stop(state)
