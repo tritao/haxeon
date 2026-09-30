@@ -27,11 +27,9 @@ class NativeCMakeProvider {
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			ninja = ninjaAvailable(context.environment.target.os, context.compilerHome),
-			ninjaProgram = ninjaExecutable(context.compilerHome),
-			// CMake rejects a cache created by another generator, so Ninja trees get their own directory.
-			buildTree = ninja ? "cmake-ninja" : "cmake",
-			// Workspace builds identify a CMake tree by what it builds, so packages that request the same
-			// (source, target) pair share one configure, one build and one set of runtime libraries.
+			ninjaProgram = ninjaExecutable(context.compilerHome), // CMake rejects a cache created by another generator, so Ninja trees get their own directory.
+			buildTree = ninja ? "cmake-ninja" : "cmake", // Workspace builds identify a CMake tree by what it builds, so packages that request the same
+		// (source, target) pair share one configure, one build and one set of runtime libraries.
 			shared = context.sharedNative,
 			identity = shared ? sharedName(source, native.cmake.target, context.environment.projectRoot) : resolvedPackage.name,
 			sharedRoot = shared ? layout.sharedCMakeRoot(identity) : null,
@@ -39,9 +37,7 @@ class NativeCMakeProvider {
 			output = shared ? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
 				sharedRoot,
 				"out",
-				(context.environment.target.os == TargetOs.Windows ? "" : "lib")
-				+ native.cmake.library
-				+ context.environment.toolchain.sharedLibrarySuffix
+				(context.environment.target.os == TargetOs.Windows ? "" : "lib") + native.cmake.library + context.environment.toolchain.sharedLibrarySuffix
 			])) : (native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
 				native.cmake.library)),
 			outputDirectory = Path.directory(output),
@@ -75,8 +71,8 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
 		var actions = [
-			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])],
-				'Configure CMake package $identity', Process("cmake", configureArguments, runDirectory, new Map())),
+			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
+				Process("cmake", configureArguments, runDirectory, new Map())),
 			new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output', Process("cmake", [
 				"--build",
 				buildDirectory,
@@ -183,7 +179,9 @@ class NativeCMakeProvider {
 		var version = ninjaVersion(executable);
 		if (version == null)
 			return false;
-		var parts = version.split("."), major = Std.parseInt(parts[0]), minor = parts.length > 1 ? Std.parseInt(parts[1]) : 0;
+		var parts = version.split("."),
+			major = Std.parseInt(parts[0]),
+			minor = parts.length > 1 ? Std.parseInt(parts[1]) : 0;
 		return major != null && minor != null && (major > 1 || (major == 1 && minor >= 13));
 	}
 

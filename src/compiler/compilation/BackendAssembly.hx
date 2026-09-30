@@ -33,9 +33,8 @@ typedef BackendAssemblyResult = {
 class BackendAssembly {
 	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
-		var nextAbi = RuntimeAbi.describe(ir),
-			// Patch planning describes what a running module must do to adopt this build. Without live patching
-			// there is no running module, and the plan would only mix session history into the build.
+		var nextAbi = RuntimeAbi.describe(ir), // Patch planning describes what a running module must do to adopt this build. Without live patching
+		// there is no running module, and the plan would only mix session history into the build.
 			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];

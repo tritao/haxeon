@@ -171,17 +171,11 @@ class Executor implements ExecutionBackend {
 	 * starts, so a slow action never idles the other workers behind a wave barrier.
 	 */
 	function executeQueued(plan:ExecutionPlan):ExecutionResult {
-		var started = Sys.time() * 1000.0,
-			pending = new Map<String, ExecutionAction>(),
-			completed = new Map<String, ActionResult>(),
-			fingerprints = new Map<String, String>(),
-			results:Array<ActionResult> = [],
-			depth = chainDepths(plan),
-			finished:Array<{action:ExecutionAction, result:ActionResult}> = [],
-			mutex = new Mutex(),
-			signal = new Lock(),
-			running = 0,
-			runningCompilers = 0;
+		var started = Sys.time() * 1000.0, pending = new Map<String, ExecutionAction>(), completed = new Map<String, ActionResult>(),
+			fingerprints = new Map<String, String>(), results:Array<ActionResult> = [], depth = chainDepths(plan), finished:Array<{
+				action:ExecutionAction,
+				result:ActionResult
+			}> = [], mutex = new Mutex(), signal = new Lock(), running = 0, runningCompilers = 0;
 		for (action in plan.actions)
 			pending.set(action.id.key(), action);
 
@@ -220,11 +214,13 @@ class Executor implements ExecutionBackend {
 				if (compiler)
 					runningCompilers++;
 				print('[${action.id}] ${action.description}');
-				var currentAction = action, dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
+				var currentAction = action,
+					dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				Thread.create(function() {
 					// Always report and release: an exception escaping this thread would leave the
 					// scheduler waiting on the lock forever.
-					var server = jobServer, holdsToken = server != null && server.acquire();
+					var server = jobServer,
+						holdsToken = server != null && server.acquire();
 					var actionStarted = Sys.time() * 1000.0;
 					var result = try executeAction(currentAction,
 						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
@@ -281,7 +277,8 @@ class Executor implements ExecutionBackend {
 
 	/** Length of the longest chain of dependents below each action, counting itself. */
 	static function chainDepths(plan:ExecutionPlan):Map<String, Int> {
-		var dependents = new Map<String, Array<String>>(), depth = new Map<String, Int>();
+		var dependents = new Map<String, Array<String>>(),
+			depth = new Map<String, Int>();
 		for (action in plan.actions)
 			for (dependency in action.dependencies) {
 				var list = dependents.get(dependency.key());

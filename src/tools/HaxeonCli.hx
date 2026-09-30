@@ -448,14 +448,8 @@ class HaxeonCli {
 
 	/** `haxeon workspace plan`: lower every member project onto one graph and report what the merge saves. */
 	static function workspaceCommand(arguments:Array<String>):Int {
-		var subcommand = arguments.length == 0 ? "" : arguments.shift(),
-			path = "materia.workspace.json",
-			skipTags:Array<String> = [],
-			only:Array<String> = [],
-			showActions = false,
-			jobs = cpuCount(),
-			compilers = 3,
-			noTestCache = false;
+		var subcommand = arguments.length == 0 ? "" : arguments.shift(), path = "materia.workspace.json", skipTags:Array<String> = [],
+			only:Array<String> = [], showActions = false, jobs = cpuCount(), compilers = 3, noTestCache = false;
 		if (subcommand != "plan" && subcommand != "build" && subcommand != "test")
 			throw 'Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--no-test-cache] [--actions]';
 		var index = 0;
@@ -487,16 +481,15 @@ class HaxeonCli {
 			} else
 				throw 'Unknown workspace option "$argument"';
 		}
-		var workspace = WorkspaceManifest.load(resolvePath(path, Sys.getCwd())),
-			selected = [
-				for (member in workspace.projects) {
-					var skipped = only.length > 0 ? only.indexOf(member.name) < 0 : false;
-					for (tag in skipTags)
-						if (member.hasTag(tag))
-							skipped = true;
-					if (!skipped) member;
-				}
-			];
+		var workspace = WorkspaceManifest.load(resolvePath(path, Sys.getCwd())), selected = [
+			for (member in workspace.projects) {
+				var skipped = only.length > 0 ? only.indexOf(member.name) < 0 : false;
+				for (tag in skipTags)
+					if (member.hasTag(tag))
+						skipped = true;
+				if (!skipped) member;
+			}
+		];
 		if (selected.length == 0)
 			throw "No workspace projects selected";
 		var started = Sys.time() * 1000.0,
@@ -506,7 +499,8 @@ class HaxeonCli {
 			var execution = subcommand == "test" ? WorkspaceBuild.withTests(lowered, haxeonHome(), !noTestCache) : lowered.plan,
 				executor = new Executor(lowered.environment, jobs);
 			executor.maxConcurrentCompilers = compilers;
-			var ninja = NativeCMakeProvider.ninjaExecutable(haxeonHome()), server:Null<JobServer> = null;
+			var ninja = NativeCMakeProvider.ninjaExecutable(haxeonHome()),
+				server:Null<JobServer> = null;
 			if (NativeCMakeProvider.ninjaSupportsJobserver(ninja))
 				server = JobServer.start(Path.join([lowered.environment.buildRoot, ".haxeon"]), jobs);
 			executor.jobServer = server;
@@ -524,7 +518,10 @@ class HaxeonCli {
 				server.stop();
 			var failed = [for (item in result.actions) if (!item.succeeded()) item];
 			if (subcommand == "test") {
-				var tests = [for (item in result.actions) if (StringTools.startsWith(item.id.key(), "test:")) item];
+				var tests = [
+					for (item in result.actions)
+						if (StringTools.startsWith(item.id.key(), "test:")) item
+				];
 				Sys.println("Tests:");
 				for (item in tests)
 					Sys.println('  ${item.succeeded() ? (item.skipped ? "pass (cached)" : "pass") : (item.blocked ? "blocked" : "FAIL")}  ${item.id.key().substr(5)}');
@@ -537,8 +534,13 @@ class HaxeonCli {
 			Sys.println('${failed.length == 0 ? "OK" : "FAILED (" + failed.length + " actions)"} in ${Std.int(result.elapsedMs / 1000)}s');
 			return failed.length == 0 ? 0 : (result.exitCode == 0 ? 1 : result.exitCode);
 		}
-		var shared = [for (action in lowered.plan.actions) if (lowered.requestedBy.get(action.id.key()).length > 1) action],
-			cmake = [for (action in lowered.plan.actions) if (StringTools.startsWith(action.id.key(), "native-cmake-")) action];
+		var shared = [
+			for (action in lowered.plan.actions)
+				if (lowered.requestedBy.get(action.id.key()).length > 1) action
+		], cmake = [
+			for (action in lowered.plan.actions)
+				if (StringTools.startsWith(action.id.key(), "native-cmake-")) action
+			];
 		Sys.println('Workspace ${workspace.path}: ${selected.length} projects');
 		for (member in lowered.projects)
 			Sys.println('  ${member.name}: ${member.actions.length} actions');
@@ -560,7 +562,9 @@ class HaxeonCli {
 	/** Worker count for whole-workspace builds; falls back to 4 where `nproc` is unavailable. */
 	static function cpuCount():Int {
 		try {
-			var process = new sys.io.Process("nproc"), output = StringTools.trim(process.stdout.readAll().toString()), status = process.exitCode();
+			var process = new sys.io.Process("nproc"),
+				output = StringTools.trim(process.stdout.readAll().toString()),
+				status = process.exitCode();
 			process.close();
 			var count = Std.parseInt(output);
 			if (status == 0 && count != null && count > 0)

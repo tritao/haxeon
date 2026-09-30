@@ -40,7 +40,8 @@ class ArtifactBuildMain {
 
 		// Artifact mode (the default): the history leaves no trace.
 		var artifact = history([], "artifact");
-		expect(artifact.functions == cold.functions, "artifact builds must not keep functions from earlier revisions: " + firstDifference(cold.functions, artifact.functions));
+		expect(artifact.functions == cold.functions,
+			"artifact builds must not keep functions from earlier revisions: " + firstDifference(cold.functions, artifact.functions));
 		expect(artifact.bytes.compare(cold.bytes) == 0, "artifact bytes must equal a cold build of the same source");
 
 		// Repeating the same compile changes nothing either.

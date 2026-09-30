@@ -272,7 +272,8 @@ class BuildSystemMain {
 	static function testJobServerTokens():Void {
 		if (Sys.systemName() == "Windows")
 			return;
-		var root = temporaryDirectory("jobserver"), server = JobServer.start(root, 2);
+		var root = temporaryDirectory("jobserver"),
+			server = JobServer.start(root, 2);
 		expect(server != null, "a job server should start on hosts with FIFOs");
 		expect(server.makeFlags.indexOf("--jobserver-auth=fifo:" + server.path) >= 0, "clients find the pool through MAKEFLAGS");
 		expect(server.acquire() && server.acquire(), "a pool of two tokens hands out two tokens");
@@ -295,13 +296,8 @@ class BuildSystemMain {
 	static function testExecutorSharesJobServerTokens():Void {
 		if (Sys.systemName() == "Windows")
 			return;
-		var root = temporaryDirectory("jobserver-executor"),
-			environment = new BuildEnvironment(root, Path.join([root, "build"])),
-			server = JobServer.start(root, 2),
-			mutex = new Mutex(),
-			active = 0,
-			peakActive = 0,
-			invoke = function():Int {
+		var root = temporaryDirectory("jobserver-executor"), environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			server = JobServer.start(root, 2), mutex = new Mutex(), active = 0, peakActive = 0, invoke = function():Int {
 				mutex.acquire();
 				active++;
 				if (active > peakActive)
@@ -312,8 +308,7 @@ class BuildSystemMain {
 				active--;
 				mutex.release();
 				return 0;
-			},
-			executor = new Executor(environment, 4, _ -> {});
+			}, executor = new Executor(environment, 4, _ -> {});
 		executor.jobServer = server;
 		var result = executor.execute(new ExecutionPlan([
 			action("token-a", [], "token A", invoke),
@@ -328,12 +323,8 @@ class BuildSystemMain {
 	}
 
 	static function testCompilerConcurrencyLimit():Void {
-		var root = temporaryDirectory("compiler-limit"),
-			environment = new BuildEnvironment(root, Path.join([root, "build"])),
-			mutex = new Mutex(),
-			active = 0,
-			peakActive = 0,
-			invoke = function():Int {
+		var root = temporaryDirectory("compiler-limit"), environment = new BuildEnvironment(root, Path.join([root, "build"])), mutex = new Mutex(),
+			active = 0, peakActive = 0, invoke = function():Int {
 				mutex.acquire();
 				active++;
 				if (active > peakActive)
@@ -344,8 +335,7 @@ class BuildSystemMain {
 				active--;
 				mutex.release();
 				return 0;
-			},
-			executor = new Executor(environment, 3, _ -> {});
+			}, executor = new Executor(environment, 3, _ -> {});
 		executor.maxConcurrentCompilers = 1;
 		var result = executor.execute(new ExecutionPlan([
 			action("limit-a", [], "limit A", invoke),
@@ -543,9 +533,8 @@ class BuildSystemMain {
 				case Compiler(_, arguments, _, _, _): arguments;
 				default: [];
 			};
-		},
-			liveExecution = PlanLowerer.lower(plan,
-				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root, null, false, false, true));
+		}, liveExecution = PlanLowerer.lower(plan,
+			new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root, null, false, false, true));
 		expect(compilerArguments(execution).indexOf("--live") < 0, "an ordinary build must not request live compiler history");
 		expect(compilerArguments(liveExecution).indexOf("--live") >= 0, "a live build must request live compiler history");
 		var wasmDiagnostic:Null<String> = null;
