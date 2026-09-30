@@ -236,6 +236,24 @@ Type-table growth remains a reload boundary because initialized HashLink modules
 store direct `hl_type*` pointers. Haxeon fails closed for new function or
 structural types until the runtime has a non-moving type arena.
 
+### Artifact builds and live sessions
+
+Live patching needs the compiler to keep its function slots, symbol-table indices, and stable function IDs
+append-only across builds, so a patch can address the running module. That history has a cost for anything else:
+a removed function keeps its slot, a replaced string constant stays in the table, and the bytes a build produces
+depend on what the compiler session compiled before it.
+
+So the history is opt-in. Without `--live`, every compile assembles from a fresh assembler and the module is a
+function of the source alone: a warm session that compiled other revisions first produces the same bytes as a
+cold one, with no dead functions or constants. Frontend caches (parsing, typing, IR) stay incremental either
+way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
+
+- `haxeon run --watch --live` builds with `--live` for you.
+- The compiler CLI accepts `--live` for `--target=hl`; the `Compiler` API keeps history by default
+  (`Compiler.livePatching`), and `CompilerDriver` sets it from the request.
+- The `<output>.hli` and `<output>.live.json` sidecars describe the session (module identity, revision), not
+  the artifact, and still differ between sessions.
+
 ## 🚀 Run the proof of concept
 
 Initialize the pinned tools, verify formatting, bootstrap the compiler, and run
@@ -511,6 +529,46 @@ The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
+
+### Workspace builds
+
+`haxeon workspace plan|build|test` merges many projects into one build graph, so shared native code is built
+once, everything runs from one work queue under one job limit, and tests run as graph nodes.
+
+```sh
+./scripts/haxeon workspace test --workspace materia.workspace.json --skip-tag cadkit --skip-tag mujoco
+```
+
+The workspace file lists the member projects. Paths are relative to the file:
+
+```json
+{
+  "version": 1,
+  "buildDir": "build/workspace",
+  "projects": [
+    { "path": "animkit/tests/haxeon.json", "name": "animkit" },
+    { "path": "stockkit/tests/haxeon.json", "name": "stockkit", "tags": ["cadkit"] },
+    { "path": "kit/tests/haxeon.json", "name": "kit", "cache": false, "inputs": ["../fixtures"] }
+  ]
+}
+```
+
+- `tags` let a run skip projects that need something the machine may lack (`--skip-tag TAG`, `--only NAME`).
+- `plan` prints the merged graph and how many actions were shared; `--actions` lists them.
+- CMake packages are identified by (source, target), not package name, so projects that request the same native
+  tree share one configure, one build, and one set of runtime libraries.
+- `--jobs N` (default: CPU count) sets the total job limit and `--compilers N` (default 3) bounds simultaneous
+  compiles, each of which holds a compiler heap. Every project keeps its own compiler worker, and at most
+  `HAXEON_COMPILER_WORKERS` (default 6) stay resident, least recently used first.
+- With Ninja 1.13 or newer (`scripts/bootstrap-tools.sh` installs a pinned copy under `.tools/ninja`), a GNU
+  jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
+  oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the
+  platform's default CMake generator.
+- `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
+  is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
+  libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
+  cached. Set `"cache": false` for a suite that depends on the clock, the network, or a peer process, or pass
+  `--no-test-cache` to run everything.
 
 ### Android host
 

@@ -3,6 +3,7 @@ package build.lowering;
 import build.Artifact.ArtifactKind;
 import build.BuildPlan;
 import build.execution.ActionId;
+import build.execution.ActionMerge;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
 import build.provider.FfiProvider;
@@ -74,6 +75,7 @@ class PlanLowerer {
 				}
 		} else if (actions.length == 0)
 			throw 'No build provider is registered for artifacts in this plan';
-		return new ExecutionPlan(actions);
+		// Shared CMake trees are requested by every package that builds the same (source, target).
+		return new ExecutionPlan(context.sharedNative ? ActionMerge.dedupe(actions) : actions);
 	}
 }

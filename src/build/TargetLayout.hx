@@ -14,6 +14,13 @@ class TargetLayout {
 	public function packageRoot(packageName:String):String
 		return Path.join([environment.buildRoot, targetDirectory(), "native", packageName]);
 
+	/**
+	 * Workspace builds give each distinct CMake (source, target) pair one directory, no matter how many
+	 * packages request it: `build` holds the CMake tree and `out` the runtime libraries.
+	 */
+	public function sharedCMakeRoot(name:String):String
+		return Path.join([environment.buildRoot, targetDirectory(), "cmake", name]);
+
 	public function hashLinkModulePath(packageName:String):String
 		return Path.join([
 			environment.buildRoot,

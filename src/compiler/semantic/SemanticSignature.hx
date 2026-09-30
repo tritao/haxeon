@@ -11,7 +11,14 @@ class SemanticSignature {
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
 		return '$' + 'anon:' + anonymousFields(fields);
 
+	/**
+	 * How many anonymous shapes have been spelled out. Spelling costs time proportional to the shape's size,
+	 * so tests use this to check that a shape is spelled once per declaration, not once per mention.
+	 */
+	public static var anonymousSpellings = 0;
+
 	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>):String {
+		anonymousSpellings++;
 		var ordered = fields.copy();
 		ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		return '{${[for (field in ordered) (field.optional ? "?" : "") + (field.isFinal ? "final " : "") + field.name + ":" + type(field.type)].join(",")}}';

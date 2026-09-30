@@ -26,10 +26,26 @@ class NativeCMakeProvider {
 		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
-			buildDirectory = Path.join([layout.packageRoot(resolvedPackage.name), "cmake"]),
-			output = native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
-				native.cmake.library),
+			ninja = ninjaAvailable(context.environment.target.os, context.compilerHome),
+			ninjaProgram = ninjaExecutable(context.compilerHome),
+			// CMake rejects a cache created by another generator, so Ninja trees get their own directory.
+			buildTree = ninja ? "cmake-ninja" : "cmake",
+			// Workspace builds identify a CMake tree by what it builds, so packages that request the same
+			// (source, target) pair share one configure, one build and one set of runtime libraries.
+			shared = context.sharedNative,
+			identity = shared ? sharedName(source, native.cmake.target, context.environment.projectRoot) : resolvedPackage.name,
+			sharedRoot = shared ? layout.sharedCMakeRoot(identity) : null,
+			buildDirectory = shared ? Path.join([sharedRoot, buildTree]) : Path.join([layout.packageRoot(resolvedPackage.name), buildTree]),
+			output = shared ? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
+				sharedRoot,
+				"out",
+				(context.environment.target.os == TargetOs.Windows ? "" : "lib")
+				+ native.cmake.library
+				+ context.environment.toolchain.sharedLibrarySuffix
+			])) : (native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
+				native.cmake.library)),
 			outputDirectory = Path.directory(output),
+			runDirectory = shared ? source : resolvedPackage.root,
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
 			configureArguments = [
 				"-S",
@@ -39,9 +55,9 @@ class NativeCMakeProvider {
 				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE=" + configuration
-			],
-			configureId = new ActionId('native-cmake-configure:${resolvedPackage.name}:${context.environment.target.toString()}'),
-			buildId = new ActionId('native-cmake-build:${resolvedPackage.name}:${context.environment.target.toString()}'),
+			].concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
+			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
+			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment);
 		if (native.cmake.library != null) {
 			configureArguments.push("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + outputDirectory);
@@ -60,7 +76,7 @@ class NativeCMakeProvider {
 		}
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])],
-				'Configure CMake package ${resolvedPackage.name}', Process("cmake", configureArguments, resolvedPackage.root, new Map())),
+				'Configure CMake package $identity', Process("cmake", configureArguments, runDirectory, new Map())),
 			new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output', Process("cmake", [
 				"--build",
 				buildDirectory,
@@ -68,7 +84,7 @@ class NativeCMakeProvider {
 				native.cmake.target,
 				"--config",
 				configuration
-			], resolvedPackage.root, new Map()), true, true)
+			], runDirectory, new Map()), true, true, ninja)
 		], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)
@@ -114,6 +130,71 @@ class NativeCMakeProvider {
 				artifactActions.set(artifact.id.key(), [linkId]);
 			}
 		return {actions: actions, artifactActions: artifactActions};
+	}
+
+	/** Where a shared CMake tree leaves its runtime libraries, or null when the package has no CMake provider. */
+	public static function sharedOutputDirectory(resolvedPackage:ResolvedPackage, context:LoweringContext):Null<String> {
+		var native = resolvedPackage.manifest.native;
+		if (native == null || native.cmake == null)
+			return null;
+		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source]));
+		return Path.join([
+			context.layout.sharedCMakeRoot(sharedName(source, native.cmake.target, context.environment.projectRoot)),
+			"out"
+		]);
+	}
+
+	/** Stable directory-safe identity of a CMake source and target, relative to the workspace when possible. */
+	static function sharedName(source:String, target:String, root:String):String {
+		var normalizedRoot = Path.addTrailingSlash(Path.normalize(root)),
+			relative = StringTools.startsWith(source, normalizedRoot) ? source.substr(normalizedRoot.length) : source,
+			name = new EReg("[^A-Za-z0-9_]+", "g").replace(relative, "-");
+		while (StringTools.startsWith(name, "-"))
+			name = name.substr(1);
+		while (StringTools.endsWith(name, "-"))
+			name = name.substr(0, name.length - 1);
+		return name + "--" + target;
+	}
+
+	static final ninjaVersions = new Map<String, String>();
+
+	/** The pinned Ninja under `.tools` when bootstrapped, otherwise whatever `ninja` resolves to on PATH. */
+	public static function ninjaExecutable(home:String):String {
+		var pinned = Path.join([home, ".tools", "ninja", "ninja"]);
+		return sys.FileSystem.exists(pinned) ? pinned : "ninja";
+	}
+
+	/** Output of `ninja --version`, or null when the executable cannot run. */
+	static function ninjaVersion(executable:String):Null<String> {
+		if (!ninjaVersions.exists(executable))
+			ninjaVersions.set(executable, try {
+				var process = new sys.io.Process(executable, ["--version"]),
+					output = StringTools.trim(process.stdout.readAll().toString()),
+					status = process.exitCode();
+				process.close();
+				status == 0 ? output : "";
+			} catch (_:Dynamic) "");
+		var version = ninjaVersions.get(executable);
+		return version == "" ? null : version;
+	}
+
+	/** Ninja 1.13 added the GNU jobserver client, which lets it share Haxeon's token pool. */
+	public static function ninjaSupportsJobserver(executable:String):Bool {
+		var version = ninjaVersion(executable);
+		if (version == null)
+			return false;
+		var parts = version.split("."), major = Std.parseInt(parts[0]), minor = parts.length > 1 ? Std.parseInt(parts[1]) : 0;
+		return major != null && minor != null && (major > 1 || (major == 1 && minor >= 13));
+	}
+
+	/**
+	 * Ninja builds in parallel by default, while `cmake --build` on the Makefiles generator is serial
+	 * without `-j`. Windows keeps its default generator so MSVC does not need a prepared environment.
+	 */
+	static function ninjaAvailable(os:TargetOs, home:String):Bool {
+		if (os == TargetOs.Windows || Sys.getEnv("HAXEON_CMAKE_GENERATOR") == "default")
+			return false;
+		return ninjaVersion(ninjaExecutable(home)) != null;
 	}
 
 	static function cmakeLinkInput(outputDirectory:String, output:String, os:TargetOs, abi:TargetAbi):String {

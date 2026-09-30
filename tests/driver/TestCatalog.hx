@@ -43,6 +43,7 @@ class TestCatalog {
 		"IrProgramAssemblerMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",
+		"DeclarationAliasCacheMain",
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
 		"TyperBoundaryMain",
@@ -80,6 +81,7 @@ class TestCatalog {
 		"LspProtocolMain",
 		"UtestDiscoveryMain",
 		"BuildSystemMain",
+		"ArtifactBuildMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];

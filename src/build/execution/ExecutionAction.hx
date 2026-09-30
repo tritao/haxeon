@@ -20,8 +20,15 @@ class ExecutionAction {
 	/** Delegated build tools must check their own complete dependency graph on every build. */
 	public final alwaysRun:Bool;
 
+	/**
+	 * The process schedules its own parallel jobs (Ninja, make). When the executor runs a jobserver it adds
+	 * the pool to the process environment at launch, so the pool's per-run path never enters a fingerprint.
+	 */
+	public final jobserverClient:Bool;
+
 	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>, description:String, action:ActionKind,
-			fingerprintDependencies:Bool = true, alwaysRun:Bool = false) {
+			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false) {
+		this.jobserverClient = jobserverClient;
 		this.id = id;
 		this.dependencies = dependencies.copy();
 		this.dependencies.sort((left, right) -> Reflect.compare(left.key(), right.key()));

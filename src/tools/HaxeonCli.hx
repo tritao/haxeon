@@ -6,6 +6,11 @@ import build.HaxeonProjectBuild;
 import build.HaxeonNativePackageBuild;
 import build.Target;
 import build.NativeTargetSupport;
+import build.WorkspaceBuild;
+import build.execution.Executor;
+import build.execution.JobServer;
+import build.native.NativeCMakeProvider;
+import build.WorkspaceManifest;
 import build.execution.ProcessRunner;
 import project.PackageLockfile;
 import project.PackageResolver;
@@ -110,6 +115,7 @@ class HaxeonCli {
 				case "fmt": fmt(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
+				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
 				case "help", "--help", "-h": usage();
 				case _:
@@ -440,6 +446,129 @@ class HaxeonCli {
 		return result.status;
 	}
 
+	/** `haxeon workspace plan`: lower every member project onto one graph and report what the merge saves. */
+	static function workspaceCommand(arguments:Array<String>):Int {
+		var subcommand = arguments.length == 0 ? "" : arguments.shift(),
+			path = "materia.workspace.json",
+			skipTags:Array<String> = [],
+			only:Array<String> = [],
+			showActions = false,
+			jobs = cpuCount(),
+			compilers = 3,
+			noTestCache = false;
+		if (subcommand != "plan" && subcommand != "build" && subcommand != "test")
+			throw 'Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--no-test-cache] [--actions]';
+		var index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--actions")
+				showActions = true;
+			else if (argument == "--no-test-cache")
+				noTestCache = true;
+			else if (argument == "--workspace" || argument == "--skip-tag" || argument == "--only" || argument == "--jobs" || argument == "--compilers") {
+				if (index >= arguments.length)
+					throw 'Option "$argument" requires a value';
+				var value = arguments[index++];
+				if (argument == "--workspace")
+					path = value;
+				else if (argument == "--skip-tag")
+					skipTags.push(value);
+				else if (argument == "--only")
+					only.push(value);
+				else {
+					var count = Std.parseInt(value);
+					if (count == null || count < 1)
+						throw 'Option "$argument" requires a positive integer';
+					if (argument == "--jobs")
+						jobs = count;
+					else
+						compilers = count;
+				}
+			} else
+				throw 'Unknown workspace option "$argument"';
+		}
+		var workspace = WorkspaceManifest.load(resolvePath(path, Sys.getCwd())),
+			selected = [
+				for (member in workspace.projects) {
+					var skipped = only.length > 0 ? only.indexOf(member.name) < 0 : false;
+					for (tag in skipTags)
+						if (member.hasTag(tag))
+							skipped = true;
+					if (!skipped) member;
+				}
+			];
+		if (selected.length == 0)
+			throw "No workspace projects selected";
+		var started = Sys.time() * 1000.0,
+			lowered = WorkspaceBuild.lower(workspace, selected, manifest -> discoverProject(manifest), haxeonHome(), []),
+			elapsed = Sys.time() * 1000.0 - started;
+		if (subcommand != "plan") {
+			var execution = subcommand == "test" ? WorkspaceBuild.withTests(lowered, haxeonHome(), !noTestCache) : lowered.plan,
+				executor = new Executor(lowered.environment, jobs);
+			executor.maxConcurrentCompilers = compilers;
+			var ninja = NativeCMakeProvider.ninjaExecutable(haxeonHome()), server:Null<JobServer> = null;
+			if (NativeCMakeProvider.ninjaSupportsJobserver(ninja))
+				server = JobServer.start(Path.join([lowered.environment.buildRoot, ".haxeon"]), jobs);
+			executor.jobServer = server;
+			Sys.println('Workspace ${subcommand}: ${selected.length} projects, ${execution.actions.length} actions, $jobs jobs (planned in ${Std.int(elapsed)} ms)');
+			Sys.println(server != null ? 'Job server: $jobs tokens shared with Ninja' : 'Job server: off (needs Ninja 1.13+; native builds use their own parallelism)');
+			var result:build.execution.ActionResult.ExecutionResult;
+			try {
+				result = executor.execute(execution);
+			} catch (error:Dynamic) {
+				if (server != null)
+					server.stop();
+				throw error;
+			}
+			if (server != null)
+				server.stop();
+			var failed = [for (item in result.actions) if (!item.succeeded()) item];
+			if (subcommand == "test") {
+				var tests = [for (item in result.actions) if (StringTools.startsWith(item.id.key(), "test:")) item];
+				Sys.println("Tests:");
+				for (item in tests)
+					Sys.println('  ${item.succeeded() ? (item.skipped ? "pass (cached)" : "pass") : (item.blocked ? "blocked" : "FAIL")}  ${item.id.key().substr(5)}');
+			}
+			var timed = [for (item in result.actions) if (item.elapsedMs > 0) item];
+			timed.sort((left, right) -> left.elapsedMs > right.elapsedMs ? -1 : (left.elapsedMs < right.elapsedMs ? 1 : 0));
+			Sys.println("Slowest actions:");
+			for (item in timed.slice(0, 8))
+				Sys.println('  ${Std.int(item.elapsedMs / 1000)}s  ${item.id.key()}');
+			Sys.println('${failed.length == 0 ? "OK" : "FAILED (" + failed.length + " actions)"} in ${Std.int(result.elapsedMs / 1000)}s');
+			return failed.length == 0 ? 0 : (result.exitCode == 0 ? 1 : result.exitCode);
+		}
+		var shared = [for (action in lowered.plan.actions) if (lowered.requestedBy.get(action.id.key()).length > 1) action],
+			cmake = [for (action in lowered.plan.actions) if (StringTools.startsWith(action.id.key(), "native-cmake-")) action];
+		Sys.println('Workspace ${workspace.path}: ${selected.length} projects');
+		for (member in lowered.projects)
+			Sys.println('  ${member.name}: ${member.actions.length} actions');
+		Sys.println('Actions: ${lowered.rawActionCount} requested -> ${lowered.plan.actions.length} after merging (${lowered.rawActionCount - lowered.plan.actions.length} shared)');
+		Sys.println('CMake actions: ${cmake.length} (each project would otherwise run its own)');
+		if (shared.length > 0) {
+			Sys.println("Shared actions:");
+			for (action in shared) {
+				var users = lowered.requestedBy.get(action.id.key());
+				Sys.println('  ${action.id}  x${users.length}: ${users.join(", ")}');
+			}
+		}
+		if (showActions)
+			Sys.print(lowered.plan.toDebugString());
+		Sys.println('Planned in ${Std.int(elapsed)} ms');
+		return 0;
+	}
+
+	/** Worker count for whole-workspace builds; falls back to 4 where `nproc` is unavailable. */
+	static function cpuCount():Int {
+		try {
+			var process = new sys.io.Process("nproc"), output = StringTools.trim(process.stdout.readAll().toString()), status = process.exitCode();
+			process.close();
+			var count = Std.parseInt(output);
+			if (status == 0 && count != null && count > 0)
+				return count;
+		} catch (_:Dynamic) {}
+		return 4;
+	}
+
 	static function build(arguments:Array<String>, launch:Bool):Int {
 		var options = parseBuildOptions(arguments),
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
@@ -491,7 +620,7 @@ class HaxeonCli {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly);
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -526,7 +655,7 @@ class HaxeonCli {
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
 						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-							options.selfHosted, compilerOnly);
+							options.selfHosted, compilerOnly, options.live);
 						return status == 0 ? candidate : null;
 					} catch (error:Dynamic) {
 						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
@@ -1257,6 +1386,10 @@ class HaxeonCli {
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
 		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
+		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");
+		Sys.println("       [--jobs N] [--compilers N] [--no-test-cache] [--actions]");
+		Sys.println("                                    Merge the workspace's projects into one build graph;");
+		Sys.println("                                    build or test run it with shared native builds");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
 		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
 		Sys.println("  --device SERIAL                Select Android device for run");
