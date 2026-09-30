@@ -184,6 +184,17 @@ class SemanticIndex {
 		signatures.set(classId, {label: sourceName(owner) + "(" + parameters.join(", ") + ")", parameters: parameters, result: sourceName(owner)});
 	}
 
+	/**
+	 * A call to a generic specialization depends on the generic function it was made from: editing or re-laying-out that
+	 * origin drops the specialization, and only callers that know the edge are retyped to request it again.
+	 */
+	static function specializationOrigin(name:String):String {
+		if (!StringTools.startsWith(name, "$generic:"))
+			return name;
+		var end = name.indexOf("[", 9);
+		return end < 0 ? name : name.substring(9, end);
+	}
+
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
 			?token:CancellationToken):Void {
 		var started = Sys.time();
@@ -870,7 +881,7 @@ class SemanticIndex {
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TCall(name, arguments), TCNativeCall(name, arguments):
-				addCall(bindNamed(resolve, name, expression.span), expression.span, name);
+				addCall(bindNamed(resolve, specializationOrigin(name), expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):

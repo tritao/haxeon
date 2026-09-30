@@ -35,6 +35,7 @@ class TestCatalog {
 		"AuditVerifierMain",
 		"InlinerMain",
 		"FinalFieldMain",
+		"GenericStructuralMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",
@@ -93,6 +94,7 @@ class TestCatalog {
 		"BuildSystemMain",
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",
+		"FieldInitializerEditMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];
