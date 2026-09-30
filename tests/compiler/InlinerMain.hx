@@ -60,8 +60,10 @@ class InlinerMain {
 			+ "function main():Int return branches(true) + loops(3) + perIteration(4) + perIterationNested(2) + late(3) + guarded(2);");
 		IrInliner.run(flowProgram, new IrInlineCache());
 		IrVerifier.verify(flowProgram);
-		for (name in ["branches", "loops", "late"])
+		for (name in ["branches", "loops"])
 			expect(allocations(programFunction(flowProgram, name)) == 1, '$name allocates once, and needs phis to replace it');
+		// An argument is a copy, so handing the object to a call that is not inlined costs a second allocation.
+		expect(allocations(programFunction(flowProgram, "late")) == 2, "late keeps its object and the copy it passes to keep");
 		for (name in ["perIteration", "perIterationNested"])
 			expect(allocations(programFunction(flowProgram, name)) == 0, '$name allocates every iteration, so it should be replaced even with phis');
 		expect(allocations(programFunction(flowProgram, "guarded")) <= 1, "an object in a function with exception handling is handled safely");
