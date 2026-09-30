@@ -536,6 +536,18 @@ class BuildSystemMain {
 			"native sources, the requested shared library, and Haxe compilation should lower to concrete actions");
 		expect(execution.actions[execution.actions.length - 1].description.indexOf("Compile Haxe package") >= 0,
 			"the Haxe compiler request must follow native package actions");
+		// Only live sessions ask the compiler to keep the history patches address a running module by.
+		var compilerArguments = function(plan:ExecutionPlan):Array<String> {
+			var last = plan.actions[plan.actions.length - 1];
+			return switch last.action {
+				case Compiler(_, arguments, _, _, _): arguments;
+				default: [];
+			};
+		},
+			liveExecution = PlanLowerer.lower(plan,
+				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root, null, false, false, true));
+		expect(compilerArguments(execution).indexOf("--live") < 0, "an ordinary build must not request live compiler history");
+		expect(compilerArguments(liveExecution).indexOf("--live") >= 0, "a live build must request live compiler history");
 		var wasmDiagnostic:Null<String> = null;
 		try {
 			BuildPlanner.project(project, BuildIntent.Build, Target.parse("wasm32"), NativeArtifactDemand.Shared);

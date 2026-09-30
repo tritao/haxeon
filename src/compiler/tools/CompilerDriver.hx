@@ -28,6 +28,8 @@ class CompilerDriver {
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
+		// A persistent session serves interactive and batch requests alike, so the mode is set per request.
+		compiler.livePatching = request.live;
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);

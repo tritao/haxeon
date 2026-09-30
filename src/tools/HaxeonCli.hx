@@ -620,7 +620,7 @@ class HaxeonCli {
 			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
 				project.root) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly);
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -655,7 +655,7 @@ class HaxeonCli {
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
 						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-							options.selfHosted, compilerOnly);
+							options.selfHosted, compilerOnly, options.live);
 						return status == 0 ? candidate : null;
 					} catch (error:Dynamic) {
 						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");

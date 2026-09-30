@@ -207,6 +207,14 @@ class Compiler {
 
 	public var inlineCache:compiler.ir.IrInliner.IrInlineCache = new compiler.ir.IrInliner.IrInlineCache();
 
+	/**
+	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
+	 * address the running module by stable slots, symbol indices and function ids. When false, every compile
+	 * assembles from a fresh assembler, so the module is a function of the source alone and never carries dead
+	 * functions, strings or ids from earlier revisions. Frontend caches stay incremental either way.
+	 */
+	public var livePatching = true;
+
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
 	var assembler:HlModuleAssembler;
@@ -246,6 +254,8 @@ class Compiler {
 			types = cloneFrom.types.copy();
 			publishedAbi = cloneFrom.publishedAbi;
 			compiledOnce = cloneFrom.compiledOnce;
+			// A clone is what actually compiles, so it must assemble the way its source was asked to.
+			livePatching = cloneFrom.livePatching;
 		} else if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();

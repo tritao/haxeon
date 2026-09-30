@@ -7,7 +7,7 @@ import sys.io.File;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false, wasmGcStress = false,
+			dumpFunction = -1, live = false, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false, wasmGcStress = false,
 			exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [], roots:Array<String> = [], defines:Array<String> = [], paths:Array<String> = [];
 		var packageRoots:Array<PackageSourceRoot> = [];
@@ -54,6 +54,8 @@ class CompilerArguments {
 				defines.push(parseDefine(value(argument, "--define=")));
 			else if (StringTools.startsWith(argument, "--dump-function="))
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
+			else if (argument == "--live")
+				live = true;
 			else if (argument == "--wasm-import-memory")
 				importMemory = true;
 			else if (StringTools.startsWith(argument, "--wasm-memory-base="))
@@ -81,6 +83,8 @@ class CompilerArguments {
 			throw 'Unsupported compiler target "$target"';
 		if ((importMemory || memoryBase != 0) && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
 			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
+		if (live && target != "hl")
+			throw "--live requires --target=hl";
 		if ((wasmMemoryStats || wasmGcStress) && target != "wasm32")
 			throw "Wasm allocator options require --target=wasm32";
 		if (exports.length != 0 && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
@@ -104,6 +108,7 @@ class CompilerArguments {
 			memoryContract: memoryContract,
 			wasmMemoryStats: wasmMemoryStats,
 			wasmGcStress: wasmGcStress,
+			live: live,
 			exports: exports,
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,

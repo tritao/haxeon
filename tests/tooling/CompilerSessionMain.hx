@@ -16,7 +16,9 @@ class CompilerSessionMain {
 			fresh = root + "/fresh.hl";
 		File.saveContent(main, "class Main { public static function main():Int { return Value.get(); } }");
 		File.saveContent(value, "class Value { public static function get():Int { return 7; } }");
-		var args = ["--target=hl", "--entry=Main", "--root=" + root, main, value],
+		// Live mode: this block asserts that backend assembly reuses lowered functions between compiles, which only a
+		// session that keeps its assembler history does. ArtifactBuildMain covers the default, history-free mode.
+		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--live", main, value],
 			session = new CompilerSession();
 		function compile()
 			return CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])), _ -> {}, session);

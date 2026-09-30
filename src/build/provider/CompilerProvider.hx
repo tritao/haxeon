@@ -56,6 +56,9 @@ class CompilerProvider {
 			}
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
+		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
+		if (context.live)
+			arguments.push("--live");
 		var command:String,
 			argumentsWithLauncher:Array<String>,
 			environment:Map<String, String>;

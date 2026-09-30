@@ -81,6 +81,7 @@ class TestCatalog {
 		"LspProtocolMain",
 		"UtestDiscoveryMain",
 		"BuildSystemMain",
+		"ArtifactBuildMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];
