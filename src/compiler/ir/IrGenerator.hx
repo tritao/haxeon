@@ -49,14 +49,21 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
+	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
 		enumConstructorCounts = [];
-		for (enumDecl in enums)
+		nullaryEnumConstructors = [];
+		for (enumDecl in enums) {
 			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
+			nullaryEnumConstructors.set(enumDecl.name, [
+				for (index in 0...enumDecl.cases.length)
+					if (enumDecl.cases[index].params.length == 0) index
+			]);
+		}
 	}
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
@@ -1133,6 +1140,8 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
+					case TArray(element) if (operation == "index_of" && isEnumType(element)):
+						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
@@ -2211,6 +2220,83 @@ class IrGenerator {
 
 	static function arrayNativeName(element:CompilerType, operation:String):String
 		return nativeArrayChecks && lowerType(element) == Dyn ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
+
+	static function enumLookupName(type:CompilerType):String
+		return switch type {
+			case TInstance(NominalKind.Enum, name, _): name;
+			case TNullable(inner), TAbstract(_, _, inner): enumLookupName(inner);
+			default: throw "Enum array lookup requires a resolved enum element";
+		};
+
+	/** Nullary constructors compare by variant; payload constructors retain reference lookup semantics. */
+	static function lowerEnumArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
+		var enumName = enumLookupName(element);
+		var nullary = nullaryEnumConstructors.get(enumName);
+		if (nullary == null)
+			throw 'Missing enum constructors for "$enumName"';
+		if (nullary.length == 0)
+			return lowerArrayNativeCall(builder, element, "index_of", arguments, I32);
+		var referenceIndex = builder.constInt(-1);
+		var array = arguments[0],
+			needle = arguments[1],
+			suffix = Std.string(referenceIndex.id),
+			resultName = "$enum-lookup-result:" + suffix,
+			indexName = "$enum-lookup-index:" + suffix,
+			limitName = "$enum-lookup-limit:" + suffix,
+			arrayName = "$enum-lookup-array:" + suffix,
+			needleName = "$enum-lookup-needle:" + suffix,
+			constructorName = "$enum-lookup-constructor:" + suffix,
+			valueName = "$enum-lookup-value:" + suffix,
+			checkNeedle = builder.createBlock(),
+			scan = builder.createBlock(),
+			body = builder.createBlock(),
+			compare = builder.createBlock(),
+			next = builder.createBlock(),
+			found = builder.createBlock(),
+			fallback = builder.createBlock(),
+			done = builder.createBlock();
+		localTypes.set(resultName, I32);
+		localTypes.set(indexName, I32);
+		localTypes.set(limitName, I32);
+		localTypes.set(arrayName, array.type);
+		localTypes.set(needleName, needle.type);
+		localTypes.set(constructorName, I32);
+		localTypes.set(valueName, lowerType(element));
+		builder.store(arrayName, array);
+		builder.store(needleName, needle);
+		builder.store(resultName, referenceIndex);
+		builder.store(indexName, builder.constInt(0));
+		builder.store(limitName, builder.arraySize(array));
+		builder.branch(builder.equal(needle, builder.constNull(needle.type)), fallback, checkNeedle);
+		builder.select(checkNeedle);
+		builder.store(constructorName, builder.enumIndex(builder.load(needleName, needle.type)));
+		for (index in nullary) {
+			var following = builder.createBlock();
+			builder.branch(builder.equal(builder.load(constructorName, I32), builder.constInt(index)), scan, following);
+			builder.select(following);
+		}
+		builder.jump(fallback);
+		builder.select(fallback);
+		builder.store(resultName,
+			lowerArrayNativeCall(builder, element, "index_of", [builder.load(arrayName, array.type), builder.load(needleName, needle.type)], I32));
+		builder.jump(done);
+		builder.select(scan);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.load(limitName, I32)), body, done);
+		builder.select(body);
+		var value = elementGet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32), lowerType(element));
+		builder.store(valueName, value);
+		builder.branch(builder.equal(value, builder.constNull(value.type)), next, compare);
+		builder.select(compare);
+		builder.branch(builder.equal(builder.enumIndex(builder.load(valueName, lowerType(element))), builder.load(constructorName, I32)), found, next);
+		builder.select(found);
+		builder.store(resultName, builder.load(indexName, I32));
+		builder.jump(done);
+		builder.select(next);
+		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(scan);
+		builder.select(done);
+		return builder.load(resultName, I32);
+	}
 
 	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
 		var nativeName = arrayNativeName(element, operation);

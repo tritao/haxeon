@@ -1454,13 +1454,13 @@ class CallResolver {
 			}
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
-			var value = coerce(typeExpressionValue(arguments[0], scope), element, "array element", "E1002");
+			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span);
 		}
 		if (name == "contains") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.contains expects one argument", span);
-			var value = coerce(typeExpressionValue(arguments[0], scope), element, "array element", "E1002"),
+			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002"),
 				index = new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span),
 				zero = new TypedExpression(TIntLiteral(0), TInt, span);
 			return new TypedExpression(TLessEqual(zero, index), TBool, span);
