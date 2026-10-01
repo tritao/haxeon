@@ -261,3 +261,4 @@ index-assignment-expression	42
 try-typed-interface	42
 std-is-of-type-interface-dynamic	42
 dynamic-field-access	42
+dynamic-method-call	42
