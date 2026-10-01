@@ -1234,7 +1234,7 @@ class BodyTyper {
 				var ownStatic = findStaticFieldNullable(owner, name);
 				if (ownStatic != null) {
 					var inlineValue = inlineStaticFieldExpression(ownStatic.owner, name, span);
-					return inlineValue == null ? new TypedExpression(TStaticField(ownStatic.owner, name), ownStatic.type, span) : inlineValue;
+					return inlineValue == null ? staticFieldValue(ownStatic.owner, name, ownStatic.type, span, scope) : inlineValue;
 				}
 				var thisType = scope.resolve("this");
 				if (thisType != null && findFieldType(thisType, name) != null)
@@ -1277,7 +1277,7 @@ class BodyTyper {
 					staticField = findStaticFieldNullable(owner, name);
 				if (staticField != null) {
 					var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
-					return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+					return inlineValue == null ? staticFieldValue(staticField.owner, name, staticField.type, span, scope) : inlineValue;
 				}
 				var dot = name.indexOf(".");
 				if (dot <= 0) {
@@ -1382,7 +1382,7 @@ class BodyTyper {
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
-								classObject = typedMember(classObject, parts[index], span);
+								classObject = typedMemberWithFlow(classObject, parts[index], span, scope);
 							return classObject;
 						}
 						classEnd--;
@@ -1430,6 +1430,14 @@ class BodyTyper {
 		substitutions:Map<String, CompilerType>
 	} {
 		return callResolver.typeGenericCallArguments(fn, arguments, scope, span);
+	}
+
+	/** A read of a static field, with any branch-local null refinement applied. */
+	function staticFieldValue(owner:String, name:String, type:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
+		var field = new TypedExpression(TStaticField(owner, name), type, span),
+			path = FlowAnalysis.accessPath(field),
+			refined = path == null ? null : scope.resolveExpression(path);
+		return refined == null || sameType(type, refined) ? field : new TypedExpression(TCast(field), refined, span);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -1896,7 +1904,7 @@ class BodyTyper {
 			staticField = findStaticFieldNullable(owner, name);
 		if (staticField != null) {
 			var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
-			return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+			return inlineValue == null ? staticFieldValue(staticField.owner, name, staticField.type, span, scope) : inlineValue;
 		}
 		if (session.classDecls.exists(name))
 			return new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
