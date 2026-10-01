@@ -1,0 +1,5 @@
+interface GcNested @target("portable-abi32") @library("gc_nested") {
+	struct gc_blob @layout(8, 4) { data: ptr<const<void>> @offset(0) @borrowed @length_field("size"); size: u32 @offset(4); }
+	struct gc_blob_list @layout(8, 4) { blobs: ptr<const<gc_blob>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(4); }
+	extern fn sumBlobs(lists: ptr<const<gc_blob_list>> @in_array("count"), count: u32) -> i32 @symbol("sum_blobs");
+}

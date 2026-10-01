@@ -147,7 +147,7 @@ the wasm32 and wasm-gc targets.
 
 - `stdlib/haxeon/wasm/HaxeonHost.hxi` declares the host services (`print`,
   `date_now`, `callback_create`, `callback_close`). The compiler registers it
-  for Wasm targets; `trace`, `Sys.print` and `Date` use it.
+  for Wasm targets; `trace` (which prints Haxe's `File.hx:line: message` lines), `Sys.print` and `Date` use it.
 - The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math
   imports remain.
 - C functions bound through HXI follow the Wasm32 C ABI as clang and

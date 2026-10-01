@@ -1790,10 +1790,18 @@ class HxiHaxeEmitter {
 		return result;
 	}
 
+	/** An input array of bytes, which Haxe passes as haxe.io.Bytes: u8 elements, or untyped memory counted in bytes. */
 	static function isByteArray(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
 			case Const(element) | Nullable(element): isByteArray(element);
-			case Pointer(element): isByteElement(element);
+			case Pointer(element): isByteElement(element) || isVoid(element);
+			case _: false;
+		};
+
+	static function isVoid(type:compiler.ffi.HxiModel.HxiType):Bool
+		return switch type {
+			case Const(element): isVoid(element);
+			case Primitive("void"): true;
 			case _: false;
 		};
 

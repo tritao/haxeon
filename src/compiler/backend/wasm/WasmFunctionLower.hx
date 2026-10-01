@@ -458,7 +458,10 @@ class WasmFunctionLower {
 									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
-						case I32, Bool, I64, F64 if (value.type == Dyn):
+						case I32, F64 if (value.type == Dyn):
+							// Any boxed number converts to Int or Float, as on HashLink: JSON gives an Int box for a whole number.
+							emit(body, dynamicNumber(output.type, requiredLocal(values, value.id), requiredLocal(values, output.id)));
+						case Bool, I64 if (value.type == Dyn):
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
 								I32Load(0),
@@ -1579,4 +1582,43 @@ class WasmFunctionLower {
 				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
 			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
+
+	/** Converts a boxed Int, Float, Bool or Int64 at `value` to `target` (I32 or F64); null gives zero. */
+	static function dynamicNumber(target:IrType, value:Int, output:Int):Array<WasmInstruction> {
+		var sources:Array<IrType> = target == F64 ? [F64, I32, Bool, I64] : [I32, F64, Bool, I64],
+			instructions:Array<WasmInstruction> = [
+				LocalGet(value),
+				I32Eqz,
+				If(null),
+				target == F64 ? F64Const(0) : I32Const(0),
+				LocalSet(output),
+				Else
+			];
+		for (source in sources) {
+			var convert:Array<WasmInstruction> = switch [source, target] {
+				case [F64, F64] | [I32, I32] | [Bool, I32]: [];
+				case [I32, F64] | [Bool, F64]: [F64ConvertI32S];
+				case [I64, F64]: [F64ConvertI64S];
+				case [F64, I32]: [I32TruncF64S];
+				case [I64, I32]: [I32WrapI64];
+				default: throw 'Unsupported dynamic number conversion from $source to $target';
+			};
+			instructions = instructions.concat([
+				LocalGet(value),
+				I32Load(0),
+				I32Const(typeId(source)),
+				I32Eq,
+				If(null),
+				LocalGet(value),
+				load(source, WasmLayout.DYN_PAYLOAD_OFFSET)
+			]);
+			instructions = instructions.concat(convert);
+			instructions = instructions.concat([LocalSet(output), Else]);
+		}
+		instructions.push(Unreachable);
+		for (_ in sources)
+			instructions.push(End);
+		instructions.push(End);
+		return instructions;
+	}
 }

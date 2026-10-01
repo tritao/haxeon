@@ -475,6 +475,9 @@ class WasmGcInterop implements WasmInteropRepresentation {
 							LocalSet(pointer)
 						]);
 						body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+						// An array of records (HXI's `array()`) borrows like one record: its elements' pointer fields
+						// hold tokens until relocation. Plain bytes have no roots, and the relocator returns at once.
+						body = body.concat(relocateFixedInputPointerFields(bytesLocal, pointer, 0));
 						body.push(End);
 					} else if (isNativePointerType(arguments[index].type)) {
 						var pointer = allocateLocal(I32);

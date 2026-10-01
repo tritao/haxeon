@@ -75,13 +75,13 @@ class IrVerifier {
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
+						|| !byteLengthType(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
 				case BytesInputOutput(lengthArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
+						|| !byteLengthType(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
 				case BytesOutput(sizeArgument):
 					if (native.arguments[index] != ManagedBytes
@@ -711,4 +711,8 @@ class IrVerifier {
 				return true;
 		return false;
 	}
+
+	/** A byte buffer's length argument: a C `int32_t`/`uint32_t`, or a 64-bit size such as `uint64_t`. */
+	static function byteLengthType(type:IrType):Bool
+		return type == I32 || type == I64;
 }

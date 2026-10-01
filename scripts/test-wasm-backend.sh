@@ -185,6 +185,9 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-borrowed-array.wasm --entry=wasm-gc-ffi-borrowed-array \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-borrowed-array.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-nested-array.wasm --entry=wasm-gc-ffi-nested-array \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_nested.hxi tests/ffi/wasm-gc-ffi-nested-array.hx
 haxeon_compile_wait
 
 node - "$root_dir" <<'JS'
@@ -279,7 +282,8 @@ const cases = [
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-short-struct.wasm", 42],
-	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42]
+	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42],
+	["out/wasm-cli-gc-ffi-nested-array.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -319,7 +323,7 @@ const cases = [
         date_now: () => Date.now()
       };
       hostServicesCheck = () => {
-        if (printed !== "host tracehost println\n")
+        if (printed !== "wasm-host-services.hx:4: host trace\nhost println\n")
           throw new Error(`${relative}: host printed ${JSON.stringify(printed)}`);
       };
     }
@@ -565,6 +569,29 @@ const cases = [
         second_y: pointer => view().getUint32(pointer + 4, true) === 2 ? view().getInt32(view().getUint32(pointer, true) + 12, true) : -1
       };
     }
+    if (relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm")) {
+      const view = () => new DataView(moduleInstance.exports.memory.buffer);
+      imports.gc_nested = {
+        // Sums every byte reachable from an array of lists of blobs; -1 when a pointer is not a real address.
+        sum_blobs: (lists, count) => {
+          const memory = view();
+          let sum = 0;
+          for (let list = 0; list < count; list++) {
+            const blobs = memory.getUint32(lists + list * 8, true), blobCount = memory.getUint32(lists + list * 8 + 4, true);
+            if (blobs + blobCount * 8 > memory.byteLength)
+              return -1;
+            for (let blob = 0; blob < blobCount; blob++) {
+              const data = memory.getUint32(blobs + blob * 8, true), size = memory.getUint32(blobs + blob * 8 + 4, true);
+              if (data + size > memory.byteLength)
+                return -1;
+              for (let offset = 0; offset < size; offset++)
+                sum += memory.getUint8(data + offset);
+            }
+          }
+          return sum;
+        }
+      };
+    }
     if (relative.includes("hxi-retained")) {
       const retainedMemory = () => memory == null ? moduleInstance.exports.memory : memory;
       const validOptions = pointer => {
@@ -646,12 +673,14 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
+      const nestedArray = relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm");
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && !nestedArray && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && !nestedArray && hasMemory)
           || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
+          || (nestedArray && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))

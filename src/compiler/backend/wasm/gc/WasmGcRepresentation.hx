@@ -147,6 +147,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback") if (value.type == Dyn): plan.boxedPrimitiveType(output.type);
 			default: null;
 		};
+		// Any boxed number converts to Int or Float, as on HashLink: JSON gives an Int box for a whole number.
+		if (boxType != null && output.type == I32)
+			return dynamicInt(valueLocal, destination);
+		if (boxType != null && output.type == F64)
+			return dynamicFloat(valueLocal, destination);
 		if (boxType != null)
 			return [
 				LocalGet(valueLocal),
@@ -327,6 +332,41 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case F64: [StructGet(box, 0), I32TruncF64S];
 					case I64: [StructGet(box, 0), I32WrapI64];
 					default: throw 'Unsupported Wasm GC dynamic Int conversion from $type';
+				};
+			instructions = instructions.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(box)}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(box)})
+			]);
+			instructions = instructions.concat(unbox);
+			instructions = instructions.concat([LocalSet(outputLocal), Else]);
+		}
+		instructions.push(Unreachable);
+		for (_ in primitiveTypes)
+			instructions.push(End);
+		instructions.push(End);
+		return instructions;
+	}
+
+	function dynamicFloat(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var instructions:Array<WasmInstruction> = [
+			LocalGet(valueLocal),
+			RefIsNull,
+			If(null),
+			F64Const(0),
+			LocalSet(outputLocal),
+			Else
+		];
+		var primitiveTypes:Array<IrType> = [IrType.F64, IrType.I32, IrType.Bool, IrType.I64];
+		for (type in primitiveTypes) {
+			var box = plan.boxedPrimitiveType(type),
+				unbox:Array<WasmInstruction> = switch type {
+					case F64: [StructGet(box, 0)];
+					case I32, Bool: [StructGet(box, 0), F64ConvertI32S];
+					case I64: [StructGet(box, 0), F64ConvertI64S];
+					default: throw 'Unsupported Wasm GC dynamic Float conversion from $type';
 				};
 			instructions = instructions.concat([
 				LocalGet(valueLocal),

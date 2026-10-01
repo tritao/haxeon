@@ -1,4 +1,4 @@
 function main():Int {
-	trace("trace works\n");
+	trace("trace works");
 	return 42;
 }

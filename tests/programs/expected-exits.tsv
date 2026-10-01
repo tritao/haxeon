@@ -281,3 +281,5 @@ generic-method-void-statement	42
 uninitialized-local-inference	42
 static-field-null-narrowing	42
 try-expression-void-context	42
+dynamic-number-cast	42
+sort-reflect-compare	42

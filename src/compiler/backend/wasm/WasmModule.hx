@@ -182,6 +182,9 @@ class WasmModule {
 	}
 
 	public function addImport(module:String, name:String, type:WasmFunctionType):Int {
+		// Imports take the first function indices, so one added now would renumber the defined functions.
+		if (functions.length != 0)
+			throw 'Wasm import $module.$name added after defined functions';
 		imports.push({module: module, name: name, type: type});
 		return imports.length - 1;
 	}

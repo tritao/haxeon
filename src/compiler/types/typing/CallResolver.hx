@@ -755,8 +755,19 @@ class CallResolver {
 		if (!hasSignature && arguments.length != expectedArguments.length)
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 		var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, name).arguments, scope, name,
-			span) : typeCallArguments(arguments, expectedArguments, scope, name),
-			call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
+			span) : typeCallArguments(arguments, expectedArguments, scope, name);
+		// trace prints a line in Haxe's form, "path/File.hx:12: message", with the path relative to its source root.
+		// The newline matters beyond looks: hosts that print by line (a browser console) would otherwise hold it back.
+		if (name == "trace" && typed.length == 1) {
+			var message = typed[0],
+				location = span.file.path + ":" + span.file.lineAt(span.start) + ": ";
+			typed = [
+				new TypedExpression(TAdd(new TypedExpression(TStringLiteral(location), TString, message.span),
+					new TypedExpression(TAdd(message, new TypedExpression(TStringLiteral("\n"), TString, message.span)), TString, message.span)),
+					TString, message.span)
+			];
+		}
+		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
 		if (!session.isPureCall(name))
 			scope.invalidateAllExpressions();
 		return session.isNoReturnCall(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;

@@ -350,6 +350,8 @@ class WasmGcModuleBuilder {
 
 	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
+		// Imports first: they take the function indices before every defined function, so adding one after a defined
+		// function would leave that function's recorded index pointing at its neighbour.
 		for (native in program.natives)
 			if (used.exists(native.name) && (isGcRuntimeMathImport(native.symbol) || isGcRuntimeSystemImport(native.symbol))) {
 				var parameters = [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)],
@@ -360,7 +362,9 @@ class WasmGcModuleBuilder {
 					importModule = native.library == null || native.library == "" ? "env" : native.library,
 					importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 				functions.set(native.name, module.addImport(importModule, importName, {parameters: parameters, results: results}));
-			} else if (used.exists(native.name)
+			}
+		for (native in program.natives)
+			if (used.exists(native.name)
 				&& (native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
@@ -469,14 +473,14 @@ class WasmGcModuleBuilder {
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
-						throw 'Wasm GC C native "${native.name}" requires byte input followed by an I32 length';
+						|| !byteLengthType(native.arguments[lengthArgument]))
+						throw 'Wasm GC C native "${native.name}" requires byte input followed by an I32 or I64 length';
 				case BytesInputOutput(lengthArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
-						throw 'Wasm GC C native "${native.name}" requires mutable byte input followed by an I32 length';
+						|| !byteLengthType(native.arguments[lengthArgument]))
+						throw 'Wasm GC C native "${native.name}" requires mutable byte input followed by an I32 or I64 length';
 				case BytesOutput(sizeArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| sizeArgument < 0
@@ -867,4 +871,8 @@ class WasmGcModuleBuilder {
 		}
 		return result;
 	}
+
+	/** A byte buffer's length argument: a C `int32_t`/`uint32_t`, or a 64-bit size such as `uint64_t`. */
+	static function byteLengthType(type:IrType):Bool
+		return type == I32 || type == I64;
 }
