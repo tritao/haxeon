@@ -25,8 +25,10 @@ class ControlFlow {
 					return true;
 				case TExpression(expression, _) if (expression.type == TNever):
 					return true;
-				case TIf(_, yes, no, _):
-					if (no.length > 0 && alwaysTerminates(yes, exhaustive, loopExit) && alwaysTerminates(no, exhaustive, loopExit))
+				case TIf(condition, yes, no, _):
+					// A bare block `{ ... }` is an `if (true)` without an `else`: it always runs its body.
+					if (isTrueLiteral(condition) ? alwaysTerminates(yes, exhaustive,
+						loopExit) : no.length > 0 && alwaysTerminates(yes, exhaustive, loopExit) && alwaysTerminates(no, exhaustive, loopExit))
 						return true;
 				case TDoWhile(body, _, _):
 					if (alwaysTerminates(body, exhaustive, loopExit))
@@ -40,13 +42,22 @@ class ControlFlow {
 					].indexOf(false) < 0)
 						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
-					if ((hasDefault ? alwaysTerminates(defaultBranch, exhaustive, loopExit) : exhaustive(expression.type, cases)) && [
-						for (switchCase in cases)
-							alwaysTerminates(switchCase.statements, exhaustive, loopExit)
-					].indexOf(false) < 0)
+					if ((hasDefault ? alwaysTerminates(defaultBranch, exhaustive, loopExit) : hasCatchAllArm(cases) || exhaustive(expression.type, cases))
+						&& [
+							for (switchCase in cases)
+								alwaysTerminates(switchCase.statements, exhaustive, loopExit)
+						].indexOf(false) < 0)
 						return true;
 				default:
 			}
+		return false;
+	}
+
+	/** An arm without a guard that matches every value: the wildcard `case _:` or a bare name `case other:`. It is the default. */
+	static function hasCatchAllArm(cases:Array<TypedSwitchCase>):Bool {
+		for (switchCase in cases)
+			if (switchCase.guard == null && (switchCase.isCatchAll || switchCase.subjectBinding != null))
+				return true;
 		return false;
 	}
 

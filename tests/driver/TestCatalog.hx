@@ -71,6 +71,7 @@ class TestCatalog {
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
+		"ReturnPathMain",
 		"ClosureNarrowingMain",
 		"AmbiguousEnumAbstractValueMain",
 		"MethodCallInvalidationMain",
