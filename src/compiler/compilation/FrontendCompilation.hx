@@ -562,8 +562,10 @@ class FrontendCompilation {
 		}
 		var result:Map<String, Bool> = [];
 		while (pending.length > 0) {
-			var current = pending.pop(),
-				body = holders.get(current).irFunctions.get(current);
+			var current = pending.pop(), holder = holders.get(current);
+			if (holder == null)
+				continue;
+			var body = holder.irFunctions.get(current);
 			if (body == null)
 				continue;
 			for (block in body.blocks)
