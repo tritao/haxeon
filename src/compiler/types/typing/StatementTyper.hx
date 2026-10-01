@@ -110,6 +110,37 @@ class StatementTyper {
 		this.assignmentRules = assignmentRules;
 	}
 
+	/**
+	 * A local initialized with a reference to a declared function and never reassigned is that function: calls
+	 * through it may omit the optional arguments and take the defaults, as calls to the function itself do. The
+	 * function type alone cannot say which arguments are optional.
+	 */
+	function aliasedFunction(name:String, span:SourceSpan, value:TypedExpression, statements:Array<AstStatement>, statementIndex:Int,
+			scope:Scope):Null<LocalFunction> {
+		var referenced = switch value.expression {
+			case TFunctionRef(target): target;
+			default: return null;
+		};
+		var signature = session.signatures.get(referenced);
+		if (signature == null || (signature.typeParameters != null && signature.typeParameters.length > 0))
+			return null;
+		var hasOptional = false;
+		for (argument in signature.arguments)
+			if (argument.optional == true || argument.defaultValue != null)
+				hasOptional = true;
+		if (!hasOptional)
+			return null;
+		var self = LexicalStorageAnalysis.key(name, span);
+		if (AssignedDeclarations.within(statements.slice(statementIndex + 1), [name => self]).declarations.exists(self))
+			return null;
+		return {
+			arguments: signature.arguments,
+			body: [],
+			outerLocals: scope.visibleLocalNames(),
+			declaredIn: scope
+		};
+	}
+
 	/** Returns null for statements handled by the compound-statement dispatcher. */
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>, statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
@@ -177,6 +208,8 @@ class StatementTyper {
 					];
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
+				if (localFunction == null && declared == null)
+					localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
 				if (!predeclared)
 					scope.define(name, value.type, span, true, null, false, localFunction);
 				scope.setMapKeySource(name, value.mapKeySource);
