@@ -198,6 +198,7 @@ conditional-empty-literal	42
 void-branch-results	42
 std-string-to-string	42
 std-string-int64	42
+generic-function-field-static	42
 super-method-call	42
 jit-stack-trace	42
 # An interface-typed value retains its concrete runtime class after array storage.

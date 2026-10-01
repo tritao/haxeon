@@ -180,6 +180,9 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-borrowed-array.wasm --entry=wasm-gc-ffi-borrowed-array \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-borrowed-array.hx
 haxeon_compile_wait
 
 node - "$root_dir" <<'JS'
@@ -273,7 +276,8 @@ const cases = [
 	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
+	["out/wasm-cli-gc-ffi-short-struct.wasm", 42],
+	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -547,6 +551,18 @@ const cases = [
       };
     if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm"))
       imports.gc_bytes = {shift_point: () => { shortStructImportCalled = true; }};
+    if (relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm")) {
+      const view = () => new DataView(moduleInstance.exports.memory.buffer);
+      imports.gc_bytes = {
+        // Writes through a non-const record pointer, which the caller must see.
+        fill_point: pointer => {
+          view().setInt32(pointer, 7, true);
+          view().setInt32(pointer + 4, 9, true);
+        },
+        // Follows the record's borrowed array to the second point's y.
+        second_y: pointer => view().getUint32(pointer + 4, true) === 2 ? view().getInt32(view().getUint32(pointer, true) + 12, true) : -1
+      };
+    }
     if (relative.includes("hxi-retained")) {
       const retainedMemory = () => memory == null ? moduleInstance.exports.memory : memory;
       const validOptions = pointer => {
@@ -627,11 +643,13 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !valueRecords && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && hasMemory)
+          || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
           || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))

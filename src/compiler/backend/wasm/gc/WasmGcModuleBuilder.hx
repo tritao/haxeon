@@ -115,14 +115,17 @@ class WasmGcModuleBuilder {
 		if (requiresScratchMemory) {
 			scratchAllocator = addGcScratchAllocator(module, scratchTop);
 		}
-		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions)),
-			representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
-				function(context) {
-					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
-						context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
-						functionInterop = gcInterop.forFunctionContext(functionContext);
-					return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
-				});
+		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions));
+		// Records hold roots in an Array<ManagedBytes>; without one, no pointer field borrows GC bytes.
+		if (requiresScratchMemory && Lambda.exists(plan.arrayElementTypes(), element -> Type.enumEq(element, ManagedBytes)))
+			gcInterop.addRootRelocator(module);
+		var representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
+			function(context) {
+				var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
+					context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
+					functionInterop = gcInterop.forFunctionContext(functionContext);
+				return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
+			});
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [representation.values.valueType(Dyn)],
 			results: []
@@ -146,7 +149,9 @@ class WasmGcModuleBuilder {
 			defineGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
+		var closureAdapters = WasmGcClosureAdapters.reserve(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
@@ -709,7 +714,8 @@ class WasmGcModuleBuilder {
 				for (located in block.instructions)
 					switch located.value {
 						case CallClosure(_, closure, _):
-							recordGcClosureType(module, plan, result, closure.type, false);
+							// Any closure may be an adapter (WasmGcClosureAdapters), which is an instance closure.
+							recordGcClosureType(module, plan, result, closure.type, true);
 						case StaticClosure(output, _):
 							recordGcClosureType(module, plan, result, output.type, false);
 						case InstanceClosure(output, _, _):

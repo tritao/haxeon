@@ -62,6 +62,9 @@ class WasmGcTypePlan {
 	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
 
+	/** Closure field holding the Wasm function type index its target is called with (WasmGcClosureAdapters). */
+	public static inline final CLOSURE_SIGNATURE_FIELD = 2;
+
 	final objectDeclarations:Map<String, IrObject> = [];
 	final enumDeclarations:Map<String, IrEnum> = [];
 	final orderedObjects:Array<IrObject> = [];
@@ -596,9 +599,11 @@ class WasmGcTypePlan {
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true}
 		]));
+		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([
 			{type: Value(I32), mutable: true},
-			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
+			{type: Value(Ref({nullable: true, heap: Any})), mutable: true},
+			{type: Value(I32), mutable: false}
 		]));
 		var boxedEntries:Array<{key:String, type:WasmValueType}> = [
 			{key: "i32", type: I32},

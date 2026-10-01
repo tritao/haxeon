@@ -508,7 +508,7 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.staticClosure(name, context.tableSlots, requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.staticClosure(name, output.type, context.tableSlots, requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
 			case CallClosure(output, closure, arguments):
@@ -562,8 +562,8 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.instanceClosure(name, context.tableSlots, requiredLocal(values, receiver.id),
-						requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.instanceClosure(name, output.type, context.tableSlots,
+						requiredLocal(values, receiver.id), requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						I32Const(WasmLayout.CLOSURE_SIZE),

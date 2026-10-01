@@ -154,6 +154,24 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructGet(boxType, 0),
 				LocalSet(destination)
 			];
+		var closureCast = switch output.type {
+			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signature(gc.module, plan, output.type)));
+			default: null;
+		};
+		if (closureCast != null)
+			// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
+			return [
+				LocalGet(valueLocal),
+				RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
+				LocalTee(destination),
+				RefIsNull,
+				I32Eqz,
+				If(null),
+				LocalGet(destination),
+				Call(closureCast),
+				LocalSet(destination),
+				End
+			];
 		return switch output.type {
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
 				var target = switch plan.valueType(output.type) {
@@ -3472,25 +3490,27 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
+	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(name);
 		if (tableSlot == null)
 			throw 'Wasm GC closure target "$name" has no stable table slot';
 		return [
 			I32Const(tableSlot * 2 + 1),
 			RefNull(Any),
+			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];
 	}
 
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
+	public function instanceClosure(name:String, type:IrType, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(WasmGcModuleBuilder.gcClosureThunkName(name));
 		if (tableSlot == null)
 			throw 'Wasm GC instance closure target "$name" has no stable table slot';
 		return [
 			I32Const(tableSlot * 2),
 			LocalGet(receiverLocal),
+			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];
