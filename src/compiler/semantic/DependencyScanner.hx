@@ -225,6 +225,18 @@ class DependencyScanner {
 			case _:
 		}
 
+	/**
+		Records the types a cast names as optional dependencies (`false`): their modules load when
+		they exist, but a name that is no module (`Dynamic`, a type parameter) is not missing.
+	**/
+	static function scanOptionalType(type:AstType, dependencies:Map<String, Bool>):Void {
+		var names:Map<String, Bool> = [];
+		scanType(type, names);
+		for (name in names.keys())
+			if (!dependencies.exists(name))
+				dependencies.set(name, false);
+	}
+
 	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
 		var length = name.length, segmentStart = 0, hasSeparator = false;
 		for (cursor in 0...length)

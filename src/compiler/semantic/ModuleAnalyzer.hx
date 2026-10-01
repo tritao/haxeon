@@ -131,6 +131,17 @@ class ModuleAnalyzer {
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
+			// An optional dependency is kept only as the module it names, if any.
+			if (dependencies.get(dependency) == false) {
+				dependencies.remove(dependency);
+				var optional = packageName != null
+					&& dependency.indexOf(".") < 0 ? sourceModuleForDependency(packageName + "." + dependency) : null;
+				if (optional == null)
+					optional = sourceModuleForDependency(dependency);
+				if (optional != null && optional != state.name)
+					dependencies.set(optional, true);
+				continue;
+			}
 			// `Module.SubType` names a module of this package, as a bare type name does.
 			if (packageName != null && isModuleRelativePath(dependency)) {
 				var relativeModule = sourceModuleForDependency(packageName + "." + dependency);
