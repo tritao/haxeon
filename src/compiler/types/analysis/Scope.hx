@@ -17,6 +17,9 @@ typedef LocalFunction = {
 
 	/** Locals visible where it was declared: assigning one of them changes no object, so it is no effect on flow facts. */
 	final outerLocals:Array<String>;
+
+	/** The scope it was declared in, where the free names of its body resolve. */
+	final ?declaredIn:Scope;
 }
 
 private typedef ScopeValue = {

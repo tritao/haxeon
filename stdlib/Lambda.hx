@@ -20,4 +20,15 @@ class Lambda {
 				return true;
 		return false;
 	}
+
+	/** The number of values, or of those `predicate` accepts. */
+	public static function count<T>(values:Array<T>, ?predicate:T->Bool):Int {
+		if (predicate == null)
+			return values.length;
+		var total = 0;
+		for (value in values)
+			if (predicate(value))
+				total++;
+		return total;
+	}
 }

@@ -251,3 +251,9 @@ field-initializer-dynamic	42
 stdlib-runtime-helpers	42
 ereg-patterns	42
 virtual-call-without-implementors	42
+lambda-count	42
+nullable-numeric-equality	42
+function-value-optional-arguments	42
+arrow-block-value	42
+comprehension-if-else	42
+index-assignment-expression	42

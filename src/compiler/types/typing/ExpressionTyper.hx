@@ -1021,6 +1021,14 @@ class ExpressionTyper {
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
+		if (operation == 2) {
+			var widenedRight = widenToNullableNumeric(right, left.type),
+				widenedLeft = widenToNullableNumeric(left, right.type);
+			if (widenedRight != null)
+				return new TypedExpression(TEqual(left, widenedRight), TBool, span);
+			if (widenedLeft != null)
+				return new TypedExpression(TEqual(widenedLeft, right), TBool, span);
+		}
 		if (!isNumeric(left.type) || !isNumeric(right.type)) {
 			fail("E1011", "Comparison requires matching numeric operands", span);
 		}
@@ -1032,6 +1040,22 @@ class ExpressionTyper {
 			case 1: TLessEqual(left, right);
 			default: TEqual(left, right);
 		}, TBool, span);
+	}
+
+	/**
+	 * `value` as a value of the nullable numeric type `other`, when it is a plain number that widens to the type
+	 * `other` wraps: `Null<Float> == 40` compares as a Float when the value is there, and is false when it is not.
+	 * Ordering comparisons of a nullable stay an error, since null has no place in the order.
+	 */
+	function widenToNullableNumeric(value:TypedExpression, other:CompilerType):Null<TypedExpression> {
+		var inner = switch other {
+			case TNullable(element): element;
+			default: return null;
+		};
+		// Only widenings that lose nothing: an Int into a Float or an Int64. Int64 and Float stay an explicit conversion.
+		if (!sameType(value.type, TInt) || !(sameType(inner, TFloat) || sameType(inner, TInt64)))
+			return null;
+		return coerce(coerce(value, inner, "numeric operand", "E1010"), other, "equality comparison", "E1011");
 	}
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
