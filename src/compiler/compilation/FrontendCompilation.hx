@@ -327,7 +327,9 @@ class FrontendCompilation {
 				// specialization was typed again in this request, its old lambdas that were not made again belong to the
 				// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
 				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
-				if (origin != null && owners.exists(origin) && !invalidated.exists(origin) && !supersededByRetyping) {
+				var sourceOwner = origin != null
+					&& initializerModule(origin, owners) != null ? origin.substr(0, origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
+				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 					retainedSpecializations.set(cached, true);
