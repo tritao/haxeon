@@ -263,3 +263,4 @@ reflect-copy-object-layout	42
 array-enum-lookup	42
 terminated-assignment	42
 interface-optional-arguments	42
+generic-callable-abi	42

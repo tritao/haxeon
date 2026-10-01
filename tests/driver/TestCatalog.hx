@@ -74,6 +74,7 @@ class TestCatalog {
 		"ExpectedEnumContextMain",
 		"ArrayLookupContextMain",
 		"InterfaceOptionalArgumentsMain",
+		"GenericCallableAbiMain",
 		"DependencyKeyMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
