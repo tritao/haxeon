@@ -512,6 +512,7 @@ DEFINE_PRIM(_BOOL,__sys_rename,_STRING _STRING);
 DEFINE_PRIM(_ARR,__sys_read_dir,_STRING);
 DEFINE_PRIM(_ARR,__sys_metadata,_STRING);
 DEFINE_PRIM(_STRING,__sys_get_env,_STRING);
+DEFINE_PRIM(_ARR,__sys_environment,_NO_ARG);
 DEFINE_PRIM(_STRING,__sys_system_name,_NO_ARG);
 DEFINE_PRIM(_BOOL,__sys_put_env,_STRING _STRING);
 DEFINE_PRIM(_I32,__sys_command,_STRING);

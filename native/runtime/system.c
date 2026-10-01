@@ -25,6 +25,32 @@ HL_PRIM vstring *HL_NAME(__sys_get_env)( vstring *name ) {
 	return realtime_string_from_platform(result);
 }
 
+HL_PRIM varray *HL_NAME(__sys_environment)( void ) {
+#if defined(_WIN32)
+	LPWCH environment = GetEnvironmentStringsW();
+	int count = 0;
+	if( environment != NULL )
+		for( const wchar_t *entry = environment; *entry != 0; entry += wcslen(entry) + 1 ) count++;
+	varray *result = hl_alloc_array(hl_string_type,count);
+	vstring **target = hl_aptr(result,vstring *);
+	int index = 0;
+	if( environment != NULL ) {
+		for( const wchar_t *entry = environment; *entry != 0; entry += wcslen(entry) + 1 )
+			target[index++] = realtime_string_from_platform((vbyte *)entry);
+		FreeEnvironmentStringsW(environment);
+	}
+#else
+	extern char **environ;
+	int count = 0;
+	for( char **entry = environ; entry != NULL && *entry != NULL; entry++ ) count++;
+	varray *result = hl_alloc_array(hl_string_type,count);
+	vstring **target = hl_aptr(result,vstring *);
+	for( int index = 0; index < count; index++ )
+		target[index] = realtime_string_from_utf8(environ[index]);
+#endif
+	return result;
+}
+
 HL_PRIM bool HL_NAME(__sys_put_env)( vstring *name, vstring *value ) {
 	char *owned_name, *owned_value = NULL;
 	vbyte *name_argument = realtime_platform_argument(name,&owned_name);
