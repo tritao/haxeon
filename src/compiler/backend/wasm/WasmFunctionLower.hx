@@ -1044,38 +1044,42 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
-			case Call(output, name, arguments) if (WasmModuleSupport.hostCNative(context.program, name) != null):
-				var host = WasmModuleSupport.hostCNative(context.program, name);
-				lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
-					closureTypes);
 			case Call(output, name, arguments):
-				var runtimeName = name;
-				for (native in context.program.natives)
-					if (native.name == name)
-						runtimeName = native.symbol;
-				var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
-					interop = context.representation.interop,
-					represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
-						[for (argument in arguments) requiredLocal(values, argument.id)]);
-				if (emitIfHandled(body, represented)) {} else {
-					var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
-						WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments,
-							outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
-					if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
-						for (argument in arguments)
-							body.push(LocalGet(requiredLocal(values, argument.id)));
-						var functionIndex = functions.get(name);
-						var mapParts = WasmModuleSupport.mapNativeParts(name);
-						if (mapParts != null && output.type != Void && (mapParts.operation == "keys" || mapParts.operation == "values")) {
-							var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
-							if (projectionIndex != null)
-								functionIndex = projectionIndex;
+				var host = WasmModuleSupport.hostCNative(context.program, name);
+				if (host != null)
+					lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
+						closureTypes);
+				else {
+					var runtimeName = name;
+					for (native in context.program.natives)
+						if (native.name == name)
+							runtimeName = native.symbol;
+					var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
+						interop = context.representation.interop,
+						represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
+							[for (argument in arguments) requiredLocal(values, argument.id)]);
+					if (emitIfHandled(body, represented)) {} else {
+						var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
+							WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments,
+								outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
+						if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
+							for (argument in arguments)
+								body.push(LocalGet(requiredLocal(values, argument.id)));
+							var functionIndex = functions.get(name);
+							var mapParts = WasmModuleSupport.mapNativeParts(name);
+							if (mapParts != null
+								&& output.type != Void
+								&& (mapParts.operation == "keys" || mapParts.operation == "values")) {
+								var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
+								if (projectionIndex != null)
+									functionIndex = projectionIndex;
+							}
+							if (functionIndex == null)
+								throw 'Wasm call to unsupported native or missing function "$name"';
+							body.push(Call(functionIndex));
+							if (output.type != Void)
+								body.push(LocalSet(requiredLocal(values, output.id)));
 						}
-						if (functionIndex == null)
-							throw 'Wasm call to unsupported native or missing function "$name"';
-						body.push(Call(functionIndex));
-						if (output.type != Void)
-							body.push(LocalSet(requiredLocal(values, output.id)));
 					}
 				}
 			case CNativeCall(output, name, arguments):

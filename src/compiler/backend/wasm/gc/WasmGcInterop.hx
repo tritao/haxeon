@@ -479,7 +479,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		// A record result lands in scratch storage: the C function writes it through a leading result pointer, or
 		// returns its single scalar, which is stored there.
 		var resultRecord = fixedAggregateResult ? allocateLocal(I32) : -1;
-		if (fixedAggregateResult) {
+		if (native.fixedResult != null) {
 			var layout = native.fixedResult;
 			// The pointer is either the leading argument or the address the scalar is stored to after the call.
 			body = body.concat([

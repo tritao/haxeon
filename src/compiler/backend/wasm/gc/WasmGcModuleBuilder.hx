@@ -329,7 +329,10 @@ class WasmGcModuleBuilder {
 			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).stdStringBody(0, resultLocal);
 		body.push(LocalGet(resultLocal));
 		body.push(Return);
-		module.setFunction(functions.get("__std_string"), new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
+		var index = functions.get("__std_string");
+		if (index == null)
+			throw "Wasm GC Std.string has no reserved function";
+		module.setFunction(index, new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
 	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,

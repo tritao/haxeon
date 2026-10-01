@@ -314,7 +314,10 @@ class WasmGcDynamicArrays {
 		var result = allocateLocal(plan.valueType(Bytes));
 		for (argument in arguments)
 			body.push(LocalGet(argument));
-		body.push(Call(functions.get(name)));
+		var index = functions.get(name);
+		if (index == null)
+			throw 'Wasm dynamic array helper "$name" has no registered function';
+		body.push(Call(index));
 		body.push(LocalSet(result));
 		return result;
 	}
