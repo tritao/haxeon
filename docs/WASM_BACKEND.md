@@ -44,6 +44,12 @@ The supported IR subset is still growing; unsupported operations and native
 signatures fail explicitly during compilation. `scripts/test-wasm-gc-parity.sh`
 compiles shared language fixtures for both targets and checks their results.
 
+String storage remains UTF-8 for ABI transfers. `String.length`, `charCodeAt`,
+`charAt` and `substring` use UTF-16 coordinates on both targets, matching
+HashLink. Substrings selecting a surrogate half retain it through WTF-8
+storage. `haxe.io.Bytes` still counts bytes. The Wasm regular-expression engine
+uses UTF-16 match positions and consumes whole Unicode scalars.
+
 ## Wasm32 linear memory and collector
 
 Wasm32 modules export `main` and `memory` by default. The runtime uses a

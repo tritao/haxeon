@@ -13,8 +13,8 @@ package runtime;
  * `s` and `u` (always on). Anything else, such as backreferences, lookbehind, named groups
  * or Unicode properties, throws when the pattern is compiled rather than matching wrongly.
  *
- * Subjects are the target's UTF-8 strings: positions are byte offsets, as `String` uses on
- * Wasm, while `.` and classes consume one whole code point.
+ * Subjects use UTF-16 positions, consistently with `String`; `.` and classes consume
+ * one whole Unicode scalar.
  */
 class Regex {
 	static inline var CHAR = 0;
@@ -266,25 +266,20 @@ class Regex {
 	public static function fold(code:Int):Int
 		return code >= "A".code && code <= "Z".code ? code + 32 : code;
 
-	/** Decodes the UTF-8 code point at `position`; a malformed byte reads as itself. */
+	/** Reads one scalar while preserving UTF-16 positions for match ranges. */
 	public static function codePointAt(value:String, position:Int, end:Int):Int {
 		var lead = value.charCodeAt(position);
-		if (lead < 0xC0)
-			return lead;
-		var width = lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : 2;
-		if (position + width > end)
-			return lead;
-		var code = lead & (width == 2 ? 0x1F : width == 3 ? 0x0F : 0x07);
-		for (index in 1...width)
-			code = (code << 6) | (value.charCodeAt(position + index) & 0x3F);
-		return code;
+		if (lead >= 0xd800 && lead <= 0xdbff && position + 1 < end) {
+			var low = value.charCodeAt(position + 1);
+			if (low >= 0xdc00 && low <= 0xdfff)
+				return 0x10000 + ((lead - 0xd800) << 10) + low - 0xdc00;
+		}
+		return lead;
 	}
 
-	public static function nextCodePoint(value:String, position:Int, end:Int):Int {
-		var lead = value.charCodeAt(position);
-		var width = lead < 0xC0 ? 1 : lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : 2;
-		return position + width > end ? position + 1 : position + width;
-	}
+	public static function nextCodePoint(value:String, position:Int, end:Int):Int
+		return codePointAt(value, position, end) > 0xffff ? position + 2 : position + 1;
+
 }
 
 /** A parsed pattern node; `kind` selects which fields apply. */

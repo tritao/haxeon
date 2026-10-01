@@ -201,17 +201,9 @@ class EReg {
 
 	static function nextScalarOffset(value:String, offset:Int):Int {
 		if (offset >= value.length) return value.length;
-		#if wasm
-		// Wasm strings are UTF-8: skip the continuation bytes of a multibyte scalar.
-		var next = offset + 1;
-		while (next < value.length && (value.charCodeAt(next) & 0xC0) == 0x80)
-			next++;
-		return next;
-		#else
 		var first = value.charCodeAt(offset);
 		return first >= 0xD800 && first <= 0xDBFF && offset + 1 < value.length
 			&& value.charCodeAt(offset + 1) >= 0xDC00 && value.charCodeAt(offset + 1) <= 0xDFFF ? offset + 2 : offset + 1;
-		#end
 	}
 
 	public static function escape(value:String):String {

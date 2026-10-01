@@ -40,7 +40,7 @@ function main():Int {
 	var empty = ~/(a*)*b/;
 	if (!empty.match("aaab") || empty.matched(0) != "aaab" || empty.match("aaaa"))
 		return 4;
-	// `.` and classes take whole code points; positions stay UTF-8 byte offsets like String.
+	// `.` and classes take whole code points; positions stay UTF-16 offsets like String.
 	var accented = ~/^caf.$/;
 	if (!accented.match("café") || !~/[é]/.match("é") || ~/^[^é]$/.match("é"))
 		return 5;
@@ -49,6 +49,10 @@ function main():Int {
 		return 6;
 	if (~/x*/g.replace("ée", "-") != "-é-e-")
 		return 7;
+	var emoji = ~/🙂+/;
+	if (!~/^.$/.match("🙂") || !emoji.match("a🙂🙂b") || emoji.matchedPos().pos != 1 || emoji.matchedPos().len != 4 || emoji.matched(0) != "🙂🙂"
+		|| ~/x*/g.replace("🙂e", "-") != "-🙂-e-")
+		return 8;
 	var long = new StringBuf();
 	for (index in 0...20000)
 		long.add("ab");

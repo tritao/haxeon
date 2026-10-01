@@ -9,7 +9,6 @@ date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
-string-utf16-length	skip	Wasm Strings count UTF-8 bytes; HashLink counts UTF-16 code units
 object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
 sys-exit	skip	Sys.exit needs the host sys_exit import, which the Wasm harness does not provide
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart

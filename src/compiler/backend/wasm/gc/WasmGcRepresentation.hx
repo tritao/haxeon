@@ -1483,11 +1483,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		if (name == "__string_length") {
 			if (output.type != I32 || arguments.length != 1 || argumentLocals.length != 1 || arguments[0].type != Bytes)
 				throw "Invalid Wasm GC string length signature";
-			return [
-				LocalGet(argumentLocals[0]),
-				StructGet(plan.bytesTypeIndex, 2),
-				LocalSet(outputLocal)
-			];
+			return compiler.backend.wasm.WasmUtf16Strings.length(stringByteLength(argumentLocals[0]), index -> stringByteAt(argumentLocals[0], index),
+				() -> allocateLocal(I32), outputLocal);
 		}
 		if (name == "__string_char_code_at")
 			return stringCharCodeAt(output, arguments, outputLocal, argumentLocals);
@@ -4194,33 +4191,23 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	function stringCharCodeAt(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if (output.type != I32 || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Bytes || arguments[1].type != I32)
 			throw "Invalid Wasm GC string charCodeAt signature";
-		var stringLocal = argumentLocals[0],
-			indexLocal = argumentLocals[1],
-			body:Array<WasmInstruction> = [LocalGet(indexLocal), I32Const(0), I32LtS, If(null)];
-		body = body.concat(trapInstructions());
-		body = body.concat([
-			End,
-			LocalGet(indexLocal),
-			LocalGet(stringLocal),
-			StructGet(plan.bytesTypeIndex, 2),
-			I32LtS,
-			I32Eqz,
-			If(null)
-		]);
-		body = body.concat(trapInstructions());
-		body = body.concat([
-			End,
-			LocalGet(stringLocal),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(stringLocal),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(indexLocal),
-			I32Add,
-			ArrayGetUnsigned(plan.byteArrayTypeIndex),
-			LocalSet(destination)
-		]);
-		return body;
+		return compiler.backend.wasm.WasmUtf16Strings.charCodeAt(stringByteLength(argumentLocals[0]), index -> stringByteAt(argumentLocals[0], index),
+			() -> allocateLocal(I32), argumentLocals[1], destination);
 	}
+
+	function stringByteLength(source:Int):Array<WasmInstruction>
+		return [LocalGet(source), StructGet(plan.bytesTypeIndex, 2)];
+
+	function stringByteAt(source:Int, index:Int):Array<WasmInstruction>
+		return [
+			LocalGet(source),
+			StructGet(plan.bytesTypeIndex, 0),
+			LocalGet(source),
+			StructGet(plan.bytesTypeIndex, 1),
+			LocalGet(index),
+			I32Add,
+			ArrayGetUnsigned(plan.byteArrayTypeIndex)
+		];
 
 	function stringFromCharCode(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if (output.type != Bytes || arguments.length != 1 || argumentLocals.length != 1 || arguments[0].type != I32)
@@ -4265,38 +4252,30 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			valueLength = allocateLocal(I32),
 			start = allocateLocal(I32),
 			end = allocateLocal(I32),
-			body:Array<WasmInstruction> = [
-				LocalGet(valueLocal),
-				RefIsNull,
-				If(null),
-				I32Const(0),
-				LocalSet(valueLength),
-				Else,
-				LocalGet(valueLocal),
-				StructGet(plan.bytesTypeIndex, 2),
-				LocalSet(valueLength),
-				End,
-				I32Const(0),
-				LocalSet(start),
-				I32Const(0),
-				LocalSet(end),
-				LocalGet(indexLocal),
-				I32Const(0),
-				I32LtS,
-				I32Eqz,
-				LocalGet(indexLocal),
-				LocalGet(valueLength),
-				I32LtS,
-				I32And,
-				If(null),
-				LocalGet(indexLocal),
-				LocalSet(start),
-				LocalGet(indexLocal),
-				I32Const(1),
-				I32Add,
-				LocalSet(end),
-				End
-			];
+			body:Array<WasmInstruction> = compiler.backend.wasm.WasmUtf16Strings.length(stringByteLength(valueLocal),
+				index -> stringByteAt(valueLocal, index), () -> allocateLocal(I32), valueLength)
+				.concat([
+					I32Const(0),
+					LocalSet(start),
+					I32Const(0),
+					LocalSet(end),
+					LocalGet(indexLocal),
+					I32Const(0),
+					I32LtS,
+					I32Eqz,
+					LocalGet(indexLocal),
+					LocalGet(valueLength),
+					I32LtS,
+					I32And,
+					If(null),
+					LocalGet(indexLocal),
+					LocalSet(start),
+					LocalGet(indexLocal),
+					I32Const(1),
+					I32Add,
+					LocalSet(end),
+					End
+				]);
 		return body.concat(stringSubstring(valueLocal, start, end, destination));
 	}
 
@@ -4757,6 +4736,35 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	function stringSubstring(valueLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
+		var storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
+		return compiler.backend.wasm.WasmUtf16Strings.substring(stringByteLength(valueLocal), index -> stringByteAt(valueLocal, index),
+			() -> allocateLocal(I32), startArgument, endArgument, size -> [LocalGet(size), ArrayNewDefault(plan.byteArrayTypeIndex), LocalSet(storage)],
+			(sourceOffset, targetOffset, size) -> [
+				LocalGet(storage),
+				LocalGet(targetOffset),
+				LocalGet(valueLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(valueLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(sourceOffset),
+				I32Add,
+				LocalGet(size),
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+			], (offset, byte) -> [
+				LocalGet(storage),
+				LocalGet(offset),
+				LocalGet(byte),
+				ArraySet(plan.byteArrayTypeIndex)
+			], size -> [
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(size),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(destination)
+			]);
+	}
+
+	function stringByteSubstring(valueLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
 		var valueLength = allocateLocal(I32),
 			start = allocateLocal(I32),
 			end = allocateLocal(I32),
@@ -4869,7 +4877,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalGet(valueLength),
 				LocalSet(end)
 			];
-		body = body.concat(stringSubstring(valueLocal, start, end, destination));
+		body = body.concat(stringByteSubstring(valueLocal, start, end, destination));
 		body = body.concat([
 			LocalGet(destination),
 			StructGet(plan.bytesTypeIndex, 0),

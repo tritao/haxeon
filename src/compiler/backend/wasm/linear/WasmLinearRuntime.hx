@@ -85,9 +85,13 @@ class WasmLinearRuntime {
 				else
 					switch native.name {
 						case "__string_length":
-							functions.set(native.name,
-								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [],
-									[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return])));
+							var builder = new WasmFunctionBuilder(native.name, {parameters: [I32], results: [I32]});
+							var result = builder.local("length", I32);
+							builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+								index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), result));
+							builder.localGet(result);
+							builder.return_();
+							functions.set(native.name, module.addFunction(builder.finish()));
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
 						case "__string_concat":
@@ -116,11 +120,7 @@ class WasmLinearRuntime {
 						case "__string_compare_full":
 							functions.set(native.name, addStringCompareFull(module, native.name));
 						case "__string_split":
-							var substring = functions.get("__string_substring");
-							if (substring == null) {
-								substring = addStringSubstring(module, "__string_substring", allocator);
-								functions.set("__string_substring", substring);
-							}
+							var substring = addStringByteSubstring(module, "$string-split-byte-substring", allocator);
 							functions.set(native.name, addStringSplit(module, native.name, allocator, substring));
 						case "__std_int_f64":
 							functions.set(native.name,
@@ -2500,16 +2500,24 @@ class WasmLinearRuntime {
 	}
 
 	static function addStringCharCodeAt(module:WasmModule, name:String):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
-			LocalGet(0),
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]});
+		var result = builder.local("code", I32);
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.charCodeAt([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), 1, result));
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function stringByteAt(source:Int, index:Int):Array<WasmInstruction>
+		return [
+			LocalGet(source),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
 			I32Add,
-			LocalGet(1),
+			LocalGet(index),
 			I32Add,
-			I32Load8U(0),
-			Return
-		]));
-	}
+			I32Load8U(0)
+		];
 
 	public static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
@@ -2850,6 +2858,53 @@ class WasmLinearRuntime {
 	}
 
 	static function addStringSubstring(module:WasmModule, name:String, allocator:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]});
+		var result = builder.local("result", I32);
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.substring([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), 1, 2, size -> [
+				LocalGet(size),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(result)
+			], (sourceOffset, targetOffset, size) -> [
+				LocalGet(result),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(targetOffset),
+				I32Add,
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(sourceOffset),
+				I32Add,
+				LocalGet(size),
+				MemoryCopy
+			], (offset, byte) -> [
+				LocalGet(result),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(offset),
+				I32Add,
+				LocalGet(byte),
+				I32Store8(0)
+			], size -> [
+				LocalGet(result),
+				I32Const(WasmModuleSupport.typeId(Bytes)),
+				I32Store(0),
+				LocalGet(result),
+				LocalGet(size),
+				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalGet(result),
+				LocalGet(size),
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET)
+			]));
+		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	static function addStringByteSubstring(module:WasmModule, name:String, allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
 			source = builder.parameter("source", 0),
 			startArg = builder.parameter("start", 1),
@@ -3134,65 +3189,40 @@ class WasmLinearRuntime {
 	}
 
 	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
-			source = builder.parameter("source", 0),
-			index = builder.parameter("index", 1),
-			result = builder.local("result", I32),
-			length = builder.local("length", I32);
-		builder.localGet(source);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(length);
-		builder.localGet(index);
-		builder.i32Const(0);
-		builder.emit(I32LtS);
-		builder.i32Eqz();
-		builder.localGet(index);
-		builder.localGet(length);
-		builder.emit(I32LtS);
-		builder.emit(I32And);
-		builder.ifElse(function(builder) {
-			builder.i32Const(1);
-			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-			builder.i32Add();
-			builder.call(builder.functionRef(allocator));
-			builder.localSet(result);
-			builder.localGet(result);
-			builder.i32Const(WasmModuleSupport.typeId(Bytes));
-			builder.emit(I32Store(0));
-			builder.localGet(result);
-			builder.i32Const(1);
-			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
-			builder.localGet(result);
-			builder.i32Const(1);
-			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
-			builder.localGet(result);
-			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-			builder.i32Add();
-			builder.localGet(source);
-			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-			builder.i32Add();
-			builder.localGet(index);
-			builder.i32Add();
-			builder.emit(I32Load8U(0));
-			builder.emit(I32Store8(0));
-		}, function(builder) {
-			builder.i32Const(0);
-			builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-			builder.i32Add();
-			builder.call(builder.functionRef(allocator));
-			builder.localSet(result);
-			builder.localGet(result);
-			builder.i32Const(WasmModuleSupport.typeId(Bytes));
-			builder.emit(I32Store(0));
-			builder.localGet(result);
-			builder.i32Const(0);
-			builder.emit(I32Store(WasmLayout.STRING_LENGTH_OFFSET));
-			builder.localGet(result);
-			builder.i32Const(0);
-			builder.emit(I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET));
-		});
-		builder.localGet(result);
-		builder.return_();
+		var substring = addStringSubstring(module, "$char-at-substring", allocator);
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]});
+		var size = builder.local("size", I32),
+			start = builder.local("start", I32),
+			end = builder.local("end", I32);
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), size));
+		builder.emitAll([
+			I32Const(0),
+			LocalSet(start),
+			I32Const(0),
+			LocalSet(end),
+			LocalGet(1),
+			I32Const(0),
+			I32LtS,
+			I32Eqz,
+			LocalGet(1),
+			LocalGet(size),
+			I32LtS,
+			I32And,
+			If(null),
+			LocalGet(1),
+			LocalSet(start),
+			LocalGet(1),
+			I32Const(1),
+			I32Add,
+			LocalSet(end),
+			End,
+			LocalGet(0),
+			LocalGet(start),
+			LocalGet(end),
+			Call(substring),
+			Return
+		]);
 		return module.addFunction(builder.finish());
 	}
 

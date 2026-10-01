@@ -264,3 +264,4 @@ array-enum-lookup	42
 terminated-assignment	42
 interface-optional-arguments	42
 generic-callable-abi	42
+string-utf16-slices	42
