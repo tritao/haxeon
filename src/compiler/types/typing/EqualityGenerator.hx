@@ -32,14 +32,16 @@ class EqualityGenerator {
 		requestKeys.sort(Reflect.compare);
 		// Direct requests first, so a helper someone asked for keeps that caller as its origin.
 		for (key in requestKeys)
-			requests.set(key, session.equalityRequests.get(key));
-		for (key in requestKeys)
-			collect(session, requests.get(key).type, requests.get(key), reachable, requests);
+			requests.set(key, requiredMapValue(session.equalityRequests, key));
+		for (key in requestKeys) {
+			var request = requiredMapValue(requests, key);
+			collect(session, request.type, request, reachable, requests);
+		}
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		return [
 			for (key in keys)
-				compareFunction(session, reachable.get(key), requests.get(key))
+				compareFunction(session, requiredMapValue(reachable, key), requiredMapValue(requests, key))
 		];
 	}
 
@@ -83,6 +85,13 @@ class EqualityGenerator {
 			default:
 				unsupported(type, span);
 		}
+	}
+
+	static function requiredMapValue<T>(values:Map<String, T>, key:String):T {
+		var value = values.get(key);
+		if (value == null)
+			throw 'Missing equality-generation entry "$key"';
+		return value;
 	}
 
 	static function supportedMapKey(session:TypingSession, type:CompilerType):Bool
