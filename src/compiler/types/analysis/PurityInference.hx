@@ -79,7 +79,8 @@ class PurityInference {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), inference.classNameOfType(argument.type),
-				PurityWalker.isIterableType(argument.type));
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isStringArrayType(argument.type));
 		}
 		if (!walker.statements(body))
 			return null;
@@ -92,7 +93,7 @@ class PurityInference {
 		direct effect, or stores to a field some type gives a setter (a setter call can do anything).
 	 */
 	public static function localBodyStores(inference:PurityInference, body:Array<AstStatement>, functionName:String, outerLocals:Array<String>,
-			?privateMaps:Array<String>):Null<{
+			?privateMaps:Array<String>, ?outerArrays:Array<String>):Null<{
 			dependencies:Array<String>,
 			fields:Array<String>,
 			indexed:Bool
@@ -101,7 +102,7 @@ class PurityInference {
 		walker.stores = {fields: [], indexed: false};
 		walker.declare("this");
 		for (name in outerLocals)
-			walker.declare(name);
+			walker.declare(name, false, null, false, outerArrays != null && outerArrays.indexOf(name) >= 0);
 		if (privateMaps != null)
 			for (name in privateMaps)
 				walker.privateMaps.set(name, true);
@@ -210,7 +211,8 @@ class PurityInference {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
-				PurityWalker.isIterableType(argument.type));
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isStringArrayType(argument.type));
 		}
 		if (!walker.statements(fn.statements))
 			return null;
@@ -311,6 +313,9 @@ private typedef LocalFact = {
 	final numeric:Bool;
 	final className:Null<String>;
 	final iterable:Bool;
+	final array:Bool;
+	final string:Bool;
+	final stringArray:Bool;
 }
 
 /** Walks one body with lexical locals, collecting callees and rejecting direct effects. */
@@ -334,8 +339,16 @@ private class PurityWalker {
 		this.functionName = functionName;
 	}
 
-	public function declare(name:String, numeric:Bool = false, ?className:String, iterable:Bool = false):Void
-		scopes[scopes.length - 1].set(name, {numeric: numeric, className: className, iterable: iterable});
+	public function declare(name:String, numeric:Bool = false, ?className:String, iterable:Bool = false, array:Bool = false, string:Bool = false,
+			stringArray:Bool = false):Void
+		scopes[scopes.length - 1].set(name, {
+			numeric: numeric,
+			className: className,
+			iterable: iterable,
+			array: array,
+			string: string,
+			stringArray: stringArray
+		});
 
 	public static function isNumericType(type:Null<AstType>):Bool
 		return switch type {
@@ -350,6 +363,18 @@ private class PurityWalker {
 	public static function isIterableType(type:Null<AstType>):Bool
 		return switch type {
 			case ArrayType(_), MapType(_, _): true;
+			default: false;
+		};
+
+	public static function isArrayType(type:Null<AstType>):Bool
+		return switch type {
+			case ArrayType(_): true;
+			default: false;
+		};
+
+	public static function isStringArrayType(type:Null<AstType>):Bool
+		return switch type {
+			case ArrayType(StringType): true;
 			default: false;
 		};
 
@@ -388,6 +413,10 @@ private class PurityWalker {
 			case Variable(name, _): isNumericLocal(name);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _): isNumeric(left) && isNumeric(right);
 			case Negate(inner, _): isNumeric(inner);
+			case Conditional(_, left, right, _): isNumeric(left) && isNumeric(right);
+			case Member(object, "length", _) if (isStringReceiver(object) || isArrayReceiver(object)): true;
+			case MethodCall(object, name, _, _) if (name == "indexOf" || name == "lastIndexOf"): isStringReceiver(object);
+			case Call(name, _, _): var parts = name.split("."); parts.length == 2 && (parts[1] == "indexOf" || parts[1] == "lastIndexOf") && isStringName(parts[0]);
 			default: false;
 		};
 
@@ -420,14 +449,16 @@ private class PurityWalker {
 		return switch value {
 			case ErrorStatement(_): false;
 			case UninitializedDeclaration(name, type, _):
-				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type));
+				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType, isStringArrayType(type));
 				true;
 			case VarDeclaration(name, type, initializer, _):
 				var pure = expression(initializer);
 				if (type == null || type == InferredType)
-					declare(name, isNumeric(initializer), null, isIterableInitializer(initializer));
+					declare(name, isNumeric(initializer), null, isIterableInitializer(initializer), isArrayInitializer(initializer),
+						isStringReceiver(initializer), isStringArrayInitializer(initializer));
 				else
-					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type));
+					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
+						isStringArrayType(type));
 				pure;
 			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name) && expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
@@ -479,9 +510,12 @@ private class PurityWalker {
 			case ErrorExpression(_), ClosureCall(_, _, _), New(_, _, _), NewGeneric(_, _, _, _), MapComprehension(_, _, _, _, _, _, _):
 				false;
 			case Variable(name, _): isLocal(name) || readsProperty(name);
+			case Member(object, "length", _) if (isStringReceiver(object) || isArrayReceiver(object)): expression(object);
 			case Member(object, name, _): readsProperty(name) && expression(object);
 			case Add(left, right, _): // `+` may convert an object operand through its toString, unless both sides are numbers.
-				if (!isNumeric(left) || !isNumeric(right)) dependencies.set(PurityInference.TO_STRING, true); expression(left) && expression(right);
+				if ((!isNumeric(left) || !isNumeric(right))
+					&& !(isStringReceiver(left) && isStringReceiver(right))) dependencies.set(PurityInference.TO_STRING,
+						true); expression(left) && expression(right);
 			case Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _),
 				BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _), Less(left, right, _),
 				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _),
@@ -522,6 +556,11 @@ private class PurityWalker {
 						declare(item);
 					return (filter == null || expression(filter)) && expression(result);
 				});
+			case Call(name, arguments, _) if (isStringCall(name) || isStringArrayJoinCall(name)):
+				all(arguments);
+			case Call(name, arguments, _) if (stores != null && isArrayStorageCall(name)):
+				stores.indexed = true;
+				all(arguments);
 			case Call(name, arguments, _) if (isPrivateMapOperation(name)):
 				all(arguments);
 			case Call(name, arguments, _):
@@ -537,6 +576,9 @@ private class PurityWalker {
 			case MethodCall(Variable(local, _), name, arguments, _) if (isOuterPrivateMap(local)
 				&& MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name) >= 0):
 				all(arguments);
+			case MethodCall(object, name, arguments, _)
+				if (isStringOperation(name) && isStringReceiver(object) || name == "join" && isStringArrayReceiver(object)): expression(object) && all(arguments);
+			case MethodCall(object, name, arguments, _) if (stores != null && isArrayStorageOperation(name) && isArrayReceiver(object)): stores.indexed = true; expression(object) && all(arguments);
 			case MethodCall(object, name, arguments, _):
 				var key = switch object {
 					case Variable("this", _): inference.resolveOwnMethod(name, functionName);
@@ -563,6 +605,108 @@ private class PurityWalker {
 				}
 		};
 	}
+
+	/** Primitive string methods cannot dispatch to user code. */
+	static function isStringOperation(name:String):Bool
+		return switch name {
+			case "charAt" | "charCodeAt" | "substring" | "substr" | "indexOf" | "lastIndexOf" | "toLowerCase" | "toUpperCase" | "split": true;
+			default: false;
+		};
+
+	static function stringResult(name:String):Bool
+		return switch name {
+			case "charAt" | "substring" | "substr" | "toLowerCase" | "toUpperCase": true;
+			default: false;
+		};
+
+	function isStringReceiver(value:AstExpression):Bool
+		return switch value {
+			case StringLiteral(_, _): true;
+			case Variable(name, _):
+				var fact = localFact(name);
+				fact == null ? inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType : fact.string;
+			case Member(Variable("this", _), name, _): inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType;
+			case Conditional(_, left, right, _), Add(left, right, _): isStringReceiver(left) && isStringReceiver(right);
+			case MethodCall(receiver, name, _, _): stringResult(name) && isStringReceiver(receiver) || name == "join" && isStringArrayReceiver(receiver);
+			case Call(name, _, _): var parts = name.split("."); parts.length == 2 && stringResult(parts[1]) && isStringName(parts[0]);
+			default: false;
+		};
+
+	function isStringName(name:String):Bool {
+		var fact = localFact(name);
+		return fact == null ? inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType
+			&& readsProperty(name) : fact.string;
+	}
+
+	function isStringCall(name:String):Bool {
+		var parts = name.split(".");
+		return parts.length == 2 && isStringOperation(parts[1]) && isStringName(parts[0]);
+	}
+
+	function isStringArrayReceiver(value:AstExpression):Bool
+		return switch value {
+			case Variable(name, _):
+				var fact = localFact(name);
+				fact == null ? isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) : fact.stringArray;
+			case Member(Variable("this", _), name, _): isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name));
+			default: false;
+		};
+
+	function isStringArrayJoinCall(name:String):Bool {
+		var parts = name.split(".");
+		if (parts.length != 2 || parts[1] != "join")
+			return false;
+		var fact = localFact(parts[0]);
+		return fact == null ? isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+			&& readsProperty(parts[0]) : fact.stringArray;
+	}
+
+	function isStringArrayInitializer(value:AstExpression):Bool
+		return switch value {
+			case ArrayLiteral(values, _):
+				var strings = values.length > 0;
+				for (value in values)
+					if (!isStringReceiver(value))
+						strings = false;
+				strings;
+			default: isStringArrayReceiver(value);
+		};
+
+	/** These built-in array operations change storage without invoking user callbacks. */
+	static function isArrayStorageOperation(name:String):Bool
+		return switch name {
+			case "push" | "pop" | "shift" | "unshift" | "resize" | "insert" | "splice" | "reverse": true;
+			default: false;
+		};
+
+	function isArrayReceiver(value:AstExpression):Bool
+		return switch value {
+			case Variable(name, _):
+				var fact = localFact(name);
+				fact == null ? isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name))
+				&& readsProperty(name) : fact.array;
+			case Member(Variable("this", _), field, _): isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName),
+					field)) && readsProperty(field);
+			default: false;
+		};
+
+	function isArrayStorageCall(name:String):Bool {
+		var parts = name.split(".");
+		if (parts.length == 3 && parts[0] == "this" && isArrayStorageOperation(parts[2]))
+			return isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[1])) && readsProperty(parts[1]);
+		if (parts.length != 2 || !isArrayStorageOperation(parts[1]))
+			return false;
+		var fact = localFact(parts[0]);
+		return fact == null ? isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+			&& readsProperty(parts[0]) : fact.array;
+	}
+
+	function isArrayInitializer(value:AstExpression):Bool
+		return switch value {
+			case ArrayLiteral(_, _), NewArray(_, _, _), ArrayComprehension(_, _, _, _, _, _, _): true;
+			case Variable(name, _): var fact = localFact(name); fact != null && fact.array;
+			default: false;
+		};
 
 	/**
 		The parser spells `a.b.c = v` as an assignment to the dotted name. In store-recording mode that is a store to

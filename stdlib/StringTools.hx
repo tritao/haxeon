@@ -19,9 +19,11 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
+@:pure
 @:hlNative("haxeon_runtime", "__string_starts_with")
 extern function stringToolsStartsWith(s:String, start:String):Bool;
 
+@:pure
 @:hlNative("haxeon_runtime", "__string_ends_with")
 extern function stringToolsEndsWith(s:String, end:String):Bool;
 

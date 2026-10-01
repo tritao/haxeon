@@ -61,6 +61,8 @@ class TestCatalog {
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",
 		"LoopFlowMain",
+		"LoopArrayEffectsMain",
+		"PrimitiveStringEffectsMain",
 		"DiagnosticLocationMain",
 		"BindingAnalysisMain",
 		"ImplicitConstructorMain",

@@ -34,7 +34,7 @@ class LoopFlow {
 			for (name in loopVariables)
 				if (name != null)
 					locals.push(name);
-		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames());
+		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames(), scope.visibleArrayNames());
 		if (stores == null)
 			scope.invalidateAllExpressions();
 		else {
