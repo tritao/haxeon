@@ -72,6 +72,66 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			var instructions:Array<WasmInstruction> = body.concat(wrapNativePointer(pointer, -1, argumentLocals[2], true, outputLocal));
 			return Handled(instructions);
 		}
+		// HXI callback entries receive records and pointers as linear-memory addresses from the host.
+		if (name == "structFromLinear") {
+			if (output.type != ManagedBytes || arguments.length != 2 || arguments[0].type != I32 || arguments[1].type != I32 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC HXI linear record copy signature";
+			var storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
+				position = allocateLocal(I32),
+				pointer = argumentLocals[0],
+				size = argumentLocals[1];
+			return Handled([
+				LocalGet(size),
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalSet(storage),
+				I32Const(0),
+				LocalSet(position),
+				Block(null),
+				Loop(null),
+				LocalGet(position),
+				LocalGet(size),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(storage),
+				LocalGet(position),
+				LocalGet(pointer),
+				LocalGet(position),
+				I32Add,
+				I32Load8U(0),
+				ArraySet(plan.byteArrayTypeIndex),
+				LocalGet(position),
+				I32Const(1),
+				I32Add,
+				LocalSet(position),
+				Br(0),
+				End,
+				End,
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(size),
+				RefNull(Any),
+				StructNew(plan.managedBytesTypeIndex),
+				LocalSet(outputLocal)
+			]);
+		}
+		if (name == "structToLinear") {
+			if (output.type != Void || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != I32
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI linear record store signature";
+			return Handled(requireGcBytesLength(argumentLocals[0], 0).concat(copyGcBytesToLinear(argumentLocals[0], argumentLocals[1])));
+		}
+		// Wasm GC keeps a callback handle as its i32 table index too.
+		if (name == "nativeCallbackFromIndex" || name == "nativeCallbackIndex") {
+			if (arguments.length != 1 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC native callback handle signature";
+			return Handled([LocalGet(argumentLocals[0]), LocalSet(outputLocal)]);
+		}
+		if (name == "nativePointerFromAddress") {
+			if (!isNativePointerType(output.type) || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC native pointer address signature";
+			return Handled(wrapNativePointer(argumentLocals[0], -1, null, true, outputLocal));
+		}
 		if (name == "native_pointer_is_closed") {
 			if (output.type != Bool || arguments.length != 1 || !isNativePointerType(arguments[0].type) || argumentLocals.length != 1)
 				throw "Invalid Wasm GC native pointer status signature";

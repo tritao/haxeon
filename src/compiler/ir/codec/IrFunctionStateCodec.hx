@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 9;
+	static inline final VERSION = 10;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -49,6 +49,7 @@ class IrFunctionStateCodec {
 			IrValueTableCodec.writeReference(output, argument);
 		IrTypeCodec.writeType(output, fn.result, 0);
 		output.writeByte(fn.inlineHint ? 1 : 0);
+		output.writeByte(fn.retention);
 		output.writeInt32(fn.debugBindings.length);
 		for (binding in fn.debugBindings) {
 			IrTypeCodec.writeString(output, binding.identity);
@@ -107,7 +108,8 @@ class IrFunctionStateCodec {
 			var arguments = [for (_ in 0...argumentCount) IrValueTableCodec.readReference(input, values)],
 				result = IrTypeCodec.readType(input, bytes.length, 0),
 				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
-			var inlineHint = version >= 9 && input.readByte() != 0;
+			var inlineHint = version >= 9 && input.readByte() != 0,
+				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
 			if (version >= 3) {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
@@ -164,7 +166,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint);
+			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}

@@ -97,7 +97,7 @@ class WasmLinearModuleBuilder {
 		importMemory = options.importMemory == true;
 		contract = options.memoryContract;
 		var memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
-		exportedFunctions = options.exports == null ? [] : options.exports;
+		exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports);
 		if (contract != null) {
 			if (!importMemory)
 				throw "A Wasm memory contract requires imported memory";

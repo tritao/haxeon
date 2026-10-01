@@ -164,6 +164,14 @@ class BodyTyper {
 			session.noReturnFunctions.set(name, true);
 	}
 
+	static function hasFunctionMetadata(fn:compiler.syntax.Ast.AstFunction, name:String):Bool {
+		if (fn.metadata != null)
+			for (entry in fn.metadata)
+				if (entry.name == name)
+					return true;
+		return false;
+	}
+
 	static function parentPath(path:String):Null<String> {
 		return compiler.QualifiedName.parent(path);
 	}
@@ -303,6 +311,8 @@ class BodyTyper {
 			isStatic: isStatic,
 			isConstructor: isConstructor,
 			isInline: fn.isInline == true,
+			isKept: hasFunctionMetadata(fn, "keep"),
+			isExposed: hasFunctionMetadata(fn, "expose"),
 			arguments: arguments,
 			result: result,
 			statements: statements,

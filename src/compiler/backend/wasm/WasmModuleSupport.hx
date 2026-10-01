@@ -8,6 +8,7 @@ import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrRetention;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -56,6 +57,15 @@ class WasmModuleSupport {
 				if (native.library == "haxeon_host" && native.symbol == hostSymbol)
 					return native;
 		return null;
+	}
+
+	/** The requested exports followed by every function declared `@:expose`, which the host calls by name. */
+	public static function exportedFunctions(program:IrProgram, requested:Array<String>):Array<String> {
+		var result = requested.copy();
+		for (fn in program.functions)
+			if (fn.retention == Expose && result.indexOf(fn.name) < 0)
+				result.push(fn.name);
+		return result;
 	}
 
 	public static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
@@ -317,8 +327,12 @@ class WasmModuleSupport {
 	 * apart.
 	 */
 	public static function reachableFunctionsWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
-		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy(),
-			reachable = reachableFunctions(program, entry, roots);
+		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy();
+		// `@:keep` and `@:expose` functions stay even when nothing calls them.
+		for (fn in program.functions)
+			if (fn.retention != Reachable && roots.indexOf(fn.name) < 0)
+				roots.push(fn.name);
+		var reachable = reachableFunctions(program, entry, roots);
 		while (true) {
 			var added = false, usedNatives = reachableNatives(program, reachable);
 			// Dynamic stringification calls each class's toString, as HashLink's `__string` proto does.

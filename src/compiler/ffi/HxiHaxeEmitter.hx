@@ -388,6 +388,8 @@ class HxiHaxeEmitter {
 			emitFunctions = moduleKind == null || moduleKind == "all" || moduleKind == "functions",
 			emitTypes = moduleKind == null || moduleKind == "all" || moduleKind == "types" || moduleKind == "functions" && !splitTypes,
 			emitConstants = moduleKind == null || moduleKind == "all" || moduleKind == "constants" || moduleKind == "functions" && !splitConstants;
+		// On Wasm, native code calls a callback through an exported entry function, named as a module-level function.
+		var callbackEntryModule = (profile == null || profile.packageName == null ? "" : profile.packageName + ".") + functionModule;
 		var callbackErrorType = profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
 			pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
 			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
@@ -554,7 +556,21 @@ class HxiHaxeEmitter {
 						emitDocumentation(output, model, name);
 						output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 						output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
+						var wasmEntry = callbackEntry(projectedName, name, parameters, result, abi, declarations, aggregateDescriptors, profile);
+						output.add('#if wasm\n');
+						if (wasmEntry == null)
+							output.add('\tpublic inline function new(callback:$projectedName) this = throw "HXI callback $name has arguments Wasm cannot pass";\n');
+						else
+							output.add('\tpublic inline function new(callback:$projectedName) this = haxeon.wasm.Callbacks.create("$callbackEntryModule.__hxi_callback_entry_$name", "${wasmEntry.signature}", callback);\n');
+						output.add('\tpublic inline function close():Bool return haxeon.wasm.Callbacks.close(cast this);\n');
+						output.add('\tpublic inline function errorKind():$callbackErrorType return haxeon.wasm.Callbacks.errorKind(cast this);\n');
+						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return haxeon.wasm.Callbacks.takeError(cast this);\n');
+						output.add('#else\n');
 						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
+						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
+						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
+						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
+						output.add('#end\n');
 						output.add('\tpublic static inline function fromNative(pointer:hl.Abstract<"native_pointer">):${projectedName}Callback return cast ${model.name}.__hxi_callback_from_pointer_$name(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), pointer);\n');
 						var callbackNames = [for (parameter in parameters) parameter.name],
 							invokeArguments = callbackNames.length == 0 ? "" : ", " + callbackNames.join(", ");
@@ -562,12 +578,26 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):Void { ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments); }\n');
 						else
 							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):${returnValue.haxeType} return cast ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments);\n');
-						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
-						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
-						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 						output.add('}\n');
 					case _:
 				}
+		if (emitFunctions && callbackDeclarations.length != 0) {
+			output.add('#if wasm\n');
+			output.add('@:hlNative("haxeon_runtime", "structFromLinear") extern function __hxi_struct_from_linear(pointer:Int, size:Int):haxe.io.Bytes;\n');
+			output.add('@:hlNative("haxeon_runtime", "structToLinear") extern function __hxi_struct_to_linear(bytes:haxe.io.Bytes, pointer:Int, size:Int):Void;\n');
+			output.add('@:hlNative("haxeon_runtime", "nativePointerFromAddress") extern function __hxi_native_pointer_from_address(address:Int):hl.Abstract<"native_pointer">;\n');
+			for (callbackDeclaration in callbackDeclarations)
+				switch callbackDeclaration {
+					case Callback(name, parameters, result, _, _):
+						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
+						var entry = projectedCallback == null ? null : callbackEntry(projectedCallback.name, name, parameters, result, abi, declarations,
+							aggregateDescriptors, profile);
+						if (entry != null)
+							output.add(entry.source);
+					case _:
+				}
+			output.add('#end\n');
+		}
 		if (emitFunctions)
 			for (callbackDeclaration in callbackDeclarations)
 				switch callbackDeclaration {
@@ -2161,6 +2191,192 @@ class HxiHaxeEmitter {
 					code: 11,
 					nativePointer: opaquePointee != null,
 					nullable: nullable
+				};
+			case _: null;
+		};
+
+	/**
+	 * The Wasm entry function for one callback type and the Wasm32 C signature native code calls it with.
+	 *
+	 * The host's function-table entry calls it with the closure's id followed by the C arguments as the Wasm32 C
+	 * ABI passes them: scalars as they are, a record holding one scalar as that scalar, other records and structure
+	 * pointers as linear addresses, and a record result through a leading address. It converts those to the
+	 * callback's Haxe arguments, calls the closure, and records an exception instead of letting it unwind through
+	 * native frames. It returns null for callback shapes it cannot convert. The function lives in the functions
+	 * module, so it calls that module's helpers unqualified.
+	 */
+	static function callbackEntry(projectedName:String, name:String, parameters:Array<HxiParameter>, result:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
+			declarations:Map<String, HxiDeclaration>, aggregateDescriptors:Map<String, String>, ?profile:HxiProjectionProfile):Null<{
+			source:String,
+			signature:String
+		}> {
+		var rawParameters = ["id:Int"],
+			letters:Array<String> = ["i"],
+			values:Array<String> = [],
+			statements:Array<String> = [];
+		function recordName(structure:String):String
+			return projectedTypeReferenceName(projectedTypeName(structure, profile), profile);
+		function structureSize(structure:String):Null<Int>
+			return switch declarations.get(structure) {
+				case Structure(_, value, _, _, _): value;
+				case _: null;
+			};
+		for (index in 0...parameters.length) {
+			var classified = abi.classify(parameters[index].type),
+				argument = 'arg$index';
+			switch classified {
+				case PointerValue(_, _, _, structure) if (structure != null):
+					var size = structureSize(structure);
+					if (size == null)
+						return null;
+					rawParameters.push('$argument:Int');
+					letters.push("i");
+					values.push('($argument == 0 ? null : ${recordName(structure)}.__hxi_attach(__hxi_struct_from_linear($argument, $size)))');
+				case PointerValue(_, _, _, _):
+					var projected = callbackProject(classified, profile);
+					if (projected == null)
+						return null;
+					rawParameters.push('$argument:Int');
+					letters.push("i");
+					statements.push('var __pointer$index:${projected.haxeType} = cast __hxi_native_pointer_from_address($argument);');
+					values.push('__pointer$index');
+				case AggregateValue(structure, size, alignment):
+					var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi, aggregateDescriptors));
+					if (single == null) {
+						rawParameters.push('$argument:Int');
+						letters.push("i");
+						values.push('${recordName(structure)}.__hxi_attach(__hxi_struct_from_linear($argument, $size))');
+					} else {
+						var scalar = scalarAccess(single);
+						if (scalar == null)
+							return null;
+						rawParameters.push('$argument:${scalar.type}');
+						letters.push(scalar.letter);
+						statements.push('var __record$index = haxe.io.Bytes.alloc($size); __record$index.${scalar.set}(0, $argument);');
+						values.push('${recordName(structure)}.__hxi_attach(__record$index)');
+					}
+				case Utf8Value(_) | CallbackValue(_, _, _, _):
+					return null;
+				case _:
+					var projected = callbackProject(classified, profile),
+						letter = scalarLetter(abiDescriptor(classified, declarations, abi, aggregateDescriptors));
+					if (projected == null || letter == null)
+						return null;
+					rawParameters.push('$argument:${projected.haxeType}');
+					letters.push(letter);
+					values.push(argument);
+			}
+		}
+		var call = '__callback(${values.join(", ")})', resultLetter:String, returnType:String, body:String, fallback = "";
+		switch abi.classify(result, true) {
+			case VoidValue:
+				resultLetter = "v";
+				returnType = "Void";
+				body = '$call;';
+			case AggregateValue(structure, size, alignment):
+				var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi, aggregateDescriptors));
+				if (single == null) {
+					rawParameters.insert(1, '__result:Int');
+					letters.insert(1, "i");
+					resultLetter = "v";
+					returnType = "Void";
+					body = '__hxi_struct_to_linear(cast $call, __result, $size);';
+				} else {
+					var scalar = scalarAccess(single);
+					if (scalar == null)
+						return null;
+					resultLetter = scalar.letter;
+					returnType = scalar.type;
+					body = 'var __bytes:haxe.io.Bytes = cast $call; return __bytes.${scalar.get}(0);';
+					fallback = ' return ${scalar.zero};';
+				}
+			case PointerValue(_, _, _, _) | Utf8Value(_) | CallbackValue(_, _, _, _):
+				return null;
+			case classifiedResult:
+				var projected = project(classifiedResult, true, profile),
+					letter = scalarLetter(abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors));
+				if (projected == null || letter == null)
+					return null;
+				resultLetter = letter;
+				returnType = projected.haxeType;
+				body = 'return $call;';
+				fallback = ' return cast 0;';
+		}
+		statements.unshift('var __callback:$projectedName = cast haxeon.wasm.Callbacks.closure(id);');
+		return {
+			source: '@:expose function __hxi_callback_entry_$name(${rawParameters.join(", ")}):$returnType { try { ${statements.join(" ")} $body } catch (error:Dynamic) haxeon.wasm.Callbacks.fail(id, error);$fallback }\n',
+			signature: resultLetter + letters.join("")
+		};
+		}
+
+	/** The element code of a record descriptor `{size;align;elements}` with exactly one element. */
+	static function singleScalarCode(descriptor:String):Null<String> {
+		if (!StringTools.startsWith(descriptor, "{") || !StringTools.endsWith(descriptor, "}"))
+			return null;
+		var parts = descriptor.substring(1, descriptor.length - 1).split(";");
+		return parts.length == 3 && parts[2].indexOf(",") < 0 && parts[2].indexOf("{") < 0 ? parts[2] : null;
+	}
+
+	/** The Wasm value letter a scalar descriptor code travels as in the Wasm32 C ABI. */
+	static function scalarLetter(code:String):Null<String>
+		return switch code {
+			case "1" | "2" | "3" | "4" | "5" | "6" | "11" | "13" | "14": "i";
+			case "7" | "8": "j";
+			case "9": "f";
+			case "10": "d";
+			case _: null;
+		};
+
+	/** The Haxe type, Wasm letter, zero and haxe.io.Bytes accessors for a record's single scalar element. */
+	static function scalarAccess(code:String):Null<{
+		type:String,
+		letter:String,
+		zero:String,
+		get:String,
+		set:String
+	}>
+		return switch code {
+			case "2": {
+					type: "Int",
+					letter: "i",
+					zero: "0",
+					get: "get",
+					set: "set"
+				};
+			case "4": {
+					type: "Int",
+					letter: "i",
+					zero: "0",
+					get: "getUInt16",
+					set: "setUInt16"
+				};
+			case "5" | "6": {
+					type: "Int",
+					letter: "i",
+					zero: "0",
+					get: "getInt32",
+					set: "setInt32"
+				};
+			case "7" | "8": {
+					type: "haxe.Int64",
+					letter: "j",
+					zero: "haxe.Int64.ofInt(0)",
+					get: "getInt64",
+					set: "setInt64"
+				};
+			case "9": {
+					type: "Float",
+					letter: "f",
+					zero: "0.0",
+					get: "getFloat",
+					set: "setFloat"
+				};
+			case "10": {
+					type: "Float",
+					letter: "d",
+					zero: "0.0",
+					get: "getDouble",
+					set: "setDouble"
 				};
 			case _: null;
 		};

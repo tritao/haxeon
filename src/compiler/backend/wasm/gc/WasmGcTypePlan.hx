@@ -204,7 +204,8 @@ class WasmGcTypePlan {
 		return switch type {
 			case Void:
 				throw "Void has no Wasm GC value type";
-			case I32, Bool, RawPtr: I32;
+			// A native callback is the host's function-table index, like a raw pointer an i32 whose null is 0.
+			case I32, Bool, RawPtr, Abstract("native_callback"): I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
@@ -230,7 +231,7 @@ class WasmGcTypePlan {
 		var key = switch type {
 			case I32: "i32";
 			case Bool: "bool";
-			case RawPtr: "i32";
+			case RawPtr, Abstract("native_callback"): "i32";
 			case I64: "i64";
 			case F32: "f64";
 			case F64: "f64";
