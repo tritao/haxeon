@@ -1640,6 +1640,8 @@ class BodyTyper {
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
 		var receiver = unwrapNullable(typeExpression(object, scope));
+		if (callResolver.isEnumMatch(receiver, name, arguments))
+			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
 	}
 
