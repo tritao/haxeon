@@ -444,6 +444,7 @@ DEFINE_PRIM(_I64,__int64_make,_I32 _I32);
 DEFINE_PRIM(_I32,__int64_to_int,_I64);
 DEFINE_PRIM(_I64,__int64_add,_I64 _I64);
 DEFINE_PRIM(_I64,__int64_sub,_I64 _I64);
+DEFINE_PRIM(_I64,__int64_neg,_I64);
 DEFINE_PRIM(_I64,__int64_and,_I64 _I64);
 DEFINE_PRIM(_I64,__int64_or,_I64 _I64);
 DEFINE_PRIM(_I64,__int64_xor,_I64 _I64);

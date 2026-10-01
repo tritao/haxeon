@@ -37,6 +37,7 @@ HL_PRIM int64_t HL_NAME(__int64_make)(int high, int low) { return (int64_t)(((ui
 HL_PRIM int HL_NAME(__int64_to_int)(int64_t value) { return (int)value; }
 HL_PRIM int64_t HL_NAME(__int64_add)(int64_t left, int64_t right) { return left + right; }
 HL_PRIM int64_t HL_NAME(__int64_sub)(int64_t left, int64_t right) { return left - right; }
+HL_PRIM int64_t HL_NAME(__int64_neg)(int64_t value) { return (int64_t)(0 - (uint64_t)value); }
 HL_PRIM int64_t HL_NAME(__int64_and)(int64_t left, int64_t right) { return left & right; }
 HL_PRIM int64_t HL_NAME(__int64_or)(int64_t left, int64_t right) { return left | right; }
 HL_PRIM int64_t HL_NAME(__int64_xor)(int64_t left, int64_t right) { return left ^ right; }

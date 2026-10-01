@@ -1227,6 +1227,15 @@ class WasmFunctionLower {
 			case "haxe.Int64.xor": I64Xor;
 			case _: null;
 		};
+		if (name == "haxe.Int64.neg") {
+			if (arguments.length != 1 || output.type != I64)
+				throw "Invalid haxe.Int64.neg Wasm native signature";
+			body.push(I64Const(0));
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64Sub);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.make") {
 			if (arguments.length != 2 || output.type != I64)
 				throw "Invalid haxe.Int64.make Wasm native signature";

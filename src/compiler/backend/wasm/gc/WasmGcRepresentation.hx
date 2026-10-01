@@ -413,6 +413,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body = body.concat(stringLiteral("Object", outputLocal));
 		body = body.concat(dynamicObjectString(valueLocal, outputLocal));
 		body = body.concat(dynamicIntegerString(valueLocal, outputLocal));
+		body = body.concat(dynamicInt64String(valueLocal, outputLocal));
 		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
 		for (enumDecl in plan.program.enums)
@@ -475,6 +476,23 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		var boxType = plan.boxedPrimitiveType(I32),
 			body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), If(null)];
 		body = body.concat(integerString(valueLocal, boxType, outputLocal));
+		body.push(End);
+		return body;
+	}
+
+	function dynamicInt64String(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var boxType = plan.boxedPrimitiveType(I64),
+			value = allocateLocal(I64),
+			body:Array<WasmInstruction> = [
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(boxType)}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(boxType)}),
+				StructGet(boxType, 0),
+				LocalSet(value)
+			];
+		body = body.concat(int64String(value, outputLocal));
 		body.push(End);
 		return body;
 	}
