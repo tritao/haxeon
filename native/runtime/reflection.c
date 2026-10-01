@@ -35,8 +35,41 @@ HL_PRIM bool HL_NAME(__reflect_has_field)(vdynamic *object, vstring *name) {
 	return name && hl_obj_has_field(object, hl_hash((vbyte *)name->bytes));
 }
 
+/* The data field `hfield` of a fixed-layout object (a class instance or a typed anonymous record), if any. */
+static hl_field_lookup *reflect_layout_field(vdynamic *object, int hfield) {
+	if (!object || (object->t->kind != HOBJ && object->t->kind != HSTRUCT)) return NULL;
+	hl_runtime_obj *rt = hl_get_obj_rt(object->t);
+	while (rt) {
+		hl_field_lookup *found = hl_lookup_find(rt->lookup, rt->nlookup, hfield);
+		if (found) return found->field_index >= 0 ? found : NULL; /* Negative indices are methods. */
+		rt = rt->parent;
+	}
+	return NULL;
+}
+
+/*
+ * Dynamic objects lose the field. A fixed-layout object cannot drop a slot, so
+ * its field is reset to the value a read of a deleted field gives on HashLink
+ * (null, or zero for plain numbers) and the call still reports success;
+ * Reflect.hasField keeps reporting the slot.
+ */
 HL_PRIM bool HL_NAME(__reflect_delete_field)(vdynamic *object, vstring *name) {
-	return name && hl_obj_delete_field(object, hl_hash((vbyte *)name->bytes));
+	if (!name) return false;
+	int field = hl_hash((vbyte *)name->bytes);
+	if (hl_obj_delete_field(object, field)) return true;
+	hl_field_lookup *slot = reflect_layout_field(object, field);
+	if (!slot) return false;
+	switch (slot->t->kind) {
+	case HUI8:
+	case HUI16:
+	case HI32:
+	case HBOOL: hl_dyn_seti(object, field, slot->t, 0); break;
+	case HI64: hl_dyn_seti64(object, field, 0); break;
+	case HF32: hl_dyn_setf(object, field, 0); break;
+	case HF64: hl_dyn_setd(object, field, 0); break;
+	default: hl_dyn_setp(object, field, slot->t, NULL); break;
+	}
+	return true;
 }
 
 HL_PRIM int HL_NAME(__reflect_field_count)(vdynamic *object) {
