@@ -587,3 +587,22 @@ FIXTURE_API uint32_t native_fixture_span_byte_sum( const uint8_t *bytes, uint32_
 	for( uint32_t index = 0; index < length; index++ ) total += bytes[index];
 	return total;
 }
+
+typedef struct native_fixture_pick {
+	int32_t index;
+	int32_t scale;
+} native_fixture_pick;
+
+typedef struct native_fixture_bias {
+	double bias;
+} native_fixture_bias;
+
+FIXTURE_API double native_fixture_span_pick( const native_fixture_bias *bias, const double *values, uint32_t count,
+	const native_fixture_pick *picks, uint32_t pick_count ) {
+	double total = bias->bias;
+	for( uint32_t index = 0; index < pick_count; index++ ) {
+		if( picks[index].index < 0 || (uint32_t)picks[index].index >= count ) return -1.0;
+		total += values[picks[index].index] * picks[index].scale;
+	}
+	return total;
+}

@@ -194,9 +194,10 @@ The command-line compiler accepts `--target=wasm32` and `--target=wasm-gc`:
 
 The driver supplies `haxeon` and `target=<target>` to every build. `wasm32`
 adds `wasm` and `wasm32`; `wasm-gc` adds `wasm` and `wasmgc`. The HashLink
-target adds `hl` and `sys`. Project defines can be added with repeated
-`--define=NAME` or `--define=NAME=value` options. Target defines are reserved
-and applied after project defines so the selected backend stays authoritative.
+target adds `hl`, `sys`, `target.sys` and `target.threaded`. Project defines
+can be added with repeated `--define=NAME` or `--define=NAME=value` options.
+Target defines are reserved and applied after project defines so the selected
+backend stays authoritative.
 
 The same compile can publish the verified target-neutral IR container with
 `--ir-output=out/main.hir`. HIR is versioned, preserves SSA value identity,

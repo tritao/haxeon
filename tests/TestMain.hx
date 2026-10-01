@@ -579,6 +579,9 @@ class TestMain {
 			'Cyclic field type inference through "First.value"');
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
+		// A native binding on a function with a body would silently run the body instead.
+		expectCompileError('class Lock { public function new() {} @:hlNative("std", "mutex_acquire") public function acquire():Void {} } function main():Int return 0;',
+			'@:hlNative binds only an extern function; "Lock.acquire" has a body, which would run instead');
 		// Operator initializers may name static fields: qualified, bare in the owning class, or across classes.
 		Frontend.compile('class Units { public static final RADIAN = Other.F / 180; public static final TURN = RADIAN * 360; '
 			+ 'public static final COUNT = Other.N + 1; public static final BACK = -Other.N; public static final HALF = Other.N / 2; '
@@ -1194,7 +1197,8 @@ class TestMain {
 			throw "Compiler CLI accepted function exports for HashLink";
 		var wasmDefines = CompilerDriver.targetDefines("wasm32"),
 			hlDefines = CompilerDriver.targetDefines("hl");
-		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32" || hlDefines.join(",") != "haxeon,target=hl,hl,sys")
+		if (wasmDefines.join(",") != "haxeon,target=wasm32,wasm,wasm32"
+			|| hlDefines.join(",") != "haxeon,target=hl,hl,sys,target.sys,target.threaded")
 			throw "Compiler targets did not expose their canonical conditional defines";
 		var equalsXmlRequest = CompilerArguments.parse(["--xml=out/equals.xml", "source/Main.hx"]);
 		if (equalsXmlRequest.xmlOutput != "out/equals.xml")

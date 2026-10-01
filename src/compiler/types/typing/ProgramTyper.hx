@@ -94,6 +94,21 @@ class ProgramTyper {
 						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
 					}
 				}
+		if (cachedMetadata == null) {
+			// A native binding replaces a function's body, so only an extern function can carry one;
+			// on any other function the body would silently run instead of the native.
+			for (fn in program.functions)
+				if (fn.isExtern != true)
+					rejectNativeBinding(fn, fn.name);
+			for (classDecl in program.classes)
+				if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null)
+					for (method in classDecl.methods)
+						rejectNativeBinding(method, classDecl.name + "." + method.name);
+			for (abstractDecl in program.abstracts)
+				if (abstractDecl.isExtern != true)
+					for (method in abstractDecl.methods)
+						rejectNativeBinding(method, abstractDecl.name + "." + method.name);
+		}
 		for (native in typedNatives)
 			switch native.convention {
 				case CNative(_):
@@ -665,5 +680,12 @@ class ProgramTyper {
 				session.declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
 				return false;
 		return true;
+	}
+
+	static function rejectNativeBinding(fn:compiler.syntax.Ast.AstFunction, name:String):Void {
+		if (fn.metadata != null)
+			for (entry in fn.metadata)
+				if (entry.name == "hlNative" || entry.name == "cNative")
+					BodyTyper.fail("E1021", '@:${entry.name} binds only an extern function; "$name" has a body, which would run instead', entry.span);
 	}
 }

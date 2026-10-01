@@ -26,6 +26,10 @@ class HxiSpanMain {
 			+
 			'\textern fn weightedSum(values: ptr<const<f64>> @in_array("count"), weights: ptr<const<f64>> @in_array("count"), count: u32, bias: f64) -> f64 @symbol("native_fixture_span_weighted_sum");\n'
 			+ '\textern fn byteSum(bytes: ptr<const<u8>> @in_array("length"), length: u32) -> u32 @symbol("native_fixture_span_byte_sum");\n'
+			+ '\tstruct fixture_pick @layout(8, 4) { index: i32 @offset(0); scale: i32 @offset(4); }\n'
+			+ '\tstruct fixture_bias @layout(8, 8) { bias: f64 @offset(0); }\n'
+			+
+			'\textern fn pick(bias: ptr<const<fixture_bias>>, values: ptr<const<f64>> @in_array("count"), count: u32, picks: ptr<const<fixture_pick>> @in_array("pickCount"), pickCount: u32) -> f64 @symbol("native_fixture_span_pick");\n'
 			+ '}');
 		compiler.update("Main.hx", MAIN);
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
@@ -85,6 +89,16 @@ function main():Int {
 	raw.offset(2).store(5);
 	if (Spans.byteSum_span(new NativeSpan<UInt8>(raw, 3)) != 255)
 		return 11;
+	// A span beside a managed array of records, which is copied as usual.
+	var bias = new fixture_bias();
+	bias.set_bias(0.25);
+	var first = new fixture_pick(), second = new fixture_pick();
+	first.set_index(3);
+	first.set_scale(-1);
+	second.set_index(1);
+	second.set_scale(2);
+	if (Spans.pick_span(bias, values, [first, second]) != 0.25 + 8.0 + 5.0)
+		return 12;
 	return 42;
 }
 ";

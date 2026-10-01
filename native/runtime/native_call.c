@@ -88,6 +88,17 @@ enum haxeon_native_callback_error {
 
 static HAXEON_NATIVE_TLS char haxeon_native_error[512];
 
+/*
+ * Calls native code in the GC's blocking mode: a native call can run long (a solver, I/O), and a
+ * collection on another thread then proceeds instead of waiting for this one to return. The call's
+ * managed arguments stay reachable from the caller's frames, which the saved context covers.
+ */
+static void haxeon_native_ffi_call( ffi_cif *cif, void (*function)(void), void *result, void **values ) {
+	hl_blocking(true);
+	ffi_call(cif,function,result,values);
+	hl_blocking(false);
+}
+
 static void haxeon_native_set_error( const char *message ) {
 	if( message == NULL ) message = "Unknown native loader error";
 	snprintf(haxeon_native_error,sizeof(haxeon_native_error),"%s",message);
@@ -499,7 +510,12 @@ static void haxeon_native_callback_dispatch( ffi_cif *cif, void *output, void **
 		return;
 	}
 	bool raised = false;
+	// The native code calling back may be in a blocking call: Haxe code runs outside blocking mode.
+	hl_thread_info *thread = hl_get_thread();
+	int blocked = thread == NULL ? 0 : thread->gc_blocking;
+	for( int level = 0; level < blocked; level++ ) hl_blocking(false);
 	vdynamic *result = hl_dyn_call_safe(callback->closure,arguments,callback->argument_count,&raised);
+	for( int level = 0; level < blocked; level++ ) hl_blocking(true);
 	if( callback->result_code == HAXEON_NATIVE_AGGREGATE && !raised && result != NULL ) {
 		if( result->t == NULL || result->t->kind != HABSTRACT || strcmp(hl_to_utf8(result->t->abs_name),"realtime_bytes") != 0 ) {
 			haxeon_native_callback_set_error(callback,HAXEON_CALLBACK_ERROR_AGGREGATE_CONTRACT,"Native callback returned a value that violates its HXI aggregate contract");
@@ -710,7 +726,7 @@ HL_PRIM int HL_NAME(native_call)( haxeon_native_function *function, vbyte *argum
 		values[index] = arguments + index * HAXEON_NATIVE_SLOT_SIZE;
 	union { uint64_t integer; double floating; void *pointer; } result;
 	memset(&result,0,sizeof(result));
-	ffi_call(&function->cif,FFI_FN(function->symbol),function->result_type == HAXEON_NATIVE_VOID ? NULL : &result,values);
+	haxeon_native_ffi_call(&function->cif,FFI_FN(function->symbol),function->result_type == HAXEON_NATIVE_VOID ? NULL : &result,values);
 	if( function->result_type != HAXEON_NATIVE_VOID ) memcpy(output,&result,HAXEON_NATIVE_SLOT_SIZE);
 	haxeon_native_error[0] = 0;
 	return 0;
@@ -734,11 +750,39 @@ typedef struct haxeon_native_cached_call {
 } haxeon_native_cached_call;
 
 static haxeon_native_cached_call *haxeon_native_call_cache;
+/* Guards the cache list: native calls run on any thread. Never held across a call that can throw. */
+static atomic_flag haxeon_native_call_cache_lock = ATOMIC_FLAG_INIT;
+
+static void haxeon_native_call_cache_acquire( void ) {
+	while( atomic_flag_test_and_set_explicit(&haxeon_native_call_cache_lock,memory_order_acquire) ) {}
+}
+
+static void haxeon_native_call_cache_release( void ) {
+	atomic_flag_clear_explicit(&haxeon_native_call_cache_lock,memory_order_release);
+}
+
+static haxeon_native_cached_call *haxeon_native_call_cache_find( const char *library_name, const char *symbol, const char *signature ) {
+	haxeon_native_call_cache_acquire();
+	haxeon_native_cached_call *found = NULL;
+	for( haxeon_native_cached_call *entry = haxeon_native_call_cache; entry != NULL; entry = entry->next )
+		if( strcmp(entry->library,library_name) == 0 && strcmp(entry->symbol,symbol) == 0 && strcmp(entry->signature,signature) == 0 ) {
+			found = entry;
+			break;
+		}
+	haxeon_native_call_cache_release();
+	return found;
+}
 
 static haxeon_native_control *haxeon_native_cached_control( const char *library_name ) {
+	haxeon_native_call_cache_acquire();
+	haxeon_native_control *control = NULL;
 	for( haxeon_native_cached_call *entry = haxeon_native_call_cache; entry != NULL; entry = entry->next )
-		if( strcmp(entry->library,library_name) == 0 && entry->function != NULL ) return entry->function->control;
-	return NULL;
+		if( strcmp(entry->library,library_name) == 0 && entry->function != NULL ) {
+			control = entry->function->control;
+			break;
+		}
+	haxeon_native_call_cache_release();
+	return control;
 }
 
 static bool haxeon_native_calling_convention( const char *name, ffi_abi *abi ) {
@@ -922,8 +966,9 @@ HL_PRIM realtime_bytes *HL_NAME(native_callback_take_error)( haxeon_native_callb
 }
 
 static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *library_name, const char *symbol, const char *signature ) {
-	for( haxeon_native_cached_call *entry = haxeon_native_call_cache; entry != NULL; entry = entry->next )
-		if( strcmp(entry->library,library_name) == 0 && strcmp(entry->symbol,symbol) == 0 && strcmp(entry->signature,signature) == 0 ) return entry;
+	haxeon_native_cached_call *cached = haxeon_native_call_cache_find(library_name,symbol,signature);
+	if( cached != NULL ) return cached;
+	// Resolved outside the lock, since resolving can throw; another thread may resolve the same call meanwhile.
 	haxeon_native_cached_call *entry = (haxeon_native_cached_call *)calloc(1,sizeof(haxeon_native_cached_call));
 	if( entry == NULL ) hl_error("Could not allocate ordinary C call cache entry");
 	ffi_abi call_abi;
@@ -950,9 +995,23 @@ static haxeon_native_cached_call *haxeon_native_cached_resolve( const char *libr
 	entry->symbol = haxeon_native_string((const vbyte *)symbol,(int)strlen(symbol));
 	entry->signature = haxeon_native_string((const vbyte *)signature,(int)strlen(signature));
 	if( entry->library == NULL || entry->symbol == NULL || entry->signature == NULL ) hl_error("Could not retain ordinary C call descriptor");
+	// Rooted before it is published, so no collection can free the function another thread finds.
 	hl_add_root(&entry->function);
+	haxeon_native_call_cache_acquire();
+	for( haxeon_native_cached_call *other = haxeon_native_call_cache; other != NULL; other = other->next )
+		if( strcmp(other->library,library_name) == 0 && strcmp(other->symbol,symbol) == 0 && strcmp(other->signature,signature) == 0 ) {
+			// Another thread published the same call first: keep its entry and drop this one.
+			haxeon_native_call_cache_release();
+			hl_remove_root(&entry->function);
+			free(entry->library);
+			free(entry->symbol);
+			free(entry->signature);
+			free(entry);
+			return other;
+		}
 	entry->next = haxeon_native_call_cache;
 	haxeon_native_call_cache = entry;
+	haxeon_native_call_cache_release();
 	return entry;
 }
 
@@ -1090,11 +1149,11 @@ static vdynamic *haxeon_native_invoke_prepared( unsigned char *argument_codes, i
 	if( result_code == HAXEON_NATIVE_AGGREGATE ) {
 		if( aggregate_output == NULL ) hl_error("Aggregate ordinary C result requires a typed destination");
 		realtime_bytes *bytes = realtime_bytes_make(result_size);
-		ffi_call(cif,FFI_FN(symbol),bytes->data,values);
+		haxeon_native_ffi_call(cif,FFI_FN(symbol),bytes->data,values);
 		*aggregate_output = bytes;
 		return NULL;
 	}
-	ffi_call(cif,FFI_FN(symbol),result_code == HAXEON_NATIVE_VOID ? NULL : output,values);
+	haxeon_native_ffi_call(cif,FFI_FN(symbol),result_code == HAXEON_NATIVE_VOID ? NULL : output,values);
 	if( result_code == HAXEON_NATIVE_VOID ) return NULL;
 	vdynamic *result;
 	switch( result_code ) {

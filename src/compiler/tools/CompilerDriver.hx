@@ -172,8 +172,13 @@ class CompilerDriver {
 				result.push("wasm");
 				result.push("wasmgc");
 			case "hl":
+				// Standard Haxe's names for a system target with threads, which HashLink's
+				// sys.thread provides: code guarding shared state with `#if target.threaded`
+				// must not compile its locks away here.
 				result.push("hl");
 				result.push("sys");
+				result.push("target.sys");
+				result.push("target.threaded");
 			default:
 		}
 		return result;

@@ -1103,7 +1103,8 @@ class HxiHaxeEmitter {
 					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
 				var spanInputs = spanCompanionInputs(fn.semantics);
 				if (spanInputs != null)
-					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, spanInputs, abi);
+					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, spanInputs, abi,
+						profile);
 			}
 		var source = output.toString();
 		if (moduleKind == "types" && splitTypes)
@@ -1443,11 +1444,12 @@ class HxiHaxeEmitter {
 					return null;
 				case InputValue(_):
 				case InputArray(element, _):
+					// Arrays of other values (records, strings) stay managed arrays, copied as usual.
 					var type = spanElementType(element);
-					if (type == null)
-						return null;
-					inputs.set(index, type);
-					any = true;
+					if (type != null) {
+						inputs.set(index, type);
+						any = true;
+					}
 				case InputBytes(_):
 					inputs.set(index, "UInt8");
 					any = true;
@@ -1463,7 +1465,9 @@ class HxiHaxeEmitter {
 		length of its span; spans sharing a count must have equal lengths.
 	**/
 	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String, nativeName:String, publicName:String,
-			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, spanInputs:Map<Int, String>, abi:HxiAbi):Void {
+			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, spanInputs:Map<Int, String>, abi:HxiAbi,
+			profile:HxiProjectionProfile):Void {
+		// Each count is the length of the first array it counts: a span's length() or an array's length.
 		var counts:Map<String, String> = [],
 			rawName = '__hxi_span_$nativeName',
 			arguments:Array<String> = [],
@@ -1473,12 +1477,14 @@ class HxiHaxeEmitter {
 			switch parameters[index].direction {
 				case InArray(count):
 					var name = parameters[index].name,
+						length = spanInputs.exists(index) ? '$name.length()' : '$name.length',
 						shared = counts.get(count);
-					checks.push('\tif (!$name.isOpen()) throw "HXI span argument $name is closed";\n');
+					if (spanInputs.exists(index))
+						checks.push('\tif (!$name.isOpen()) throw "HXI span argument $name is closed";\n');
 					if (shared != null)
-						checks.push('\tif ($name.length() != $shared.length()) throw "HXI span arguments $shared and $name must have the same length";\n');
+						checks.push('\tif ($length != $shared) throw "HXI arrays sharing a count must have equal lengths";\n');
 					else
-						counts.set(count, name);
+						counts.set(count, length);
 				case _:
 			}
 		for (index in 0...parameters.length) {
@@ -1487,11 +1493,16 @@ class HxiHaxeEmitter {
 			if (spanInputs.exists(index)) {
 				arguments.push('${parameter.name}:runtime.memory.NativeSpan<${spanInputs.get(index)}>');
 				callArguments.push('${parameter.name}.data()');
+			} else if (parameter.direction.match(InArray(_))) {
+				arguments.push('${parameter.name}:${inputArrayType(parameter.type, abi, profile)}');
+				for (line in inputArraySetup(parameter, abi, profile))
+					checks.push('\t$line\n');
+				callArguments.push(inputArrayNativeValue(parameter));
 			} else if (counted != null) {
 				var limit = unsignedCountLimit(parameter.type, abi);
 				if (limit != null)
-					checks.push('\tif ($counted.length() > $limit) throw "HXI span argument $counted exceeds its count range";\n');
-				callArguments.push(arrayCountValue(parameter.type, '$counted.length()', abi));
+					checks.push('\tif ($counted > $limit) throw "HXI array exceeds its count range";\n');
+				callArguments.push(arrayCountValue(parameter.type, counted, abi));
 			} else {
 				arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
 				callArguments.push(parameter.name);
@@ -1504,7 +1515,7 @@ class HxiHaxeEmitter {
 				'arg$index:${spanInputs.exists(index) ? 'runtime.memory.RawPtr<${spanInputs.get(index)}>' : rawArgumentTypes[index]}'
 		].join(", "));
 		output.add('):$resultType;\n');
-		output.add('/** Calls $publicName with its arrays read in place from native spans, without copying them. */\n');
+		output.add('/** Calls $publicName with its numeric arrays read in place from native spans, without copying them. */\n');
 		output.add('function ${publicName}_span(${arguments.join(", ")}):$resultType {\n');
 		for (check in checks)
 			output.add(check);

@@ -569,14 +569,15 @@ submits a managed view without copying the selected bytes. This is intended
 for coarse command and upload transactions; it does not add per-element FFI
 calls.
 
-A function whose counted input arrays all hold fixed-layout scalars, whose
-other parameters are plain values, and whose result is a plain value also
-receives a `<Function>_span` companion. It takes each array as a
-`NativeSpan<T>` and passes its address to native code for the call, with no
-copy; each count argument is its span's length, spans sharing a count must
-have equal lengths, and a span whose owner is closed is refused. This passes
-memory one native library owns to another without marshalling it through
-Haxe.
+A function with at least one counted input array of fixed-layout scalars,
+whose other parameters are plain values, structures, or counted input arrays,
+and whose result is a plain value also receives a `<Function>_span`
+companion. It takes each scalar array as a `NativeSpan<T>` and passes its
+address to native code for the call, with no copy; arrays of other values
+(records, strings) stay managed arrays and are copied as usual. Each count
+argument is its array's length, arrays sharing a count must have equal
+lengths, and a span whose owner is closed is refused. This passes memory one
+native library owns to another without marshalling it through Haxe.
 
 Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`
