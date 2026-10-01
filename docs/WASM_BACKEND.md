@@ -120,6 +120,55 @@ encoding for those runtimes; the NativeKit GC web showcase selects this
 compatibility mode by default. Leave the variable unset (or set it to `0`) to
 exercise the standardized encoding.
 
+## Standard library on Wasm
+
+Where HashLink calls a native runtime, the Wasm stdlib substitutes Haxe code
+under `#if wasm`, shared by both targets:
+
+- `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem` and the `Sys` path
+  operations use `runtime.MemoryFileSystem`, a session-only in-memory store
+  that a host-backed store can later replace. Failures follow the HashLink
+  runtime's booleans and error messages.
+- `EReg` uses `runtime.Regex`, a backtracking engine for the common PCRE subset;
+  unsupported syntax throws when the pattern is compiled.
+- `Std.random` is a fixed-seed xorshift generator; `Reflect.compare` follows
+  `hl_dyn_compare` for null, strings, numbers and booleans.
+- `hl.Gc` controls are ignored and its counters read zero. `Sys.getEnv` returns
+  null, `Sys.systemName` is `"Web"`, and `Sys.executablePath` is empty.
+
+Threads, `sys.io.Process` and `Sys.command` remain unsupported.
+
+## Host ABI
+
+A Wasm guest and its host meet only at C-ABI functions: every import and
+export argument is a Wasm32 C ABI scalar or an address in linear memory.
+Neither backend's value layout crosses the boundary, so one host serves both
+the wasm32 and wasm-gc targets.
+
+- `stdlib/haxeon/wasm/HaxeonHost.hxi` declares the host services (`print`,
+  `date_now`, `callback_create`, `callback_close`). The compiler registers it
+  for Wasm targets; `trace`, `Sys.print` and `Date` use it.
+- The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math
+  imports remain.
+- C functions bound through HXI follow the Wasm32 C ABI as clang and
+  Emscripten implement it (`WasmCAbi`): a record holding a single scalar
+  travels as that scalar, other records by address, a record result through
+  a leading result address, and C floats as `f32`. Wasm32 passes addresses of
+  its own data; Wasm GC copies records and strings through scratch memory.
+- Native callbacks: each HXI callback type gets an `@:expose`d entry function
+  taking a closure id and the C arguments. `haxeon.wasm.Callbacks` keeps the
+  closures and asks the host for a function-table entry through
+  `HaxeonHost.callback_create(entry, signature, id)`; the table entry forwards
+  native calls to the entry with the id. A callback handle is that table
+  index on both backends.
+- Functions declared `@:keep` survive dead-code elimination; `@:expose`
+  functions are also exported under their names.
+
+`stdlib/haxeon/wasm/haxeon-host.js` is the host side for a guest that shares
+memory with an Emscripten module: it checks the memory contracts, implements
+the services above, and forwards the guest's other imports to the Emscripten
+module's C exports.
+
 ## Building and testing
 
 Bootstrap the pinned local compiler tools once:

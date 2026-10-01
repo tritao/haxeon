@@ -199,6 +199,8 @@ pure-inference	42
 conditional-empty-literal	42
 void-branch-results	42
 std-string-to-string	42
+std-string-int64	42
+generic-function-field-static	42
 super-method-call	42
 jit-stack-trace	42
 # An interface-typed value retains its concrete runtime class after array storage.
@@ -250,3 +252,19 @@ capture-shadowing	42
 compound-shift-assign	42
 field-initializer-dynamic	42
 interface-is-of-type	42
+stdlib-runtime-helpers	42
+ereg-patterns	42
+virtual-call-without-implementors	42
+lambda-count	42
+nullable-numeric-equality	42
+function-value-optional-arguments	42
+arrow-block-value	42
+comprehension-if-else	42
+index-assignment-expression	42
+try-typed-interface	42
+std-is-of-type-interface-dynamic	42
+dynamic-field-access	42
+dynamic-method-call	42
+dynamic-arithmetic	42
+dynamic-increment	42
+dynamic-modulo	42

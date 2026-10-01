@@ -1,0 +1,7 @@
+{
+  "interface": "HaxeonHost",
+  "package": "haxeon.wasm",
+  "modules": {
+    "functions": "HaxeonHost"
+  }
+}

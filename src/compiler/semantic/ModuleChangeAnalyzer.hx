@@ -194,7 +194,7 @@ class ModuleChangeAnalyzer {
 		for (fn in ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = SemanticSignature.parsedFunction(fn, ast.aliases),
-				body = sourceFingerprint(state, fn.span);
+				body = sourceFingerprint(state, fn.span, fn.typeParameters != null && fn.typeParameters.length > 0);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
 			if (state.signatureFingerprints.get(fn.name) != signature)
@@ -240,7 +240,8 @@ class ModuleChangeAnalyzer {
 				var localName = className + "." + method.name,
 					canonical = localName,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
-					body = sourceFingerprint(state, method.span);
+					body = sourceFingerprint(state,
+						method.span, classDecl.typeParameters.length > 0 || method.typeParameters != null && method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -254,7 +255,8 @@ class ModuleChangeAnalyzer {
 			for (method in abstractDecl.methods) {
 				var localName = abstractName + "." + method.name,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
-					body = sourceFingerprint(state, method.span);
+					body = sourceFingerprint(state,
+						method.span, abstractDecl.typeParameters.length > 0 || method.typeParameters != null && method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -291,7 +293,12 @@ class ModuleChangeAnalyzer {
 	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState, metadata:Array<compiler.syntax.Ast.AstMetadata>):String
 		return [for (entry in metadata) state.source.slice(entry.span.start, entry.span.end)].join("|");
 
-	/** Include the source line because it is part of emitted debugger metadata. */
-	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan):String
-		return state.source.path + ":" + Std.string(state.source.lineAt(span.start)) + ":" + state.source.slice(span.start, span.end);
+	/**
+	 * Include the source line because it is part of emitted debugger metadata. A generic function also includes its offset:
+	 * its specializations are kept from one build to the next while the function is unchanged, and they carry offsets in
+	 * their debug mappings and in the names of their lambdas, so a function that only moved along its line must not keep them.
+	 */
+	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan, generic:Bool = false):String
+		return state.source.path + ":" + Std.string(state.source.lineAt(span.start)) + (generic ? "@" + Std.string(span.start) : "") + ":"
+			+ state.source.slice(span.start, span.end);
 }

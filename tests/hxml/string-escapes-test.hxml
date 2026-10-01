@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main StringEscapesMain
+-hl out/string-escapes-test.hl

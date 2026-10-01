@@ -221,6 +221,15 @@ class CfgVerifier {
 				case CallClosure(out, closure, arguments):
 					require(closure, available, block.id);
 					switch closure.type {
+						case Dyn:
+							// A call through a Dynamic value: the arguments and the result are Dynamic too.
+							if (!sameType(out.type, Dyn))
+								throw 'CFG dynamic closure call must produce a Dynamic value';
+							for (argument in arguments) {
+								require(argument, available, block.id);
+								if (!sameType(argument.type, Dyn))
+									throw 'CFG dynamic closure call has a non-Dynamic argument';
+							}
 						case Function(argumentTypes, result):
 							if (argumentTypes.length != arguments.length || !sameType(out.type, result))
 								throw 'CFG closure call has the wrong signature';

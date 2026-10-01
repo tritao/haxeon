@@ -96,11 +96,17 @@ class FieldInference {
 		return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
 	}
 
-	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>):AstType {
-		return resolveField(field, owner, classes, aliases, []);
+	/**
+	 * `enums` and `enumAbstracts` let an initializer that names an enum constructor or an enum abstract value, such
+	 * as `Kind.Rapid`, give the field that enum's (or abstract's) type.
+	 */
+	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+			?enums:Map<String, compiler.syntax.Ast.AstEnum>, ?enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):AstType {
+		return resolveField(field, owner, classes, aliases, enums == null ? [] : enums, enumAbstracts == null ? [] : enumAbstracts, []);
 	}
 
 	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):AstType {
 		var inferred = parsedType(field);
 		if (inferred != InferredType)
@@ -109,6 +115,11 @@ class FieldInference {
 		if (resolving.exists(key))
 			throw new CompileError(new Diagnostic("E1002", 'Cyclic field type inference through "$key"', field.span));
 		resolving.set(key, true);
+		var enumType = enumConstructorType(field.initializer, owner, classes, aliases, enums, enumAbstracts);
+		if (enumType != null) {
+			resolving.remove(key);
+			return enumType;
+		}
 		var reference = staticFieldReference(field.initializer);
 		if (reference == null) {
 			var callType = staticCallResult(field.initializer, owner, classes, aliases);
@@ -128,9 +139,78 @@ class FieldInference {
 		if (target == null)
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" from unknown static field "${reference.owner}.${reference.name}"', field.span));
-		var result = resolveField(target, targetOwner, classes, aliases, resolving);
+		var result = resolveField(target, targetOwner, classes, aliases, enums, enumAbstracts, resolving);
 		resolving.remove(key);
 		return result;
+	}
+
+	/**
+	 * The enum named by an initializer that is one of its constructors (`Kind.Rapid`, `Kind.Feed(3)`), or the
+	 * enum abstract named by one of its values (`Mode.Fast`); null when it is neither. A class of that name
+	 * takes precedence, and a generic enum is left alone: its type arguments would have to come from the
+	 * constructor's arguments.
+	 */
+	static function enumConstructorType(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>,
+			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):Null<AstType> {
+		var path:Null<String> = null, hasArguments = false;
+		switch expression {
+			case Member(Variable(owner, _), name, _):
+				path = owner + "." + name;
+			case Variable(value, _):
+				path = value;
+			case Call(name, _, _):
+				path = name;
+				hasArguments = true;
+			default:
+		}
+		if (path == null)
+			return null;
+		var separator = path.lastIndexOf(".");
+		if (separator <= 0)
+			return null;
+		var written = path.substring(0, separator),
+			caseName = path.substring(separator + 1);
+		if (classes.exists(resolveOwner(written, currentOwner, classes, aliases)))
+			return null;
+		if (!hasArguments) {
+			var abstractName = resolveDeclaration(written, currentOwner, aliases, enumAbstracts);
+			if (abstractName != null) {
+				for (value in enumAbstracts.get(abstractName).values)
+					if (value.name == caseName)
+						return NamedType(written);
+				return null;
+			}
+		}
+		var resolved = resolveDeclaration(written, currentOwner, aliases, enums);
+		if (resolved == null)
+			return null;
+		var declaration = enums.get(resolved);
+		if (declaration.typeParameters.length > 0)
+			return null;
+		for (enumCase in declaration.cases)
+			if (enumCase.name == caseName && (enumCase.params.length == 0) != hasArguments)
+				return NamedType(written);
+		return null;
+	}
+
+	static function resolveDeclaration<T>(name:String, currentOwner:String, aliases:Map<String, String>, enums:Map<String, T>):Null<String> {
+		if (aliases.exists(name) && enums.exists(aliases.get(name)))
+			return aliases.get(name);
+		if (enums.exists(name))
+			return name;
+		var separator = currentOwner.lastIndexOf("."),
+			local = separator < 0 ? name : currentOwner.substring(0, separator + 1) + name;
+		if (enums.exists(local))
+			return local;
+		var found:Null<String> = null;
+		for (candidate in enums.keys())
+			if (candidate == name || StringTools.endsWith(candidate, "." + name)) {
+				if (found != null)
+					return null;
+				found = candidate;
+			}
+		return found;
 	}
 
 	static function staticCallResult(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,

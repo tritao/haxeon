@@ -30,6 +30,9 @@ extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_sub")
 	public static function sub(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
 
+	@:hlNative("haxeon_runtime", "__int64_neg")
+	public static function neg(value:haxe.Int64):haxe.Int64;
+
 	@:hlNative("haxeon_runtime", "__int64_and")
 	public static function and(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
 

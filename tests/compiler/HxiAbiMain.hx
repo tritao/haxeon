@@ -15,6 +15,7 @@ class HxiAbiMain {
 		var linux = parse("x86_64-linux-gnu"),
 			windows = parse("x86_64-pc-windows-msvc");
 		verifyValueRecordTargets();
+		verifyScalarAlignment();
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 64, Signed);
 		expectInteger(windows.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_long")), 32, Signed);
 		expectInteger(linux.classify(compiler.ffi.HxiModel.HxiType.Primitive("c_char")), 8, PlainChar);
@@ -199,6 +200,32 @@ class HxiAbiMain {
 			rejected = true;
 		expect(rejected, "cyclic aliases should be rejected before ABI classification");
 		Sys.println("PASS: HXI types classify for target C ABIs");
+	}
+
+	/** 64-bit scalars align to 8 except in System V i386 records, so a record of doubles passes by value on Wasm32. */
+	static function verifyScalarAlignment():Void {
+		for (entry in [
+			{target: "wasm32-unknown-emscripten", align: 8},
+			{target: "portable-abi32", align: 8},
+			{target: "armv7-linux-androideabi", align: 8},
+			{target: "i686-pc-windows-msvc", align: 8},
+			{target: "i686-linux-gnu", align: 4},
+			{target: "x86_64-linux-gnu", align: 8}
+		]) {
+			var abi = HxiAbi.forTarget(entry.target);
+			for (primitive in ["f64", "i64"]) {
+				var layout = abi.layout(compiler.ffi.HxiModel.HxiType.Primitive(primitive));
+				expect(layout != null && layout.size == 8 && layout.align == entry.align, '${entry.target}: $primitive should align to ${entry.align}');
+			}
+		}
+		var model = HxiParser.parse("vec3.hxi",
+			'interface vectors @target("portable-abi32") @library("vectors") {'
+			+ ' struct vec3 @layout(24, 8) { x: f64 @offset(0); y: f64 @offset(8); z: f64 @offset(16); }'
+			+ ' extern fn length(value: vec3) -> f64;'
+			+ ' }');
+		HxiValidator.validate(model, []);
+		expect(Type.enumEq(HxiProjection.cNatives(model)[0].argumentModes[0], FixedValue(24, 8, true)),
+			"portable-abi32: a record of doubles should pass by value");
 	}
 
 	static function verifyValueRecordTargets():Void {

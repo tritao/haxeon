@@ -37,8 +37,8 @@ typedef SemanticAssemblyResult = {
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
 class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
-			structuralChanged:Map<String, Bool>):SemanticAssemblyResult {
+			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>, structuralChanged:Map<String, Bool>,
+			refreshUnchangedModules:Bool = true):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		#if haxeon
 		var allocatedAtStart = hl.Gc.totalAllocated();
@@ -98,10 +98,16 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
-		var classDeclarations:Map<String, AstClass> = [];
+		var classDeclarations:Map<String, AstClass> = [],
+			enumDeclarations:Map<String, compiler.syntax.Ast.AstEnum> = [],
+			enumAbstractDeclarations:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (enumDecl in parsed.enums)
+					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name), enumDecl);
+				for (abstractDecl in parsed.enumAbstracts)
+					enumAbstractDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, abstractDecl.name), abstractDecl);
 				for (classDecl in parsed.classes)
 					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name), classDecl);
 			}
@@ -385,8 +391,9 @@ class SemanticAssembly {
 					canonicalFields.push({
 						name: field.name,
 						metadata: field.metadata,
-						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases), classAliases,
-							classDecl.typeParameters),
+						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
+							enumDeclarations, enumAbstractDeclarations),
+							classAliases, classDecl.typeParameters),
 						initializer: initializer,
 						readAccess: field.readAccess,
 						writeAccess: field.writeAccess,
@@ -589,6 +596,25 @@ class SemanticAssembly {
 						dependents.push(owner);
 					}
 		}
+		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
+		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
+		// `TypingSession.purityQueries`, kept for the purity drift check and used here for the callee alone). Walked backwards,
+		// that finds the functions to retype when a callee's signature changes, such as a method gaining an optional parameter,
+		// which every caller still type-checks against but must be lowered to again.
+		var reverseTypedCalls:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			for (caller => record in modules.get(moduleName).purityQueries)
+				for (callee in record.keys()) {
+					var callers = reverseTypedCalls.get(callee);
+					if (callers == null) {
+						callers = [];
+						reverseTypedCalls.set(callee, callers);
+					}
+					callers.push(purityDependencyOwner(caller));
+				}
+		}
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
@@ -623,6 +649,12 @@ class SemanticAssembly {
 							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
 					}
 				}
+			if (changedSignatures.exists(changed) && reverseTypedCalls.exists(changed))
+				for (caller in reverseTypedCalls.get(changed))
+					if (!invalid.exists(caller)) {
+						work.push(caller);
+						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "typed-call");
+					}
 			if (genericOrigins.exists(changed)) {
 				// A call through a local (`context.resourceState(...)`) has no resolvable name before typing, so the callers
 				// that must request this origin's dropped specializations again come from the IR they were lowered to.
@@ -664,8 +696,14 @@ class SemanticAssembly {
 				invalidModules.set(moduleName, true);
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
-			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name))
+			if (owner != null && invalidModules.exists(owner) && !invalid.exists(fn.name)) {
+				// The refresh exists to rebuild a module's semantic index, which only editor services read. Without one, a
+				// function that was typed and lowered from this revision of its module's source has nothing to redo: its
+				// body, spans and dependencies are unchanged (anything that did change is invalid by another reason).
+				if (!refreshUnchangedModules && typedAtCurrentRevision(modules.get(owner), fn.name))
+					continue;
 				invalidate(invalid, invalidationReasons, fn.name, ModuleSemanticSnapshot, owner);
+			}
 		}
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
@@ -709,6 +747,12 @@ class SemanticAssembly {
 		target.set(sourceName, canonicalName);
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
 	}
+
+	static function typedAtCurrentRevision(state:Null<ModuleState>, name:String):Bool
+		return state != null
+			&& state.typedFunctions.exists(name)
+			&& state.typedSourceRevisions.get(name) == state.revision
+			&& (state.irFunctions.exists(name) || state.pendingIrFunctions.exists(name));
 
 	/** The functions whose lowered bodies call or refer to a specialization, by the generic function it was made from. */
 	static function callersOfSpecializations(modules:Map<String, ModuleState>, names:Array<String>):Map<String, Array<String>> {

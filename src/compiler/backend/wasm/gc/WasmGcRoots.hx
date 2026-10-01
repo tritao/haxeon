@@ -134,6 +134,9 @@ class WasmGcRoots {
 					case I32, Bool, I64, F64: true;
 					default: false;
 				};
+			// A cast to a function type may allocate an adapter closure (WasmLinearClosureAdapters).
+			case SafeCast(output, _):
+				output.type.match(Function(_, _));
 			default: false;
 		};
 

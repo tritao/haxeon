@@ -20,6 +20,7 @@ typedef WasmLinearContextState = {
 	final freeHead:Int;
 	final markStackTop:Int;
 	final gcBudget:Int;
+	final gcLiveBytes:Int;
 	final allocationCount:Int;
 	final allocationBytes:Int;
 	final largestAllocation:Int;
@@ -47,6 +48,9 @@ class WasmLinearContext {
 	public final freeHead:Int;
 	public final markStackTop:Int;
 	public final gcBudget:Int;
+
+	/** Bytes in blocks the last collection kept, or -1 when collections have no budget. */
+	public final gcLiveBytes:Int;
 
 	public final allocationCount:Int;
 	public final allocationBytes:Int;
@@ -77,6 +81,7 @@ class WasmLinearContext {
 		freeHead = state.freeHead;
 		markStackTop = state.markStackTop;
 		gcBudget = state.gcBudget;
+		gcLiveBytes = state.gcLiveBytes;
 		allocationCount = state.allocationCount;
 		allocationBytes = state.allocationBytes;
 		largestAllocation = state.largestAllocation;

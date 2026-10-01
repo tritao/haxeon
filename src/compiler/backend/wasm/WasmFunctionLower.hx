@@ -450,6 +450,13 @@ class WasmFunctionLower {
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch output.type {
+						case Function(_, _) if (functions.exists(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))):
+							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								Call(functions.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
+								LocalSet(requiredLocal(values, output.id))
+							]);
 						case I32, Bool, I64, F64 if (value.type == Dyn):
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
@@ -508,7 +515,7 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.staticClosure(name, context.tableSlots, requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.staticClosure(name, output.type, context.tableSlots, requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
 			case CallClosure(output, closure, arguments):
@@ -562,8 +569,8 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.instanceClosure(name, context.tableSlots, requiredLocal(values, receiver.id),
-						requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.instanceClosure(name, output.type, context.tableSlots,
+						requiredLocal(values, receiver.id), requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						I32Const(WasmLayout.CLOSURE_SIZE),
@@ -1044,6 +1051,10 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
+			case Call(output, name, arguments) if (WasmModuleSupport.hostCNative(context.program, name) != null):
+				var host = WasmModuleSupport.hostCNative(context.program, name);
+				lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
+					closureTypes);
 			case Call(output, name, arguments):
 				var runtimeName = name;
 				for (native in context.program.natives)
@@ -1133,6 +1144,15 @@ class WasmFunctionLower {
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
+		if (name == "haxe.Int64.fromFloat") {
+			if (arguments.length != 1 || arguments[0].type != F64 || output.type != I64)
+				throw "Invalid haxe.Int64.fromFloat Wasm native signature";
+			// HashLink's C cast is undefined outside the Int64 range; Wasm saturates instead of trapping.
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64TruncSatF64S);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.toInt") {
 			if (arguments.length != 1 || output.type != I32)
 				throw "Invalid haxe.Int64.toInt Wasm native signature";
@@ -1214,6 +1234,15 @@ class WasmFunctionLower {
 			case "haxe.Int64.xor": I64Xor;
 			case _: null;
 		};
+		if (name == "haxe.Int64.neg") {
+			if (arguments.length != 1 || output.type != I64)
+				throw "Invalid haxe.Int64.neg Wasm native signature";
+			body.push(I64Const(0));
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64Sub);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.make") {
 			if (arguments.length != 2 || output.type != I64)
 				throw "Invalid haxe.Int64.make Wasm native signature";
@@ -1334,16 +1363,12 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		for (object in program.objects) {
-			if (!implementsInterface(program, object.name, interfaceName))
-				continue;
-			var functionName = findMethod(program, object.name, methodName);
+		var index = WasmProgramIndex.of(program);
+		for (object in index.implementorsOf(interfaceName)) {
+			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
 				var functionIndex = functions.get(functionName),
-					targetFunction:Null<IrFunction> = null;
-				for (candidate in program.functions)
-					if (candidate.name == functionName)
-						targetFunction = candidate;
+					targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
 						throw 'Wasm interface target "$functionName" has no Haxe function signature';
@@ -1372,16 +1397,12 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		for (object in program.objects) {
-			if (!isObjectSubtype(program, object.name, staticType))
-				continue;
-			var functionName = findMethod(program, object.name, methodName);
+		var index = WasmProgramIndex.of(program);
+		for (object in index.subtypesOf(staticType)) {
+			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
 				var functionIndex = functions.get(functionName),
-					targetFunction:Null<IrFunction> = null;
-				for (candidate in program.functions)
-					if (candidate.name == functionName)
-						targetFunction = candidate;
+					targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
 						throw 'Wasm class target "$functionName" has no Haxe function signature';
@@ -1398,54 +1419,20 @@ class WasmFunctionLower {
 		return result;
 	}
 
-	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (object in program.objects)
-			if (object.name == actual)
-				return object.base != null && isObjectSubtype(program, object.base, expected);
-		return false;
-	}
+	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).isObjectSubtype(actual, expected);
 
-	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int {
-		for (object in program.objects)
-			if (object.name == typeName)
-				return object.base == null ? 0 : objectInheritanceDepth(program, object.base) + 1;
-		return 0;
-	}
+	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int
+		return WasmProgramIndex.of(program).inheritanceDepth(typeName);
 
-	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String> {
-		for (object in program.objects)
-			if (object.name == objectName) {
-				for (method in object.methods)
-					if (method.name == methodName)
-						return method.functionName;
-				return object.base == null ? null : findMethod(program, object.base, methodName);
-			}
-		return null;
-	}
+	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String>
+		return WasmProgramIndex.of(program).findMethod(objectName, methodName);
 
-	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool {
-		for (object in program.objects)
-			if (object.name == objectName) {
-				for (implemented in object.interfaces)
-					if (interfaceExtends(program, implemented, interfaceName))
-						return true;
-				return object.base != null && implementsInterface(program, object.base, interfaceName);
-			}
-		return false;
-	}
+	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool
+		return WasmProgramIndex.of(program).implementsInterface(objectName, interfaceName);
 
-	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (interfaceDecl in program.interfaces)
-			if (interfaceDecl.name == actual)
-				for (base in interfaceDecl.bases)
-					if (interfaceExtends(program, base, expected))
-						return true;
-		return false;
-	}
+	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	public static function typeId(type:IrType):Int {
 		var identity = switch type {

@@ -94,8 +94,10 @@ class ConversionResolver {
 			targetResult = targetSignature.result;
 		if (sourceArguments.length != targetArguments.length || TypeRelations.equals(value.type, expected))
 			return new TypedExpression(TCast(value), expected, span);
-		var contextName = session.currentContext.name, adapterId = session.functionAdapterCounter++,
-			adapterName = '$' + 'function-adapter:$contextName:$adapterId', environmentName = '$' + 'function-adapter-env:$contextName:$adapterId',
+		var contextName = session.currentContext.name,
+			adapterId = session.functionAdapterCounts.exists(contextName) ? session.functionAdapterCounts.get(contextName) : 0;
+		session.functionAdapterCounts.set(contextName, adapterId + 1);
+		var adapterName = '$' + 'function-adapter:$contextName:$adapterId', environmentName = '$' + 'function-adapter-env:$contextName:$adapterId',
 			captureName = '__adapted_callable', arguments = [
 				for (index in 0...targetArguments.length)
 					{

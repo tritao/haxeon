@@ -18,5 +18,19 @@ function main():Int {
 	var gappedValue = Wasm32ValueRecords.makeGapped(39);
 	if (gappedValue.get_tag() != 3 || gappedValue.get_value() != 39 || Wasm32ValueRecords.sumGapped(gappedValue) != 42)
 		return 0;
+	// Records holding one scalar travel as that scalar, as clang's Wasm32 C ABI passes them.
+	var id = new id64();
+	id.set_value(haxe.Int64.make(1, 41));
+	var next = Wasm32ValueRecords.nextId(id);
+	if (next.get_value() != haxe.Int64.make(1, 42))
+		return 0;
+	var measure = new real();
+	measure.set_value(84.5);
+	if (Wasm32ValueRecords.half(measure).get_value() != 42.25)
+		return 0;
+	// C floats cross as f32 values: the host sees 0.1 rounded to single precision.
+	var scaled = Wasm32ValueRecords.scale(0.1, 4.0);
+	if (Math.abs(scaled - 0.4) > 1e-6)
+		return 0;
 	return 42;
 }

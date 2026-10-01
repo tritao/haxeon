@@ -433,10 +433,13 @@ library still do. Failed native builds still block the project build and launch.
 On Linux and macOS, host builds reuse a private compiler worker between CLI
 invocations. Small source edits retain semantic compiler state; changes to the
 source manifest, roots, defines, or FFI configuration reset it. Compiler or
-standard-library changes select a fresh worker. Workers exit after five idle
-minutes; their connection metadata and logs live under
-`<outputDir>/.haxeon/compiler/`. Set `HAXEON_COMPILER_SERVER=0` to use one-shot
-compilation. Windows, explicit `--self-hosted` builds, and unavailable workers
+standard-library changes select a fresh worker. Workers exit after
+`HAXEON_COMPILER_IDLE_SECONDS` (default 90) without a request. Every build root
+shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`, or
+`HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
+logs, so the resident limits below apply to the whole machine. Set
+`HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
+as a HashLink program compiled once per compiler version (Windows interprets it). Windows, explicit `--self-hosted` builds, and unavailable workers
 retain the one-shot path. The normal CLI's local fingerprint checks run before
 contacting a worker, so unchanged bytecode is still skipped entirely.
 
@@ -561,8 +564,10 @@ The workspace file lists the member projects. Paths are relative to the file:
 - CMake packages are identified by (source, target), not package name, so projects that request the same native
   tree share one configure, one build, and one set of runtime libraries.
 - `--jobs N` (default: CPU count) sets the total job limit and `--compilers N` (default 3) bounds simultaneous
-  compiles, each of which holds a compiler heap. Every project keeps its own compiler worker, and at most
-  `HAXEON_COMPILER_WORKERS` (default 6) stay resident, least recently used first.
+  compiles, each of which holds a compiler heap. Every project keeps its own compiler worker. Across all build
+  roots, at most `HAXEON_COMPILER_WORKERS` (default 4) stay resident and, on Linux, their total resident memory
+  stays within `HAXEON_COMPILER_MEMORY_MB` (default 4096); the least recently used workers are retired first, and a
+  project's workers from older compiler versions are retired immediately.
 - With Ninja 1.13 or newer (`scripts/bootstrap-tools.sh` installs a pinned copy under `.tools/ninja`), a GNU
   jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
   oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the

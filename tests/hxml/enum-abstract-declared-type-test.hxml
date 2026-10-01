@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main EnumAbstractDeclaredTypeMain
+-hl out/enum-abstract-declared-type-test.hl

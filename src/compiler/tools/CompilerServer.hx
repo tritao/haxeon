@@ -7,7 +7,10 @@ import sys.FileSystem;
 import sys.net.Host;
 import sys.net.Socket;
 
-/** Private loopback worker for one project's build session. Exits after five idle minutes. */
+/**
+ * Private loopback worker for one project's build session. Exits after `HAXEON_COMPILER_IDLE_SECONDS`
+ * (default 90) without a request, since its heap stays at the high-water mark of its largest compile.
+ */
 class CompilerServer {
 	public static function main():Void {
 		var args = Sys.args();
@@ -23,12 +26,13 @@ class CompilerServer {
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
 		listener.listen(8);
-		var descriptor = Json.stringify({port: listener.host().port, token: token});
+		var descriptor = Json.stringify({port: listener.host().port, token: token, pid: processId()});
 		File.saveContent(statePath + "." + token + ".tmp", descriptor);
 		FileSystem.rename(statePath + "." + token + ".tmp", statePath);
 		try {
 			var running = true;
-			var idleDeadline = Sys.time() + 300;
+			var idleSeconds = idleTimeout();
+			var idleDeadline = Sys.time() + idleSeconds;
 			while (running) {
 				if (Socket.select([listener], [], [], Math.max(0, idleDeadline - Sys.time())).read.length == 0) {
 					if (Sys.time() >= idleDeadline)
@@ -76,7 +80,7 @@ class CompilerServer {
 					} catch (_:Dynamic) {}
 				}
 				client.close();
-				idleDeadline = Sys.time() + 300;
+				idleDeadline = Sys.time() + idleSeconds;
 			}
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("Compiler server stopped: " + Std.string(error) + "\n");
@@ -88,6 +92,21 @@ class CompilerServer {
 				FileSystem.deleteFile(statePath);
 		} catch (_:Dynamic) {}
 	}
+
+	static function idleTimeout():Float {
+		var value = Sys.getEnv("HAXEON_COMPILER_IDLE_SECONDS"),
+			parsed = value == null ? null : Std.parseInt(value);
+		return parsed == null || parsed < 1 ? 90 : parsed;
+	}
+
+	/** Lets clients measure and liveness-check this worker without connecting to it. */
+	#if hl
+	@:hlNative("std", "sys_getpid") static function processId():Int
+		return 0;
+	#else
+	static function processId():Null<Int>
+		return null;
+	#end
 
 	static function send(client:Socket, value:Dynamic):Void {
 		client.output.writeString(Json.stringify(value) + "\n");

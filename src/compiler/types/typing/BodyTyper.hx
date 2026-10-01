@@ -164,6 +164,14 @@ class BodyTyper {
 			session.noReturnFunctions.set(name, true);
 	}
 
+	static function hasFunctionMetadata(fn:compiler.syntax.Ast.AstFunction, name:String):Bool {
+		if (fn.metadata != null)
+			for (entry in fn.metadata)
+				if (entry.name == name)
+					return true;
+		return false;
+	}
+
 	static function parentPath(path:String):Null<String> {
 		return compiler.QualifiedName.parent(path);
 	}
@@ -274,7 +282,11 @@ class BodyTyper {
 			scope.define(argument.name, type, argument.span);
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
+			var declaredAbstract = EnumAbstractHints.named(session, argument.type);
+			if (declaredAbstract != null)
+				context.declaredAbstracts.set(scope.requireId(argument.name), declaredAbstract);
 		}
+		context.declaredResultAbstract = EnumAbstractHints.named(session, fn.result);
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -299,6 +311,8 @@ class BodyTyper {
 			isStatic: isStatic,
 			isConstructor: isConstructor,
 			isInline: fn.isInline == true,
+			isKept: hasFunctionMetadata(fn, "keep"),
+			isExposed: hasFunctionMetadata(fn, "expose"),
 			arguments: arguments,
 			result: result,
 			statements: statements,
@@ -1229,6 +1243,11 @@ class BodyTyper {
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
 			if (enumLiteral != null)
 				return enumLiteral;
+			// A value of the enum abstract that is expected here outranks a class of the same name, as a
+			// value of an expected enum does above; the class stays reachable wherever no value is expected.
+			var abstractValue = sourceIsBareReference(span) ? expectedEnumAbstractValue(name, expectedType, span) : null;
+			if (abstractValue != null)
+				return abstractValue;
 			var inferredEnumLiteral = uniqueEnumLiteral(name, span);
 			if (inferredEnumLiteral != null)
 				return inferredEnumLiteral;
@@ -1302,27 +1321,8 @@ class BodyTyper {
 								return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
 					}
 					// Enum abstracts lower to their underlying type, so a switch over
-					// one cannot name it here. Among several abstracts declaring the
-					// value, the one in the current type's own package wins: its
-					// types are visible without an import, as in Haxe.
-					var unqualifiedAbstract:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
-						ambiguous = false,
-						samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
-					var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-					for (candidateName => candidate in session.enumAbstractDecls)
-						for (value in candidate.values)
-							if (value.name == name) {
-								if (unqualifiedAbstract != null)
-									ambiguous = true;
-								unqualifiedAbstract = candidate;
-								if (pathBeforeLast(candidateName) == ownerPackage)
-									samePackage.push(candidate);
-							}
-					if (ambiguous) {
-						if (samePackage.length != 1)
-							fail("E1005", 'Ambiguous enum abstract value "$name"', span);
-						unqualifiedAbstract = samePackage[0];
-					}
+					// one cannot name it here; look the value up among them all.
+					var unqualifiedAbstract = findBareEnumAbstract(name, null, span, false);
 					if (unqualifiedAbstract != null)
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
@@ -1480,6 +1480,11 @@ class BodyTyper {
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		if (sameType(typedObject.type, TDynamic)) {
+			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			return new TypedExpression(TCall("Reflect.field", [typedObject, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span);
+		}
 		switch typedObject.type {
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);
@@ -1781,6 +1786,79 @@ class BodyTyper {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The enum abstract value a bare name picks out where a value of `expectedType` is wanted. Enum
+	 * abstracts lower to their underlying type, so the expected type only says which underlying type the
+	 * value must have; the abstracts over it that declare the name compete as in `findBareEnumAbstract`.
+	 * Null when nothing is expected or the name is not such a value (an ambiguous name is left to the
+	 * ordinary lookup, which reports it). Only called for a bare reference.
+	 */
+	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
+		// A name written bare can arrive qualified by the class it also names; the value is its last segment.
+		var valueName = lastPathSegment(name);
+		// The other side's declared type names the abstract: that is the one the value belongs to, however
+		// many others declare the name. The hint is spent here so typing the value cannot leak it.
+		var hinted = session.abstractHint;
+		session.abstractHint = null;
+		if (hinted != null) {
+			var hintedDeclaration = session.enumAbstractDecls.get(hinted);
+			if (hintedDeclaration != null)
+				for (value in hintedDeclaration.values)
+					if (value.name == valueName)
+						return typeExpression(value.value, new Scope(), lowerType(hintedDeclaration.underlying));
+		}
+		if (expectedType == null)
+			return null;
+		var declaration = findBareEnumAbstract(valueName, expectedType, span, true);
+		if (declaration == null)
+			return null;
+		for (value in declaration.values)
+			if (value.name == valueName)
+				return typeExpression(value.value, new Scope(), lowerType(declaration.underlying));
+		return null;
+	}
+
+	/**
+	 * The enum abstract a bare value name belongs to, optionally only among those over `underlying`.
+	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
+	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
+	 * error, or null when `lenient`.
+	 */
+	function findBareEnumAbstract(name:String, underlying:Null<CompilerType>, span:SourceSpan, lenient:Bool):Null<compiler.syntax.Ast.AstEnumAbstract> {
+		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
+			ambiguous = false,
+			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
+			declaredBy:Array<String> = [];
+		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
+		for (candidateName => candidate in session.enumAbstractDecls) {
+			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
+				continue;
+			for (value in candidate.values)
+				if (value.name == name) {
+					if (found != null)
+						ambiguous = true;
+					found = candidate;
+					declaredBy.push(candidateName);
+					if (pathBeforeLast(candidateName) == ownerPackage)
+						samePackage.push(candidate);
+				}
+		}
+		if (ambiguous) {
+			if (samePackage.length != 1) {
+				if (lenient)
+					return null;
+				declaredBy.sort(Reflect.compare);
+				fail("E1005",
+					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}' +
+					(samePackage.length > 1 ? ", and more than one of them is in the current package" : ", and none of them is in the current package") +
+					'. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
+					span);
+			}
+			found = samePackage[0];
+		}
+		return found;
 	}
 
 	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {

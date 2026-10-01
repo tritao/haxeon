@@ -52,6 +52,7 @@ class WasmLinearModuleBuilder {
 	var freeHead:Int;
 	var markStackTop:Int;
 	var gcBudget:Int;
+	var gcLiveBytes:Int;
 	var allocationCount:Int;
 	var allocationBytes:Int;
 	var largestAllocation:Int;
@@ -68,6 +69,7 @@ class WasmLinearModuleBuilder {
 	var representation:WasmRepresentationSet;
 	var tableSlots:Map<String, Int>;
 	var exceptionTag:Null<Int>;
+	var closureAdapters:WasmLinearClosureAdapters;
 
 	public function new(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
 		this.program = program;
@@ -82,6 +84,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	function compileModule():BackendResult {
+		closureAdapters = WasmLinearClosureAdapters.generate(program);
 		IrVerifier.verify(program);
 		prepareModule();
 		buildRuntime();
@@ -96,7 +99,7 @@ class WasmLinearModuleBuilder {
 		importMemory = options.importMemory == true;
 		contract = options.memoryContract;
 		var memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
-		exportedFunctions = options.exports == null ? [] : options.exports;
+		exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports);
 		if (contract != null) {
 			if (!importMemory)
 				throw "A Wasm memory contract requires imported memory";
@@ -162,9 +165,12 @@ class WasmLinearModuleBuilder {
 		markStackTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		gcBudget = -1;
+		gcLiveBytes = -1;
 		if (options.wasmGcStress != true) {
 			gcBudget = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
+			gcLiveBytes = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		}
 		allocationCount = -1;
 		allocationBytes = -1;
@@ -203,6 +209,7 @@ class WasmLinearModuleBuilder {
 			freeHead: freeHead,
 			markStackTop: markStackTop,
 			gcBudget: gcBudget,
+			gcLiveBytes: gcLiveBytes,
 			allocationCount: allocationCount,
 			allocationBytes: allocationBytes,
 			largestAllocation: largestAllocation,
@@ -253,7 +260,8 @@ class WasmLinearModuleBuilder {
 			throw "Linear Wasm bytes data pointer helper is missing";
 		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
-		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
+		closureAdapters.defineKeyQuery(module, functions, tableSlots);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
 			results: []
@@ -268,7 +276,9 @@ class WasmLinearModuleBuilder {
 
 	function lowerFunctions():haxe.io.Bytes {
 		return WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
-			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
+			if (!reachable.exists(fn.name)
+				|| (fn.name == "__entry" && preferredEntry != "__entry")
+				|| fn.name == WasmLinearClosureAdapters.KEY_FUNCTION)
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,

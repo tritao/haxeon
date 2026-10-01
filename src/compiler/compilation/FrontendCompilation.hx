@@ -123,7 +123,8 @@ class FrontendCompilation {
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGraph = AllocationMeter.sample();
 
-		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged),
+		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged,
+			indexSemantics),
 			canonicalProgram = semanticAssembly.canonicalProgram,
 			functions = semanticAssembly.functions,
 			owners = semanticAssembly.owners,
@@ -158,7 +159,6 @@ class FrontendCompilation {
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
-			IrGenerator.bindInterfaceImplementers(typedNew.classes, typedNew.interfaces);
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);
 			IrGenerator.bindNativeStringFastPaths(!context.isWasmTarget());
@@ -206,6 +206,12 @@ class FrontendCompilation {
 				if (!currentClasses.exists(classDecl.name))
 					objectCache.remove(classDecl.name);
 		}
+		// The objects a function makes for its closures and captured variables are named by source offsets. When the function
+		// is typed again they are made again under their new names, and the old ones must not stay behind.
+		var retypedNames:Map<String, Bool> = [for (fn in typedNew.functions) fn.name => true];
+		for (name in [for (name in objectCache.keys()) name])
+			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
+				objectCache.remove(name);
 		for (object in IrGenerator.objectsFrom(typedNew))
 			objectCache.set(object.name, object);
 		var allocationAfterObjects = AllocationMeter.sample();
@@ -317,7 +323,11 @@ class FrontendCompilation {
 			var hasRetainedSpecializations = false;
 			for (cached => fn in state.typedFunctions) {
 				var origin = fn.genericOrigin;
-				if (origin != null && owners.exists(origin) && !invalidated.exists(origin)) {
+				// A lambda or adapter made inside a specialization names that specialization as its origin. When the
+				// specialization was typed again in this request, its old lambdas that were not made again belong to the
+				// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
+				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
+				if (origin != null && owners.exists(origin) && !invalidated.exists(origin) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 					retainedSpecializations.set(cached, true);
@@ -462,7 +472,7 @@ class FrontendCompilation {
 		}
 		if (token != null)
 			token.check();
-		var resolvedObjects = resolvedObjectsFrom(objectCache, typedNew);
+		var resolvedObjects = resolvedObjectsFrom(objectCache, typedNew, functionNamesOf(cachedNames, typedNew));
 		var objectNames = [for (name in resolvedObjects.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var irNatives = context.irNatives();
@@ -477,8 +487,9 @@ class FrontendCompilation {
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew), IrGenerator.staticInitializersFrom(typedNew, initializationClasses),
-			entryPoint, irCNatives, IrProgramAssembler.reflectableObjectsFrom(typedNew));
+			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
+			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
+			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		if (IrInliner.enabled) {
 			// A caller whose inlined callee changed is re-lowered and patched even though its own source did not.
@@ -540,10 +551,11 @@ class FrontendCompilation {
 	 * kept for when their module becomes reachable again; only objects whose layout resolves
 	 * against this program's declarations are lowered.
 	 */
-	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram):Map<String, IrObject> {
-		var enums = [for (decl in typed.enums) decl.name => true],
-			interfaces = [for (decl in typed.interfaces) decl.name => true],
-			objects = [for (name => object in objectCache) name => object];
+	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram, functionNames:Map<String, Bool>):Map<String, IrObject> {
+		var enums = [for (decl in typed.enums) decl.name => true], interfaces = [for (decl in typed.interfaces) decl.name => true], objects = [
+			for (name => object in objectCache)
+				if (!isOrphanedEnvironment(name, functionNames)) name => object
+		];
 		var removed = true;
 		while (removed) {
 			removed = false;
@@ -560,6 +572,41 @@ class FrontendCompilation {
 			}
 		}
 		return objects;
+	}
+
+	/**
+	 * The environment object of a lambda or function adapter exists for that function alone. When an edit renames the
+	 * function (a lambda is named by its source offset) or removes it, the old environment must go with it; anything else
+	 * kept in the cache is content-named and harmless to keep.
+	 */
+	static function isGeneratedObjectOfRetypedFunction(name:String, retyped:Map<String, Bool>):Bool {
+		for (prefix in ["$cell:", "$lambda-env:", "$function-adapter-env:"])
+			if (StringTools.startsWith(name, prefix)) {
+				// The owner is followed by ":" and may itself contain ":" (a lambda's name), so try every boundary.
+				var rest = name.substr(prefix.length),
+					colon = rest.indexOf(":");
+				while (colon >= 0) {
+					if (retyped.exists(rest.substr(0, colon)))
+						return true;
+					colon = rest.indexOf(":", colon + 1);
+				}
+				return false;
+			}
+		return false;
+	}
+
+	static function functionNamesOf(cachedNames:Array<String>, typed:TypedProgram):Map<String, Bool> {
+		var names:Map<String, Bool> = [for (name in cachedNames) name => true];
+		for (fn in typed.functions)
+			names.set(fn.name, true);
+		return names;
+	}
+
+	static function isOrphanedEnvironment(name:String, functionNames:Map<String, Bool>):Bool {
+		for (pair in [["$lambda-env:", "$lambda:"], ["$function-adapter-env:", "$function-adapter:"]])
+			if (StringTools.startsWith(name, pair[0]))
+				return !functionNames.exists(pair[1] + name.substr(pair[0].length));
+		return false;
 	}
 
 	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>, interfaces:Map<String, Bool>):Bool

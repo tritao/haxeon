@@ -25,9 +25,9 @@ import compiler.ir.SourceProvenance.Located;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
-		IrGenerator.bindInterfaceImplementers(typed.classes, typed.interfaces);
-		return assemble([for (fn in typed.functions) IrGenerator.generateFunction(fn)], nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed),
-			enumsFrom(typed), staticFieldsFrom(typed), staticInitializersFrom(typed), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
+		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
+		return assemble(functions, nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
+			staticInitializersFrom(typed, null, functions), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
 	}
 
 	/** Objects `Reflect` may inspect by field name: classes and anonymous records, not closure storage. */
@@ -73,37 +73,36 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	/** Build ordered, bounded boot functions from static field initializers. */
-	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>):Array<IrFunction> {
+	/**
+	 * Build ordered, bounded boot functions from static field initializers. Initializers run in declaration
+	 * order (classes in module dependency order), except that a field whose initializer reads another static
+	 * field, directly or through the functions it calls, runs after that field when `program` is given.
+	 */
+	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction> {
 		var statements:Array<TypedStatement> = [],
-			spans:Array<compiler.Source.SourceSpan> = [];
+			spans:Array<compiler.Source.SourceSpan> = [],
+			globals:Array<String> = [];
 		var classes = orderedClasses(typed.classes, classOrder);
 		for (classDecl in classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (field.isStatic && !field.isInline && initializer != null) {
 					spans.push(field.span);
+					globals.push(classDecl.name + "." + field.name);
 					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
 				}
 			}
 		if (statements.length == 0)
 			return [];
+		if (program != null && statements.length > 1) {
+			var order = initializationOrder(statements, spans, globals, program);
+			statements = [for (index in order) statements[index]];
+			spans = [for (index in order) spans[index]];
+		}
 		var functions:Array<IrFunction> = [];
 		for (offset in 0...Std.int((statements.length + 7) / 8)) {
 			var start = offset * 8;
-			var name = "__init$part" + offset;
-			functions.push(IrGenerator.generateFunction({
-				name: name,
-				owner: null,
-				isStatic: true,
-				isConstructor: false,
-				arguments: [],
-				result: TVoid,
-				statements: statements.slice(start, start + 8),
-				cells: [],
-				cellCaptures: [],
-				span: spans[start]
-			}));
+			functions.push(initializerFunction("__init$part" + offset, statements.slice(start, start + 8), spans[start]));
 		}
 		var boot = new IrBuilder();
 		var lastCall = boot.call(functions[0].name, [], Void);
@@ -112,6 +111,98 @@ class IrProgramAssembler {
 		boot.returnValue(lastCall);
 		functions.unshift(new IrFunction("__init", [], Void, boot.blocks));
 		return functions;
+	}
+
+	static function initializerFunction(name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
+		return IrGenerator.generateFunction({
+			name: name,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: [],
+			result: TVoid,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: span
+		});
+
+	/**
+	 * Indices of `statements` in an order where each initializer follows the initializers of the static fields it
+	 * reads. The order is a stable depth-first topological sort, so independent fields keep their declaration
+	 * order; members of a cycle keep it too, since no order satisfies them all.
+	 */
+	static function initializationOrder(statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>, globals:Array<String>,
+			program:Array<IrFunction>):Array<Int> {
+		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
+			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
+			byMethod:Map<String, Array<String>> = [],
+			references:Map<String, StaticReferences> = [];
+		for (fn in program) {
+			var dot = fn.name.lastIndexOf(".");
+			if (dot < 0)
+				continue;
+			var method = fn.name.substr(dot + 1), named = byMethod.get(method);
+			if (named == null) {
+				named = [];
+				byMethod.set(method, named);
+			}
+			named.push(fn.name);
+		}
+		function referencesOf(fn:IrFunction):StaticReferences {
+			var known = references.get(fn.name);
+			if (known != null)
+				return known;
+			var found:StaticReferences = {globals: [], calls: []};
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					switch instruction.value {
+						case GlobalGet(_, name):
+							found.globals.push(name);
+						case Call(_, callee, _), StaticClosure(_, callee), InstanceClosure(_, callee, _):
+							found.calls.push(callee);
+						// A virtual call can reach any method of that name.
+						case MethodCall(_, _, method, _):
+							found.calls = found.calls.concat(byMethod.exists(method) ? byMethod.get(method) : []);
+						default:
+					}
+			references.set(fn.name, found);
+			return found;
+		}
+		var dependencies:Array<Array<Int>> = [];
+		for (index in 0...statements.length) {
+			var reads:Map<Int, Bool> = [],
+				visited:Map<String, Bool> = [],
+				pending = [initializerFunction("__init$probe", [statements[index]], spans[index])];
+			while (pending.length > 0) {
+				var fn = pending.pop(), found = referencesOf(fn);
+				for (name in found.globals)
+					if (initializerIndex.exists(name) && initializerIndex.get(name) != index)
+						reads.set(initializerIndex.get(name), true);
+				for (callee in found.calls)
+					if (!visited.exists(callee) && byName.exists(callee)) {
+						visited.set(callee, true);
+						pending.push(byName.get(callee));
+					}
+			}
+			var sorted = [for (dependency in reads.keys()) dependency];
+			sorted.sort((left, right) -> left - right);
+			dependencies.push(sorted);
+		}
+		var state:Array<Int> = [for (_ in statements) 0],
+			order:Array<Int> = [];
+		function visit(index:Int):Void {
+			if (state[index] != 0)
+				return;
+			state[index] = 1;
+			for (dependency in dependencies[index])
+				visit(dependency);
+			state[index] = 2;
+			order.push(index);
+		}
+		for (index in 0...statements.length)
+			visit(index);
+		return order;
 	}
 
 	static function orderedClasses(classes:Array<compiler.types.TypedAst.TypedClass>, ?order:Array<String>):Array<compiler.types.TypedAst.TypedClass> {
@@ -800,3 +891,6 @@ class IrProgramAssembler {
 		return false;
 	}
 }
+
+/** Static fields read and functions called directly by one IR function. */
+private typedef StaticReferences = {final globals:Array<String>; var calls:Array<String>;}

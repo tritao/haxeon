@@ -216,12 +216,22 @@ HL_PRIM int HL_NAME(__string_last_index_of_from)( vstring *value, vstring *needl
 	return -1;
 }
 
-/* Same order as HashLink's string_compare_full: bytewise over the common prefix, then length. */
+/* Sort key of a UTF-16 code unit such that comparing keys orders strings by code point, as the Wasm backends do
+ * over UTF-8: surrogates (code points above U+FFFF) must sort above the units U+E000..U+FFFF. */
+static int realtime_unit_order( uchar unit ) {
+	return unit >= 0xE000 ? unit - 0x800 : unit >= 0xD800 ? unit + 0x2000 : unit;
+}
+
+/* Orders strings by code point over the common prefix, then by length. A bytewise compare of the UTF-16 data
+ * would order by the low byte of each little-endian unit first, putting U+00FF after U+0100. */
 HL_PRIM int HL_NAME(__string_compare_full)( vstring *left, vstring *right ) {
 	int left_length = realtime_string_length(left), right_length = realtime_string_length(right);
 	int length = left_length < right_length ? left_length : right_length;
-	int order = length == 0 ? 0 : memcmp(left->bytes, right->bytes, length * sizeof(uchar));
-	return order != 0 ? order : left_length - right_length;
+	for( int index = 0; index < length; index++ ) {
+		uchar a = left->bytes[index], b = right->bytes[index];
+		if( a != b ) return realtime_unit_order(a) - realtime_unit_order(b);
+	}
+	return left_length - right_length;
 }
 
 HL_PRIM int HL_NAME(__string_char_code_at)( vstring *value, int index ) {

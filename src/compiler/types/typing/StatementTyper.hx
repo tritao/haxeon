@@ -110,6 +110,37 @@ class StatementTyper {
 		this.assignmentRules = assignmentRules;
 	}
 
+	/**
+	 * A local initialized with a reference to a declared function and never reassigned is that function: calls
+	 * through it may omit the optional arguments and take the defaults, as calls to the function itself do. The
+	 * function type alone cannot say which arguments are optional.
+	 */
+	function aliasedFunction(name:String, span:SourceSpan, value:TypedExpression, statements:Array<AstStatement>, statementIndex:Int,
+			scope:Scope):Null<LocalFunction> {
+		var referenced = switch value.expression {
+			case TFunctionRef(target): target;
+			default: return null;
+		};
+		var signature = session.signatures.get(referenced);
+		if (signature == null || (signature.typeParameters != null && signature.typeParameters.length > 0))
+			return null;
+		var hasOptional = false;
+		for (argument in signature.arguments)
+			if (argument.optional == true || argument.defaultValue != null)
+				hasOptional = true;
+		if (!hasOptional)
+			return null;
+		var self = LexicalStorageAnalysis.key(name, span);
+		if (AssignedDeclarations.within(statements.slice(statementIndex + 1), [name => self]).declarations.exists(self))
+			return null;
+		return {
+			arguments: signature.arguments,
+			body: [],
+			outerLocals: scope.visibleLocalNames(),
+			declaredIn: scope
+		};
+	}
+
 	/** Returns null for statements handled by the compound-statement dispatcher. */
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>, statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
@@ -123,6 +154,9 @@ class StatementTyper {
 					fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
+				var uninitializedAbstract = EnumAbstractHints.named(session, declared);
+				if (uninitializedAbstract != null)
+					context.declaredAbstracts.set(scope.requireId(name), uninitializedAbstract);
 				[TDeclare(scope.requireId(name), declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
 				var localFunction:Null<LocalFunction> = null;
@@ -140,7 +174,12 @@ class StatementTyper {
 					case Lambda(arguments, body, _):
 						var self = LexicalStorageAnalysis.key(name, span),
 							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
-						if (!assignments.exists(self)) localFunction = {arguments: arguments, body: body, outerLocals: scope.visibleLocalNames()};
+						if (!assignments.exists(self)) localFunction = {
+							arguments: arguments,
+							body: body,
+							outerLocals: scope.visibleLocalNames(),
+							declaredIn: scope
+						};
 					default:
 				}
 				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
@@ -156,7 +195,8 @@ class StatementTyper {
 							recursiveCell = context.storage.cell(scope.requireId(name));
 						default:
 					}
-				var value = typeExpression(initializer, scope, declaredType, false);
+				var declaredAbstract = EnumAbstractHints.named(session, declared);
+				var value = EnumAbstractHints.typed(session, declaredAbstract, initializer, () -> typeExpression(initializer, scope, declaredType, false));
 				if (declaredType != null)
 					value = coerce(value, declaredType, 'local "$name"', "E1002");
 				else
@@ -168,14 +208,19 @@ class StatementTyper {
 					];
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
+				if (localFunction == null && declared == null)
+					localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
 				if (!predeclared)
 					scope.define(name, value.type, span, true, null, false, localFunction);
 				scope.setMapKeySource(name, value.mapKeySource);
 				bindCell(name, span, scope, value.type);
+				if (declaredAbstract != null)
+					context.declaredAbstracts.set(scope.requireId(name), declaredAbstract);
 				[TVar(scope.requireId(name), value, span)];
 			case Return(expression, span):
 				var expected = result == null ? context.inferredResult : result;
-				var value = typeExpression(expression, scope, expected, false),
+				var value = EnumAbstractHints.typed(session, context.declaredResultAbstract, expression,
+					() -> typeExpression(expression, scope, expected, false)),
 					output:Array<TypedStatement> = [];
 				var thrown = switch value.expression {
 					case TThrowExpression(thrown): thrown;
@@ -234,6 +279,14 @@ class StatementTyper {
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
 		var current = scope.resolve(name);
+		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
+		var dot = name.indexOf("."),
+			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
+		if ((current != null && sameType(current, TDynamic)) || (current == null && root != null && sameType(root, TDynamic))) {
+			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
+			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
+		}
 		if (current != null && !scope.isAssigned(name))
 			fail("E1023", 'Local "$name" may be used before assignment', span);
 		if (current == null) {
@@ -322,6 +375,8 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -378,10 +433,23 @@ class StatementTyper {
 		};
 	}
 
+	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement
+		return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+
+	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var boxed = coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
+			call = new TypedExpression(TCall("Reflect.setField", [object, new TypedExpression(TStringLiteral(fieldName), TString, span), boxed]), TVoid, span);
+		return TExpression(call, span);
+	}
+
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldStore(object, fieldName, value, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -442,7 +510,7 @@ class StatementTyper {
 						fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
 				case TInt, TFloat, TBool, TString:
 				case TInstance(kind, _, arguments):
-					if (Std.string(kind) != "class")
+					if (Std.string(kind) != "class" && Std.string(kind) != "interface")
 						fail("E1022", "Unsupported catch binding type", catchClause.span);
 					if (arguments.length != 0)
 						fail("E1022", "Unsupported generic catch binding type", catchClause.span);
@@ -614,7 +682,9 @@ class StatementTyper {
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedExpression.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type, false),
+					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(EnumAbstractHints.typed(session,
+						EnumAbstractHints.declaredAs(session, typedExpression), switchCase.value,
+						() -> typeExpression(switchCase.value, scope, typedExpression.type, false)),
 						typedExpression.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");

@@ -24,6 +24,9 @@ private typedef WasmControl = {
 
 /** Target-level structural validation before bytes reach an embedding runtime. */
 class WasmValidator {
+	/** Control kind of a block that starts in unreachable code. */
+	static inline var DEAD_FRAME = 5;
+
 	public static function validate(module:WasmModule):Void {
 		validateTypes(module);
 		if (module.exceptionTagType != null) {
@@ -234,6 +237,33 @@ class WasmValidator {
 			tagParameters = tagType == null ? [] : module.functionTypeAt(tagType).parameters,
 			reachable = true;
 		for (instruction in fn.body) {
+			// Code after unreachable, br, return or throw has a polymorphic operand stack, so only its block
+			// structure is tracked until the enclosing frame's else, catch or end restores reachability. Blocks
+			// that start there are dead as a whole, including after their own end.
+			if (!reachable) {
+				var top = controls.length == 0 ? null : controls[controls.length - 1];
+				switch instruction {
+					case Block(_), Loop(_), Try(_), TryTable(_, _), If(_):
+						controls.push({
+							kind: DEAD_FRAME,
+							result: null,
+							height: stack.length,
+							hasCatch: false,
+							catchTypes: null
+						});
+						continue;
+					case Else, Catch(_):
+						if (top != null && top.kind == DEAD_FRAME)
+							continue;
+					case End:
+						if (top != null && top.kind == DEAD_FRAME) {
+							controls.pop();
+							continue;
+						}
+					default:
+						continue;
+				}
+			}
 			switch instruction {
 				case Unreachable:
 					reachable = false;
@@ -504,6 +534,10 @@ class WasmValidator {
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I32);
+				case I64TruncSatF64S:
+					pop(stack, F64, fn);
+					if (reachable)
+						stack.push(I64);
 				case I32ReinterpretF32:
 					pop(stack, F32, fn);
 					if (reachable)

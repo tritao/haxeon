@@ -9,8 +9,6 @@ import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.ValueCopyLayout;
 import compiler.types.TypedAst.TypedEnum;
-import compiler.types.TypedAst.TypedClass;
-import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
@@ -53,58 +51,6 @@ class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
-
-	static var interfaceImplementers:Map<String, Array<String>> = [];
-
-	/**
-	 * Record, for each interface, the classes that implement it without
-	 * inheriting it from their base. A runtime type test against an interface
-	 * checks these classes: backends know the classes an object belongs to,
-	 * not the interfaces (on HashLink an object never casts to the virtual
-	 * type an interface lowers to), and subclasses pass their base's check.
-	 */
-	public static function bindInterfaceImplementers(classes:Array<TypedClass>, interfaces:Array<TypedInterface>):Void {
-		var bases:Map<String, Array<String>> = [for (declared in interfaces) declared.name => declared.bases];
-		var byName:Map<String, TypedClass> = [for (declared in classes) declared.name => declared];
-		function expand(name:String, into:Map<String, Bool>):Void {
-			if (into.exists(name))
-				return;
-			into.set(name, true);
-			var parents = bases.get(name);
-			if (parents != null)
-				for (parent in parents)
-					expand(parent, into);
-		}
-		function reached(className:Null<String>):Map<String, Bool> {
-			var result:Map<String, Bool> = [];
-			var current = className;
-			while (current != null) {
-				var declared = byName.get(current);
-				if (declared == null)
-					break;
-				for (name in declared.interfaces)
-					expand(name, result);
-				current = declared.base;
-			}
-			return result;
-		}
-		interfaceImplementers = [];
-		var names = [for (declared in classes) if (!declared.isNativeValue) declared.name];
-		names.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
-		for (name in names) {
-			var own = reached(name),
-				inherited = reached(byName.get(name).base);
-			for (interfaceName in own.keys())
-				if (!inherited.exists(interfaceName)) {
-					var list = interfaceImplementers.get(interfaceName);
-					if (list == null) {
-						list = [];
-						interfaceImplementers.set(interfaceName, list);
-					}
-					list.push(name);
-				}
-		}
-	}
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
@@ -206,8 +152,8 @@ class IrGenerator {
 	public static function generate(typed:TypedProgram):IrProgram
 		return IrProgramAssembler.generate(typed);
 
-	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>):Array<IrFunction>
-		return IrProgramAssembler.staticInitializersFrom(typed, classOrder);
+	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction>
+		return IrProgramAssembler.staticInitializersFrom(typed, classOrder, program);
 
 	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
 		return IrProgramAssembler.enumsFrom(typed);
@@ -237,7 +183,10 @@ class IrGenerator {
 	public static function generateFunction(fn:TypedFunction):IrFunction {
 		try {
 			var cfg = generateCfg(fn), built = SsaBuilder.build(cfg);
-			return fn.isInline == true ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, true) : built;
+			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
+			return fn.isInline == true
+				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
+					retention) : built;
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}
@@ -1160,15 +1109,10 @@ class IrGenerator {
 			case TCall("__std_is_of_type", args):
 				if (args.length != 2)
 					throw "Std.isOfType intrinsic requires value and type operands";
-				switch args[1].type {
-					case TInstance(NominalKind.Interface, name, _):
-						lowerInterfaceTypeTest(lowerExpression(args[0], builder, localTypes), name, expression, builder, localTypes);
-					default:
-						builder.call("__std_is_of_type", [
-							lowerExpression(args[0], builder, localTypes),
-							builder.typeValue(lowerType(args[1].type))
-						], Bool);
-				}
+				builder.call("__std_is_of_type", [
+					lowerExpression(args[0], builder, localTypes),
+					builder.typeValue(lowerType(args[1].type))
+				], Bool);
 			case TCall("__std_is_exact_type", args):
 				if (args.length != 2)
 					throw "Std.isExactType intrinsic requires value and type operands";
@@ -2170,35 +2114,6 @@ class IrGenerator {
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
 		return type == TInt ? builder.constInt(1) : builder.constFloat(1.0);
-
-	/** True when `value` is an instance of a class implementing `interfaceName` (or already that interface's virtual). */
-	static function lowerInterfaceTypeTest(value:CfgValue, interfaceName:String, expression:TypedExpression, builder:CfgBuilder,
-			localTypes:Map<String, IrType>):CfgValue {
-		var resultName = '$' + 'is-interface:${expression.span.start}:${expression.span.end}',
-			valueName = '$' + 'is-interface-value:${expression.span.start}:${expression.span.end}';
-		localTypes.set(resultName, Bool);
-		// Each test runs in its own block, so the value travels through a local.
-		localTypes.set(valueName, Dyn);
-		builder.store(valueName, value);
-		var matched = builder.createBlock(), joinBlock = builder.createBlock();
-		var candidates:Array<IrType> = [Virtual(interfaceName)];
-		var implementers = interfaceImplementers.get(interfaceName);
-		if (implementers != null)
-			for (name in implementers)
-				candidates.push(Obj(name));
-		for (candidate in candidates) {
-			var next = builder.createBlock();
-			builder.branch(builder.call("__std_is_of_type", [builder.load(valueName, Dyn), builder.typeValue(candidate)], Bool), matched, next);
-			builder.select(next);
-		}
-		builder.store(resultName, builder.constBool(false));
-		builder.jumpFrom(builder.currentBlock(), joinBlock);
-		builder.select(matched);
-		builder.store(resultName, builder.constBool(true));
-		builder.jumpFrom(builder.currentBlock(), joinBlock);
-		builder.select(joinBlock);
-		return builder.load(resultName, Bool);
-	}
 
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var resultName = '$' + 'logical:${left.span.start}:${right.span.end}';

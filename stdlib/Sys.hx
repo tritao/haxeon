@@ -31,6 +31,7 @@ extern function sysThreadCpuTime():Float;
 @:hlNative("std", "sys_process_memory")
 extern function sysProcessMemory():Float;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__sys_get_cwd")
 extern function sysGetCwd():String;
 
@@ -54,6 +55,33 @@ extern function sysIsDir(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_read_dir")
 extern function sysReadDir(path:String):Array<String>;
+#else
+// Wasm has no host process: the path operations use the session's in-memory filesystem, the
+// environment is empty, and there is no executable path.
+function sysGetCwd():String
+	return runtime.MemoryFileSystem.getCwd();
+
+function sysFullPath(path:String):String
+	return runtime.MemoryFileSystem.normalize(path);
+
+function sysExecutablePath():String
+	return "";
+
+function sysGetEnv(name:String):Null<String>
+	return null;
+
+function sysSystemName():String
+	return "Web";
+
+function sysExists(path:String):Bool
+	return runtime.MemoryFileSystem.exists(path);
+
+function sysIsDir(path:String):Bool
+	return runtime.MemoryFileSystem.isDirectory(path);
+
+function sysReadDir(path:String):Array<String>
+	return runtime.MemoryFileSystem.readDirectory(path);
+#end
 
 @:hlNative("std", "sys_getpid")
 extern function sysGetPid():Int;
@@ -64,12 +92,18 @@ extern function sysExit(code:Int):Void;
 @:hlNative("haxeon_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__sys_set_cwd")
 extern function sysSetCwd(path:String):Bool;
+#else
+function sysSetCwd(path:String):Bool
+	return runtime.MemoryFileSystem.setCwd(path);
+#end
 
 @:hlNative("haxeon_runtime", "__sys_put_env")
 extern function sysPutEnv(name:String, value:String):Bool;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__sys_create_dir")
 extern function sysCreateDir(path:String, mode:Int):Bool;
 
@@ -81,6 +115,20 @@ extern function sysDelete(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
+#else
+/** `mkdir` semantics: the parent must already exist. The mode is ignored. */
+function sysCreateDir(path:String, mode:Int):Bool
+	return runtime.MemoryFileSystem.createDirectory(path, false);
+
+function sysRemoveDir(path:String):Bool
+	return runtime.MemoryFileSystem.deleteDirectory(path);
+
+function sysDelete(path:String):Bool
+	return runtime.MemoryFileSystem.deleteFile(path);
+
+function sysRename(path:String, newPath:String):Bool
+	return runtime.MemoryFileSystem.rename(path, newPath);
+#end
 
 @:hlNative("haxeon_runtime", "__sys_command")
 extern function sysCommand(command:String):Int;
@@ -91,8 +139,13 @@ extern function sysSleep(seconds:Float):Void;
 @:hlNative("std", "sys_get_char")
 extern function sysGetChar(echo:Bool):Int;
 
+#if wasm
+function sysPrint(value:String):Void
+	haxeon.wasm.HaxeonHost.print(value);
+#else
 @:hlNative("haxeon_runtime", "__sys_print")
 extern function sysPrint(value:String):Void;
+#end
 
 @:hlNative("haxeon_runtime", "__sys_stdout")
 extern function sysStdout():sys.io.FileOutput;

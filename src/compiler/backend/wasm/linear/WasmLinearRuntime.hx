@@ -22,9 +22,8 @@ class WasmLinearRuntime {
 			if (used.exists(native.name))
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod",
-						"__math_exp", "__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_print", "__sys_args", "__date_now",
-						"__date_get_time", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char",
-						"sys_exit", "native_callback_create", "native_callback_close", "native_callback_error_kind", "native_callback_take_error":
+						"__math_exp", "__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time",
+						"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 						runtimeImport(module, native);
 					default:
 				}
@@ -101,6 +100,10 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringIndexOf(module, native.name));
 						case "__string_index_of_from":
 							functions.set(native.name, addStringIndexOf(module, native.name, true));
+						case "__string_last_index_of":
+							functions.set(native.name, addStringLastIndexOf(module, native.name));
+						case "__string_last_index_of_from":
+							functions.set(native.name, addStringLastIndexOf(module, native.name, true));
 						case "__string_substring":
 							if (!functions.exists(native.name))
 								functions.set(native.name, addStringSubstring(module, native.name, allocator));
@@ -227,13 +230,6 @@ class WasmLinearRuntime {
 				}
 				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual));
 			}
-		for (native in program.natives)
-			if (native.symbol == "native_callback_create") {
-				var callbackAllocator = addBytesAlloc(module, "__haxeon_callback_alloc_bytes", allocator);
-				functions.set("__haxeon_callback_alloc_bytes", callbackAllocator);
-				module.exports.push({name: "__haxeon_callback_alloc_bytes", functionIndex: callbackAllocator});
-				break;
-			}
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
@@ -241,11 +237,10 @@ class WasmLinearRuntime {
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round",
-				"__math_exp", "__math_log", "__math_ceil", "__math_floor", "__sys_print", "__sys_args", "__date_now", "__date_get_time":
+				"__math_exp", "__math_log", "__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
-			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit",
-				"native_callback_create", "native_callback_close", "native_callback_error_kind", "native_callback_take_error":
+			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
 			case "__int64_to_string": addInt64ToString(module, native.name, allocator);
@@ -303,6 +298,11 @@ class WasmLinearRuntime {
 			case "structGetRoots": addStructGetRoots(module, native.name);
 			case "structUtf8Copy": addStructUtf8Copy(module, native.name, allocator, bytesDataPointer);
 			case "structGetPointer": addStructGetPointer(module, native.name, bytesDataPointer);
+			case "structFromLinear": addStructFromLinear(module, native.name, allocator);
+			case "structToLinear": addStructToLinear(module, native.name, bytesDataPointer);
+			// A borrowed native pointer is its address on Wasm32, and a callback handle its table index.
+			case "nativePointerFromAddress", "nativeCallbackFromIndex", "nativeCallbackIndex":
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return]));
 			case "structSetPointer": addStructSetPointer(module, native.name, bytesDataPointer);
 			case "structGetUtf8": addStructGetUtf8(module, native.name, allocator, bytesDataPointer);
 			case "structSetUtf8": addStructSetUtf8(module, native.name, allocator, bytesDataPointer);
@@ -1528,6 +1528,46 @@ class WasmLinearRuntime {
 			[LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add, I32Load(0), Return]));
 	}
 
+	/** Copies `size` bytes at a linear address into new Bytes, for HXI callback entries receiving records. */
+	static function addStructFromLinear(module:WasmModule, name:String, allocator:Int):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
+			LocalGet(1),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			Call(allocator),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(WasmModuleSupport.typeId(Bytes)),
+			I32Store(0),
+			LocalGet(2),
+			LocalGet(1),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(2),
+			LocalGet(1),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(2),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(0),
+			LocalGet(1),
+			MemoryCopy,
+			LocalGet(2),
+			Return
+		]));
+	}
+
+	/** Copies the first `size` bytes of a record to a linear address, for HXI callback entries returning records. */
+	static function addStructToLinear(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: []}, [], [
+			LocalGet(1),
+			LocalGet(0),
+			Call(bytesDataPointer),
+			LocalGet(2),
+			MemoryCopy,
+			Return
+		]));
+	}
+
 	static function addStructSetPointer(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
 			LocalGet(0),
@@ -2688,6 +2728,123 @@ class WasmLinearRuntime {
 			});
 		});
 		builder.localGet(result);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/** Mirrors the HashLink runtime: null operands give -1 and an empty needle matches at the clamped start. */
+	static function addStringLastIndexOf(module:WasmModule, name:String, fromStart = false):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
+			value = builder.parameter("value", 0),
+			needle = builder.parameter("needle", 1),
+			start = fromStart ? builder.parameter("start", 2) : null,
+			valueLength = builder.local("valueLength", I32),
+			needleLength = builder.local("needleLength", I32),
+			index = builder.local("index", I32),
+			inner = builder.local("inner", I32);
+		builder.localGet(value);
+		builder.i32Eqz();
+		builder.localGet(needle);
+		builder.i32Eqz();
+		builder.emit(I32Or);
+		if (start != null) {
+			builder.localGet(start);
+			builder.i32Const(0);
+			builder.emit(I32LtS);
+			builder.emit(I32Or);
+		}
+		builder.if_(function(builder) {
+			builder.i32Const(-1);
+			builder.return_();
+		});
+		builder.localGet(value);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(valueLength);
+		builder.localGet(needle);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(needleLength);
+		// The last candidate is the clamped start, or the final position the needle fits at.
+		builder.localGet(valueLength);
+		builder.localSet(index);
+		if (start != null) {
+			builder.localGet(start);
+			builder.localGet(valueLength);
+			builder.emit(I32LtS);
+			builder.if_(function(builder) {
+				builder.localGet(start);
+				builder.localSet(index);
+			});
+		}
+		builder.localGet(needleLength);
+		builder.i32Eqz();
+		builder.if_(function(builder) {
+			builder.localGet(index);
+			builder.return_();
+		});
+		builder.localGet(valueLength);
+		builder.localGet(needleLength);
+		builder.i32Sub();
+		builder.localGet(index);
+		builder.emit(I32LtS);
+		builder.if_(function(builder) {
+			builder.localGet(valueLength);
+			builder.localGet(needleLength);
+			builder.i32Sub();
+			builder.localSet(index);
+		});
+		builder.block(function(builder) {
+			builder.loop(function(builder) {
+				builder.localGet(index);
+				builder.i32Const(0);
+				builder.emit(I32LtS);
+				builder.emit(BrIf(1));
+				builder.i32Const(0);
+				builder.localSet(inner);
+				builder.block(function(builder) {
+					builder.loop(function(builder) {
+						builder.localGet(inner);
+						builder.localGet(needleLength);
+						builder.emit(I32Eq);
+						builder.emit(BrIf(1));
+						builder.localGet(value);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(index);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.localGet(needle);
+						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
+						builder.i32Add();
+						builder.localGet(inner);
+						builder.i32Add();
+						builder.emit(I32Load8U(0));
+						builder.emit(I32Eq);
+						builder.i32Eqz();
+						builder.emit(BrIf(1));
+						builder.localGet(inner);
+						builder.i32Const(1);
+						builder.i32Add();
+						builder.localSet(inner);
+						builder.emit(Br(0));
+					});
+				});
+				builder.localGet(inner);
+				builder.localGet(needleLength);
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					builder.localGet(index);
+					builder.return_();
+				});
+				builder.localGet(index);
+				builder.i32Const(1);
+				builder.i32Sub();
+				builder.localSet(index);
+				builder.emit(Br(0));
+			});
+		});
+		builder.i32Const(-1);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}

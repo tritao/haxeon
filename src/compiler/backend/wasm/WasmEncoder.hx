@@ -26,7 +26,7 @@ class WasmEncoder {
 	public static function encode(module:WasmModule):Bytes {
 		WasmValidator.validate(module);
 		for (imported in module.imports)
-			module.typeIndex(imported.type);
+			module.importTypeIndex(imported.type);
 		for (fn in module.functions)
 			module.typeIndex(fn.type);
 		var output = new BytesOutput();
@@ -149,7 +149,7 @@ class WasmEncoder {
 			writeString(body, imported.module);
 			writeString(body, imported.name);
 			body.writeByte(0);
-			writeU32(body, module.typeIndex(imported.type));
+			writeU32(body, module.importTypeIndex(imported.type));
 		}
 		if (module.importMemory) {
 			writeString(body, "env");
@@ -582,6 +582,9 @@ class WasmEncoder {
 					output.writeByte(0xa7);
 				case I32TruncF64S:
 					output.writeByte(0xaa);
+				case I64TruncSatF64S:
+					output.writeByte(0xfc);
+					writeU32(output, 6);
 				case I32ReinterpretF32:
 					output.writeByte(0xbc);
 				case F32ReinterpretI32:

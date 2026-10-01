@@ -22,6 +22,7 @@
 
 package sys;
 
+#if !wasm
 @:hlNative("haxeon_runtime", "__sys_exists")
 extern function fileSystemExists(path:String):Bool;
 
@@ -48,6 +49,36 @@ extern function fileSystemDeleteDirectory(path:String):Bool;
 
 @:hlNative("haxeon_runtime", "__sys_rename")
 extern function fileSystemRename(path:String, newPath:String):Bool;
+#else
+// Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
+function fileSystemExists(path:String):Bool
+	return runtime.MemoryFileSystem.exists(path);
+
+function fileSystemIsDirectory(path:String):Bool
+	return runtime.MemoryFileSystem.isDirectory(path);
+
+function fileSystemFullPath(path:String):String
+	return runtime.MemoryFileSystem.normalize(path);
+
+function fileSystemReadDirectory(path:String):Array<String>
+	return runtime.MemoryFileSystem.readDirectory(path);
+
+function fileSystemMetadata(path:String):Null<Array<Int>>
+	return runtime.MemoryFileSystem.stat(path);
+
+/** Creates missing parents too, as the Haxe API documents. The mode is ignored. */
+function fileSystemCreateDirectory(path:String, mode:Int):Bool
+	return runtime.MemoryFileSystem.createDirectory(path, true);
+
+function fileSystemDeleteFile(path:String):Bool
+	return runtime.MemoryFileSystem.deleteFile(path);
+
+function fileSystemDeleteDirectory(path:String):Bool
+	return runtime.MemoryFileSystem.deleteDirectory(path);
+
+function fileSystemRename(path:String, newPath:String):Bool
+	return runtime.MemoryFileSystem.rename(path, newPath);
+#end
 
 /** Supported filesystem queries backed by the stable runtime ABI. */
 class FileSystem {

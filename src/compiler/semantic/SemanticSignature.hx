@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeAlias;
@@ -75,8 +76,21 @@ class SemanticSignature {
 		return fn.name
 			+ (typeParameters == null
 				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
-			+ "("
-			+ [for (argument in fn.arguments) parsedType(argument.type, definitions, [])].join(",") + ")->" + parsedType(fn.result, definitions, []);
+			+ "(" // Whether an argument may be omitted is part of the signature: callers are checked against the arity range.
+			+ [for (argument in fn.arguments) parsedArgument(argument, definitions)].join(",") + ")->" + parsedType(fn.result, definitions, []);
+	}
+
+	/**
+	 * An argument as callers see it: its type, whether it may be omitted, and what it defaults to. A caller that
+	 * omits an argument is lowered with the default at the call site, so a changed default changes every such call
+	 * although each still type-checks; the default's source text stands for its value.
+	 */
+	static function parsedArgument(argument:AstArgument, definitions:Map<String, AstType>):String {
+		var type = parsedType(argument.type, definitions, []);
+		if (argument.defaultValue == null)
+			return (argument.optional == true ? "?" : "") + type;
+		var span = argument.span;
+		return "?" + type + "=" + span.file.slice(span.start, span.end);
 	}
 
 	static function parsedConstraint(fn:AstFunction, parameter:String, definitions:Map<String, AstType>):String {

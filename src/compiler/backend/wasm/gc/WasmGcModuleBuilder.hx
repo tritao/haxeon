@@ -9,10 +9,10 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.IrFunction;
+import compiler.ir.IrGraph;
 import compiler.ir.IrVerifier;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
-import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmExceptionLowering;
 import compiler.backend.wasm.gc.WasmGcMaps;
@@ -27,6 +27,7 @@ import compiler.backend.wasm.WasmPatch;
 import compiler.backend.wasm.gc.WasmGcRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
+import compiler.backend.wasm.WasmCAbi;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmModule.WasmDataSegment;
@@ -50,7 +51,7 @@ class WasmGcModuleBuilder {
 		IrVerifier.verify(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
-			exportedFunctions = options.exports == null ? [] : options.exports,
+			exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
 			roots = exportedFunctions.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
@@ -100,6 +101,13 @@ class WasmGcModuleBuilder {
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
+		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
+		// needs every class's toString index and is defined later.
+		if (usedNatives.exists("__std_string"))
+			functions.set("__std_string", module.addFunction(new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes))));
+		for (name in ["__std_is_of_type", "__std_is_exact_type", "__exception_matches"])
+			if (usedNatives.exists(name))
+				addGcTypeTest(module, functions, plan, gcRepresentation, name);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		WasmGcDynamicArrays.register(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
@@ -107,14 +115,17 @@ class WasmGcModuleBuilder {
 		if (requiresScratchMemory) {
 			scratchAllocator = addGcScratchAllocator(module, scratchTop);
 		}
-		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions)),
-			representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
-				function(context) {
-					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
-						context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
-						functionInterop = gcInterop.forFunctionContext(functionContext);
-					return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
-				});
+		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions));
+		// Records hold roots in an Array<ManagedBytes>; without one, no pointer field borrows GC bytes.
+		if (requiresScratchMemory && Lambda.exists(plan.arrayElementTypes(), element -> Type.enumEq(element, ManagedBytes)))
+			gcInterop.addRootRelocator(module);
+		var representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
+			function(context) {
+				var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
+					context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
+					functionInterop = gcInterop.forFunctionContext(functionContext);
+				return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
+			});
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [representation.values.valueType(Dyn)],
 			results: []
@@ -134,9 +145,13 @@ class WasmGcModuleBuilder {
 			var type = plan.wasmFunctionType([for (argument in fn.arguments) argument.type], fn.result);
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
+		if (usedNatives.exists("__std_string"))
+			defineGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
+		var closureAdapters = WasmGcClosureAdapters.reserve(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
@@ -250,9 +265,9 @@ class WasmGcModuleBuilder {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
-			var cfg = new WasmCfgAnalysis(fn);
-			for (blockId in cfg.graph.order)
-				for (located in cfg.graph.block(blockId).instructions)
+			var graph = new IrGraph(fn);
+			for (blockId in graph.order)
+				for (located in graph.block(blockId).instructions)
 					switch located.value {
 						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), GlobalGet(_, _),
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
@@ -291,6 +306,36 @@ class WasmGcModuleBuilder {
 			case Function(_, _): true;
 			default: false;
 		};
+
+	/** One shared function per Dynamic type test native, each testing a value against every type in the program. */
+	static function addGcTypeTest(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation, name:String):Void {
+		var locals:Array<WasmLocal> = [], nextLocal = 2, allocateLocal:WasmValueType->Int = function(type) {
+			locals.push({type: type});
+			return nextLocal++;
+		};
+		var resultLocal = allocateLocal(I32),
+			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).typeTestBody(name, 0, 1, resultLocal);
+		body.push(LocalGet(resultLocal));
+		body.push(Return);
+		functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType([Dyn, TypeRef], Bool), locals, body)));
+	}
+
+	/**
+	 * Std.string of a Dynamic value tests the value against every class in the program, so its call sites, runtime
+	 * helpers included, share one function instead of each carrying that dispatch. Its index is reserved early and
+	 * its body defined here, once every class's toString has an index.
+	 */
+	static function defineGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation):Void {
+		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = function(type) {
+			locals.push({type: type});
+			return nextLocal++;
+		};
+		var resultLocal = allocateLocal(plan.valueType(Bytes)),
+			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).stdStringBody(0, resultLocal);
+		body.push(LocalGet(resultLocal));
+		body.push(Return);
+		module.setFunction(functions.get("__std_string"), new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
+	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
 			used:Map<String, Bool>):Void {
@@ -377,23 +422,24 @@ class WasmGcModuleBuilder {
 				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
 				"__math_log", "Math.mathIsFinite", "__math_is_finite", "Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic",
 				"__std_string", "__std_is_of_type", "__std_is_exact_type", "__exception_matches", "__reflect_is_object", "__dynamic_equal",
-				"__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.and", "haxe.Int64.or",
-				"haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt", "haxe.Int64.toInt",
-				"__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_blit", "__bytes_get_i32", "__bytes_get_float",
-				"__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64",
+				"__f64_to_i64_bits", "__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.neg", "haxe.Int64.and",
+				"haxe.Int64.or", "haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt",
+				"haxe.Int64.fromFloat", "haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set",
+				"__bytes_blit", "__bytes_get_i32", "__bytes_get_float", "__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI8", "setI8",
+				"getU8", "setU8", "getI16", "setI16", "getU16", "setU16", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64",
 				"__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer",
-				"structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "__bytes_input_new",
-				"__bytes_input_position", "__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32",
-				"__bytes_input_read_f64", "__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian",
-				"__bytes_output_set_big_endian", "__bytes_output_write_byte", "__bytes_output_write_i32", "__bytes_output_write_f64",
-				"__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer",
-				"native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length", "__string_char_at",
-				"__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full", "__string_starts_with", "__string_ends_with",
-				"__int64_parse", "__int64_to_string", "__int64_to_float", "__string_index_of", "__string_index_of_from", "__string_last_index_of",
-				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring",
-				"__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
-				"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_callback_create", "native_callback_close",
-				"native_callback_error_kind", "native_callback_take_error": true;
+				"structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "structFromLinear",
+				"structToLinear", "nativePointerFromAddress", "nativeCallbackFromIndex", "nativeCallbackIndex", "__bytes_input_new", "__bytes_input_position",
+				"__bytes_input_big_endian", "__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64",
+				"__bytes_input_read_string", "__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian",
+				"__bytes_output_write_byte", "__bytes_output_write_i32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write",
+				"__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer", "native_pointer_close", "native_pointer_is_closed",
+				"native_pointer_owned_from_slot", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
+				"__string_compare_full", "__string_starts_with", "__string_ends_with", "__int64_parse", "__int64_to_string", "__int64_to_float",
+				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
+				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32",
+				"__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
+				"sys_get_char", "sys_exit": true;
 			default: false;
 		};
 	}
@@ -476,9 +522,9 @@ class WasmGcModuleBuilder {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name))
 				continue;
-			var cfg = new WasmCfgAnalysis(fn);
-			for (blockId in cfg.graph.order)
-				for (located in cfg.graph.block(blockId).instructions)
+			var graph = new IrGraph(fn);
+			for (blockId in graph.order)
+				for (located in graph.block(blockId).instructions)
 					switch located.value {
 						case Call(output, name, _) if (output.type != Void):
 							var parts = WasmModuleSupport.mapNativeParts(name);
@@ -540,6 +586,7 @@ class WasmGcModuleBuilder {
 			case F32: F64;
 			case F64: F64;
 			case Abstract("native_pointer"): I32;
+			case Abstract("native_callback"): I32;
 			case _: throw 'Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}';
 		};
 
@@ -557,17 +604,17 @@ class WasmGcModuleBuilder {
 							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _): I32;
 						case Value: gcCNativeValueType(native.arguments[index]);
 					});
-			var type:WasmFunctionType = {
-				parameters: parameters,
-				results: switch native.result {
-					case Void: [];
-					case ManagedBytes if (native.fixedResult != null): [I32];
-					case ManagedBytes if (native.pointerLength != null): [I32];
-					case _: [gcCNativeValueType(native.result)];
-				}
-			}, importModule = native.library == null
-				|| native.library == "" ? "env" : native.library, importName = native.symbol == null
-					|| native.symbol == "" ? native.name : native.symbol;
+			var results = switch native.result {
+				case Void: [];
+				case ManagedBytes if (native.fixedResult != null): [I32];
+				case ManagedBytes if (native.pointerLength != null): [I32];
+				case _: [gcCNativeValueType(native.result)];
+			};
+			// Release imports take the raw pointer only; every other import follows the Wasm32 C ABI.
+			var type:WasmFunctionType = isGcPointerRelease(program,
+				native) ? {parameters: parameters, results: results} : WasmCAbi.of(native).importType(parameters, results),
+				importModule = native.library == null || native.library == "" ? "env" : native.library,
+				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 			functions.set(native.name, module.addImport(importModule, importName, type));
 		}
 	}
@@ -623,7 +670,7 @@ class WasmGcModuleBuilder {
 			return true;
 		for (native in program.natives)
 			if (native.name == name)
-				return isSupportedGcRuntimeNative(native.symbol);
+				return isSupportedGcRuntimeNative(native.symbol) || WasmModuleSupport.hostCNative(program, native.name) != null;
 		return false;
 	}
 
@@ -669,7 +716,8 @@ class WasmGcModuleBuilder {
 				for (located in block.instructions)
 					switch located.value {
 						case CallClosure(_, closure, _):
-							recordGcClosureType(module, plan, result, closure.type, false);
+							// Any closure may be an adapter (WasmGcClosureAdapters), which is an instance closure.
+							recordGcClosureType(module, plan, result, closure.type, true);
 						case StaticClosure(output, _):
 							recordGcClosureType(module, plan, result, output.type, false);
 						case InstanceClosure(output, _, _):

@@ -34,6 +34,9 @@ class HxiAbi {
 	public final longBits:Int;
 	public final wcharBits:Int;
 
+	/** Largest alignment of a scalar field: 64-bit scalars align to 4 only on the System V i386 ABI. */
+	public final scalarAlignLimit:Int;
+
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:Null<HxiInterface>;
 	final classifications:Map<String, HxiAbiValue> = [];
@@ -65,6 +68,11 @@ class HxiAbi {
 		var windows = this.target.indexOf("windows") >= 0 || this.target.indexOf("mingw") >= 0 || this.target.indexOf("msvc") >= 0;
 		longBits = windows ? 32 : pointerBits;
 		wcharBits = windows ? 16 : 32;
+		scalarAlignLimit = switch architecture {
+			case "i386" | "i486" | "i586" | "i686" | "x86": windows ? 8 : 4;
+			// Wasm32 and ARM (AAPCS) align 64-bit scalars to 8, as does the portable 32-bit profile audited on Wasm.
+			default: 8;
+		};
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
 				declarations.set(name, declaration);
@@ -99,7 +107,7 @@ class HxiAbi {
 				switch classify(type) {
 					case IntegerValue(bits, _), EnumerationValue(_, bits, _), FloatValue(bits):
 						var size = Std.int(bits / 8);
-						{size: size, align: Std.int(Math.min(size, pointerBits / 8))};
+						{size: size, align: size < scalarAlignLimit ? size : scalarAlignLimit};
 					case Boolean32Value: {size: 4, align: 4};
 					case HandleValue(_): {size: 4, align: 4};
 					case PointerValue(_, _, _, _) | Utf8Value(_): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};

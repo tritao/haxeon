@@ -154,7 +154,7 @@ class DeclarationIndex {
 		return resolveInner(type, span == null ? fallbackSpan : span, [], substitutions == null ? [] : substitutions);
 
 	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
-		return FieldInference.resolvedType(field, owner, classes, []);
+		return FieldInference.resolvedType(field, owner, classes, [], enums, enumAbstracts);
 
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');

@@ -20,6 +20,8 @@ class RuntimeType {
 			case TFloat: "f64";
 			case TBool: "bool";
 			case TString: "bytes";
+			// IrGenerator lowers a nullable reference to the reference itself, so Array<Null<String>> holds strings.
+			case TNullable(TString): "bytes";
 			case TNullable(_): "ref";
 			default: isRuntimeReference(element) ? "ref" : null;
 		};
