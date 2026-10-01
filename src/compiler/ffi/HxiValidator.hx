@@ -346,6 +346,17 @@ class HxiValidator {
 					validateType(result, names, declarationsByName, span, true);
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
+					if (resultPolicy.span != null) {
+						if (resultPolicy.length != null)
+							fail('@span and @length on "$name" are exclusive: a span borrows the memory that @length copies', span);
+						if (transfersOwnership(resultPolicy.ownership, resultPolicy.handleDisposition))
+							fail('@span on "$name" borrows its memory and cannot be @owned', span);
+						if (hasDirectedParameter(parameters))
+							fail('@span on "$name" requires plain input parameters, which its count function also takes', span);
+						var element = spanElement(result, abi);
+						if (element == null || HxiHaxeEmitter.spanElementType(element, true) == null)
+							fail('@span on "$name" requires a pointer to 32- or 64-bit integers or 64-bit floats', span);
+					}
 			}
 		validatePointerResultContracts(value, declarationsByName, abi);
 	}
@@ -389,6 +400,8 @@ class HxiValidator {
 						}
 					if (resultPolicy.length != null)
 						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length, declarations, abi, span);
+					if (resultPolicy.span != null)
+						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.span, declarations, abi, span, "span");
 				case _:
 			}
 	}
@@ -417,8 +430,8 @@ class HxiValidator {
 	}
 
 	static function validateLengthFunction(value:HxiInterface, owner:String, parameters:Array<HxiParameter>, callConvention:String, lengthSymbol:String,
-			declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan):Void {
-		var length = referencedFunction(value, owner, "length", lengthSymbol, span);
+			declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan, role:String = "length"):Void {
+		var length = referencedFunction(value, owner, role, lengthSymbol, span);
 		switch length {
 			case Function(lengthName, lengthParameters, lengthResult, _, _, lengthCallConvention, _, lengthSpan):
 				if (lengthCallConvention != callConvention)
@@ -770,6 +783,21 @@ class HxiValidator {
 		visiting.remove(name);
 		complete.set(name, true);
 	}
+
+	static function hasDirectedParameter(parameters:Array<HxiParameter>):Bool {
+		for (parameter in parameters)
+			if (parameter.direction != In)
+				return true;
+		return false;
+	}
+
+	/** The value a @span result points at, or null when the result is no pointer. */
+	static function spanElement(type:HxiType, abi:HxiAbi):Null<HxiAbiValue>
+		return switch type {
+			case Nullable(element) | Const(element): spanElement(element, abi);
+			case Pointer(element): abi.classify(element);
+			case _: null;
+		};
 
 	static function bytePointerLike(type:HxiType, names:Map<String, HxiDeclaration>):Bool
 		return switch type {

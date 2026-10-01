@@ -89,7 +89,7 @@ class HxiWriter {
 				if (resultPolicy.metadata == null)
 					writeFunctionMetadataFallback(output, callConvention, resultPolicy);
 				else
-					writeMetadata(output, resultPolicy.metadata, ["callconv", "borrowed", "owned", "length"]);
+					writeMetadata(output, resultPolicy.metadata, ["callconv", "borrowed", "owned", "length", "span"]);
 				output.add(";\n");
 		}
 
@@ -153,6 +153,8 @@ class HxiWriter {
 		writeHandleDisposition(output, policy.handleDisposition);
 		if (policy.length != null)
 			output.add(' @length("${policy.length}")');
+		if (policy.span != null)
+			output.add(' @span("${policy.span}")');
 	}
 
 	static function writeMetadata(output:StringBuf, metadata:Map<String, Array<String>>, names:Array<String>):Void {

@@ -494,6 +494,18 @@ owned results. Borrowed memory is never released. Nullable pointer results
 become Haxe `null`; a non-null result contract returning `NULL` is a runtime
 boundary error. `@length` is rejected for opaque resource pointers.
 
+`@span("count_symbol")` reads a borrowed pointer result in place instead of
+copying it: the result projects to `runtime.memory.NativeSpan<T>` over the
+returned address and the element count its count function returns. Like a
+length function, the count function takes the pointer function's arguments and
+returns `size_t`. The pointee must be a 32- or 64-bit integer or a 64-bit float
+(`Int`, `haxe.Int64`, `Float`); the function may take only plain inputs. A span
+result is always borrowed: the memory belongs to native code, and a span stays
+valid only while that memory does. Attach the owning Haxe object with
+`span.ownedBy(owner)` (a `NativeSpanOwner`) to make reads throw once the owner
+is closed. C headers declare it with `__attribute__((annotate("hxi:returns_span")))`
+behind a one-argument macro naming the count function.
+
 HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
 metadata project to typed Haxe abstracts backed by managed bytes. Constructing
 the abstract zero-initializes exactly the declared size. Generated `get_field`
@@ -556,6 +568,15 @@ accepts `haxe.io.Bytes`, an offset, and a length, validates the range, and
 submits a managed view without copying the selected bytes. This is intended
 for coarse command and upload transactions; it does not add per-element FFI
 calls.
+
+A function whose counted input arrays all hold fixed-layout scalars, whose
+other parameters are plain values, and whose result is a plain value also
+receives a `<Function>_span` companion. It takes each array as a
+`NativeSpan<T>` and passes its address to native code for the call, with no
+copy; each count argument is its span's length, spans sharing a count must
+have equal lengths, and a span whose owner is closed is refused. This passes
+memory one native library owns to another without marshalling it through
+Haxe.
 
 Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`

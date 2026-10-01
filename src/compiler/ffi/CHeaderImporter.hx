@@ -268,7 +268,7 @@ class CHeaderImporter {
 				if (field(node, "variadic") == true)
 					throw '${declarationLocation(node)}: unsupported variadic function "$name"';
 				var parameters = [for (child in children(node)) if (field(child, "kind") == "ParmVarDecl") child],
-					rawSignature:String = field(type, "qualType"),
+					rawSignature:String = withoutMacroQualifier(field(type, "qualType"), field(type, "desugaredQualType")),
 					callConvention = callingConvention(rawSignature),
 					signature = stripCallingConvention(rawSignature),
 					result = StringTools.trim(signature.substring(0, signature.indexOf("("))),
@@ -289,10 +289,19 @@ class CHeaderImporter {
 					handleDisposition = Owned;
 					resultMetadata.set("owned", []);
 				}
+				var span:Null<String> = null;
+				if (hasAnnotation(node, "hxi:returns_span")) {
+					span = annotationMacroArgument(node, "hxi:returns_span");
+					if (span == null)
+						throw '${declarationLocation(node)}: span result of "$name" needs its element-count function';
+					ownership = Borrowed;
+					resultMetadata.set("span", ['"$span"']);
+				}
 				var policy:HxiResultPolicy = {
 					ownership: ownership,
 					handleDisposition: handleDisposition,
 					length: null,
+					span: span,
 					metadata: resultMetadata
 				};
 				return Function(name, modelParameters, typeFromProjection(borrowedUtf8 ? "utf8" : mapType(result)), null, false, callConvention, policy,
@@ -792,6 +801,18 @@ class CHeaderImporter {
 
 	static function callingConvention(type:String):String
 		return type.indexOf("__attribute__((stdcall))") >= 0 || type.indexOf("__stdcall") >= 0 ? "stdcall" : "cdecl";
+
+	/**
+		A function type without the annotation macro clang spells in front of it
+		when a calling convention makes it a macro-qualified type, as in
+		`MK_RETURNS_SPAN(count) const double *(handle) __attribute__((cdecl))`.
+	**/
+	static function withoutMacroQualifier(type:String, desugared:Null<String>):String {
+		if (desugared == null || desugared == type)
+			return type;
+		var qualifier = ~/^[A-Za-z_][A-Za-z0-9_]*\([^()]*\)\s+/;
+		return qualifier.match(type) ? qualifier.matchedRight() : type;
+	}
 
 	static function stripCallingConvention(type:String):String {
 		type = StringTools.replace(type, " __attribute__((stdcall))", "");

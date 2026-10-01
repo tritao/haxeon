@@ -361,18 +361,20 @@ class HxiParser {
 		var parameters = parseParameters();
 		expect("->");
 		var result = parseType(),
-			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length", "callconv"]),
+			metadata = parseMetadata(["symbol", "leaf", "borrowed", "owned", "length", "span", "callconv"]),
 			symbol = metadataValue(metadata, "symbol", false),
 			leaf = metadataFlag(metadata, "leaf"),
 			borrowed = metadataFlag(metadata, "borrowed"),
 			ownership = metadataOwnership(metadata, "owned"),
 			length = metadataValue(metadata, "length", false),
+			span = metadataValue(metadata, "span", false),
 			callConvention = metadataValue(metadata, "callconv", false),
 			end = expect(";").span;
 		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
-			ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+			ownership: ownership != Unspecified ? ownership : borrowed || span != null ? Borrowed : Unspecified,
 			handleDisposition: metadataHandleDisposition(metadata, "owned"),
 			length: length,
+			span: span,
 			metadata: metadata
 		}, start.merge(end));
 	}

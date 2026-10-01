@@ -71,6 +71,10 @@ typedef HxiResultPolicy = {
 	final ownership:HxiOwnership;
 	final handleDisposition:HxiHandleDisposition;
 	final length:Null<String>;
+
+	/** The size_t element-count function of a borrowed pointer result read as a NativeSpan. */
+	final span:Null<String>;
+
 	final metadata:Map<String, Array<String>>;
 }
 

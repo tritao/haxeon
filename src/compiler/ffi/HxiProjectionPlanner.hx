@@ -181,7 +181,9 @@ class HxiProjectionPlanner {
 				case AggregateValue(name, _, _): HxiHaxeEmitter.projectedTypeName(name, profile);
 				case _: null;
 			},
+			spanResult = signature.semantics.result.match(NativeSpan(_, _)),
 			rawName = hasOutputParameters
+				|| spanResult
 				|| ownedResult != null
 				|| aggregateResult != null
 				|| callbackResult ? '__hxi_raw_$nativeName' : publicName,
@@ -241,6 +243,7 @@ class HxiProjectionPlanner {
 					case _: projectedAbiType(value, profile);
 				}
 			case ManagedBytes(_, _, _, _): "haxe.io.Bytes";
+			case NativeSpan(_, element): 'runtime.memory.NativeSpan<${HxiHaxeEmitter.spanElementType(element, true)}>';
 			case BorrowedPointer(value) | PlainValue(value): projectedAbiType(value, profile);
 			case BorrowedHandle(name): HxiHaxeEmitter.projectedTypeName(name, profile);
 		};

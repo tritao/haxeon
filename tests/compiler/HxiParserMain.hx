@@ -822,6 +822,25 @@ class HxiParserMain {
 			"return target-sized unsigned size_t");
 		expectError('interface bad @target("x86_64-w64-windows-gnu") @library("bad") { extern fn create() -> ptr<u8> @borrowed @length("length"); extern fn length() -> c_size @symbol("length") @callconv("system"); }',
 			"must use calling convention");
+		var spanCount = 'extern fn count(value: i32) -> c_size @symbol("count");';
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32) -> ptr<const<u16>> @span("count"); $spanCount }',
+			"requires a pointer to 32- or 64-bit integers or 64-bit floats");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32) -> i32 @span("count"); $spanCount }',
+			"requires a pointer to 32- or 64-bit integers or 64-bit floats");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32) -> ptr<const<u8>> @span("count") @length("count"); $spanCount }',
+			"are exclusive");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32) -> ptr<f64> @span("count") @owned("release"); extern fn release(value: ptr<void>) -> void @symbol("release"); $spanCount }',
+			"cannot be @owned");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32, out: ptr<i32> @out) -> ptr<const<f64>> @span("count"); $spanCount }',
+			"requires plain input parameters");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i32) -> ptr<const<f64>> @span("missing"); }',
+			"must name a function declared in interface");
+		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { extern fn values(value: i64) -> ptr<const<f64>> @span("count"); $spanCount }',
+			"must match the pointer function ABI type");
+		var spans = HxiParser.parse("spans.hxi",
+			'interface spans @target("x86_64-linux-gnu") @library("spans") { extern fn values(value: i32) -> ptr<const<f64>> @span("count"); $spanCount }');
+		expect(HxiWriter.write(spans).indexOf('extern fn values(value: i32) -> ptr<const<f64>> @span("count");') >= 0,
+			"span results should round-trip through the HXI writer");
 		var compiler = new Compiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1

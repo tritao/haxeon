@@ -56,6 +56,8 @@ class CHeaderImporterMain {
 			"borrowed buffer field annotations should retain their length contract");
 		expect(first.indexOf("extern fn sample_error() -> utf8 @borrowed") >= 0,
 			"annotated borrowed UTF-8 results should import with their ownership contract");
+		expect(first.indexOf('extern fn sample_values(handle: sample_handle) -> ptr<const<f64>> @span("sample_values_count")') >= 0,
+			"span results should import with their count function");
 		expect(first.indexOf("extern fn sample_check_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
 			"explicit UTF-8 marker typedefs should import as string contracts");
 		expect(first.indexOf("extern fn sample_check_annotated_utf8(value: utf8, optional: nullable<utf8>)") >= 0,
@@ -140,7 +142,8 @@ class CHeaderImporterMain {
 			"dependent headers should retain their own declarations and dependency references");
 		var windows = importHeaderText("tests/ffi/import_fixture.h", "i686-w64-windows-gnu", ["tests/ffi"]);
 		expect(windows.indexOf('callback sample_stdcall_callback = fn(arg0: i32) -> i32 @callconv("stdcall")') >= 0
-			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0,
+			&& windows.indexOf('extern fn sample_stdcall_function(value: i32) -> i32 @callconv("stdcall")') >= 0
+			&& windows.indexOf('extern fn sample_stdcall_ticks() -> ptr<const<i64>> @callconv("stdcall") @span("sample_stdcall_ticks_count")') >= 0,
 			"Clang calling conventions should survive callback and function import");
 		HxiParser.parse("import_fixture-windows.hxi", windows);
 		var orderAb = importHeaderText("tests/ffi/import_order_ab.h", "x86_64-linux-gnu", ["tests/ffi"], "clang", "sample", "Order"),

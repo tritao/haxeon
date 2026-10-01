@@ -153,6 +153,8 @@ try-typed-int	42
 try-multiple-catches	42
 local-shadowing	42
 captured-shadowing	42
+module-function-shadowing	42
+abstract-sibling-call	42
 dynamic-argument	42
 anonymous-record	42
 switch-expression	42

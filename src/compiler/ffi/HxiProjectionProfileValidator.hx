@@ -2,6 +2,7 @@ package compiler.ffi;
 
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiModel.HxiParameterDirection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 
@@ -242,8 +243,9 @@ class HxiProjectionProfileValidator {
 					for (field in fields)
 						HxiHaxeEmitter.addProjectedName(path, 'structure "$name"', HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
 							'structure field "$name.${field.name}"', members);
-				case Function(name, parameters, result, _, _, _, _, _):
-					var publicName = HxiHaxeEmitter.projectedFunctionName(name, profile);
+				case Function(name, parameters, result, _, _, _, functionPolicy, _):
+					var publicName = HxiHaxeEmitter.projectedFunctionName(name, profile),
+						resultSpan = functionPolicy.span;
 					HxiHaxeEmitter.addProjectedName(path, "module", publicName, 'function "$name"', functionModuleNames);
 					var resultPolicy = HxiHaxeEmitter.resultErrorProjection(result, profile);
 					if (resultPolicy != null)
@@ -256,6 +258,12 @@ class HxiProjectionProfileValidator {
 							functionModuleNames);
 					if (HxiHaxeEmitter.byteArrayParameter(parameters) != null)
 						HxiHaxeEmitter.addProjectedName(path, "module", publicName + "_slice", 'byte-slice wrapper for "$name"', functionModuleNames);
+					if (Lambda.exists(parameters, parameter -> parameter.direction.match(InArray(_)))) {
+						HxiHaxeEmitter.addProjectedName(path, "module", publicName + "_span", 'span wrapper for "$name"', functionModuleNames);
+						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_span_$name', 'raw span call for "$name"', functionModuleNames);
+					}
+					if (resultSpan != null)
+						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_raw_$name', 'raw span result call for "$name"', functionModuleNames);
 				case Constant(name, _, _):
 					HxiHaxeEmitter.addProjectedName(path, "constants", HxiHaxeEmitter.projectedConstantName(name, profile), 'constant "$name"',
 						constantMembers);

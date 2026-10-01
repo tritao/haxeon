@@ -546,3 +546,44 @@ FIXTURE_API int32_t native_fixture_split_points( const native_fixture_point *val
 	}
 	return 42;
 }
+
+/* Borrowed arrays read in place as spans, and arrays passed in from spans. */
+static const double native_fixture_span_values_storage[] = {1.5, 2.5, 4.0, -8.0};
+static const int64_t native_fixture_span_ticks_storage[] = {INT64_C(5000000000), INT64_C(-7)};
+static const uint32_t native_fixture_span_codes_storage[] = {65535, 7, 300};
+
+FIXTURE_API const double *native_fixture_span_values( int32_t which ) {
+	return which == 0 ? NULL : native_fixture_span_values_storage;
+}
+
+FIXTURE_API size_t native_fixture_span_values_count( int32_t which ) {
+	return which == 0 ? 0 : sizeof(native_fixture_span_values_storage) / sizeof(native_fixture_span_values_storage[0]);
+}
+
+FIXTURE_API const int64_t *native_fixture_span_ticks( void ) {
+	return native_fixture_span_ticks_storage;
+}
+
+FIXTURE_API size_t native_fixture_span_ticks_count( void ) {
+	return 2;
+}
+
+FIXTURE_API const uint32_t *native_fixture_span_codes( void ) {
+	return native_fixture_span_codes_storage;
+}
+
+FIXTURE_API size_t native_fixture_span_codes_count( void ) {
+	return 3;
+}
+
+FIXTURE_API double native_fixture_span_weighted_sum( const double *values, const double *weights, uint32_t count, double bias ) {
+	double total = bias;
+	for( uint32_t index = 0; index < count; index++ ) total += values[index] * weights[index];
+	return total;
+}
+
+FIXTURE_API uint32_t native_fixture_span_byte_sum( const uint8_t *bytes, uint32_t length ) {
+	uint32_t total = 0;
+	for( uint32_t index = 0; index < length; index++ ) total += bytes[index];
+	return total;
+}

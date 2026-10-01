@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdint.h>
 
 #define HXI_OUT __attribute__((annotate("hxi:out")))
@@ -10,6 +11,7 @@
 #define HXI_OUT_UTF8_ARRAY(count) __attribute__((annotate("hxi:out_array"))) __attribute__((annotate("hxi:utf8_array")))
 #define HXI_RETAINED __attribute__((annotate("hxi:retained")))
 #define HXI_RETURNS_BORROWED_UTF8 __attribute__((annotate("hxi:returns_borrowed_utf8")))
+#define HXI_RETURNS_SPAN(count) __attribute__((annotate("hxi:returns_span")))
 #define HXI_UTF8 __attribute__((annotate("hxi:utf8")))
 #define HXI_NULLABLE_UTF8 __attribute__((annotate("hxi:nullable_utf8")))
 #define HXI_BORROWED __attribute__((annotate("hxi:borrowed")))
@@ -30,6 +32,8 @@ typedef void (*sample_visit_callback)(const struct sample_options *, void *);
 #ifdef _WIN32
 typedef int32_t (__stdcall *sample_stdcall_callback)(int32_t);
 int32_t __stdcall sample_stdcall_function(int32_t value);
+size_t __stdcall sample_stdcall_ticks_count(void);
+const int64_t *__stdcall sample_stdcall_ticks(void) HXI_RETURNS_SPAN(sample_stdcall_ticks_count);
 #endif
 
 enum {
@@ -97,6 +101,8 @@ sample_mode sample_check_mode(sample_mode value);
 sample_flags sample_check_flags(sample_flags value);
 sample_wide_flags sample_check_wide_flags(sample_wide_flags value);
 const char *sample_error(void) HXI_RETURNS_BORROWED_UTF8;
+size_t sample_values_count(sample_handle handle);
+const double *sample_values(sample_handle handle) HXI_RETURNS_SPAN(sample_values_count);
 int32_t sample_check_utf8(hxi_utf8 value, hxi_nullable_utf8 optional);
 int32_t sample_check_annotated_utf8(const char *value HXI_UTF8,
                                     const char *optional HXI_NULLABLE_UTF8);

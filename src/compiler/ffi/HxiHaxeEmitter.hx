@@ -210,7 +210,7 @@ class HxiHaxeEmitter {
 			}
 		for (fn in abi.functions())
 			switch fn.semantics.result {
-				case OwnedHandle(_, _):
+				case OwnedHandle(_, _) | NativeSpan(_, _):
 					directed.set(fn.name, true);
 				case _:
 			}
@@ -304,7 +304,7 @@ class HxiHaxeEmitter {
 						ownership: "owned",
 						release: release
 					};
-				case BorrowedPointer(_) | BorrowedHandle(_): {
+				case BorrowedPointer(_) | BorrowedHandle(_) | NativeSpan(_, _): {
 						managedBytes: false,
 						length: null,
 						ownership: "borrowed",
@@ -331,13 +331,37 @@ class HxiHaxeEmitter {
 					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
 					argumentModes: argumentModes,
-					result: resultContract.managedBytes || fixedResult != null ? ManagedBytes : irType(returnValue.code, true),
+					result: resultContract.managedBytes
+					|| fixedResult != null ? ManagedBytes : fn.semantics.result.match(NativeSpan(_, _)) ? IrType.RawPtr : irType(returnValue.code, true),
 					pointerOwnership: resultContract.ownership,
 					pointerRelease: resultContract.release,
 					pointerLength: resultContract.length,
 					pointerNullable: returnValue.nullable,
 					pointerSize: Std.int(abi.pointerBits / 8),
 					fixedResult: fixedResult
+				});
+			var spanInputs = supported && returnValue != null ? spanCompanionInputs(fn.semantics) : null;
+			if (spanInputs != null)
+				result.push({
+					name: nativeModule + ".__hxi_span_" + fn.name,
+					library: library,
+					symbol: fn.symbol,
+					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
+					arguments: [
+						for (index in 0...arguments.length)
+							spanInputs.exists(index) ? IrType.RawPtr : arguments[index]
+					],
+					argumentModes: [
+						for (index in 0...argumentModes.length)
+							spanInputs.exists(index) ? Value : argumentModes[index]
+					],
+					result: irType(returnValue.code, true),
+					pointerOwnership: "unspecified",
+					pointerRelease: null,
+					pointerLength: null,
+					pointerNullable: false,
+					pointerSize: Std.int(abi.pointerBits / 8),
+					fixedResult: null
 				});
 		}
 		return result;
@@ -1020,8 +1044,14 @@ class HxiHaxeEmitter {
 				output.add('@:cNative("${escape(library)}", "${escape(fn.symbol)}", "$signature")\n');
 				output.add('extern function $rawName(');
 				output.add([for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'].join(", "));
-				var resultType = result.haxeType;
-				if (result.code == 11)
+				var resultType = result.haxeType,
+					spanResult = switch fn.semantics.result {
+						case NativeSpan(count, element): {count: count, element: spanElementType(element, true)};
+						case _: null;
+					};
+				if (spanResult != null)
+					resultType = 'runtime.memory.RawPtr<${spanResult.element}>';
+				else if (result.code == 11)
 					if (fn.resultPolicy.length != null)
 						resultType = result.nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes";
 					else
@@ -1048,6 +1078,13 @@ class HxiHaxeEmitter {
 						case NoOutputWrapper:
 							throw 'Output parameters were not normalized for "${fn.name}"';
 					}
+				} else if (spanResult != null) {
+					var countName = switch functionDeclarationForSymbol(model.declarations, spanResult.count) {
+						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
+						case _: throw 'Native symbol "${spanResult.count}" is not an HXI function';
+					};
+					emitSpanResultWrapper(output, publicName, rawName, argumentTypes, spanResult.element, countName, Std.int(abi.pointerBits),
+						model.documentation.get(fn.name));
 				} else if (ownedHandleResult != null) {
 					emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
 				} else if (callbackResult != null) {
@@ -1064,6 +1101,9 @@ class HxiHaxeEmitter {
 				}
 				if (projectedFunction.checked != null)
 					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
+				var spanInputs = spanCompanionInputs(fn.semantics);
+				if (spanInputs != null)
+					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, spanInputs, abi);
 			}
 		var source = output.toString();
 		if (moduleKind == "types" && splitTypes)
@@ -1382,6 +1422,139 @@ class HxiHaxeEmitter {
 		emitDocumentationValue(output, documentation);
 		output.add('function $publicName(${arguments.join(", ")}):$ownedType return $ownedType.adopt($rawName(${callArguments.join(", ")}));\n');
 	}
+
+	/**
+		The element types of the counted input arrays of a function that can take
+		them as NativeSpans, by parameter index: one with plain or structure
+		inputs and at least one array of fixed-layout scalars, returning a plain
+		value. Null for any other function.
+	**/
+	public static function spanCompanionInputs(semantics:compiler.ffi.HxiSemantics.HxiSemanticFunction):Null<Map<Int, String>> {
+		switch semantics.result {
+			case PlainValue(VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | Boolean32Value | HandleValue(_)):
+			case _:
+				return null;
+		}
+		var inputs:Map<Int, String> = [], any = false;
+		for (index in 0...semantics.parameters.length)
+			switch semantics.parameters[index].kind {
+				case InputValue(PointerValue(_, _, _, structure)) if (structure != null):
+				case InputValue(PointerValue(_, _, _, _) | Utf8Value(_) | CallbackValue(_, _, _, _)):
+					return null;
+				case InputValue(_):
+				case InputArray(element, _):
+					var type = spanElementType(element);
+					if (type == null)
+						return null;
+					inputs.set(index, type);
+					any = true;
+				case InputBytes(_):
+					inputs.set(index, "UInt8");
+					any = true;
+				case _:
+					return null;
+			}
+		return any ? inputs : null;
+	}
+
+	/**
+		`<name>_span`: the function with its counted input arrays passed as
+		NativeSpans, read by native code in place for the call. Each count is the
+		length of its span; spans sharing a count must have equal lengths.
+	**/
+	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String, nativeName:String, publicName:String,
+			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, spanInputs:Map<Int, String>, abi:HxiAbi):Void {
+		var counts:Map<String, String> = [],
+			rawName = '__hxi_span_$nativeName',
+			arguments:Array<String> = [],
+			callArguments:Array<String> = [],
+			checks:Array<String> = [];
+		for (index in 0...parameters.length)
+			switch parameters[index].direction {
+				case InArray(count):
+					var name = parameters[index].name,
+						shared = counts.get(count);
+					checks.push('\tif (!$name.isOpen()) throw "HXI span argument $name is closed";\n');
+					if (shared != null)
+						checks.push('\tif ($name.length() != $shared.length()) throw "HXI span arguments $shared and $name must have the same length";\n');
+					else
+						counts.set(count, name);
+				case _:
+			}
+		for (index in 0...parameters.length) {
+			var parameter = parameters[index],
+				counted = counts.get(parameter.name);
+			if (spanInputs.exists(index)) {
+				arguments.push('${parameter.name}:runtime.memory.NativeSpan<${spanInputs.get(index)}>');
+				callArguments.push('${parameter.name}.data()');
+			} else if (counted != null) {
+				var limit = unsignedCountLimit(parameter.type, abi);
+				if (limit != null)
+					checks.push('\tif ($counted.length() > $limit) throw "HXI span argument $counted exceeds its count range";\n');
+				callArguments.push(arrayCountValue(parameter.type, '$counted.length()', abi));
+			} else {
+				arguments.push('${parameter.name}:${rawArgumentTypes[index]}');
+				callArguments.push(parameter.name);
+			}
+		}
+		output.add('@:cNative("${escape(library)}", "${escape(symbol)}", "$signature")\n');
+		output.add('extern function $rawName(');
+		output.add([
+			for (index in 0...rawArgumentTypes.length)
+				'arg$index:${spanInputs.exists(index) ? 'runtime.memory.RawPtr<${spanInputs.get(index)}>' : rawArgumentTypes[index]}'
+		].join(", "));
+		output.add('):$resultType;\n');
+		output.add('/** Calls $publicName with its arrays read in place from native spans, without copying them. */\n');
+		output.add('function ${publicName}_span(${arguments.join(", ")}):$resultType {\n');
+		for (check in checks)
+			output.add(check);
+		output.add('\t${resultType == "Void" ? "" : "return "}$rawName(${callArguments.join(", ")});\n');
+		output.add('}\n');
+	}
+
+	/** A @span result: the borrowed address and its count function's element count, as a NativeSpan. */
+	static function emitSpanResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, element:String, countName:String,
+			pointerBits:Int, documentation:Null<HxiDocumentation>):Void {
+		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
+			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
+			spanType = 'runtime.memory.NativeSpan<$element>';
+		emitDocumentationValue(output, documentation);
+		output.add('function $publicName(${arguments.join(", ")}):$spanType {\n');
+		output.add('\tvar __data = $rawName($callArguments);\n');
+		if (pointerBits == 64) {
+			output.add('\tvar __count = $countName($callArguments);\n');
+			output.add('\tif (haxe.Int64.compare(__count, haxe.Int64.ofInt(0)) < 0 || haxe.Int64.compare(__count, haxe.Int64.ofInt(2147483647)) > 0) throw "HXI span count exceeds the Int range";\n');
+			output.add('\treturn new $spanType(__data, haxe.Int64.toInt(__count));\n');
+		} else {
+			output.add('\tvar __count = $countName($callArguments);\n');
+			output.add('\tif (__count < 0) throw "HXI span count exceeds the Int range";\n');
+			output.add('\treturn new $spanType(__data, __count);\n');
+		}
+		output.add('}\n');
+	}
+
+	/**
+		The Haxe type a NativeSpan holds a native value as, of the value's own
+		size: native scalar types below 32 bits, `Int`, `haxe.Int64`, `Float32`,
+		and `Float`. Null for values a span cannot hold. A `readable` span is
+		read element by element from Haxe, which native scalar types cannot be
+		returned to yet, so it holds only `Int`, `haxe.Int64`, and `Float`.
+	**/
+	public static function spanElementType(value:HxiAbiValue, readable:Bool = false):Null<String>
+		return if (readable) switch value {
+			case IntegerValue(32, _) | EnumerationValue(_, 32, _): "Int";
+			case IntegerValue(64, _) | EnumerationValue(_, 64, _): "haxe.Int64";
+			case FloatValue(64): "Float";
+			case _: null;
+		} else switch value {
+			case IntegerValue(8, sign) | EnumerationValue(_, 8, sign): sign == Signed ? "Int8" : "UInt8";
+			case IntegerValue(16, sign) | EnumerationValue(_, 16, sign): sign == Signed ? "Int16" : "UInt16";
+			case IntegerValue(32, _) | EnumerationValue(_, 32, _): "Int";
+			case IntegerValue(64, _) | EnumerationValue(_, 64, _): "haxe.Int64";
+			case FloatValue(32): "Float32";
+			case FloatValue(64): "Float";
+			case _: null;
+		};
 
 	static function emitAggregateResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, structureType:String,
 			documentation:Null<HxiDocumentation>):Void {

@@ -320,6 +320,7 @@ class CxxAbiLowerer {
 				ownership: Owned(ownedRelease),
 				handleDisposition: Unspecified,
 				length: null,
+				span: null,
 				metadata: metadata
 			};
 		}
@@ -329,6 +330,7 @@ class CxxAbiLowerer {
 			ownership: borrowed ? Borrowed : Unspecified,
 			handleDisposition: Unspecified,
 			length: null,
+			span: null,
 			metadata: metadata
 		};
 	}

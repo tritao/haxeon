@@ -36,6 +36,9 @@ enum HxiSemanticResultKind {
 	BorrowedHandle(name:String);
 	OwnedHandle(name:String, destroy:String);
 	ManagedBytes(length:String, value:HxiAbiValue, ownership:HxiOwnership, handleDisposition:HxiHandleDisposition);
+
+	/** A borrowed pointer to `count` fixed-layout values, read in place as a NativeSpan. */
+	NativeSpan(count:String, element:HxiAbiValue);
 }
 
 typedef HxiSemanticFunction = {
@@ -77,8 +80,10 @@ class HxiSemantics {
 				case Function(name, parameters, result, symbol, _, callConvention, resultPolicy, _):
 					var normalizedParameters = [for (parameter in parameters) normalizeParameter(parameter, abi, declarations)],
 						nativeResult = abi.classify(result, true),
-						semanticResult = normalizeResult(result, nativeResult, resultPolicy.ownership, resultPolicy.handleDisposition, resultPolicy.length,
-							declarations);
+						semanticResult = resultPolicy.span != null ? NativeSpan(resultPolicy.span,
+							pointeeValue(result,
+								abi)) : normalizeResult(result, nativeResult, resultPolicy.ownership, resultPolicy.handleDisposition, resultPolicy.length,
+								declarations);
 					functions.push({
 						name: name,
 						symbol: symbol == null ? name : symbol,

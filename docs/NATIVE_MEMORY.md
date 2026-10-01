@@ -56,6 +56,30 @@ Raw pointers do not own their targets, keep them alive, or prevent invalidation.
 The compiler does not infer ownership, borrowing, or lifetimes. A pointer becomes
 invalid when its owning arena is reset or disposed.
 
+## Native spans
+
+`runtime.memory.NativeSpan<T>` is a borrowed, read-only view of `length()`
+consecutive values of `T` in native memory: a `RawPtr<T>` and a count. It
+never copies, frees, or keeps alive the memory it views.
+
+```haxe
+var span = new NativeSpan<Float>(pointer, count, owner); // owner is optional
+span.length();
+span.get(index)         // bounds-checked read of a scalar element
+span.at(index)          // bounds-checked RawPtr<T>, e.g. to a native record
+span.data()             // the unchecked base address
+span.slice(start, count)
+span.ownedBy(owner)     // the same view, readable only while owner is open
+span.toArray()          // a managed copy
+```
+
+An owner is a `NativeSpanOwner` whose `isClosed()` reports when the memory
+may no longer be read; reads through a span with a closed owner throw. FFI
+functions produce spans from `@span` pointer results and accept them through
+`_span` companions (see `C_HEADER_FFI.md`). Native scalar element types such
+as `UInt16` can be viewed and passed on, but not yet read with `get`, since
+they cannot be returned as Haxe values.
+
 ## Layout queries
 
 These operations resolve against the selected target ABI and become integer
