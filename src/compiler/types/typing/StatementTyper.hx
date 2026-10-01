@@ -607,6 +607,22 @@ class StatementTyper {
 				typedIterable = unwrapNullable(typeExpression(MethodCall(iterable, "iterator", [], span), scope, null, false));
 			default:
 		}
+		// `for (index => element in array)` is a loop over the indices that binds each element.
+		if (valueName != null)
+			switch typedIterable.type {
+				case TArray(_):
+					var array = "__haxeon_array" + span.start,
+						loopBody:Array<AstStatement> = [
+							VarDeclaration(valueName, null, Index(Variable(array, span), Variable(name, span), span), span)
+						];
+					for (statement in body)
+						loopBody.push(statement);
+					return typeIf(BoolLiteral(true, span), [
+						VarDeclaration(array, null, iterable, span),
+						ForIn(name, null, Range(IntegerLiteral(0, span), Member(Variable(array, span), "length", span), span), loopBody, span)
+					], [], span, scope, result);
+				default:
+			}
 		var originalIterable = typedIterable;
 		LoopFlow.enter(session, scope, body, [name, valueName]);
 		var element:CompilerType = switch typedIterable.type {
