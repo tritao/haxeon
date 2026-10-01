@@ -105,6 +105,7 @@ class TestCatalog {
 		"LiveNativeShiftMain",
 		"FieldInitializerEditMain",
 		"EqualityHelperEditMain",
+		"SharedEqualityHelperEditMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];

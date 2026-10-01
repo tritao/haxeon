@@ -296,6 +296,8 @@ class FrontendCompilation {
 			if (modules.exists(module))
 				modules.get(module).typeVersion++;
 		var allocationBeforeModulePrune = AllocationMeter.sample();
+		// A structural equality helper has one origin, but every helper that calls it needs it kept.
+		var calledEqualityHelpers = equalityHelpersStillCalled(modules, names, typedByName, owners, invalidated);
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -308,6 +310,11 @@ class FrontendCompilation {
 			if (ownedFunctions != null)
 				for (functionName in ownedFunctions)
 					valid.set(functionName, true);
+			for (cached in state.typedFunctions.keys())
+				if (calledEqualityHelpers.exists(cached)) {
+					valid.set(cached, true);
+					owners.set(cached, name);
+				}
 			if (generatedByModule.exists(name)) {
 				var lambdaNames = generatedByModule.get(name);
 				for (lambdaName in lambdaNames.keys())
@@ -526,6 +533,52 @@ class FrontendCompilation {
 	}
 
 	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
+	/**
+	 * The cached structural equality helpers that a helper kept by this build still calls, directly or through other
+	 * helpers. A helper reached through several comparisons has the origin of only one of them, so when that origin
+	 * is edited or stops comparing, pruning by origin alone would drop a helper that another kept helper calls and
+	 * the next verification fails on the unknown call. A helper is kept on its own when it was typed again in this
+	 * build or its origin is unchanged.
+	 */
+	static function equalityHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, invalidated:Map<String, Bool>):Map<String, Bool> {
+		var holders:Map<String, compiler.modules.ModuleState> = [],
+			kept:Map<String, Bool> = [],
+			pending:Array<String> = [];
+		for (name in names) {
+			var state = modules.get(name);
+			if (state == null)
+				continue;
+			for (cached => fn in state.typedFunctions) {
+				if (!StringTools.startsWith(cached, "$equality:"))
+					continue;
+				holders.set(cached, state);
+				var origin = fn.genericOrigin;
+				if (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin))) {
+					kept.set(cached, true);
+					pending.push(cached);
+				}
+			}
+		}
+		var result:Map<String, Bool> = [];
+		while (pending.length > 0) {
+			var current = pending.pop(),
+				body = holders.get(current).irFunctions.get(current);
+			if (body == null)
+				continue;
+			for (block in body.blocks)
+				for (instruction in block.instructions)
+					switch instruction.value {
+						case Call(_, callee, _) if (holders.exists(callee) && !kept.exists(callee)):
+							kept.set(callee, true);
+							result.set(callee, true);
+							pending.push(callee);
+						default:
+					}
+		}
+		return result;
+	}
+
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
 		return sameNames([for (decl in previous.enums) decl.name], [for (decl in current.enums) decl.name])
 			&& sameNames([for (decl in previous.enumAbstracts) decl.name], [for (decl in current.enumAbstracts) decl.name])
