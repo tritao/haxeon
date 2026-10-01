@@ -232,6 +232,12 @@ class WasmEncoder {
 		var body = new BytesOutput();
 		writeU32(body, module.functions.length);
 		for (fn in module.functions) {
+			var encoded = fn.encodedBody;
+			if (encoded != null) {
+				writeU32(body, encoded.length);
+				body.writeBytes(encoded, 0, encoded.length);
+				continue;
+			}
 			var functionBody = new BytesOutput();
 			writeLocals(functionBody, fn.locals);
 			writeInstructions(functionBody, fn.body);

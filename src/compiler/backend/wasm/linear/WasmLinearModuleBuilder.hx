@@ -12,6 +12,7 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
+import compiler.backend.wasm.WasmRuntimeLinker;
 import compiler.backend.wasm.linear.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTarget.WasmTargetConfig;
@@ -48,15 +49,8 @@ class WasmLinearModuleBuilder {
 	var rootFrameTop:Int;
 	var rootLimit:Int;
 	var heapStart:Int;
-	var heapTop:Int;
-	var freeHead:Int;
+	var heapState:Int;
 	var markStackTop:Int;
-	var gcBudget:Int;
-	var gcLiveBytes:Int;
-	var allocationCount:Int;
-	var allocationBytes:Int;
-	var largestAllocation:Int;
-	var collectionCount:Int;
 	var rootGlobals:Array<Int>;
 	var functions:Map<String, Int>;
 	var globals:Map<String, Int>;
@@ -145,6 +139,8 @@ class WasmLinearModuleBuilder {
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		staticDataAddresses = staticData.addresses;
+		heapState = WasmModuleSupport.align(nextData, 8);
+		nextData = heapState + WasmLayout.HEAP_STATE_SIZE;
 		module.memoryMin = 1;
 		module.exportMemory = !importMemory;
 		rootBase = WasmModuleSupport.align(Std.int(Math.max(1024, nextData)), 8);
@@ -154,38 +150,20 @@ class WasmLinearModuleBuilder {
 		if (contract != null && heapStart > contract.guestLimit)
 			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
 		module.memoryMin = contract == null ? WasmModuleSupport.memoryPages(heapStart) : WasmModuleSupport.memoryPages(contract.memorySize);
-		heapTop = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(heapStart)]});
 		rootTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
 		rootFrameTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		freeHead = module.globals.length;
-		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
 		markStackTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		gcBudget = -1;
-		gcLiveBytes = -1;
-		if (options.wasmGcStress != true) {
-			gcBudget = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(WasmLayout.GC_MIN_ALLOCATION_BUDGET)]});
-			gcLiveBytes = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		}
-		allocationCount = -1;
-		allocationBytes = -1;
-		largestAllocation = -1;
-		collectionCount = -1;
-		if (options.wasmMemoryStats == true) {
-			allocationCount = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			allocationBytes = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			largestAllocation = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-			collectionCount = module.globals.length;
-			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
-		}
+		// The C runtime's heap state starts empty, with the minimum collection budget.
+		var state = haxe.io.Bytes.alloc(WasmLayout.HEAP_STATE_SIZE);
+		state.setInt32(WasmLayout.HEAP_STATE_HEAP_START, heapStart);
+		state.setInt32(WasmLayout.HEAP_STATE_HEAP_TOP, heapStart);
+		state.setInt32(WasmLayout.HEAP_STATE_BUDGET, WasmLayout.GC_MIN_ALLOCATION_BUDGET);
+		state.setInt32(WasmLayout.HEAP_STATE_FLAGS,
+			(options.wasmGcStress == true ? WasmLayout.HEAP_FLAG_STRESS : 0) | (options.wasmMemoryStats == true ? WasmLayout.HEAP_FLAG_STATS : 0));
+		module.data.push({offset: heapState, bytes: state});
 		globals = [];
 		rootGlobals = [];
 		for (field in program.staticFields) {
@@ -201,19 +179,12 @@ class WasmLinearModuleBuilder {
 			rootGlobals: rootGlobals,
 			strings: strings,
 			heapStart: heapStart,
-			heapTop: heapTop,
 			rootBase: rootBase,
 			rootTop: rootTop,
 			rootFrameTop: rootFrameTop,
 			rootLimit: rootLimit,
-			freeHead: freeHead,
 			markStackTop: markStackTop,
-			gcBudget: gcBudget,
-			gcLiveBytes: gcLiveBytes,
-			allocationCount: allocationCount,
-			allocationBytes: allocationBytes,
-			largestAllocation: largestAllocation,
-			collectionCount: collectionCount
+			heapState: heapState
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
 	}
@@ -221,6 +192,7 @@ class WasmLinearModuleBuilder {
 	function buildRuntime():Void {
 		WasmModuleSupport.addCNativeImports(module, functions, program, usedCNatives);
 		WasmLinearRuntime.addImports(linear, usedNatives);
+		linkRuntime();
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
@@ -229,6 +201,41 @@ class WasmLinearModuleBuilder {
 		WasmLinearDynamicArrays.register(linear);
 		runtimeFunctionCount = module.functions.length;
 	}
+
+	/**
+	 * Links the C runtime (native/wasm/heap.c) after every import. It calls back into the collector, whose index is
+	 * reserved here and defined by WasmLinearGc.
+	 */
+	function linkRuntime():Void {
+		var runtime = options.wasmLinearRuntime != null ? options.wasmLinearRuntime : defaultRuntime();
+		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {parameters: [], results: []}));
+		var exports = WasmRuntimeLinker.link(module, runtime, name -> switch name {
+			case "collect": linear.collectorFunction;
+			default: throw 'The wasm32 runtime imports unknown guest function "$name"';
+		});
+		function required(name:String):Int {
+			var index = exports.get(name);
+			if (index == null)
+				throw 'The wasm32 runtime does not export $name';
+			return index;
+		}
+		linear.heapAllocFunction = required("haxeon_heap_alloc");
+		linear.heapSweepFunction = required("haxeon_heap_sweep");
+	}
+
+	static var cachedRuntime:Null<haxe.io.Bytes> = null;
+
+	/** The committed runtime, found like the stdlib host interfaces: relative to the Haxeon root. */
+	static function defaultRuntime():haxe.io.Bytes {
+		if (cachedRuntime == null) {
+			if (!sys.FileSystem.exists(DEFAULT_RUNTIME))
+				throw 'The wasm32 backend links $DEFAULT_RUNTIME, which is missing; run scripts/build-wasm-runtime.sh';
+			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
+		}
+		return cachedRuntime;
+	}
+
+	static inline final DEFAULT_RUNTIME = "stdlib/haxeon/wasm/linear-runtime.wasm";
 
 	function declareFunctions():Void {
 		methods = [];
@@ -295,6 +302,9 @@ class WasmLinearModuleBuilder {
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 	}
 
+	function heapStateWord(offset:Int):Array<compiler.backend.wasm.WasmTypes.WasmInstruction>
+		return [I32Const(heapState), I32Load(offset)];
+
 	function finalizeExports():Void {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
@@ -310,7 +320,7 @@ class WasmLinearModuleBuilder {
 		}
 		if (options.wasmMemoryStats == true) {
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_top", [GlobalGet(heapTop)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_top", heapStateWord(WasmLayout.HEAP_STATE_HEAP_TOP));
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
@@ -318,10 +328,10 @@ class WasmLinearModuleBuilder {
 			// In-block headers make out-of-line GC metadata a zero-sized region.
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocation_count", [GlobalGet(allocationCount)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocated_bytes", [GlobalGet(allocationBytes)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", [GlobalGet(largestAllocation)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count", [GlobalGet(collectionCount)]);
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocation_count", heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_COUNT));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocated_bytes", heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_BYTES));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", heapStateWord(WasmLayout.HEAP_STATE_LARGEST_ALLOCATION));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count", heapStateWord(WasmLayout.HEAP_STATE_COLLECTION_COUNT));
 		}
 	}
 }

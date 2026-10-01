@@ -66,6 +66,19 @@ class WasmLayout {
 	public static inline final GC_BLOCK_CLEAR_SCAN_MASK = -5;
 	public static inline final GC_MIN_ALLOCATION_BUDGET = 262144;
 
+	// hx_heap in native/wasm/heap.c: wasm32 heap state, owned by the linked C runtime (docs/WASM_LINEAR_RUNTIME.md).
+	public static inline final HEAP_STATE_HEAP_START = 0;
+	public static inline final HEAP_STATE_HEAP_TOP = 4;
+	public static inline final HEAP_STATE_BUDGET = 8;
+	public static inline final HEAP_STATE_FLAGS = 20;
+	public static inline final HEAP_STATE_ALLOCATION_COUNT = 24;
+	public static inline final HEAP_STATE_ALLOCATION_BYTES = 28;
+	public static inline final HEAP_STATE_LARGEST_ALLOCATION = 32;
+	public static inline final HEAP_STATE_COLLECTION_COUNT = 36;
+	public static inline final HEAP_STATE_SIZE = 40 + 128 * 4;
+	public static inline final HEAP_FLAG_STRESS = 1;
+	public static inline final HEAP_FLAG_STATS = 2;
+
 	public final objects:Map<String, WasmObjectLayout> = [];
 	public final enums:Map<String, WasmEnumLayout> = [];
 

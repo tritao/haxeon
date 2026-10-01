@@ -30,11 +30,18 @@ class WasmFunction {
 	public final body:Array<WasmInstruction>;
 	public final name:String;
 
-	public function new(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>, ?body:Array<WasmInstruction>) {
+	/**
+	 * A body already in binary form (locals, code and its `end`), as linked from a precompiled module
+	 * (WasmRuntimeLinker). Passes that rewrite instructions leave such a function alone.
+	 */
+	public final encodedBody:Null<haxe.io.Bytes>;
+
+	public function new(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>, ?body:Array<WasmInstruction>, ?encodedBody:haxe.io.Bytes) {
 		this.name = name;
 		this.type = type;
 		this.locals = locals == null ? [] : locals;
 		this.body = body == null ? [] : body;
+		this.encodedBody = encodedBody;
 	}
 }
 
