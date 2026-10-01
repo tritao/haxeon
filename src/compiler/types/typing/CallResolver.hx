@@ -379,12 +379,13 @@ class CallResolver {
 		can decide (`S` in `map<T, S>(values:Array<T>, f:T->S)`) is inferred from
 		the lambda body.
 	**/
-	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>):{
+	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>,
+			?presetSubstitutions:Map<String, CompilerType>):{
 		arguments:Array<TypedExpression>,
 		substitutions:Map<String, CompilerType>
 	} {
 		var parameters = functionTypeParameters(fn),
-			substitutions:Map<String, CompilerType> = [],
+			substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : copyMap(presetSubstitutions),
 			typed:Array<Null<TypedExpression>> = [],
 			offset = leading == null ? 0 : leading.length,
 			lambdas:Array<Int> = [];
@@ -408,12 +409,26 @@ class CallResolver {
 			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
-		for (index in lambdas) {
-			var declared = fn.arguments[offset + index],
-				expected = lambdaExpectation(declared.type, declared.span, parameters, substitutions),
-				argument = typeExpression(arguments[index], scope, expected, expected != null);
-			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
-			typed[offset + index] = argument;
+		while (lambdas.length > 0) {
+			var progressed = false;
+			for (index in lambdas.copy()) {
+				var declared = fn.arguments[offset + index],
+					expected = lambdaExpectation(declared.type, declared.span, parameters, substitutions);
+				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
+					continue;
+				var argument = typeExpression(arguments[index], scope, expected, expected != null);
+				inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
+				typed[offset + index] = argument;
+				lambdas.remove(index);
+				progressed = true;
+			}
+			if (!progressed) {
+				// No callback supplies the missing parameter context. Preserve the
+				// ordinary inference diagnostic rather than assuming Dynamic.
+				var index = lambdas[0];
+				typeExpression(arguments[index], scope, null, false);
+				fail("E1003", "Cannot infer generic callback context", span);
+			}
 		}
 		return {arguments: [for (argument in typed) requiredArgument(argument)], substitutions: substitutions};
 	}
@@ -423,6 +438,18 @@ class CallResolver {
 			throw "Generic call argument was not typed";
 		return argument;
 	}
+
+	static function lambdaParametersAnnotated(expression:AstExpression):Bool
+		return switch expression {
+			case Lambda(arguments, _, _):
+				var annotated = true;
+				for (argument in arguments)
+					if (argument.type == InferredType)
+						annotated = false;
+				annotated;
+			default:
+				false;
+		};
 
 	static function isLambdaLiteral(expression:AstExpression):Bool
 		return switch expression {
@@ -481,15 +508,19 @@ class CallResolver {
 	public function resolveInstanceMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, receiverName:Null<String> = null, contextualGenericArguments:Bool = true):TypedExpression {
 		var className = switch receiver.type {
-			case TInstance(Class, value, _), TInstance(Interface, value, _): value;
-			default: null;
+			case TInstance(Class, value, _), TInstance(Interface, value, _):
+				value;
+			default:
+				null;
 		};
 		if (className == null)
 			fail("E1007", 'Cannot call method on non-object "${receiverName == null ? name : receiverName}"', span);
 		var methodInfo = findMethod(className, name);
 		var classReference = switch receiver.expression {
-			case TClassRef(_): true;
-			default: false;
+			case TClassRef(_):
+				true;
+			default:
+				false;
 		};
 		if (classReference && methodInfo != null && methodInfo.isStatic) {
 			var methodKey = methodInfo.owner + "." + name,
@@ -512,30 +543,13 @@ class CallResolver {
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
 		if (functionTypeParameters(method).length > 0) {
-			var preset = contextualGenericArguments ? copyMap(substitutions) : new Map<String, CompilerType>(),
-				parameters = functionTypeParameters(method),
-				hasLambda = false;
-			if (!contextualGenericArguments)
-				for (argument in arguments)
-					switch argument {
-						case Lambda(_, _, _):
-							hasLambda = true;
-						default:
-					}
+			var preset = copyMap(substitutions),
+				parameters = functionTypeParameters(method);
 			if (expectedType != null)
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
-			var contextual = contextualGenericArguments || hasLambda || expectedType != null,
-				typingSubstitutions = copyMap(preset);
-			if (contextual)
-				for (parameter in parameters)
-					if (!typingSubstitutions.exists(parameter))
-						typingSubstitutions.set(parameter, TDynamic);
-			var genericArguments = contextual ? [
-				for (index in 0...arguments.length)
-					typeExpression(arguments[index], scope,
-						session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
-			] : [for (argument in arguments) typeExpression(argument, scope, null, false)];
-			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, false, preset, receiver);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, false, prepared.substitutions,
+				receiver);
 		}
 		var semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
@@ -736,28 +750,12 @@ class CallResolver {
 				receiver = typeExpressionValue(Variable("this", span), scope);
 			}
 			var preset:Map<String, CompilerType> = [],
-				parameters = functionTypeParameters(method),
-				hasLambda = false;
-			for (argument in arguments)
-				switch argument {
-					case Lambda(_, _, _):
-						hasLambda = true;
-					default:
-				}
+				parameters = functionTypeParameters(method);
 			if (expectedType != null)
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
-			var contextual = hasLambda || expectedType != null,
-				typingSubstitutions = copyMap(preset);
-			if (contextual)
-				for (parameter in parameters)
-					if (!typingSubstitutions.exists(parameter))
-						typingSubstitutions.set(parameter, TDynamic);
-			var genericArguments = contextual ? [
-				for (index in 0...arguments.length)
-					typeExpression(arguments[index], scope,
-						session.declarations.resolve(method.arguments[index].type, method.arguments[index].span, typingSubstitutions), true)
-			] : [for (argument in arguments) typeExpression(argument, scope, null, false)];
-			return genericInstantiation.specialize(methodKey, method, genericArguments, span, scope, methodInfo.owner, methodInfo.isStatic, preset, receiver);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, methodInfo.isStatic,
+				prepared.substitutions, receiver);
 		}
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
