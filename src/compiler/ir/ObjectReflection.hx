@@ -11,8 +11,13 @@ private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjec
  * layout's generated function to compare field names. HashLink reflects through its own runtime and never declares these natives.
  */
 class ObjectReflection {
+	/**
+	 * With `tableDispatch`, only the per-layout functions are generated and each native stays declared, listing them as
+	 * the functions its backend implementation calls: the backend finds a value's layout from the type id in its header
+	 * (linear Wasm), which costs the same however many layouts the program has.
+	 */
 	public static function generate(natives:Null<Array<IrNative>>, objects:Null<Array<IrObject>>, reflectable:Null<Array<String>>,
-			functions:Array<IrFunction>):Null<Array<IrNative>> {
+			functions:Array<IrFunction>, tableDispatch:Bool = false):Null<Array<IrNative>> {
 		if (natives == null)
 			return null;
 		var remaining:Array<IrNative> = [],
@@ -24,6 +29,17 @@ class ObjectReflection {
 			}
 			if (layouts == null)
 				layouts = layoutsOf(objects == null ? [] : objects, reflectable == null ? [] : reflectable);
+			if (tableDispatch) {
+				remaining.push({
+					name: native.name,
+					library: native.library,
+					symbol: native.symbol,
+					arguments: native.arguments,
+					result: native.result,
+					generatedFunctionDependencies: tableLayoutFunctions(native, layouts, functions)
+				});
+				continue;
+			}
 			functions.push(switch native.symbol {
 				case "__reflect_object_field": field(native.name, layouts, functions);
 				case "__reflect_object_set_field": setField(native.name, layouts, functions);
@@ -62,20 +78,25 @@ class ObjectReflection {
 	}
 
 	static function field(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
-		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], (builder, layout, typed, arguments) -> {
-			forEachField(builder, arguments[0], layout, field -> builder.returnValue(builder.toDyn(builder.fieldGet(typed, field.name, field.type))));
-			builder.returnValue(builder.constNull(Dyn));
-		}, builder -> builder.constNull(Dyn));
+		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], fieldBody, builder -> builder.constNull(Dyn));
+
+	static function fieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
+		forEachField(builder, arguments[0], layout, field -> builder.returnValue(builder.toDyn(builder.fieldGet(typed, field.name, field.type))));
+		builder.returnValue(builder.constNull(Dyn));
+	}
 
 	static function setField(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
-		return perLayout(name, layouts, functions, Bool, [{name: "field", type: Bytes}, {name: "value", type: Dyn}], (builder, layout, typed, arguments) -> {
-			var value = arguments[1];
-			forEachField(builder, arguments[0], layout, field -> {
-				builder.fieldSet(typed, field.name, field.type == Dyn ? value : builder.safeCast(value, field.type));
-				builder.returnValue(builder.constBool(true));
-			});
-			builder.returnValue(builder.constBool(false));
-		}, builder -> builder.constBool(false));
+		return perLayout(name, layouts, functions, Bool, [{name: "field", type: Bytes}, {name: "value", type: Dyn}], setFieldBody,
+			builder -> builder.constBool(false));
+
+	static function setFieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
+		var value = arguments[1];
+		forEachField(builder, arguments[0], layout, field -> {
+			builder.fieldSet(typed, field.name, field.type == Dyn ? value : builder.safeCast(value, field.type));
+			builder.returnValue(builder.constBool(true));
+		});
+		builder.returnValue(builder.constBool(false));
+	}
 
 	static function fieldCount(name:String, layouts:Array<ReflectedLayout>):IrFunction {
 		var builder = new IrBuilder(),
@@ -86,17 +107,59 @@ class ObjectReflection {
 	}
 
 	static function fieldName(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
-		return perLayout(name, layouts, functions, Bytes, [{name: "index", type: I32}], (builder, layout, _, arguments) -> {
-			for (position in 0...layout.fields.length) {
-				var matched = builder.createBlock(),
-					next = builder.createBlock();
-				builder.branch(builder.equal(arguments[0], builder.constInt(position)), matched, next);
-				builder.select(matched);
-				builder.returnValue(builder.constString(layout.fields[position].name));
-				builder.select(next);
-			}
-			builder.returnValue(builder.constNull(Bytes));
-		}, builder -> builder.constNull(Bytes));
+		return perLayout(name, layouts, functions, Bytes, [{name: "index", type: I32}], fieldNameBody, builder -> builder.constNull(Bytes));
+
+	static function fieldNameBody(builder:IrBuilder, layout:ReflectedLayout, _:IrValue, arguments:Array<IrValue>):Void {
+		for (position in 0...layout.fields.length) {
+			var matched = builder.createBlock(), next = builder.createBlock();
+			builder.branch(builder.equal(arguments[0], builder.constInt(position)), matched, next);
+			builder.select(matched);
+			builder.returnValue(builder.constString(layout.fields[position].name));
+			builder.select(next);
+		}
+		builder.returnValue(builder.constNull(Bytes));
+	}
+
+	/** One function per layout for a native the backend dispatches itself; returns their names, in layout order. */
+	static function tableLayoutFunctions(native:IrNative, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):Array<String> {
+		var result:IrType, parameters:Array<{name:String, type:IrType}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void;
+		switch native.symbol {
+			case "__reflect_object_field":
+				result = Dyn;
+				parameters = [{name: "field", type: Bytes}];
+				body = fieldBody;
+			case "__reflect_object_set_field":
+				result = Bool;
+				parameters = [{name: "field", type: Bytes}, {name: "value", type: Dyn}];
+				body = setFieldBody;
+			case "__reflect_object_field_count":
+				result = I32;
+				parameters = [];
+				body = (builder, layout, _, _) -> builder.returnValue(builder.constInt(layout.fields.length));
+			case "__reflect_object_field_name":
+				result = Bytes;
+				parameters = [{name: "index", type: I32}];
+				body = fieldNameBody;
+			default:
+				throw 'Unknown object reflection native "${native.symbol}"';
+		}
+		return [
+			for (layout in layouts)
+				layoutFunction('${native.name}.${layout.name}', layout, functions, result, parameters, body)
+		];
+	}
+
+	static function layoutFunction(layoutName:String, layout:ReflectedLayout, functions:Array<IrFunction>, result:IrType,
+			parameters:Array<{name:String, type:IrType}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void):String {
+		var layoutBuilder = new IrBuilder(),
+			layoutObject = layoutBuilder.argument("object", Obj(layout.name));
+		body(layoutBuilder, layout, layoutObject, [
+			for (parameter in parameters)
+				layoutBuilder.argument(parameter.name, parameter.type)
+		]);
+		functions.push(new IrFunction(layoutName, layoutBuilder.arguments, result, layoutBuilder.blocks));
+		return layoutName;
+	}
 
 	/**
 	 * A native that dispatches on the value's layout to one generated function per layout, which `body` fills
@@ -110,14 +173,7 @@ class ObjectReflection {
 			object = builder.argument("object", Dyn),
 			arguments = [for (parameter in parameters) builder.argument(parameter.name, parameter.type)];
 		forEachLayout(builder, object, layouts, (layout, typed) -> {
-			var layoutName = '$name.${layout.name}',
-				layoutBuilder = new IrBuilder(),
-				layoutObject = layoutBuilder.argument("object", Obj(layout.name));
-			body(layoutBuilder, layout, layoutObject, [
-				for (parameter in parameters)
-					layoutBuilder.argument(parameter.name, parameter.type)
-			]);
-			functions.push(new IrFunction(layoutName, layoutBuilder.arguments, result, layoutBuilder.blocks));
+			var layoutName = layoutFunction('$name.${layout.name}', layout, functions, result, parameters, body);
 			builder.returnValue(builder.call(layoutName, [typed].concat(arguments), result));
 		});
 		builder.returnValue(fallback(builder));

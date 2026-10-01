@@ -75,6 +75,11 @@ class WasmLinearRuntime {
 		var outputReserve = addBytesOutputReserve(module, allocator, bytesDataPointer);
 		functions.set("__haxeon_bytes_output_reserve", outputReserve);
 		for (native in program.natives) {
+			var reflection = WasmLinearReflection.define(context, native);
+			if (reflection != null) {
+				functions.set(native.name, reflection);
+				continue;
+			}
 			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve);
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);

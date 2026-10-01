@@ -932,6 +932,10 @@ class Compiler {
 			default: false;
 		};
 
+	/** True when the active target is the linear-memory WebAssembly backend, whose objects carry a type id header. */
+	public function isLinearWasmTarget():Bool
+		return defines.get("target") == "wasm32";
+
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
 
