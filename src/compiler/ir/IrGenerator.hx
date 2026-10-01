@@ -241,6 +241,8 @@ class IrGenerator {
 
 	static function initializeLocal(name:String, value:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		localTypes.set(name, value.type);
+		if (builder.isTerminated())
+			return;
 		builder.store(name, value);
 		var cellType = localTypes.get("__cell:" + name);
 		if (cellType != null)
@@ -274,30 +276,40 @@ class IrGenerator {
 					builder.debugLocal(name, span, scopeEnd);
 					initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
 				case TAssign(name, value, _):
-					builder.store(name, lowerExpression(value, builder, localTypes));
+					var loweredValue = lowerExpression(value, builder, localTypes);
+					if (!builder.isTerminated())
+						builder.store(name, loweredValue);
 				case TCellAssign(name, cellClass, value, _):
 					var loweredValue = lowerExpression(value, builder, localTypes);
-					builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
+					if (!builder.isTerminated())
+						builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
 				case TCellCapturedAssign(name, cellClass, value, _):
 					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment');
-					var loweredValue = lowerExpression(value, builder, localTypes),
-						cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
-					builder.fieldSet(cell, "value", loweredValue);
+					var loweredValue = lowerExpression(value, builder, localTypes);
+					if (!builder.isTerminated()) {
+						var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
+						builder.fieldSet(cell, "value", loweredValue);
+					}
 				case TFieldAssign(object, name, value, _):
 					var operands = lowerOperands([object, value], builder, localTypes);
-					builder.fieldSet(operands[0], name, operands[1]);
+					if (!builder.isTerminated())
+						builder.fieldSet(operands[0], name, operands[1]);
 				case TStaticFieldAssign(name, field, value, _):
-					builder.globalSet(name + "." + field, lowerExpression(value, builder, localTypes));
+					var loweredValue = lowerExpression(value, builder, localTypes);
+					if (!builder.isTerminated())
+						builder.globalSet(name + "." + field, loweredValue);
 				case TIndexAssign(array, index, value, _):
 					var operands = lowerOperands([array, index, value], builder, localTypes);
-					elementSet(builder, operands[0], operands[1], operands[2]);
+					if (!builder.isTerminated())
+						elementSet(builder, operands[0], operands[1], operands[2]);
 				case TMapAssign(map, key, value, _):
 					var mapType = switch map.type {
 						case TMap(keyType, valueType): {key: keyType, value: valueType};
 						default: throw "Map assignment requires a map value";
 					};
 					var operands = lowerOperands([map, key, value], builder, localTypes);
-					lowerMapSet(builder, operands[0], operands[1], operands[2], mapType.key, mapType.value);
+					if (!builder.isTerminated())
+						lowerMapSet(builder, operands[0], operands[1], operands[2], mapType.key, mapType.value);
 				case TReturn(expression, _):
 					var returnValue = lowerExpression(expression, builder, localTypes);
 					if (!builder.isTerminated()) {
@@ -698,6 +710,8 @@ class IrGenerator {
 		for (expression in expressions) {
 			var value = lowerExpression(expression, builder, localTypes),
 				name = '$' + 'operand:${expression.span.start}:${value.id}';
+			if (builder.isTerminated())
+				return [];
 			localTypes.set(name, value.type);
 			builder.store(name, value);
 			temporaries.push({name: name, type: value.type});
