@@ -70,6 +70,7 @@ class TestCatalog {
 		"ClosureEffectsMain",
 		"EnumVisibilityMain",
 		"EnumImportOrderMain",
+		"ExpectedEnumContextMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",

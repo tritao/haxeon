@@ -713,8 +713,7 @@ class BodyTyper {
 	function constrainLocalExpression(expression:AstExpression, expected:CompilerType):Bool
 		return switch expression {
 			case Variable(name, _): constrainLocal(name, expected);
-			case Call(name, arguments, _):
-				var info = enumCaseInfo(name);
+			case Call(name, arguments, span):
 				var enumName:Null<String> = switch expected {
 					case TInstance(Enum, value, _): value;
 					case TNullable(element):
@@ -724,8 +723,9 @@ class BodyTyper {
 						}
 					default: null;
 				};
-				if (info == null && enumName != null && name.indexOf(".") < 0)
-					info = enumCaseInfo(enumName + "." + name);
+				var info = enumName != null && sourceIsBareReference(span) ? enumCaseInfo(enumName + "." + lastPathSegment(name)) : null;
+				if (info == null)
+					info = enumCaseInfo(name);
 				var changed = false;
 				if (info != null)
 					for (index in 0...arguments.length) {
