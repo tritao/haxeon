@@ -750,3 +750,36 @@ const cases = [
   process.exitCode = 1;
 });
 JS
+
+# haxeon-host.js throws haxeon.wasm.HostError into a guest that calls an import it cannot provide.
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async \
+		--target="$target" --output="out/wasm-host-error-$target.wasm" --entry=wasm-host-error --wasm-import-memory \
+		--root=tests/ffi --ffi-interface=tests/ffi/host_error.hxi tests/ffi/wasm-host-error.hx
+done
+haxeon_compile_wait
+node - "$root_dir" <<'JS'
+const fs = require("fs"), path = require("path"), vm = require("vm");
+const root = process.argv[2];
+vm.runInThisContext(fs.readFileSync(path.join(root, "stdlib/haxeon/wasm/haxeon-host.js"), "utf8"));
+(async () => {
+  for (const target of ["wasm32", "wasm-gc"]) {
+    const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-host-error-${target}.wasm`)));
+    const minimum = WebAssembly.Module.imports(module).some(entry => entry.kind === "memory") ? 64 : 0;
+    const memory = new WebAssembly.Memory({initial: minimum});
+    // Messages go to the top page, above anything the guest uses.
+    const scratch = () => memory.buffer.byteLength - 4096;
+    const {exports, unavailable} = await HaxeonWasmHost.instantiate(module, {
+      emscripten: {}, memory, allocate: scratch, release: () => {}});
+    if (!unavailable.includes("missing_lib"))
+      throw new Error(`${target}: missing_lib was not reported unavailable`);
+    const result = exports.main();
+    if (result !== 42)
+      throw new Error(`${target}: the guest did not catch the HostError (exit ${result})`);
+  }
+  console.log("PASS: haxeon-host.js throws HostError into wasm32 and wasm-gc guests");
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
+JS

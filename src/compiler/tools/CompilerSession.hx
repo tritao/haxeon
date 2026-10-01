@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.Compiler;
 import compiler.ffi.HxiInterfaceOrder;
+import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
@@ -43,6 +44,17 @@ class CompilerSession {
 			case _: {interfaces: [], projections: []};
 		};
 
+	/**
+	 * Stdlib modules a Wasm host calls into, compiled into every guest that shares linear memory with its host
+	 * (haxeon.wasm.HostError reads its message from that memory): wasm32 always, wasm-gc when it imports memory.
+	 */
+	static function hostSources(request:CompilerRequest):Array<String>
+		return switch request.target {
+			case "wasm32": ["stdlib/haxeon/wasm/HostError.hx"];
+			case "wasm-gc" | "wasmgc" if (request.importMemory == true): ["stdlib/haxeon/wasm/HostError.hx"];
+			case _: [];
+		};
+
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
 		var host = hostInterfaces(request.target),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
@@ -51,6 +63,7 @@ class CompilerSession {
 			projections = [for (path in projectionPaths) {path: path, text: read(path)}],
 			identity = Json.stringify({
 				target: request.target,
+				importMemory: request.importMemory,
 				entry: request.entry,
 				defines: request.defines,
 				roots: request.roots,
@@ -128,6 +141,11 @@ class CompilerSession {
 			}
 		}
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
+		// Wasm guests always carry the stdlib modules their host calls into.
+		var hostModules = hostSources(request);
+		SourceManifestLoader.load(compiler, ["stdlib"], hostModules, null, readChanged);
+		for (path in hostModules)
+			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, ["stdlib"])));
 		for (path in request.paths)
 			sourceTexts.set(path, read(path));
 		return compiler;

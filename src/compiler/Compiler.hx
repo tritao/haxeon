@@ -256,6 +256,8 @@ class Compiler {
 			compiledOnce = cloneFrom.compiledOnce;
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
+			for (name in cloneFrom.rootModules)
+				rootModules.push(name);
 		} else if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
@@ -514,6 +516,14 @@ class Compiler {
 
 	function ffiConfigurationSnapshot():FfiConfiguration
 		return new FfiConfiguration(ffiInterfaceSources, ffiProjectionSources);
+
+	/** Modules compiled with every entry, whatever it imports: what a host calls into (haxeon.wasm.HostError). */
+	public final rootModules:Array<String> = [];
+
+	/** Compiles a loaded module with every entry, so its exposed functions reach the output. */
+	public function addRootModule(name:String):Void
+		if (rootModules.indexOf(name) < 0)
+			rootModules.push(name);
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {

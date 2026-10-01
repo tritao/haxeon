@@ -26,6 +26,10 @@ class CompilationContext {
 	final moduleAnalyzer:ModuleAnalyzer;
 
 	public final modules:Map<String, ModuleState>;
+
+	/** Modules compiled with every entry (Compiler.addRootModule). */
+	public final rootModules:Array<String>;
+
 	public final graph:ModuleGraph;
 	public final objectCache:Map<String, IrObject>;
 	public final moduleId:Bytes;
@@ -45,6 +49,7 @@ class CompilationContext {
 		objectCache = owner.objectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
+		rootModules = owner.rootModules;
 		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader, buildSemanticModels,
 			owner.declarationOwners);
 	}

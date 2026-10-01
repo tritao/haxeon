@@ -28,10 +28,14 @@ var HaxeonWasmHost = (() => {
    *   contract    the host's memory contract; the guest's must match it field for field
    *   print       receives each complete line the guest prints (default console.log)
    *   wrap        optional (module, name, fn) => fn applied to each forwarded C function, e.g. to time calls
+   *   allocate    optional size => address of shared memory for a host error message, with release(address);
+   *   release     both default to the Emscripten module's malloc and free when it exports them
    * Returns {instance, exports, unavailable}, where unavailable lists the import modules the host could not
-   * provide; calling one of their functions throws.
+   * provide. Calling one of their functions throws haxeon.wasm.HostError into the guest, which Haxe code catches
+   * like its own exceptions; a guest without exceptions gets a JavaScript Error, which stops it.
    */
-  async function instantiate(source, {emscripten, memory, contract, print = line => console.log(line), wrap = null}) {
+  async function instantiate(source, {emscripten, memory, contract, print = line => console.log(line), wrap = null,
+      allocate = emscripten && emscripten._malloc, release = emscripten && emscripten._free}) {
     const module = source instanceof WebAssembly.Module ? source
       : await WebAssembly.compileStreaming(source instanceof Response || source instanceof Promise ? source : fetch(source));
     const guestContract = memoryContract(module);
@@ -85,6 +89,25 @@ var HaxeonWasmHost = (() => {
         __math_sin: Math.sin, __math_cos: Math.cos, __math_tan: Math.tan, __math_atan2: Math.atan2
       }
     };
+    const encoder = new TextEncoder();
+    // Throws `message` as a haxeon.wasm.HostError with the guest's exception tag when it can.
+    const fail = message => {
+      const tag = exports && exports.__haxeon_exception, create = exports && exports["haxeon.wasm.HostError.fromLinear"];
+      if (tag && create && allocate && release) {
+        const bytes = encoder.encode(message), address = allocate(bytes.length || 1);
+        if (address) {
+          let error;
+          try {
+            new Uint8Array(memory.buffer, address, bytes.length).set(bytes);
+            error = create(address, bytes.length);
+          } finally {
+            release(address);
+          }
+          throw new WebAssembly.Exception(tag, [error]);
+        }
+      }
+      throw new Error(message);
+    };
     const unavailable = new Set();
     for (const entry of WebAssembly.Module.imports(module)) {
       if (entry.kind !== "function" || imports[entry.module]?.[entry.name]) continue;
@@ -95,9 +118,7 @@ var HaxeonWasmHost = (() => {
         continue;
       }
       unavailable.add(entry.module);
-      table[entry.name] = () => {
-        throw new Error(`${entry.module}.${entry.name} is not available to this guest`);
-      };
+      table[entry.name] = () => fail(`${entry.module}.${entry.name} is not available in this build`);
     }
     const instance = await WebAssembly.instantiate(module, imports);
     exports = instance.exports;

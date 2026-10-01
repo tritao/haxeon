@@ -94,7 +94,7 @@ class FrontendCompilation {
 			names = cachedReachability.names.copy();
 			initializationClasses = cachedReachability.initializationClasses.copy();
 		} else {
-			var reachability = new ModuleReachability(modules, entryModule);
+			var reachability = new ModuleReachability(modules, entryModule, context.rootModules);
 			while (reachability.hasNext(token)) {
 				var reachableState = reachability.next();
 				if (reachableState.ast == null) {
