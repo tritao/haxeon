@@ -140,12 +140,12 @@ class TypingSession {
 		it does to state anyone else can see; null when it may have any other effect.
 	 */
 	public function bodyStores(body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>, owner:Null<String>, ?privateMaps:Array<String>,
-			?outerArrays:Array<String>):Null<{
+			?outerArrays:Array<String>, ?outerMaps:Array<String>):Null<{
 			fields:Array<String>,
 			indexed:Bool
 		}> {
 		var found = compiler.types.analysis.PurityInference.localBodyStores(localPurityInference(), body, owner == null ? "$local" : owner + ".$local",
-			outerLocals, privateMaps, outerArrays);
+			outerLocals, privateMaps, outerArrays, outerMaps);
 		if (found == null || !dependenciesArePure(found.dependencies))
 			return null;
 		return {fields: found.fields, indexed: found.indexed};

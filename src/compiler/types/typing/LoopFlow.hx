@@ -29,12 +29,20 @@ class LoopFlow {
 				scope.invalidate(name);
 				scope.invalidateExpressionsForLocal(name);
 			}
-		var locals = scope.visibleLocalNames();
+		var locals = scope.visibleLocalNames(),
+			privateMaps = scope.visiblePrivateMapNames(),
+			arrays = scope.visibleArrayNames(),
+			maps = scope.visiblePrimitiveMapNames();
 		if (loopVariables != null)
 			for (name in loopVariables)
-				if (name != null)
+				if (name != null) {
 					locals.push(name);
-		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, scope.visiblePrivateMapNames(), scope.visibleArrayNames());
+					// The loop binding shadows an outer collection, even before its scope is opened.
+					privateMaps.remove(name);
+					arrays.remove(name);
+					maps.remove(name);
+				}
+		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, privateMaps, arrays, maps);
 		if (stores == null)
 			scope.invalidateAllExpressions();
 		else {

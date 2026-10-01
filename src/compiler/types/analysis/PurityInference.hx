@@ -80,7 +80,7 @@ class PurityInference {
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), inference.classNameOfType(argument.type),
 				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
-				PurityWalker.isStringArrayType(argument.type));
+				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		if (!walker.statements(body))
 			return null;
@@ -93,7 +93,7 @@ class PurityInference {
 		direct effect, or stores to a field some type gives a setter (a setter call can do anything).
 	 */
 	public static function localBodyStores(inference:PurityInference, body:Array<AstStatement>, functionName:String, outerLocals:Array<String>,
-			?privateMaps:Array<String>, ?outerArrays:Array<String>):Null<{
+			?privateMaps:Array<String>, ?outerArrays:Array<String>, ?outerMaps:Array<String>):Null<{
 			dependencies:Array<String>,
 			fields:Array<String>,
 			indexed:Bool
@@ -102,16 +102,20 @@ class PurityInference {
 		walker.stores = {fields: [], indexed: false};
 		walker.declare("this");
 		for (name in outerLocals)
-			walker.declare(name, false, null, false, outerArrays != null && outerArrays.indexOf(name) >= 0);
+			walker.declare(name, false, null, false, outerArrays != null && outerArrays.indexOf(name) >= 0, false,
+				false, outerMaps != null && outerMaps.indexOf(name) >= 0);
 		if (privateMaps != null)
 			for (name in privateMaps)
 				walker.privateMaps.set(name, true);
 		if (!walker.statements(body))
 			return null;
+		var stores = walker.stores;
+		if (stores == null)
+			throw "Body store collection is missing after effect analysis";
 		return {
 			dependencies: [for (key in walker.dependencies.keys()) key],
-			fields: [for (field in walker.stores.fields.keys()) field],
-			indexed: walker.stores.indexed
+			fields: [for (field in stores.fields.keys()) field],
+			indexed: stores.indexed
 		};
 		}
 
@@ -212,7 +216,7 @@ class PurityInference {
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
 				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
-				PurityWalker.isStringArrayType(argument.type));
+				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		if (!walker.statements(fn.statements))
 			return null;
@@ -316,6 +320,7 @@ private typedef LocalFact = {
 	final array:Bool;
 	final string:Bool;
 	final stringArray:Bool;
+	final map:Bool;
 }
 
 /** Walks one body with lexical locals, collecting callees and rejecting direct effects. */
@@ -340,14 +345,15 @@ private class PurityWalker {
 	}
 
 	public function declare(name:String, numeric:Bool = false, ?className:String, iterable:Bool = false, array:Bool = false, string:Bool = false,
-			stringArray:Bool = false):Void
+			stringArray:Bool = false, map:Bool = false):Void
 		scopes[scopes.length - 1].set(name, {
 			numeric: numeric,
 			className: className,
 			iterable: iterable,
 			array: array,
 			string: string,
-			stringArray: stringArray
+			stringArray: stringArray,
+			map: map
 		});
 
 	public static function isNumericType(type:Null<AstType>):Bool
@@ -449,16 +455,17 @@ private class PurityWalker {
 		return switch value {
 			case ErrorStatement(_): false;
 			case UninitializedDeclaration(name, type, _):
-				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType, isStringArrayType(type));
+				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
+					isStringArrayType(type), isMapType(type));
 				true;
 			case VarDeclaration(name, type, initializer, _):
 				var pure = expression(initializer);
 				if (type == null || type == InferredType)
 					declare(name, isNumeric(initializer), null, isIterableInitializer(initializer), isArrayInitializer(initializer),
-						isStringReceiver(initializer), isStringArrayInitializer(initializer));
+						isStringReceiver(initializer), isStringArrayInitializer(initializer), isMapInitializer(initializer));
 				else
 					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
-						isStringArrayType(type));
+						isStringArrayType(type), isMapType(type));
 				pure;
 			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name) && expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
@@ -556,7 +563,7 @@ private class PurityWalker {
 						declare(item);
 					return (filter == null || expression(filter)) && expression(result);
 				});
-			case Call(name, arguments, _) if (isStringCall(name) || isStringArrayJoinCall(name)):
+			case Call(name, arguments, _) if (isMapReadCall(name) || isStringCall(name) || isStringArrayJoinCall(name)):
 				all(arguments);
 			case Call(name, arguments, _) if (stores != null && isArrayStorageCall(name)):
 				stores.indexed = true;
@@ -576,6 +583,7 @@ private class PurityWalker {
 			case MethodCall(Variable(local, _), name, arguments, _) if (isOuterPrivateMap(local)
 				&& MapEscapeAnalysis.MAP_OPERATIONS.indexOf(name) >= 0):
 				all(arguments);
+			case MethodCall(object, name, arguments, _) if (isMapReadOperation(name) && isMapReceiver(object)): expression(object) && all(arguments);
 			case MethodCall(object, name, arguments, _)
 				if (isStringOperation(name) && isStringReceiver(object) || name == "join" && isStringArrayReceiver(object)): expression(object) && all(arguments);
 			case MethodCall(object, name, arguments, _) if (stores != null && isArrayStorageOperation(name) && isArrayReceiver(object)): stores.indexed = true; expression(object) && all(arguments);
@@ -605,6 +613,54 @@ private class PurityWalker {
 				}
 		};
 	}
+
+	/** Primitive map reads cannot call user code; mutations remain effects. */
+	public static function isMapType(type:Null<AstType>):Bool
+		return switch type {
+			case MapType(StringType, _), MapType(IntType, _): true;
+			default: false;
+		};
+
+	static function isMapReadOperation(name:String):Bool
+		return switch name {
+			case "exists" | "get" | "keys" | "values" | "size": true;
+			default: false;
+		};
+
+	function isMapReceiver(value:AstExpression):Bool
+		return switch value {
+			case Variable(name, _):
+				var fact = localFact(name);
+				fact == null ? isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name))
+				&& readsProperty(name) : fact.map;
+			case Member(Variable("this", _), name, _): isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName),
+					name)) && readsProperty(name);
+			default: false;
+		};
+
+	function isMapReadCall(name:String):Bool {
+		var parts = name.split(".");
+		if (parts.length == 3 && parts[0] == "this" && isMapReadOperation(parts[2]))
+			return isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[1])) && readsProperty(parts[1]);
+		if (parts.length != 2 || !isMapReadOperation(parts[1]))
+			return false;
+		var fact = localFact(parts[0]);
+		return fact == null ? isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+			&& readsProperty(parts[0]) : fact.map;
+	}
+
+	function isMapInitializer(value:AstExpression):Bool
+		return switch value {
+			case MapLiteral(entries, _):
+				var primitive = entries.length > 0;
+				for (entry in entries)
+					switch entry.key {
+						case StringLiteral(_, _), IntegerLiteral(_, _):
+						default: primitive = false;
+					}
+				primitive;
+			default: isMapReceiver(value);
+		};
 
 	/** Primitive string methods cannot dispatch to user code. */
 	static function isStringOperation(name:String):Bool
@@ -713,6 +769,9 @@ private class PurityWalker {
 		field `c`, allowed when no type gives `c` a setter and reading `a.b` runs no impure getter.
 	 */
 	function dottedFieldStore(path:String):Bool {
+		var stores = this.stores;
+		if (stores == null)
+			return false;
 		var segments = path.split(".");
 		if (segments.length < 2)
 			return false;
