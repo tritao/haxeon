@@ -1127,7 +1127,8 @@ class Parser {
 				span = expressionSpan(expression).merge(expressionSpan(value));
 			expression = switch expression {
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
-				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
+				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable",
+						expressionSpan(expression)));
 			};
 		}
 		return expression;
@@ -1450,6 +1451,10 @@ class Parser {
 					consume(TokenKind.RightParen);
 				}
 				var value = parseComprehensionValue();
+				if (condition != null && check(TokenKind.Else)) {
+					value = parseComprehensionElse(condition, value);
+					condition = null;
+				}
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
 					var mapValue = parseComprehensionValue(),
@@ -1737,6 +1742,45 @@ class Parser {
 		return prefix.length == 0 ? result : BlockExpression(prefix, result, span);
 	}
 
+	/**
+	 * `for (x in xs) if (c) a else b`: the `if` after the header is not a filter but the start of the value once an
+	 * `else` follows it. Every arm yields a value when the chain ends in a plain `else`, so it is nested
+	 * conditionals; when the last `if` has no `else`, no value is yielded if no condition holds, which lowers like a
+	 * comprehension body that ends in an `if` without `else` (see `filteredComprehensionValue`).
+	 */
+	function parseComprehensionElse(condition:AstExpression, value:AstExpression):AstExpression {
+		var arms = [{condition: condition, value: value}],
+			tail:Null<AstExpression> = null;
+		while (match(TokenKind.Else)) {
+			if (match(TokenKind.If)) {
+				consume(TokenKind.LeftParen);
+				var armCondition = parseExpression();
+				consume(TokenKind.RightParen);
+				arms.push({condition: armCondition, value: parseComprehensionValue()});
+				continue;
+			}
+			tail = parseComprehensionValue();
+			break;
+		}
+		var span = expressionSpan(condition).merge(expressionSpan(tail == null ? arms[arms.length - 1].value : tail));
+		var index = arms.length;
+		if (tail != null) {
+			var chained = tail;
+			while (index > 0) {
+				index--;
+				chained = Conditional(arms[index].condition, arms[index].value, chained, span);
+			}
+			return chained;
+		}
+		var yielded:AstExpression = ArrayLiteral([], span);
+		while (index > 0) {
+			index--;
+			yielded = Conditional(arms[index].condition, ArrayLiteral([arms[index].value], span), yielded, span);
+		}
+		var name = "__haxeon_yield";
+		return ArrayComprehension(name, null, yielded, null, Variable(name, span), true, span);
+	}
+
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
 		consume(TokenKind.LeftParen);
 		var keyName = consume(TokenKind.Identifier).text, valueName = null;
@@ -1754,6 +1798,10 @@ class Parser {
 			consume(TokenKind.RightParen);
 		}
 		var value = parseComprehensionValue();
+		if (condition != null && check(TokenKind.Else)) {
+			value = parseComprehensionElse(condition, value);
+			condition = null;
+		}
 		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
@@ -2294,6 +2342,9 @@ class Parser {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
 		if (isBracedExpression(expression))
+			return expressionSpan(expression);
+		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
+		if (check(TokenKind.Else))
 			return expressionSpan(expression);
 		return consume(TokenKind.Semicolon).span;
 	}
