@@ -2031,9 +2031,11 @@ class Parser {
 		while (true) {
 			if (atSwitchBranchEnd() && statements.length == 0)
 				return EmptyExpression(start.merge(current().span));
-			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
-				var end = statementSpan(statements[statements.length - 1]);
-				return BlockExpression(statements, Unreachable(end), start.merge(end));
+			if (atSwitchBranchEnd() && statements.length > 0) {
+				// Statements that end the branch: it never completes if the last one leaves, else its value is Void.
+				var last = statements[statements.length - 1],
+					end = statementSpan(last);
+				return BlockExpression(statements, statementTerminates(last) ? Unreachable(end) : EmptyExpression(end), start.merge(end));
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
@@ -2572,6 +2574,9 @@ class Parser {
 	static function codePointString(code:Int, span:SourceSpan):String {
 		if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
 			invalidEscape("U+" + StringTools.hex(code, 4) + " is not a Unicode scalar value", span);
+		// HashLink strings are NUL-terminated and cannot hold one; fail here, at the literal, not when the module is written.
+		if (code == 0)
+			invalidEscape("a String cannot contain NUL (U+0000); use Bytes for binary data", span);
 		var bytes = new haxe.io.BytesOutput();
 		if (code < 0x80)
 			bytes.writeByte(code);

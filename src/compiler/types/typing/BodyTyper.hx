@@ -80,7 +80,7 @@ class BodyTyper {
 			function(name, substitutions, owner) return this.enterBody(name, substitutions, owner), function(body) this.leaveBody(body),
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
-			function(statements) return ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
+			function(statements) return ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
 		var switchRules = {
 			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
 			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
@@ -290,7 +290,7 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if (result != TVoid && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;
@@ -1640,6 +1640,8 @@ class BodyTyper {
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
 		var receiver = unwrapNullable(typeExpression(object, scope));
+		if (callResolver.isEnumMatch(receiver, name, arguments))
+			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
 	}
 

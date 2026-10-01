@@ -56,6 +56,7 @@ string-split	42
 string-split-edge	42
 reflect-compare-sort	42
 reflect-delete-field	42
+reflect-delete-typed-field	42
 comprehension-block-filter	42
 sys-exit	42
 array-index-growth	42
@@ -255,6 +256,7 @@ interface-is-of-type	42
 stdlib-runtime-helpers	42
 ereg-patterns	42
 virtual-call-without-implementors	42
+switch-branch-if-without-else	42
 lambda-count	42
 nullable-numeric-equality	42
 function-value-optional-arguments	42
@@ -268,3 +270,9 @@ dynamic-method-call	42
 dynamic-arithmetic	42
 dynamic-increment	42
 dynamic-modulo	42
+block-return-paths	42
+bytes-buffer	42
+type-enum-index	42
+array-key-value-iteration	42
+enum-value-match	42
+try-return-body	42

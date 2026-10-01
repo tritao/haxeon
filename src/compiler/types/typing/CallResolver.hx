@@ -189,6 +189,26 @@ class CallResolver {
 			default: null;
 		};
 
+	/** `value.match(pattern)` on an enum value. */
+	public function isEnumMatch(receiver:TypedExpression, name:String, arguments:Array<AstExpression>):Bool
+		return name == "match" && arguments.length == 1 && switch receiver.type {
+			case TInstance(NominalKind.Enum, _, _): true;
+			default: false;
+		};
+
+	/** Whether `object` matches `pattern`: `switch object { case pattern: true; default: false }`, with `object` evaluated once. */
+	public function typeEnumMatch(object:AstExpression, pattern:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
+		var matched = "__haxeon_match" + span.start;
+		return typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)], SwitchExpression(Variable(matched, span), [
+			{
+				value: pattern,
+				guard: null,
+				result: BoolLiteral(true, span),
+				span: span
+			}
+		], BoolLiteral(false, span), span), span), scope, null, false);
+	}
+
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
@@ -855,8 +875,11 @@ class CallResolver {
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
-		if (receiver != null && methodName != null)
+		if (receiver != null && methodName != null) {
+			if (isEnumMatch(receiver, methodName, arguments))
+				return typeEnumMatch(Variable(name.substring(0, name.lastIndexOf(".")), span), arguments[0], span, scope);
 			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName, false);
+		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
 
@@ -1052,6 +1075,17 @@ class CallResolver {
 				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
 			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+		}
+		if (name == "Type.enumIndex") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			switch value.type {
+				case TInstance(NominalKind.Enum, _, _):
+				default:
+					fail("E1009", "Type.enumIndex requires an enum value", span);
+			}
+			return new TypedExpression(TEnumIndex(value), TInt, span);
 		}
 		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
 			if (arguments.length != 1)
