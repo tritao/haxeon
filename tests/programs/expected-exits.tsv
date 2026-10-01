@@ -253,3 +253,4 @@ virtual-call-without-implementors	42
 lambda-count	42
 nullable-numeric-equality	42
 function-value-optional-arguments	42
+arrow-block-value	42

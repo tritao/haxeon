@@ -1059,8 +1059,18 @@ class Parser {
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
-		if (check(TokenKind.LeftBrace))
-			return parseStatementOrBlock();
+		if (check(TokenKind.LeftBrace)) {
+			var statements = parseStatementOrBlock();
+			// As in Haxe, the value of an arrow function's block is its last expression. A callback that is expected
+			// to return nothing discards it, as it does the value of an expression body.
+			if (statements.length > 0)
+				switch statements[statements.length - 1] {
+					case Expression(expression, span):
+						statements[statements.length - 1] = Return(expression, span);
+					default:
+				}
+			return statements;
+		}
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
 	}
