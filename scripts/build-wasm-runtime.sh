@@ -3,6 +3,7 @@
 # needs nothing from a linker but memory. The result is committed, so compiling Haxe programs needs no clang.
 #   scripts/build-wasm-runtime.sh          rebuild stdlib/haxeon/wasm/linear-runtime.wasm
 #   scripts/build-wasm-runtime.sh --check  fail if the committed module differs from a fresh build
+#                                          (skipped, not failed, without clang)
 # HAXEON_WASM_CLANG names the clang to use; otherwise an Emscripten SDK's clang next to this checkout is used.
 set -euo pipefail
 
@@ -17,7 +18,15 @@ if [[ -z "$clang" ]]; then
 		fi
 	done
 fi
-[[ -n "$clang" && -x "$clang" ]] || { echo "build-wasm-runtime.sh: no clang with a wasm32 target; set HAXEON_WASM_CLANG" >&2; exit 1; }
+if [[ -z "$clang" || ! -x "$clang" ]]; then
+	# Checking needs clang too; without one the committed module cannot be compared, which is not a failure.
+	if [[ "${1:-}" == "--check" ]]; then
+		echo "SKIP: linear-runtime.wasm freshness (no clang with a wasm32 target; set HAXEON_WASM_CLANG)"
+		exit 0
+	fi
+	echo "build-wasm-runtime.sh: no clang with a wasm32 target; set HAXEON_WASM_CLANG" >&2
+	exit 1
+fi
 
 temp_dir=$(mktemp -d)
 trap 'rm -rf -- "${temp_dir:?}"' EXIT
