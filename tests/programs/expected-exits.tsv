@@ -258,3 +258,5 @@ function-value-optional-arguments	42
 arrow-block-value	42
 comprehension-if-else	42
 index-assignment-expression	42
+try-typed-interface	42
+std-is-of-type-interface-dynamic	42
