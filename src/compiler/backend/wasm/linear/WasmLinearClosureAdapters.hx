@@ -187,9 +187,9 @@ class WasmLinearClosureAdapters {
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
 	static function adapter(sourceType:IrType, source:String, targetType:IrType, target:String):IrFunction {
-		var builder = new IrBuilder(), original = builder.argument("closure", Dyn), targetArguments = [
-			for (index => type in arguments(targetType))
-				builder.argument('argument$index', type)
+		var builder = new IrBuilder(), original = builder.argument("closure", Dyn), targetTypes = arguments(targetType), targetArguments = [
+			for (index in 0...targetTypes.length)
+				builder.argument('argument$index', targetTypes[index])
 		], sourceArguments = arguments(sourceType), callee = builder.safeCast(original, sourceType), converted = [
 			for (index in 0...sourceArguments.length)
 				convert(builder, targetArguments[index], sourceArguments[index])
@@ -230,7 +230,7 @@ class WasmLinearClosureAdapters {
 		var index = functions.get(KEY_FUNCTION);
 		if (index == null)
 			return;
-		var named = [for (name => slot in tableSlots) {slot: slot, id: keyIds.get(slotOrder(name))}];
+		var named = [for (name => slot in tableSlots) {slot: slot, id: keyId(slotOrder(name))}];
 		named.sort((left, right) -> left.slot - right.slot);
 		var runs:Array<{start:Int, id:Int}> = [];
 		for (entry in named)
@@ -272,6 +272,14 @@ class WasmLinearClosureAdapters {
 		body = body.concat(lookup(runs, 0, runs.length, slot));
 		body = body.concat([I32Const(2), I32Mul, LocalGet(instance), I32Add, Return]);
 		module.setFunction(index, new WasmFunction(KEY_FUNCTION, module.functionType(index), [{type: I32}, {type: I32}], body));
+	}
+
+	/** The id of a key slotOrder returned; every such key has one. */
+	function keyId(key:String):Int {
+		var id = keyIds.get(key);
+		if (id == null)
+			throw 'Linear Wasm closure key "$key" has no id';
+		return id;
 	}
 
 	/** Pushes the key id of the run holding `slot`, by binary search over the runs' first slots. */

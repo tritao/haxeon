@@ -454,7 +454,8 @@ class WasmFunctionLower {
 							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
-								Call(functions.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
+								Call(WasmModuleSupport.requiredFunctionIndex(functions,
+									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
 						case I32, Bool, I64, F64 if (value.type == Dyn):
@@ -1053,6 +1054,8 @@ class WasmFunctionLower {
 						requiredLocal(values, right.id)));
 			case Call(output, name, arguments) if (WasmModuleSupport.hostCNative(context.program, name) != null):
 				var host = WasmModuleSupport.hostCNative(context.program, name);
+				if (host == null)
+					throw 'Wasm host native "$name" disappeared';
 				lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
 					closureTypes);
 			case Call(output, name, arguments):

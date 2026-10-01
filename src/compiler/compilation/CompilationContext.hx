@@ -117,7 +117,7 @@ class CompilationContext {
 		for (name in names) {
 			var state = modules.get(name);
 			if (state != null)
-				dependencyKeys.set(name, state.dependencies.join("\x00"));
+				dependencyKeys.set(name, state.dependencies.join("\n"));
 		}
 		owner.reachabilityCache.set(entry, {
 			names: names.copy(),

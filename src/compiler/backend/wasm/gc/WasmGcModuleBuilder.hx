@@ -334,7 +334,8 @@ class WasmGcModuleBuilder {
 			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).stdStringBody(0, resultLocal);
 		body.push(LocalGet(resultLocal));
 		body.push(Return);
-		module.setFunction(functions.get("__std_string"), new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
+		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, "__std_string"),
+			new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
 	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
@@ -602,7 +603,7 @@ class WasmGcModuleBuilder {
 							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _): I32;
 						case Value: gcCNativeValueType(native.arguments[index]);
 					});
-			var results = switch native.result {
+			var results:Array<WasmValueType> = switch native.result {
 				case Void: [];
 				case ManagedBytes if (native.fixedResult != null): [I32];
 				case ManagedBytes if (native.pointerLength != null): [I32];

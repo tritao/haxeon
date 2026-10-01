@@ -198,7 +198,7 @@ class WasmModuleSupport {
 									if (!result.exists(key)) result.set(key, {
 										staticType: module.typeIndex(type),
 										instanceType: module.typeIndex({
-											parameters: [I32].concat(type.parameters),
+											parameters: [compiler.backend.wasm.WasmTypes.WasmValueType.I32].concat(type.parameters),
 											results: type.results
 										})
 									});

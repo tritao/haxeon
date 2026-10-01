@@ -2546,21 +2546,21 @@ class Parser {
 	static function codePointString(code:Int, span:SourceSpan):String {
 		if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
 			invalidEscape("U+" + StringTools.hex(code, 4) + " is not a Unicode scalar value", span);
-		var bytes = new haxe.io.BytesBuffer();
+		var bytes = new haxe.io.BytesOutput();
 		if (code < 0x80)
-			bytes.addByte(code);
+			bytes.writeByte(code);
 		else if (code < 0x800) {
-			bytes.addByte(0xC0 | (code >> 6));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xC0 | (code >> 6));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else if (code < 0x10000) {
-			bytes.addByte(0xE0 | (code >> 12));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xE0 | (code >> 12));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else {
-			bytes.addByte(0xF0 | (code >> 18));
-			bytes.addByte(0x80 | ((code >> 12) & 0x3F));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xF0 | (code >> 18));
+			bytes.writeByte(0x80 | ((code >> 12) & 0x3F));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		}
 		return bytes.getBytes().toString();
 	}

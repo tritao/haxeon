@@ -314,7 +314,7 @@ class WasmGcDynamicArrays {
 		var result = allocateLocal(plan.valueType(Bytes));
 		for (argument in arguments)
 			body.push(LocalGet(argument));
-		body.push(Call(functions.get(name)));
+		body.push(Call(WasmModuleSupport.requiredFunctionIndex(functions, name)));
 		body.push(LocalSet(result));
 		return result;
 	}

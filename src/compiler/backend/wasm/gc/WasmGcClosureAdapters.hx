@@ -162,13 +162,18 @@ class WasmGcClosureAdapters {
 		// No closure of this arity can be converted, as a failed reference cast traps.
 		body.push(Unreachable);
 		var name = castName(target);
-		module.setFunction(functions.get(name), new WasmFunction(name, module.functionType(functions.get(name)), [{type: I32}], body));
+		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, name),
+			new WasmFunction(name, module.functionType(WasmModuleSupport.requiredFunctionIndex(functions, name)), [
+				{
+					type: I32
+				}
+			], body));
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic where they differ. */
 	function defineAdapter(source:Int, target:Int, functions:Map<String, Int>, representation:WasmGcRepresentation):Void {
 		var name = adapterName(source, target),
-			type:WasmFunctionType = module.functionType(functions.get(name)),
+			type:WasmFunctionType = module.functionType(WasmModuleSupport.requiredFunctionIndex(functions, name)),
 			sourceType = types.get(source),
 			targetType = types.get(target);
 		var sourceArguments:Array<IrType> = [],
@@ -197,7 +202,7 @@ class WasmGcClosureAdapters {
 			locals = [];
 			body = [Unreachable];
 		}
-		module.setFunction(functions.get(name), new WasmFunction(name, type, locals, body));
+		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, name), new WasmFunction(name, type, locals, body));
 	}
 
 	function adapterBody(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, source:Int, sourceArguments:Array<IrType>, sourceResult:IrType,

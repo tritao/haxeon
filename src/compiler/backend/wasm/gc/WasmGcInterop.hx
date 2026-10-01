@@ -491,6 +491,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		var resultRecord = fixedAggregateResult ? allocateLocal(I32) : -1;
 		if (fixedAggregateResult) {
 			var layout = native.fixedResult;
+			if (layout == null)
+				throw 'Wasm GC C native "${native.name}" has no record result layout';
 			// The pointer is either the leading argument or the address the scalar is stored to after the call.
 			body = body.concat([
 				I32Const(layout.size),
@@ -533,7 +535,11 @@ class WasmGcInterop implements WasmInteropRepresentation {
 					var pointer = bytePointers[index];
 					if (pointer == null)
 						throw 'Wasm GC C native "${native.name}" aggregate argument $index has no scratch pointer';
-					if (native.argumentModes[index].match(FixedInputOutput(_, _, false)) && moduleInterop.rootTokenRestorer >= 0)
+					var restoresTokens = switch native.argumentModes[index] {
+						case FixedInputOutput(_, _, false): moduleInterop.rootTokenRestorer >= 0;
+						default: false;
+					};
+					if (restoresTokens)
 						body = body.concat([
 							LocalGet(argumentLocals[index]),
 							LocalGet(pointer),

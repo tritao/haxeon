@@ -31,10 +31,16 @@ class EqualityGenerator {
 			requestKeys = [for (key in session.equalityRequests.keys()) key];
 		requestKeys.sort(Reflect.compare);
 		// Direct requests first, so a helper someone asked for keeps that caller as its origin.
-		for (key in requestKeys)
-			requests.set(key, session.equalityRequests.get(key));
-		for (key in requestKeys)
-			collect(session, requests.get(key).type, requests.get(key), reachable, requests);
+		for (key in requestKeys) {
+			var request = session.equalityRequests.get(key);
+			if (request != null)
+				requests.set(key, request);
+		}
+		for (key in requestKeys) {
+			var request = requests.get(key);
+			if (request != null)
+				collect(session, request.type, request, reachable, requests);
+		}
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		return [

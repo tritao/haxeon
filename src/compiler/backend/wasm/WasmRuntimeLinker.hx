@@ -1,7 +1,7 @@
 package compiler.backend.wasm;
 
 import haxe.io.Bytes;
-import haxe.io.BytesBuffer;
+import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
@@ -106,7 +106,7 @@ class WasmRuntimeLinker {
 
 	/** Copies one body, renumbering `call` targets and block types. */
 	function relocate(start:Int, end:Int, targets:Array<Int>, types:Array<WasmFunctionType>, module:WasmModule):Bytes {
-		var output = new BytesBuffer();
+		var output = new BytesOutput();
 		position = start;
 		var groups = u32();
 		for (_ in 0...groups) {
@@ -115,7 +115,7 @@ class WasmRuntimeLinker {
 		}
 		var copied = start;
 		function flush(upTo:Int):Void {
-			output.addBytes(bytes, copied, upTo - copied);
+			output.writeBytes(bytes, copied, upTo - copied);
 			copied = upTo;
 		}
 		while (position < end) {
@@ -180,7 +180,7 @@ class WasmRuntimeLinker {
 	}
 
 	function u32():Int {
-		var result = 0, shift = 0, byte;
+		var result = 0, shift = 0, byte:Int;
 		do {
 			byte = bytes.get(position++);
 			result |= (byte & 0x7f) << shift;
@@ -190,7 +190,7 @@ class WasmRuntimeLinker {
 	}
 
 	function s32():Int {
-		var result = 0, shift = 0, byte;
+		var result = 0, shift = 0, byte:Int;
 		do {
 			byte = bytes.get(position++);
 			result |= (byte & 0x7f) << shift;
@@ -220,12 +220,12 @@ class WasmRuntimeLinker {
 			case code: throw 'The Wasm runtime uses value type 0x${StringTools.hex(code, 2)}';
 		};
 
-	static function writeU32(output:BytesBuffer, value:Int):Void {
+	static function writeU32(output:BytesOutput, value:Int):Void {
 		var remaining = value;
 		do {
 			var byte = remaining & 0x7f;
 			remaining >>>= 7;
-			output.addByte(remaining != 0 ? byte | 0x80 : byte);
+			output.writeByte(remaining != 0 ? byte | 0x80 : byte);
 		} while (remaining != 0);
 	}
 }
