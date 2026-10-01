@@ -739,8 +739,8 @@ class ExpressionTyper {
 		var targetType = target == null ? expectedType : lowerType(target);
 		if (targetType == null)
 			fail("E1003", "Untyped cast requires an expected type", span);
-		// The target guides typing of the operand (`([I32] : Array<IrType>)` resolves I32 by it); the conversion stays explicit.
-		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, targetType, false), targetType, span);
+		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
+		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, target == null ? null : targetType, false), targetType, span);
 	}
 
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {

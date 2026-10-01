@@ -800,7 +800,7 @@ class IrGenerator {
 
 	static function referenceCastType(type:IrType):Bool
 		return switch type {
-			case Obj(_), Virtual(_), Function(_, _), Array(_): true;
+			case Obj(_), Virtual(_), Function(_, _), Array(_), Abstract(_), ManagedBytes: true;
 			default: false;
 		};
 
