@@ -395,8 +395,10 @@ class ExpressionTyper {
 		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
 		if (typedCondition != null && typedCondition.type != TBool)
 			fail("E1004", "Array comprehension condition must be Bool", span);
+		// The value is only computed where the condition holds, so it sees what the condition proves.
+		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
 		var expectedElement = arrayElementExpectation(expectedType),
-			typedValue = typeExpressionCallback(value, loopScope, expectedElement, false),
+			typedValue = typeExpressionCallback(value, valueScope, expectedElement, false),
 			flattenedElement = switch typedValue.expression {
 				case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
 				case _: null;
@@ -450,9 +452,11 @@ class ExpressionTyper {
 		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
 		if (typedCondition != null && typedCondition.type != TBool)
 			fail("E1004", "Map comprehension condition must be Bool", span);
+		// The entry is only computed where the condition holds, so it sees what the condition proves.
+		var entryScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
 		var expected = mapExpectation(expectedType),
-			typedKey = typeExpressionCallback(key, loopScope, expected == null ? null : expected.key, false),
-			typedValue = typeExpressionCallback(value, loopScope, expected == null ? null : expected.value, false),
+			typedKey = typeExpressionCallback(key, entryScope, expected == null ? null : expected.key, false),
+			typedValue = typeExpressionCallback(value, entryScope, expected == null ? null : expected.value, false),
 			resultKey = expected == null ? typedKey.type : expected.key,
 			resultValue = expected == null ? typedValue.type : expected.value;
 		typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");

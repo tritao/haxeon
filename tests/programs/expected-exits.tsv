@@ -292,3 +292,4 @@ captured-uninitialized-local	42
 infinite-loop-trailing-code	42
 std-downcast	42
 static-field-arithmetic	42
+comprehension-null-narrowing	42
