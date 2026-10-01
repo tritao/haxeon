@@ -245,6 +245,7 @@ DEFINE_PRIM(_BOOL,__array_remove_f64,_ARR _F64);
 DEFINE_PRIM(_BOOL,__array_remove_bytes,_ARR _STRING);
 DEFINE_PRIM(_BOOL,__array_remove_bool,_ARR _BOOL);
 DEFINE_PRIM(_BOOL,__array_remove_ref,_ARR _DYN);
+DEFINE_PRIM(_DYN,__reflect_copy,_DYN);
 DEFINE_PRIM(_DYN,__reflect_field,_DYN _STRING);
 DEFINE_PRIM(_VOID,__reflect_set_field,_DYN _STRING _DYN);
 DEFINE_PRIM(_BOOL,__reflect_has_field,_DYN _STRING);
