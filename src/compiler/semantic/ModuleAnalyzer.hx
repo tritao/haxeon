@@ -141,6 +141,15 @@ class ModuleAnalyzer {
 					continue;
 				}
 			}
+			// `Module.Type` written inside a package names a module of that package, as in Haxe.
+			if (sourceModule == null && dependency.indexOf(".") >= 0 && packageName != null) {
+				var packageModule = sourceModuleForDependency(packageName + "." + dependency);
+				if (packageModule != null) {
+					dependencies.remove(dependency);
+					dependencies.set(packageModule, true);
+					continue;
+				}
+			}
 			if (sourceModule == null && dependency.indexOf(".") < 0 && hasSourceModuleImport(ast.imports)) {
 				dependencies.remove(dependency);
 				continue;
