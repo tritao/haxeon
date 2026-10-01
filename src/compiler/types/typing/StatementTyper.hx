@@ -142,19 +142,71 @@ class StatementTyper {
 	}
 
 	/** Returns null for statements handled by the compound-statement dispatcher. */
+	/** The type of `var name;` is that of its first assignment in source order, which must be typeable where it is declared. */
+	function inferUninitializedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope, span:SourceSpan):CompilerType {
+		var assigned = firstAssignment(name, statements, start);
+		if (assigned != null) {
+			var type:Null<CompilerType> = null;
+			var speculative = new Scope(scope);
+			speculative.assumeAllAssigned();
+			try {
+				type = typeExpression(assigned, speculative, null, false).type;
+			} catch (_:CompileError) {}
+			if (type != null && type != TNull && type != TVoid && type != TNever)
+				return type;
+		}
+		fail("E1002", 'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration', span);
+		return TVoid;
+	}
+
+	static function firstAssignment(name:String, statements:Array<AstStatement>, start:Int):Null<AstExpression> {
+		for (index in start...statements.length) {
+			var found:Null<AstExpression> = switch statements[index] {
+				case Assignment(assigned, expression, _) if (assigned == name): expression;
+				case If(_, yes, no, _):
+					var inYes = firstAssignment(name, yes, 0);
+					inYes != null ? inYes : firstAssignment(name, no, 0);
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): firstAssignment(name, body, 0);
+				case Try(tryBranch, catches, _):
+					var inTry = firstAssignment(name, tryBranch, 0);
+					if (inTry == null)
+						for (catchClause in catches) {
+							inTry = firstAssignment(name, catchClause.statements, 0);
+							if (inTry != null)
+								break;
+						}
+					inTry;
+				case Switch(_, cases, defaultBranch, _, _):
+					var inCase:Null<AstExpression> = null;
+					for (switchCase in cases) {
+						inCase = firstAssignment(name, switchCase.statements, 0);
+						if (inCase != null)
+							break;
+					}
+					inCase != null ? inCase : firstAssignment(name, defaultBranch, 0);
+				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name): return null;
+				default: null;
+			};
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>, statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
 		var context = session.currentContext;
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
-				var declaredType = session.declarations.resolve(declared, null, context.typeSubstitutions),
+				var declaredType = declared == InferredType ? inferUninitializedType(name, statements, statementIndex + 1, scope,
+					span) : session.declarations.resolve(declared, null, context.typeSubstitutions),
 					declarationKey = LexicalStorageAnalysis.key(name, span);
 				if (context.storage.hasCandidate(declarationKey) && context.storage.candidateKind(declarationKey) == MutableCapture)
 					fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
-				var uninitializedAbstract = EnumAbstractHints.named(session, declared);
+				var uninitializedAbstract = declared == InferredType ? null : EnumAbstractHints.named(session, declared);
 				if (uninitializedAbstract != null)
 					context.declaredAbstracts.set(scope.requireId(name), uninitializedAbstract);
 				[TDeclare(scope.requireId(name), declaredType, span)];

@@ -520,7 +520,8 @@ class TestMain {
 		expectCompileError('class Values { public final value:Int; public function new(value:Int) this.value = value; } function main():Int return new Values(1).value();',
 			'Cannot call non-function field "value"');
 		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
-		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
+		expectCompileError('function main():Int { var value; return 0; }', 'Cannot infer type of local "value"');
+		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }', 'Type mismatch for local "value"');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
