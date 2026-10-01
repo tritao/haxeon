@@ -9,10 +9,10 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.IrFunction;
+import compiler.ir.IrGraph;
 import compiler.ir.IrVerifier;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
-import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmExceptionLowering;
 import compiler.backend.wasm.gc.WasmGcMaps;
@@ -101,6 +101,13 @@ class WasmGcModuleBuilder {
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
+		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
+		// needs every class's toString index and is defined later.
+		if (usedNatives.exists("__std_string"))
+			functions.set("__std_string", module.addFunction(new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes))));
+		for (name in ["__std_is_of_type", "__std_is_exact_type", "__exception_matches"])
+			if (usedNatives.exists(name))
+				addGcTypeTest(module, functions, plan, gcRepresentation, name);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		WasmGcDynamicArrays.register(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
@@ -136,7 +143,7 @@ class WasmGcModuleBuilder {
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
 		if (usedNatives.exists("__std_string"))
-			addGcStdString(module, functions, plan, gcRepresentation);
+			defineGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
@@ -253,9 +260,9 @@ class WasmGcModuleBuilder {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
-			var cfg = new WasmCfgAnalysis(fn);
-			for (blockId in cfg.graph.order)
-				for (located in cfg.graph.block(blockId).instructions)
+			var graph = new IrGraph(fn);
+			for (blockId in graph.order)
+				for (located in graph.block(blockId).instructions)
 					switch located.value {
 						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), GlobalGet(_, _),
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
@@ -295,26 +302,34 @@ class WasmGcModuleBuilder {
 			default: false;
 		};
 
+	/** One shared function per Dynamic type test native, each testing a value against every type in the program. */
+	static function addGcTypeTest(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation, name:String):Void {
+		var locals:Array<WasmLocal> = [], nextLocal = 2, allocateLocal:WasmValueType->Int = function(type) {
+			locals.push({type: type});
+			return nextLocal++;
+		};
+		var resultLocal = allocateLocal(I32),
+			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).typeTestBody(name, 0, 1, resultLocal);
+		body.push(LocalGet(resultLocal));
+		body.push(Return);
+		functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType([Dyn, TypeRef], Bool), locals, body)));
+	}
+
 	/**
-	 * Std.string of a Dynamic value tests the value against every class in the program, so its call sites share one
-	 * function instead of each carrying that dispatch. It is built once every class's toString has an index; until
-	 * "__std_string" is registered, the representation lowers the conversion inline, which becomes this body.
+	 * Std.string of a Dynamic value tests the value against every class in the program, so its call sites, runtime
+	 * helpers included, share one function instead of each carrying that dispatch. Its index is reserved early and
+	 * its body defined here, once every class's toString has an index.
 	 */
-	static function addGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation):Void {
+	static function defineGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation):Void {
 		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = function(type) {
 			locals.push({type: type});
 			return nextLocal++;
 		};
 		var resultLocal = allocateLocal(plan.valueType(Bytes)),
-			lowered = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null})
-				.lowerRuntimeCall("__std_string", new IrValue(-1, "__std_string_result", Bytes), [new IrValue(0, "__std_string_value", Dyn)], resultLocal, [0]),
-			body = switch lowered {
-				case Handled(instructions): instructions;
-				case UseDefault: throw "Wasm GC has no Std.string lowering";
-			};
+			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).stdStringBody(0, resultLocal);
 		body.push(LocalGet(resultLocal));
 		body.push(Return);
-		functions.set("__std_string", module.addFunction(new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body)));
+		module.setFunction(functions.get("__std_string"), new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
 	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
@@ -500,9 +515,9 @@ class WasmGcModuleBuilder {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name))
 				continue;
-			var cfg = new WasmCfgAnalysis(fn);
-			for (blockId in cfg.graph.order)
-				for (located in cfg.graph.block(blockId).instructions)
+			var graph = new IrGraph(fn);
+			for (blockId in graph.order)
+				for (located in graph.block(blockId).instructions)
 					switch located.value {
 						case Call(output, name, _) if (output.type != Void):
 							var parts = WasmModuleSupport.mapNativeParts(name);

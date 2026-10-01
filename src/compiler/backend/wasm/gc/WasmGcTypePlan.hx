@@ -47,6 +47,9 @@ class WasmGcTypePlan {
 	public final iteratorTypeIndices:Map<String, Int> = [];
 	public final functionTypeIndices:Map<String, Int> = [];
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
+
+	final implementorCache:Map<String, Array<Int>> = [];
+
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
 	/** Immutable `(array i32)` holding `RuntimeData.address` tables, or -1 when the program has none. */
@@ -116,11 +119,16 @@ class WasmGcTypePlan {
 	}
 
 	/** Returns class type indices that can satisfy a Haxe virtual interface cast. */
+	/** Classes implementing an interface, cached: every interface type test over Dynamic values asks for them. */
 	public function interfaceImplementors(interfaceName:String):Array<Int> {
+		var cached = implementorCache.get(interfaceName);
+		if (cached != null)
+			return cached;
 		var result:Array<Int> = [];
 		for (object in orderedObjects)
 			if (objectImplementsInterface(object.name, interfaceName))
 				result.push(objectType(object.name));
+		implementorCache.set(interfaceName, result);
 		return result;
 	}
 
@@ -300,16 +308,8 @@ class WasmGcTypePlan {
 		return object.base != null && objectImplementsInterface(object.base, interfaceName);
 	}
 
-	function interfaceExtends(actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (interfaceDecl in program.interfaces)
-			if (interfaceDecl.name == actual)
-				for (base in interfaceDecl.bases)
-					if (interfaceExtends(base, expected))
-						return true;
-		return false;
-	}
+	function interfaceExtends(actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	function visitObject(object:IrObject, states:Map<String, Int>):Void {
 		var state = states.get(object.name);

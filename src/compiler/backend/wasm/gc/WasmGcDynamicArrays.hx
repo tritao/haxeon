@@ -45,6 +45,7 @@ class WasmGcDynamicArrays {
 
 	final plan:WasmGcTypePlan;
 	final program:IrProgram;
+	final functions:Map<String, Int>;
 	final representation:WasmGcRepresentation;
 	final elements:Array<IrType>;
 	final throws:Bool;
@@ -58,17 +59,32 @@ class WasmGcDynamicArrays {
 	/** Emit a module function for each dynamic-view native the program uses. */
 	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
-		for (native in program.natives)
-			if (used.exists(native.name) && isOperation(native.name) && !functions.exists(native.name))
-				functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native).emit(module, native));
+		var operations = [
+			for (native in program.natives)
+				if (used.exists(native.name) && isOperation(native.name) && !functions.exists(native.name)) native
+		];
+		if (operations.length == 0)
+			return;
+		// Error messages name a value's type by testing it against every class, so helpers share one function.
+		if (!functions.exists(VALUE_TYPE_NAME)) {
+			var namer = new WasmGcDynamicArrays(plan, program, representation, 1, functions),
+				result = namer.inlineValueTypeName(0);
+			namer.body.push(LocalGet(result));
+			namer.body.push(Return);
+			functions.set(VALUE_TYPE_NAME,
+				module.addFunction(new WasmFunction(VALUE_TYPE_NAME, plan.wasmFunctionType([Dyn], Bytes), namer.locals, namer.body)));
+		}
+		for (native in operations)
+			functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
 
-	function new(plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, native:IrNative) {
+	function new(plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int, functions:Map<String, Int>) {
 		this.plan = plan;
+		this.functions = functions;
 		this.program = program;
 		elements = plan.arrayElementTypes();
 		throws = WasmModuleSupport.hasExceptions(program);
-		nextLocal = native.arguments.length;
+		nextLocal = argumentCount;
 		representation = gcRepresentation.forFunction({allocateLocal: allocateLocal, exceptionTag: throws ? 0 : null, irFunction: null});
 	}
 
@@ -194,8 +210,21 @@ class WasmGcDynamicArrays {
 		push([LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End]);
 	}
 
+	/** Lowers a runtime operation inline, or calls the module function that implements it, such as Std.string. */
 	function lower(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):Void
-		push(handled(representation.lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals)));
+		switch representation.lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals) {
+			case Handled(instructions):
+				push(instructions);
+			case UseDefault:
+				var index = functions.get(name);
+				if (index == null)
+					throw 'Wasm GC dynamic array helper has no lowering or function for "$name"';
+				for (local in argumentLocals)
+					body.push(LocalGet(local));
+				body.push(Call(index));
+				if (output.type != Void)
+					body.push(LocalSet(outputLocal));
+		}
 
 	function concrete(operation:String, element:IrType):String
 		return '__array_${operation}_${WasmGcRepresentation.arrayNativeSuffix(element)}';
@@ -259,8 +288,18 @@ class WasmGcDynamicArrays {
 		return result;
 	}
 
-	/** Name of a dynamic value's runtime type. */
+	static inline var VALUE_TYPE_NAME = "__haxeon_value_type_name";
+
+	/** Name of a dynamic value's runtime type, from the module's shared function. */
 	function valueTypeName(valueLocal:Int):Int {
+		var result = allocateLocal(plan.valueType(Bytes));
+		body.push(LocalGet(valueLocal));
+		body.push(Call(functions.get(VALUE_TYPE_NAME)));
+		body.push(LocalSet(result));
+		return result;
+	}
+
+	function inlineValueTypeName(valueLocal:Int):Int {
 		var result = allocateLocal(plan.valueType(Bytes));
 		function when(test:Array<WasmInstruction>, name:String):Void {
 			push([LocalGet(valueLocal)].concat(test).concat([If(null)]));

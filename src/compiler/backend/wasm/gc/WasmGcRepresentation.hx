@@ -92,29 +92,18 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return stringLiteral(value, destination);
 	}
 
+	// A literal is copied from a passive data segment in one instruction rather than stored byte by byte.
 	function stringLiteral(value:String, destination:Int):Array<WasmInstruction> {
-		var bytes = HaxeBytes.ofString(value),
-			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
-			body:Array<WasmInstruction> = [
-				I32Const(bytes.length),
-				ArrayNewDefault(plan.byteArrayTypeIndex),
-				LocalSet(storage)
-			];
-		for (index in 0...bytes.length)
-			body = body.concat([
-				LocalGet(storage),
-				I32Const(index),
-				I32Const(bytes.get(index)),
-				ArraySet(plan.byteArrayTypeIndex)
-			]);
-		body = body.concat([
-			LocalGet(storage),
+		var length = HaxeBytes.ofString(value).length;
+		return [
 			I32Const(0),
-			I32Const(bytes.length),
+			I32Const(length),
+			ArrayNewData(plan.byteArrayTypeIndex, gc.stringSegment(value)),
+			I32Const(0),
+			I32Const(length),
 			StructNew(plan.bytesTypeIndex),
 			LocalSet(destination)
-		]);
-		return body;
+		];
 	}
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
@@ -345,31 +334,43 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
+		// An exact test rejects every subclass, so each class needs its descendants.
+		var children:Map<String, Array<String>> = [];
+		if (exact)
+			for (object in plan.program.objects)
+				if (object.base != null) {
+					var list = children.get(object.base);
+					if (list == null)
+						children.set(object.base, list = []);
+					list.push(object.name);
+				}
+		function descendants(name:String):Array<String> {
+			var result:Array<String> = [], pending = [name];
+			while (pending.length > 0) {
+				var direct = children.get(pending.pop());
+				if (direct != null)
+					for (child in direct) {
+						result.push(child);
+						pending.push(child);
+					}
+			}
+			return result;
+		}
 		for (object in plan.program.objects) {
 			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Obj(object.name), plan.objectType(object.name));
 			if (exact)
-				for (candidate in plan.program.objects) {
-					var base = candidate.base;
-					while (base != null && base != object.name) {
-						var next:Null<String> = null;
-						for (parent in plan.program.objects)
-							if (parent.name == base)
-								next = parent.base;
-						base = next;
-					}
-					if (base == object.name) {
-						body.push(LocalGet(typeLocal));
-						body.push(I32Const(WasmModuleSupport.typeId(Obj(object.name))));
-						body.push(I32Eq);
-						body.push(If(null));
-						body.push(LocalGet(valueLocal));
-						body.push(RefTest({nullable: false, heap: Type(plan.objectType(candidate.name))}));
-						body.push(If(null));
-						body.push(I32Const(0));
-						body.push(LocalSet(outputLocal));
-						body.push(End);
-						body.push(End);
-					}
+				for (descendant in descendants(object.name)) {
+					body.push(LocalGet(typeLocal));
+					body.push(I32Const(WasmModuleSupport.typeId(Obj(object.name))));
+					body.push(I32Eq);
+					body.push(If(null));
+					body.push(LocalGet(valueLocal));
+					body.push(RefTest({nullable: false, heap: Type(plan.objectType(descendant))}));
+					body.push(If(null));
+					body.push(I32Const(0));
+					body.push(LocalSet(outputLocal));
+					body.push(End);
+					body.push(End);
 				}
 		}
 		for (enumDecl in plan.program.enums)
@@ -379,6 +380,14 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			appendInterfaceTypeTest(body, valueLocal, typeLocal, outputLocal, interfaceDecl.name);
 		return body;
 	}
+
+	/** The body of the module's shared function for a Dynamic type test native. */
+	public function typeTestBody(name:String, valueLocal:Int, typeLocal:Int, outputLocal:Int):Array<WasmInstruction>
+		return dynamicTypeTest(valueLocal, typeLocal, outputLocal, name == "__std_is_exact_type");
+
+	/** The body of the module's shared Std.string(Dynamic) function. */
+	public function stdStringBody(valueLocal:Int, outputLocal:Int):Array<WasmInstruction>
+		return dynamicString(valueLocal, outputLocal);
 
 	function dynamicString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [
@@ -439,22 +448,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				if (!object.isValue && plan.objectTypeIndices.exists(object.name)) object.name
 		];
 		classes.sort((left, right) -> depth(right) - depth(left));
+		// Appended in place: the chain has an arm per class, so rebuilding the array each time is quadratic.
 		var body:Array<WasmInstruction> = [];
 		for (name in classes) {
 			var objectType = plan.objectType(name),
 				method = WasmModuleSupport.stringMethod(program, name),
 				methodIndex = method == null ? null : gc.functions.get(method);
-			body = body.concat([
-				LocalGet(valueLocal),
-				RefTest({nullable: false, heap: Type(objectType)}),
-				If(null)
-			]);
-			body = body.concat(methodIndex == null ? stringLiteral(name, outputLocal) : [
+			body.push(LocalGet(valueLocal));
+			body.push(RefTest({nullable: false, heap: Type(objectType)}));
+			body.push(If(null));
+			for (instruction in (methodIndex == null ? stringLiteral(name, outputLocal) : [
 				LocalGet(valueLocal),
 				RefCast({nullable: false, heap: Type(objectType)}),
 				Call(methodIndex),
 				LocalSet(outputLocal)
-			]);
+			]))
+				body.push(instruction);
 			body.push(Else);
 		}
 		for (_ in classes)
@@ -1116,6 +1125,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return dynamicString(argumentLocals[0], outputLocal);
 		}
 		if (name == "__std_is_of_type" || name == "__std_is_exact_type" || name == "__exception_matches") {
+			// These test a value against every type in the program, so call sites share one function each.
+			if (gc.functions.exists(name))
+				return UseDefault;
 			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)
 				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");

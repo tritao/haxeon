@@ -45,19 +45,27 @@ class WasmModuleSupport {
 	 * never reads how a backend lays out Haxe values: `trace` prints through HaxeonHost.print.
 	 */
 	public static function hostCNative(program:IrProgram, nativeName:String):Null<IrCNative> {
-		var hostSymbol:Null<String> = null;
-		for (native in program.natives)
-			if (native.name == nativeName)
-				hostSymbol = switch native.symbol {
-					case "__sys_print": "print";
+		if (hostCNativeProgram != program) {
+			hostCNativeProgram = program;
+			hostCNatives = [];
+			var hosted:Map<String, IrCNative> = [];
+			for (native in program.cNatives)
+				if (native.library == "haxeon_host")
+					hosted.set(native.symbol, native);
+			for (native in program.natives) {
+				var host = switch native.symbol {
+					case "__sys_print": hosted.get("print");
 					case _: null;
 				};
-		if (hostSymbol != null)
-			for (native in program.cNatives)
-				if (native.library == "haxeon_host" && native.symbol == hostSymbol)
-					return native;
-		return null;
+				if (host != null)
+					hostCNatives.set(native.name, host);
+			}
+		}
+		return hostCNatives.get(nativeName);
 	}
+
+	static var hostCNativeProgram:Null<IrProgram> = null;
+	static var hostCNatives:Map<String, IrCNative> = [];
 
 	/** The requested exports followed by every function declared `@:expose`, which the host calls by name. */
 	public static function exportedFunctions(program:IrProgram, requested:Array<String>):Array<String> {
@@ -379,7 +387,27 @@ class WasmModuleSupport {
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
 		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
+	// Type tests emit a class's id once per class per test site, so named types remember theirs.
+	static final namedTypeIds:Map<String, Int> = [];
+
 	public static function typeId(type:IrType):Int {
+		var key = switch type {
+			case Obj(name): "O" + name;
+			case Enum(name): "E" + name;
+			case Virtual(name): "V" + name;
+			case _: null;
+		};
+		if (key == null)
+			return computeTypeId(type);
+		var id = namedTypeIds.get(key);
+		if (id == null) {
+			id = computeTypeId(type);
+			namedTypeIds.set(key, id);
+		}
+		return id;
+	}
+
+	static function computeTypeId(type:IrType):Int {
 		var identity = switch type {
 			case Iterator(_): Abstract("realtime_iterator");
 			default: type;
