@@ -1127,7 +1127,14 @@ class Parser {
 				span = expressionSpan(expression).merge(expressionSpan(value));
 			expression = switch expression {
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
-				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable",
+				// `a[i] = v` as a value is `v`; the array and index are evaluated once, as in the statement.
+				case Index(array, position, _):
+					var assigned = "__haxeon_assigned";
+					BlockExpression([
+						VarDeclaration(assigned, null, value, span),
+						IndexAssignment(array, position, Variable(assigned, span), span)
+					], Variable(assigned, span), span);
+				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable or an array element",
 						expressionSpan(expression)));
 			};
 		}
