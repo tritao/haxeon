@@ -269,3 +269,5 @@ dynamic-arithmetic	42
 dynamic-increment	42
 dynamic-modulo	42
 block-return-paths	42
+bytes-buffer	42
+type-enum-index	42

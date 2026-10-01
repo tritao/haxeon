@@ -1053,6 +1053,17 @@ class CallResolver {
 			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}
+		if (name == "Type.enumIndex") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			switch value.type {
+				case TInstance(NominalKind.Enum, _, _):
+				default:
+					fail("E1009", "Type.enumIndex requires an enum value", span);
+			}
+			return new TypedExpression(TEnumIndex(value), TInt, span);
+		}
 		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
