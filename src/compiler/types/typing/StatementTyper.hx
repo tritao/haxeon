@@ -279,6 +279,14 @@ class StatementTyper {
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
 		var current = scope.resolve(name);
+		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
+		var dot = name.indexOf("."),
+			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
+		if ((current != null && sameType(current, TDynamic)) || (current == null && root != null && sameType(root, TDynamic))) {
+			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
+			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
+		}
 		if (current != null && !scope.isAssigned(name))
 			fail("E1023", 'Local "$name" may be used before assignment', span);
 		if (current == null) {
