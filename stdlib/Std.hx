@@ -225,6 +225,11 @@ class Std {
 		return false;
 	}
 
+	/** The value as the requested class or interface when it is an instance of it, else null; lowered by the compiler. */
+	public static function downcast(value:Dynamic, type:Dynamic):Dynamic {
+		return null;
+	}
+
 	/** True only when the runtime class is exactly the requested class. */
 	public static function isExactType(value:Dynamic, type:Dynamic):Bool {
 		return false;

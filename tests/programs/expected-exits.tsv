@@ -284,3 +284,4 @@ try-expression-void-context	42
 reflect-object-dispatch	42
 captured-uninitialized-local	42
 infinite-loop-trailing-code	42
+std-downcast	42
