@@ -72,6 +72,7 @@ class TestCatalog {
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
 		"ReturnPathMain",
+		"LocalTypeLoadMain",
 		"ClosureNarrowingMain",
 		"AmbiguousEnumAbstractValueMain",
 		"MethodCallInvalidationMain",

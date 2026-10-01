@@ -92,6 +92,15 @@ class ModuleAnalyzer {
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);
+		// A type named only in an annotation, cast or catch clause is a dependency when a source module has that name.
+		for (key in [for (key in dependencies.keys()) key])
+			if (StringTools.startsWith(key, DependencyScanner.OPTIONAL_PREFIX)) {
+				dependencies.remove(key);
+				var typeName = key.substr(DependencyScanner.OPTIONAL_PREFIX.length);
+				if (sourceModuleForDependency(typeName) != null
+					|| (ast.packageName != null && sourceModuleForDependency(ast.packageName + "." + typeName) != null))
+					dependencies.set(typeName, true);
+			}
 		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
 			for (field in classDecl.fields)

@@ -6,18 +6,33 @@ import compiler.syntax.Ast.AstType;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {
+	/**
+	 * Marks a name that is only a dependency when a source module of that name exists: a type written in a local
+	 * annotation, a cast, or a catch clause may as well be a built-in (`Dynamic`), a type parameter, or a type that is
+	 * resolved elsewhere, so the module analyzer keeps such a name only when it names a module.
+	 */
+	public static inline final OPTIONAL_PREFIX = "?";
+
 	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>):Void
 		switch s {
 			case ErrorStatement(_):
-			case UninitializedDeclaration(_, _, _):
-			case VarDeclaration(_, _, e, _), Assignment(_, e, _), Return(e, _), Throw(e, _):
+			case UninitializedDeclaration(_, type, _):
+				scanAnnotation(type, dependencies);
+			case VarDeclaration(_, type, e, _):
+				// A type written only in the annotation still has to be loaded.
+				if (type != null)
+					scanAnnotation(type, dependencies);
+				scanExpression(e, dependencies);
+			case Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies);
 			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
 					scanStatement(x, dependencies);
-				for (catchClause in catches)
+				for (catchClause in catches) {
+					scanAnnotation(catchClause.type, dependencies);
 					for (x in catchClause.statements)
 						scanStatement(x, dependencies);
+				}
 			case IndexAssignment(array, offset, e, _):
 				scanExpression(array, dependencies);
 				scanExpression(offset, dependencies);
@@ -89,7 +104,9 @@ class DependencyScanner {
 				scanExpression(value, dependencies);
 			case ThrowExpression(value, _):
 				scanExpression(value, dependencies);
-			case Cast(value, _, _):
+			case Cast(value, type, _):
+				if (type != null)
+					scanAnnotation(type, dependencies);
 				scanExpression(value, dependencies);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies);
@@ -179,6 +196,14 @@ class DependencyScanner {
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
 		addQualifiedOwner(name, dependencies);
+	}
+
+	/** Like `scanType`, for names that count as dependencies only when they name a source module. */
+	static function scanAnnotation(type:AstType, dependencies:Map<String, Bool>):Void {
+		var names:Map<String, Bool> = [];
+		scanType(type, names);
+		for (name in names.keys())
+			dependencies.set(OPTIONAL_PREFIX + name, true);
 	}
 
 	static function scanType(type:AstType, dependencies:Map<String, Bool>):Void
