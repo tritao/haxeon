@@ -236,6 +236,7 @@ class FlowAnalysis {
 	public static function accessPath(expression:TypedExpression):Null<String>
 		return switch expression.expression {
 			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): name;
+			case TStaticField(owner, name): 'static:$owner.$name';
 			case TField(object, name):
 				var parent = accessPath(object);
 				parent == null ? null : parent + "." + name;

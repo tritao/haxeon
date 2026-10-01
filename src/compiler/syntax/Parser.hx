@@ -1112,9 +1112,8 @@ class Parser {
 				var initializer = parseExpression();
 				declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
 			} else {
-				if (type == null)
-					fail(current(), 'Uninitialized local "${nameToken.text}" requires an explicit type');
-				declarations.push(UninitializedDeclaration(nameToken.text, type, start.merge(previous().span)));
+				// Without an annotation, the typer takes the type from the first assignment, as Haxe does.
+				declarations.push(UninitializedDeclaration(nameToken.text, type == null ? InferredType : type, start.merge(previous().span)));
 			}
 		} while (match(TokenKind.Comma));
 		var lastInitializer = switch declarations[declarations.length - 1] {

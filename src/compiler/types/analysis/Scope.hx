@@ -85,6 +85,11 @@ class Scope {
 			assigned.set(value.id, true);
 	}
 
+	/** For speculative typing: every visible local counts as assigned in this scope, not in its parents. */
+	public function assumeAllAssigned():Void
+		for (value in visibleValues())
+			assigned.set(value.id, true);
+
 	public function setMapKeySource(name:String, source:Null<TypedExpression>):Void {
 		var value = resolveLocal(name);
 		if (value == null)

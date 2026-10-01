@@ -562,7 +562,8 @@ class CallResolver {
 							hasLambda = true;
 						default:
 					}
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var contextual = contextualGenericArguments || hasLambda || expectedType != null,
 				typingSubstitutions = copyMap(preset);
@@ -665,8 +666,13 @@ class CallResolver {
 	}
 
 	public function typeClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, callableName:Null<String> = null,
-			invalidateAllExpressions:Bool = true):TypedExpression {
-		var typedCallee = typeExpression(callee, scope, null, false),
+			invalidateAllExpressions:Bool = true, ?expectedType:CompilerType):TypedExpression {
+		// A `try` expression is an immediately called lambda; where its value is discarded, its branches may differ in type.
+		var discarded = expectedType == TVoid && arguments.length == 0 && switch callee {
+			case Lambda(lambdaArguments, _, _): lambdaArguments.length == 0;
+			default: false;
+		},
+			typedCallee = typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null, false),
 			functionType = switch typedCallee.type {
 				case TFunction(parameters, result): {arguments: parameters, result: result};
 				default: null;
@@ -784,7 +790,8 @@ class CallResolver {
 						hasLambda = true;
 					default:
 				}
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var contextual = hasLambda || expectedType != null,
 				typingSubstitutions = copyMap(preset);
