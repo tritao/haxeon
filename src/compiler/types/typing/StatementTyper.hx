@@ -155,8 +155,8 @@ class StatementTyper {
 			if (type != null && type != TNull && type != TVoid && type != TNever)
 				return type;
 		}
-		fail("E1002", 'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration', span);
-		return TVoid;
+		throw new CompileError(new Diagnostic("E1002",
+			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration', span));
 	}
 
 	static function firstAssignment(name:String, statements:Array<AstStatement>, start:Int):Null<AstExpression> {
