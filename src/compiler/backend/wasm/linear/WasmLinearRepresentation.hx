@@ -21,11 +21,13 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	final layout:WasmLayout;
 	final allocator:Int;
 	final bytesDataPointer:Int;
+	final cstringCopy:Int;
 
-	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int) {
+	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int) {
 		this.layout = layout;
 		this.allocator = allocator;
 		this.bytesDataPointer = bytesDataPointer;
+		this.cstringCopy = cstringCopy;
 	}
 
 	public function valueType(type:IrType):WasmValueType
@@ -113,13 +115,15 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
 		var abi = WasmCAbi.of(native), fixed = native.fixedResult;
-		if (!abi.adjustsCall())
+		if (!abi.adjustsCall() && native.result != Bytes)
 			return UseDefault;
 		var body:Array<WasmInstruction> = [];
 		if (fixed == null) {
 			pushNativeArguments(body, abi, arguments, argumentLocals);
 			body.push(Call(importIndex));
 			body = body.concat(abi.raiseResult());
+			if (native.result == Bytes)
+				body.push(Call(cstringCopy));
 			if (outputLocal >= 0)
 				body.push(LocalSet(outputLocal));
 			return body;

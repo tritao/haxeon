@@ -63,7 +63,9 @@ class WasmGcModuleBuilder {
 			requiresLinearMemory = false;
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
-				if ((native.result == ManagedBytes && native.pointerLength != null) || native.fixedResult != null)
+				if (native.result == Bytes
+					|| (native.result == ManagedBytes && native.pointerLength != null)
+					|| native.fixedResult != null)
 					requiresLinearMemory = true;
 				for (index in 0...native.argumentModes.length)
 					switch native.argumentModes[index] {

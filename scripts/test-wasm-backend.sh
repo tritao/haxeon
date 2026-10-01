@@ -180,12 +180,18 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async --target="$target" --output="out/wasm-utf8-result-$target.wasm" \
+		--entry=wasm-utf8-result --root=tests/ffi --ffi-interface=tests/ffi/utf8_result.hxi tests/ffi/wasm-utf8-result.hx
+done
 haxeon_compile_wait
 
 node - "$root_dir" <<'JS'
 const fs = require("fs");
 const root = process.argv[2];
 const cases = [
+  ["out/wasm-utf8-result-wasm32.wasm", 42],
+  ["out/wasm-utf8-result-wasm-gc.wasm", 42],
   ["out/wasm-backend-test.wasm", 42],
   ["out/wasm-backend-branch.wasm", 42],
   ["out/wasm-backend-loop.wasm", 6],
@@ -287,6 +293,13 @@ const cases = [
     let shortStructImportCalled = false;
     let hostServicesCheck = null;
     const imports = {};
+    if (relative.includes("wasm-utf8-result-")) {
+      let pointer = 0;
+      const bytes = new TextEncoder().encode("é🙂\0");
+      const write = () => { pointer = moduleInstance.exports.memory.buffer.byteLength - 256; new Uint8Array(moduleInstance.exports.memory.buffer, pointer, bytes.length).set(bytes); return pointer; };
+      imports.utf8_result = {borrowed_text: write, optional_text: enabled => enabled ? write() : 0,
+        overwrite_text: () => new Uint8Array(moduleInstance.exports.memory.buffer, pointer, bytes.length).fill(120)};
+    }
     if (relative.endsWith("cnative-import.wasm"))
       imports.fixture = {fixture_add: (left, right) => left + right};
     if (relative.endsWith("wasm32-bytes-view.wasm")) {
@@ -623,15 +636,17 @@ const cases = [
     }
     if (importedMemory)
       imports.env = {memory};
-    if (relative.includes("gc-")) {
+    if (relative.includes("gc-") || relative.endsWith("utf8-result-wasm-gc.wasm")) {
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
+      const utf8Results = relative.endsWith("utf8-result-wasm-gc.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !valueRecords && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && hasMemory)
+          || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
           || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))

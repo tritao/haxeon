@@ -2519,6 +2519,57 @@ class WasmLinearRuntime {
 			I32Load8U(0)
 		];
 
+	/** Copies a borrowed, NUL-terminated native UTF-8 value into a managed string. */
+	public static function addCStringCopy(module:WasmModule, allocator:Int):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw("__haxeon_cstring_copy", {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}], [
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			I32Const(0),
+			Return,
+			End,
+			I32Const(0),
+			LocalSet(1),
+			Block(null),
+			Loop(null),
+			LocalGet(0),
+			LocalGet(1),
+			I32Add,
+			I32Load8U(0),
+			I32Eqz,
+			BrIf(1),
+			LocalGet(1),
+			I32Const(1),
+			I32Add,
+			LocalSet(1),
+			Br(0),
+			End,
+			End,
+			LocalGet(1),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			Call(allocator),
+			LocalSet(2),
+			LocalGet(2),
+			I32Const(WasmModuleSupport.typeId(Bytes)),
+			I32Store(0),
+			LocalGet(2),
+			LocalGet(1),
+			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+			LocalGet(2),
+			LocalGet(1),
+			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+			LocalGet(2),
+			I32Const(WasmLayout.STRING_DATA_OFFSET),
+			I32Add,
+			LocalGet(0),
+			LocalGet(1),
+			MemoryCopy,
+			LocalGet(2),
+			Return
+		]));
+	}
+
 	public static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
 			LocalGet(0),
