@@ -2467,17 +2467,33 @@ class WasmLinearRuntime {
 			if (name != "__std_is_exact_type")
 				for (object in program.objects) {
 					var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
+					var interfaceNames:Array<String> = object.interfaces.copy();
 					var base = object.base;
 					while (base != null) {
 						accepted.push(WasmModuleSupport.typeId(Obj(base)));
 						var next:Null<String> = null;
 						for (candidate in program.objects)
-							if (candidate.name == base)
+							if (candidate.name == base) {
 								next = candidate.base;
+								// A subclass implements whatever its superclasses do.
+								for (interfaceName in candidate.interfaces)
+									interfaceNames.push(interfaceName);
+							}
 						base = next;
 					}
-					for (interfaceName in object.interfaces)
+					// An interface also stands for every interface it extends.
+					var visited:Map<String, Bool> = [];
+					while (interfaceNames.length > 0) {
+						var interfaceName = interfaceNames.pop();
+						if (interfaceName == null || visited.exists(interfaceName))
+							continue;
+						visited.set(interfaceName, true);
 						accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
+						for (declaration in program.interfaces)
+							if (declaration.name == interfaceName)
+								for (parent in declaration.bases)
+									interfaceNames.push(parent);
+					}
 					builder.localGet(value);
 					builder.emit(I32Load(0));
 					builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
