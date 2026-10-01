@@ -121,6 +121,9 @@ class ClosureTyper {
 		for (name in freeNames) {
 			var capturedType = scope.resolve(name);
 			if (capturedType != null) {
+				// A closure that only reads a local sees whatever it holds when the closure is created, so it must be assigned by then.
+				if (!free.assigned.exists(name) && !scope.isAssigned(name))
+					fail("E1023", 'Local "$name" may be used before assignment', span);
 				var captureType:CompilerType = capturedType;
 				var declaredCaptureType = scope.resolveDeclared(name);
 				var cellClass:Null<String> = null;

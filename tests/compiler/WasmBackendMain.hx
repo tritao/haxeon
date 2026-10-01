@@ -567,10 +567,10 @@ class WasmBackendMain {
 			|| repeatedPlan.functionTypeIndex([], I32) != plan.functionTypeIndex([], I32))
 			throw "Wasm GC type indices must be stable for identical IR programs";
 		if (baseIndex >= nodeIndex
-			|| plan.objectFieldIndex("Node", "id") != 0
-			|| plan.objectFieldIndex("Node", "parent") != 1
-			|| plan.objectFieldIndex("Node", "children") != 2)
-			throw "Wasm GC object types must reserve parent-first field indices";
+			|| plan.objectFieldIndex("Node", "id") != WasmGcTypePlan.OBJECT_HEADER_FIELDS
+			|| plan.objectFieldIndex("Node", "parent") != WasmGcTypePlan.OBJECT_HEADER_FIELDS + 1
+			|| plan.objectFieldIndex("Node", "children") != WasmGcTypePlan.OBJECT_HEADER_FIELDS + 2)
+			throw "Wasm GC object types must reserve the class id header, then parent-first field indices";
 		var enumIndex = plan.enumType("Choice"),
 			nodeConstructorIndex = plan.enumConstructorType("Choice", 2);
 		if (plan.enumFieldIndex("Choice", 2, 0) != 1)
@@ -599,7 +599,13 @@ class WasmBackendMain {
 			case Struct(fields): fields;
 			default: throw "A Haxe object must plan as a GC struct";
 		};
-		var recursiveParent = switch nodeFields[1].type {
+		var headerIsClassId = switch nodeFields[0].type {
+			case Value(I32): true;
+			default: false;
+		};
+		var rootIsSupertype = module.typeAt(baseIndex).supertypes.length == 1
+			&& module.typeAt(baseIndex).supertypes[0] == plan.objectRootTypeIndex;
+		var recursiveParent = switch nodeFields[WasmGcTypePlan.OBJECT_HEADER_FIELDS + 1].type {
 			case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
 			default: false;
 		};
@@ -636,8 +642,8 @@ class WasmBackendMain {
 			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.closureTypeIndex);
 			default: false;
 		};
-		if (!recursiveParent || !objectSubtype || !nodeElementType || !arrayDataType || !iteratorArrayType || !callbackUsesClosure
-			|| enumSubtype.supertypes[0] != enumIndex)
+		if (!headerIsClassId || !rootIsSupertype || !recursiveParent || !objectSubtype || !nodeElementType || !arrayDataType || !iteratorArrayType
+			|| !callbackUsesClosure || enumSubtype.supertypes[0] != enumIndex)
 			throw "Wasm GC type plan lost a recursive reference, wrapper, iterator, or enum subtype";
 
 		var signature = plan.wasmFunctionType([], I32),

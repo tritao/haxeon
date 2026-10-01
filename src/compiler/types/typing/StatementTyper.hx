@@ -200,10 +200,7 @@ class StatementTyper {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
 				var declaredType = declared == InferredType ? inferUninitializedType(name, statements, statementIndex + 1, scope,
-					span) : session.declarations.resolve(declared, null, context.typeSubstitutions),
-					declarationKey = LexicalStorageAnalysis.key(name, span);
-				if (context.storage.hasCandidate(declarationKey) && context.storage.candidateKind(declarationKey) == MutableCapture)
-					fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
+					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
 				var uninitializedAbstract = declared == InferredType ? null : EnumAbstractHints.named(session, declared);

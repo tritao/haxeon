@@ -50,6 +50,9 @@ class WasmLinearModuleBuilder {
 	var rootLimit:Int;
 	var heapStart:Int;
 	var heapState:Int;
+	var reflectionTable:Int;
+	var reflectionCount:Int;
+	var reflectionBytes:Null<haxe.io.Bytes>;
 	var markStackTop:Int;
 	var rootGlobals:Array<Int>;
 	var functions:Map<String, Int>;
@@ -139,6 +142,17 @@ class WasmLinearModuleBuilder {
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		staticDataAddresses = staticData.addresses;
+		reflectionBytes = null;
+		reflectionTable = 0;
+		reflectionCount = 0;
+		var reflectionSize = WasmReflectionTable.tableSize(program);
+		if (reflectionSize > 0) {
+			reflectionTable = WasmModuleSupport.align(nextData, 8);
+			reflectionCount = Std.int(reflectionSize / WasmReflectionTable.ROW_SIZE);
+			reflectionBytes = haxe.io.Bytes.alloc(reflectionSize);
+			module.data.push({offset: reflectionTable, bytes: reflectionBytes});
+			nextData = reflectionTable + reflectionSize;
+		}
 		heapState = WasmModuleSupport.align(nextData, 8);
 		nextData = heapState + WasmLayout.HEAP_STATE_SIZE;
 		module.memoryMin = 1;
@@ -184,7 +198,10 @@ class WasmLinearModuleBuilder {
 			rootFrameTop: rootFrameTop,
 			rootLimit: rootLimit,
 			markStackTop: markStackTop,
-			heapState: heapState
+			heapState: heapState,
+			reflectionTable: reflectionTable,
+			reflectionCount: reflectionCount,
+			reflectionBytes: reflectionBytes
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
 	}
@@ -269,6 +286,7 @@ class WasmLinearModuleBuilder {
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
 		closureAdapters.defineKeyQuery(module, functions, tableSlots);
+		WasmLinearReflection.finalize(linear, tableSlots);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
 			results: []

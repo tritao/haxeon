@@ -107,7 +107,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
-		return [StructNewDefault(plan.objectType(typeName)), LocalSet(destination)];
+		return [
+			StructNewDefault(plan.objectType(typeName)),
+			LocalSet(destination),
+			LocalGet(destination),
+			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
+			StructSet(plan.objectType(typeName), 0)
+		];
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var objectName = requireObjectName(object.type),

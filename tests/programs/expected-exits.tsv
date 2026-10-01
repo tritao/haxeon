@@ -283,3 +283,7 @@ static-field-null-narrowing	42
 try-expression-void-context	42
 dynamic-number-cast	42
 sort-reflect-compare	42
+reflect-object-dispatch	42
+captured-uninitialized-local	42
+infinite-loop-trailing-code	42
+std-downcast	42

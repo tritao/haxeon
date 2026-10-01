@@ -376,7 +376,7 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
-		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions);
+		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,

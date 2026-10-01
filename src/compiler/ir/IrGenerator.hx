@@ -75,6 +75,18 @@ class IrGenerator {
 
 	static var nativeStringFastPaths = false;
 
+	/**
+	 * Wasm: field reflection over object layouts is dispatched by the backend through a table keyed on the class id in every
+	 * object's header, so the program carries one function per layout and no dispatcher of its own.
+	 */
+	public static function bindNativeReflectionDispatch(enabled:Bool):Void
+		nativeReflectionDispatch = enabled;
+
+	public static function usesNativeReflectionDispatch():Bool
+		return nativeReflectionDispatch;
+
+	static var nativeReflectionDispatch = false;
+
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
 	static function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
 		switch expression.expression {

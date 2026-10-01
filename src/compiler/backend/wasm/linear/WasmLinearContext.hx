@@ -18,6 +18,12 @@ typedef WasmLinearContextState = {
 	final rootLimit:Int;
 	final markStackTop:Int;
 	final heapState:Int;
+
+	/** Where the reflection table lives, how many rows it has, and its bytes (WasmLinearReflection). */
+	final reflectionTable:Int;
+
+	final reflectionCount:Int;
+	final reflectionBytes:Null<haxe.io.Bytes>;
 }
 
 /** Shared state used while generating the Linear32 runtime functions. */
@@ -41,6 +47,10 @@ class WasmLinearContext {
 
 	/** Address of the C runtime's hx_heap (WasmLayout.HEAP_STATE_*). */
 	public final heapState:Int;
+
+	public final reflectionTable:Int;
+	public final reflectionCount:Int;
+	public final reflectionBytes:Null<haxe.io.Bytes>;
 
 	public var markFunction:Int = -1;
 	public var traceFunction:Int = -1;
@@ -66,5 +76,8 @@ class WasmLinearContext {
 		rootLimit = state.rootLimit;
 		markStackTop = state.markStackTop;
 		heapState = state.heapState;
+		reflectionTable = state.reflectionTable;
+		reflectionCount = state.reflectionCount;
+		reflectionBytes = state.reflectionBytes;
 	}
 }

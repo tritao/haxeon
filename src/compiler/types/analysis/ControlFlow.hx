@@ -12,7 +12,7 @@ class ControlFlow {
 
 	/**
 	 * Whether the statements certainly return or throw. Code after such statements is reported as unreachable, so this
-	 * recognises only the forms that rule has always been written against.
+	 * recognises only the forms that rule has always been written against; an infinite loop is not one of them.
 	 */
 	public static function alwaysReturns(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
 		return alwaysTerminates(statements, exhaustive, false, false);
@@ -50,7 +50,9 @@ class ControlFlow {
 				case TDoWhile(body, _, _):
 					if (alwaysTerminates(body, exhaustive, loopExit, complete))
 						return true;
-				case TWhile(condition, body, _) if (isInfiniteLoop(condition, body)):
+				// As in Haxe, code after `while (true)` that only leaves by returning is accepted, so the unreachable-code rule
+				// (`alwaysReturns`) does not count the loop; the missing-return check does.
+				case TWhile(condition, body, _) if ((loopExit || complete) && isInfiniteLoop(condition, body)):
 					return true;
 				case TTry(tryBranch, catches, _):
 					if (alwaysTerminates(tryBranch, exhaustive, loopExit, complete) && catches.length > 0 && [

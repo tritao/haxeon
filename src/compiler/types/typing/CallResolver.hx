@@ -1186,6 +1186,24 @@ class CallResolver {
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
 			return new TypedExpression(TCall(name == "Std.isExactType" ? "__std_is_exact_type" : "__std_is_of_type", [value, target]), TBool, span);
 		}
+		if (name == "Std.downcast") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "Std.downcast" expects 2 arguments, got ${arguments.length}', span);
+			var targetName = switch arguments[1] {
+				case Variable(value, _): value;
+				default:
+					fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
+					"";
+			};
+			if (scope.resolve(targetName) != null || !(session.classDecls.exists(targetName) || session.interfaceDecls.exists(targetName)))
+				fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
+			// `value` is evaluated once: test the held copy, then cast it or yield null.
+			var held = '$' + 'downcast:${span.start}',
+				test = Call("Std.isOfType", [Variable(held, span), arguments[1]], span);
+			return typeExpression(BlockExpression([VarDeclaration(held, null, arguments[0], span)],
+				Conditional(test, Cast(Variable(held, span), NamedType(targetName), span), NullLiteral(span), span), span),
+				scope, expectedType, false);
+		}
 		if (name == "Reflect.compare") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Reflect.compare" expects 2 arguments, got ${arguments.length}', span);
