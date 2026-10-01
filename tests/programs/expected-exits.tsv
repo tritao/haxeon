@@ -270,3 +270,4 @@ dynamic-method-call	42
 dynamic-arithmetic	42
 dynamic-increment	42
 dynamic-modulo	42
+try-return-body	42
