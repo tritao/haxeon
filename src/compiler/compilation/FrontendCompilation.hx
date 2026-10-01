@@ -162,7 +162,7 @@ class FrontendCompilation {
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);
 			IrGenerator.bindNativeStringFastPaths(!context.isWasmTarget());
-			IrGenerator.bindNativeReflectionDispatch(context.isLinearWasmTarget());
+			IrGenerator.bindNativeReflectionDispatch(context.isWasmTarget());
 			typerMetrics = typedResult.metrics;
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;

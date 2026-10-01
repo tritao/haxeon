@@ -81,9 +81,6 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
-	public function isLinearWasmTarget():Bool
-		return owner.isLinearWasmTarget();
-
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 

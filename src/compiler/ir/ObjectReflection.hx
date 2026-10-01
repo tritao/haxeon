@@ -145,14 +145,20 @@ class ObjectReflection {
 		}
 		return [
 			for (layout in layouts)
-				layoutFunction('${native.name}.${layout.name}', layout, functions, result, parameters, body)
+				layoutFunction('${native.name}.${layout.name}', layout, functions, result, parameters, body, true)
 		];
 	}
 
+	/**
+	 * With `dynamicReceiver` the function takes the object as Dynamic and casts it itself, so every layout's function has one
+	 * signature and a backend can call any of them through a single function type.
+	 */
 	static function layoutFunction(layoutName:String, layout:ReflectedLayout, functions:Array<IrFunction>, result:IrType,
-			parameters:Array<{name:String, type:IrType}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void):String {
+			parameters:Array<{name:String, type:IrType}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void,
+			dynamicReceiver:Bool = false):String {
 		var layoutBuilder = new IrBuilder(),
-			layoutObject = layoutBuilder.argument("object", Obj(layout.name));
+			dynamicObject = layoutBuilder.argument("object", dynamicReceiver ? Dyn : Obj(layout.name)),
+			layoutObject = dynamicReceiver ? layoutBuilder.safeCast(dynamicObject, Obj(layout.name)) : dynamicObject;
 		body(layoutBuilder, layout, layoutObject, [
 			for (parameter in parameters)
 				layoutBuilder.argument(parameter.name, parameter.type)

@@ -3,86 +3,21 @@ package compiler.backend.wasm.linear;
 import compiler.backend.wasm.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmReflectionTable;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrProgram;
-
-private typedef ReflectionRow = {final typeId:Int; final functions:Array<Null<String>>;}
 
 /**
- * Field reflection over object layouts (`__reflect_object_*`): the program holds one function per layout, and this finds
- * the one for a value from the type id in its header. A static table of one row per class, sorted by type id, holds a
- * function-table slot per operation; a lookup binary-searches it and the operation calls through the slot. Code size
- * and lookup time do not grow with the number of classes the way a chain of type tests does.
+ * Linear Wasm's side of field reflection over object layouts: a lookup that binary-searches the table in memory by the type
+ * id at the start of every object, and the four operations that call the per-layout function through the slot it finds
+ * (see WasmReflectionTable).
  */
 class WasmLinearReflection {
-	static final OPERATIONS = [
-		"__reflect_object_field",
-		"__reflect_object_set_field",
-		"__reflect_object_field_count",
-		"__reflect_object_field_name"
-	];
-
-	/** Type id, then one slot for each of OPERATIONS. */
-	public static inline final ROW_SIZE = 20;
-
 	static final ENTRY_FUNCTION = "__reflect_object_entry";
-
-	static function operationIndex(symbol:String):Int
-		return OPERATIONS.indexOf(symbol);
-
-	public static function declares(program:IrProgram):Bool {
-		for (native in program.natives)
-			if (operationIndex(native.symbol) >= 0)
-				return true;
-		return false;
-	}
-
-	/**
-	 * A row for every class that has a layout of its own or inherits one, naming the per-layout functions of the nearest
-	 * layout up its base chain, so an instance of a class that is not itself reflected still reflects as its base does.
-	 */
-	static function rows(program:IrProgram):Array<ReflectionRow> {
-		var nativeNames:Array<Null<String>> = [for (_ in OPERATIONS) null],
-			functionNames:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
-			objects = [for (object in program.objects) object.name => object];
-		for (native in program.natives) {
-			var index = operationIndex(native.symbol);
-			if (index >= 0)
-				nativeNames[index] = native.name;
-		}
-		var result:Array<ReflectionRow> = [];
-		for (object in program.objects) {
-			if (object.isValue)
-				continue;
-			var functions:Array<Null<String>> = [for (_ in OPERATIONS) null], owner:Null<String> = object.name, found = false;
-			while (owner != null && !found) {
-				for (index in 0...OPERATIONS.length) {
-					var native = nativeNames[index];
-					if (native != null && functionNames.exists('$native.$owner')) {
-						functions[index] = '$native.$owner';
-						found = true;
-					}
-				}
-				if (!found) {
-					var base = objects.get(owner);
-					owner = base == null ? null : base.base;
-				}
-			}
-			if (found)
-				result.push({typeId: WasmModuleSupport.typeId(Obj(object.name)), functions: functions});
-		}
-		result.sort((left, right) -> left.typeId < right.typeId ? -1 : left.typeId > right.typeId ? 1 : 0);
-		return result;
-	}
-
-	/** Bytes the table needs; the contents are filled in once function-table slots are known (finalize). */
-	public static function tableSize(program:IrProgram):Int
-		return declares(program) ? rows(program).length * ROW_SIZE : 0;
 
 	/** The operation named by `native`, or null when it is not one of ours. */
 	public static function define(context:WasmLinearContext, native:IrNative):Null<Int> {
-		var column = operationIndex(native.symbol);
+		var column = WasmReflectionTable.operationIndex(native.symbol);
 		if (column < 0)
 			return null;
 		var module = context.module, functions = context.functions;
@@ -151,7 +86,7 @@ class WasmLinearReflection {
 			I32ShrU,
 			LocalSet(middle),
 			LocalGet(middle),
-			I32Const(ROW_SIZE),
+			I32Const(WasmReflectionTable.ROW_SIZE),
 			I32Mul,
 			I32Const(table),
 			I32Add,
@@ -186,20 +121,9 @@ class WasmLinearReflection {
 		]));
 	}
 
-	/** Writes the rows once every function has a slot in the table; a function the program never reaches gets -1. */
+	/** Writes the rows once every function has a slot in the table. */
 	public static function finalize(context:WasmLinearContext, slots:Map<String, Int>):Void {
-		var bytes = context.reflectionBytes;
-		if (bytes == null)
-			return;
-		var all = rows(context.program);
-		for (index in 0...all.length) {
-			var offset = index * ROW_SIZE;
-			bytes.setInt32(offset, all[index].typeId);
-			for (column in 0...OPERATIONS.length) {
-				var name = all[index].functions[column],
-					slot = name == null ? null : slots.get(name);
-				bytes.setInt32(offset + 4 + 4 * column, slot == null ? -1 : slot);
-			}
-		}
+		if (context.reflectionBytes != null)
+			WasmReflectionTable.fill(context.reflectionBytes, context.program, slots);
 	}
 }

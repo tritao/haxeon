@@ -145,10 +145,10 @@ class WasmLinearModuleBuilder {
 		reflectionBytes = null;
 		reflectionTable = 0;
 		reflectionCount = 0;
-		var reflectionSize = WasmLinearReflection.tableSize(program);
+		var reflectionSize = WasmReflectionTable.tableSize(program);
 		if (reflectionSize > 0) {
 			reflectionTable = WasmModuleSupport.align(nextData, 8);
-			reflectionCount = Std.int(reflectionSize / WasmLinearReflection.ROW_SIZE);
+			reflectionCount = Std.int(reflectionSize / WasmReflectionTable.ROW_SIZE);
 			reflectionBytes = haxe.io.Bytes.alloc(reflectionSize);
 			module.data.push({offset: reflectionTable, bytes: reflectionBytes});
 			nextData = reflectionTable + reflectionSize;
