@@ -344,7 +344,7 @@ class ExpressionTyper {
 			loopScope = new Scope(scope),
 			keyType:Null<CompilerType> = null,
 			bodyExpressions = predicate == null ? [value] : [predicate, value];
-		LoopFlow.enterExpressions(session, scope, bodyExpressions, span);
+		LoopFlow.enterExpressions(session, scope, bodyExpressions, span, valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)
@@ -415,7 +415,8 @@ class ExpressionTyper {
 			originalIterable = typedIterable,
 			loopScope = new Scope(scope),
 			itemType:Null<CompilerType> = null;
-		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span);
+		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span,
+			valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)

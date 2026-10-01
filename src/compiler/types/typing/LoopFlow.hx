@@ -14,8 +14,9 @@ import compiler.types.analysis.Scope;
  */
 class LoopFlow {
 	/** The same for a comprehension, whose predicate and result expressions run once per item. */
-	public static function enterExpressions(session:TypingSession, scope:Scope, expressions:Array<AstExpression>, span:SourceSpan):Void
-		enter(session, scope, [for (expression in expressions) Expression(expression, span)]);
+	public static function enterExpressions(session:TypingSession, scope:Scope, expressions:Array<AstExpression>, span:SourceSpan,
+			?loopVariables:Array<String>):Void
+		enter(session, scope, [for (expression in expressions) Expression(expression, span)], loopVariables);
 
 	/**
 	 * Forget, in `scope`, every fact the loop made of `statements` could invalidate. `loopVariables` are the names the

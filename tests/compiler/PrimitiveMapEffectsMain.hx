@@ -52,6 +52,21 @@ class PrimitiveMapEffectsMain {
 				'for (flags in [new FakeMap(), new FakeMap()]) { total += provider.value; flags.exists("x"); }'));
 		if (!rejected(result))
 			throw "loop variable inherited the outer map's effect classification";
+		result.update("Main.hx",
+			fake + StringTools.replace(source, 'for (i in 0...2) if (flags.exists("x")) total += provider.value;',
+				'var values = [for (flags in [new FakeMap(), new FakeMap()]) { var value = provider.value; flags.exists("x"); value; }]; total = values[0];'));
+		if (!rejected(result))
+			throw "comprehension variable inherited the outer map's effect classification";
+		result.update("Main.hx",
+			fake + StringTools.replace(source, 'for (i in 0...2) if (flags.exists("x")) total += provider.value;',
+				'var values = [for (flags in [new FakeMap(), new FakeMap()]) "x" => { var value = provider.value; flags.exists("x"); value; }];'));
+		if (!rejected(result))
+			throw "map comprehension variable inherited the outer map's effect classification";
+		result.update("Main.hx",
+			StringTools.replace(source, 'for (i in 0...2) if (flags.exists("x")) total += provider.value;',
+				'var values = [for (i in 0...2) if (flags.exists("x")) provider.value]; total = values[0] + values[1];'));
+		if (GeneratedProgramRunner.exitCode(result.compile("Main")) != 14)
+			throw "comprehension lost a fact across an unshadowed primitive map read";
 		var fakeArray = StringTools.replace(StringTools.replace(fake, "FakeMap", "FakeArray"), "exists(key:String):Bool", "push(key:Int):Bool");
 		var arraySource = StringTools.replace(StringTools.replace(source, "flags:Map<String,Bool>", "flags:Array<Int>"), '["x"=>true]', '[1]');
 		result.update("Main.hx",
@@ -59,6 +74,11 @@ class PrimitiveMapEffectsMain {
 				'for (flags in [new FakeArray(), new FakeArray()]) { total += provider.value; flags.push(1); }'));
 		if (!rejected(result))
 			throw "loop variable inherited the outer array's effect classification";
+		result.update("Main.hx",
+			fakeArray + StringTools.replace(arraySource, 'for (i in 0...2) if (flags.exists("x")) total += provider.value;',
+				'var values = [for (flags in [new FakeArray(), new FakeArray()]) { var value = provider.value; flags.push(1); value; }];'));
+		if (!rejected(result))
+			throw "comprehension variable inherited the outer array's effect classification";
 	}
 
 	static function main():Void {
