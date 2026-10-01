@@ -2210,8 +2210,9 @@ class HxiHaxeEmitter {
 			source:String,
 			signature:String
 		}> {
+		// The signature is the C function native code calls; the host adds the id when it forwards the call.
 		var rawParameters = ["id:Int"],
-			letters:Array<String> = ["i"],
+			letters:Array<String> = [],
 			values:Array<String> = [],
 			statements:Array<String> = [];
 		function recordName(structure:String):String
@@ -2277,7 +2278,7 @@ class HxiHaxeEmitter {
 				var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi, aggregateDescriptors));
 				if (single == null) {
 					rawParameters.insert(1, '__result:Int');
-					letters.insert(1, "i");
+					letters.insert(0, "i");
 					resultLetter = "v";
 					returnType = "Void";
 					body = '__hxi_struct_to_linear(cast $call, __result, $size);';

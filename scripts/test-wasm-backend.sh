@@ -342,12 +342,16 @@ const cases = [
       };
       imports.wasm_callbacks = {
         apply_combine: (callback, value) => {
-          if (callbacks.get(callback).signature !== "iiidi")
+          if (callbacks.get(callback).signature !== "iidi")
             throw new Error(`${relative}: combine callback signature ${callbacks.get(callback).signature}`);
           return callEntry(callback, value, 5.0, 0);
         },
         // The record result comes back through the leading pointer, which the callback writes too.
-        apply_measure: (result, callback, limits) => callEntry(callback, result, 5, limits, 0)
+        apply_measure: (result, callback, limits) => {
+          if (callbacks.get(callback).signature !== "viiii")
+            throw new Error(`${relative}: measure callback signature ${callbacks.get(callback).signature}`);
+          return callEntry(callback, result, 5, limits, 0);
+        }
       };
       hostServicesCheck = () => {
         if (callbacks.size !== 0)
