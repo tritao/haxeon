@@ -279,3 +279,4 @@ try-return-body	42
 generic-method-void-statement	42
 uninitialized-local-inference	42
 static-field-null-narrowing	42
+try-expression-void-context	42
