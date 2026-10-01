@@ -445,9 +445,18 @@ class WasmGcInterop implements WasmInteropRepresentation {
 						body = body.concat(copyGcStringToLinear(stringLocal, pointer, length));
 						body = body.concat([End, LocalSet(pointer)]);
 					} else if (arguments[index].type == ManagedBytes) {
+						// Null bytes (an absent nullable pointer) pass NULL, as on wasm32 and HL.
 						var bytesLocal = argumentLocals[index],
 							pointer = allocateLocal(I32);
 						bytePointers[index] = pointer;
+						body = body.concat([
+							I32Const(0),
+							LocalSet(pointer),
+							LocalGet(bytesLocal),
+							RefIsNull,
+							I32Eqz,
+							If(null)
+						]);
 						body = body.concat([
 							LocalGet(bytesLocal),
 							StructGet(plan.managedBytesTypeIndex, 2),
@@ -456,6 +465,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 							LocalSet(pointer)
 						]);
 						body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+						body.push(End);
 					} else if (isNativePointerType(arguments[index].type)) {
 						var pointer = allocateLocal(I32);
 						bytePointers[index] = pointer;

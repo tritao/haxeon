@@ -68,6 +68,14 @@ class WasmModule {
 	public var start:Null<Int>;
 	public var tableMin:Null<Int>;
 	public final tableElements:Array<Int> = [];
+
+	/** `types` flattened by subtype index, and each function signature's first index; `types` is only appended to. */
+	final flatTypes:Array<WasmSubtype> = [];
+
+	final functionTypeIndices:Map<String, Int> = [];
+	final standaloneFunctionTypeIndices:Map<String, Int> = [];
+	var flattenedGroups = 0;
+
 	public var memoryMin:Null<Int>;
 	public var importMemory:Bool;
 	public var exceptionTagType:Null<Int>;
@@ -87,15 +95,21 @@ class WasmModule {
 	}
 
 	public function typeIndex(type:WasmFunctionType):Int {
-		for (index in 0...typeCount()) {
-			var candidate = typeAt(index);
-			switch candidate.composite {
-				case Func(functionType) if (sameType(functionType, type)):
-					return index;
-				default:
-			}
-		}
-		return addType({finalType: true, supertypes: [], composite: Func(type)});
+		flatten();
+		var index = functionTypeIndices.get(functionTypeKey(type));
+		return index != null ? index : addType({finalType: true, supertypes: [], composite: Func(type)});
+	}
+
+	/**
+	 * The type an imported function is declared with: a final function type outside any recursion group.
+	 * Wasm GC links a Wasm-exported function only to an import of the same canonical type, and a function
+	 * type inside a recursion group is distinct from the same signature declared on its own, as every
+	 * C function the host compiles is.
+	 */
+	public function importTypeIndex(type:WasmFunctionType):Int {
+		flatten();
+		var index = standaloneFunctionTypeIndices.get(functionTypeKey(type));
+		return index != null ? index : addType({finalType: true, supertypes: [], composite: Func(type)});
 	}
 
 	/** Adds one type and returns its flattened type index. */
@@ -113,33 +127,39 @@ class WasmModule {
 	}
 
 	public function typeCount():Int {
-		var count = 0;
-		for (group in types)
-			switch group {
-				case Single(_):
-					count++;
-				case RecGroup(groupTypes):
-					count += groupTypes.length;
-			}
-		return count;
+		flatten();
+		return flatTypes.length;
 	}
 
 	public function typeAt(index:Int):WasmSubtype {
-		if (index < 0)
+		flatten();
+		if (index < 0 || index >= flatTypes.length)
 			throw 'Unknown Wasm type index $index';
-		var current = 0;
-		for (group in types)
-			switch group {
+		return flatTypes[index];
+	}
+
+	function flatten():Void
+		while (flattenedGroups < types.length) {
+			switch types[flattenedGroups++] {
 				case Single(type):
-					if (current == index)
-						return type;
-					current++;
+					indexType(type, type.finalType && type.supertypes.length == 0);
 				case RecGroup(groupTypes):
-					if (index < current + groupTypes.length)
-						return groupTypes[index - current];
-					current += groupTypes.length;
+					for (type in groupTypes)
+						indexType(type, false);
 			}
-		throw 'Unknown Wasm type index $index';
+		}
+
+	function indexType(type:WasmSubtype, standalone:Bool):Void {
+		switch type.composite {
+			case Func(functionType):
+				var key = functionTypeKey(functionType);
+				if (!functionTypeIndices.exists(key))
+					functionTypeIndices.set(key, flatTypes.length);
+				if (standalone && !standaloneFunctionTypeIndices.exists(key))
+					standaloneFunctionTypeIndices.set(key, flatTypes.length);
+			default:
+		}
+		flatTypes.push(type);
 	}
 
 	public function functionTypeAt(typeIndex:Int):WasmFunctionType {
@@ -180,32 +200,28 @@ class WasmModule {
 		functions[index - imports.length] = fn;
 	}
 
-	function sameType(left:WasmFunctionType, right:WasmFunctionType):Bool {
-		if (left.parameters.length != right.parameters.length || left.results.length != right.results.length)
-			return false;
-		for (index in 0...left.parameters.length)
-			if (!sameValueType(left.parameters[index], right.parameters[index]))
-				return false;
-		for (index in 0...left.results.length)
-			if (!sameValueType(left.results[index], right.results[index]))
-				return false;
-		return true;
+	static function functionTypeKey(type:WasmFunctionType):String {
+		var key = new StringBuf();
+		for (parameter in type.parameters)
+			key.add(valueTypeKey(parameter));
+		key.add("->");
+		for (result in type.results)
+			key.add(valueTypeKey(result));
+		return key.toString();
 	}
 
-	function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
-		return switch [left, right] {
-			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
-			default: false;
+	static function valueTypeKey(type:WasmValueType):String
+		return switch type {
+			case I32: "i";
+			case I64: "l";
+			case F32: "f";
+			case F64: "d";
+			case Ref(reference): (reference.nullable ? "?" : "!") + heapTypeKey(reference.heap) + ";";
 		};
-	}
 
-	function sameHeapType(left:WasmTypes.WasmHeapType, right:WasmTypes.WasmHeapType):Bool {
-		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
-			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
-			default: false;
+	static function heapTypeKey(heap:WasmTypes.WasmHeapType):String
+		return switch heap {
+			case Type(index): '$index';
+			default: Std.string(heap);
 		};
-	}
 }

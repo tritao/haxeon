@@ -65,15 +65,25 @@ class WasmGcDynamicArrays {
 		];
 		if (operations.length == 0)
 			return;
-		// Error messages name a value's type by testing it against every class, so helpers share one function.
-		if (!functions.exists(VALUE_TYPE_NAME)) {
-			var namer = new WasmGcDynamicArrays(plan, program, representation, 1, functions),
-				result = namer.inlineValueTypeName(0);
-			namer.body.push(LocalGet(result));
-			namer.body.push(Return);
-			functions.set(VALUE_TYPE_NAME,
-				module.addFunction(new WasmFunction(VALUE_TYPE_NAME, plan.wasmFunctionType([Dyn], Bytes), namer.locals, namer.body)));
+		// Error messages name types by testing against every class or element type, so helpers share these
+		// functions; expanded in each arm of an element-type dispatch they grow with the square of the types.
+		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int):Void {
+			if (functions.exists(name))
+				return;
+			var helper = new WasmGcDynamicArrays(plan, program, representation, arguments.length, functions),
+				result = build(helper);
+			helper.body.push(LocalGet(result));
+			helper.body.push(Return);
+			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, Bytes), helper.locals, helper.body)));
 		}
+		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
+		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
+		shared(CAST_MESSAGE, [Dyn, I32], helper -> helper.concatenate([
+			helper.literal("Can't cast "),
+			helper.valueTypeName(0),
+			helper.literal(" to "),
+			helper.typeName(1)
+		]));
 		for (native in operations)
 			functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
@@ -269,8 +279,14 @@ class WasmGcDynamicArrays {
 			default: "Object";
 		};
 
-	/** Name of the element type a runtime type id denotes. */
-	function typeName(typeLocal:Int):Int {
+	static inline var TYPE_NAME = "__haxeon_array_type_name";
+	static inline var CAST_MESSAGE = "__haxeon_array_cast_message";
+
+	/** Name of the element type a runtime type id denotes, from the module's shared function. */
+	function typeName(typeLocal:Int):Int
+		return callShared(TYPE_NAME, [typeLocal]);
+
+	function inlineTypeName(typeLocal:Int):Int {
 		var result = allocateLocal(plan.valueType(Bytes)),
 			named:Array<IrType> = [I32, I64, F64, Bool, Bytes, Dyn],
 			seen:Map<Int, Bool> = [for (type in named) typeId(type) => true];
@@ -291,10 +307,14 @@ class WasmGcDynamicArrays {
 	static inline var VALUE_TYPE_NAME = "__haxeon_value_type_name";
 
 	/** Name of a dynamic value's runtime type, from the module's shared function. */
-	function valueTypeName(valueLocal:Int):Int {
+	function valueTypeName(valueLocal:Int):Int
+		return callShared(VALUE_TYPE_NAME, [valueLocal]);
+
+	function callShared(name:String, arguments:Array<Int>):Int {
 		var result = allocateLocal(plan.valueType(Bytes));
-		body.push(LocalGet(valueLocal));
-		body.push(Call(functions.get(VALUE_TYPE_NAME)));
+		for (argument in arguments)
+			body.push(LocalGet(argument));
+		body.push(Call(functions.get(name)));
 		body.push(LocalSet(result));
 		return result;
 	}
@@ -337,12 +357,7 @@ class WasmGcDynamicArrays {
 	}
 
 	function raiseCast(valueLocal:Int, typeLocal:Int):Void
-		raise(concatenate([
-			literal("Can't cast "),
-			valueTypeName(valueLocal),
-			literal(" to "),
-			typeName(typeLocal)
-		]));
+		raise(callShared(CAST_MESSAGE, [valueLocal, typeLocal]));
 
 	// Conversions between dynamic values and element storage.
 
