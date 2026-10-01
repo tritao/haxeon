@@ -146,8 +146,10 @@ class ProgramTyper {
 								name: method.name,
 								arguments: [
 									for (argument in method.arguments)
-										erasureType(interfaceDecl, argument.type, argument.span)
-								],
+										session.representation.resolveMethodArgument(TInstance(NominalKind.Interface, interfaceDecl.name,
+											[for (_ in interfaceDecl.typeParameters) TDynamic]),
+											interfaceDecl.name, argument)
+											.physical],
 								result: erasureType(interfaceDecl, method.result, method.span)
 							}
 					]

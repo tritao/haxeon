@@ -73,6 +73,7 @@ class TestCatalog {
 		"EnumImportOrderMain",
 		"ExpectedEnumContextMain",
 		"ArrayLookupContextMain",
+		"InterfaceOptionalArgumentsMain",
 		"DependencyKeyMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",

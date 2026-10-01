@@ -234,7 +234,9 @@ class ModuleCanonicalizer {
 								{
 									name: argument.name,
 									type: canonicalType(argument.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-									span: argument.span
+									span: argument.span,
+									optional: argument.optional,
+									defaultValue: argument.defaultValue
 								}
 						],
 						result: canonicalType(method.result, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),

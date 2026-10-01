@@ -818,11 +818,11 @@
 1206	$lambda:compiler.types.typing.ExpressionTyper.typeNativeLayoutQuery:11731
 1207	$lambda:compiler.types.typing.ExpressionTyper.typeObjectLiteral:13843
 1208	$lambda:compiler.types.typing.ExpressionTyper.typeSwitchExpression:29565
-1209	$lambda:compiler.types.typing.ProgramTyper.computeNativeLayout:23594
+1209	$lambda:compiler.types.typing.ProgramTyper.computeNativeLayout:23752
 1210	$lambda:compiler.types.typing.ProgramTyper.new:1483
 1211	$lambda:compiler.types.typing.ProgramTyper.new:1529
 1212	$lambda:compiler.types.typing.ProgramTyper.new:1619
-1213	$lambda:compiler.types.typing.ProgramTyper.typeClass:17613
+1213	$lambda:compiler.types.typing.ProgramTyper.typeClass:17771
 1214	$lambda:compiler.types.typing.RuntimeDependencyTracker.ordered:770
 1215	$lambda:compiler.types.typing.StatementTyper.typeSimpleStatement:10688
 1216	$lambda:compiler.types.typing.StatementTyper.typeSimpleStatement:9438
