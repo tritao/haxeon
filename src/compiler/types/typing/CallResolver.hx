@@ -478,8 +478,28 @@ class CallResolver {
 		return results.length == 0 ? null : results[0];
 	}
 
+	/**
+	 * `dynamicValue.method(arguments)`: the method is looked up by name when the program runs and called with its
+	 * arguments as Dynamic values, and what it returns is Dynamic. It may run any code, so nothing known about the
+	 * captured variables or fields survives it, as for a call through a function value of unknown body.
+	 */
+	function resolveDynamicMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var callee = new TypedExpression(TCall("Reflect.field", [receiver, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span),
+			typedArguments = [
+				for (argument in arguments)
+					coerce(typeExpression(argument, scope, TDynamic, false), TDynamic, 'argument to dynamic method "$name"', "E1009")
+			];
+		for (captured in session.currentContext.storage.candidateSourceNames())
+			scope.invalidate(captured);
+		scope.invalidateAllExpressions();
+		return new TypedExpression(TClosureCall(callee, typedArguments), TDynamic, span);
+	}
+
 	public function resolveInstanceMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, receiverName:Null<String> = null, contextualGenericArguments:Bool = true):TypedExpression {
+		if (sameType(receiver.type, TDynamic))
+			return resolveDynamicMethodCall(receiver, name, arguments, span, scope);
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _): value;
 			default: null;

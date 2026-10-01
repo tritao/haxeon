@@ -30,6 +30,10 @@ class Parser {
 
 	final tokens:Array<Token>;
 	var position:Int = 0;
+
+	/** Braceless `try` bodies being parsed: their last statement may omit the semicolon before `catch`. */
+	var tryBodyDepth:Int = 0;
+
 	var recovering:Bool = false;
 	var typedLambdaCount:Int = 0;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -968,6 +972,20 @@ class Parser {
 			}
 			position = saved;
 		}
+		// A bare block in statement position is a nested scope. Its value, if it
+		// ends in one, would be discarded, so it parses once, as statements, and
+		// need not end in a value (`{ var x = f(); for (...) g(x); }`). It lowers
+		// to `if (true) { ... }`: branches already open a scope and pass
+		// break, continue and return through, so no pass needs a block form.
+		// `{name: ...}` and `{"name": ...}` stay object literals.
+		if (check(TokenKind.LeftBrace)
+			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon)) {
+			var start = current().span,
+				statements = parseStatementOrBlock(),
+				span = start.merge(previous().span);
+			match(TokenKind.Semicolon);
+			return If(BoolLiteral(true, start), statements, [], span);
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1019,9 +1037,17 @@ class Parser {
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		var expression = parseExpression();
-		match(TokenKind.Semicolon);
-		return [Expression(expression, expressionSpan(expression))];
+		// Any single statement (`try return f() catch ...`, `try x = f() catch
+		// ...`); the semicolon before `catch` is optional.
+		tryBodyDepth++;
+		try {
+			var statements = parseStatements();
+			tryBodyDepth--;
+			return statements;
+		} catch (error:CompileError) {
+			tryBodyDepth--;
+			throw error;
+		}
 	}
 
 	function parseDoWhileBody():Array<AstStatement> {
@@ -2348,7 +2374,7 @@ class Parser {
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
-		if (isBracedExpression(expression))
+		if (isBracedExpression(expression) || (tryBodyDepth > 0 && check(TokenKind.Catch)))
 			return expressionSpan(expression);
 		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
 		if (check(TokenKind.Else))

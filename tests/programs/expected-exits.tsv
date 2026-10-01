@@ -189,6 +189,8 @@ dynamic-array-views	42
 dynamic-array-references	42
 math-float-rounding	42
 math-inverse-trig	42
+math-exp-log	42
+statement-forms	42
 array-filter-map-join	42
 math-constants	42
 prefix-increment	42
@@ -249,6 +251,7 @@ map-copy	42
 capture-shadowing	42
 compound-shift-assign	42
 field-initializer-dynamic	42
+interface-is-of-type	42
 stdlib-runtime-helpers	42
 ereg-patterns	42
 virtual-call-without-implementors	42
@@ -258,3 +261,10 @@ function-value-optional-arguments	42
 arrow-block-value	42
 comprehension-if-else	42
 index-assignment-expression	42
+try-typed-interface	42
+std-is-of-type-interface-dynamic	42
+dynamic-field-access	42
+dynamic-method-call	42
+dynamic-arithmetic	42
+dynamic-increment	42
+dynamic-modulo	42

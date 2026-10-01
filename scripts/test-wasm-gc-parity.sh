@@ -82,6 +82,8 @@ const runtime = {
   __math_cos: Math.cos,
   __math_tan: Math.tan,
   __math_atan2: Math.atan2,
+  __math_exp: Math.exp,
+  __math_log: Math.log,
   __std_int_f64: Math.trunc
 };
 

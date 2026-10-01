@@ -279,6 +279,14 @@ class StatementTyper {
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
 		var current = scope.resolve(name);
+		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
+		var dot = name.indexOf("."),
+			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
+		if ((current != null && sameType(current, TDynamic)) || (current == null && root != null && sameType(root, TDynamic))) {
+			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
+			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
+		}
 		if (current != null && !scope.isAssigned(name))
 			fail("E1023", 'Local "$name" may be used before assignment', span);
 		if (current == null) {
@@ -367,6 +375,8 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -423,10 +433,23 @@ class StatementTyper {
 		};
 	}
 
+	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement
+		return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+
+	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var boxed = coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
+			call = new TypedExpression(TCall("Reflect.setField", [object, new TypedExpression(TStringLiteral(fieldName), TString, span), boxed]), TVoid, span);
+		return TExpression(call, span);
+	}
+
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldStore(object, fieldName, value, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -487,7 +510,7 @@ class StatementTyper {
 						fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
 				case TInt, TFloat, TBool, TString:
 				case TInstance(kind, _, arguments):
-					if (Std.string(kind) != "class")
+					if (Std.string(kind) != "class" && Std.string(kind) != "interface")
 						fail("E1022", "Unsupported catch binding type", catchClause.span);
 					if (arguments.length != 0)
 						fail("E1022", "Unsupported generic catch binding type", catchClause.span);
