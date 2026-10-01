@@ -1108,6 +1108,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return dynamicInt(argumentLocals[0], outputLocal);
 		}
 		if (name == "__std_string") {
+			// Converting a dynamic value tests every class in the program, so call sites share one function.
+			if (gc.functions.exists("__std_string"))
+				return UseDefault;
 			if (output.type != Bytes || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Std.string signature";
 			return dynamicString(argumentLocals[0], outputLocal);

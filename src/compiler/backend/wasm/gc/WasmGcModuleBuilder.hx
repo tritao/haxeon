@@ -135,6 +135,8 @@ class WasmGcModuleBuilder {
 			var type = plan.wasmFunctionType([for (argument in fn.arguments) argument.type], fn.result);
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
+		if (usedNatives.exists("__std_string"))
+			addGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
@@ -292,6 +294,28 @@ class WasmGcModuleBuilder {
 			case Function(_, _): true;
 			default: false;
 		};
+
+	/**
+	 * Std.string of a Dynamic value tests the value against every class in the program, so its call sites share one
+	 * function instead of each carrying that dispatch. It is built once every class's toString has an index; until
+	 * "__std_string" is registered, the representation lowers the conversion inline, which becomes this body.
+	 */
+	static function addGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation):Void {
+		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = function(type) {
+			locals.push({type: type});
+			return nextLocal++;
+		};
+		var resultLocal = allocateLocal(plan.valueType(Bytes)),
+			lowered = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null})
+				.lowerRuntimeCall("__std_string", new IrValue(-1, "__std_string_result", Bytes), [new IrValue(0, "__std_string_value", Dyn)], resultLocal, [0]),
+			body = switch lowered {
+				case Handled(instructions): instructions;
+				case UseDefault: throw "Wasm GC has no Std.string lowering";
+			};
+		body.push(LocalGet(resultLocal));
+		body.push(Return);
+		functions.set("__std_string", module.addFunction(new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body)));
+	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
 			used:Map<String, Bool>):Void {
