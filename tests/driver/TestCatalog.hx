@@ -92,6 +92,7 @@ class TestCatalog {
 		"HxiFlagsMain",
 		"HxiParserMain",
 		"ManagedBytesMain",
+		"RawBytePointerMain",
 		"HxiAbiMain",
 		"NativeLayoutMain",
 		"NativeMemoryMain",
