@@ -98,6 +98,9 @@ class CHeaderImporterMain {
 			"named C enums should import as nominal HXI enums");
 		expect(first.indexOf("extern fn sample_check_result(value: sample_result) -> sample_result") >= 0,
 			"enum function signatures should retain their nominal type");
+		expect(first.indexOf("opaque sample_opaque;") >= 0, "annotated incomplete C structs should import as opaque HXI types");
+		expect(first.indexOf("sample_opaque_create(out_value: ptr<ptr<sample_opaque>> @out @borrowed)") >= 0,
+			"borrowed opaque output slots should preserve their ownership annotation");
 		expect(first.indexOf("enum sample_mode : u32") >= 0
 			&& first.indexOf("SAMPLE_MODE_ALTERNATE = 1") >= 0
 			&& first.indexOf("type sample_mode = u32") < 0,

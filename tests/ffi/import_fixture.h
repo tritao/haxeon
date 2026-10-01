@@ -16,11 +16,14 @@
 #define HXI_OWNED __attribute__((annotate("hxi:owned")))
 #define HXI_LENGTH_FIELD(size) __attribute__((annotate("hxi:length_field")))
 #define HXI_HANDLE __attribute__((annotate("hxi:handle")))
+#define HXI_OPAQUE __attribute__((annotate("hxi:opaque")))
 #define HXI_HANDLE_DESTROY(symbol) __attribute__((annotate("hxi:handle_destroy")))
 #define HXI_DECLARE_HANDLE(name) typedef struct name { uint32_t id; } name HXI_HANDLE
 #define HXI_FLAGS(name) __attribute__((annotate("hxi:flags:" #name))) name##_flags_enum
 
 typedef uint32_t sample_handle HXI_HANDLE;
+typedef struct sample_opaque sample_opaque HXI_OPAQUE;
+void sample_opaque_create(sample_opaque **out_value HXI_OUT HXI_BORROWED);
 typedef uint32_t sample_owned_handle HXI_HANDLE HXI_HANDLE_DESTROY(sample_owned_handle_destroy);
 HXI_DECLARE_HANDLE(sample_resource);
 typedef const char *hxi_utf8;

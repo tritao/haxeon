@@ -187,6 +187,12 @@ class CHeaderImporter {
 			case "TypedefDecl":
 				var qualified:String = field(type, "qualType"),
 					callback = functionPointer(qualified);
+				if (hasAnnotation(node, "hxi:opaque")) {
+					if (!StringTools.startsWith(qualified, "struct ") || layouts.exists(qualified.substring(7)))
+						throw '${declarationLocation(node)}: hxi:opaque requires an incomplete struct typedef';
+					addDocumentation(documentation, name, node);
+					return Opaque(name, sourceSpan(node));
+				}
 				if (hasAnnotation(node, "hxi:bool32")) {
 					if (mapType(qualified) != "u32")
 						throw '${declarationLocation(node)}: ABI bool typedef "$name" must use uint32_t storage';
@@ -273,6 +279,7 @@ class CHeaderImporter {
 					signature = stripCallingConvention(rawSignature),
 					result = StringTools.trim(signature.substring(0, signature.indexOf("("))),
 					borrowedUtf8 = hasAnnotation(node, "hxi:returns_borrowed_utf8"),
+					borrowed = hasAnnotation(node, "hxi:borrowed"),
 					owned = hasAnnotation(node, "hxi:owned");
 				addDocumentation(documentation, name, node);
 				var modelParameters:Array<HxiParameter> = queriedArraysNullable([for (parameter in parameters) parameterModel(parameter)]),
@@ -281,7 +288,7 @@ class CHeaderImporter {
 					handleDisposition:HxiHandleDisposition = Unspecified;
 				if (callConvention != "cdecl")
 					resultMetadata.set("callconv", ['"$callConvention"']);
-				if (borrowedUtf8) {
+				if (borrowedUtf8 || borrowed) {
 					ownership = Borrowed;
 					resultMetadata.set("borrowed", []);
 				}
@@ -335,9 +342,12 @@ class CHeaderImporter {
 			qualified:String = field(type, "qualType"),
 			retained = hasAnnotation(parameter, "hxi:retained"),
 			owned = hasAnnotation(parameter, "hxi:owned"),
+			borrowed = hasAnnotation(parameter, "hxi:borrowed"),
 			metadata = direction.metadata;
 		if (owned)
 			metadata.set("owned", []);
+		if (borrowed)
+			metadata.set("borrowed", []);
 		if (retained)
 			metadata.set("retained", []);
 		var projected:String;
@@ -382,7 +392,7 @@ class CHeaderImporter {
 			name: field(parameter, "name"),
 			type: typeFromProjection(projected),
 			direction: direction.direction,
-			ownership: Unspecified,
+			ownership: borrowed ? Borrowed : Unspecified,
 			handleDisposition: owned ? Owned : Unspecified,
 			retained: retained,
 			metadata: metadata,
