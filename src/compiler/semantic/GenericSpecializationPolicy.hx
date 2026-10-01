@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeShape.RuntimeShapes;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
@@ -18,6 +19,10 @@ class GenericSpecializationPolicy {
 			for (constraint in constraints)
 				if (constraint.parameter == parameter)
 					return {representation: semantic, policy: "constrained"};
+		// Native scalars and records have no runtime shape of their own: a shared body would read
+		// `RawPtr<T>` or `sizeof<T>()` with another type's size, so they specialize exactly.
+		if (NativeLayout.containsNativeLayoutType(semantic))
+			return {representation: semantic, policy: "layout"};
 		for (argument in fn.arguments)
 			if (containsNested(argument.type, parameter, false))
 				return {representation: semantic, policy: "layout"};
