@@ -69,6 +69,7 @@ class WasmLinearModuleBuilder {
 	var representation:WasmRepresentationSet;
 	var tableSlots:Map<String, Int>;
 	var exceptionTag:Null<Int>;
+	var closureAdapters:WasmLinearClosureAdapters;
 
 	public function new(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
 		this.program = program;
@@ -83,6 +84,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	function compileModule():BackendResult {
+		closureAdapters = WasmLinearClosureAdapters.generate(program);
 		IrVerifier.verify(program);
 		prepareModule();
 		buildRuntime();
@@ -258,7 +260,8 @@ class WasmLinearModuleBuilder {
 			throw "Linear Wasm bytes data pointer helper is missing";
 		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
-		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
+		closureAdapters.defineKeyQuery(module, functions, tableSlots);
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
 			results: []
@@ -273,7 +276,9 @@ class WasmLinearModuleBuilder {
 
 	function lowerFunctions():haxe.io.Bytes {
 		return WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
-			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
+			if (!reachable.exists(fn.name)
+				|| (fn.name == "__entry" && preferredEntry != "__entry")
+				|| fn.name == WasmLinearClosureAdapters.KEY_FUNCTION)
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,

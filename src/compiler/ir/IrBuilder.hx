@@ -168,6 +168,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function constVoid():IrValue {
+		var out = temporary(Void);
+		emit(ConstVoid(out));
+		return out;
+	}
+
 	public function constBool(value:Bool):IrValue {
 		var out = temporary(Bool);
 		emit(ConstBool(out, value));
