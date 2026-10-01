@@ -632,12 +632,23 @@ class BodyTyper {
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
 		return switch initializer {
 			case NullLiteral(_): true;
-			case ArrayLiteral(values, _): values.length == 0;
+			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
+			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
 			case MapLiteral(entries, _): entries.length == 0;
 			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
 			case SwitchExpression(_, _, _, _): true;
 			default: false;
 		};
+
+	static function valuesAreNull(values:Array<AstExpression>):Bool {
+		for (value in values)
+			switch value {
+				case NullLiteral(_):
+				default:
+					return false;
+			}
+		return true;
+	}
 
 	static function containsNullLiteral(expression:AstExpression):Bool
 		return ExpressionTyper.containsNullLiteral(expression);
@@ -656,12 +667,12 @@ class BodyTyper {
 				case VarDeclaration(name, declared, initializer, _):
 					if (declared != null)
 						changed = constrainLocal(name, lowerType(declared)) || changed;
-					if (context.localExpectedTypes.exists(name))
-						changed = constrainLocalExpression(initializer, context.localExpectedTypes.get(name)) || changed;
+					changed = constrainLocalExpression(initializer, context.localExpectedTypes.exists(name) ? context.localExpectedTypes.get(name) : TVoid)
+						|| changed;
 				case Return(expression, _):
 					changed = constrainLocalExpression(expression, result) || changed;
 				case Expression(expression, _):
-					changed = constrainPushedExpression(expression) || changed;
+					changed = constrainPushedExpression(expression) || constrainLocalExpression(expression, TVoid) || changed;
 				case If(_, thenBranch, elseBranch, _):
 					changed = inferBodyStatementConstraints(thenBranch, result)
 						|| inferBodyStatementConstraints(elseBranch, result)
@@ -734,6 +745,19 @@ class BodyTyper {
 									break;
 								changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index])) || changed;
 							}
+					}
+				}
+				changed;
+			case New(typeName, arguments, _):
+				var constructorName = typeName + ".new", changed = false;
+				if (session.signatures.exists(constructorName)
+					&& session.classDecls.exists(typeName)
+					&& requiredMapValue(session.classDecls, typeName).typeParameters.length == 0) {
+					var signature = requiredMapValue(session.signatures, constructorName);
+					for (index in 0...arguments.length) {
+						if (index >= signature.arguments.length)
+							break;
+						changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index])) || changed;
 					}
 				}
 				changed;
