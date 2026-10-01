@@ -1480,6 +1480,11 @@ class BodyTyper {
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		if (sameType(typedObject.type, TDynamic)) {
+			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			return new TypedExpression(TCall("Reflect.field", [typedObject, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span);
+		}
 		switch typedObject.type {
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);

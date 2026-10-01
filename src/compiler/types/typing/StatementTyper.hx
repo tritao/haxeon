@@ -367,6 +367,8 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -423,10 +425,23 @@ class StatementTyper {
 		};
 	}
 
+	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement
+		return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+
+	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var boxed = coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
+			call = new TypedExpression(TCall("Reflect.setField", [object, new TypedExpression(TStringLiteral(fieldName), TString, span), boxed]), TVoid, span);
+		return TExpression(call, span);
+	}
+
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldStore(object, fieldName, value, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
