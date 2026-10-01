@@ -72,6 +72,7 @@ class TestCatalog {
 		"EnumVisibilityMain",
 		"EnumImportOrderMain",
 		"ExpectedEnumContextMain",
+		"DependencyKeyMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",

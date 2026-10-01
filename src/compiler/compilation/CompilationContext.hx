@@ -117,13 +117,21 @@ class CompilationContext {
 		for (name in names) {
 			var state = modules.get(name);
 			if (state != null)
-				dependencyKeys.set(name, state.dependencies.join("\x00"));
+				dependencyKeys.set(name, dependencyKey(state.dependencies));
 		}
 		owner.reachabilityCache.set(entry, {
 			names: names.copy(),
 			dependencyKeys: dependencyKeys,
 			initializationClasses: initializationClasses.copy()
 		});
+	}
+
+	/** Length-prefixed components preserve boundaries without binary separators in text keys. */
+	public static function dependencyKey(dependencies:Array<String>):String {
+		var key = "";
+		for (dependency in dependencies)
+			key += dependency.length + ":" + dependency;
+		return key;
 	}
 
 	public static function mapIsEmpty(values:Map<String, Bool>):Bool
