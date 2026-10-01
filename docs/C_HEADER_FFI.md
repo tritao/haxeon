@@ -259,6 +259,10 @@ headers are excluded.
 
 The importer supports C typedefs, annotated opaque handles, anonymous integer enum constants, named enums, fixed-width
 enum aliases, structs, fixed-size arrays, pointers, `const`, and non-variadic function declarations.
+An incomplete `struct` typedef annotated with `hxi:opaque` imports as an
+opaque HXI type. Pointer results and output slots may carry `hxi:borrowed`;
+the latter also needs `hxi:out` and a nullable inner pointer when failure can
+leave it unset. A complete struct cannot use `hxi:opaque`.
 It maps fixed-width integer typedefs and `size_t`-family types to raw HXI
 primitives. Structs carry Clang-computed `@layout` and `@offset` annotations.
 Output is sorted so the same header and target produce byte-identical results.
