@@ -8,6 +8,7 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.backend.wasm.WasmCAbi;
 import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmRepresentation.WasmAggregateRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmInteropRepresentation;
@@ -111,7 +112,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
-		var abi = WasmLinearCAbi.of(native), fixed = native.fixedResult;
+		var abi = WasmCAbi.of(native), fixed = native.fixedResult;
 		if (!abi.adjustsCall())
 			return UseDefault;
 		var body:Array<WasmInstruction> = [];
@@ -151,7 +152,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return body;
 	}
 
-	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmLinearCAbi, arguments:Array<IrValue>, argumentLocals:Array<Int>):Void {
+	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmCAbi, arguments:Array<IrValue>, argumentLocals:Array<Int>):Void {
 		for (index in 0...arguments.length) {
 			nativeArgument(body, arguments[index], argumentLocals[index]);
 			for (instruction in abi.lowerArgument(index))

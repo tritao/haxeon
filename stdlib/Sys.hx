@@ -139,8 +139,13 @@ extern function sysSleep(seconds:Float):Void;
 @:hlNative("std", "sys_get_char")
 extern function sysGetChar(echo:Bool):Int;
 
+#if wasm
+function sysPrint(value:String):Void
+	haxeon.wasm.HaxeonHost.print(value);
+#else
 @:hlNative("haxeon_runtime", "__sys_print")
 extern function sysPrint(value:String):Void;
+#end
 
 @:hlNative("haxeon_runtime", "__sys_stdout")
 extern function sysStdout():sys.io.FileOutput;

@@ -30,56 +30,62 @@ class EqualityGenerator {
 			requests:Map<String, EqualityRequest> = [],
 			requestKeys = [for (key in session.equalityRequests.keys()) key];
 		requestKeys.sort(Reflect.compare);
+		// Direct requests first, so a helper someone asked for keeps that caller as its origin.
 		for (key in requestKeys) {
 			var request = session.equalityRequests.get(key);
-			collect(session, request.type, request.span, reachable);
-			requests.set(key, request);
+			if (request != null)
+				requests.set(key, request);
+		}
+		for (key in requestKeys) {
+			var request = requests.get(key);
+			if (request != null)
+				collect(session, request.type, request, reachable, requests);
 		}
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
-		var result:Array<TypedFunction> = [];
-		for (key in keys) {
-			var type = reachable.get(key), request = requests.get(key);
-			if (request == null) {
-				var first = session.equalityRequests.get(requestKeys[0]);
-				if (first == null)
-					throw "Missing equality request";
-				request = {type: type, origin: first.origin, span: first.span};
-			}
-			result.push(compareFunction(session, type, request));
-		}
-		return result;
+		return [
+			for (key in keys)
+				compareFunction(session, reachable.get(key), requests.get(key))
+		];
 	}
 
-	static function collect(session:TypingSession, type:CompilerType, span:SourceSpan, reachable:Map<String, CompilerType>):Void {
-		var key = equalsName(type);
+	/**
+	 * Collects every helper a comparison of `type` needs. A helper reached only through another one takes the
+	 * origin of the request that reached it: incremental builds keep a generated function while its origin is
+	 * unchanged, so the nested helper then lives exactly as long as the helper calling it.
+	 */
+	static function collect(session:TypingSession, type:CompilerType, root:EqualityRequest, reachable:Map<String, CompilerType>,
+			requests:Map<String, EqualityRequest>):Void {
+		var key = equalsName(type), span = root.span;
 		if (reachable.exists(key))
 			return;
 		reachable.set(key, type);
+		if (!requests.exists(key))
+			requests.set(key, {type: type, origin: root.origin, span: root.span});
 		switch type {
 			case TInt, TInt64, TFloat, TBool, TString, TBytes, TNull:
 			case TAbstract(_, _, representation):
-				collect(session, representation, span, reachable);
+				collect(session, representation, root, reachable, requests);
 			case TNullable(element):
-				collect(session, element, span, reachable);
+				collect(session, element, root, reachable, requests);
 			case TArray(element):
 				if (RuntimeType.arrayName(element) == null)
 					unsupported(type, span);
-				collect(session, element, span, reachable);
+				collect(session, element, root, reachable, requests);
 			case TMap(keyType, valueType):
 				if (RuntimeType.mapName(keyType, valueType) == null || !supportedMapKey(session, keyType))
 					unsupported(type, span);
-				collect(session, valueType, span, reachable);
+				collect(session, valueType, root, reachable, requests);
 			case TAnonymous(_, fields):
 				for (field in fields)
-					collect(session, field.type, span, reachable);
+					collect(session, field.type, root, reachable, requests);
 			case TInstance(NominalKind.Enum, name, arguments):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null || declaration.typeParameters.length != arguments.length)
 					unsupported(type, span);
 				for (constructor in declaration.cases)
 					for (parameter in constructor.params)
-						collect(session, session.representation.enumParameterType(declaration.typeParameters, parameter, type), span, reachable);
+						collect(session, session.representation.enumParameterType(declaration.typeParameters, parameter, type), root, reachable, requests);
 			default:
 				unsupported(type, span);
 		}

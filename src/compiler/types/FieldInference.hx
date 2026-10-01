@@ -175,8 +175,9 @@ class FieldInference {
 			return null;
 		if (!hasArguments) {
 			var abstractName = resolveDeclaration(written, currentOwner, aliases, enumAbstracts);
-			if (abstractName != null) {
-				for (value in enumAbstracts.get(abstractName).values)
+			var abstractDecl = abstractName == null ? null : enumAbstracts.get(abstractName);
+			if (abstractDecl != null) {
+				for (value in abstractDecl.values)
 					if (value.name == caseName)
 						return NamedType(written);
 				return null;
@@ -186,7 +187,7 @@ class FieldInference {
 		if (resolved == null)
 			return null;
 		var declaration = enums.get(resolved);
-		if (declaration.typeParameters.length > 0)
+		if (declaration == null || declaration.typeParameters.length > 0)
 			return null;
 		for (enumCase in declaration.cases)
 			if (enumCase.name == caseName && (enumCase.params.length == 0) != hasArguments)

@@ -1,0 +1,24 @@
+// The services a Haxeon Wasm guest imports from its host, for both the wasm32 and wasm-gc targets.
+// Every argument and result is a Wasm32 C ABI scalar or an address in the linear memory the guest and host
+// share, so a host never depends on how either backend lays out Haxe values. The compiler registers this
+// interface for Wasm targets; hosts implement the "haxeon_host" import module.
+interface HaxeonHost @target("portable-abi32") @library("haxeon_host") {
+	/**
+	 * Writes program output. Lines may arrive in several calls; the host decides where they go.
+	 */
+	extern fn print(text: utf8) -> void;
+	/**
+	 * Milliseconds since the Unix epoch.
+	 */
+	extern fn date_now() -> f64;
+	/**
+	 * Adds a function-table entry that native code can call as a C function of Wasm type `signature` (for
+	 * example "vii"). Calling it calls the guest export `entry` with `id` followed by the C arguments.
+	 * Returns the table index.
+	 */
+	extern fn callback_create(entry: utf8, signature: utf8, id: i32) -> i32;
+	/**
+	 * Removes a function-table entry made by callback_create.
+	 */
+	extern fn callback_close(callback: i32) -> void;
+}

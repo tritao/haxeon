@@ -596,6 +596,25 @@ class SemanticAssembly {
 						dependents.push(owner);
 					}
 		}
+		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
+		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
+		// `TypingSession.purityQueries`, kept for the purity drift check and used here for the callee alone). Walked backwards,
+		// that finds the functions to retype when a callee's signature changes, such as a method gaining an optional parameter,
+		// which every caller still type-checks against but must be lowered to again.
+		var reverseTypedCalls:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			for (caller => record in modules.get(moduleName).purityQueries)
+				for (callee in record.keys()) {
+					var callers = reverseTypedCalls.get(callee);
+					if (callers == null) {
+						callers = [];
+						reverseTypedCalls.set(callee, callers);
+					}
+					callers.push(purityDependencyOwner(caller));
+				}
+		}
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in bodyChanged.keys())
@@ -630,6 +649,12 @@ class SemanticAssembly {
 							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
 					}
 				}
+			if (changedSignatures.exists(changed) && reverseTypedCalls.exists(changed))
+				for (caller in reverseTypedCalls.get(changed))
+					if (!invalid.exists(caller)) {
+						work.push(caller);
+						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "typed-call");
+					}
 			if (genericOrigins.exists(changed)) {
 				// A call through a local (`context.resourceState(...)`) has no resolvable name before typing, so the callers
 				// that must request this origin's dropped specializations again come from the IR they were lowered to.

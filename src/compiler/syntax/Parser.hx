@@ -30,6 +30,10 @@ class Parser {
 
 	final tokens:Array<Token>;
 	var position:Int = 0;
+
+	/** Braceless `try` bodies being parsed: their last statement may omit the semicolon before `catch`. */
+	var tryBodyDepth:Int = 0;
+
 	var recovering:Bool = false;
 	var typedLambdaCount:Int = 0;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -968,6 +972,20 @@ class Parser {
 			}
 			position = saved;
 		}
+		// A bare block in statement position is a nested scope. Its value, if it
+		// ends in one, would be discarded, so it parses once, as statements, and
+		// need not end in a value (`{ var x = f(); for (...) g(x); }`). It lowers
+		// to `if (true) { ... }`: branches already open a scope and pass
+		// break, continue and return through, so no pass needs a block form.
+		// `{name: ...}` and `{"name": ...}` stay object literals.
+		if (check(TokenKind.LeftBrace)
+			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon)) {
+			var start = current().span,
+				statements = parseStatementOrBlock(),
+				span = start.merge(previous().span);
+			match(TokenKind.Semicolon);
+			return If(BoolLiteral(true, start), statements, [], span);
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1019,9 +1037,17 @@ class Parser {
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		var expression = parseExpression();
-		match(TokenKind.Semicolon);
-		return [Expression(expression, expressionSpan(expression))];
+		// Any single statement (`try return f() catch ...`, `try x = f() catch
+		// ...`); the semicolon before `catch` is optional.
+		tryBodyDepth++;
+		try {
+			var statements = parseStatements();
+			tryBodyDepth--;
+			return statements;
+		} catch (error:CompileError) {
+			tryBodyDepth--;
+			throw error;
+		}
 	}
 
 	function parseDoWhileBody():Array<AstStatement> {
@@ -1059,8 +1085,18 @@ class Parser {
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
-		if (check(TokenKind.LeftBrace))
-			return parseStatementOrBlock();
+		if (check(TokenKind.LeftBrace)) {
+			var statements = parseStatementOrBlock();
+			// As in Haxe, the value of an arrow function's block is its last expression. A callback that is expected
+			// to return nothing discards it, as it does the value of an expression body.
+			if (statements.length > 0)
+				switch statements[statements.length - 1] {
+					case Expression(expression, span):
+						statements[statements.length - 1] = Return(expression, span);
+					default:
+				}
+			return statements;
+		}
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
 	}
@@ -1117,7 +1153,15 @@ class Parser {
 				span = expressionSpan(expression).merge(expressionSpan(value));
 			expression = switch expression {
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
-				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable", expressionSpan(expression)));
+				// `a[i] = v` as a value is `v`; the array and index are evaluated once, as in the statement.
+				case Index(array, position, _):
+					var assigned = "__haxeon_assigned";
+					BlockExpression([
+						VarDeclaration(assigned, null, value, span),
+						IndexAssignment(array, position, Variable(assigned, span), span)
+					], Variable(assigned, span), span);
+				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable or an array element",
+						expressionSpan(expression)));
 			};
 		}
 		return expression;
@@ -1440,6 +1484,10 @@ class Parser {
 					consume(TokenKind.RightParen);
 				}
 				var value = parseComprehensionValue();
+				if (condition != null && check(TokenKind.Else)) {
+					value = parseComprehensionElse(condition, value);
+					condition = null;
+				}
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
 					var mapValue = parseComprehensionValue(),
@@ -1727,6 +1775,45 @@ class Parser {
 		return prefix.length == 0 ? result : BlockExpression(prefix, result, span);
 	}
 
+	/**
+	 * `for (x in xs) if (c) a else b`: the `if` after the header is not a filter but the start of the value once an
+	 * `else` follows it. Every arm yields a value when the chain ends in a plain `else`, so it is nested
+	 * conditionals; when the last `if` has no `else`, no value is yielded if no condition holds, which lowers like a
+	 * comprehension body that ends in an `if` without `else` (see `filteredComprehensionValue`).
+	 */
+	function parseComprehensionElse(condition:AstExpression, value:AstExpression):AstExpression {
+		var arms = [{condition: condition, value: value}],
+			tail:Null<AstExpression> = null;
+		while (match(TokenKind.Else)) {
+			if (match(TokenKind.If)) {
+				consume(TokenKind.LeftParen);
+				var armCondition = parseExpression();
+				consume(TokenKind.RightParen);
+				arms.push({condition: armCondition, value: parseComprehensionValue()});
+				continue;
+			}
+			tail = parseComprehensionValue();
+			break;
+		}
+		var span = expressionSpan(condition).merge(expressionSpan(tail == null ? arms[arms.length - 1].value : tail));
+		var index = arms.length;
+		if (tail != null) {
+			var chained = tail;
+			while (index > 0) {
+				index--;
+				chained = Conditional(arms[index].condition, arms[index].value, chained, span);
+			}
+			return chained;
+		}
+		var yielded:AstExpression = ArrayLiteral([], span);
+		while (index > 0) {
+			index--;
+			yielded = Conditional(arms[index].condition, ArrayLiteral([arms[index].value], span), yielded, span);
+		}
+		var name = "__haxeon_yield";
+		return ArrayComprehension(name, null, yielded, null, Variable(name, span), true, span);
+	}
+
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
 		consume(TokenKind.LeftParen);
 		var keyName = consume(TokenKind.Identifier).text, valueName = null;
@@ -1744,6 +1831,10 @@ class Parser {
 			consume(TokenKind.RightParen);
 		}
 		var value = parseComprehensionValue();
+		if (condition != null && check(TokenKind.Else)) {
+			value = parseComprehensionElse(condition, value);
+			condition = null;
+		}
 		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
@@ -2285,7 +2376,10 @@ class Parser {
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
-		if (isBracedExpression(expression))
+		if (isBracedExpression(expression) || (tryBodyDepth > 0 && check(TokenKind.Catch)))
+			return expressionSpan(expression);
+		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
+		if (check(TokenKind.Else))
 			return expressionSpan(expression);
 		return consume(TokenKind.Semicolon).span;
 	}
@@ -2480,21 +2574,21 @@ class Parser {
 	static function codePointString(code:Int, span:SourceSpan):String {
 		if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
 			invalidEscape("U+" + StringTools.hex(code, 4) + " is not a Unicode scalar value", span);
-		var bytes = new haxe.io.BytesBuffer();
+		var bytes = new haxe.io.BytesOutput();
 		if (code < 0x80)
-			bytes.addByte(code);
+			bytes.writeByte(code);
 		else if (code < 0x800) {
-			bytes.addByte(0xC0 | (code >> 6));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xC0 | (code >> 6));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else if (code < 0x10000) {
-			bytes.addByte(0xE0 | (code >> 12));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xE0 | (code >> 12));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else {
-			bytes.addByte(0xF0 | (code >> 18));
-			bytes.addByte(0x80 | ((code >> 12) & 0x3F));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xF0 | (code >> 18));
+			bytes.writeByte(0x80 | ((code >> 12) & 0x3F));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		}
 		return bytes.getBytes().toString();
 	}

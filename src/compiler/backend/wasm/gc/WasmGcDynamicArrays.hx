@@ -45,6 +45,7 @@ class WasmGcDynamicArrays {
 
 	final plan:WasmGcTypePlan;
 	final program:IrProgram;
+	final functions:Map<String, Int>;
 	final representation:WasmGcRepresentation;
 	final elements:Array<IrType>;
 	final throws:Bool;
@@ -58,17 +59,42 @@ class WasmGcDynamicArrays {
 	/** Emit a module function for each dynamic-view native the program uses. */
 	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
-		for (native in program.natives)
-			if (used.exists(native.name) && isOperation(native.name) && !functions.exists(native.name))
-				functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native).emit(module, native));
+		var operations = [
+			for (native in program.natives)
+				if (used.exists(native.name) && isOperation(native.name) && !functions.exists(native.name)) native
+		];
+		if (operations.length == 0)
+			return;
+		// Error messages name types by testing against every class or element type, so helpers share these
+		// functions; expanded in each arm of an element-type dispatch they grow with the square of the types.
+		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int):Void {
+			if (functions.exists(name))
+				return;
+			var helper = new WasmGcDynamicArrays(plan, program, representation, arguments.length, functions),
+				result = build(helper);
+			helper.body.push(LocalGet(result));
+			helper.body.push(Return);
+			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, Bytes), helper.locals, helper.body)));
+		}
+		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
+		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
+		shared(CAST_MESSAGE, [Dyn, I32], helper -> helper.concatenate([
+			helper.literal("Can't cast "),
+			helper.valueTypeName(0),
+			helper.literal(" to "),
+			helper.typeName(1)
+		]));
+		for (native in operations)
+			functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
 
-	function new(plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, native:IrNative) {
+	function new(plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int, functions:Map<String, Int>) {
 		this.plan = plan;
+		this.functions = functions;
 		this.program = program;
 		elements = plan.arrayElementTypes();
 		throws = WasmModuleSupport.hasExceptions(program);
-		nextLocal = native.arguments.length;
+		nextLocal = argumentCount;
 		representation = gcRepresentation.forFunction({allocateLocal: allocateLocal, exceptionTag: throws ? 0 : null, irFunction: null});
 	}
 
@@ -194,8 +220,21 @@ class WasmGcDynamicArrays {
 		push([LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End]);
 	}
 
+	/** Lowers a runtime operation inline, or calls the module function that implements it, such as Std.string. */
 	function lower(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):Void
-		push(handled(representation.lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals)));
+		switch representation.lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals) {
+			case Handled(instructions):
+				push(instructions);
+			case UseDefault:
+				var index = functions.get(name);
+				if (index == null)
+					throw 'Wasm GC dynamic array helper has no lowering or function for "$name"';
+				for (local in argumentLocals)
+					body.push(LocalGet(local));
+				body.push(Call(index));
+				if (output.type != Void)
+					body.push(LocalSet(outputLocal));
+		}
 
 	function concrete(operation:String, element:IrType):String
 		return '__array_${operation}_${WasmGcRepresentation.arrayNativeSuffix(element)}';
@@ -240,8 +279,14 @@ class WasmGcDynamicArrays {
 			default: "Object";
 		};
 
-	/** Name of the element type a runtime type id denotes. */
-	function typeName(typeLocal:Int):Int {
+	static inline var TYPE_NAME = "__haxeon_array_type_name";
+	static inline var CAST_MESSAGE = "__haxeon_array_cast_message";
+
+	/** Name of the element type a runtime type id denotes, from the module's shared function. */
+	function typeName(typeLocal:Int):Int
+		return callShared(TYPE_NAME, [typeLocal]);
+
+	function inlineTypeName(typeLocal:Int):Int {
 		var result = allocateLocal(plan.valueType(Bytes)),
 			named:Array<IrType> = [I32, I64, F64, Bool, Bytes, Dyn],
 			seen:Map<Int, Bool> = [for (type in named) typeId(type) => true];
@@ -259,8 +304,22 @@ class WasmGcDynamicArrays {
 		return result;
 	}
 
-	/** Name of a dynamic value's runtime type. */
-	function valueTypeName(valueLocal:Int):Int {
+	static inline var VALUE_TYPE_NAME = "__haxeon_value_type_name";
+
+	/** Name of a dynamic value's runtime type, from the module's shared function. */
+	function valueTypeName(valueLocal:Int):Int
+		return callShared(VALUE_TYPE_NAME, [valueLocal]);
+
+	function callShared(name:String, arguments:Array<Int>):Int {
+		var result = allocateLocal(plan.valueType(Bytes));
+		for (argument in arguments)
+			body.push(LocalGet(argument));
+		body.push(Call(WasmModuleSupport.requiredFunctionIndex(functions, name)));
+		body.push(LocalSet(result));
+		return result;
+	}
+
+	function inlineValueTypeName(valueLocal:Int):Int {
 		var result = allocateLocal(plan.valueType(Bytes));
 		function when(test:Array<WasmInstruction>, name:String):Void {
 			push([LocalGet(valueLocal)].concat(test).concat([If(null)]));
@@ -298,12 +357,7 @@ class WasmGcDynamicArrays {
 	}
 
 	function raiseCast(valueLocal:Int, typeLocal:Int):Void
-		raise(concatenate([
-			literal("Can't cast "),
-			valueTypeName(valueLocal),
-			literal(" to "),
-			typeName(typeLocal)
-		]));
+		raise(callShared(CAST_MESSAGE, [valueLocal, typeLocal]));
 
 	// Conversions between dynamic values and element storage.
 

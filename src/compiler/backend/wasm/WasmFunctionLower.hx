@@ -450,6 +450,14 @@ class WasmFunctionLower {
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch output.type {
+						case Function(_, _) if (functions.exists(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))):
+							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
+							emit(body, [
+								LocalGet(requiredLocal(values, value.id)),
+								Call(WasmModuleSupport.requiredFunctionIndex(functions,
+									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
+								LocalSet(requiredLocal(values, output.id))
+							]);
 						case I32, Bool, I64, F64 if (value.type == Dyn):
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
@@ -508,7 +516,7 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.staticClosure(name, context.tableSlots, requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.staticClosure(name, output.type, context.tableSlots, requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
 			case CallClosure(output, closure, arguments):
@@ -562,8 +570,8 @@ class WasmFunctionLower {
 				if (tableSlot == null)
 					throw 'Wasm instance closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.instanceClosure(name, context.tableSlots, requiredLocal(values, receiver.id),
-						requiredLocal(values, output.id));
+					represented = calls == null ? UseDefault : calls.instanceClosure(name, output.type, context.tableSlots,
+						requiredLocal(values, receiver.id), requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else
 					emit(body, [
 						I32Const(WasmLayout.CLOSURE_SIZE),
@@ -1044,6 +1052,12 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
+			case Call(output, name, arguments) if (WasmModuleSupport.hostCNative(context.program, name) != null):
+				var host = WasmModuleSupport.hostCNative(context.program, name);
+				if (host == null)
+					throw 'Wasm host native "$name" disappeared';
+				lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,
+					closureTypes);
 			case Call(output, name, arguments):
 				var runtimeName = name;
 				for (native in context.program.natives)
@@ -1223,6 +1237,15 @@ class WasmFunctionLower {
 			case "haxe.Int64.xor": I64Xor;
 			case _: null;
 		};
+		if (name == "haxe.Int64.neg") {
+			if (arguments.length != 1 || output.type != I64)
+				throw "Invalid haxe.Int64.neg Wasm native signature";
+			body.push(I64Const(0));
+			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+			body.push(I64Sub);
+			body.push(LocalSet(requiredLocal(values, output.id)));
+			return true;
+		}
 		if (name == "haxe.Int64.make") {
 			if (arguments.length != 2 || output.type != I64)
 				throw "Invalid haxe.Int64.make Wasm native signature";

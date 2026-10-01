@@ -47,6 +47,9 @@ class WasmGcTypePlan {
 	public final iteratorTypeIndices:Map<String, Int> = [];
 	public final functionTypeIndices:Map<String, Int> = [];
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
+
+	final implementorCache:Map<String, Array<Int>> = [];
+
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
 	/** Immutable `(array i32)` holding `RuntimeData.address` tables, or -1 when the program has none. */
@@ -58,6 +61,9 @@ class WasmGcTypePlan {
 	public var bytesInputTypeIndex(default, null):Int = -1;
 	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
+
+	/** Closure field holding the Wasm function type index its target is called with (WasmGcClosureAdapters). */
+	public static inline final CLOSURE_SIGNATURE_FIELD = 2;
 
 	final objectDeclarations:Map<String, IrObject> = [];
 	final enumDeclarations:Map<String, IrEnum> = [];
@@ -116,11 +122,16 @@ class WasmGcTypePlan {
 	}
 
 	/** Returns class type indices that can satisfy a Haxe virtual interface cast. */
+	/** Classes implementing an interface, cached: every interface type test over Dynamic values asks for them. */
 	public function interfaceImplementors(interfaceName:String):Array<Int> {
+		var cached = implementorCache.get(interfaceName);
+		if (cached != null)
+			return cached;
 		var result:Array<Int> = [];
 		for (object in orderedObjects)
 			if (objectImplementsInterface(object.name, interfaceName))
 				result.push(objectType(object.name));
+		implementorCache.set(interfaceName, result);
 		return result;
 	}
 
@@ -204,7 +215,8 @@ class WasmGcTypePlan {
 		return switch type {
 			case Void:
 				throw "Void has no Wasm GC value type";
-			case I32, Bool, RawPtr: I32;
+			// A native callback is the host's function-table index, like a raw pointer an i32 whose null is 0.
+			case I32, Bool, RawPtr, Abstract("native_callback"): I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
@@ -230,7 +242,7 @@ class WasmGcTypePlan {
 		var key = switch type {
 			case I32: "i32";
 			case Bool: "bool";
-			case RawPtr: "i32";
+			case RawPtr, Abstract("native_callback"): "i32";
 			case I64: "i64";
 			case F32: "f64";
 			case F64: "f64";
@@ -299,16 +311,8 @@ class WasmGcTypePlan {
 		return object.base != null && objectImplementsInterface(object.base, interfaceName);
 	}
 
-	function interfaceExtends(actual:String, expected:String):Bool {
-		if (actual == expected)
-			return true;
-		for (interfaceDecl in program.interfaces)
-			if (interfaceDecl.name == actual)
-				for (base in interfaceDecl.bases)
-					if (interfaceExtends(base, expected))
-						return true;
-		return false;
-	}
+	function interfaceExtends(actual:String, expected:String):Bool
+		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	function visitObject(object:IrObject, states:Map<String, Int>):Void {
 		var state = states.get(object.name);
@@ -595,9 +599,11 @@ class WasmGcTypePlan {
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true}
 		]));
+		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([
 			{type: Value(I32), mutable: true},
-			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
+			{type: Value(Ref({nullable: true, heap: Any})), mutable: true},
+			{type: Value(I32), mutable: false}
 		]));
 		var boxedEntries:Array<{key:String, type:WasmValueType}> = [
 			{key: "i32", type: I32},

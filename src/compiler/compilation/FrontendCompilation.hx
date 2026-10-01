@@ -85,7 +85,7 @@ class FrontendCompilation {
 					context.addTypeDependencies(state);
 					graphDependencyMs += Sys.time() * 1000.0 - phaseStarted;
 				}
-				if (cachedReachability.dependencyKeys.get(name) != state.dependencies.join("\x00"))
+				if (cachedReachability.dependencyKeys.get(name) != state.dependencies.join("\n"))
 					reuseGraph = false;
 			}
 		if (!CompilationContext.mapIsEmpty(structuralChanged))

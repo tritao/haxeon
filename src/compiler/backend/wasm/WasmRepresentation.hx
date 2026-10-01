@@ -61,8 +61,8 @@ interface WasmCallRepresentation {
 		resultType:IrType
 	}>, receiverLocal:Int, destination:Int,
 		argumentLocals:Array<Int>):WasmLoweringResult;
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult;
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult;
+	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult;
+	public function instanceClosure(name:String, type:IrType, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult;
 	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
 		argumentLocals:Array<Int>):WasmLoweringResult;
 }

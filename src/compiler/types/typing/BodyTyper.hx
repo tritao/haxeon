@@ -164,6 +164,14 @@ class BodyTyper {
 			session.noReturnFunctions.set(name, true);
 	}
 
+	static function hasFunctionMetadata(fn:compiler.syntax.Ast.AstFunction, name:String):Bool {
+		if (fn.metadata != null)
+			for (entry in fn.metadata)
+				if (entry.name == name)
+					return true;
+		return false;
+	}
+
 	static function parentPath(path:String):Null<String> {
 		return compiler.QualifiedName.parent(path);
 	}
@@ -303,6 +311,8 @@ class BodyTyper {
 			isStatic: isStatic,
 			isConstructor: isConstructor,
 			isInline: fn.isInline == true,
+			isKept: hasFunctionMetadata(fn, "keep"),
+			isExposed: hasFunctionMetadata(fn, "expose"),
 			arguments: arguments,
 			result: result,
 			statements: statements,
@@ -1470,6 +1480,11 @@ class BodyTyper {
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		if (sameType(typedObject.type, TDynamic)) {
+			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			return new TypedExpression(TCall("Reflect.field", [typedObject, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span);
+		}
 		switch typedObject.type {
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);

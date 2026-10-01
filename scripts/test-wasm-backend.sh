@@ -10,6 +10,8 @@ if [[ ! -x "$haxe_bin" ]]; then
 fi
 source "$root_dir/scripts/haxeon-compiler.sh"
 
+# The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
+bash "$root_dir/scripts/build-wasm-runtime.sh" --check
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
 bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
@@ -136,6 +138,17 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-hxi-value-records.wasm --entry=wasm32-value-records \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async \
+		--target=$target --output=out/wasm-cli-host-services-$target.wasm --entry=wasm-host-services \
+		--root=tests/programs tests/programs/wasm-host-services.hx
+	haxeon_compile_async \
+		--target=$target --output=out/wasm-cli-host-callbacks-$target.wasm --entry=wasm-callbacks \
+		--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
+done
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-hxi-value-records.wasm --entry=wasm32-value-records \
+	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
@@ -169,6 +182,9 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-borrowed-array.wasm --entry=wasm-gc-ffi-borrowed-array \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-borrowed-array.hx
 haxeon_compile_wait
 
 node - "$root_dir" <<'JS'
@@ -232,6 +248,11 @@ const cases = [
 	["out/wasm-cli-hxi-retained.wasm", 42],
 	["out/wasm-cli-hxi-retained-imported.wasm", 42],
 	["out/wasm-cli-hxi-value-records.wasm", 42],
+	["out/wasm-cli-gc-hxi-value-records.wasm", 42],
+	["out/wasm-cli-host-services-wasm32.wasm", 42],
+	["out/wasm-cli-host-services-wasm-gc.wasm", 42],
+	["out/wasm-cli-host-callbacks-wasm32.wasm", 42],
+	["out/wasm-cli-host-callbacks-wasm-gc.wasm", 42],
 	["out/wasm-cli-try-catch.wasm", 42],
 	["out/wasm-cli-try-nested.wasm", 42],
 	["out/wasm-cli-try-bounds.wasm", 42],
@@ -257,7 +278,8 @@ const cases = [
 	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
+	["out/wasm-cli-gc-ffi-short-struct.wasm", 42],
+	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -269,6 +291,7 @@ const cases = [
 	let ownedPointerReleases = [];
 	let byteViewCalls = 0;
     let shortStructImportCalled = false;
+    let hostServicesCheck = null;
     const imports = {};
     if (relative.endsWith("cnative-import.wasm"))
       imports.fixture = {fixture_add: (left, right) => left + right};
@@ -280,7 +303,69 @@ const cases = [
         return length === expected.length && expected.every((value, index) => actual[index] === value) ? 42 : 0;
       }};
     }
-    if (relative.endsWith("wasm-cli-hxi-value-records.wasm"))
+    // HaxeonHost receives C strings and returns scalars on both backends; nothing else is imported.
+    if (relative.includes("wasm-cli-host-services-")) {
+      const unexpected = WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter(entry => entry.module !== "haxeon_host");
+      if (unexpected.length !== 0)
+        throw new Error(`${relative}: unexpected imports ${unexpected.map(entry => entry.module + "." + entry.name).join(", ")}`);
+      let printed = "";
+      imports.haxeon_host = {
+        print: pointer => {
+          const bytes = new Uint8Array(moduleInstance.exports.memory.buffer);
+          let end = pointer;
+          while (bytes[end] !== 0) end++;
+          printed += new TextDecoder().decode(bytes.subarray(pointer, end));
+        },
+        date_now: () => Date.now()
+      };
+      hostServicesCheck = () => {
+        if (printed !== "host tracehost println\n")
+          throw new Error(`${relative}: host printed ${JSON.stringify(printed)}`);
+      };
+    }
+    // The host calls callbacks through the exported entry named at creation, with the closure id first.
+    if (relative.includes("wasm-cli-host-callbacks-")) {
+      const callbacks = new Map();
+      let nextCallback = 1;
+      const cString = pointer => {
+        const bytes = new Uint8Array(moduleInstance.exports.memory.buffer);
+        let end = pointer;
+        while (bytes[end] !== 0) end++;
+        return new TextDecoder().decode(bytes.subarray(pointer, end));
+      };
+      const callEntry = (index, ...args) => {
+        const entry = callbacks.get(index);
+        if (!entry) throw new Error(`${relative}: call to closed callback ${index}`);
+        return moduleInstance.exports[entry.entry](entry.id, ...args);
+      };
+      imports.haxeon_host = {
+        callback_create: (entry, signature, id) => {
+          const index = nextCallback++;
+          callbacks.set(index, {entry: cString(entry), signature: cString(signature), id});
+          return index;
+        },
+        callback_close: index => callbacks.delete(index)
+      };
+      imports.wasm_callbacks = {
+        apply_combine: (callback, value) => {
+          if (callbacks.get(callback).signature !== "iidi")
+            throw new Error(`${relative}: combine callback signature ${callbacks.get(callback).signature}`);
+          return callEntry(callback, value, 5.0, 0);
+        },
+        // The record result comes back through the leading pointer, which the callback writes too.
+        apply_measure: (result, callback, limits) => {
+          if (callbacks.get(callback).signature !== "viiii")
+            throw new Error(`${relative}: measure callback signature ${callbacks.get(callback).signature}`);
+          return callEntry(callback, result, 5, limits, 0);
+        }
+      };
+      hostServicesCheck = () => {
+        if (callbacks.size !== 0)
+          throw new Error(`${relative}: ${callbacks.size} callbacks were not closed`);
+      };
+    }
+    // Both backends call these records through the same Wasm32 C ABI.
+    if (relative.endsWith("wasm-cli-hxi-value-records.wasm") || relative.endsWith("wasm-cli-gc-hxi-value-records.wasm"))
       imports.wasm32_value_records = {
         read_point: pointer => {
           if (pointer % 4 !== 0)
@@ -401,14 +486,13 @@ const cases = [
           const view = new DataView(moduleInstance.exports.memory.buffer);
           return view.getInt32(pointer, true) + view.getInt32(pointer + 4, true);
         },
-        make_point: seed => {
-          const pointer = 1024;
+        // A record result is written through the leading result pointer, as clang's Wasm32 C ABI returns it.
+        make_point: (pointer, seed) => {
+          if (pointer % 4 !== 0)
+            throw new Error("record result pointer is not four-byte aligned");
           const view = new DataView(moduleInstance.exports.memory.buffer);
           view.setInt32(pointer, seed, true);
           view.setInt32(pointer + 4, seed + 2, true);
-          view.setUint32(pointer + 8, 0, true);
-          view.setUint32(pointer + 12, 0, true);
-          return pointer;
         },
         borrowed_context: () => 0x1234,
         owned_context: () => 0x5678,
@@ -469,6 +553,18 @@ const cases = [
       };
     if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm"))
       imports.gc_bytes = {shift_point: () => { shortStructImportCalled = true; }};
+    if (relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm")) {
+      const view = () => new DataView(moduleInstance.exports.memory.buffer);
+      imports.gc_bytes = {
+        // Writes through a non-const record pointer, which the caller must see.
+        fill_point: pointer => {
+          view().setInt32(pointer, 7, true);
+          view().setInt32(pointer + 4, 9, true);
+        },
+        // Follows the record's borrowed array to the second point's y.
+        second_y: pointer => view().getUint32(pointer + 4, true) === 2 ? view().getInt32(view().getUint32(pointer, true) + 12, true) : -1
+      };
+    }
     if (relative.includes("hxi-retained")) {
       const retainedMemory = () => memory == null ? moduleInstance.exports.memory : memory;
       const validOptions = pointer => {
@@ -549,9 +645,14 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
+      // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
+      const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && !borrowedArray && hasMemory)
+          || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
+          || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
@@ -577,6 +678,8 @@ const cases = [
     const value = instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);
+    if (hostServicesCheck)
+      hostServicesCheck();
     if (relative.endsWith("wasm32-bytes-view.wasm") && byteViewCalls !== 2)
       throw new Error(`expected both direct and generated byte-slice calls, got ${byteViewCalls}`);
     if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm") && !ownedBytesReleased)

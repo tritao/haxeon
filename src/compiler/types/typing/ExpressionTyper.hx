@@ -742,11 +742,34 @@ class ExpressionTyper {
 		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, targetType, false), targetType, span);
 	}
 
+	/**
+	 * An operator with a Dynamic operand: what the values are is only known when the program runs, so it calls
+	 * `haxeon.DynamicOps` with every operand boxed. Null unless an operand is Dynamic and the others are numbers or
+	 * Dynamic as well (or Strings, for the ordering operators).
+	 */
+	function dynamicOperation(name:String, operands:Array<TypedExpression>, result:CompilerType, span:SourceSpan,
+			orderable:Bool = false):Null<TypedExpression> {
+		var dynamicOperand = false;
+		for (operand in operands)
+			if (sameType(operand.type, TDynamic))
+				dynamicOperand = true;
+			else if (!isNumeric(operand.type) && !(orderable && sameType(operand.type, TString)))
+				return null;
+		if (!dynamicOperand)
+			return null;
+		session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+		var boxed = [for (operand in operands) coerce(operand, TDynamic, "dynamic operand", "E1010")];
+		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
+	}
+
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedValue = typeExpressionCallback(value, scope, expectedType == TInt64 ? TInt64 : null, false);
 		var overloaded = callResolver.typeAbstractOperator("u-", [typedValue], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		var dynamicResult = dynamicOperation("neg", [typedValue], TFloat, span);
+		if (dynamicResult != null)
+			return dynamicResult;
 		if (!isNumeric(typedValue.type))
 			fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
 		return new TypedExpression(TNegate(typedValue), typedValue.type, span);
@@ -764,6 +787,8 @@ class ExpressionTyper {
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedTarget = typeExpressionCallback(target, scope, null, false);
+		if (sameType(typedTarget.type, TDynamic))
+			return dynamicPostfixIncrement(target, delta, span, scope);
 		if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
 			fail("E1018", "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
@@ -794,6 +819,23 @@ class ExpressionTyper {
 			default:
 		}
 		return new TypedExpression(operation, typedTarget.type, span);
+	}
+
+	/**
+	 * `target++` on a Dynamic value: the value is the old one, and the target becomes it plus (or minus) one:
+	 * `{ var old = target; target = old + 1; old }`.
+	 */
+	function dynamicPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
+		var old = "__haxeon_incremented", // Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			updated = Add(Variable(old, span), delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
+			store = switch target {
+				case Variable(name, _): Assignment(name, updated, span);
+				case Member(object, field, _): FieldAssignment(object, field, updated, span);
+				default:
+					fail("E1018", "Postfix increment target is not assignable", span);
+					Assignment("", updated, span);
+			};
+		return typeExpressionCallback(BlockExpression([VarDeclaration(old, null, target, span), store], Variable(old, span), span), scope, null, false);
 	}
 
 	public static function containsNullLiteral(expression:AstExpression):Bool
@@ -876,6 +918,9 @@ class ExpressionTyper {
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
+		var dynamicResult = dynamicOperation(add ? "add" : "sub", [left, right], add ? TDynamic : TFloat, span);
+		if (dynamicResult != null)
+			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
@@ -897,6 +942,9 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		var dynamicResult = dynamicOperation(operation == 2 ? "mul" : "div", [left, right], TFloat, span);
+		if (dynamicResult != null)
+			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span, operation != 2);
@@ -909,6 +957,9 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator("%", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		var dynamicResult = dynamicOperation("mod", [left, right], TFloat, span);
+		if (dynamicResult != null)
+			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Modulo requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
@@ -921,6 +972,10 @@ class ExpressionTyper {
 	public function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		var dynamicResult = dynamicOperation(["bitAnd", "bitXor", "bitOr", "shiftLeft", "shiftRight", "unsignedShiftRight"][operation], [left, right], TInt,
+			span);
+		if (dynamicResult != null)
+			return dynamicResult;
 		if (operation >= 3) {
 			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
 				fail("E1010", "Shift operators require an Int or Int64 value", span);
@@ -1021,6 +1076,17 @@ class ExpressionTyper {
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}
+		if (operation == 2) {
+			var widenedRight = widenToNullableNumeric(right, left.type),
+				widenedLeft = widenToNullableNumeric(left, right.type);
+			if (widenedRight != null)
+				return new TypedExpression(TEqual(left, widenedRight), TBool, span);
+			if (widenedLeft != null)
+				return new TypedExpression(TEqual(widenedLeft, right), TBool, span);
+		}
+		var dynamicOrder = dynamicOperation(operation == 0 ? "less" : "lessEqual", [left, right], TBool, span, true);
+		if (dynamicOrder != null)
+			return dynamicOrder;
 		if (!isNumeric(left.type) || !isNumeric(right.type)) {
 			fail("E1011", "Comparison requires matching numeric operands", span);
 		}
@@ -1032,6 +1098,22 @@ class ExpressionTyper {
 			case 1: TLessEqual(left, right);
 			default: TEqual(left, right);
 		}, TBool, span);
+	}
+
+	/**
+	 * `value` as a value of the nullable numeric type `other`, when it is a plain number that widens to the type
+	 * `other` wraps: `Null<Float> == 40` compares as a Float when the value is there, and is false when it is not.
+	 * Ordering comparisons of a nullable stay an error, since null has no place in the order.
+	 */
+	function widenToNullableNumeric(value:TypedExpression, other:CompilerType):Null<TypedExpression> {
+		var inner = switch other {
+			case TNullable(element): element;
+			default: return null;
+		};
+		// Only widenings that lose nothing: an Int into a Float or an Int64. Int64 and Float stay an explicit conversion.
+		if (!sameType(value.type, TInt) || !(sameType(inner, TFloat) || sameType(inner, TInt64)))
+			return null;
+		return coerce(coerce(value, inner, "numeric operand", "E1010"), other, "equality comparison", "E1011");
 	}
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {

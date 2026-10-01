@@ -8,6 +8,7 @@ import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrRetention;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -31,12 +32,48 @@ class WasmModuleSupport {
 		for (native in program.cNatives) {
 			if (!used.exists(native.name))
 				continue;
-			var type:WasmFunctionType = compiler.backend.wasm.linear.WasmLinearCAbi.of(native)
+			var type:WasmFunctionType = WasmCAbi.of(native)
 				.importType([for (argument in native.arguments) requireValueType(argument)], resultTypes(native.result));
 			var importModule = native.library == null || native.library == "" ? "env" : native.library,
 				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 			functions.set(native.name, module.addImport(importModule, importName, type));
 		}
+	}
+
+	/**
+	 * The HaxeonHost C function a runtime native calls on Wasm (see stdlib/haxeon/wasm/HaxeonHost.hxi), so a host
+	 * never reads how a backend lays out Haxe values: `trace` prints through HaxeonHost.print.
+	 */
+	public static function hostCNative(program:IrProgram, nativeName:String):Null<IrCNative> {
+		if (hostCNativeProgram != program) {
+			hostCNativeProgram = program;
+			hostCNatives = [];
+			var hosted:Map<String, IrCNative> = [];
+			for (native in program.cNatives)
+				if (native.library == "haxeon_host")
+					hosted.set(native.symbol, native);
+			for (native in program.natives) {
+				var host = switch native.symbol {
+					case "__sys_print": hosted.get("print");
+					case _: null;
+				};
+				if (host != null)
+					hostCNatives.set(native.name, host);
+			}
+		}
+		return hostCNatives.get(nativeName);
+	}
+
+	static var hostCNativeProgram:Null<IrProgram> = null;
+	static var hostCNatives:Map<String, IrCNative> = [];
+
+	/** The requested exports followed by every function declared `@:expose`, which the host calls by name. */
+	public static function exportedFunctions(program:IrProgram, requested:Array<String>):Array<String> {
+		var result = requested.copy();
+		for (fn in program.functions)
+			if (fn.retention == Expose && result.indexOf(fn.name) < 0)
+				result.push(fn.name);
+		return result;
 	}
 
 	public static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
@@ -67,6 +104,10 @@ class WasmModuleSupport {
 						switch located.value {
 							case CNativeCall(_, name, _):
 								result.set(name, true);
+							case Call(_, name, _):
+								var host = hostCNative(program, name);
+								if (host != null)
+									result.set(host.name, true);
 							default:
 						}
 		return result;
@@ -151,8 +192,16 @@ class WasmModuleSupport {
 										parameters: [for (argument in arguments) requireValueType(argument)],
 										results: resultTypes(resultType)
 									};
+									// Any closure may be an instance closure: a cast adapts closures as instance closures
+									// (WasmLinearClosureAdapters).
 									var key = Std.string(closure.type);
-									if (!result.exists(key)) result.set(key, {staticType: module.typeIndex(type), instanceType: null});
+									if (!result.exists(key)) result.set(key, {
+										staticType: module.typeIndex(type),
+										instanceType: module.typeIndex({
+											parameters: [compiler.backend.wasm.WasmTypes.WasmValueType.I32].concat(type.parameters),
+											results: type.results
+										})
+									});
 								default:
 							}
 						case InstanceClosure(output, name, _):
@@ -185,9 +234,18 @@ class WasmModuleSupport {
 		return result;
 	}
 
-	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
+	/** Puts every named function in the table, sorted by name, or by `group` and then name. */
+	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>, ?group:String->String):Map<String, Int> {
 		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
-		names.sort(Reflect.compare);
+		if (group == null)
+			names.sort(Reflect.compare);
+		else {
+			var groups = [for (name in names) name => group(name)];
+			names.sort((left, right) -> {
+				var order = Reflect.compare(groups.get(left), groups.get(right));
+				order != 0 ? order : Reflect.compare(left, right);
+			});
+		}
 		var slots:Map<String, Int> = [];
 		for (index in 0...names.length) {
 			slots.set(names[index], index);
@@ -294,8 +352,12 @@ class WasmModuleSupport {
 	 * apart.
 	 */
 	public static function reachableFunctionsWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
-		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy(),
-			reachable = reachableFunctions(program, entry, roots);
+		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy();
+		// `@:keep` and `@:expose` functions stay even when nothing calls them.
+		for (fn in program.functions)
+			if (fn.retention != Reachable && roots.indexOf(fn.name) < 0)
+				roots.push(fn.name);
+		var reachable = reachableFunctions(program, entry, roots);
 		while (true) {
 			var added = false, usedNatives = reachableNatives(program, reachable);
 			// Dynamic stringification calls each class's toString, as HashLink's `__string` proto does.
@@ -315,6 +377,7 @@ class WasmModuleSupport {
 							roots.push(dependency);
 							added = true;
 						}
+
 			if (!added)
 				return reachable;
 			reachable = reachableFunctions(program, entry, roots);
@@ -341,7 +404,27 @@ class WasmModuleSupport {
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
 		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
+	// Type tests emit a class's id once per class per test site, so named types remember theirs.
+	static final namedTypeIds:Map<String, Int> = [];
+
 	public static function typeId(type:IrType):Int {
+		var key = switch type {
+			case Obj(name): "O" + name;
+			case Enum(name): "E" + name;
+			case Virtual(name): "V" + name;
+			case _: null;
+		};
+		if (key == null)
+			return computeTypeId(type);
+		var id = namedTypeIds.get(key);
+		if (id == null) {
+			id = computeTypeId(type);
+			namedTypeIds.set(key, id);
+		}
+		return id;
+	}
+
+	static function computeTypeId(type:IrType):Int {
 		var identity = switch type {
 			case Iterator(_): Abstract("realtime_iterator");
 			default: type;

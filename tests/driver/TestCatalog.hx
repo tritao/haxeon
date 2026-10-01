@@ -72,7 +72,10 @@ class TestCatalog {
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
+		"ClosureNarrowingMain",
 		"AmbiguousEnumAbstractValueMain",
+		"MethodCallInvalidationMain",
+		"OptionalParameterSignatureMain",
 		"EnumAbstractValueShadowedByClassMain",
 		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",
@@ -100,6 +103,7 @@ class TestCatalog {
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",
 		"FieldInitializerEditMain",
+		"EqualityHelperEditMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];

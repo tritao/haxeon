@@ -71,9 +71,11 @@ class HlWriterCache {
 	/** Keeps snapshot validation marks only for the snapshots of the module just validated. */
 	public function retainSnapshots(active:Array<Bytes>):Void {
 		var kept = new ObjectMap<Bytes, Int>();
-		for (content in active)
-			if (validatedSnapshots.exists(content))
-				kept.set(content, validatedSnapshots.get(content));
+		for (content in active) {
+			var mark = validatedSnapshots.get(content);
+			if (mark != null)
+				kept.set(content, mark);
+		}
 		validatedSnapshots = kept;
 	}
 

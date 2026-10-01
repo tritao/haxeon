@@ -12,19 +12,12 @@ typedef WasmLinearContextState = {
 	final rootGlobals:Array<Int>;
 	final strings:Map<String, Int>;
 	final heapStart:Int;
-	final heapTop:Int;
 	final rootBase:Int;
 	final rootTop:Int;
 	final rootFrameTop:Int;
 	final rootLimit:Int;
-	final freeHead:Int;
 	final markStackTop:Int;
-	final gcBudget:Int;
-	final gcLiveBytes:Int;
-	final allocationCount:Int;
-	final allocationBytes:Int;
-	final largestAllocation:Int;
-	final collectionCount:Int;
+	final heapState:Int;
 }
 
 /** Shared state used while generating the Linear32 runtime functions. */
@@ -40,26 +33,20 @@ class WasmLinearContext {
 	public final strings:Map<String, Int>;
 
 	public final heapStart:Int;
-	public final heapTop:Int;
 	public final rootBase:Int;
 	public final rootTop:Int;
 	public final rootFrameTop:Int;
 	public final rootLimit:Int;
-	public final freeHead:Int;
 	public final markStackTop:Int;
-	public final gcBudget:Int;
 
-	/** Bytes in blocks the last collection kept, or -1 when collections have no budget. */
-	public final gcLiveBytes:Int;
-
-	public final allocationCount:Int;
-	public final allocationBytes:Int;
-	public final largestAllocation:Int;
-	public final collectionCount:Int;
+	/** Address of the C runtime's hx_heap (WasmLayout.HEAP_STATE_*). */
+	public final heapState:Int;
 
 	public var markFunction:Int = -1;
 	public var traceFunction:Int = -1;
 	public var collectorFunction:Int = -1;
+	public var heapAllocFunction:Int = -1;
+	public var heapSweepFunction:Int = -1;
 	public var allocatorFunction:Int = -1;
 	public var exceptionTag:Null<Int> = null;
 
@@ -73,18 +60,11 @@ class WasmLinearContext {
 		rootGlobals = state.rootGlobals;
 		strings = state.strings;
 		heapStart = state.heapStart;
-		heapTop = state.heapTop;
 		rootBase = state.rootBase;
 		rootTop = state.rootTop;
 		rootFrameTop = state.rootFrameTop;
 		rootLimit = state.rootLimit;
-		freeHead = state.freeHead;
 		markStackTop = state.markStackTop;
-		gcBudget = state.gcBudget;
-		gcLiveBytes = state.gcLiveBytes;
-		allocationCount = state.allocationCount;
-		allocationBytes = state.allocationBytes;
-		largestAllocation = state.largestAllocation;
-		collectionCount = state.collectionCount;
+		heapState = state.heapState;
 	}
 }

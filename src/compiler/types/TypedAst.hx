@@ -284,6 +284,12 @@ typedef TypedFunction = {
 	/** Declared `inline`. */
 	final ?isInline:Bool;
 
+	/** Declared `@:keep`: backends keep it even when nothing calls it. */
+	final ?isKept:Bool;
+
+	/** Declared `@:expose`: kept and exported to the host where the target has one. */
+	final ?isExposed:Bool;
+
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
 	final statements:Array<TypedStatement>;
