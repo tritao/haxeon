@@ -778,6 +778,13 @@ class CallResolver {
 		var owner = session.currentContext.lexicalOwner;
 		if (name.indexOf(".") >= 0 || owner == null)
 			return null;
+		// An abstract's own instance method called without a receiver is a call on `this`, whose type
+		// arguments are the method's: they are not inferred again from the call's arguments.
+		var abstractDeclaration = session.declarations.abstracts.get(owner);
+		if (abstractDeclaration != null && scope.resolve("this") != null)
+			for (candidate in abstractDeclaration.methods)
+				if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
+					return typeAbstractMethodCall(typeExpressionValue(Variable("this", span), scope), name, arguments, span, scope);
 		var methodInfo = findMethod(owner, name);
 		if (methodInfo == null)
 			return null;
