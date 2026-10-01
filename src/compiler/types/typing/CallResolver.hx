@@ -562,7 +562,8 @@ class CallResolver {
 							hasLambda = true;
 						default:
 					}
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var contextual = contextualGenericArguments || hasLambda || expectedType != null,
 				typingSubstitutions = copyMap(preset);
@@ -784,7 +785,8 @@ class CallResolver {
 						hasLambda = true;
 					default:
 				}
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var contextual = hasLambda || expectedType != null,
 				typingSubstitutions = copyMap(preset);
