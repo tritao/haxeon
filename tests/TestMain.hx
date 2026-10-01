@@ -527,6 +527,7 @@ class TestMain {
 			'Field "v" requires an object');
 		expectCompileError('class S { public static var cur:Null<P>; public static function clear():Void { cur = null; } } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.clear(); return S.cur.v; } return 0; } function main():Int return f();',
 			'Field "v" requires an object');
+		expectCompileError('function main():Int { var x:Int; var read = () -> x; x = 1; return read(); }', 'Local "x" may be used before assignment');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
