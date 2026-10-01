@@ -19,6 +19,21 @@ class OptionalParameterSignatureMain {
 			throw '$label: incremental build kept the old signature: $error';
 	}
 
+	/**
+	 * A caller that omits an optional argument is lowered with the default, so editing the default must regenerate it
+	 * even though the signature types and arity are unchanged and the caller still type-checks.
+	 */
+	static function checkDefault(label:String, gateBefore:String, gateAfter:String, caller:String):Void {
+		var compiler = new Compiler();
+		compiler.update("Gate.hx", gateBefore);
+		compiler.update("Main.hx", caller);
+		compiler.compile("Main", null, false);
+		compiler.update("Gate.hx", gateAfter);
+		var changed = compiler.compile("Main", null, false);
+		if (changed.regenerated.indexOf("Main.main") < 0)
+			throw '$label: the caller kept the old default: ${changed.regenerated}';
+	}
+
 	static function main():Void {
 		var instanceBefore = "class Gate { public function new() {} public function go(id:String, point:Array<Float>):Int return point == null ? 0 : 1; }";
 		var instanceAfter = "class Gate { public function new() {} public function go(id:String, ?point:Array<Float>):Int return point == null ? 0 : 1; }";
@@ -34,6 +49,12 @@ class OptionalParameterSignatureMain {
 		check("static, caller unchanged", staticBefore, staticAfter, staticCallBefore, staticCallBefore);
 		var defaultAfter = "class Gate { public function new() {} public function go(id:String, point:Array<Float> = null):Int return point == null ? 0 : 1; }";
 		check("instance, default value", instanceBefore, defaultAfter, instanceCallBefore, instanceCallAfter);
-		Sys.println("PASS: making a parameter optional is a signature change for incremental builds");
+		checkDefault("instance, default changes", "class Gate { public function new() {} public function scale(v:Float = 1.0):Float return v; }",
+			"class Gate { public function new() {} public function scale(v:Float = 3.0):Float return v; }",
+			"class Main { static function main():Int { var g = new Gate(); return g.scale() > 0.5 ? 0 : 1; } }");
+		checkDefault("static, default changes", "class Gate { public static function scale(v:Float = 1.0):Float return v; }",
+			"class Gate { public static function scale(v:Float = 3.0):Float return v; }",
+			"class Main { static function main():Int return Gate.scale() > 0.5 ? 0 : 1; }");
+		Sys.println("PASS: making a parameter optional, or changing its default, is a signature change for incremental builds");
 	}
 }
