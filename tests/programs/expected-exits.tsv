@@ -251,3 +251,4 @@ field-initializer-dynamic	42
 stdlib-runtime-helpers	42
 ereg-patterns	42
 virtual-call-without-implementors	42
+switch-branch-if-without-else	42

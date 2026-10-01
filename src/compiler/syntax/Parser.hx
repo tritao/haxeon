@@ -1940,9 +1940,11 @@ class Parser {
 		while (true) {
 			if (atSwitchBranchEnd() && statements.length == 0)
 				return EmptyExpression(start.merge(current().span));
-			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
-				var end = statementSpan(statements[statements.length - 1]);
-				return BlockExpression(statements, Unreachable(end), start.merge(end));
+			if (atSwitchBranchEnd() && statements.length > 0) {
+				// Statements that end the branch: it never completes if the last one leaves, else its value is Void.
+				var last = statements[statements.length - 1],
+					end = statementSpan(last);
+				return BlockExpression(statements, statementTerminates(last) ? Unreachable(end) : EmptyExpression(end), start.merge(end));
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
