@@ -84,6 +84,24 @@ HL_PRIM double HL_NAME(__math_sqrt)(double value) {
 	return sqrt(value);
 }
 
+// Used by the HL host only through the Wasm-shaped natives; Math.abs/min/max are inlined there but the declarations
+// are still imported, so the library must define them. NaN in either operand gives NaN and -0.0 is below 0.0.
+HL_PRIM double HL_NAME(__math_abs)(double value) {
+	return fabs(value);
+}
+
+HL_PRIM double HL_NAME(__math_min)(double left, double right) {
+	if (left != left || right != right)
+		return NAN;
+	return left < right ? left : (right < left ? right : (signbit(left) ? left : right));
+}
+
+HL_PRIM double HL_NAME(__math_max)(double left, double right) {
+	if (left != left || right != right)
+		return NAN;
+	return left > right ? left : (right > left ? right : (signbit(left) ? right : left));
+}
+
 HL_PRIM double HL_NAME(__math_atan2)(double y, double x) {
 	return atan2(y, x);
 }
