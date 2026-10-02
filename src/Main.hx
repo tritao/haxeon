@@ -2,6 +2,7 @@ import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
+import haxe.io.Path;
 import sys.io.File;
 
 /** Command-line compiler entry point for producing a complete HashLink module. */
@@ -13,6 +14,10 @@ class Main {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot("stdlib");
+		// Packages beside the source file (tests/programs/pkg/Module.hx) resolve as they would under a project root.
+		var sourceDirectory = Path.directory(sourcePath);
+		if (sourceDirectory != "")
+			compiler.addSourceRoot(sourceDirectory);
 		var module = ModulePath.fromFile(sourcePath);
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result = compiler.compile(module);

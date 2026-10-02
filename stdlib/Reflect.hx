@@ -140,10 +140,15 @@ function reflectHasField(object:Dynamic, field:String):Bool {
 	return false;
 }
 
-/** Compiled class and anonymous record layouts are fixed on Wasm, so only dynamic objects lose fields. */
+/**
+ * Dynamic objects lose the field. Compiled class and anonymous record layouts are fixed on Wasm, so their field is reset to
+ * what a deleted field reads as on HashLink (null, or zero for plain numbers) and stays a slot of the layout.
+ */
 function reflectDeleteField(object:Dynamic, field:String):Bool {
 	var dynamicObject = runtime.DynamicObject.of(object);
-	return dynamicObject != null && dynamicObject.remove(field);
+	if (dynamicObject != null)
+		return dynamicObject.remove(field);
+	return reflectHasField(object, field) && reflectObjectSetField(object, field, null);
 }
 
 function reflectFieldCount(object:Dynamic):Int {
