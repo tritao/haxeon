@@ -13,6 +13,13 @@ Results go to `out/cross-lang.json`. Languages: `haxeon` (`scripts/haxeon build`
 `haxe-hl` (pinned stock Haxe to HashLink), `csharp` (needs `dotnet` 9 SDK),
 `dart` (needs `dart`, AOT `compile exe`). Missing toolchains are skipped.
 
+Timed runs are pinned to one core with `taskset` (the first P-core on hybrid CPUs;
+override with `--cpu N` or disable with `--no-pin`), which also makes the
+multi-threaded C# variants single-threaded, matching the single-threaded Haxe.
+The load average is printed and saved in the JSON, with a warning on a busy
+machine: other builds running alongside skew timings, so compare runs only when
+the load is low.
+
 Method: each build is checked against the expected output, then one discarded
 warmup run and `--runs` timed runs. Times are whole-process wall clock (startup
 and JIT warmup included) with peak RSS; there is no in-process warmup yet.

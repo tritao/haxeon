@@ -11,6 +11,10 @@ hanabi1224/Programming-Language-Benchmarks (see NOTICE.md).
 
 Languages whose toolchain is missing are skipped, not failed.
 Times are whole-process wall clock (startup included) plus peak RSS.
+
+Timed runs are pinned to one core (a P-core on hybrid CPUs) so results do not depend on where the scheduler places
+the process; this also makes the multi-threaded C# variants single-threaded, matching the single-threaded Haxe.
+Use --no-pin to let the OS schedule freely. The load average is recorded before and after, and a busy machine warns.
 """
 import argparse, json, os, shutil, statistics, subprocess, sys, tempfile, time
 from pathlib import Path
@@ -22,6 +26,25 @@ HL = TOOLS / "hashlink" / "hl"
 HAXE = TOOLS / "haxe" / "haxe"
 DOTNET = TOOLS / "dotnet" / "dotnet"
 DART = TOOLS / "dart-sdk" / "bin" / "dart"
+
+
+def parse_cpu_list(text):
+    cpus = []
+    for part in text.strip().split(","):
+        if "-" in part:
+            low, high = part.split("-")
+            cpus.extend(range(int(low), int(high) + 1))
+        elif part:
+            cpus.append(int(part))
+    return cpus
+
+
+def default_cpu():
+    """The first performance core on a hybrid CPU, otherwise CPU 0."""
+    try:
+        return parse_cpu_list(Path("/sys/devices/cpu_core/cpus").read_text())[0]
+    except (OSError, ValueError, IndexError):
+        return 0
 
 
 def find(local, name):
@@ -109,10 +132,13 @@ def hl_env(*extra):
     return dict(os.environ, LD_LIBRARY_PATH=":".join(paths))
 
 
+PIN = []  # a taskset prefix for timed runs, set from --cpu / --no-pin
+
+
 def run_once(cmd, args, env):
     t0 = time.perf_counter()
     # /usr/bin/time reports the child's own peak RSS; wait4's ru_maxrss would inherit ours.
-    r = subprocess.run(["/usr/bin/time", "-f", "\n%M KB", *cmd, *args.split()], env=env,
+    r = subprocess.run(["/usr/bin/time", "-f", "\n%M KB", *PIN, *cmd, *args.split()], env=env,
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     dt = time.perf_counter() - t0
     err = r.stderr.decode(errors="replace").rstrip()
@@ -129,9 +155,19 @@ def main():
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--size", type=int, default=0, help="index into each problem's bench sizes")
     ap.add_argument("--test-only", action="store_true")
+    ap.add_argument("--cpu", type=int, default=None, help="core to pin timed runs to (default: first performance core)")
+    ap.add_argument("--no-pin", action="store_true", help="do not pin timed runs to a core")
     ap.add_argument("--json", default=str(ROOT / "out" / "cross-lang.json"))
     a = ap.parse_args()
 
+    if not a.no_pin and shutil.which("taskset"):
+        cpu = a.cpu if a.cpu is not None else default_cpu()
+        PIN.extend(["taskset", "-c", str(cpu)])
+    cores = os.cpu_count() or 1
+    load_before = os.getloadavg()[0]
+    if load_before > cores / 4:
+        print(f"warning: load average {load_before:.1f} on {cores} cpus; other work may skew timings", file=sys.stderr)
+    print(f"pinned to: {PIN[-1] if PIN else 'none'}   load: {load_before:.2f}")
     results, tmp = [], Path(tempfile.mkdtemp(prefix="xlang-"))
     print(f"{'problem':14}{'lang':9}{'status':9}{'median s':>10}{'p95 s':>9}{'rss MiB':>9}")
     for problem in a.problems.split(","):
@@ -166,8 +202,11 @@ def main():
             print(f"{problem:14}{lang:9}{row['status']:9}"
                   + (f"{row['median']:10.3f}{row['p95']:9.3f}{row['rss_mib']:9.0f}" if "median" in row else
                      f"  {row.get('detail', '')[:60].splitlines()[0] if row.get('detail') else ''}"))
+    load_after = os.getloadavg()[0]
+    print(f"load: {load_after:.2f} (before {load_before:.2f})")
     Path(a.json).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.json).write_text(json.dumps(dict(runs=a.runs, results=results), indent=2))
+    Path(a.json).write_text(json.dumps(dict(runs=a.runs, pinned_cpu=int(PIN[-1]) if PIN else None, load_before=load_before,
+                                            load_after=load_after, results=results), indent=2))
     shutil.rmtree(tmp, ignore_errors=True)
 
 
