@@ -993,6 +993,10 @@ class IrGenerator {
 			case TNullableWrap(value):
 				switch value.expression {
 					case TNullLiteral: builder.constNull(lowerType(expression.type));
+					// A narrowed read (`if (x != null) y = x`) is a cast of the nullable down to its value, and the
+					// assignment wraps it back up: reuse the existing box instead of unboxing and allocating a new one.
+					case TCast(inner) if (TypeRelations.equals(inner.type, expression.type) && lowerType(expression.type) == Dyn):
+						lowerExpression(inner, builder, localTypes);
 					default:
 						var lowered = lowerExpression(value, builder, localTypes),
 							target = lowerType(expression.type);
