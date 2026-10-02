@@ -239,15 +239,31 @@ HL_PRIM int HL_NAME(__string_char_code_at)( vstring *value, int index ) {
 	return value->bytes[index];
 }
 
+/* One-character strings for the code units below 256 are created once and shared. Strings are never modified in
+   place, so sharing is invisible, and `s.charAt(i)` in a loop stops allocating a String and its buffer per call. */
+#define REALTIME_SINGLE_CHAR_CACHE 256
+static vstring *realtime_single_char_cache[REALTIME_SINGLE_CHAR_CACHE];
+
+static vstring *realtime_single_char_string( uchar unit ) {
+	if( unit >= REALTIME_SINGLE_CHAR_CACHE )
+		return realtime_string_copy(&unit,1);
+	vstring *cached = realtime_single_char_cache[unit];
+	if( cached == NULL ) {
+		cached = realtime_string_copy(&unit,1);
+		hl_add_root(&realtime_single_char_cache[unit]);
+		realtime_single_char_cache[unit] = cached;
+	}
+	return cached;
+}
+
 HL_PRIM vstring *HL_NAME(__string_char_at)( vstring *value, int index ) {
 	bool present = index >= 0 && index < realtime_string_length(value);
-	return realtime_string_copy(present ? value->bytes + index : NULL, present ? 1 : 0);
+	return present ? realtime_single_char_string(value->bytes[index]) : realtime_string_copy(NULL,0);
 }
 
 HL_PRIM vstring *HL_NAME(__string_from_char_code)( int code ) {
 	if( (uchar)code == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	uchar unit = (uchar)code;
-	return realtime_string_copy(&unit,1);
+	return realtime_single_char_string((uchar)code);
 }
 
 HL_PRIM vstring *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {
