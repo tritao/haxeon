@@ -283,7 +283,7 @@ class HlValidator {
 					requireRegister(fn, pointer);
 					requireRegister(fn, offset);
 					requireRegister(fn, source);
-				case ArraySize(destination, array):
+				case ArraySize(destination, array), RefData(destination, array):
 					requireRegister(fn, destination);
 					requireRegister(fn, array);
 				case MakeEnum(destination, constructor, arguments):

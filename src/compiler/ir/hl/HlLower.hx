@@ -216,6 +216,10 @@ class HlLower {
 								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
 							case IteratorHasNext(_, _):
 								ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
+							case ArrayGet(_, array, _):
+								ensureRawArrayNative(runtimeNatives, array.type, "check");
+							case ArraySet(array, _, _):
+								ensureRawArrayNative(runtimeNatives, array.type, "ensure");
 							case IteratorNext(output, _):
 								var nextNative = iteratorNextNative(output.type);
 								ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")], nextNative.result);
@@ -495,6 +499,23 @@ class HlLower {
 			default: true;
 		};
 
+	/** Byte shift of one element of an Int or Float array, whose storage the compiler lays out itself; null for any other array. */
+	static function rawArrayShift(array:IrType):Null<Int>
+		return switch array {
+			case Array(I32): 2;
+			case Array(F64): 3;
+			default: null;
+		};
+
+	static function rawArrayNativeName(array:IrType, operation:String):String
+		return '__hl_array_${operation}_${rawArrayShift(array) == 2 ? "i32" : "f64"}';
+
+	/** The out-of-range paths of an inlined array access are HashLink's own `array_check` and `array_ensure`. */
+	static function ensureRawArrayNative(natives:Array<IrNative>, array:IrType, operation:String):Void {
+		if (rawArrayShift(array) != null)
+			ensureNative(natives, rawArrayNativeName(array, operation), [array, IrType.I32], IrType.Void, "std", 'array_$operation');
+	}
+
 	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
 	static function iteratorNextNative(element:IrType):{name:String, result:IrType}
 		return switch element {
@@ -554,6 +575,27 @@ class HlLower {
 					case _:
 				}
 			}
+		var uses:Map<Int, Int> = [];
+		function countUse(value:IrValue):Void
+			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+		for (block in fn.blocks) {
+			for (instruction in block.instructions) {
+				for (input in compiler.ir.IrOperands.inputs(instruction.value))
+					countUse(input);
+				switch instruction.value {
+					case Phi(_, inputs):
+						for (input in inputs)
+							countUse(input.value);
+					default:
+				}
+			}
+			if (block.terminator != null)
+				switch block.terminator.value {
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+						countUse(value);
+					case Jump(_):
+				}
+		}
 		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
@@ -604,8 +646,25 @@ class HlLower {
 				continue;
 			instructions.push(HlInstruction.Label('block_${block.id}'));
 			debugLocations.push(debugLocation(blockProvenance(block)));
+			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
+			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
+			var fusedCondition:Null<Int> = null,
+				fusedComparison:Null<HlInstruction> = null;
+			if (block.terminator != null && block.instructions.length > 0)
+				switch block.terminator.value {
+					case Branch(condition, _, _) if (uses.get(condition.id) == 1 && !bindingsByValue.exists(condition.id)):
+						switch block.instructions[block.instructions.length - 1].value {
+							case Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _) if (output.id == condition.id):
+								fusedCondition = condition.id;
+							default:
+						}
+					default:
+				}
+			provenInRange.clear();
 			for (instruction in block.instructions) {
 				var instructionStart = instructions.length;
+				if (!keepsArrayBounds(instruction.value))
+					provenInRange.clear();
 				var output = instructionOutput(instruction.value);
 				switch instruction.value {
 					case Phi(_, _):
@@ -716,6 +775,13 @@ class HlLower {
 					case UnsignedShiftRight(output, left, right):
 						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
+					case Less(output, left, right) if (output.id == fusedCondition):
+						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers), requireRegister(right, registers), null);
+					case LessEqual(output, left, right) if (output.id == fusedCondition):
+						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers), requireRegister(right, registers), null);
+					case Equal(output, left, right) if (output.id == fusedCondition):
+						fusedComparison = comparisonJump(2, nullValues.exists(left.id), nullValues.exists(right.id), requireRegister(left, registers),
+							requireRegister(right, registers), null);
 					case Less(output, left, right):
 						lowerComparison(output, left, right, 0, false, false, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):
@@ -840,6 +906,14 @@ class HlLower {
 					case FieldSet(object, fieldName, value):
 						instructions.push(HlInstruction.FieldSet(requireRegister(object, registers), requireObjectField(object, fieldName),
 							requireRegister(value, registers)));
+					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
+						var destination = defineRegister(output, registers, registerTypes);
+						lowerRawArrayAccess(array, index, "check", instructions, registers, registerTypes,
+							(data, offset) -> HlInstruction.GetMem(destination, data, offset));
+					case ArraySet(array, index, value) if (rawArrayShift(array.type) != null):
+						var source = requireRegister(value, registers);
+						lowerRawArrayAccess(array, index, "ensure", instructions, registers, registerTypes,
+							(data, offset) -> HlInstruction.SetMem(data, offset, source));
 					case ArrayGet(output, array, index):
 						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
 							requireRegister(index, registers)));
@@ -905,7 +979,10 @@ class HlLower {
 				case Branch(condition, yes, no):
 					if (edges.exists(edgeKey(block.id, yes)) || edges.exists(edgeKey(block.id, no)))
 						throw "Phi elimination requires split critical edges";
-					instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
+					if (fusedComparison != null)
+						instructions.push(withJumpTarget(fusedComparison, 'block_$yes'));
+					else
+						instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
 					instructions.push(HlInstruction.Jump('block_$no'));
 			}
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
@@ -1086,6 +1163,27 @@ class HlLower {
 		return writes;
 	}
 
+	/** The jump taken when a comparison holds; `target` may be filled in later with `withJumpTarget`. */
+	static function comparisonJump(operation:Int, leftNull:Bool, rightNull:Bool, leftReg:Int, rightReg:Int, target:Null<String>):HlInstruction {
+		var label = target == null ? "" : target;
+		if (operation == 2 && (leftNull || rightNull))
+			return HlInstruction.JumpNull(leftNull ? rightReg : leftReg, label);
+		return switch operation {
+			case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, label);
+			case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, label);
+			default: HlInstruction.JumpEqual(leftReg, rightReg, label);
+		};
+	}
+
+	static function withJumpTarget(jump:HlInstruction, target:String):HlInstruction
+		return switch jump {
+			case JumpSignedLess(left, right, _): HlInstruction.JumpSignedLess(left, right, target);
+			case JumpSignedLessOrEqual(left, right, _): HlInstruction.JumpSignedLessOrEqual(left, right, target);
+			case JumpNull(value, _): HlInstruction.JumpNull(value, target);
+			case JumpEqual(left, right, _): HlInstruction.JumpEqual(left, right, target);
+			default: throw "Not a comparison jump";
+		};
+
 	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool, registers:Map<Int, Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
@@ -1093,14 +1191,7 @@ class HlLower {
 			rightReg = requireRegister(right, registers);
 		var trueLabel = '__cmp_true_${output.id}',
 			endLabel = '__cmp_end_${output.id}';
-		if (operation == 2 && (leftNull || rightNull))
-			instructions.push(HlInstruction.JumpNull(leftNull ? rightReg : leftReg, trueLabel));
-		else
-			instructions.push(switch operation {
-				case 0: HlInstruction.JumpSignedLess(leftReg, rightReg, trueLabel);
-				case 1: HlInstruction.JumpSignedLessOrEqual(leftReg, rightReg, trueLabel);
-				default: HlInstruction.JumpEqual(leftReg, rightReg, trueLabel);
-			});
+		instructions.push(comparisonJump(operation, leftNull, rightNull, leftReg, rightReg, trueLabel));
 		instructions.push(HlInstruction.LoadBool(destination, false));
 		instructions.push(HlInstruction.Jump(endLabel));
 		instructions.push(HlInstruction.Label(trueLabel));
@@ -1133,6 +1224,64 @@ class HlLower {
 		instructions.push(HlInstruction.New(destination, internType(IrType.Bytes), 0));
 		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_BYTES_FIELD, data));
 		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_LENGTH_FIELD, length));
+	}
+
+	var rawArrayAccesses = 0;
+
+	/** Array and index pairs, as `arrayId:indexId`, already known to be in range at this point of the block being lowered. */
+	final provenInRange:Map<String, Bool> = [];
+
+	/**
+	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
+	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
+	 */
+	static function keepsArrayBounds(instruction:IrInstruction):Bool
+		return switch instruction {
+			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), ToDyn(_, _),
+				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
+				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _),
+				FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
+			default: false;
+		};
+
+	/**
+	 * An Int or Float array element access with the bounds test in the bytecode, as Haxe's own Array does. The
+	 * VM's `OGetArray`/`OSetArray` call into the runtime on every access; here an index in range (one signed
+	 * test against zero and one against the size) goes straight to the element, and only an out-of-range index
+	 * calls `operation` (`array_check` raises, `array_ensure` grows the array or raises for a negative index).
+	 * A second access to the same array and index in the same block, such as the write of `a[i] += x`, skips the test.
+	 */
+	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
+		var elementShift = rawArrayShift(array.type);
+		if (elementShift == null)
+			throw "Inline array access requires an Int or Float array";
+		var arrayRegister = requireRegister(array, registers),
+			indexRegister = requireRegister(index, registers),
+			key = '${array.id}:${index.id}',
+			data = temporaryRegister(IrType.Bytes, registerTypes),
+			shift = temporaryRegister(IrType.I32, registerTypes),
+			offset = temporaryRegister(IrType.I32, registerTypes);
+		if (!provenInRange.exists(key)) {
+			var id = rawArrayAccesses++,
+				outOfRange = '__array_out_of_range_$id',
+				inRange = '__array_in_range_$id',
+				zero = temporaryRegister(IrType.I32, registerTypes),
+				size = temporaryRegister(IrType.I32, registerTypes),
+				unused = temporaryRegister(IrType.Void, registerTypes);
+			instructions.push(HlInstruction.LoadInt(zero, internInt(0)));
+			instructions.push(HlInstruction.JumpSignedLess(indexRegister, zero, outOfRange));
+			instructions.push(HlInstruction.ArraySize(size, arrayRegister));
+			instructions.push(HlInstruction.JumpSignedLess(indexRegister, size, inRange));
+			instructions.push(HlInstruction.Label(outOfRange));
+			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(array.type, operation)), arrayRegister, indexRegister));
+			instructions.push(HlInstruction.Label(inRange));
+			provenInRange.set(key, true);
+		}
+		instructions.push(HlInstruction.RefData(data, arrayRegister));
+		instructions.push(HlInstruction.LoadInt(shift, internInt(elementShift)));
+		instructions.push(HlInstruction.ShiftLeft(offset, indexRegister, shift));
+		instructions.push(access(data, offset));
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {

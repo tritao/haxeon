@@ -41,6 +41,9 @@ private typedef LoopContext = {
 	final continueBlock:CfgBlock;
 	final breakFlag:String;
 	final trapDepth:Int;
+
+	/** Set when a `break` of this loop is lowered; a loop that never breaks needs no break flag. */
+	var breakUsed:Bool;
 }
 
 /** Resolved key and value types of a map operation being lowered. */
@@ -388,6 +391,7 @@ class IrGenerator {
 						throw "break outside loop";
 					var loop = loops[loops.length - 1];
 					builder.closeTrapsToDepth(loop.trapDepth);
+					loop.breakUsed = true;
 					builder.store(loop.breakFlag, builder.constBool(true));
 					builder.jump(loop.continueBlock);
 				case TContinue(_):
@@ -449,21 +453,22 @@ class IrGenerator {
 						bodyBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.jump(conditionBlock);
-					builder.select(conditionBlock);
-					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
 					builder.select(checkBlock);
 					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
 					builder.select(bodyBlock);
-					loops.push({
+					var loop:LoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
-						trapDepth: builder.trapDepth()
-					});
+						trapDepth: builder.trapDepth(),
+						breakUsed: false
+					};
+					loops.push(loop);
 					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
+					lowerLoopHeader(builder, conditionBlock, checkBlock, afterBlock, loop);
 					builder.select(afterBlock);
 					if (infinite)
 						builder.markUnreachable();
@@ -479,7 +484,8 @@ class IrGenerator {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
-						trapDepth: builder.trapDepth()
+						trapDepth: builder.trapDepth(),
+						breakUsed: true
 					});
 					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
@@ -494,7 +500,8 @@ class IrGenerator {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
-						trapDepth: builder.trapDepth()
+						trapDepth: builder.trapDepth(),
+						breakUsed: true
 					});
 					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
@@ -570,8 +577,6 @@ class IrGenerator {
 						bodyBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.jump(conditionBlock);
-					builder.select(conditionBlock);
-					builder.branch(builder.load(breakFlag, Bool), afterBlock, checkBlock);
 					builder.select(checkBlock);
 					if (counted) {
 						var indexValue = builder.add(builder.load(indexName, I32), builder.constInt(1));
@@ -600,17 +605,20 @@ class IrGenerator {
 						initializeLocal(valueName,
 							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue), builder,
 							localTypes);
-					loops.push({
+					var loop:LoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
-						trapDepth: builder.trapDepth()
-					});
+						trapDepth: builder.trapDepth(),
+						breakUsed: false
+					};
+					loops.push(loop);
 					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated()) {
 						builder.jump(conditionBlock);
 					}
+					lowerLoopHeader(builder, conditionBlock, checkBlock, afterBlock, loop);
 					builder.select(afterBlock);
 				case TSwitch(expression, cases, defaultBranch, hasDefault, span):
 					var switchName = '$' + 'switch:${span.start}',
@@ -2227,6 +2235,18 @@ class IrGenerator {
 		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && elementType != Dyn)
 			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
+	}
+
+	/**
+	 * Closes a loop's header once its body has been lowered, so a loop that never breaks tests nothing: its
+	 * `break` flag is only read when some `break` stored to it.
+	 */
+	static function lowerLoopHeader(builder:CfgBuilder, header:CfgBlock, check:CfgBlock, after:CfgBlock, loop:LoopContext):Void {
+		builder.select(header);
+		if (loop.breakUsed)
+			builder.branch(builder.load(loop.breakFlag, Bool), after, check);
+		else
+			builder.jump(check);
 	}
 
 	static function arrayElementType(array:CfgValue):Null<IrType>

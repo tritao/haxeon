@@ -79,6 +79,7 @@ class PatchOpcodeTests {
 			{instruction: ArraySet(0, 1, 2), opcode: 81, operands: [0, 1, 2]},
 			{instruction: New(0, 128, 256), opcode: 82, operands: [0]},
 			{instruction: ArraySize(0, 1), opcode: 83, operands: [0, 1]},
+			{instruction: RefData(0, 1), opcode: 96, operands: [0, 1]},
 			{instruction: LoadType(0, 128), opcode: 84, operands: [0, 128]},
 			{instruction: MakeEnum(0, 1, [2, 3]), opcode: 90, operands: [0, 1, 2, 2, 3]},
 			{instruction: EnumIndex(0, 1), opcode: 92, operands: [0, 1]},

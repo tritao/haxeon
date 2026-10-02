@@ -89,6 +89,10 @@ enum HlInstruction {
 	SetI16(pointer:Int, offset:Int, source:Int);
 	SetMem(pointer:Int, offset:Int, source:Int);
 	ArraySize(destination:Int, array:Int);
+
+	/** The address of an array's first element, for raw GetMem/SetMem access once its index is known to be in range. */
+	RefData(destination:Int, array:Int);
+
 	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
 	EnumIndex(destination:Int, value:Int);
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);

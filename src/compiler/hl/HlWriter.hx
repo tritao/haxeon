@@ -651,6 +651,8 @@ class HlWriter {
 					{opcode: HlOpcode.SetMem, operands: [pointer, offset, source]};
 				case ArraySize(destination, array):
 					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
+				case RefData(destination, array):
+					{opcode: HlOpcode.RefData, operands: [destination, array]};
 				case MakeEnum(destination, constructor, arguments):
 					{opcode: HlOpcode.MakeEnum, operands: [destination, constructor, arguments.length].concat(arguments)};
 				case EnumIndex(destination, value):
