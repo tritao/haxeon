@@ -379,7 +379,10 @@ class WasmGcModuleBuilder {
 			}
 		for (native in program.natives)
 			if (used.exists(native.name)
-				&& (native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
+				&& (native.name == "__string_compare_full"
+					|| native.name == "__math_ceil"
+					|| native.name == "__math_floor"
+					|| native.name == "__math_sqrt")) {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
 					nextLocal = native.arguments.length,
@@ -407,8 +410,7 @@ class WasmGcModuleBuilder {
 
 	static function isGcRuntimeMathImport(symbol:Null<String>):Bool {
 		return switch symbol {
-			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
-				"__math_log": true;
+			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_round", "__math_exp", "__math_log": true;
 			default: false;
 		};
 	}

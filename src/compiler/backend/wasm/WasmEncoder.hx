@@ -575,6 +575,8 @@ class WasmEncoder {
 					output.writeByte(0x9b);
 				case F64Floor:
 					output.writeByte(0x9c);
+				case F64Sqrt:
+					output.writeByte(0x9f);
 				case F64Eq:
 					output.writeByte(0x61);
 				case F64Lt:

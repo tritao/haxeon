@@ -21,9 +21,9 @@ class WasmLinearRuntime {
 		for (native in program.natives)
 			if (used.exists(native.name))
 				switch native.symbol {
-					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod",
-						"__math_exp", "__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time",
-						"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_exp",
+						"__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
+						"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 						runtimeImport(module, native);
 					default:
 				}
@@ -241,10 +241,11 @@ class WasmLinearRuntime {
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
-			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round",
-				"__math_exp", "__math_log", "__math_ceil", "__math_floor", "__sys_args":
+			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
+				"__math_log", "__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
+			case "__math_sqrt": addMathSqrt(module, native.name);
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
@@ -4085,6 +4086,10 @@ class WasmLinearRuntime {
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}
+
+	/** `Math.sqrt` is the f64.sqrt instruction, not a call out to the host. */
+	static function addMathSqrt(module:WasmModule, name:String):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [F64]}, [], [LocalGet(0), F64Sqrt, Return]));
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],

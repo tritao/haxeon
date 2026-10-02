@@ -1183,6 +1183,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Math.ceil signature";
 			return [LocalGet(argumentLocals[0]), F64Ceil, I32TruncF64S, LocalSet(outputLocal)];
 		}
+		if (name == "__math_sqrt") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Math.sqrt signature";
+			return [LocalGet(argumentLocals[0]), F64Sqrt, LocalSet(outputLocal)];
+		}
 		if (name == "__math_floor") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Math.floor signature";
