@@ -39,7 +39,7 @@ typedef struct realtime_string_buffer {
 static void realtime_string_buffer_reserve( realtime_string_buffer *buffer, int needed ) {
 	if( needed <= buffer->capacity )
 		return;
-	int capacity = buffer->capacity < 16 ? 16 : buffer->capacity;
+	int capacity = buffer->capacity < 64 ? 64 : buffer->capacity;
 	while( capacity < needed ) {
 		if( capacity > 0x3FFFFFFF )
 			hl_error("StringBuf is too large");
@@ -65,7 +65,10 @@ HL_PRIM void HL_NAME(__string_buffer_add)( realtime_string_buffer *buffer, vstri
 	if( length > 0x7FFFFFFF - buffer->length )
 		hl_error("StringBuf is too large");
 	realtime_string_buffer_reserve(buffer, buffer->length + length);
-	memcpy(buffer->data + buffer->length, value->bytes, (size_t)length * sizeof(uchar));
+	if( length == 1 )
+		buffer->data[buffer->length] = value->bytes[0];
+	else
+		memcpy(buffer->data + buffer->length, value->bytes, (size_t)length * sizeof(uchar));
 	buffer->length += length;
 }
 

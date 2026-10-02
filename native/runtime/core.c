@@ -120,8 +120,12 @@ HL_PRIM double HL_NAME(__math_fmod)(double value, double modulus) {
 	if (value >= 1.0 && value < 9007199254740992.0 && modulus >= 1.0 && modulus < 9007199254740992.0) {
 		int64_t a = (int64_t)value;
 		int64_t b = (int64_t)modulus;
-		if ((double)a == value && (double)b == modulus)
+		if ((double)a == value && (double)b == modulus) {
+			// 32-bit division is several times cheaper than 64-bit on most cores.
+			if (((a | b) >> 32) == 0)
+				return (double)((uint32_t)a % (uint32_t)b);
 			return (double)(a % b);
+		}
 	}
 	return fmod(value, modulus);
 }
