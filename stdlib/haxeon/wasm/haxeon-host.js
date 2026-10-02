@@ -7,6 +7,19 @@
 "use strict";
 
 var HaxeonWasmHost = (() => {
+  /**
+   * Thrown from the guest's Sys.exit, carrying its status as `code`. It unwinds the guest, which is how a Wasm program
+   * stops running: instantiate's caller catches it where it would otherwise see main return. Haxe's own try/catch in the
+   * guest never sees it, because the guest catches only its own exception tag.
+   */
+  class HaxeonExit extends Error {
+    constructor(code) {
+      super(`Sys.exit(${code})`);
+      this.name = "HaxeonExit";
+      this.code = code;
+    }
+  }
+
   const CONTRACT_FIELDS = ["version", "pageSize", "hostBase", "hostLimit", "guestBase", "guestLimit", "memorySize"];
 
   /** The guest's linear-memory contract (the haxeon.memory.contract custom section), or null without one. */
@@ -80,7 +93,7 @@ var HaxeonWasmHost = (() => {
         sys_getpid: () => 1,
         sys_sleep: () => {},
         sys_get_char: () => -1,
-        sys_exit: () => {}
+        sys_exit: code => { throw new HaxeonExit(code); }
       },
       haxeon_runtime: {
         __math_ceil: Math.ceil, __math_floor: Math.floor, __math_round: Math.round,
@@ -125,5 +138,5 @@ var HaxeonWasmHost = (() => {
     return {instance, exports, unavailable: [...unavailable].sort()};
   }
 
-  return {instantiate, memoryContract};
+  return {instantiate, memoryContract, HaxeonExit};
 })();
