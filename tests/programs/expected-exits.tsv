@@ -296,3 +296,4 @@ static-field-arithmetic	42
 comprehension-null-narrowing	42
 generic-property-setter	42
 thread-stand-ins	42
+captured-receiver-reassigned	42
