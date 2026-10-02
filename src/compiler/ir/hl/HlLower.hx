@@ -510,10 +510,15 @@ class HlLower {
 	static function rawArrayNativeName(array:IrType, operation:String):String
 		return '__hl_array_${operation}_${rawArrayShift(array) == 2 ? "i32" : "f64"}';
 
-	/** The out-of-range paths of an inlined array access are HashLink's own `array_check` and `array_ensure`. */
+	/**
+	 * The out-of-range paths of an inlined array access: `array_out_of_bounds` for a read and `array_ensure` for a write.
+	 * The first only raises, which lets the JIT treat the call as never returning, so values stay in registers across
+	 * the bounds test instead of being spilled for the whole function.
+	 */
 	static function ensureRawArrayNative(natives:Array<IrNative>, array:IrType, operation:String):Void {
 		if (rawArrayShift(array) != null)
-			ensureNative(natives, rawArrayNativeName(array, operation), [array, IrType.I32], IrType.Void, "std", 'array_$operation');
+			ensureNative(natives, rawArrayNativeName(array, operation), [array, IrType.I32], IrType.Void, "std",
+				operation == "check" ? "array_out_of_bounds" : 'array_$operation');
 	}
 
 	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
