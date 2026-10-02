@@ -138,6 +138,10 @@ class TestMain {
 		if (nullCoalesceTokens[1].kind != compiler.syntax.Token.TokenKind.NullCoalesce)
 			throw "Null-coalescing operator was not tokenized";
 		Frontend.compile('function main():Int return "=".code;');
+		Frontend.compile('function ordered(a:String, b:String):Bool return a < b || a <= b || a > b || a >= b; function main():Int return ordered("a", "z") ? 42 : 0;');
+		expectCompileError('function main():Int return "a" < 1 ? 42 : 0;', "Comparison requires matching numeric operands");
+		expectCompileError('function main():Int return true >= false ? 42 : 0;', "Comparison requires matching numeric operands");
+		Sys.println("PASS: String ordering accepts matching strings without weakening mixed or boolean ordering");
 		Frontend.compile('function main():Int { return 0x2A; }');
 		var separatedInteger = new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
 		if (separatedInteger != 5351)

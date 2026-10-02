@@ -962,6 +962,15 @@ class ExpressionTyper {
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
+			// Compare content in source operand order; reversing the numeric result
+			// must not reverse evaluation of side-effecting string expressions.
+			var order = new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
+			var zero = new TypedExpression(TIntLiteral(0), TInt, span);
+			var first = reversed ? zero : order,
+				second = reversed ? order : zero;
+			return new TypedExpression(operation == 0 ? TLess(first, second) : TLessEqual(first, second), TBool, span);
+		}
 		if (reversed) {
 			var original = left;
 			left = right;
