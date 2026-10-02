@@ -80,7 +80,7 @@ class BodyTyper {
 			function(name, substitutions, owner) return this.enterBody(name, substitutions, owner), function(body) this.leaveBody(body),
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
-			function(statements) return ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
+			function(statements) return ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
 		var switchRules = {
 			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
 			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
@@ -290,7 +290,7 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !ControlFlow.alwaysReturns(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if (result != TVoid && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = null,
 			typeParameters = fn.typeParameters;
@@ -1258,7 +1258,7 @@ class BodyTyper {
 				var ownStatic = findStaticFieldNullable(owner, name);
 				if (ownStatic != null) {
 					var inlineValue = inlineStaticFieldExpression(ownStatic.owner, name, span);
-					return inlineValue == null ? new TypedExpression(TStaticField(ownStatic.owner, name), ownStatic.type, span) : inlineValue;
+					return inlineValue == null ? staticFieldValue(ownStatic.owner, name, ownStatic.type, span, scope) : inlineValue;
 				}
 				var thisType = scope.resolve("this");
 				if (thisType != null && findFieldType(thisType, name) != null)
@@ -1301,7 +1301,7 @@ class BodyTyper {
 					staticField = findStaticFieldNullable(owner, name);
 				if (staticField != null) {
 					var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
-					return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+					return inlineValue == null ? staticFieldValue(staticField.owner, name, staticField.type, span, scope) : inlineValue;
 				}
 				var dot = name.indexOf(".");
 				if (dot <= 0) {
@@ -1406,7 +1406,7 @@ class BodyTyper {
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
-								classObject = typedMember(classObject, parts[index], span);
+								classObject = typedMemberWithFlow(classObject, parts[index], span, scope);
 							return classObject;
 						}
 						classEnd--;
@@ -1454,6 +1454,14 @@ class BodyTyper {
 		substitutions:Map<String, CompilerType>
 	} {
 		return callResolver.typeGenericCallArguments(fn, arguments, scope, span);
+	}
+
+	/** A read of a static field, with any branch-local null refinement applied. */
+	function staticFieldValue(owner:String, name:String, type:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
+		var field = new TypedExpression(TStaticField(owner, name), type, span),
+			path = FlowAnalysis.accessPath(field),
+			refined = path == null ? null : scope.resolveExpression(path);
+		return refined == null || sameType(type, refined) ? field : new TypedExpression(TCast(field), refined, span);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -1504,6 +1512,11 @@ class BodyTyper {
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		if (sameType(typedObject.type, TDynamic)) {
+			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			return new TypedExpression(TCall("Reflect.field", [typedObject, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span);
+		}
 		switch typedObject.type {
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);
@@ -1659,6 +1672,8 @@ class BodyTyper {
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
 		var receiver = unwrapNullable(typeExpression(object, scope));
+		if (callResolver.isEnumMatch(receiver, name, arguments))
+			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
 	}
 
@@ -1913,7 +1928,7 @@ class BodyTyper {
 			staticField = findStaticFieldNullable(owner, name);
 		if (staticField != null) {
 			var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
-			return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name), staticField.type, span) : inlineValue;
+			return inlineValue == null ? staticFieldValue(staticField.owner, name, staticField.type, span, scope) : inlineValue;
 		}
 		if (session.classDecls.exists(name))
 			return new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);

@@ -1,41 +1,52 @@
+/* Copyright (C)2005-2019 Haxe Foundation. Licensed under the MIT License; see ../../../LICENSE. */
+
 package haxe.io;
 
-/** Byte accumulation over the shared byte-output ABI; returned bytes are independent snapshots. */
+/** An append-only buffer of bytes: build a `Bytes` from pieces, then take it with `getBytes`. */
 class BytesBuffer {
-	final output:BytesOutput;
+	var output:BytesOutput;
+	var size:Int = 0;
 
-	public var length(default, null):Int = 0;
+	/** The number of bytes added so far. */
+	public var length(get, never):Int;
 
 	public function new() {
 		output = new BytesOutput();
+		// Haxe's BytesBuffer writes numbers little-endian.
 		output.setBigEndian(false);
 	}
 
-	public function addByte(value:Int):Void {
-		output.writeByte(value);
-		length++;
+	function get_length():Int
+		return size;
+
+	public function addByte(byte:Int):Void {
+		output.writeByte(byte);
+		size++;
 	}
 
-	public function add(bytes:Bytes):Void {
-		output.write(bytes);
-		length += bytes.length;
+	public function add(src:Bytes):Void {
+		output.write(src);
+		size += src.length;
 	}
 
-	public function addBytes(bytes:Bytes, position:Int, count:Int):Void {
-		if (position < 0 || count < 0 || position > bytes.length - count)
-			throw "BytesBuffer.addBytes range is out of bounds";
-		output.writeBytes(bytes, position, count);
-		length += count;
-	}
+	public function addString(value:String, ?encoding:Encoding):Void
+		add(Bytes.ofString(value));
 
 	public function addInt32(value:Int):Void {
 		output.writeInt32(value);
-		length += 4;
+		size += 4;
 	}
 
 	public function addDouble(value:Float):Void {
 		output.writeDouble(value);
-		length += 8;
+		size += 8;
+	}
+
+	public function addBytes(src:Bytes, pos:Int, len:Int):Void {
+		if (pos < 0 || len < 0 || pos + len > src.length)
+			throw "Out of bounds";
+		output.writeBytes(src, pos, len);
+		size += len;
 	}
 
 	public function getBytes():Bytes

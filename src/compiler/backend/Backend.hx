@@ -22,6 +22,9 @@ typedef BackendOptions = {
 	final ?wasmMemoryStats:Bool;
 	final ?wasmGcStress:Bool;
 	final ?exports:Array<String>;
+
+	/** The C runtime linked into wasm32 modules; defaults to stdlib/haxeon/wasm/linear-runtime.wasm. */
+	final ?wasmLinearRuntime:haxe.io.Bytes;
 }
 
 /** Backend artifact returned after lowering a verified Haxeon program. */

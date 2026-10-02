@@ -5,9 +5,9 @@ import haxe.io.Bytes;
 
 /**
  * The Wasm filesystem behind `sys.io.File`, `sys.io.AtomicFile`, `sys.FileSystem` and the `Sys`
- * path operations. It is a session-only store: files live in module memory and vanish with the
- * instance. Every operation goes through this class, so a host-backed store can later replace
- * its bodies without touching callers.
+ * path operations. Files live in module memory and vanish with the instance, unless a host
+ * keeps them: it can fill the store before the program uses it and set `observer` to mirror
+ * every later change to storage of its own.
  *
  * Paths are absolute from "/" or relative to the working directory; repeated separators, "."
  * and ".." are normalized away. Operations report failure as the HashLink runtime does: the
@@ -20,6 +20,9 @@ class MemoryFileSystem {
 	static final entries:Map<String, MemoryEntry> = ["/" => new MemoryEntry(null, 0)];
 	static var clock = 0;
 	static var workingDirectory = "/";
+
+	/** Told about each change after it happens, in order; null when nothing mirrors the store. */
+	public static var observer:Null<MemoryFileSystemObserver> = null;
 
 	/** The absolute, normalized form of `path`. */
 	public static function normalize(path:String):String {
@@ -76,6 +79,8 @@ class MemoryFileSystem {
 		if (!isDirectoryAt(parent) && (!recursive || !createDirectory(parent, true)))
 			return false;
 		entries.set(target, new MemoryEntry(null, ++clock));
+		if (observer != null)
+			observer.directoryCreated(target);
 		return true;
 	}
 
@@ -85,6 +90,8 @@ class MemoryFileSystem {
 		if (target == "/" || !isDirectoryAt(target) || hasChildren(target))
 			return false;
 		entries.remove(target);
+		if (observer != null)
+			observer.removed(target);
 		return true;
 	}
 
@@ -93,6 +100,8 @@ class MemoryFileSystem {
 		if (fileAt(target) == null)
 			return false;
 		entries.remove(target);
+		if (observer != null)
+			observer.removed(target);
 		return true;
 	}
 
@@ -122,6 +131,8 @@ class MemoryFileSystem {
 		}
 		entries.remove(source);
 		entries.set(target, moving);
+		if (observer != null)
+			observer.renamed(source, target);
 		return true;
 	}
 
@@ -199,6 +210,8 @@ class MemoryFileSystem {
 		if (isDirectoryAt(target) || !isDirectoryAt(parentOf(target)))
 			return false;
 		entries.set(target, new MemoryEntry(content, ++clock));
+		if (observer != null)
+			observer.fileWritten(target, content);
 		return true;
 	}
 
@@ -223,6 +236,18 @@ class MemoryFileSystem {
 		var separator = target.lastIndexOf("/");
 		return separator <= 0 ? "/" : target.substr(0, separator);
 	}
+}
+
+/**
+ * Receives MemoryFileSystem changes with normalized absolute paths. A rename moves a whole tree, and a
+ * directory is created only after its parent; `content` belongs to the store and must not be changed.
+ */
+interface MemoryFileSystemObserver {
+	function directoryCreated(path:String):Void;
+	function fileWritten(path:String, content:Bytes):Void;
+	/** A file, or a directory that was empty. */
+	function removed(path:String):Void;
+	function renamed(path:String, newPath:String):Void;
 }
 
 /** A file's bytes, or null content for a directory, with its last modification stamp. */

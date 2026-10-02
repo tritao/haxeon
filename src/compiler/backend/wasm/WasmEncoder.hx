@@ -23,6 +23,9 @@ import compiler.backend.wasm.WasmModule.WasmCustomSection;
 
 /** Encodes the small Wasm module model into standard WebAssembly binary format. */
 class WasmEncoder {
+	/** Export name of the module's exception tag. */
+	public static inline final EXCEPTION_TAG_EXPORT = "__haxeon_exception";
+
 	public static function encode(module:WasmModule):Bytes {
 		WasmValidator.validate(module);
 		for (imported in module.imports)
@@ -49,6 +52,9 @@ class WasmEncoder {
 			exports.push({name: "memory", functionIndex: -1});
 		if (module.exportTable)
 			exports.push({name: "table", functionIndex: -2});
+		// The host throws haxeon.wasm.HostError with the guest's own tag, so Haxe catches it (haxeon-host.js).
+		if (module.exceptionTagType != null)
+			exports.push({name: EXCEPTION_TAG_EXPORT, functionIndex: -3});
 		if (exports.length > 0)
 			writeSection(output, 7, encodeExports(exports, module.exportMemory, module.exportTable));
 		if (module.start != null)
@@ -214,6 +220,9 @@ class WasmEncoder {
 			} else if (exportTable && entry.functionIndex == -2) {
 				body.writeByte(0x01);
 				writeU32(body, 0);
+			} else if (entry.functionIndex == -3) {
+				body.writeByte(0x04);
+				writeU32(body, 0);
 			} else {
 				body.writeByte(0x00);
 				writeU32(body, entry.functionIndex);
@@ -232,6 +241,12 @@ class WasmEncoder {
 		var body = new BytesOutput();
 		writeU32(body, module.functions.length);
 		for (fn in module.functions) {
+			var encoded = fn.encodedBody;
+			if (encoded != null) {
+				writeU32(body, encoded.length);
+				body.writeBytes(encoded, 0, encoded.length);
+				continue;
+			}
 			var functionBody = new BytesOutput();
 			writeLocals(functionBody, fn.locals);
 			writeInstructions(functionBody, fn.body);

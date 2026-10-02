@@ -524,7 +524,16 @@ class TestMain {
 		expectCompileError('class Values { public final value:Int; public function new(value:Int) this.value = value; } function main():Int return new Values(1).value();',
 			'Cannot call non-function field "value"');
 		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
-		expectCompileError('function main():Int { var value; return 0; }', 'Uninitialized local "value" requires an explicit type');
+		expectCompileError('function main():Int { var value; return 0; }',
+			'Cannot infer type of local "value"; add a type annotation or make its first assignment typeable at the declaration');
+		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }', 'Type mismatch for local "value"');
+		expectCompileError('class S { public static var cur:Null<P>; } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.cur = null; return S.cur.v; } return 0; } function main():Int return f();',
+			'Field "v" requires an object');
+		expectCompileError('class S { public static var cur:Null<P>; public static function clear():Void { cur = null; } } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.clear(); return S.cur.v; } return 0; } function main():Int return f();',
+			'Field "v" requires an object');
+		expectCompileError('function main():Int { var x:Int; var read = () -> x; x = 1; return read(); }', 'Local "x" may be used before assignment');
+		expectCompileError('class Shape { public function new() {} } function main():Int { var s = new Shape(); return Std.downcast(s, Int) == null ? 0 : 1; }',
+			'Std.downcast expects a class or interface as its second argument');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');

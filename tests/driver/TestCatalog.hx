@@ -77,11 +77,14 @@ class TestCatalog {
 		"InterfaceOptionalArgumentsMain",
 		"GenericCallableAbiMain",
 		"DependencyKeyMain",
+		"PackageRootModuleMain",
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
+		"ReturnPathMain",
+		"LocalTypeLoadMain",
 		"ClosureNarrowingMain",
 		"AmbiguousEnumAbstractValueMain",
 		"MethodCallInvalidationMain",
@@ -116,6 +119,7 @@ class TestCatalog {
 		"LiveNativeShiftMain",
 		"FieldInitializerEditMain",
 		"EqualityHelperEditMain",
+		"SharedEqualityHelperEditMain",
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = ["RuntimeDomainMain"];

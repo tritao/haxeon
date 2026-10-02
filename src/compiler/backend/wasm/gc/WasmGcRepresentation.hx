@@ -107,7 +107,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
-		return [StructNewDefault(plan.objectType(typeName)), LocalSet(destination)];
+		return [
+			StructNewDefault(plan.objectType(typeName)),
+			LocalSet(destination),
+			LocalGet(destination),
+			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
+			StructSet(plan.objectType(typeName), 0)
+		];
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var objectName = requireObjectName(object.type),
@@ -147,12 +153,35 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback") if (value.type == Dyn): plan.boxedPrimitiveType(output.type);
 			default: null;
 		};
+		// Any boxed number converts to Int or Float, as on HashLink: JSON gives an Int box for a whole number.
+		if (boxType != null && output.type == I32)
+			return dynamicInt(valueLocal, destination);
+		if (boxType != null && output.type == F64)
+			return dynamicFloat(valueLocal, destination);
 		if (boxType != null)
 			return [
 				LocalGet(valueLocal),
 				RefCast({nullable: false, heap: Type(boxType)}),
 				StructGet(boxType, 0),
 				LocalSet(destination)
+			];
+		var closureCast = switch output.type {
+			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signature(gc.module, plan, output.type)));
+			default: null;
+		};
+		if (closureCast != null)
+			// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
+			return [
+				LocalGet(valueLocal),
+				RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
+				LocalTee(destination),
+				RefIsNull,
+				I32Eqz,
+				If(null),
+				LocalGet(destination),
+				Call(closureCast),
+				LocalSet(destination),
+				End
 			];
 		return switch output.type {
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
@@ -309,6 +338,41 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case F64: [StructGet(box, 0), I32TruncF64S];
 					case I64: [StructGet(box, 0), I32WrapI64];
 					default: throw 'Unsupported Wasm GC dynamic Int conversion from $type';
+				};
+			instructions = instructions.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(box)}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(box)})
+			]);
+			instructions = instructions.concat(unbox);
+			instructions = instructions.concat([LocalSet(outputLocal), Else]);
+		}
+		instructions.push(Unreachable);
+		for (_ in primitiveTypes)
+			instructions.push(End);
+		instructions.push(End);
+		return instructions;
+	}
+
+	function dynamicFloat(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var instructions:Array<WasmInstruction> = [
+			LocalGet(valueLocal),
+			RefIsNull,
+			If(null),
+			F64Const(0),
+			LocalSet(outputLocal),
+			Else
+		];
+		var primitiveTypes:Array<IrType> = [IrType.F64, IrType.I32, IrType.Bool, IrType.I64];
+		for (type in primitiveTypes) {
+			var box = plan.boxedPrimitiveType(type),
+				unbox:Array<WasmInstruction> = switch type {
+					case F64: [StructGet(box, 0)];
+					case I32, Bool: [StructGet(box, 0), F64ConvertI32S];
+					case I64: [StructGet(box, 0), F64ConvertI64S];
+					default: throw 'Unsupported Wasm GC dynamic Float conversion from $type';
 				};
 			instructions = instructions.concat([
 				LocalGet(valueLocal),
@@ -3469,25 +3533,27 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function staticClosure(name:String, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
+	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(name);
 		if (tableSlot == null)
 			throw 'Wasm GC closure target "$name" has no stable table slot';
 		return [
 			I32Const(tableSlot * 2 + 1),
 			RefNull(Any),
+			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];
 	}
 
-	public function instanceClosure(name:String, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
+	public function instanceClosure(name:String, type:IrType, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(WasmGcModuleBuilder.gcClosureThunkName(name));
 		if (tableSlot == null)
 			throw 'Wasm GC instance closure target "$name" has no stable table slot';
 		return [
 			I32Const(tableSlot * 2),
 			LocalGet(receiverLocal),
+			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];

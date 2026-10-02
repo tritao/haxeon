@@ -56,6 +56,7 @@ string-split	42
 string-split-edge	42
 reflect-compare-sort	42
 reflect-delete-field	42
+reflect-delete-typed-field	42
 comprehension-block-filter	42
 sys-exit	42
 array-index-growth	42
@@ -189,6 +190,8 @@ dynamic-array-views	42
 dynamic-array-references	42
 math-float-rounding	42
 math-inverse-trig	42
+math-exp-log	42
+statement-forms	42
 array-filter-map-join	42
 math-constants	42
 prefix-increment	42
@@ -198,6 +201,8 @@ conditional-empty-literal	42
 void-branch-results	42
 std-string-to-string	42
 std-string-int64	42
+same-package-module-type	42
+generic-function-field-static	42
 super-method-call	42
 jit-stack-trace	42
 # An interface-typed value retains its concrete runtime class after array storage.
@@ -248,9 +253,11 @@ map-copy	42
 capture-shadowing	42
 compound-shift-assign	42
 field-initializer-dynamic	42
+interface-is-of-type	42
 stdlib-runtime-helpers	42
 ereg-patterns	42
 virtual-call-without-implementors	42
+switch-branch-if-without-else	42
 lambda-count	42
 nullable-numeric-equality	42
 function-value-optional-arguments	42
@@ -266,3 +273,26 @@ interface-optional-arguments	42
 generic-callable-abi	42
 string-utf16-slices	42
 string-ordering	42
+bytes-buffer-snapshot	42
+try-typed-interface	42
+std-is-of-type-interface-dynamic	42
+dynamic-field-access	42
+dynamic-method-call	42
+dynamic-arithmetic	42
+dynamic-increment	42
+dynamic-modulo	42
+block-return-paths	42
+type-enum-index	42
+array-key-value-iteration	42
+enum-value-match	42
+try-return-body	42
+generic-method-void-statement	42
+uninitialized-local-inference	42
+static-field-null-narrowing	42
+try-expression-void-context	42
+dynamic-number-cast	42
+sort-reflect-compare	42
+reflect-object-dispatch	42
+captured-uninitialized-local	42
+infinite-loop-trailing-code	42
+std-downcast	42

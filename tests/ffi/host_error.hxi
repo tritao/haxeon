@@ -1,0 +1,3 @@
+interface HostErrorProbe @target("portable-abi32") @library("missing_lib") {
+	extern fn missingCall(value: i32) -> i32 @symbol("missing_call");
+}

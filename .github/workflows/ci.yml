@@ -165,6 +165,10 @@ jobs:
         if: matrix.platform != 'windows'
         run: ./scripts/bootstrap-compiler.sh --self
 
+      - name: Self-hosting fixed point
+        if: matrix.platform != 'windows'
+        run: ./scripts/check-self-hosting.sh
+
       - name: Hot reload and GDB metadata gate
         if: matrix.platform == 'test' || matrix.platform == 'linux-arm64'
         run: ./tests/integration/test-gdb-hot-reload.sh

@@ -91,6 +91,7 @@ class WasmGcModuleBuilder {
 		// needs linear memory only for C FFI scratch space or an imported memory contract.
 		var staticData = WasmModuleSupport.layoutStaticData(program, 8, reachable),
 			staticDataInit = addGcStaticData(module, globals, plan, staticData),
+			reflectionTable = WasmGcReflection.addTable(module, globals, plan, program),
 			memoryEnd = memoryBase + 8;
 		var scratchTop = -1;
 		if (requiresScratchMemory || requiresLinearMemory || importMemory) {
@@ -103,6 +104,12 @@ class WasmGcModuleBuilder {
 		}
 		addGcCNativeImports(module, functions, program, usedCNatives);
 		addGcRuntimeNativeFunctions(module, functions, plan, gcRepresentation, program, usedNatives);
+		for (native in program.natives)
+			if (usedNatives.exists(native.name)) {
+				var reflection = WasmGcReflection.define(module, functions, globals, plan, gcRepresentation, program, native);
+				if (reflection != null)
+					functions.set(native.name, reflection);
+			}
 		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
 		// needs every class's toString index and is defined later.
 		if (usedNatives.exists("__std_string"))
@@ -117,14 +124,17 @@ class WasmGcModuleBuilder {
 		if (requiresScratchMemory) {
 			scratchAllocator = addGcScratchAllocator(module, scratchTop);
 		}
-		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions)),
-			representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
-				function(context) {
-					var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
-						context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
-						functionInterop = gcInterop.forFunctionContext(functionContext);
-					return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
-				});
+		var gcInterop = new WasmGcInterop(gcContext, scratchTop, scratchAllocator, gcPointerReleaseFunctionIndices(program, reachable, functions));
+		// Records hold roots in an Array<ManagedBytes>; without one, no pointer field borrows GC bytes.
+		if (requiresScratchMemory && Lambda.exists(plan.arrayElementTypes(), element -> Type.enumEq(element, ManagedBytes)))
+			gcInterop.addRootRelocator(module);
+		var representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation, gcRepresentation, gcInterop,
+			function(context) {
+				var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
+					context.allocateLocal), functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
+					functionInterop = gcInterop.forFunctionContext(functionContext);
+				return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
+			});
 		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [representation.values.valueType(Dyn)],
 			results: []
@@ -148,7 +158,11 @@ class WasmGcModuleBuilder {
 			defineGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
+		var closureAdapters = WasmGcClosureAdapters.reserve(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		if (reflectionTable != null)
+			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots);
+		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
@@ -167,7 +181,10 @@ class WasmGcModuleBuilder {
 		if (entry == null)
 			throw 'Wasm GC entry point $preferredEntry was not emitted';
 		var init = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
-		module.start = staticDataInit == null ? init : addGcStartFunction(module, staticDataInit, init);
+		var startInit:Null<Array<WasmInstruction>> = staticDataInit;
+		if (reflectionTable != null)
+			startInit = (startInit == null ? [] : startInit).concat(reflectionTable.init);
+		module.start = startInit == null ? init : addGcStartFunction(module, startInit, init);
 		module.exports.push({name: "main", functionIndex: entry});
 		for (exported in exportedFunctions) {
 			var exportIndex = functions.get(exported);
@@ -331,10 +348,8 @@ class WasmGcModuleBuilder {
 			body = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}).stdStringBody(0, resultLocal);
 		body.push(LocalGet(resultLocal));
 		body.push(Return);
-		var index = functions.get("__std_string");
-		if (index == null)
-			throw "Wasm GC Std.string has no reserved function";
-		module.setFunction(index, new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
+		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, "__std_string"),
+			new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes), locals, body));
 	}
 
 	static function addGcMapRuntimeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram,
@@ -349,6 +364,8 @@ class WasmGcModuleBuilder {
 
 	static function addGcRuntimeNativeFunctions(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
+		// Imports first: they take the function indices before every defined function, so adding one after a defined
+		// function would leave that function's recorded index pointing at its neighbour.
 		for (native in program.natives)
 			if (used.exists(native.name) && (isGcRuntimeMathImport(native.symbol) || isGcRuntimeSystemImport(native.symbol))) {
 				var parameters = [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)],
@@ -359,7 +376,9 @@ class WasmGcModuleBuilder {
 					importModule = native.library == null || native.library == "" ? "env" : native.library,
 					importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 				functions.set(native.name, module.addImport(importModule, importName, {parameters: parameters, results: results}));
-			} else if (used.exists(native.name)
+			}
+		for (native in program.natives)
+			if (used.exists(native.name)
 				&& (native.name == "__string_compare_full" || native.name == "__math_ceil" || native.name == "__math_floor")) {
 				var functionType = plan.wasmFunctionType(native.arguments, native.result),
 					locals:Array<WasmLocal> = [],
@@ -388,7 +407,8 @@ class WasmGcModuleBuilder {
 
 	static function isGcRuntimeMathImport(symbol:Null<String>):Bool {
 		return switch symbol {
-			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round": true;
+			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
+				"__math_log": true;
 			default: false;
 		};
 	}
@@ -418,16 +438,17 @@ class WasmGcModuleBuilder {
 				"__array_remove_bool", "__array_remove_f64", "__array_remove_bytes", "__array_remove_ref", "__array_index_of_i32", "__array_index_of_i64",
 				"__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref", "__array_slice_i32", "__array_slice_i64",
 				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_floor",
-				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round", "Math.mathIsFinite",
-				"__math_is_finite", "Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type",
-				"__std_is_exact_type", "__exception_matches", "__reflect_is_object", "__dynamic_equal", "__f64_to_i64_bits", "__i64_to_f64_bits",
-				"haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.neg", "haxe.Int64.and", "haxe.Int64.or", "haxe.Int64.xor",
-				"haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt", "haxe.Int64.fromFloat", "haxe.Int64.toInt",
-				"__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_blit", "__bytes_get_i32", "__bytes_get_float",
-				"__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI8", "setI8", "getU8", "setU8", "getI16", "setI16", "getU16", "setU16",
-				"getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64", "__bytes_view", "__bytes_sub", "__bytes_compare",
-				"__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer", "structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8",
-				"structSlice", "structWithRoots", "structGetRoots", "structFromLinear", "structToLinear", "nativePointerFromAddress",
+				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
+				"__math_log", "Math.mathIsFinite", "__math_is_finite", "Math.mathIsNaN", "__math_is_nan", "__std_int_f64", "__std_int_dynamic",
+				"__std_string", "__std_is_of_type", "__std_is_exact_type", "__exception_matches", "__reflect_is_object", "__dynamic_equal",
+				"__reflect_object_field", "__reflect_object_set_field", "__reflect_object_field_count", "__reflect_object_field_name", "__f64_to_i64_bits",
+				"__i64_to_f64_bits", "haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.neg", "haxe.Int64.and", "haxe.Int64.or",
+				"haxe.Int64.xor", "haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt", "haxe.Int64.fromFloat",
+				"haxe.Int64.toInt", "__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_blit", "__bytes_get_i32",
+				"__bytes_get_float", "__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI8", "setI8", "getU8", "setU8", "getI16", "setI16",
+				"getU16", "setU16", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64", "__bytes_view", "__bytes_sub",
+				"__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer", "structSetBorrowedBytes", "structUtf8Copy",
+				"structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "structFromLinear", "structToLinear", "nativePointerFromAddress",
 				"nativeCallbackFromIndex", "nativeCallbackIndex", "__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian",
 				"__bytes_input_set_big_endian", "__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string",
 				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
@@ -602,7 +623,7 @@ class WasmGcModuleBuilder {
 							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _): I32;
 						case Value: gcCNativeValueType(native.arguments[index]);
 					});
-			var results = switch native.result {
+			var results:Array<WasmValueType> = switch native.result {
 				case Void: [];
 				case ManagedBytes if (native.fixedResult != null): [I32];
 				case ManagedBytes if (native.pointerLength != null): [I32];
@@ -714,7 +735,8 @@ class WasmGcModuleBuilder {
 				for (located in block.instructions)
 					switch located.value {
 						case CallClosure(_, closure, _):
-							recordGcClosureType(module, plan, result, closure.type, false);
+							// Any closure may be an adapter (WasmGcClosureAdapters), which is an instance closure.
+							recordGcClosureType(module, plan, result, closure.type, true);
 						case StaticClosure(output, _):
 							recordGcClosureType(module, plan, result, output.type, false);
 						case InstanceClosure(output, _, _):

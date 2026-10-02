@@ -92,6 +92,19 @@ class ModuleAnalyzer {
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);
+		// A type named only in an annotation, cast or catch clause is a dependency when a source module has that name.
+		// The dependency is the module that resolved: for `Types.Kind` in package `pk` that is `pk.Types`, while the
+		// dotted type name itself names no module and the later passes do not qualify dotted names.
+		for (key in [for (key in dependencies.keys()) key])
+			if (StringTools.startsWith(key, DependencyScanner.OPTIONAL_PREFIX)) {
+				dependencies.remove(key);
+				var typeName = key.substr(DependencyScanner.OPTIONAL_PREFIX.length);
+				var module = sourceModuleForDependency(typeName);
+				if (module == null && ast.packageName != null)
+					module = sourceModuleForDependency(ast.packageName + "." + typeName);
+				if (module != null)
+					dependencies.set(module, true);
+			}
 		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
 			for (field in classDecl.fields)
@@ -129,6 +142,15 @@ class ModuleAnalyzer {
 				if (sourceModuleForDependency(packageCandidate) != null) {
 					dependencies.remove(dependency);
 					dependencies.set(packageCandidate, true);
+					continue;
+				}
+			}
+			// `Module.Type` written inside a package names a module of that package, as in Haxe.
+			if (sourceModule == null && dependency.indexOf(".") >= 0 && packageName != null) {
+				var packageModule = sourceModuleForDependency(packageName + "." + dependency);
+				if (packageModule != null) {
+					dependencies.remove(dependency);
+					dependencies.set(packageModule, true);
 					continue;
 				}
 			}

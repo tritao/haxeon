@@ -314,10 +314,7 @@ class WasmGcDynamicArrays {
 		var result = allocateLocal(plan.valueType(Bytes));
 		for (argument in arguments)
 			body.push(LocalGet(argument));
-		var index = functions.get(name);
-		if (index == null)
-			throw 'Wasm dynamic array helper "$name" has no registered function';
-		body.push(Call(index));
+		body.push(Call(WasmModuleSupport.requiredFunctionIndex(functions, name)));
 		body.push(LocalSet(result));
 		return result;
 	}

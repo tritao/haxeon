@@ -2,6 +2,7 @@ interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	opaque gc_context;
 	struct gc_fixture_point @layout(16, 16) { x: i32 @offset(0); y: i32 @offset(4); }
 	struct gc_value_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }
+	struct gc_point_list @layout(8, 4) { points: ptr<const<gc_value_point>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(4); }
 	extern fn inspect(data: ptr<const<u8>> @in_array("length"), length: u32) -> i32 @symbol("inspect_bytes");
 	extern fn mutate(data: ptr<u8> @in_array("length"), length: u32) -> i32 @symbol("mutate_bytes");
 	extern fn store(value: ptr<u32> @out, count: ptr<u32> @out) -> void @symbol("store_values");
@@ -11,6 +12,8 @@ interface GcBytes @target("portable-abi32") @library("gc_bytes") {
 	extern fn readPoint(point: ptr<const<gc_value_point>>) -> i32 @symbol("read_point");
 	extern fn sumPoint(point: gc_value_point) -> i32 @symbol("sum_point");
 	extern fn makePoint(seed: i32) -> gc_value_point @symbol("make_point");
+	extern fn fillPoint(point: ptr<gc_value_point>) -> void @symbol("fill_point");
+	extern fn secondY(list: ptr<gc_point_list>) -> i32 @symbol("second_y");
 	extern fn borrowedContext() -> nullable<ptr<gc_context>> @borrowed @symbol("borrowed_context");
 	extern fn ownedContext() -> ptr<gc_context> @owned("release_context") @symbol("owned_context");
 	extern fn nullableOwnedContext(value: i32) -> nullable<ptr<gc_context>> @owned("release_context") @symbol("nullable_owned_context");

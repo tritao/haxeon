@@ -192,8 +192,16 @@ class WasmModuleSupport {
 										parameters: [for (argument in arguments) requireValueType(argument)],
 										results: resultTypes(resultType)
 									};
+									// Any closure may be an instance closure: a cast adapts closures as instance closures
+									// (WasmLinearClosureAdapters).
 									var key = Std.string(closure.type);
-									if (!result.exists(key)) result.set(key, {staticType: module.typeIndex(type), instanceType: null});
+									if (!result.exists(key)) result.set(key, {
+										staticType: module.typeIndex(type),
+										instanceType: module.typeIndex({
+											parameters: [compiler.backend.wasm.WasmTypes.WasmValueType.I32].concat(type.parameters),
+											results: type.results
+										})
+									});
 								default:
 							}
 						case InstanceClosure(output, name, _):
@@ -226,9 +234,18 @@ class WasmModuleSupport {
 		return result;
 	}
 
-	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>):Map<String, Int> {
+	/** Puts every named function in the table, sorted by name, or by `group` and then name. */
+	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>, ?group:String->String):Map<String, Int> {
 		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
-		names.sort(Reflect.compare);
+		if (group == null)
+			names.sort(Reflect.compare);
+		else {
+			var groups = [for (name in names) name => group(name)];
+			names.sort((left, right) -> {
+				var order = Reflect.compare(groups.get(left), groups.get(right));
+				order != 0 ? order : Reflect.compare(left, right);
+			});
+		}
 		var slots:Map<String, Int> = [];
 		for (index in 0...names.length) {
 			slots.set(names[index], index);

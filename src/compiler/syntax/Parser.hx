@@ -30,6 +30,10 @@ class Parser {
 
 	final tokens:Array<Token>;
 	var position:Int = 0;
+
+	/** Braceless `try` bodies being parsed: their last statement may omit the semicolon before `catch`. */
+	var tryBodyDepth:Int = 0;
+
 	var recovering:Bool = false;
 	var typedLambdaCount:Int = 0;
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
@@ -968,6 +972,20 @@ class Parser {
 			}
 			position = saved;
 		}
+		// A bare block in statement position is a nested scope. Its value, if it
+		// ends in one, would be discarded, so it parses once, as statements, and
+		// need not end in a value (`{ var x = f(); for (...) g(x); }`). It lowers
+		// to `if (true) { ... }`: branches already open a scope and pass
+		// break, continue and return through, so no pass needs a block form.
+		// `{name: ...}` and `{"name": ...}` stay object literals.
+		if (check(TokenKind.LeftBrace)
+			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon)) {
+			var start = current().span,
+				statements = parseStatementOrBlock(),
+				span = start.merge(previous().span);
+			match(TokenKind.Semicolon);
+			return If(BoolLiteral(true, start), statements, [], span);
+		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
 			consume(TokenKind.LeftParen);
@@ -1019,9 +1037,17 @@ class Parser {
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		var expression = parseExpression();
-		match(TokenKind.Semicolon);
-		return [Expression(expression, expressionSpan(expression))];
+		// Any single statement (`try return f() catch ...`, `try x = f() catch
+		// ...`); the semicolon before `catch` is optional.
+		tryBodyDepth++;
+		try {
+			var statements = parseStatements();
+			tryBodyDepth--;
+			return statements;
+		} catch (error:CompileError) {
+			tryBodyDepth--;
+			throw error;
+		}
 	}
 
 	function parseDoWhileBody():Array<AstStatement> {
@@ -1086,9 +1112,8 @@ class Parser {
 				var initializer = parseExpression();
 				declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
 			} else {
-				if (type == null)
-					fail(current(), 'Uninitialized local "${nameToken.text}" requires an explicit type');
-				declarations.push(UninitializedDeclaration(nameToken.text, type, start.merge(previous().span)));
+				// Without an annotation, the typer takes the type from the first assignment, as Haxe does.
+				declarations.push(UninitializedDeclaration(nameToken.text, type == null ? InferredType : type, start.merge(previous().span)));
 			}
 		} while (match(TokenKind.Comma));
 		var lastInitializer = switch declarations[declarations.length - 1] {
@@ -2005,9 +2030,11 @@ class Parser {
 		while (true) {
 			if (atSwitchBranchEnd() && statements.length == 0)
 				return EmptyExpression(start.merge(current().span));
-			if (atSwitchBranchEnd() && statements.length > 0 && statementTerminates(statements[statements.length - 1])) {
-				var end = statementSpan(statements[statements.length - 1]);
-				return BlockExpression(statements, Unreachable(end), start.merge(end));
+			if (atSwitchBranchEnd() && statements.length > 0) {
+				// Statements that end the branch: it never completes if the last one leaves, else its value is Void.
+				var last = statements[statements.length - 1],
+					end = statementSpan(last);
+				return BlockExpression(statements, statementTerminates(last) ? Unreachable(end) : EmptyExpression(end), start.merge(end));
 			}
 			if (isStatementOnlyStart(current().kind)) {
 				appendStatements(statements, parseStatements());
@@ -2348,7 +2375,7 @@ class Parser {
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
-		if (isBracedExpression(expression))
+		if (isBracedExpression(expression) || (tryBodyDepth > 0 && check(TokenKind.Catch)))
 			return expressionSpan(expression);
 		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
 		if (check(TokenKind.Else))
@@ -2546,21 +2573,24 @@ class Parser {
 	static function codePointString(code:Int, span:SourceSpan):String {
 		if (code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
 			invalidEscape("U+" + StringTools.hex(code, 4) + " is not a Unicode scalar value", span);
-		var bytes = new haxe.io.BytesBuffer();
+		// HashLink strings are NUL-terminated and cannot hold one; fail here, at the literal, not when the module is written.
+		if (code == 0)
+			invalidEscape("a String cannot contain NUL (U+0000); use Bytes for binary data", span);
+		var bytes = new haxe.io.BytesOutput();
 		if (code < 0x80)
-			bytes.addByte(code);
+			bytes.writeByte(code);
 		else if (code < 0x800) {
-			bytes.addByte(0xC0 | (code >> 6));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xC0 | (code >> 6));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else if (code < 0x10000) {
-			bytes.addByte(0xE0 | (code >> 12));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xE0 | (code >> 12));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		} else {
-			bytes.addByte(0xF0 | (code >> 18));
-			bytes.addByte(0x80 | ((code >> 12) & 0x3F));
-			bytes.addByte(0x80 | ((code >> 6) & 0x3F));
-			bytes.addByte(0x80 | (code & 0x3F));
+			bytes.writeByte(0xF0 | (code >> 18));
+			bytes.writeByte(0x80 | ((code >> 12) & 0x3F));
+			bytes.writeByte(0x80 | ((code >> 6) & 0x3F));
+			bytes.writeByte(0x80 | (code & 0x3F));
 		}
 		return bytes.getBytes().toString();
 	}

@@ -344,6 +344,16 @@ class IrVerifier {
 				var closureType:IrType = Function(signature.arguments.slice(1), signature.result);
 				if (!sameType(out.type, closureType))
 					throw 'Wrong IR instance closure type for "$name"';
+			case CallClosure(out, closure, args) if (sameType(closure.type, Dyn)):
+				// A call through a Dynamic value: the arguments and the result are Dynamic too.
+				require(values, closure);
+				for (argument in args) {
+					require(values, argument);
+					if (!sameType(argument.type, Dyn))
+						throw 'IR dynamic closure call argument must be Dynamic';
+				}
+				if (!sameType(out.type, Dyn))
+					throw 'IR dynamic closure call must produce a Dynamic value';
 			case CallClosure(out, closure, args):
 				require(values, closure);
 				var functionType = switch closure.type {

@@ -22,8 +22,8 @@ class WasmLinearRuntime {
 			if (used.exists(native.name))
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod",
-						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
-						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+						"__math_exp", "__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time",
+						"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 						runtimeImport(module, native);
 					default:
 				}
@@ -75,6 +75,11 @@ class WasmLinearRuntime {
 		var outputReserve = addBytesOutputReserve(module, allocator, bytesDataPointer);
 		functions.set("__haxeon_bytes_output_reserve", outputReserve);
 		for (native in program.natives) {
+			var reflection = WasmLinearReflection.define(context, native);
+			if (reflection != null) {
+				functions.set(native.name, reflection);
+				continue;
+			}
 			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve);
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
@@ -237,7 +242,7 @@ class WasmLinearRuntime {
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_atan2", "__math_fmod", "__math_round",
-				"__math_ceil", "__math_floor", "__sys_args":
+				"__math_exp", "__math_log", "__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
@@ -2467,17 +2472,33 @@ class WasmLinearRuntime {
 			if (name != "__std_is_exact_type")
 				for (object in program.objects) {
 					var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
+					var interfaceNames:Array<String> = object.interfaces.copy();
 					var base = object.base;
 					while (base != null) {
 						accepted.push(WasmModuleSupport.typeId(Obj(base)));
 						var next:Null<String> = null;
 						for (candidate in program.objects)
-							if (candidate.name == base)
+							if (candidate.name == base) {
 								next = candidate.base;
+								// A subclass implements whatever its superclasses do.
+								for (interfaceName in candidate.interfaces)
+									interfaceNames.push(interfaceName);
+							}
 						base = next;
 					}
-					for (interfaceName in object.interfaces)
+					// An interface also stands for every interface it extends.
+					var visited:Map<String, Bool> = [];
+					while (interfaceNames.length > 0) {
+						var interfaceName = interfaceNames.pop();
+						if (interfaceName == null || visited.exists(interfaceName))
+							continue;
+						visited.set(interfaceName, true);
 						accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
+						for (declaration in program.interfaces)
+							if (declaration.name == interfaceName)
+								for (parent in declaration.bases)
+									interfaceNames.push(parent);
+					}
 					builder.localGet(value);
 					builder.emit(I32Load(0));
 					builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));

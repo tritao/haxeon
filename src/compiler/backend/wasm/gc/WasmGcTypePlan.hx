@@ -52,6 +52,16 @@ class WasmGcTypePlan {
 
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
+	/**
+	 * Supertype of every class struct, whose first field is the class id (`WasmModuleSupport.typeId(Obj(name))`). Reading it
+	 * from any Dynamic value is one test and one field read, which is what makes dispatch on a value's class independent of
+	 * how many classes the program has. -1 when the program has no objects.
+	 */
+	public var objectRootTypeIndex(default, null):Int = -1;
+
+	/** Fields before an object's own: the class id. */
+	public static inline final OBJECT_HEADER_FIELDS = 1;
+
 	/** Immutable `(array i32)` holding `RuntimeData.address` tables, or -1 when the program has none. */
 	public var staticDataTypeIndex(default, null):Int = -1;
 
@@ -61,6 +71,9 @@ class WasmGcTypePlan {
 	public var bytesInputTypeIndex(default, null):Int = -1;
 	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
+
+	/** Closure field holding the Wasm function type index its target is called with (WasmGcClosureAdapters). */
+	public static inline final CLOSURE_SIGNATURE_FIELD = 2;
 
 	final objectDeclarations:Map<String, IrObject> = [];
 	final enumDeclarations:Map<String, IrEnum> = [];
@@ -450,6 +463,8 @@ class WasmGcTypePlan {
 	}
 
 	function reserveNamedTypes():Void {
+		if (orderedObjects.length > 0)
+			objectRootTypeIndex = reserveType();
 		for (object in orderedObjects)
 			objectTypeIndices.set(object.name, reserveType());
 		for (enumDecl in program.enums) {
@@ -466,7 +481,7 @@ class WasmGcTypePlan {
 			var fieldIndices:Map<String, Int> = [];
 			for (index in 0...inherited.length)
 				if (!fieldIndices.exists(inherited[index].name))
-					fieldIndices.set(inherited[index].name, index);
+					fieldIndices.set(inherited[index].name, index + OBJECT_HEADER_FIELDS);
 			objectFieldIndices.set(object.name, fieldIndices);
 		}
 	}
@@ -484,7 +499,7 @@ class WasmGcTypePlan {
 	}
 
 	function reserveRuntimeTypes():Void {
-		if (usesStaticData())
+		if (usesStaticData() || WasmReflectionTable.declares(program))
 			staticDataTypeIndex = reserveType();
 		byteArrayTypeIndex = reserveType();
 		bytesTypeIndex = reserveType();
@@ -541,16 +556,19 @@ class WasmGcTypePlan {
 			if (fields == null)
 				throw 'Missing flattened fields for Wasm GC object "${object.name}"';
 			var baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
-				supertypes:Array<Int> = baseIndex == null ? [] : [baseIndex],
+				supertypes:Array<Int> = [baseIndex == null ? objectRootTypeIndex : baseIndex],
 				wasmFields:Array<WasmFieldType> = [
-					for (field in fields)
-						{
-							type: Value(valueType(field.type)),
-							mutable: true
-						}
+					{
+						type: Value(I32),
+						mutable: true
+					}
 				];
+			for (field in fields)
+				wasmFields.push({type: Value(valueType(field.type)), mutable: true});
 			setType(objectType(object.name), false, supertypes, Struct(wasmFields));
 		}
+		if (objectRootTypeIndex >= 0)
+			setType(objectRootTypeIndex, false, [], Struct([{type: Value(I32), mutable: true}]));
 		for (enumDecl in program.enums) {
 			var base = enumType(enumDecl.name),
 				baseFields:Array<WasmFieldType> = [{type: Value(I32), mutable: false}];
@@ -596,9 +614,11 @@ class WasmGcTypePlan {
 			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
 			{type: Value(I32), mutable: true}
 		]));
+		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([
 			{type: Value(I32), mutable: true},
-			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
+			{type: Value(Ref({nullable: true, heap: Any})), mutable: true},
+			{type: Value(I32), mutable: false}
 		]));
 		var boxedEntries:Array<{key:String, type:WasmValueType}> = [
 			{key: "i32", type: I32},

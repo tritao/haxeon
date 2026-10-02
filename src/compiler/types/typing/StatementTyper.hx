@@ -142,19 +142,68 @@ class StatementTyper {
 	}
 
 	/** Returns null for statements handled by the compound-statement dispatcher. */
+	/** The type of `var name;` is that of its first assignment in source order, which must be typeable where it is declared. */
+	function inferUninitializedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope, span:SourceSpan):CompilerType {
+		var assigned = firstAssignment(name, statements, start);
+		if (assigned != null) {
+			var type:Null<CompilerType> = null;
+			var speculative = new Scope(scope);
+			speculative.assumeAllAssigned();
+			try {
+				type = typeExpression(assigned, speculative, null, false).type;
+			} catch (_:CompileError) {}
+			if (type != null && type != TNull && type != TVoid && type != TNever)
+				return type;
+		}
+		throw new CompileError(new Diagnostic("E1002",
+			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration', span));
+	}
+
+	static function firstAssignment(name:String, statements:Array<AstStatement>, start:Int):Null<AstExpression> {
+		for (index in start...statements.length) {
+			var found:Null<AstExpression> = switch statements[index] {
+				case Assignment(assigned, expression, _) if (assigned == name): expression;
+				case If(_, yes, no, _):
+					var inYes = firstAssignment(name, yes, 0);
+					inYes != null ? inYes : firstAssignment(name, no, 0);
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): firstAssignment(name, body, 0);
+				case Try(tryBranch, catches, _):
+					var inTry = firstAssignment(name, tryBranch, 0);
+					if (inTry == null)
+						for (catchClause in catches) {
+							inTry = firstAssignment(name, catchClause.statements, 0);
+							if (inTry != null)
+								break;
+						}
+					inTry;
+				case Switch(_, cases, defaultBranch, _, _):
+					var inCase:Null<AstExpression> = null;
+					for (switchCase in cases) {
+						inCase = firstAssignment(name, switchCase.statements, 0);
+						if (inCase != null)
+							break;
+					}
+					inCase != null ? inCase : firstAssignment(name, defaultBranch, 0);
+				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name): return null;
+				default: null;
+			};
+			if (found != null)
+				return found;
+		}
+		return null;
+	}
+
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>, statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
 		var context = session.currentContext;
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
-				var declaredType = session.declarations.resolve(declared, null, context.typeSubstitutions),
-					declarationKey = LexicalStorageAnalysis.key(name, span);
-				if (context.storage.hasCandidate(declarationKey) && context.storage.candidateKind(declarationKey) == MutableCapture)
-					fail("E1023", 'Captured local "$name" must be initialized at its declaration', span);
+				var declaredType = declared == InferredType ? inferUninitializedType(name, statements, statementIndex + 1, scope,
+					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
-				var uninitializedAbstract = EnumAbstractHints.named(session, declared);
+				var uninitializedAbstract = declared == InferredType ? null : EnumAbstractHints.named(session, declared);
 				if (uninitializedAbstract != null)
 					context.declaredAbstracts.set(scope.requireId(name), uninitializedAbstract);
 				[TDeclare(scope.requireId(name), declaredType, span)];
@@ -279,6 +328,14 @@ class StatementTyper {
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
 		var current = scope.resolve(name);
+		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
+		var dot = name.indexOf("."),
+			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
+		if ((current != null && sameType(current, TDynamic)) || (current == null && root != null && sameType(root, TDynamic))) {
+			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
+			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
+		}
 		if (current != null && !scope.isAssigned(name))
 			fail("E1023", 'Local "$name" may be used before assignment', span);
 		if (current == null) {
@@ -297,6 +354,7 @@ class StatementTyper {
 					TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0), TFloat, span),
 				updated = delta > 0 ? new TypedExpression(TAdd(oldValue, one), staticField.type,
 					span) : new TypedExpression(TSub(oldValue, one), staticField.type, span);
+			scope.invalidateExpression('static:${staticField.owner}.$fieldName');
 			return TStaticFieldAssign(staticField.owner, fieldName, updated, span);
 		}
 		if (!sameType(current, TInt) && !sameType(current, TFloat))
@@ -343,7 +401,9 @@ class StatementTyper {
 				if (staticField == null)
 					fail("E1005", 'Unknown variable "$name"', span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, name, span);
-				var value = coerce(typeExpression(expression, scope, staticField.type, false), staticField.type, 'field "$name"', "E1002");
+				var assignedValue = typeExpression(expression, scope, staticField.type, false),
+					value = coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
+				refineStaticStore(scope, staticField.owner, name, assignedValue.type, staticField.type);
 				return TStaticFieldAssign(staticField.owner, name, value, span);
 			}
 			var assignedValue = typeExpression(expression, scope, expected, false),
@@ -367,6 +427,8 @@ class StatementTyper {
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -374,7 +436,9 @@ class StatementTyper {
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
-				var value = coerce(typeExpression(expression, scope, staticField.type, false), staticField.type, 'field "$name"', "E1002");
+				var assignedValue = typeExpression(expression, scope, staticField.type, false),
+					value = coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
+				refineStaticStore(scope, staticField.owner, fieldName, assignedValue.type, staticField.type);
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
@@ -423,10 +487,23 @@ class StatementTyper {
 		};
 	}
 
+	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement
+		return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+
+	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var boxed = coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
+			call = new TypedExpression(TCall("Reflect.setField", [object, new TypedExpression(TStringLiteral(fieldName), TString, span), boxed]), TVoid, span);
+		return TExpression(call, span);
+	}
+
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
 			value = typeExpression(expression, scope, null, false);
+		if (sameType(object.type, TDynamic))
+			return dynamicFieldStore(object, fieldName, value, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -434,7 +511,9 @@ class StatementTyper {
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
+				var assignedType = value.type;
 				value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
+				refineStaticStore(scope, staticField.owner, fieldName, assignedType, staticField.type);
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
@@ -459,6 +538,13 @@ class StatementTyper {
 				}
 				statement;
 		};
+	}
+
+	/** A store to a static field replaces what earlier null checks said about it, and about anything reached through it. */
+	static function refineStaticStore(scope:Scope, owner:String, name:String, assigned:CompilerType, stored:CompilerType):Void {
+		var path = 'static:$owner.$name';
+		scope.invalidateExpression(path);
+		scope.refineExpression(path, assignmentFlowType(assigned, stored));
 	}
 
 	static function assignmentFlowType(source:CompilerType, stored:CompilerType):CompilerType
@@ -487,7 +573,7 @@ class StatementTyper {
 						fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
 				case TInt, TFloat, TBool, TString:
 				case TInstance(kind, _, arguments):
-					if (Std.string(kind) != "class")
+					if (Std.string(kind) != "class" && Std.string(kind) != "interface")
 						fail("E1022", "Unsupported catch binding type", catchClause.span);
 					if (arguments.length != 0)
 						fail("E1022", "Unsupported generic catch binding type", catchClause.span);
@@ -584,6 +670,22 @@ class StatementTyper {
 				typedIterable = unwrapNullable(typeExpression(MethodCall(iterable, "iterator", [], span), scope, null, false));
 			default:
 		}
+		// `for (index => element in array)` is a loop over the indices that binds each element.
+		if (valueName != null)
+			switch typedIterable.type {
+				case TArray(_):
+					var array = "__haxeon_array" + span.start,
+						loopBody:Array<AstStatement> = [
+							VarDeclaration(valueName, null, Index(Variable(array, span), Variable(name, span), span), span)
+						];
+					for (statement in body)
+						loopBody.push(statement);
+					return typeIf(BoolLiteral(true, span), [
+						VarDeclaration(array, null, iterable, span),
+						ForIn(name, null, Range(IntegerLiteral(0, span), Member(Variable(array, span), "length", span), span), loopBody, span)
+					], [], span, scope, result);
+				default:
+			}
 		var originalIterable = typedIterable;
 		LoopFlow.enter(session, scope, body, [name, valueName]);
 		var element:CompilerType = switch typedIterable.type {

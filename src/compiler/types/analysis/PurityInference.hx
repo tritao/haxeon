@@ -99,7 +99,8 @@ class PurityInference {
 			indexed:Bool
 		}> {
 		var walker = new PurityWalker(inference, functionName);
-		walker.stores = {fields: [], indexed: false};
+		var stores:{fields:Map<String, Bool>, indexed:Bool} = {fields: [], indexed: false};
+		walker.stores = stores;
 		walker.declare("this");
 		for (name in outerLocals)
 			walker.declare(name, false, null, false, outerArrays != null && outerArrays.indexOf(name) >= 0, false,
@@ -109,9 +110,6 @@ class PurityInference {
 				walker.privateMaps.set(name, true);
 		if (!walker.statements(body))
 			return null;
-		var stores = walker.stores;
-		if (stores == null)
-			throw "Body store collection is missing after effect analysis";
 		return {
 			dependencies: [for (key in walker.dependencies.keys()) key],
 			fields: [for (field in stores.fields.keys()) field],
@@ -472,9 +470,8 @@ private class PurityWalker {
 			case Increment(name, _, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 			case Increment(name, _, _): isLocal(name);
 			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key) && expression(value);
-			case IndexAssignment(target, key, value, _) if (stores != null): stores.indexed = true; expression(target) && expression(key) && expression(value);
-			case FieldAssignment(object, field, value, _) if (stores != null && !inference.mayHaveSetter(field)): stores.fields.set(field,
-					true); expression(object) && expression(value);
+			case IndexAssignment(target, key, value, _) if (stores != null): recordIndexedStore(); expression(target) && expression(key) && expression(value);
+			case FieldAssignment(object, field, value, _) if (stores != null && !inference.mayHaveSetter(field)): recordFieldStore(field); expression(object) && expression(value);
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
@@ -607,7 +604,7 @@ private class PurityWalker {
 					case Variable(name, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 					case Variable(name, _): isLocal(name);
 					case Member(object, field, _) if (stores != null && !inference.mayHaveSetter(field)):
-						stores.fields.set(field, true);
+						recordFieldStore(field);
 						expression(object);
 					default: false;
 				}
@@ -781,8 +778,20 @@ private class PurityWalker {
 		for (index in 1...segments.length - 1)
 			if (!readsProperty(segments[index]))
 				return false;
-		stores.fields.set(field, true);
+		recordFieldStore(field);
 		return true;
+	}
+
+	function recordFieldStore(field:String):Void {
+		var recorded = stores;
+		if (recorded != null)
+			recorded.fields.set(field, true);
+	}
+
+	function recordIndexedStore():Void {
+		var recorded = stores;
+		if (recorded != null)
+			recorded.indexed = true;
 	}
 
 	/**

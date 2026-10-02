@@ -13,3 +13,4 @@ object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
 sys-exit	skip	Sys.exit needs the host sys_exit import, which the Wasm harness does not provide
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
 profile-span	skip	Profile spans are a HashLink diagnostics feature
+dynamic-method-call	skip	Calling a method of a Dynamic value is HashLink-only so far; neither Wasm backend lowers it

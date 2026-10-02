@@ -18,6 +18,7 @@ class Frontend {
 		// The convenience frontend has no target; keep its IR portable.
 		IrGenerator.bindNativeArrayChecks(false);
 		IrGenerator.bindNativeStringFastPaths(false);
+		IrGenerator.bindNativeReflectionDispatch(false);
 		return IrGenerator.generate(Typer.type(ast));
 	}
 }

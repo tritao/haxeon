@@ -5,6 +5,10 @@ import compiler.backend.wasm.WasmRepresentation.WasmInteropRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.WasmCAbi;
+import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmModule.WasmLocal;
+import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.ir.Ir.IrCNative;
@@ -23,6 +27,12 @@ class WasmGcInterop implements WasmInteropRepresentation {
 	final scratchAllocator:Int;
 	final nativePointerReleaseIndices:Array<Int>;
 	final nativePointerReleaseBySymbol:Map<String, Int>;
+
+	/** `__haxeon_gc_relocate_roots`, on the module-level interop; -1 without a scratch bridge. */
+	var rootRelocator = -1;
+
+	/** `__haxeon_gc_restore_root_tokens`, created with rootRelocator. */
+	var rootTokenRestorer = -1;
 
 	public function new(gc:WasmGcContext, scratchTop:Int, scratchAllocator:Int, pointerReleases:Map<String, Int>, ?functionContext:WasmGcFunctionContext,
 			?moduleInterop:WasmGcInterop) {
@@ -465,6 +475,9 @@ class WasmGcInterop implements WasmInteropRepresentation {
 							LocalSet(pointer)
 						]);
 						body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
+						// An array of records (HXI's `array()`) borrows like one record: its elements' pointer fields
+						// hold tokens until relocation. Plain bytes have no roots, and the relocator returns at once.
+						body = body.concat(relocateFixedInputPointerFields(bytesLocal, pointer, 0));
 						body.push(End);
 					} else if (isNativePointerType(arguments[index].type)) {
 						var pointer = allocateLocal(I32);
@@ -481,6 +494,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		var resultRecord = fixedAggregateResult ? allocateLocal(I32) : -1;
 		if (native.fixedResult != null) {
 			var layout = native.fixedResult;
+			if (layout == null)
+				throw 'Wasm GC C native "${native.name}" has no record result layout';
 			// The pointer is either the leading argument or the address the scalar is stored to after the call.
 			body = body.concat([
 				I32Const(layout.size),
@@ -523,6 +538,16 @@ class WasmGcInterop implements WasmInteropRepresentation {
 					var pointer = bytePointers[index];
 					if (pointer == null)
 						throw 'Wasm GC C native "${native.name}" aggregate argument $index has no scratch pointer';
+					var restoresTokens = switch native.argumentModes[index] {
+						case FixedInputOutput(_, _, false): moduleInterop.rootTokenRestorer >= 0;
+						default: false;
+					};
+					if (restoresTokens)
+						body = body.concat([
+							LocalGet(argumentLocals[index]),
+							LocalGet(pointer),
+							Call(moduleInterop.rootTokenRestorer)
+						]);
 					body = body.concat(copyLinearToGcBytes(argumentLocals[index], pointer));
 				case BytesOutput(_):
 					var pointer = bytePointers[index];
@@ -802,7 +827,120 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		];
 	}
 
+	/** Gives C real addresses for a record copied to linear memory at `aggregatePointer` (see addRootRelocator). */
 	function relocateFixedInputPointerFields(bytesLocal:Int, aggregatePointer:Int, aggregateSize:Int):Array<WasmInstruction> {
+		// Without a relocator the program has no record roots, so no field holds a token.
+		if (moduleInterop.rootRelocator < 0)
+			return [];
+		return [
+			LocalGet(bytesLocal),
+			LocalGet(aggregatePointer),
+			Call(moduleInterop.rootRelocator)
+		];
+	}
+
+	/**
+	 * Adds `__haxeon_gc_relocate_roots(record, address)`. A GC record cannot hold linear addresses for the bytes its
+	 * pointer fields borrow, so such a field holds a token (bit 31, plus bit 30 for a UTF-8 string that needs a NUL)
+	 * and the bytes sit in the record's root slot for that field: slot `n` backs the pointer at byte `(n - 1) * 4`.
+	 * Once the record is copied to `address`, this copies each rooted value to scratch memory, writes its address
+	 * over the token, and recurses, since a rooted array of records has pointer fields of its own. Records built
+	 * by `array()` keep each element's token at the element's own slot, so the slot comes from the field position.
+	 */
+	public function addRootRelocator(module:WasmModule):Void {
+		var name = "__haxeon_gc_relocate_roots", type:WasmFunctionType = {parameters: [plan.valueType(ManagedBytes), I32], results: []},
+			index = module.addFunction(new WasmFunction(name, type)), locals:Array<WasmLocal> = [], nextLocal = 2;
+		rootRelocator = index;
+		gc.functions.set(name, index);
+		var lowering = new WasmGcInterop(gc, scratchTop, scratchAllocator, [], new WasmGcFunctionContext(gc, null, null, function(valueType) {
+			locals.push({type: valueType});
+			return nextLocal++;
+		}), this);
+		module.setFunction(index, new WasmFunction(name, type, locals, lowering.rootRelocatorBody(0, 1, index)));
+		// Copying an in/out record back must not replace its tokens with the scratch addresses C was given.
+		var restoreName = "__haxeon_gc_restore_root_tokens",
+			restoreLocals:Array<WasmLocal> = [],
+			restoreNext = 2;
+		rootTokenRestorer = module.addFunction(new WasmFunction(restoreName, type));
+		gc.functions.set(restoreName, rootTokenRestorer);
+		var restoring = new WasmGcInterop(gc, scratchTop, scratchAllocator, [], new WasmGcFunctionContext(gc, null, null, function(valueType) {
+			restoreLocals.push({type: valueType});
+			return restoreNext++;
+		}), this);
+		module.setFunction(rootTokenRestorer, new WasmFunction(restoreName, type, restoreLocals, restoring.restoreRootTokensBody(0, 1)));
+	}
+
+	/** Writes each rooted field's token from the record over the address relocation gave C at `aggregatePointer`. */
+	function restoreRootTokensBody(bytesLocal:Int, aggregatePointer:Int):Array<WasmInstruction> {
+		var rootsType = plan.arrayType(ManagedBytes),
+			rootsStorageType = plan.arrayStorageType(ManagedBytes),
+			rootsLocal = allocateLocal(plan.valueType(Array(ManagedBytes))),
+			rootIndexLocal = allocateLocal(I32),
+			offsetLocal = allocateLocal(I32),
+			tokenLocal = allocateLocal(I32),
+			body:Array<WasmInstruction> = [
+				LocalGet(bytesLocal),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefTest({
+					nullable: false,
+					heap: Type(rootsType)
+				}),
+				I32Eqz,
+				If(null),
+				Return,
+				End,
+				LocalGet(bytesLocal),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(rootsType)}),
+				LocalSet(rootsLocal),
+				I32Const(1),
+				LocalSet(rootIndexLocal),
+				Block(null),
+				Loop(null),
+				LocalGet(rootIndexLocal),
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayLengthFieldIndex()),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(rootsStorageType)
+				}),
+				LocalGet(rootIndexLocal),
+				ArrayGet(rootsStorageType),
+				RefIsNull,
+				I32Eqz,
+				If(null),
+				LocalGet(rootIndexLocal),
+				I32Const(1),
+				I32Sub,
+				I32Const(2),
+				I32Shl,
+				LocalSet(offsetLocal)
+			];
+		body = body.concat(managedByteGetI32(bytesLocal, offsetLocal, tokenLocal));
+		body = body.concat([
+			LocalGet(aggregatePointer),
+			LocalGet(offsetLocal),
+			I32Add,
+			LocalGet(tokenLocal),
+			I32Store(0),
+			End,
+			LocalGet(rootIndexLocal),
+			I32Const(1),
+			I32Add,
+			LocalSet(rootIndexLocal),
+			Br(0),
+			End,
+			End
+		]);
+		return body;
+	}
+
+	function rootRelocatorBody(bytesLocal:Int, aggregatePointer:Int, self:Int):Array<WasmInstruction> {
 		var rootsType = plan.arrayType(ManagedBytes),
 			rootsStorageType = plan.arrayStorageType(ManagedBytes),
 			rootsLocal = allocateLocal(plan.valueType(Array(ManagedBytes))),
@@ -816,12 +954,17 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			offsetLocal = allocateLocal(I32),
 			targetLocal = allocateLocal(I32),
 			body:Array<WasmInstruction> = [
+				// Plain bytes (a UTF-8 copy or a scalar array) borrow nothing.
 				LocalGet(bytesLocal),
 				StructGet(plan.managedBytesTypeIndex, 3),
-				RefCast({
-					nullable: false,
-					heap: Type(rootsType)
-				}),
+				RefTest({nullable: false, heap: Type(rootsType)}),
+				I32Eqz,
+				If(null),
+				Return,
+				End,
+				LocalGet(bytesLocal),
+				StructGet(plan.managedBytesTypeIndex, 3),
+				RefCast({nullable: false, heap: Type(rootsType)}),
 				LocalSet(rootsLocal),
 				I32Const(1),
 				LocalSet(rootIndexLocal),
@@ -833,82 +976,68 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				I32LtS,
 				I32Eqz,
 				BrIf(1),
+				LocalGet(rootsLocal),
+				StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
+				RefCast({
+					nullable: false,
+					heap: Type(rootsStorageType)
+				}),
+				LocalGet(rootIndexLocal),
+				ArrayGet(rootsStorageType),
+				LocalTee(rootValueLocal),
+				RefIsNull,
+				I32Eqz,
+				If(null),
 				LocalGet(rootIndexLocal),
 				I32Const(1),
 				I32Sub,
 				I32Const(2),
 				I32Shl,
 				LocalSet(offsetLocal),
+				LocalGet(bytesLocal),
+				StructGet(plan.managedBytesTypeIndex, 2),
 				LocalGet(offsetLocal),
-				I32Const(aggregateSize),
+				I32Const(4),
+				I32Add,
 				I32LtS,
+				If(null),
+				Unreachable,
+				End,
+				LocalGet(rootValueLocal),
+				RefCast({
+					nullable: false,
+					heap: Type(plan.managedBytesTypeIndex)
+				}),
+				LocalSet(sourceLocal),
+				LocalGet(aggregatePointer),
+				LocalGet(offsetLocal),
+				I32Add,
+				I32Load(0),
+				LocalTee(tokenLocal),
+				I32Const(-2147483648),
+				I32And,
 				I32Eqz,
-				If(null)
+				If(null),
+				Unreachable,
+				End,
+				LocalGet(sourceLocal),
+				StructGet(plan.managedBytesTypeIndex, 2),
+				LocalGet(tokenLocal),
+				I32Const(0x40000000),
+				I32And,
+				I32Eqz,
+				I32Eqz,
+				I32Add,
+				I32Const(8),
+				Call(moduleInterop.scratchAllocator),
+				LocalSet(targetLocal)
 			];
-		body = body.concat(trapInstructions());
-		body = body.concat([
-			End,
-			LocalGet(rootsLocal),
-			StructGet(rootsType, WasmGcTypePlan.arrayDataFieldIndex()),
-			RefCast({nullable: false, heap: Type(rootsStorageType)}),
-			LocalGet(rootIndexLocal),
-			ArrayGet(rootsStorageType),
-			LocalTee(rootValueLocal),
-			RefIsNull,
-			If(null),
-			Else,
-			LocalGet(rootValueLocal),
-			RefCast({
-				nullable: false,
-				heap: Type(plan.managedBytesTypeIndex)
-			}),
-			LocalSet(sourceLocal),
-			LocalGet(aggregatePointer),
-			LocalGet(offsetLocal),
-			I32Add,
-			I32Load(0),
-			LocalTee(tokenLocal),
-			I32Const(-2147483648),
-			I32And,
-			I32Const(-2147483648),
-			I32Eq,
-			I32Eqz,
-			If(null)
-		]);
-		body = body.concat(trapInstructions());
-		body = body.concat([
-			End,
-			LocalGet(tokenLocal),
-			I32Const(0x3fffffff),
-			I32And,
-			LocalGet(rootIndexLocal),
-			I32Eq,
-			I32Eqz,
-			If(null)
-		]);
-		body = body.concat(trapInstructions());
-		body = body.concat([
-			End,
-			LocalGet(sourceLocal),
-			StructGet(plan.managedBytesTypeIndex, 2),
-			LocalGet(tokenLocal),
-			I32Const(0x40000000),
-			I32And,
-			I32Eqz,
-			I32Eqz,
-			I32Add,
-			I32Const(8),
-			Call(moduleInterop.scratchAllocator),
-			LocalSet(targetLocal)
-		]);
 		body = body.concat(copyGcBytesToLinear(sourceLocal, targetLocal));
 		body = body.concat([
 			LocalGet(tokenLocal),
 			I32Const(0x40000000),
 			I32And,
-			I32Eqz,
 			If(null),
-			Else,
 			LocalGet(targetLocal),
 			LocalGet(sourceLocal),
 			StructGet(plan.managedBytesTypeIndex, 2),
@@ -921,6 +1050,9 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			I32Add,
 			LocalGet(targetLocal),
 			I32Store(0),
+			LocalGet(sourceLocal),
+			LocalGet(targetLocal),
+			Call(self),
 			End,
 			LocalGet(rootIndexLocal),
 			I32Const(1),

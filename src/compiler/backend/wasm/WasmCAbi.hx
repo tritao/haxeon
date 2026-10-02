@@ -74,7 +74,7 @@ class WasmCAbi {
 		if (split.length != 2)
 			throw 'C native "${native.name}" has an invalid signature "${native.signature}"';
 		var argumentDescriptors = split[0].length == 0 ? [] : topLevel(split[0], ","),
-			plain = [for (_ in native.arguments) null],
+			plain:Array<Null<WasmCScalar>> = [for (_ in native.arguments) null],
 			unconverted = [for (_ in native.arguments) false],
 			floatResult = split[1] == FLOAT && native.fixedResult == null,
 			adjusted = native.fixedResult != null || floatResult;

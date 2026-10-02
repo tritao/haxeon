@@ -189,6 +189,26 @@ class CallResolver {
 			default: null;
 		};
 
+	/** `value.match(pattern)` on an enum value. */
+	public function isEnumMatch(receiver:TypedExpression, name:String, arguments:Array<AstExpression>):Bool
+		return name == "match" && arguments.length == 1 && switch receiver.type {
+			case TInstance(NominalKind.Enum, _, _): true;
+			default: false;
+		};
+
+	/** Whether `object` matches `pattern`: `switch object { case pattern: true; default: false }`, with `object` evaluated once. */
+	public function typeEnumMatch(object:AstExpression, pattern:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
+		var matched = "__haxeon_match" + span.start;
+		return typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)], SwitchExpression(Variable(matched, span), [
+			{
+				value: pattern,
+				guard: null,
+				result: BoolLiteral(true, span),
+				span: span
+			}
+		], BoolLiteral(false, span), span), span), scope, null, false);
+	}
+
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
@@ -505,8 +525,28 @@ class CallResolver {
 		return results.length == 0 ? null : results[0];
 	}
 
+	/**
+	 * `dynamicValue.method(arguments)`: the method is looked up by name when the program runs and called with its
+	 * arguments as Dynamic values, and what it returns is Dynamic. It may run any code, so nothing known about the
+	 * captured variables or fields survives it, as for a call through a function value of unknown body.
+	 */
+	function resolveDynamicMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		var callee = new TypedExpression(TCall("Reflect.field", [receiver, new TypedExpression(TStringLiteral(name), TString, span)]), TDynamic, span),
+			typedArguments = [
+				for (argument in arguments)
+					coerce(typeExpression(argument, scope, TDynamic, false), TDynamic, 'argument to dynamic method "$name"', "E1009")
+			];
+		for (captured in session.currentContext.storage.candidateSourceNames())
+			scope.invalidate(captured);
+		scope.invalidateAllExpressions();
+		return new TypedExpression(TClosureCall(callee, typedArguments), TDynamic, span);
+	}
+
 	public function resolveInstanceMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, receiverName:Null<String> = null, contextualGenericArguments:Bool = true):TypedExpression {
+		if (sameType(receiver.type, TDynamic))
+			return resolveDynamicMethodCall(receiver, name, arguments, span, scope);
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _):
 				value;
@@ -545,7 +585,8 @@ class CallResolver {
 		if (functionTypeParameters(method).length > 0) {
 			var preset = copyMap(substitutions),
 				parameters = functionTypeParameters(method);
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
 			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, false, prepared.substitutions,
@@ -639,8 +680,13 @@ class CallResolver {
 	}
 
 	public function typeClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, callableName:Null<String> = null,
-			invalidateAllExpressions:Bool = true):TypedExpression {
-		var typedCallee = typeExpression(callee, scope, null, false),
+			invalidateAllExpressions:Bool = true, ?expectedType:CompilerType):TypedExpression {
+		// A `try` expression is an immediately called lambda; where its value is discarded, its branches may differ in type.
+		var discarded = expectedType == TVoid && arguments.length == 0 && switch callee {
+			case Lambda(lambdaArguments, _, _): lambdaArguments.length == 0;
+			default: false;
+		},
+			typedCallee = typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null, false),
 			functionType = switch typedCallee.type {
 				case TFunction(parameters, result): {arguments: parameters, result: result};
 				default: null;
@@ -723,8 +769,19 @@ class CallResolver {
 		if (!hasSignature && arguments.length != expectedArguments.length)
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}', span);
 		var typed = hasSignature ? typeDeclaredCallArguments(arguments, requiredMapValue(session.signatures, name).arguments, scope, name,
-			span) : typeCallArguments(arguments, expectedArguments, scope, name),
-			call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
+			span) : typeCallArguments(arguments, expectedArguments, scope, name);
+		// trace prints a line in Haxe's form, "path/File.hx:12: message", with the path relative to its source root.
+		// The newline matters beyond looks: hosts that print by line (a browser console) would otherwise hold it back.
+		if (name == "trace" && typed.length == 1) {
+			var message = typed[0],
+				location = span.file.path + ":" + span.file.lineAt(span.start) + ": ";
+			typed = [
+				new TypedExpression(TAdd(new TypedExpression(TStringLiteral(location), TString, message.span),
+					new TypedExpression(TAdd(message, new TypedExpression(TStringLiteral("\n"), TString, message.span)), TString, message.span)),
+					TString, message.span)
+			];
+		}
+		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name, typed), result, span);
 		if (!session.isPureCall(name))
 			scope.invalidateAllExpressions();
 		return session.isNoReturnCall(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
@@ -751,7 +808,8 @@ class CallResolver {
 			}
 			var preset:Map<String, CompilerType> = [],
 				parameters = functionTypeParameters(method);
-			if (expectedType != null)
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
 				inferTypeParameters(method.result, expectedType, parameters, preset, span);
 			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
 			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, methodInfo.isStatic,
@@ -833,8 +891,11 @@ class CallResolver {
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
-		if (receiver != null && methodName != null)
+		if (receiver != null && methodName != null) {
+			if (isEnumMatch(receiver, methodName, arguments))
+				return typeEnumMatch(Variable(name.substring(0, name.lastIndexOf(".")), span), arguments[0], span, scope);
 			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName, false);
+		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
 
@@ -1031,6 +1092,17 @@ class CallResolver {
 			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}
+		if (name == "Type.enumIndex") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			switch value.type {
+				case TInstance(NominalKind.Enum, _, _):
+				default:
+					fail("E1009", "Type.enumIndex requires an enum value", span);
+			}
+			return new TypedExpression(TEnumIndex(value), TInt, span);
+		}
 		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
@@ -1111,6 +1183,24 @@ class CallResolver {
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
 			return new TypedExpression(TCall(name == "Std.isExactType" ? "__std_is_exact_type" : "__std_is_of_type", [value, target]), TBool, span);
+		}
+		if (name == "Std.downcast") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "Std.downcast" expects 2 arguments, got ${arguments.length}', span);
+			var targetName = switch arguments[1] {
+				case Variable(value, _): value;
+				default:
+					fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
+					"";
+			};
+			if (scope.resolve(targetName) != null || !(session.classDecls.exists(targetName) || session.interfaceDecls.exists(targetName)))
+				fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
+			// `value` is evaluated once: test the held copy, then cast it or yield null.
+			var held = '$' + 'downcast:${span.start}',
+				test = Call("Std.isOfType", [Variable(held, span), arguments[1]], span);
+			return typeExpression(BlockExpression([VarDeclaration(held, null, arguments[0], span)],
+				Conditional(test, Cast(Variable(held, span), NamedType(targetName), span), NullLiteral(span), span), span),
+				scope, expectedType, false);
 		}
 		if (name == "Reflect.compare") {
 			if (arguments.length != 2)

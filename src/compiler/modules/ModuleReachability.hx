@@ -12,11 +12,16 @@ class ModuleReachability {
 	var cursor = 0;
 	var current:ModuleState;
 
-	public function new(modules:Map<String, ModuleState>, entryModule:String) {
+	/** `roots` are modules compiled with every entry (Compiler.addRootModule); missing ones are skipped. */
+	public function new(modules:Map<String, ModuleState>, entryModule:String, ?roots:Array<String>) {
 		if (!modules.exists(entryModule))
 			throw 'Missing entry module "$entryModule"';
 		this.modules = modules;
 		pending = [entryModule];
+		if (roots != null)
+			for (root in roots)
+				if (root != entryModule && modules.exists(root))
+					pending.push(root);
 	}
 
 	public function hasNext(?token:CancellationToken):Bool {

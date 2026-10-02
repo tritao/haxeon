@@ -82,6 +82,18 @@ class IrGenerator {
 
 	static var nativeStringFastPaths = false;
 
+	/**
+	 * Wasm: field reflection over object layouts is dispatched by the backend through a table keyed on the class id in every
+	 * object's header, so the program carries one function per layout and no dispatcher of its own.
+	 */
+	public static function bindNativeReflectionDispatch(enabled:Bool):Void
+		nativeReflectionDispatch = enabled;
+
+	public static function usesNativeReflectionDispatch():Bool
+		return nativeReflectionDispatch;
+
+	static var nativeReflectionDispatch = false;
+
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
 	static function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
 		switch expression.expression {
@@ -399,6 +411,14 @@ class IrGenerator {
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
 						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
+				case TIf(condition, thenBranch, elseBranch, span) if (isBoolLiteral(condition)):
+					// A bare block `{ ... }` is an `if (true)` without an `else`: only the branch that runs is lowered, so the
+					// code after a block that returns stays unreachable.
+					var taken = switch condition.expression {
+						case TBoolLiteral(true): thenBranch;
+						default: elseBranch;
+					};
+					lowerStatements(taken, builder, localTypes, loops, statementsScopeEnd(taken, span.end));
 				case TIf(condition, thenBranch, elseBranch, span):
 					var conditionValue = lowerExpression(condition, builder, localTypes),
 						thenBlock = builder.createBlock(),
@@ -598,9 +618,12 @@ class IrGenerator {
 						exits:Array<CfgBlock> = [];
 					localTypes.set(switchName, switchType);
 					builder.store(switchName, lowerExpression(expression, builder, localTypes));
-					var checkBlock = builder.currentBlock();
+					var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
+						matchesEverything = false;
 					for (caseIndex in 0...cases.length) {
 						var switchCase = cases[caseIndex];
+						if (switchCase.guard == null && (switchCase.isCatchAll || switchCase.subjectBinding != null))
+							matchesEverything = true;
 						var matchBlock = builder.createBlock(),
 							bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
 							nextBlock = builder.createBlock();
@@ -672,7 +695,7 @@ class IrGenerator {
 						checkBlock = nextBlock;
 					}
 					builder.select(checkBlock);
-					if (!hasDefault && isEnumType(expression.type))
+					if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
 						builder.markUnreachable();
 					else
 						lowerStatements(defaultBranch, builder, localTypes, loops, statementsScopeEnd(defaultBranch, span.end));
@@ -691,6 +714,12 @@ class IrGenerator {
 			}
 		}
 	}
+
+	static function isBoolLiteral(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TBoolLiteral(_): true;
+			default: false;
+		};
 
 	static function typedStatementSpan(statement:TypedStatement):compiler.Source.SourceSpan
 		return switch statement {

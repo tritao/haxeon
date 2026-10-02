@@ -19,6 +19,8 @@ class WasmExceptionLowering {
 		for (index in 0...module.functions.length) {
 			var functionIndex = module.imports.length + index,
 				fn = module.functions[index];
+			if (fn.encodedBody != null)
+				continue;
 			module.setFunction(functionIndex, new WasmFunction(fn.name, fn.type, fn.locals, lowerSequence(fn.body, payloadType)));
 		}
 	}

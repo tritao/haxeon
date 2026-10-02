@@ -153,8 +153,9 @@ the wasm32 and wasm-gc targets.
 
 - `stdlib/haxeon/wasm/HaxeonHost.hxi` declares the host services (`print`,
   `write_output`, `flush_output`, `date_now`, `callback_create`,
-  `callback_close`). The compiler registers it for Wasm targets; `trace`,
-  `Sys.print`, `Sys.stdout()`, `Sys.stderr()` and `Date` use it.
+  `callback_close`). The compiler registers it for Wasm targets; `trace`
+  (which prints Haxe's `File.hx:line: message` lines), `Sys.print`, `Sys.stdout()`,
+  `Sys.stderr()` and `Date` use it.
   `write_output(text, error)` selects stdout with 0 or stderr with 1;
   `flush_output(error)` publishes an unterminated line on that stream.
 - The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math

@@ -10,6 +10,8 @@ if [[ ! -x "$haxe_bin" ]]; then
 fi
 source "$root_dir/scripts/haxeon-compiler.sh"
 
+# The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
+bash "$root_dir/scripts/build-wasm-runtime.sh" --check
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
 bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
@@ -187,6 +189,12 @@ for target in wasm32 wasm-gc; do
 	haxeon_compile_async --target="$target" --output="out/wasm-utf8-result-$target.wasm" \
 		--entry=wasm-utf8-result --root=tests/ffi --ffi-interface=tests/ffi/utf8_result.hxi tests/ffi/wasm-utf8-result.hx
 done
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-borrowed-array.wasm --entry=wasm-gc-ffi-borrowed-array \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-borrowed-array.hx
+haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-ffi-nested-array.wasm --entry=wasm-gc-ffi-nested-array \
+	--root=tests/ffi --ffi-interface=tests/ffi/gc_nested.hxi tests/ffi/wasm-gc-ffi-nested-array.hx
 haxeon_compile_wait
 
 node - "$root_dir" <<'JS'
@@ -282,7 +290,9 @@ const cases = [
 	["out/wasm-cli-string-split.wasm", 42],
 	["out/wasm-cli-gc-bytes.wasm", 42],
 	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-short-struct.wasm", 42]
+	["out/wasm-cli-gc-ffi-short-struct.wasm", 42],
+	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42],
+	["out/wasm-cli-gc-ffi-nested-array.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
@@ -337,7 +347,7 @@ const cases = [
         date_now: () => Date.now()
       };
       hostServicesCheck = () => {
-        if (printed !== "host tracehost println\nstdout λ" || errors !== "stderr 雪" || JSON.stringify(flushes) !== "[0,1]")
+        if (printed !== "wasm-host-services.hx:4: host trace\nhost println\nstdout λ" || errors !== "stderr 雪" || JSON.stringify(flushes) !== "[0,1]")
           throw new Error(`${relative}: host printed ${JSON.stringify(printed)}`);
       };
     }
@@ -571,6 +581,41 @@ const cases = [
       };
     if (relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm"))
       imports.gc_bytes = {shift_point: () => { shortStructImportCalled = true; }};
+    if (relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm")) {
+      const view = () => new DataView(moduleInstance.exports.memory.buffer);
+      imports.gc_bytes = {
+        // Writes through a non-const record pointer, which the caller must see.
+        fill_point: pointer => {
+          view().setInt32(pointer, 7, true);
+          view().setInt32(pointer + 4, 9, true);
+        },
+        // Follows the record's borrowed array to the second point's y.
+        second_y: pointer => view().getUint32(pointer + 4, true) === 2 ? view().getInt32(view().getUint32(pointer, true) + 12, true) : -1
+      };
+    }
+    if (relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm")) {
+      const view = () => new DataView(moduleInstance.exports.memory.buffer);
+      imports.gc_nested = {
+        // Sums every byte reachable from an array of lists of blobs; -1 when a pointer is not a real address.
+        sum_blobs: (lists, count) => {
+          const memory = view();
+          let sum = 0;
+          for (let list = 0; list < count; list++) {
+            const blobs = memory.getUint32(lists + list * 8, true), blobCount = memory.getUint32(lists + list * 8 + 4, true);
+            if (blobs + blobCount * 8 > memory.byteLength)
+              return -1;
+            for (let blob = 0; blob < blobCount; blob++) {
+              const data = memory.getUint32(blobs + blob * 8, true), size = memory.getUint32(blobs + blob * 8 + 4, true);
+              if (data + size > memory.byteLength)
+                return -1;
+              for (let offset = 0; offset < size; offset++)
+                sum += memory.getUint8(data + offset);
+            }
+          }
+          return sum;
+        }
+      };
+    }
     if (relative.includes("hxi-retained")) {
       const retainedMemory = () => memory == null ? moduleInstance.exports.memory : memory;
       const validOptions = pointer => {
@@ -652,12 +697,16 @@ const cases = [
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const utf8Results = relative.endsWith("utf8-result-wasm-gc.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
+      const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
+      const nestedArray = relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm");
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && WebAssembly.Module.imports(compiled).length !== 0)
-          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && hasMemory)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && WebAssembly.Module.imports(compiled).length !== 0)
+          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && hasMemory)
           || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
+          || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
+          || (nestedArray && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || (valueRecords && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
@@ -753,7 +802,7 @@ const cases = [
   // Exercise the shipped browser adapter, including partial-line flush and separated streams.
   const vm = require("vm"), path = require("path");
   const adapterSource = fs.readFileSync(path.join(root, "stdlib/haxeon/wasm/haxeon-host.js"), "utf8");
-  const context = vm.createContext({WebAssembly, TextDecoder, Uint8Array, Date, performance, console});
+  const context = vm.createContext({WebAssembly, TextDecoder, TextEncoder, Uint8Array, Date, performance, console});
   vm.runInContext(adapterSource + "\nglobalThis.adapter = HaxeonWasmHost;", context);
   for (const target of ["wasm32", "wasm-gc"]) {
     const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-cli-host-streams-${target}.wasm`)));
@@ -762,12 +811,45 @@ const cases = [
     const guest = await context.adapter.instantiate(module, {memory, emscripten: {},
       print: line => output.push(line), printError: line => errors.push(line)});
     const result = guest.exports.main();
-    if (result !== 42 || JSON.stringify(output) !== JSON.stringify(["host tracehost println", "stdout λ"])
+    if (result !== 42 || JSON.stringify(output) !== JSON.stringify(["wasm-host-services.hx:4: host trace", "host println", "stdout λ"])
         || JSON.stringify(errors) !== JSON.stringify(["stderr 雪"]) || guest.unavailable.length)
       throw new Error(`${target}: host stream routing/flush failed: ${JSON.stringify({result, output, errors})}`);
   }
   console.log("PASS: Wasm browser host stdout/stderr and partial-line flush");
   console.log("PASS: Wasm modules validate and execute");
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});
+JS
+
+# haxeon-host.js throws haxeon.wasm.HostError into a guest that calls an import it cannot provide.
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async \
+		--target="$target" --output="out/wasm-host-error-$target.wasm" --entry=wasm-host-error --wasm-import-memory \
+		--root=tests/ffi --ffi-interface=tests/ffi/host_error.hxi tests/ffi/wasm-host-error.hx
+done
+haxeon_compile_wait
+node - "$root_dir" <<'JS'
+const fs = require("fs"), path = require("path"), vm = require("vm");
+const root = process.argv[2];
+vm.runInThisContext(fs.readFileSync(path.join(root, "stdlib/haxeon/wasm/haxeon-host.js"), "utf8"));
+(async () => {
+  for (const target of ["wasm32", "wasm-gc"]) {
+    const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-host-error-${target}.wasm`)));
+    const minimum = WebAssembly.Module.imports(module).some(entry => entry.kind === "memory") ? 64 : 0;
+    const memory = new WebAssembly.Memory({initial: minimum});
+    // Messages go to the top page, above anything the guest uses.
+    const scratch = () => memory.buffer.byteLength - 4096;
+    const {exports, unavailable} = await HaxeonWasmHost.instantiate(module, {
+      emscripten: {}, memory, allocate: scratch, release: () => {}});
+    if (!unavailable.includes("missing_lib"))
+      throw new Error(`${target}: missing_lib was not reported unavailable`);
+    const result = exports.main();
+    if (result !== 42)
+      throw new Error(`${target}: the guest did not catch the HostError (exit ${result})`);
+  }
+  console.log("PASS: haxeon-host.js throws HostError into wasm32 and wasm-gc guests");
 })().catch(error => {
   console.error(error);
   process.exitCode = 1;
