@@ -341,7 +341,7 @@ class HxiHaxeEmitter {
 					fixedResult: fixedResult
 				});
 			var spanInputs = supported && returnValue != null ? spanCompanionInputs(fn.semantics) : null;
-			if (spanInputs != null)
+			if (spanInputs != null && returnValue != null)
 				result.push({
 					name: nativeModule + ".__hxi_span_" + fn.name,
 					library: library,
