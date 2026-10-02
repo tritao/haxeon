@@ -466,14 +466,14 @@ class WasmGcModuleBuilder {
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
-						throw 'Wasm GC C native "${native.name}" requires byte input followed by an I32 length';
+						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
+						throw 'Wasm GC C native "${native.name}" requires byte input with an integer length';
 				case BytesInputOutput(lengthArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
-						throw 'Wasm GC C native "${native.name}" requires mutable byte input followed by an I32 length';
+						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
+						throw 'Wasm GC C native "${native.name}" requires mutable byte input with an integer length';
 				case BytesOutput(sizeArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| sizeArgument < 0

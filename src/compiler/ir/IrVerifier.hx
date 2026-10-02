@@ -75,13 +75,13 @@ class IrVerifier {
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
+						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
 				case BytesInputOutput(lengthArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| native.arguments[lengthArgument] != I32)
+						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
 				case BytesOutput(sizeArgument):
 					if (native.arguments[index] != ManagedBytes
@@ -98,6 +98,10 @@ class IrVerifier {
 				case Value | Output | InputOutput:
 			}
 	}
+
+	/** Counted byte inputs use the integer width declared by the native ABI. */
+	public static function validByteInputCount(type:IrType):Bool
+		return type == I32 || type == I64;
 
 	static function validAggregateLayout(size:Int, alignment:Int):Bool
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;

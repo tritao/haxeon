@@ -293,6 +293,14 @@ FIXTURE_API int32_t native_fixture_shift_point( native_fixture_point *point ) {
 	return 42;
 }
 
+FIXTURE_API int32_t native_fixture_sum_void_bytes( const void *data, uint64_t count ) {
+	const uint8_t *bytes = data;
+	int32_t sum = 0;
+	if ( count > 32 || ( count && !data ) ) return -1;
+	for ( uint64_t i = 0; i < count; ++i ) sum += bytes[i];
+	return sum;
+}
+
 FIXTURE_API int32_t native_fixture_read_bytes( int32_t first, uint8_t *data, uint32_t *size ) {
 	const uint32_t required = 3;
 	if( size == NULL ) return -1;
