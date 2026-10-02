@@ -998,7 +998,12 @@ class IrGenerator {
 							target = lowerType(expression.type);
 						sameIrType(lowered.type, target) ? lowered : abiBoundaryCast(builder, lowered, target);
 				}
-			case TIntToFloat(value): builder.intToFloat(lowerExpression(value, builder, localTypes));
+			case TIntToFloat(value):
+				switch value.expression {
+					// An Int literal used as a Float is a Float constant, not a conversion at every execution.
+					case TIntLiteral(literal): builder.constFloat(literal);
+					default: builder.intToFloat(lowerExpression(value, builder, localTypes));
+				}
 			case TIntToInt64(value): builder.intToInt64(lowerExpression(value, builder, localTypes));
 			case TFloatToInt(value): builder.floatToInt(lowerExpression(value, builder, localTypes));
 			case TToDynamic(value): switch value.expression {
