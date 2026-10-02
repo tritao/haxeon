@@ -1,5 +1,21 @@
 package sys.thread;
 
+#if wasm
+/**
+ * Condition variable on a single-threaded target: no other thread can signal, so a wait that has to wait never ends.
+ * `wait` says so instead of hanging; `timedWait` times out at once.
+ */
+class Condition {
+  public function new() {}
+
+  public function acquire():Void {}
+  public function release():Void {}
+  public function signal():Void {}
+  public function broadcast():Void {}
+  public function wait():Void throw "Condition.wait would block forever on a single-threaded target";
+  public function timedWait(timeout:Float):Bool return false;
+}
+#else
 /** Recursive mutex and condition variable backed by HashLink. */
 class Condition {
   final handle:hl.Abstract<"hl_condition">;
@@ -28,3 +44,4 @@ extern function nativeConditionBroadcast(condition:hl.Abstract<"hl_condition">):
 extern function nativeConditionWait(condition:hl.Abstract<"hl_condition">):Void;
 @:hlNative("std", "condition_timed_wait")
 extern function nativeConditionTimedWait(condition:hl.Abstract<"hl_condition">, timeout:Float):Bool;
+#end
