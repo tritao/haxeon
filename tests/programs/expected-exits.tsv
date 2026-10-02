@@ -311,3 +311,4 @@ thread-gc-stress	42
 math-sqrt-native	42
 control-flow-shapes	42
 do-while-jumps	42
+exception-structured	42

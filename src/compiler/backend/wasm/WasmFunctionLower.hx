@@ -147,12 +147,11 @@ class WasmFunctionLower {
 			live: live,
 			size: align(12 + rootLocals.length * 4, 8)
 		};
+		// Handler state exists only for a function that contains a try. Any function in an exception-enabled module still
+		// throws with the module's tag, but one without a try needs no handler dispatch and can be emitted structured.
 		context.exceptionState = null;
-		if (context.exceptionTag != null) {
-			var blocks:Map<Int, Int> = [], orderIndex = 0;
-			for (id in analysis.graph.order)
-				blocks.set(id, orderIndex++);
-			var saved:Map<Int, Int> = [];
+		var saved:Map<Int, Int> = [];
+		if (context.exceptionTag != null)
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
@@ -161,6 +160,10 @@ class WasmFunctionLower {
 								saved.set(catchBlock, placement.allocate(I32));
 						default:
 					}
+		if (context.exceptionTag != null && saved.keys().hasNext()) {
+			var blocks:Map<Int, Int> = [], orderIndex = 0;
+			for (id in analysis.graph.order)
+				blocks.set(id, orderIndex++);
 			context.exceptionState = {
 				handler: placement.allocate(I32),
 				exception: placement.allocate(context.representation.values.valueType(Dyn)),
@@ -255,8 +258,8 @@ class WasmFunctionLower {
 				if (value.type != Void)
 					body.push(LocalGet(requiredLocal(state.values, value.id)));
 				body.push(Return);
-			case Throw(_), Rethrow(_):
-				body.push(Unreachable);
+			case Throw(value), Rethrow(value):
+				emitThrow(body, requiredLocal(state.values, value.id));
 			case Jump(target):
 				structuredBranch(body, state, id, target);
 			case Branch(condition, yes, no):
@@ -406,7 +409,6 @@ class WasmFunctionLower {
 	function lowerBlock(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, pc:Int, predecessor:Int,
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
-		var exceptionState = context.exceptionState;
 		emitPhiGroup(body, block, values, predecessor);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
@@ -426,10 +428,7 @@ class WasmFunctionLower {
 					body.push(LocalGet(requiredLocal(values, value.id)));
 				body.push(Return);
 			case Throw(value), Rethrow(value):
-				if (exceptionState == null)
-					body.push(Unreachable);
-				else
-					emit(body, [LocalGet(requiredLocal(values, value.id)), Throw(exceptionState.tag)]);
+				emitThrow(body, requiredLocal(values, value.id));
 			case Jump(target):
 				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, target));
 			case Branch(condition, yes, no):
@@ -446,8 +445,17 @@ class WasmFunctionLower {
 	}
 
 	function trapOrThrow():Array<WasmInstruction> {
-		var exceptionState = context.exceptionState;
-		return exceptionState == null ? [Unreachable] : context.representation.values.zeroValue(Dyn).concat([Throw(exceptionState.tag)]);
+		var tag = context.exceptionTag;
+		return tag == null ? [Unreachable] : context.representation.values.zeroValue(Dyn).concat([Throw(tag)]);
+	}
+
+	/** A Haxe throw: the module's exception tag when it has exceptions, otherwise a trap. */
+	function emitThrow(body:Array<WasmInstruction>, valueLocal:Int):Void {
+		var tag = context.exceptionTag;
+		if (tag == null)
+			body.push(Unreachable);
+		else
+			emit(body, [LocalGet(valueLocal), Throw(tag)]);
 	}
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
