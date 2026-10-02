@@ -314,3 +314,4 @@ control-flow-shapes	42
 do-while-jumps	42
 exception-structured	42
 iterator-replacement	42
+math-fmod-native	42

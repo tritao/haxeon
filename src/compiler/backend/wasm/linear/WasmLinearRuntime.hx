@@ -2,6 +2,7 @@ package compiler.backend.wasm.linear;
 
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
+import compiler.backend.wasm.WasmFmod;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -21,9 +22,9 @@ class WasmLinearRuntime {
 		for (native in program.natives)
 			if (used.exists(native.name))
 				switch native.symbol {
-					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_exp",
-						"__math_log", "__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
-						"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_exp", "__math_log",
+						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
+						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 						runtimeImport(module, native);
 					default:
 				}
@@ -241,11 +242,13 @@ class WasmLinearRuntime {
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
-			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_round", "__math_exp",
-				"__math_log", "__math_ceil", "__math_floor", "__sys_args":
+			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
+				"__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "__math_sqrt": addMathSqrt(module, native.name);
+			case "__math_fmod": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, WasmFmod.locals(),
+					WasmFmod.body()));
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);

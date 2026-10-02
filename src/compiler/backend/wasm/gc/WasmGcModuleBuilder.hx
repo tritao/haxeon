@@ -22,6 +22,7 @@ import compiler.backend.wasm.gc.WasmGcFunctionContext;
 import compiler.backend.wasm.gc.WasmGcInterop;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
+import compiler.backend.wasm.WasmFmod;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
 import compiler.backend.wasm.gc.WasmGcRepresentation;
@@ -378,6 +379,11 @@ class WasmGcModuleBuilder {
 				functions.set(native.name, module.addImport(importModule, importName, {parameters: parameters, results: results}));
 			}
 		for (native in program.natives)
+			if (used.exists(native.name) && native.symbol == "__math_fmod")
+				functions.set(native.name,
+					module.addFunction(new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), WasmFmod.locals(),
+						WasmFmod.body())));
+		for (native in program.natives)
 			if (used.exists(native.name)
 				&& (native.name == "__string_compare_full"
 					|| native.name == "__math_ceil"
@@ -410,7 +416,7 @@ class WasmGcModuleBuilder {
 
 	static function isGcRuntimeMathImport(symbol:Null<String>):Bool {
 		return switch symbol {
-			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_fmod", "__math_round", "__math_exp", "__math_log": true;
+			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log": true;
 			default: false;
 		};
 	}
