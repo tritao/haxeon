@@ -1302,16 +1302,23 @@ class Parser {
 	}
 
 	function parseMultiplicative():AstExpression {
-		var expression = parsePrimary();
-		while (check(TokenKind.Star) || check(TokenKind.Slash) || check(TokenKind.Percent)) {
+		var expression = parseModulo();
+		while (check(TokenKind.Star) || check(TokenKind.Slash)) {
 			var operation = advance().kind,
-				right = parsePrimary(),
+				right = parseModulo(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
-			expression = switch operation {
-				case TokenKind.Star: Mul(expression, right, span);
-				case TokenKind.Slash: Div(expression, right, span);
-				default: Mod(expression, right, span);
-			};
+			expression = operation == TokenKind.Star ? Mul(expression, right, span) : Div(expression, right, span);
+		}
+		return expression;
+	}
+
+	/** `%` binds tighter than `*` and `/` in Haxe: `a * b % c` is `a * (b % c)`. */
+	function parseModulo():AstExpression {
+		var expression = parsePrimary();
+		while (match(TokenKind.Percent)) {
+			var right = parsePrimary(),
+				span = expressionSpan(expression).merge(expressionSpan(right));
+			expression = Mod(expression, right, span);
 		}
 		return expression;
 	}

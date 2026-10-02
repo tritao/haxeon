@@ -316,3 +316,4 @@ exception-structured	42
 iterator-replacement	42
 math-fmod-native	42
 math-abs-min-max	42
+modulo-precedence	42
