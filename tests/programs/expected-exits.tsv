@@ -306,3 +306,4 @@ array-compound-call	42
 condition-branches	42
 string-buffer-chars	42
 string-buffer-unicode	42
+gc-collection-pacing	42
