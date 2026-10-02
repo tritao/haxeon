@@ -1408,8 +1408,8 @@ class CallResolver {
 			var start = coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, 'String.$name start', "E1009"),
 				end:Null<TypedExpression> = arguments.length == 1 ? null : coerce(typeExpressionValue(arguments[1], scope, TInt), TInt, 'String.$name end',
 					"E1009");
-			if (name == "substr" && end != null)
-				end = new TypedExpression(TAdd(start, end), TInt, span);
+			if (name == "substr")
+				return typeSubstr(receiver, start, end, span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
 		}
 		if (name == "charCodeAt") {
@@ -1431,6 +1431,47 @@ class CallResolver {
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
 		throw new CompileError(new Diagnostic("E1007", 'Unknown String method "$name"', span));
+	}
+
+	/**
+	 * `receiver.substr(position, length)` over the `substring` primitive. A negative position counts from the end of
+	 * the string and a negative length selects nothing, as in Haxe. Unless the position and length are constants that
+	 * need no adjustment, the receiver, position and length are evaluated once, in order, into temporaries.
+	 */
+	function typeSubstr(receiver:TypedExpression, position:TypedExpression, length:Null<TypedExpression>, span:SourceSpan):TypedExpression {
+		function nonNegativeConstant(value:TypedExpression)
+			return switch value.expression {
+				case TIntLiteral(literal): literal >= 0;
+				default: false;
+			};
+		if (nonNegativeConstant(position) && (length == null || nonNegativeConstant(length))) {
+			var end = length == null ? null : new TypedExpression(TAdd(position, length), TInt, span);
+			return new TypedExpression(TStringSubstring(receiver, position, end), TString, span);
+		}
+		var contextName = session.currentContext.name,
+			id = session.substrCounts.exists(contextName) ? session.substrCounts.get(contextName) : 0;
+		session.substrCounts.set(contextName, id + 1);
+		var receiverName = '$' + 'substr-receiver:$contextName:$id',
+			positionName = '$' + 'substr-position:$contextName:$id',
+			lengthName = '$' + 'substr-length:$contextName:$id',
+			startName = '$' + 'substr-start:$contextName:$id',
+			receiverLocal = new TypedExpression(TLocal(receiverName), TString, span),
+			positionLocal = new TypedExpression(TLocal(positionName), TInt, span),
+			lengthLocal = new TypedExpression(TLocal(lengthName), TInt, span),
+			startLocal = new TypedExpression(TLocal(startName), TInt, span),
+			zero = new TypedExpression(TIntLiteral(0), TInt, span),
+			fromEnd = new TypedExpression(TAdd(new TypedExpression(TStringLength(receiverLocal), TInt, span), positionLocal), TInt, span),
+			normalized = new TypedExpression(TConditional(new TypedExpression(TLess(positionLocal, zero), TBool, span),
+				new TypedExpression(TConditional(new TypedExpression(TLess(fromEnd, zero), TBool, span), zero, fromEnd), TInt, span), positionLocal),
+				TInt, span),
+			clampedLength = new TypedExpression(TConditional(new TypedExpression(TLess(lengthLocal, zero), TBool, span), zero, lengthLocal), TInt, span),
+			end = length == null ? null : new TypedExpression(TAdd(startLocal, clampedLength), TInt, span),
+			statements:Array<compiler.types.TypedAst.TypedStatement> = [TVar(receiverName, receiver, span), TVar(positionName, position, span)];
+		if (length != null)
+			statements.push(TVar(lengthName, length, span));
+		statements.push(TVar(startName, normalized, span));
+		return new TypedExpression(TBlockExpression(statements, new TypedExpression(TStringSubstring(receiverLocal, startLocal, end), TString, span)),
+			TString, span);
 	}
 
 	public function typeArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {

@@ -1550,6 +1550,10 @@ class Parser {
 				var element = parseType();
 				consume(TokenKind.Greater);
 				consume(TokenKind.LeftParen);
+				if (check(TokenKind.RightParen)) {
+					var end = advance().span;
+					return parsePostfix(NewArray(element, IntegerLiteral(0, end), start.merge(end)));
+				}
 				var length = parseExpression();
 				var end = consume(TokenKind.RightParen).span;
 				return parsePostfix(NewArray(element, length, start.merge(end)));

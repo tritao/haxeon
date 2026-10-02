@@ -357,10 +357,16 @@ HL_PRIM vstring *HL_NAME(__string_replace)( vstring *value, vstring *sub, vstrin
 
 HL_PRIM vstring *HL_NAME(__string_substring)( vstring *value, int start, int end ) {
 	int length = realtime_string_length(value);
+	// Both indexes clamp into the string, then a reversed pair is swapped, as in Haxe.
 	if( start < 0 ) start = 0;
-	if( end < start ) end = start;
+	if( end < 0 ) end = 0;
 	if( start > length ) start = length;
 	if( end > length ) end = length;
+	if( end < start ) {
+		int swap = start;
+		start = end;
+		end = swap;
+	}
 	return realtime_string_slice(realtime_string_data(value), start, end);
 }
 

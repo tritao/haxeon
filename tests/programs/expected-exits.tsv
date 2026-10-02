@@ -62,6 +62,7 @@ sys-exit	42
 array-index-growth	42
 date-runtime	42
 sys-runtime	42
+sys-println-dynamic	42
 callback-method	42
 bound-method	42
 name-collision	42
@@ -98,6 +99,7 @@ array-splice	42
 array-growth-wasm	42
 array-iterator-wasm	42
 array-mutation	42
+array-typed-empty-new	42
 array-insert	42
 array-resize	42
 array-remove	42
@@ -296,3 +298,5 @@ reflect-object-dispatch	42
 captured-uninitialized-local	42
 infinite-loop-trailing-code	42
 std-downcast	42
+string-substr-negative	42
+string-substring-reversed	42

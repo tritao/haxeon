@@ -68,6 +68,8 @@ class TypingSession {
 	 */
 	public final functionAdapterCounts:Map<String, Int> = [];
 
+	public final substrCounts:Map<String, Int> = [];
+
 	public final representation:TypeRepresentation;
 
 	public var currentContext(get, never):TypingContext;
