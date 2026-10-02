@@ -1246,8 +1246,8 @@ class HlLower {
 
 	/**
 	 * An Int or Float array element access with the bounds test in the bytecode, as Haxe's own Array does. The
-	 * VM's `OGetArray`/`OSetArray` call into the runtime on every access; here an index in range (one signed
-	 * test against zero and one against the size) goes straight to the element, and only an out-of-range index
+	 * VM's `OGetArray`/`OSetArray` call into the runtime on every access; here an index in range (one unsigned
+	 * test against the size, which also rejects a negative index) goes straight to the element, and only an out-of-range index
 	 * calls `operation` (`array_check` raises, `array_ensure` grows the array or raises for a negative index).
 	 * A second access to the same array and index in the same block, such as the write of `a[i] += x`, skips the test.
 	 */
@@ -1266,13 +1266,10 @@ class HlLower {
 			var id = rawArrayAccesses++,
 				outOfRange = '__array_out_of_range_$id',
 				inRange = '__array_in_range_$id',
-				zero = temporaryRegister(IrType.I32, registerTypes),
 				size = temporaryRegister(IrType.I32, registerTypes),
 				unused = temporaryRegister(IrType.Void, registerTypes);
-			instructions.push(HlInstruction.LoadInt(zero, internInt(0)));
-			instructions.push(HlInstruction.JumpSignedLess(indexRegister, zero, outOfRange));
 			instructions.push(HlInstruction.ArraySize(size, arrayRegister));
-			instructions.push(HlInstruction.JumpSignedLess(indexRegister, size, inRange));
+			instructions.push(HlInstruction.JumpUnsignedLess(indexRegister, size, inRange));
 			instructions.push(HlInstruction.Label(outOfRange));
 			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(array.type, operation)), arrayRegister, indexRegister));
 			instructions.push(HlInstruction.Label(inRange));

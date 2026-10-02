@@ -56,6 +56,7 @@ class PatchOpcodeTests {
 			{instruction: JumpNull(0, "target"), opcode: 46, operands: [0, -2]},
 			{instruction: JumpSignedLess(0, 1, "target"), opcode: 48, operands: [0, 1, -2]},
 			{instruction: JumpSignedLessOrEqual(0, 1, "target"), opcode: 51, operands: [0, 1, -2]},
+			{instruction: JumpUnsignedLess(0, 1, "target"), opcode: 52, operands: [0, 1, -2]},
 			{instruction: JumpEqual(0, 1, "target"), opcode: 56, operands: [0, 1, -2]},
 			{instruction: Jump("target"), opcode: 58, operands: [-2]},
 			{instruction: ToDyn(0, 1), opcode: 59, operands: [0, 1]},
