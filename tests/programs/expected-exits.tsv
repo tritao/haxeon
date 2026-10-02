@@ -157,6 +157,7 @@ module-function-shadowing	42
 abstract-sibling-call	42
 thread-lock	42
 thread-mutex	42
+thread-tls	42
 dynamic-argument	42
 anonymous-record	42
 switch-expression	42
