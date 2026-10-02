@@ -302,3 +302,4 @@ string-substr-negative	42
 string-substring-reversed	42
 array-iterator-typed	42
 loop-break-array-bounds	42
+array-compound-call	42

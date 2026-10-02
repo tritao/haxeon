@@ -661,6 +661,7 @@ class HlLower {
 					default:
 				}
 			provenInRange.clear();
+			elementOffsets.clear();
 			for (instruction in block.instructions) {
 				var instructionStart = instructions.length;
 				if (!keepsArrayBounds(instruction.value))
@@ -908,11 +909,11 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
 						var destination = defineRegister(output, registers, registerTypes);
-						lowerRawArrayAccess(array, index, "check", instructions, registers, registerTypes,
+						lowerRawArrayAccess(array, index, "check", false, instructions, registers, registerTypes,
 							(data, offset) -> HlInstruction.GetMem(destination, data, offset));
 					case ArraySet(array, index, value) if (rawArrayShift(array.type) != null):
 						var source = requireRegister(value, registers);
-						lowerRawArrayAccess(array, index, "ensure", instructions, registers, registerTypes,
+						lowerRawArrayAccess(array, index, "ensure", true, instructions, registers, registerTypes,
 							(data, offset) -> HlInstruction.SetMem(data, offset, source));
 					case ArrayGet(output, array, index):
 						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
@@ -1232,6 +1233,13 @@ class HlLower {
 	final provenInRange:Map<String, Bool> = [];
 
 	/**
+	 * The byte-offset register of every array and index pair accessed so far in the block being lowered. The offset
+	 * depends only on the index, so it stays valid however much code runs in between; the pair also records that its
+	 * index was validated, which `a[i] += f()` relies on to skip the re-check of its write after the call.
+	 */
+	final elementOffsets:Map<String, Int> = [];
+
+	/**
 	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
 	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
 	 */
@@ -1247,22 +1255,27 @@ class HlLower {
 	/**
 	 * An Int or Float array element access with the bounds test in the bytecode, as Haxe's own Array does. The
 	 * VM's `OGetArray`/`OSetArray` call into the runtime on every access; here an index in range (one unsigned
-	 * test against the size, which also rejects a negative index) goes straight to the element, and only an out-of-range index
-	 * calls `operation` (`array_check` raises, `array_ensure` grows the array or raises for a negative index).
-	 * A second access to the same array and index in the same block, such as the write of `a[i] += x`, skips the test.
+	 * test against the size, which also rejects a negative index) goes straight to the element, and only an
+	 * out-of-range index calls `operation` (`array_check` raises, `array_ensure` grows the array or raises for a
+	 * negative index).
+	 *
+	 * An access to a pair already proven in range with nothing but arithmetic in between skips the test. A *write*
+	 * to a pair an earlier access in the block validated also skips it across calls, so `a[i] += f(x)` tests once,
+	 * as Haxe does. That is memory safe because an array's capacity only ever grows: the index stays inside the
+	 * allocation, and the data pointer is reloaded for every access so a callee that grew the array cannot leave
+	 * the write in a stale buffer. It differs from a re-test only when the callee shrank the array below the index,
+	 * where the write lands past the logical end instead of extending the array. Reads always re-test after a call,
+	 * so reading a removed element still raises.
 	 */
-	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, writes:Bool, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
 		var elementShift = rawArrayShift(array.type);
 		if (elementShift == null)
 			throw "Inline array access requires an Int or Float array";
 		var arrayRegister = requireRegister(array, registers),
 			indexRegister = requireRegister(index, registers),
-			key = '${array.id}:${index.id}',
-			data = temporaryRegister(IrType.Bytes, registerTypes),
-			shift = temporaryRegister(IrType.I32, registerTypes),
-			offset = temporaryRegister(IrType.I32, registerTypes);
-		if (!provenInRange.exists(key)) {
+			key = '${array.id}:${index.id}';
+		if (!provenInRange.exists(key) && !(writes && elementOffsets.exists(key))) {
 			var id = rawArrayAccesses++,
 				outOfRange = '__array_out_of_range_$id',
 				inRange = '__array_in_range_$id',
@@ -1275,9 +1288,16 @@ class HlLower {
 			instructions.push(HlInstruction.Label(inRange));
 			provenInRange.set(key, true);
 		}
+		var offset = elementOffsets.get(key);
+		if (offset == null) {
+			var shift = temporaryRegister(IrType.I32, registerTypes);
+			offset = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.LoadInt(shift, internInt(elementShift)));
+			instructions.push(HlInstruction.ShiftLeft(offset, indexRegister, shift));
+			elementOffsets.set(key, offset);
+		}
+		var data = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.RefData(data, arrayRegister));
-		instructions.push(HlInstruction.LoadInt(shift, internInt(elementShift)));
-		instructions.push(HlInstruction.ShiftLeft(offset, indexRegister, shift));
 		instructions.push(access(data, offset));
 	}
 
