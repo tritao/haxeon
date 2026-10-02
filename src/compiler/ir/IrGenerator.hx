@@ -23,6 +23,7 @@ import compiler.ir.cfg.Cfg.CfgValue;
 import compiler.ir.cfg.Cfg.CfgArgument;
 import compiler.ir.cfg.CfgBuilder;
 import compiler.ir.cfg.SsaBuilder;
+import compiler.ir.cfg.CfgIteratorReplacement;
 import compiler.ir.IrBuilder;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -204,7 +205,8 @@ class IrGenerator {
 
 	public static function generateFunction(fn:TypedFunction):IrFunction {
 		try {
-			var cfg = generateCfg(fn), built = SsaBuilder.build(cfg);
+			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
+				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
 			return fn.isInline == true
 				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
