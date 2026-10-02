@@ -247,6 +247,15 @@ class WasmLinearRuntime {
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "__math_sqrt": addMathSqrt(module, native.name);
+			case "__math_abs": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64], results: [F64]}, [],
+					[LocalGet(0), F64Abs, Return]));
+			case "__math_min", "__math_max":
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, [], [
+					LocalGet(0),
+					LocalGet(1),
+					native.symbol == "__math_min" ? F64Min : F64Max,
+					Return
+				]));
 			case "__math_fmod": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, WasmFmod.locals(),
 					WasmFmod.body()));
 			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":

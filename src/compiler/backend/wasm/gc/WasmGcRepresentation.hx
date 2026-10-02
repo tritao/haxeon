@@ -1188,6 +1188,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Math.sqrt signature";
 			return [LocalGet(argumentLocals[0]), F64Sqrt, LocalSet(outputLocal)];
 		}
+		if (name == "__math_abs") {
+			if (output.type != F64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Math.abs signature";
+			return [LocalGet(argumentLocals[0]), F64Abs, LocalSet(outputLocal)];
+		}
+		if (name == "__math_min" || name == "__math_max") {
+			if (output.type != F64 || arguments.length != 2 || arguments[0].type != F64 || arguments[1].type != F64 || argumentLocals.length != 2)
+				throw "Invalid Wasm GC Math.min/max signature";
+			return [
+				LocalGet(argumentLocals[0]),
+				LocalGet(argumentLocals[1]),
+				name == "__math_min" ? F64Min : F64Max,
+				LocalSet(outputLocal)
+			];
+		}
 		if (name == "__math_floor") {
 			if (output.type != I32 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Math.floor signature";
