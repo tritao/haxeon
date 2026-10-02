@@ -1114,18 +1114,16 @@ class IrGenerator {
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
 			case TAnd(left, right): lowerLogical(left, right, true, builder, localTypes);
 			case TOr(left, right): lowerLogical(left, right, false, builder, localTypes);
-			case TEqual(a, b):
-				var operands = lowerOperands([a, b], builder, localTypes),
+			case TEqual(a, b): var operands = lowerOperands([a, b], builder, localTypes),
 					left = operands[0],
-					right = operands[1];
-				if (isNullableEnumExpression(a) || isNullableEnumExpression(b))
-					return lowerNullableEnumEquality(a, b, left, right, builder, localTypes);
-				var isEnum = isDirectEnumType(a.type) && !isNullExpression(a) && !isNullExpression(b);
-				if (isEnum) {
+					right = operands[1]; if (isNullableEnumExpression(a) || isNullableEnumExpression(b)) return lowerNullableEnumEquality(a, b, left, right,
+					builder, localTypes); var isEnum = isDirectEnumType(a.type) && !isNullExpression(a) && !isNullExpression(b); if (isEnum) {
 					left = builder.enumIndex(left);
 					right = builder.enumIndex(right);
-				}
-				lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
+				} // A test against a literal null is a pointer test, not a call into the runtime's equality: it lowers to one
+				// OJNull whatever the other side's reference type (a boxed Null<Int>, a Dynamic, a String).
+				isNullExpression(a) || isNullExpression(b) ? builder.equal(left,
+					right) : lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
 					Bool) : lowerType(a.type) == Dyn
 				|| lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall("$rawptr.isNull", [pointer]):
