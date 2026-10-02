@@ -141,6 +141,9 @@ for target in wasm32 wasm-gc; do
 		--target=$target --output=out/wasm-cli-host-services-$target.wasm --entry=wasm-host-services \
 		--root=tests/programs tests/programs/wasm-host-services.hx
 	haxeon_compile_async \
+		--target=$target --output=out/wasm-cli-host-streams-$target.wasm --entry=wasm-host-services \
+		--wasm-import-memory --root=tests/programs tests/programs/wasm-host-services.hx
+	haxeon_compile_async \
 		--target=$target --output=out/wasm-cli-host-callbacks-$target.wasm --entry=wasm-callbacks \
 		--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
 done
@@ -315,7 +318,7 @@ const cases = [
       const unexpected = WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter(entry => entry.module !== "haxeon_host");
       if (unexpected.length !== 0)
         throw new Error(`${relative}: unexpected imports ${unexpected.map(entry => entry.module + "." + entry.name).join(", ")}`);
-      let printed = "";
+      let printed = "", errors = "", flushes = [];
       imports.haxeon_host = {
         print: pointer => {
           const bytes = new Uint8Array(moduleInstance.exports.memory.buffer);
@@ -323,10 +326,18 @@ const cases = [
           while (bytes[end] !== 0) end++;
           printed += new TextDecoder().decode(bytes.subarray(pointer, end));
         },
+        write_output: (pointer, error) => {
+          const bytes = new Uint8Array(moduleInstance.exports.memory.buffer);
+          let end = pointer;
+          while (bytes[end] !== 0) end++;
+          const text = new TextDecoder().decode(bytes.subarray(pointer, end));
+          if (error) errors += text; else printed += text;
+        },
+        flush_output: error => flushes.push(error),
         date_now: () => Date.now()
       };
       hostServicesCheck = () => {
-        if (printed !== "host tracehost println\n")
+        if (printed !== "host tracehost println\nstdout λ" || errors !== "stderr 雪" || JSON.stringify(flushes) !== "[0,1]")
           throw new Error(`${relative}: host printed ${JSON.stringify(printed)}`);
       };
     }
@@ -739,6 +750,23 @@ const cases = [
     if (!roundTrips || significantDigits(actual) !== significantDigits(expected))
       throw new Error(`Std.string(Float bits 0x${floatBits.toString(16)}): expected shortest round-trip ${expected}, got ${actual}`);
   }
+  // Exercise the shipped browser adapter, including partial-line flush and separated streams.
+  const vm = require("vm"), path = require("path");
+  const adapterSource = fs.readFileSync(path.join(root, "stdlib/haxeon/wasm/haxeon-host.js"), "utf8");
+  const context = vm.createContext({WebAssembly, TextDecoder, Uint8Array, Date, performance, console});
+  vm.runInContext(adapterSource + "\nglobalThis.adapter = HaxeonWasmHost;", context);
+  for (const target of ["wasm32", "wasm-gc"]) {
+    const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-cli-host-streams-${target}.wasm`)));
+    const memory = new WebAssembly.Memory({initial: 256, maximum: 4096});
+    const output = [], errors = [];
+    const guest = await context.adapter.instantiate(module, {memory, emscripten: {},
+      print: line => output.push(line), printError: line => errors.push(line)});
+    const result = guest.exports.main();
+    if (result !== 42 || JSON.stringify(output) !== JSON.stringify(["host tracehost println", "stdout λ"])
+        || JSON.stringify(errors) !== JSON.stringify(["stderr 雪"]) || guest.unavailable.length)
+      throw new Error(`${target}: host stream routing/flush failed: ${JSON.stringify({result, output, errors})}`);
+  }
+  console.log("PASS: Wasm browser host stdout/stderr and partial-line flush");
   console.log("PASS: Wasm modules validate and execute");
 })().catch(error => {
   console.error(error);

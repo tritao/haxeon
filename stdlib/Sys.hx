@@ -122,6 +122,7 @@ extern function sysDelete(path:String):Bool;
 @:hlNative("haxeon_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
 #else
+
 /** `mkdir` semantics: the parent must already exist. The mode is ignored. */
 function sysCreateDir(path:String, mode:Int):Bool
 	return runtime.MemoryFileSystem.createDirectory(path, false);
@@ -153,11 +154,19 @@ function sysPrint(value:String):Void
 extern function sysPrint(value:String):Void;
 #end
 
+#if wasm
+function sysStdout():sys.io.FileOutput
+	return new sys.io.FileOutput(false);
+
+function sysStderr():sys.io.FileOutput
+	return new sys.io.FileOutput(true);
+#else
 @:hlNative("haxeon_runtime", "__sys_stdout")
 extern function sysStdout():sys.io.FileOutput;
 
 @:hlNative("haxeon_runtime", "__sys_stderr")
 extern function sysStderr():sys.io.FileOutput;
+#end
 
 /** Supported host and process operations exposed through HashLink. */
 class Sys {

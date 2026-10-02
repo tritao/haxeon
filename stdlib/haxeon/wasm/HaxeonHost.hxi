@@ -7,6 +7,10 @@ interface HaxeonHost @target("portable-abi32") @library("haxeon_host") {
 	 * Writes program output. Lines may arrive in several calls; the host decides where they go.
 	 */
 	extern fn print(text: utf8) -> void;
+    /** Writes standard output (error=0) or standard error (error=1). */
+    extern fn write_output(text: utf8, error: i32) -> void;
+    /** Publishes a pending unterminated line on the selected stream. */
+    extern fn flush_output(error: i32) -> void;
 	/**
 	 * Milliseconds since the Unix epoch.
 	 */
