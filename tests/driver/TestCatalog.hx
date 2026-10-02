@@ -70,6 +70,7 @@ class TestCatalog {
 		"QualifiedStaticReceiverMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
+		"SamePackageOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
 		"ReturnPathMain",

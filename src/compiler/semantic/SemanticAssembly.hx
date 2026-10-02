@@ -191,8 +191,10 @@ class SemanticAssembly {
 				aliases = context.importAliases(ast.imports, ast.importAliases);
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
+			// Unpackaged names wait until the current package's own types are in:
+			// in `package nav`, a plain `Path` is `nav.Path`, as in Haxe.
 			for (sourceName => declarationName in sourceTypeAliases)
-				if (!aliases.exists(sourceName))
+				if (sourceName.indexOf(".") >= 0 && !aliases.exists(sourceName))
 					aliases.set(sourceName, declarationName);
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
@@ -237,6 +239,9 @@ class SemanticAssembly {
 				for (alias => target in visibleTypeAliases(visiblePackage, sourceTypeAliases, visibleAliasesByPackage))
 					if (!aliases.exists(alias))
 						aliases.set(alias, target);
+			for (sourceName => declarationName in sourceTypeAliases)
+				if (sourceName.indexOf(".") < 0 && !aliases.exists(sourceName))
+					aliases.set(sourceName, declarationName);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression
 			// aliases. Install them only after visible type aliases have been
