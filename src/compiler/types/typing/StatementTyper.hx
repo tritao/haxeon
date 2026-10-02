@@ -308,14 +308,10 @@ class StatementTyper {
 			case Break(span):
 				if (context.loopDepth == 0)
 					fail("E1017", "break is only valid inside a loop", span);
-				if (!context.loopEarlyExits[context.loopDepth - 1])
-					fail("E1017", "break in do-while is not supported by the current CFG backend", span);
 				[TBreak(span)];
 			case Continue(span):
 				if (context.loopDepth == 0)
 					fail("E1017", "continue is only valid inside a loop", span);
-				if (!context.loopEarlyExits[context.loopDepth - 1])
-					fail("E1017", "continue in do-while is not supported by the current CFG backend", span);
 				[TContinue(span)];
 			case Expression(expression, span):
 				[
@@ -631,7 +627,6 @@ class StatementTyper {
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "While condition must be Bool", span);
 		var context = session.currentContext;
-		context.loopEarlyExits[context.loopDepth] = true;
 		context.loopDepth++;
 		// The condition is evaluated right before every iteration, so what it proves holds where the body starts.
 		var typedBody = typeStatements(body, FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall), result);
@@ -645,14 +640,15 @@ class StatementTyper {
 	public function typeDoWhile(body:Array<AstStatement>, predicate:AstExpression, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
 		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
 		var bodyScope = new Scope(scope), context = session.currentContext;
-		context.loopEarlyExits[context.loopDepth] = false;
 		context.loopDepth++;
 		var typedBody = typeStatements(body, bodyScope, result);
 		context.loopDepth--;
 		var typedCondition = typeExpression(predicate, bodyScope, null, false);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "Do-while condition must be Bool", span);
-		scope.mergeAssignmentsFrom([bodyScope]);
+		// The body runs at least once, so what it assigns holds afterwards, unless a break or continue can skip the rest of it.
+		if (!AstScan.breaksOut(body) && !AstScan.continuesOut(body))
+			scope.mergeAssignmentsFrom([bodyScope]);
 		if (!AstScan.breaksOut(body))
 			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TDoWhile(typedBody, typedCondition, span);
@@ -732,7 +728,6 @@ class StatementTyper {
 					fail("E1014", "Key/value for-in requires a Map", span);
 			}
 		var context = session.currentContext;
-		context.loopEarlyExits[context.loopDepth] = true;
 		context.loopDepth++;
 		var typedBody = typeStatements(body, loopScope, result);
 		context.loopDepth--;

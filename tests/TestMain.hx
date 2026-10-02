@@ -348,9 +348,9 @@ class TestMain {
 		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
 		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
-		expectCompileError('function main():Int { do { break; } while (true); return 0; }', 'break in do-while is not supported by the current CFG backend');
-		expectCompileError('function main():Int { do { continue; } while (true); return 0; }',
-			'continue in do-while is not supported by the current CFG backend');
+		Frontend.compile('function main():Int { do { break; } while (true); return 0; }');
+		Frontend.compile('function main():Int { var i = 0; do { i++; continue; } while (i < 3); return i; }');
+		expectCompileError('function main():Int { break; return 0; }', 'break is only valid inside a loop');
 		var values = [
 			-0x1FFFFFFF,
 			-0x2000,

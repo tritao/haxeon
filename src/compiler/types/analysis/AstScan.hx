@@ -52,31 +52,45 @@ class AstScan {
 	}
 
 	/** Whether a `break` in these statements leaves the loop they are the body of; breaks of nested loops are theirs. */
-	public static function breaksOut(statements:Array<AstStatement>):Bool {
-		for (statement in statements)
+	public static function breaksOut(statements:Array<AstStatement>):Bool
+		return jumpsOut(statements, statement -> switch statement {
+			case Break(_): true;
+			default: false;
+		});
+
+	/** Whether a `continue` in these statements restarts the loop they are the body of; continues of nested loops are theirs. */
+	public static function continuesOut(statements:Array<AstStatement>):Bool
+		return jumpsOut(statements, statement -> switch statement {
+			case Continue(_): true;
+			default: false;
+		});
+
+	static function jumpsOut(statements:Array<AstStatement>, isJump:AstStatement->Bool):Bool {
+		for (statement in statements) {
+			if (isJump(statement))
+				return true;
 			switch statement {
-				case Break(_):
-					return true;
 				case If(_, yes, no, _):
-					if (breaksOut(yes) || breaksOut(no))
+					if (jumpsOut(yes, isJump) || jumpsOut(no, isJump))
 						return true;
 				case Try(tryBranch, catches, _):
-					if (breaksOut(tryBranch))
+					if (jumpsOut(tryBranch, isJump))
 						return true;
 					for (caught in catches)
-						if (breaksOut(caught.statements))
+						if (jumpsOut(caught.statements, isJump))
 							return true;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (entry in cases)
-						if (breaksOut(entry.statements))
+						if (jumpsOut(entry.statements, isJump))
 							return true;
-					if (breaksOut(defaultBranch))
+					if (jumpsOut(defaultBranch, isJump))
 						return true;
 				default:
 			}
-		// A block expression is a statement list too; look for a break anywhere inside one to stay on the safe side.
+		}
+		// A block expression is a statement list too; look for the jump anywhere inside one to stay on the safe side.
 		return anyExpression(statements, expression -> switch expression {
-			case BlockExpression(inner, _, _): breaksOut(inner);
+			case BlockExpression(inner, _, _): jumpsOut(inner, isJump);
 			default: false;
 		});
 	}

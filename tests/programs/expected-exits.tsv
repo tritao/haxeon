@@ -309,3 +309,4 @@ string-buffer-unicode	42
 gc-collection-pacing	42
 thread-gc-stress	42
 math-sqrt-native	42
+do-while-jumps	42

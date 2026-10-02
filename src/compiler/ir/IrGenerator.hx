@@ -472,40 +472,32 @@ class IrGenerator {
 					if (infinite)
 						builder.markUnreachable();
 				case TDoWhile(body, condition, span):
+					// One copy of the body, entered first: body, then the condition block, which loops back or leaves. `break` and
+					// `continue` jump to the condition block, as in the other loops, where the break flag is read first.
 					var breakFlag = '$' + 'do-while-break:${span.start}';
 					localTypes.set(breakFlag, Bool);
 					builder.store(breakFlag, builder.constBool(false));
-					var conditionBlock = builder.createBlock(),
+					var bodyBlock = builder.createBlock(),
+						conditionBlock = builder.createBlock(),
 						conditionCheck = builder.createBlock(),
-						bodyBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
-					loops.push({
+					builder.jump(bodyBlock);
+					builder.select(bodyBlock);
+					var loop:LoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
 						trapDepth: builder.trapDepth(),
-						breakUsed: true
-					});
+						breakUsed: false
+					};
+					loops.push(loop);
 					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
-					builder.select(conditionBlock);
-					builder.branch(builder.load(breakFlag, Bool), afterBlock, conditionCheck);
+					lowerLoopHeader(builder, conditionBlock, conditionCheck, afterBlock, loop);
 					builder.select(conditionCheck);
 					lowerBranch(condition, bodyBlock, afterBlock, builder, localTypes);
-					builder.select(bodyBlock);
-					loops.push({
-						breakBlock: afterBlock,
-						continueBlock: conditionBlock,
-						breakFlag: breakFlag,
-						trapDepth: builder.trapDepth(),
-						breakUsed: true
-					});
-					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
-					loops.pop();
-					if (!builder.isTerminated())
-						builder.jump(conditionBlock);
 					builder.select(afterBlock);
 				case TForIn(name, valueName, sourceIterable, body, span):
 					var iterable = arrayIteratorSource(sourceIterable);

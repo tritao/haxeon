@@ -32,7 +32,6 @@ class TypingContext {
 	public var declaredResultAbstract:Null<String>;
 
 	public var loopDepth:Int = 0;
-	public final loopEarlyExits:Array<Bool> = [];
 	public var expectedReturnType:CompilerType = TVoid;
 	public var inferredResult:Null<CompilerType>;
 	public var contextualVoidLambda:Bool = false;

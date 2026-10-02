@@ -1,5 +1,5 @@
 function main():Int {
-	// for, while and do-while loops with and without break/continue, nested (break in do-while is unsupported).
+	// for, while and do-while loops with and without break/continue, nested.
 	var found = -1;
 	for (i in 0...10) {
 		if (i == 4) {
