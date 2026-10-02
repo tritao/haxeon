@@ -2,845 +2,178 @@
 
 > **Haxe, always on.**
 
-Haxeon is an experimental Haxe-compatible language and realtime compiler for
-HashLink. It combines familiar Haxe syntax and static typing with incremental
-compilation, transactional hot patching, and a runtime designed to keep an
-application running while its code changes.
+Haxeon is a cross-platform application toolkit built on a Haxe-compatible
+language. Write your app once in typed, familiar Haxe, call C and C++ libraries
+through generated bindings, and run it on desktop, Android, and the web, with
+live code updates while it runs.
 
-Haxeon currently implements a growing subset of Haxe. It is a serious compiler
-experiment and is not yet recommended for production applications.
+Haxeon currently implements a growing subset of Haxe.
 
-## 🔥 Why Haxeon?
+## 🧱 What you get
+
+| | |
+|---|---|
+| **One language** | Haxe-compatible syntax with static typing, served by a self-hosted, incremental compiler |
+| **Many targets** | Desktop and Android on HashLink, plus WebAssembly (`wasm32`, `wasm-gc`), all lowered from one IR |
+| **Native code, typed** | HXI bindings generated from C and C++ headers, fixed-layout records, raw pointers, and arenas |
+| **Always on** | Transactional hot patching: edits land in the running program, and a bad patch leaves it untouched |
+| **One CLI** | `haxeon` initializes, builds, runs, formats, and packages projects, including their native dependencies |
+
+## 🔥 Always on
 
 Traditional development repeatedly stops, rebuilds, and restarts an
-application. Haxeon is built around a continuous development loop:
+application. Haxeon is built around a continuous loop:
 
 1. Edit Haxe-compatible source.
 2. Recompile only what changed.
 3. Validate the resulting patch.
-4. Atomically install it into the running HashLink program.
+4. Atomically install it into the running program.
 5. Keep existing state, objects, and closures alive.
 
 If a patch is malformed, stale, or incompatible, the running program remains
-untouched.
+untouched. Changes that alter a module's structure use an explicit reload
+boundary that carries your state across.
 
-## ✨ Highlights
+## 🚀 Quick start
 
-- Familiar Haxe-compatible syntax with static type checking
-- A self-hosted compiler running on HashLink
-- Incremental parsing, typing, and IR generation
-- Function-level change detection and stable function identities
-- Transactional, multi-function hot-code replacement
-- Live callers and closures that immediately observe committed replacements
-- Explicit reload boundaries for incompatible structural changes
-- Persistent compiler identity across compiler and editor restarts
-- Reclamation of superseded JIT allocations after protected calls finish
-- Standard `.hl` output for ordinary HashLink compatibility
-- Experimental self-hosted WebAssembly backend for `wasm32` and `wasm-gc`,
-  lowered from canonical SSA IR
+Requirements: a C/C++ toolchain, CMake, and Git. The pinned Haxe, HashLink, and
+Ninja tools are installed locally by the setup scripts.
 
-## 🧭 What Haxeon is
+```sh
+./scripts/bootstrap-tools.sh     # pinned tools (Windows: scripts/setup.ps1)
+cmake --preset release
+cmake --build --preset release   # HashLink VM and Haxeon runtime
 
-Haxeon is both a focused Haxe-compatible language implementation and a live
-execution environment built on a patchable HashLink runtime.
+./scripts/haxeon init            # creates haxeon.json and src/Main.hx
+./scripts/haxeon run             # build and launch
+./scripts/haxeon run --watch     # rebuild and relaunch on edits
+```
 
-For the initial application load, the compiler emits a standard HashLink
-bytecode module—the same format normally stored in a `.hl` file. Compatible
-edits become compact Haxeon patch data containing only changed function bodies
-and the symbol additions they require. The runtime validates and JIT-compiles
-the entire patch privately before publishing it as one atomic transaction.
+`run --watch --live` keeps one process alive and applies patches between
+application ticks. It requires an entry class with `start`, `tick`, `saveState`,
+`close`, and `restoreState`; see [Project CLI](docs/CLI.md).
 
-Haxeon is not currently a drop-in replacement for the complete Haxe compiler.
-Language and standard-library coverage are still expanding, and edits that
-change the live module's structure may require a reload.
+| Platform | Status |
+|---|---|
+| Linux, macOS (x86-64 and Apple Silicon), Windows | Supported host targets |
+| Android (`arm64-v8a`, `x86_64`) | Supported, with live patching |
+| WebAssembly (`wasm32`, `wasm-gc`) | Experimental, build-only |
 
-## 🏗️ How it works
+## 🧬 What Haxeon adds over Haxe
+
+Haxeon keeps Haxe's syntax and static typing, then adds the pieces that are
+awkward to get from the reference compiler:
+
+| | **Haxe** | **Haxeon** |
+|---|---|---|
+| Live code changes | Compilation server speeds up rebuilds; the app restarts | Transactional patches applied to the running program |
+| Calling C and C++ | A different mechanism per target: hand-written HashLink C glue, hxcpp externs, JS externs | One typed interface format (**HXI**), generated from headers, shared by every target |
+| WebAssembly | No official target | Self-hosted `wasm32` and `wasm-gc` backends |
+| Native data layout | Managed objects only | Fixed-layout `@:value @:repr("C")` records, `RawPtr<T>`, and arenas, with `sizeof`/`offsetof` folded to constants |
+| Native build | Left to the user | Packages declare C/C++ sources or a CMake project; the CLI plans, caches, and builds them |
+| Mobile | Via other targets | Android host with the same runtime and live patching |
+
+### HXI: one interface for C and C++
+
+**HXI** is Haxeon's typed description of a native library's ABI: functions,
+records and their exact layouts, enums, callbacks, and who owns each pointer.
+A Clang-based importer generates it from your C headers (and a deliberately
+constrained C++ subset), so you don't hand-write bindings. Haxe code then calls
+the library as ordinary typed Haxe, with generated wrappers for out-parameters,
+owned handles that you `close()`, and byte buffers.
 
 ```text
-Haxe-compatible source
-        │
-        ▼
- Lexer → Parser → Type checker
-        │
-        ▼
- Immutable SSA IR
-        │
-        ▼
- HashLink lowering and assembly
-        │
-        ├── Initial build ──→ HashLink bytecode module (.hl)
-        │                      + Haxeon identity manifest
-        │
-        └── Compatible edit → Haxeon patch
-                               │
-                               └── validate → stage → commit
+ C / C++ headers ──► Clang importer ──► HXI (target-specific, deterministic)
+                                            │
+                  ┌─────────────────────────┼──────────────────────────┐
+                  ▼                         ▼                          ▼
+        HashLink / desktop             Android                  WebAssembly
+        libffi bridge, no          same runtime and       typed Wasm imports using the
+        HDLL glue code             native packages        clang/Emscripten C ABI
 ```
 
-The implementation uses three short format names:
-
-- **HLB** is the standard serialized HashLink bytecode format. Its bytes begin
-  with the `HLB` signature and are normally written as a `.hl` file.
-- **HLI** is Haxeon's companion identity manifest. It binds a module identity
-  and stable Haxeon function IDs to the function slots in an initial HLB module.
-- **HLP** is Haxeon's versioned patch protocol. It carries validated symbol
-  additions and replacement function bodies between incremental builds and the
-  live runtime.
-
-HLI and HLP are Haxeon-specific data formats; neither changes the standard HLB
-module, so generated `.hl` files remain compatible with ordinary HashLink.
-
-The frontend is divided into parsing, declaration and type checking, and IR
-generation. Modules retain their source, tokens, syntax trees, typed trees,
-dependencies, diagnostics, and generated IR. Body and signature fingerprints
-allow Haxeon to reuse unaffected artifacts and propagate invalidation only where
-required.
-
-IR values are immutable SSA definitions. Assignments create new values, while
-condition joins and mutable loop headers receive explicit, predecessor-complete
-phi nodes. The HashLink backend eliminates those phis on incoming edges with
-parallel-copy snapshots, emits real `OLabel` block markers, and leaves no SSA
-constructs in the serialized bytecode module or patch.
-
-The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
-see [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the representation
-boundary, linear-memory and collector contracts, GC target, and test commands.
-
-## 🧩 Language support
-
-The current subset includes:
-
-- `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
-- Local variables, functions, methods, recursion, and expression statements
-- Classes, interfaces, anonymous structures, enums, and enum abstracts
-- Closures with generated environments and shared cells for mutable captures
-- Arrays and compiler-owned primitive, string, and reference array operations
-- Primitive and reference-valued `Map<String, T>` and `Map<Int, T>` forms
-- Arithmetic, bitwise operations, comparisons, string operations, and casts
-- `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
-- Array iteration and comprehensions
-- Exceptions
-- Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
-  (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
-  A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
-- Haxe-compatible `Sys` operations through the stable runtime ABI
-
-String addition, equality, `.length`, `indexOf`, and `substring` use the
-compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
-`concat`, `slice`, `indexOf`, `push`, and `pop`. Capacity-aware array growth
-preserves object identity so aliases and fields continue to observe the same
-array.
-
-HashLink strings use HashLink's standard `String` object layout: zero
-terminated UTF-16 data plus its length in code units, so `.length` and
-`charCodeAt` take constant time. Haxeon rejects NUL code units when creating a
-`String` from a character code or byte buffer, and rejects NUL in compiled
-string constants. Use `Bytes` for binary data.
-
-Hosts may register typed HashLink natives with `Compiler.registerNative()`
-before the first build. Registrations then freeze so the native-table layout
-cannot silently change beneath a live module. `compiler.RuntimeAbi.register()`
-installs the stable host surface used by the command-line compiler; Haxeon-owned
-realtime operations remain in a separately versioned ABI.
-
-Unsupported ABI combinations produce explicit typed diagnostics instead of
-silently falling back to dynamic behavior.
-
-### C header import
-
-A standalone Clang-based importer can generate deterministic, target-specific
-raw HXI declarations from a constrained C ABI. It preserves record layouts and
-keeps system-header implementation details out of the generated interface. A
-strict parser validates types, layouts, symbols, and ABI metadata before use. See
-[C header FFI import](docs/C_HEADER_FFI.md) for usage and the supported subset.
-The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
-the pinned vendored libffi is statically linked into the runtime library, with
-no separate libffi runtime dependency. Windows x64 builds compile the pinned
-sources directly with CMake and MSVC, without a Cygwin build dependency. This
-remains deliberately separate from HashLink's `@:hlNative` convention.
-
-The native-memory model keeps GC-managed Haxe objects separate from fixed-layout
-native records. See [native values and memory](docs/NATIVE_MEMORY.md) for the
-representation contract and implementation sequence. The frontend recognizes
-`@:value @:repr("C")` records, shares ABI layout rules with HXI, and folds
-`sizeof`, `alignof`, and `offsetof` queries to constants. HashLink now lowers
-typed `RawPtr<T>` memory operations to SSA loads, stores, and offsets, and the
-Haxeon `Arena` provides stable bump-allocated native blocks.
-
-### Source-declared HashLink bindings
-
-Target functions can be declared without a Haxe body by combining `extern`
-with `@:hlNative`:
-
-```haxe
-@:hlNative("std", "sys_time")
-extern function nativeTime():Float;
-```
-
-The two metadata arguments are the HashLink library and exported symbol.
-Bindings participate in normal name and type checking, but emit only a native
-table entry. Missing, duplicate, non-string, or malformed bindings are compile
-errors. Static methods on `extern class` and static or instance methods on
-`extern abstract` use the same form; an instance abstract method passes its
-underlying representation as native argument zero.
-
-An extern class or abstract can provide a default library for all its methods.
-The method name is used as the native symbol unless the method carries its own
-two-argument `@:hlNative` binding:
-
-```haxe
-@:hlNative("platform")
-extern class Native {
-    public static function poll():Int;
-
-    @:hlNative("override", "renamed")
-    public static function draw():Void;
-}
-```
-
-An extern abstract can declare its HashLink storage independently of its source
-identity:
-
-```haxe
-@:hlType("bytes")
-extern abstract Bytes(Dynamic) {}
-
-@:hlType("nativeAbstract")
-extern abstract Abstract<T>(Dynamic) {}
-```
-
-The supported representations are currently `bytes` and `nativeAbstract`.
-Tagged types such as `hl.Abstract<"realtime_module">` use the latter and retain
-the quoted tag as part of their ABI identity. These target declarations live
-under `stdlib/hl`; unsupported representation names are diagnosed rather than
-silently lowered as ordinary objects.
-
-## 🛡️ Transactional patching
-
-Haxeon treats hot replacement as a transaction, not a best-effort reload:
-
-- Every live module has a 128-bit identity.
-- Functions receive persistent stable IDs independent of bytecode ordering.
-- Patches carry an expected base revision and replacement revisions.
-- Symbol tables are verified by prefix length and content hash.
-- Patch call sites use stable-target relocations rather than stale bytecode
-  function-table indices.
-- All replacements are validated and JIT-compiled before publication.
-- Multi-function patches become visible atomically.
-- Failed staging is discarded without changing the live program.
-- Stale, replayed, cross-module, and incompatible patches are rejected.
-
-Calls and commits are synchronized. Permanent per-slot dispatch entries keep
-existing closures and object prototypes valid, while superseded JIT code is
-reclaimed after protected calls complete. Retained objects and closures pin
-their owning module until released, and module disposal is idempotent.
-
-Type-table growth remains a reload boundary because initialized HashLink modules
-store direct `hl_type*` pointers. Haxeon fails closed for new function or
-structural types until the runtime has a non-moving type arena.
-
-### Artifact builds and live sessions
-
-Live patching needs the compiler to keep its function slots, symbol-table indices, and stable function IDs
-append-only across builds, so a patch can address the running module. That history has a cost for anything else:
-a removed function keeps its slot, a replaced string constant stays in the table, and the bytes a build produces
-depend on what the compiler session compiled before it.
-
-So the history is opt-in. Without `--live`, every compile assembles from a fresh assembler and the module is a
-function of the source alone: a warm session that compiled other revisions first produces the same bytes as a
-cold one, with no dead functions or constants. Frontend caches (parsing, typing, IR) stay incremental either
-way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
-
-- `haxeon run --watch --live` builds with `--live` for you.
-- The compiler CLI accepts `--live` for `--target=hl`; the `Compiler` API keeps history by default
-  (`Compiler.livePatching`), and `CompilerDriver` sets it from the request.
-- The `<output>.hli` and `<output>.live.json` sidecars describe the session (module identity, revision), not
-  the artifact, and still differ between sessions.
-
-## 🚀 Run the proof of concept
-
-Initialize the pinned tools, verify formatting, bootstrap the compiler, and run
-the integration suites:
-
-```sh
-./scripts/bootstrap-tools.sh
-./scripts/format.sh --check
-./scripts/bootstrap-status.sh
-./scripts/bootstrap-compiler.sh
-./scripts/bootstrap-compiler.sh --self
-./scripts/test.sh
-./tests/integration/test-hot-reload.sh
-```
-
-### Project CLI
-
-The project CLI creates a small `haxeon.json` manifest, builds HashLink programs
-for the current desktop host, experimental Wasm32 modules, and Android APKs, and
-can launch host programs or install and launch an Android app. The same command
-is available on Unix-like systems and Windows:
-
-On Unix-like systems, `scripts/haxeon` compiles the CLI to cached HashLink
-bytecode when its sources change, then runs that bytecode. If HashLink is not
-installed yet, the script uses the pinned Haxe interpreter for bootstrap and
-diagnostic commands.
-
-```sh
-./scripts/haxeon init
-./scripts/haxeon doctor
-./scripts/haxeon platforms
-./scripts/haxeon build
-./scripts/haxeon build --plan
-./scripts/haxeon build --jobs 8
-./scripts/haxeon run
-./scripts/haxeon build --target wasm32
-./scripts/haxeon init --target android
-./scripts/haxeon build --target android
-./scripts/haxeon run --target android
-./scripts/haxeon devices
-./scripts/haxeon fmt src/Main.hx
-./scripts/haxeon fmt --check src/Main.hx
-cat src/Main.hx | ./scripts/haxeon fmt --stdin --line-width 100
-```
-
-`haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
-default, while `--check` reports files that would change. Use `--stdin` for
-editor or pipeline integration, `--line-width` to set the column limit, and
-`--tab-size` with `--use-tabs` to control indentation.
-
-On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
-creates `src/Main.hx` and a project file like this:
+Attach an import to a package with a recipe; the build regenerates the HXI when
+the recipe or headers change:
 
 ```json
-{
-  "version": 1,
-  "package": { "name": "my-app" },
-  "entry": "Main",
-  "sources": ["src/Main.hx"],
-  "sourceRoots": ["src"],
-  "target": "host",
-  "defines": [],
-  "outputDir": "build"
-}
+{ "version": 1, "package": { "name": "mylib-bindings" },
+  "ffi": { "imports": ["ffi/mylib.ffi.json"] } }
 ```
-
-`haxeon init --target android` also adds Android settings to the manifest:
 
 ```json
-"android": {
-  "applicationId": "org.haxeon.android",
-  "label": "Haxeon"
-}
+{ "version": 1, "name": "mylib", "language": "c", "header": "include/mylib.h",
+  "includes": ["include"], "library": "mylib", "interface": "MyLib" }
 ```
 
-Paths in the project file are relative to that file. Host builds go to
-`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`; Android
-builds go to `build/android/app-debug.apk`. Android projects require a
-top-level `main():Void` entry function and an installed Android SDK/NDK. Use
-`--device SERIAL` with `run --target android` when more than one device is
-connected. Android builds use the pinned `vendor/libffi` submodule, which is
-initialized by `scripts/bootstrap-tools.sh` or with
-`git submodule update --init vendor/libffi`. Use
-`--project path/to/haxeon.json` to select another project, repeat
-`--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
-running program after `--`:
-
-```sh
-./scripts/haxeon run -- --verbose
-```
-
-On Linux and macOS, `run --watch` rebuilds after edits to resolved package
-sources and relaunches the host app after a successful build. Haxe source edits
-use the compiler-only build path; FFI, manifest, and native source edits use the
-full project build. A failed build leaves the running app open. Runtime output
-is forwarded from `<output>.watch.log`. This mode restarts the process.
-
-```sh
-./scripts/haxeon run --watch --project path/to/haxeon.json -- --verbose
-```
-
-`run --watch --live` keeps a stable host process and applies compatible HLP
-patches between application pump steps. The project entry class must expose
-static `start(arguments:String):Void`, `tick():Int` (nonzero while running),
-`saveState():String`, `close():Int`, and `restoreState(state:String):Void`, and,
-like any entry class, a `main` (the live host never calls it).
-The host calls `start` once, then `tick` repeatedly. A structural change reloads
-the module through those state methods. Non-Haxe changes restart the process.
-The output path must be separate from any ordinary app build output.
-
-```sh
-./scripts/haxeon run --watch --live --project path/to/live.json \
-  --output build/host/live.hl -- --verbose
-```
-
-Host builds resolve local path dependencies declared by package name. A
-dependency can provide Haxe sources and optional C sources; C sources are
-compiled into the HashLink native library requested by the build:
-
-```json
-{
-  "version": 1,
-  "package": { "name": "my-app" },
-  "entry": "Main",
-  "sourceRoots": ["src"],
-  "dependencies": {
-    "foo": { "path": "../foo" }
-  },
-  "target": "host",
-  "outputDir": "build"
-}
-```
-
-The `foo` package can list native inputs in its own manifest:
-
-```json
-{
-  "version": 1,
-  "package": { "name": "foo" },
-  "sourceRoots": ["src"],
-  "native": {
-    "sources": ["native/foo.c"],
-    "includeDirs": ["native/include"],
-    "std": "c++20"
-  }
-}
-```
-
-The optional native `std` value controls compilation of package-owned C and
-C++ sources. It is separate from the `std` value in an FFI recipe, which
-controls Clang's header import and generated thunk compilation. CMake-backed
-packages continue to declare their language standard in `CMakeLists.txt`.
-
-`haxeon build --plan` prints the deterministic artifact and action plans.
-Add `--explain` to show why each artifact is present, and `--timings` to print
-resolution, planning/lowering, and execution wall-clock measurements.
-`--jobs COUNT` controls the number of independent ready actions the executor
-may run at once. Native outputs and action fingerprints live below the
-application's `outputDir`; unchanged native source actions are skipped on later builds.
-CMake package builds are delegated on every invocation, allowing CMake to check
-its own source, header, generated-file, and library dependencies. Configure
-fingerprints cover `CMakeLists.txt` and explicit `native.cmake.inputs`; use those
-inputs for additional configuration files, rather than entire source trees.
-CMake package stamps are never shared as if they were complete library artifacts.
-
-Set `native.cmake.library` to the name of an ordinary shared-library CMake
-target when the package's HXI interface loads that library directly. Haxeon
-places the library in the package's native runtime directory and includes that
-directory when running dependents. Omit `library` for CMake targets that produce
-the package's `<package>.hdll` output themselves.
-Native implementation changes do not invalidate independently compiled bytecode;
-Haxe sources, FFI interfaces/projections, compiler sources, and the standard
-library still do. Failed native builds still block the project build and launch.
-
-On Linux and macOS, host builds reuse a private compiler worker between CLI
-invocations. Small source edits retain semantic compiler state; changes to the
-source manifest, roots, defines, or FFI configuration reset it. Compiler or
-standard-library changes select a fresh worker. Workers exit after
-`HAXEON_COMPILER_IDLE_SECONDS` (default 90) without a request. Every build root
-shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`, or
-`HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
-logs, so the resident limits below apply to the whole machine. Set
-`HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
-as a HashLink program compiled once per compiler version (Windows interprets it). Windows, explicit `--self-hosted` builds, and unavailable workers
-retain the one-shot path. The normal CLI's local fingerprint checks run before
-contacting a worker, so unchanged bytecode is still skipped entirely.
-
-Shared-cache hashing reuses content digests within one build invocation. Set
-`HAXEON_DISABLE_ARTIFACT_CACHE=1` to disable the shared artifact cache while
-retaining local fingerprint checks. It is no longer necessary to disable it to
-avoid sharing a CMake package's stamp file.
-
-The current executor is selected through a replaceable backend boundary; set
-`HAXEON_EXECUTOR=native` explicitly to select it. Alternate schedulers can be
-evaluated against the same lowered `ExecutionPlan` without changing package or
-build semantics.
-The normal host build requests the shared HashLink library; static archives are
-available to other build consumers without being produced unnecessarily. Target
-and toolchain selection is centralized: examples include
-`windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-aarch64`, `android-aarch64`,
-and `wasm32`.
-
-Git dependencies can be added and installed reproducibly:
-
-```sh
-./scripts/haxeon add --git https://github.com/example/foo.git --rev main foo
-./scripts/haxeon install
-./scripts/haxeon install --locked
-./scripts/haxeon update
-./scripts/haxeon tree
-./scripts/haxeon why foo
-./scripts/haxeon publish --registry local --version 1.0.0
-./scripts/haxeon package check
-```
-
-`install` records the requested source and resolved Git commit in
-`haxeon.lock`; `install --locked` rejects manifest changes and checks out the
-exact recorded revision.
-
-Registry sources use the same lockfile path. A registry index records immutable
-release checksums, SemVer versions, yanked status, compatibility metadata, and
-native provider metadata. For local development, `publish` writes an immutable
-release and index below `~/.haxeon/cache/sources/registry`; projects then use
-`{"registry":"local","version":"^1.0"}` and resolve through the normal
-package graph.
-
-Repositories can declare workspace members. A workspace member with the same
-package name overrides an external dependency source while retaining the same
-package identity:
-
-```json
-"workspace": ["packages/core", "packages/editor"]
-```
-
-Native packages may instead delegate an existing CMake project as one coarse
-provider:
-
-```json
-"native": {
-  "cmake": { "source": "native", "target": "foo" }
-}
-```
-
-Native providers advertise their supported targets with `native.targets`; the
-default source and CMake providers support `host` and `android`. If a package
-has no provider for a requested target, planning stops with the package and
-missing-provider chain—for example, `foo cannot be built for wasm32`—before
-compilation or linking begins.
-
-Packages can also gate resolution with compatibility metadata:
-
-```json
-"compatibility": {
-  "haxeon": ">=0.3",
-  "targets": ["host", "android"],
-  "runtimeAbi": "2"
-}
-```
-
-These requirements are checked while resolving the package graph, before any
-compiler or native action is planned.
-
-Haxelib is an adapter, not Haxeon's package model. A pure-Haxe Haxelib release
-can be placed in the dedicated `~/.haxeon/cache/sources/haxelib/<name>/<version>`
-cache (or supplied as an archive under its downloads cache); its `haxelib.json`
-is translated to a normal Haxeon manifest. Haxeon does not read global
-`haxelib dev` state or execute `extraParams`, macros, or HXML compiler settings;
-unsupported settings fail with an explicit import diagnostic.
-
-Android builds resolve the same package graph, compile `native.sources` with the
-Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
-under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
-rebuilt and repackaged when its C sources change; Haxe-only edits continue to
-use the Android HLB asset path.
-
-The `doctor` command checks the local compiler, HashLink runtime, and Android
-SDK tools. `platforms` lists CLI targets, and `devices` reports connected
-Android devices. Wasm32 is build-only; host output runs through HashLink on the
-current machine.
-
-### Workspace builds
-
-`haxeon workspace plan|build|test` merges many projects into one build graph, so shared native code is built
-once, everything runs from one work queue under one job limit, and tests run as graph nodes.
-
-```sh
-./scripts/haxeon workspace test --workspace materia.workspace.json --skip-tag cadkit --skip-tag mujoco
-```
-
-The workspace file lists the member projects. Paths are relative to the file:
-
-```json
-{
-  "version": 1,
-  "buildDir": "build/workspace",
-  "projects": [
-    { "path": "animkit/tests/haxeon.json", "name": "animkit" },
-    { "path": "stockkit/tests/haxeon.json", "name": "stockkit", "tags": ["cadkit"] },
-    { "path": "kit/tests/haxeon.json", "name": "kit", "cache": false, "inputs": ["../fixtures"] }
-  ]
-}
-```
-
-- `tags` let a run skip projects that need something the machine may lack (`--skip-tag TAG`, `--only NAME`).
-- `plan` prints the merged graph and how many actions were shared; `--actions` lists them.
-- CMake packages are identified by (source, target), not package name, so projects that request the same native
-  tree share one configure, one build, and one set of runtime libraries.
-- `--jobs N` (default: CPU count) sets the total job limit and `--compilers N` (default 3) bounds simultaneous
-  compiles, each of which holds a compiler heap. Every project keeps its own compiler worker. Across all build
-  roots, at most `HAXEON_COMPILER_WORKERS` (default 4) stay resident and, on Linux, their total resident memory
-  stays within `HAXEON_COMPILER_MEMORY_MB` (default 4096); the least recently used workers are retired first, and a
-  project's workers from older compiler versions are retired immediately.
-- With Ninja 1.13 or newer (`scripts/bootstrap-tools.sh` installs a pinned copy under `.tools/ninja`), a GNU
-  jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
-  oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the
-  platform's default CMake generator.
-- `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
-  is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
-  libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
-  cached. Set `"cache": false` for a suite that depends on the clock, the network, or a peer process, or pass
-  `--no-test-cache` to run everything.
-
-### Android host
-
-The first Android host embeds the HashLink runtime and the existing JIT
-backends directly in `libhaxeon.so`; it does not translate Haxeon to JVM or
-Android VM bytecode. Gradle generates a small `.hl` asset and packages the
-host for `arm64-v8a` and `x86_64`. The project CLI sends its manifest to Gradle
-and copies the resulting APK to `build/android/app-debug.apk`:
-
-```sh
-./scripts/haxeon init --target android
-./scripts/haxeon build --target android
-./scripts/haxeon run --target android [--device SERIAL]
-```
-
-Set `android.applicationId` and `android.label` in `haxeon.json` to customize
-the installed package name and launcher label. `run` installs the APK and
-launches it on the selected device or the only online device. `haxeon devices`
-lists connected devices.
-
-For the bundled demo, Gradle can still be called directly:
-
-```sh
-source scripts/android-env.sh
-./scripts/build-android.sh assembleDebug
-adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-The host keeps one Haxeon runtime module alive and exposes a loopback patch
-port forwarded through `adb`. After changing `android/demo/Main.hx`, compile
-and send a compatible body patch without rebuilding the APK:
-
-```sh
-./scripts/build-android-patch.sh
-./scripts/android-send-patch.sh
-```
-
-The patch compiler stages a new baseline beside `android/app/src/main/assets/app.hcs`;
-the send command promotes it only after the device acknowledges the patch.
-Structural edits are sent as a full domain reload, still without rebuilding the
-APK:
-
-```sh
-./scripts/build-android-reload.sh
-./scripts/android-send-reload.sh
-```
-
-The reload bundle replaces the loaded HLB module and HLI manifest only after
-the new module initializes and its `main` call succeeds. Its staged compiler
-baseline is promoted only after the device acknowledges the replacement.
-
-The local Android SDK, NDK, CMake, Gradle, and emulator are kept under
-`.tools/`. The CLI configures these paths automatically. Source
-`scripts/android-env.sh` when using `adb`, `emulator`, or Gradle directly. The
-disposable API 36 emulator used for the smoke test is named
-`haxeon-api36-x86_64`.
-
-The full test script runs program fixtures with 16 workers by default. Set
-`TEST_JOBS=1` for the sequential baseline, or invoke the driver directly to
-select a suite or test:
-
-```sh
-TEST_JOBS=1 ./scripts/test.sh
-.tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 16
-.tools/haxe/haxe -cp tests --run driver.TestDriver --suite compiler --test ParserRecovery
-```
-
-The cross-platform Haxe build entry point provides the native build, bootstrap,
-and core test workflow without Bash. This is the path used by Windows CI:
-
-```sh
-.tools/haxe/haxe -cp src --run build.HaxeonBuild native
-.tools/haxe/haxe -cp src --run build.HaxeonBuild bootstrap-self
-.tools/haxe/haxe -cp src --run build.HaxeonBuild test 16
-```
-
-`bootstrap/compiler.hl` is checked in. For ordinary compiler development,
-`bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
-pinned HashLink without invoking the reference Haxe compiler.
-
-The full bootstrap uses pinned reference Haxe to build the compiler, then asks
-that compiler to build itself and requires byte-for-byte equality. Both modes
-derive the same sorted source manifest from `src/` and build the native runtime
-bridge before compilation.
-
-The writer currently targets HashLink bytecode format version 6, matching the
-decoder in `src/code.c`.
-
-### API documentation
-
-Haxeon recognizes Haxe documentation comments beginning with `/**`. Their
-Markdown and `@param`, `@return`/`@returns`, `@deprecated`, `@see`, `@throws`,
-`@exception`, and `@since` tags are shared by editor hover, completion, and
-signature help.
-
-The compiler can also emit deterministic Haxe type-description XML for tools
-such as [dox](https://github.com/HaxeFoundation/dox):
-
-```sh
-compiler.hl --xml=docs/api.xml --output=out/app.hl \
-  --entry=my.app.Main --root=src src/my/app/Main.hx
-haxelib run dox -i docs -o docs/html
-```
-
-Both `--xml=docs/api.xml` and the standard two-argument form
-`--xml docs/api.xml` are accepted. Documentation generation does not change
-runtime fingerprints or hot-reload compatibility.
-
-## 📊 Benchmarks
-
-Run the repeatable edit-to-runtime benchmark:
-
-```sh
-./scripts/benchmark.sh
-```
-
-It reports median, p95, and p99 latency for cold compilation, no-op rebuilds,
-body patches, signature reloads, and structural reloads. It also runs a patch
-soak test and writes machine-readable results to `out/benchmark.json`.
-
-Attribute soak-test memory growth with isolated compiler and runtime passes:
-
-```sh
-./scripts/benchmark.sh --only-soak --soak-mode compiler \
-  --json out/benchmark-compiler.json
-./scripts/benchmark.sh --only-soak --soak-mode runtime \
-  --json out/benchmark-runtime.json
-```
-
-Generate scaling results and compare two runs:
-
-```sh
-./scripts/benchmark.sh --only-scale --json out/benchmark-scale.json
-./scripts/benchmark-compare.sh baseline.json out/benchmark-scale.json
-```
-
-Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
-`--scale-iterations` to tune a run. Benchmark comparisons are informational and
-do not enforce thresholds.
-
-## 🧪 Development
-
-### Native build
-
-Haxeon uses CMake for its cross-platform native build and Ninja as the default
-backend. HashLink is built from the pinned `vendor/hashlink` submodule; the
-resulting VM and library are placed in `.tools/hashlink`, while Haxeon's runtime
-HDLL is placed in `out`.
-
-The Release preset owns those shared tool paths. The Debug preset writes its VM
-and runtime HDLL under `out/cmake/dev` so a development build cannot replace
-the optimized VM used by profiler captures and normal project commands.
-
-```sh
-cmake --preset release
-cmake --build --preset release
-```
-
-The same build can be driven by the cross-platform Haxe entry point:
-
-```sh
-.tools/haxe/haxe -cp src --run build.HaxeonBuild doctor
-.tools/haxe/haxe -cp src --run build.HaxeonBuild native release
-```
-
-On a fresh Windows checkout, run `scripts/setup.ps1` from a Visual Studio
-developer shell. It installs the pinned tools and selects the `windows-msvc`
-preset. The CI job also builds and tests `windows-msvc-debug`, which uses the
-matching MSVC Debug CRT. Later native-only builds can use
-`scripts/build-native.ps1`. Unix environments may use
-`scripts/bootstrap-tools.sh` followed by
-`scripts/build-native.sh`; macOS CI covers both Intel and Apple Silicon, with
-the latter using HashLink's AArch64 JIT. The `macos-arm64` preset can also be
-used for an explicit arm64 build on Darwin. Set `HAXEON_CMAKE_PRESET` to
-override the wrapper's default preset.
-
-Linux AArch64 hosts need `qemu-user` and `libc6-amd64-cross`: the pinned Haxe
-release is currently Linux x86-64, so the shared bootstrap keeps the normal
-`.tools/haxe/haxe` path and runs that compiler through an explicit QEMU
-wrapper. The native HashLink and runtime still build and execute for AArch64.
-
-Pinned tool versions, archive checksums, extraction, and submodule setup are
-defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
-launchers for that shared bootstrap rather than separate installers.
-
-Haxe sources use the repository-pinned Haxe Formatter:
-
-```sh
-./scripts/format.sh
-./scripts/format.sh --check
-```
-
-For short-lived compiler profiling runs, start the HashLink process with
-`--diagnostics-wait`. It opens the diagnostics socket, holds the program before
-its entrypoint, and resumes after `hlprof-live` configures sampling. Run the
-first command in one terminal and the second in another:
-
-```sh
-LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
-  .tools/hashlink/hl --diagnostics 24020 --diagnostics-wait out/compiler.hl
-.tools/hashlink/hlprof-live --connect-timeout 10 --rate 500 --output out/compiler.hlpc 24020
-```
-
-For host applications, `haxeon run --profile` automates that handshake: it builds
-the project, launches it with `--diagnostics-wait`, attaches `hlprof-live`, writes
-an HLPC capture (default `build/host/profile/profile-<timestamp>/profile.hlpc`), and prints
-a top-functions report after the process exits. Pass `--profile-output PATH` to
-choose the capture location, and runtime arguments after `--`:
-
-```sh
-haxeon run --profile --profile-output build/host/profile/editor.hlpc
-```
-
-Applications can mark a measured operation with `haxeon.ProfileSpan.begin(name)`
-and `haxeon.ProfileSpan.end(name)`. Markers use the same clock and thread IDs as
-the stack samples. Names may be UTF-8 text; begin/end names must match on each
-thread. After exporting the capture, `scripts/hlprof-spans.py` lists the
-slowest spans and the sampled leaf functions inside each one:
-
-```sh
-.tools/hashlink/hlprof-live export --format perfetto \
-  --output out/editor.perfetto.json out/editor.hlpc
-python3 scripts/hlprof-spans.py --min-ms 20 --top 20 \
-  --output out/span-spikes.json out/editor.perfetto.json
-```
-
-The report includes sample counts, dropped-record counts, and incomplete span
-counts when capture ends before the final marker is drained. A span with few
-samples needs further investigation; sampling alone cannot prove whether its
-thread was descheduled or blocked.
-
-Profile captures include `capture.json` and a copy of the exact bytecode used
-by the run. A HashLink heap dump captured by the application can be placed in
-the same directory and added as the `heap` artifact in the manifest. Inspect
-it with `haxeon heap inspect --capture DIR`, or pass the bytecode and dump paths
-directly with `haxeon heap inspect BYTECODE DUMP`.
-
-To profile incremental compiler edits, pass `--profile-output` to the project
-benchmark. It starts a dedicated worker with a diagnostics port, warms that
-worker before attaching, and captures the edit loop. The normal worker launch
-is unchanged. Sampling adds overhead, so use an unprofiled run for latency
-comparisons. HashLink's allocation samples currently identify the native
-allocator rather than Haxe allocation call sites; the compiler's per-phase
-allocation counters remain the better source for allocation totals.
-
-```sh
-python3 scripts/benchmark-incremental-project.py \
-  --project /path/to/haxeon.json --source /path/to/Main.hx \
-  --token-a 'before' --token-b 'after' --output /tmp/edit.hl \
-  --profile-output /tmp/compiler-edits.hlpc
-.tools/hashlink/hlprof-live export --format perfetto \
-  --output /tmp/compiler-edits.json /tmp/compiler-edits.hlpc
-```
-
-Incremental benchmark output also reports `alloc-<phase>-bytes`, `-count`,
-`-gcs`, and `-gc-ms` from HashLink's cumulative GC counters. These are
-phase deltas; `gc-ms` measures stop-the-world marking. The `driver-alloc-*`
-values cover request preparation, compilation, artifact encoding, and writing.
-Use the unprofiled benchmark for latency comparisons, since live sampling adds
-CPU overhead.
-
-`bootstrap-status.sh` runs the real lexer, parser, and typer over the compiler
-source tree and reports bootstrap progress. Pass `--json` for a machine-readable
-dashboard.
+Unsupported constructs produce explicit diagnostics instead of a guessed
+binding. See [`docs/C_HEADER_FFI.md`](docs/C_HEADER_FFI.md) for the supported
+subset, C++ profiles, ownership rules, and exception thunks.
+
+### Cross-platform apps, including the browser
+
+The Wasm backends lower the same canonical IR as the HashLink backend, so an
+application's Haxe code, its HXI bindings, and its C/C++ library share one
+source of truth across desktop, Android, and the web:
+
+- **`wasm32`** uses linear memory with a precise collector. **`wasm-gc`** uses
+  the engine's native garbage collector and needs no linear memory unless FFI
+  asks for it.
+- A guest and its host meet only at C-ABI functions, so one host serves both
+  Wasm targets. Compile your C/C++ library with Emscripten; Haxeon's
+  `haxeon-host.js` connects the guest to that module and forwards the HXI
+  imports to its exports.
+- C callbacks, records by value, out-parameters, and owned handles work across
+  the boundary; Wasm GC copies records and strings through scratch memory.
+
+Wasm support is experimental and narrower than the desktop target:
+
+- Haxeon does not yet build a package's C/C++ sources for `wasm32`. A package
+  with no provider for a target stops at planning with a clear error, so
+  compile the library with Emscripten yourself.
+- `wasm-gc` supports a smaller subset of the FFI than `wasm32`, and HXI
+  interfaces with 64-bit pointers are rejected for Wasm.
+- `wasm64`, threads, and `sys.io.Process` are not available, and file access
+  uses an in-memory store.
+- Wasm builds are build-only; `haxeon run` does not launch them.
+
+See [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the host ABI and test
+commands.
+
+## ⚖️ How it compares
+
+Hot reload is not new. These are the closest widely used tools, and how
+Haxeon's approach differs.
+
+| | **Haxeon** | **.NET Hot Reload** | **Dart / Flutter hot reload** |
+|---|---|---|---|
+| Language | Haxe-compatible subset | C#, F# | Dart |
+| Runtime | HashLink (JIT) | CLR (`dotnet watch`, Visual Studio) | Dart VM (JIT, debug mode) |
+| How edits apply | Compiler emits a patch of changed function bodies; the runtime validates and JIT-compiles it, then publishes it atomically | Compiler emits metadata/IL deltas applied to the running process | Updated source is compiled and injected into the running VM |
+| Granularity | Function bodies, with stable function IDs | Method bodies and some member additions | Classes and functions |
+| Failed or incompatible edit | Patch is rejected; the live program is untouched | Unsupported ("rude") edits require a restart | Reload fails or needs a hot restart |
+| Structural changes | Explicit reload boundary; state moves through `saveState`/`restoreState` | Restart | Hot restart (state is lost) |
+| Output when not live | Standard `.hl` bytecode, also Wasm and Android | Normal .NET assemblies | AOT binaries for release |
+| Primary use | General applications, tools, and editors | General applications, web, desktop | UI development, mostly Flutter |
+
+.NET Hot Reload and Flutter's hot reload are mature, polished workflows with
+large ecosystems behind them. Haxeon's bet is different: make transactional
+patching a core compiler and runtime contract rather than an IDE feature, on top
+of a language that targets many platforms.
+
+## 📚 Documentation
+
+| Topic | Where |
+|---|---|
+| Project CLI, manifests, dependencies, workspaces | [`docs/CLI.md`](docs/CLI.md) |
+| Supported Haxe subset, FFI, and native bindings | [`docs/LANGUAGE_SUPPORT.md`](docs/LANGUAGE_SUPPORT.md) |
+| How patching works, reload rules, artifact builds | [`docs/LIVE_PATCHING.md`](docs/LIVE_PATCHING.md) |
+| Compiler pipeline, SSA IR, HLB/HLI/HLP formats | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Patch transactions in depth | [`docs/PATCH_TRANSACTIONS.md`](docs/PATCH_TRANSACTIONS.md) |
+| WebAssembly backend | [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) |
+| Android host | [`docs/ANDROID.md`](docs/ANDROID.md) |
+| Building, testing, bootstrapping, formatting | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
+| Benchmarks and profiling | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md), [`docs/PROFILING.md`](docs/PROFILING.md) |
+| More design notes | [`docs/`](docs/) |
 
 ## 🗺️ Project direction
 
@@ -849,6 +182,4 @@ with realtime behavior treated as a core compiler and runtime constraint rather
 than an editor-side workaround.
 
 The staged architecture, reload rules, and Pragtical conversion gates are
-tracked in the [roadmap](ROADMAP.md). Deeper design notes live in
-[`docs/`](docs/), including patch transactions, metadata ownership, module
-reclamation, semantic contracts, and the implementation baseline.
+tracked in the [roadmap](ROADMAP.md).
