@@ -424,10 +424,9 @@ class IrGenerator {
 					};
 					lowerStatements(taken, builder, localTypes, loops, statementsScopeEnd(taken, span.end));
 				case TIf(condition, thenBranch, elseBranch, span):
-					var conditionValue = lowerExpression(condition, builder, localTypes),
-						thenBlock = builder.createBlock(),
+					var thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock();
-					builder.branch(conditionValue, thenBlock, elseBlock);
+					lowerBranch(condition, thenBlock, elseBlock, builder, localTypes);
 					builder.select(thenBlock);
 					lowerStatements(thenBranch, builder, localTypes, loops, statementsScopeEnd(thenBranch, span.end));
 					var thenActive = !builder.isTerminated(),
@@ -454,7 +453,7 @@ class IrGenerator {
 						afterBlock = builder.createBlock();
 					builder.jump(conditionBlock);
 					builder.select(checkBlock);
-					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
+					lowerBranch(condition, bodyBlock, afterBlock, builder, localTypes);
 					builder.select(bodyBlock);
 					var loop:LoopContext = {
 						breakBlock: afterBlock,
@@ -494,7 +493,7 @@ class IrGenerator {
 					builder.select(conditionBlock);
 					builder.branch(builder.load(breakFlag, Bool), afterBlock, conditionCheck);
 					builder.select(conditionCheck);
-					builder.branch(lowerExpression(condition, builder, localTypes), bodyBlock, afterBlock);
+					lowerBranch(condition, bodyBlock, afterBlock, builder, localTypes);
 					builder.select(bodyBlock);
 					loops.push({
 						breakBlock: afterBlock,
@@ -1218,7 +1217,7 @@ class IrGenerator {
 					localName = '$' + 'conditional:${expression.span.start}:${afterBlock.id}',
 					resultType = lowerType(expression.type);
 				localTypes.set(localName, resultType);
-				builder.branch(lowerExpression(condition, builder, localTypes), yesBlock, noBlock);
+				lowerBranch(condition, yesBlock, noBlock, builder, localTypes);
 				builder.select(yesBlock);
 				var yesValue = lowerExpression(whenTrue, builder, localTypes);
 				if (!builder.isTerminated()) {
@@ -2181,6 +2180,36 @@ class IrGenerator {
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
 		return type == TInt ? builder.constInt(1) : builder.constFloat(1.0);
+
+	/**
+	 * Branches on a condition, lowering `&&`, `||` and `!` as control flow instead of building a Bool: each operand
+	 * jumps straight to the right target, and a comparison that ends its block becomes the branch itself. Returns
+	 * false when an operand diverged before the branch, so nothing after it is reachable.
+	 */
+	static function lowerBranch(condition:TypedExpression, whenTrue:CfgBlock, whenFalse:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Bool {
+		switch condition.expression {
+			case TNot(value):
+				return lowerBranch(value, whenFalse, whenTrue, builder, localTypes);
+			case TAnd(left, right):
+				var middle = builder.createBlock();
+				if (!lowerBranch(left, middle, whenFalse, builder, localTypes))
+					return false;
+				builder.select(middle);
+				return lowerBranch(right, whenTrue, whenFalse, builder, localTypes);
+			case TOr(left, right):
+				var middle = builder.createBlock();
+				if (!lowerBranch(left, whenTrue, middle, builder, localTypes))
+					return false;
+				builder.select(middle);
+				return lowerBranch(right, whenTrue, whenFalse, builder, localTypes);
+			default:
+				var value = lowerExpression(condition, builder, localTypes);
+				if (builder.isTerminated())
+					return false;
+				builder.branch(value, whenTrue, whenFalse);
+				return true;
+		}
+	}
 
 	static function lowerLogical(left:TypedExpression, right:TypedExpression, and:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var resultName = '$' + 'logical:${left.span.start}:${right.span.end}';
