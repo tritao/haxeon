@@ -27,6 +27,60 @@ static vstring *realtime_string_concat_many( vstring **parts, int count ) {
 	return result;
 }
 
+/* StringBuf: a growable buffer of UTF-16 code units. `add` copies characters in, so the pieces appended do not
+   stay alive until toString the way a list of parts would. The handle is scanned (it points at its storage);
+   the storage holds no pointers. */
+typedef struct realtime_string_buffer {
+	uchar *data;
+	int length;
+	int capacity;
+} realtime_string_buffer;
+
+static void realtime_string_buffer_reserve( realtime_string_buffer *buffer, int needed ) {
+	if( needed <= buffer->capacity )
+		return;
+	int capacity = buffer->capacity < 16 ? 16 : buffer->capacity;
+	while( capacity < needed ) {
+		if( capacity > 0x3FFFFFFF )
+			hl_error("StringBuf is too large");
+		capacity *= 2;
+	}
+	uchar *data = (uchar *)hl_gc_alloc_noptr((size_t)capacity * sizeof(uchar));
+	if( buffer->length > 0 )
+		memcpy(data, buffer->data, (size_t)buffer->length * sizeof(uchar));
+	buffer->data = data;
+	buffer->capacity = capacity;
+}
+
+HL_PRIM realtime_string_buffer *HL_NAME(__string_buffer_new)( void ) {
+	realtime_string_buffer *buffer = (realtime_string_buffer *)hl_gc_alloc_raw(sizeof(realtime_string_buffer));
+	memset(buffer, 0, sizeof(realtime_string_buffer));
+	return buffer;
+}
+
+HL_PRIM void HL_NAME(__string_buffer_add)( realtime_string_buffer *buffer, vstring *value ) {
+	int length = realtime_string_length(value);
+	if( length <= 0 )
+		return;
+	if( length > 0x7FFFFFFF - buffer->length )
+		hl_error("StringBuf is too large");
+	realtime_string_buffer_reserve(buffer, buffer->length + length);
+	memcpy(buffer->data + buffer->length, value->bytes, (size_t)length * sizeof(uchar));
+	buffer->length += length;
+}
+
+HL_PRIM int HL_NAME(__string_buffer_length)( realtime_string_buffer *buffer ) {
+	return buffer->length;
+}
+
+HL_PRIM vstring *HL_NAME(__string_buffer_to_string)( realtime_string_buffer *buffer ) {
+	uchar *output;
+	vstring *result = realtime_string_alloc(buffer->length, &output);
+	if( buffer->length > 0 )
+		memcpy(output, buffer->data, (size_t)buffer->length * sizeof(uchar));
+	return result;
+}
+
 HL_PRIM vstring *HL_NAME(__string_concat3)( vstring *s0, vstring *s1, vstring *s2 ) {
 	vstring *parts[3] = { s0, s1, s2 };
 	return realtime_string_concat_many(parts,3);
