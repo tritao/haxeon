@@ -252,6 +252,7 @@ map-entry-facts	42
 map-clear-reuse	42
 implicit-constructor	42
 map-copy	42
+map-hash-index	42
 capture-shadowing	42
 compound-shift-assign	42
 field-initializer-dynamic	42
