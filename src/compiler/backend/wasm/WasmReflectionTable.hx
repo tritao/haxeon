@@ -15,13 +15,14 @@ class WasmReflectionTable {
 		"__reflect_object_field",
 		"__reflect_object_set_field",
 		"__reflect_object_field_count",
-		"__reflect_object_field_name"
+		"__reflect_object_field_name",
+		"__reflect_object_delete_field"
 	];
 
 	/** Class id, then one slot for each of OPERATIONS. */
-	public static inline final ROW_SIZE = 20;
+	public static inline final ROW_SIZE = 24;
 
-	public static inline final ROW_WORDS = 5;
+	public static inline final ROW_WORDS = 6;
 
 	public static function operationIndex(symbol:String):Int
 		return OPERATIONS.indexOf(symbol);

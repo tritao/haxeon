@@ -106,6 +106,9 @@ extern function reflectObjectField(object:Dynamic, field:String):Dynamic;
 @:hlNative("haxeon_runtime", "__reflect_object_set_field")
 extern function reflectObjectSetField(object:Dynamic, field:String, value:Dynamic):Bool;
 
+@:hlNative("haxeon_runtime", "__reflect_object_delete_field")
+extern function reflectObjectDeleteField(object:Dynamic, field:String):Bool;
+
 @:hlNative("haxeon_runtime", "__reflect_object_field_count")
 extern function reflectObjectFieldCount(object:Dynamic):Int;
 
@@ -135,10 +138,10 @@ function reflectHasField(object:Dynamic, field:String):Bool {
 	return false;
 }
 
-/** Compiled class and anonymous record layouts are fixed on Wasm, so only dynamic objects lose fields. */
+/** Compiled class and anonymous record layouts are fixed on Wasm: only dynamic objects lose fields, and a typed object's field is reset. */
 function reflectDeleteField(object:Dynamic, field:String):Bool {
 	var dynamicObject = runtime.DynamicObject.of(object);
-	return dynamicObject != null && dynamicObject.remove(field);
+	return dynamicObject == null ? reflectObjectDeleteField(object, field) : dynamicObject.remove(field);
 }
 
 function reflectFieldCount(object:Dynamic):Int {

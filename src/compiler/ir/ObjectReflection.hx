@@ -45,6 +45,7 @@ class ObjectReflection {
 				case "__reflect_object_set_field": setField(native.name, layouts, functions);
 				case "__reflect_object_field_count": fieldCount(native.name, layouts);
 				case "__reflect_object_field_name": fieldName(native.name, layouts, functions);
+				case "__reflect_object_delete_field": deleteField(native.name, layouts, functions);
 				default: throw 'Unknown object reflection native "${native.symbol}"';
 			});
 		}
@@ -106,6 +107,26 @@ class ObjectReflection {
 		return new IrFunction(name, builder.arguments, I32, builder.blocks);
 	}
 
+	static function deleteField(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
+		return perLayout(name, layouts, functions, Bool, [{name: "field", type: Bytes}], deleteFieldBody, builder -> builder.constBool(false));
+
+	/** A fixed layout cannot lose a field, so deleting one resets it to what a deleted field reads as: null, or zero for numbers. */
+	static function deleteFieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
+		forEachField(builder, arguments[0], layout, field -> {
+			builder.fieldSet(typed, field.name, zeroValue(builder, field.type));
+			builder.returnValue(builder.constBool(true));
+		});
+		builder.returnValue(builder.constBool(false));
+	}
+
+	static function zeroValue(builder:IrBuilder, type:IrType):IrValue
+		return switch type {
+			case I32, I64: builder.constInt(0, type);
+			case Bool: builder.constBool(false);
+			case F32, F64: builder.constFloat(0.0, type);
+			default: builder.constNull(type);
+		};
+
 	static function fieldName(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Bytes, [{name: "index", type: I32}], fieldNameBody, builder -> builder.constNull(Bytes));
 
@@ -140,6 +161,10 @@ class ObjectReflection {
 				result = Bytes;
 				parameters = [{name: "index", type: I32}];
 				body = fieldNameBody;
+			case "__reflect_object_delete_field":
+				result = Bool;
+				parameters = [{name: "field", type: Bytes}];
+				body = deleteFieldBody;
 			default:
 				throw 'Unknown object reflection native "${native.symbol}"';
 		}
