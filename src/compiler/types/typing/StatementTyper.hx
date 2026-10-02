@@ -70,6 +70,7 @@ typedef AssignmentTypingRules = {
 	rejectInlineFieldMutation:(String, String, SourceSpan) -> Void,
 	findFieldType:(CompilerType, String) -> Null<CompilerType>,
 	instancePropertyAccessor:(CompilerType, String, Bool) -> Null<String>,
+	propertySetterCall:(TypedExpression, String, TypedExpression, SourceSpan) -> TypedExpression,
 	fieldType:(CompilerType, String, SourceSpan) -> CompilerType,
 	fieldRepresentationType:(CompilerType, String, SourceSpan) -> CompilerType,
 	abiBoundaryCast:(TypedExpression, CompilerType) -> TypedExpression,
@@ -384,7 +385,7 @@ class StatementTyper {
 					var receiver = typeExpression(Variable("this", span), scope, null, false),
 						propertySetter = assignmentRules.instancePropertyAccessor(thisType, name, false);
 					if (propertySetter != null)
-						return TExpression(new TypedExpression(TMethodCall(receiver, propertySetter, [value]), instanceField, span), span);
+						return TExpression(assignmentRules.propertySetterCall(receiver, propertySetter, value, span), span);
 					var receiverPath = FlowAnalysis.accessPath(receiver);
 					if (receiverPath != null) {
 						var fieldPath = receiverPath + "." + name;
@@ -448,7 +449,7 @@ class StatementTyper {
 					setter:Null<String> = platformField == null ? null : platformField.set,
 					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
 						var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
-						propertySetter != null ? TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span) : {
+						propertySetter != null ? TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span) : {
 							value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
 							TFieldAssign(object, fieldName, value, span);
 						};
@@ -524,7 +525,7 @@ class StatementTyper {
 				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
 					var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
 					if (propertySetter != null)
-						TExpression(new TypedExpression(TMethodCall(object, propertySetter, [value]), expected, span), span)
+						TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span)
 					else {
 						value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
 						TFieldAssign(object, fieldName, value, span);

@@ -140,6 +140,7 @@ class BodyTyper {
 				rejectInlineFieldMutation: function(owner, name, span) this.rejectInlineFieldMutation(owner, name, span),
 				findFieldType: function(type, name) return this.findFieldType(type, name),
 				instancePropertyAccessor: function(type, name, read) return this.instancePropertyAccessor(type, name, read),
+				propertySetterCall: function(object, setter, value, span) return this.propertySetterCall(object, setter, value, span),
 				fieldType: function(type, name, span) return this.fieldType(type, name, span),
 				fieldRepresentationType: function(type, name, span) return session.representation.resolveField(type, name, span).physical,
 				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
@@ -1614,6 +1615,19 @@ class BodyTyper {
 					session.representation.nominalSubstitutions(type)), name, read); else null;
 			default: null;
 		};
+
+	/**
+	 * A call of the property setter `setter` on `object` with `value`. As for a getter, the setter of a
+	 * generic class takes and returns its type parameter's representation, not the substituted type.
+	 */
+	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression, span:SourceSpan):TypedExpression {
+		var method = requiredMapValue(session.signatures, setter),
+			methodInfo = session.methodInfo.get(setter),
+			owner = methodInfo == null ? requiredString(parentPath(setter)) : methodInfo.owner,
+			arguments = session.representation.adaptMethodArguments(object.type, owner, method, [value]),
+			methodResult = session.representation.resolveMethodResult(object.type, owner, method);
+		return new TypedExpression(TMethodCall(object, setter, arguments), methodResult.physical, span);
+	}
 
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return session.representation.resolveField(type, name, span).physical;
