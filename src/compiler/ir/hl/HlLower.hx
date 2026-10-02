@@ -216,8 +216,9 @@ class HlLower {
 								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
 							case IteratorHasNext(_, _):
 								ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
-							case IteratorNext(_, _):
-								ensureNative(runtimeNatives, "__iterator_next", [IrType.Abstract("realtime_iterator")], IrType.Dyn);
+							case IteratorNext(output, _):
+								var nextNative = iteratorNextNative(output.type);
+								ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")], nextNative.result);
 							default:
 						}
 		return runtimeNatives;
@@ -494,6 +495,14 @@ class HlLower {
 			default: true;
 		};
 
+	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
+	static function iteratorNextNative(element:IrType):{name:String, result:IrType}
+		return switch element {
+			case F64: {name: "__iterator_next_f64", result: IrType.F64};
+			case I32: {name: "__iterator_next_i32", result: IrType.I32};
+			default: {name: "__iterator_next", result: IrType.Dyn};
+		};
+
 	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType, ?library:String, ?symbol:String):Void {
 		var nativeLibrary = library == null ? "haxeon_runtime" : library,
 			nativeSymbol = symbol == null ? name : symbol;
@@ -734,9 +743,13 @@ class HlLower {
 							requireRegister(iterator, registers)));
 					case IteratorNext(output, iterator):
 						var destination = defineRegister(output, registers, registerTypes),
-							dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
-						instructions.push(HlInstruction.Call1(dynamicResult, requireFunction("__iterator_next"), requireRegister(iterator, registers)));
-						instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
+							nextNative = iteratorNextNative(output.type);
+						if (nextNative.result == IrType.Dyn) {
+							var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
+							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name), requireRegister(iterator, registers)));
+							instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
+						} else
+							instructions.push(HlInstruction.Call1(destination, requireFunction(nextNative.name), requireRegister(iterator, registers)));
 					case CNativeCall(output, functionName, arguments):
 						var native = cNatives.get(functionName);
 						if (native == null)

@@ -493,6 +493,8 @@ DEFINE_PRIM(_BOOL,__dynamic_equal,_DYN _DYN);
 DEFINE_PRIM(_ABSTRACT(realtime_iterator),__iterator_new,_DYN);
 DEFINE_PRIM(_BOOL,__iterator_has_next,_ABSTRACT(realtime_iterator));
 DEFINE_PRIM(_DYN,__iterator_next,_ABSTRACT(realtime_iterator));
+DEFINE_PRIM(_F64,__iterator_next_f64,_ABSTRACT(realtime_iterator));
+DEFINE_PRIM(_I32,__iterator_next_i32,_ABSTRACT(realtime_iterator));
 DEFINE_PRIM(_BOOL,__string_starts_with,_STRING _STRING);
 DEFINE_PRIM(_BOOL,__string_ends_with,_STRING _STRING);
 DEFINE_PRIM(_STRING,__string_replace,_STRING _STRING _STRING);

@@ -300,3 +300,4 @@ infinite-loop-trailing-code	42
 std-downcast	42
 string-substr-negative	42
 string-substring-reversed	42
+array-iterator-typed	42
