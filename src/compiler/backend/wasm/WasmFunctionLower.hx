@@ -18,7 +18,6 @@ import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.backend.wasm.WasmStructurer.WasmLoopInfo;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionGcRootState;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
@@ -27,6 +26,60 @@ import compiler.backend.wasm.gc.WasmGcRepresentation;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+
+/** One open Wasm structured-control instruction, innermost last. */
+private enum StructureFrame {
+	/** A `loop` whose header is the given block; a back edge to it is a `br` to this frame. */
+	LoopFrame(header:Int);
+
+	/** A `block` that ends where the given merge node's code begins. */
+	BlockFrame(followedBy:Int);
+
+	/** An `if`/`else`. */
+	IfFrame;
+}
+
+/** Everything one structured emission shares while it walks a function's dominator tree. */
+private class StructuredEmission {
+	public final structurer:WasmStructurer;
+	public final functions:Map<String, Int>;
+	public final values:Map<Int, Int>;
+	public final predecessor:Int;
+	public final layout:WasmLayout;
+	public final allocator:Int;
+	public final globals:Map<String, Int>;
+	public final strings:Map<String, Int>;
+	public final methods:Map<String, String>;
+	public final closureTypes:Map<String, WasmClosureTypes>;
+	public final frames:Array<StructureFrame> = [];
+	public final phiBlocks:Map<Int, Bool> = [];
+
+	public function new(structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int, layout:WasmLayout, allocator:Int,
+			globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>) {
+		this.structurer = structurer;
+		this.functions = functions;
+		this.values = values;
+		this.predecessor = predecessor;
+		this.layout = layout;
+		this.allocator = allocator;
+		this.globals = globals;
+		this.strings = strings;
+		this.methods = methods;
+		this.closureTypes = closureTypes;
+	}
+
+	/** The branch depth, counted from the innermost open frame, of the nearest frame matching `matches`. */
+	public function depthOf(matches:StructureFrame->Bool):Int {
+		var depth = 0, index = frames.length - 1;
+		while (index >= 0) {
+			if (matches(frames[index]))
+				return depth;
+			depth++;
+			index--;
+		}
+		throw 'No enclosing frame for a branch in ${structurer.functionName}';
+	}
+}
 
 class WasmFunctionLower {
 	final context:WasmFunctionLowerContext;
@@ -119,10 +172,9 @@ class WasmFunctionLower {
 		var predecessor = placement.allocate(I32);
 		var structurer = new WasmStructurer(fn),
 			body:Array<WasmInstruction> = null;
+		// Any reducible CFG structures, so a failure here is a bug to surface rather than a reason to emit the slow dispatcher.
 		if (context.exceptionState == null && structurer.canUseStructured())
-			try
-				body = lowerStructured(fn, structurer, functions, valueLocals, predecessor, layout, allocator, globals, strings, methods, closureTypes)
-			catch (_:Dynamic) {}
+			body = lowerStructured(fn, structurer, functions, valueLocals, predecessor, layout, allocator, globals, strings, methods, closureTypes);
 		if (body == null) {
 			var pc = placement.allocate(I32);
 			body = lowerDispatcher(fn, analysis, functions, valueLocals, pc, predecessor, layout, allocator, globals, strings, methods, closureTypes);
@@ -149,115 +201,95 @@ class WasmFunctionLower {
 	function lowerStructured(fn:IrFunction, structurer:WasmStructurer, functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int, layout:WasmLayout,
 			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Array<WasmInstruction> {
-		var body:Array<WasmInstruction> = [];
+		var body:Array<WasmInstruction> = [],
+			state = new StructuredEmission(structurer, functions, values, predecessor, layout, allocator, globals, strings, methods, closureTypes);
 		emit(body, [I32Const(-1), LocalSet(predecessor)]);
-		if (!emitPath(body, fn.blocks[0].id, null, null, 0, structurer, functions, values, predecessor, [], layout, allocator, globals, strings, methods,
-			closureTypes))
-			throw 'Unable to structure CFG for ${fn.name}';
+		// `predecessor` only matters on edges into a block with phis, so only those edges set it.
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case Phi(output, _) if (output.type != Void):
+						state.phiBlocks.set(block.id, true);
+					default:
+				}
+		structuredTree(body, state, fn.blocks[0].id);
 		body.push(Unreachable);
 		return body;
 	}
 
-	function emitPath(body:Array<WasmInstruction>, start:Int, stop:Null<Int>, activeLoop:Null<Int>, loopDepth:Int, structurer:WasmStructurer,
-			functions:Map<String, Int>, values:Map<Int, Int>, predecessor:Int, visited:Array<Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>,
-			strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Bool {
-		var current = start;
-		while (stop == null || current != stop) {
-			if (visited.indexOf(current) >= 0)
-				return false;
-			visited.push(current);
-			var block = structurer.analysis.graph.block(current);
-			var loop = structurer.loops.get(block.id);
-			if (loop != null) {
-				if (!emitLoop(body, block, loop, structurer, functions, values, predecessor, visited, layout, allocator, globals, strings, methods,
-					closureTypes))
-					return false;
-				if (stop != null && loop.exit == stop)
-					return true;
-				current = loop.exit;
-				continue;
-			}
-			emitBlockInstructions(body, block, values, functions, predecessor, layout, allocator, globals, strings, methods, closureTypes);
-			if (block.terminator == null)
-				return false;
-			switch block.terminator.value {
-				case Return(value):
-					restoreRoots(body);
-					if (value.type != Void)
-						body.push(LocalGet(requiredLocal(values, value.id)));
-					body.push(Return);
-					return true;
-				case Throw(_), Rethrow(_):
-					body.push(Unreachable);
-					return true;
-				case Jump(target):
-					if (activeLoop != null && target == activeLoop) {
-						setPredecessor(body, predecessor, block.id);
-						body.push(Br(loopDepth));
-						return true;
-					}
-					setPredecessor(body, predecessor, block.id);
-					if (stop != null && target == stop)
-						return true;
-					current = target;
-				case Branch(condition, yes, no):
-					var merge = structurer.analysis.mergeFor(yes, no);
-					if (merge == null)
-						return false;
-					emit(body, [LocalGet(requiredLocal(values, condition.id)), If(null)]);
-					setPredecessor(body, predecessor, block.id);
-					if (!emitPath(body, yes, merge, activeLoop, activeLoop == null ? 0 : loopDepth + 1, structurer, functions, values, predecessor,
-						visited.copy(), layout, allocator, globals, strings, methods, closureTypes))
-						return false;
-					body.push(Else);
-					setPredecessor(body, predecessor, block.id);
-					if (!emitPath(body, no, merge, activeLoop, activeLoop == null ? 0 : loopDepth + 1, structurer, functions, values, predecessor,
-						visited.copy(), layout, allocator, globals, strings, methods, closureTypes))
-						return false;
-					body.push(End);
-					if (stop != null && merge == stop)
-						return true;
-					current = merge;
-			}
-		}
-		return true;
+	/** The code of block `id` and everything it dominates, wrapped in a `loop` when it is a loop header. */
+	function structuredTree(body:Array<WasmInstruction>, state:StructuredEmission, id:Int):Void {
+		if (state.structurer.isLoopHeader(id)) {
+			body.push(Loop(null));
+			state.frames.push(LoopFrame(id));
+			structuredWithin(body, state, id, state.structurer.mergeChildrenOf(id));
+			state.frames.pop();
+			body.push(End);
+		} else
+			structuredWithin(body, state, id, state.structurer.mergeChildrenOf(id));
 	}
 
-	function emitLoop(body:Array<WasmInstruction>, block:IrBlock, loop:WasmLoopInfo, structurer:WasmStructurer, functions:Map<String, Int>,
-			values:Map<Int, Int>, predecessor:Int, visited:Array<Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>,
-			methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Bool {
+	/**
+	 * Block `id`'s code with its merge-node children `ys` laid out after it: the last of them opens the outermost
+	 * `block`, so a forward branch to any of them is a `br` out of the code that precedes it.
+	 */
+	function structuredWithin(body:Array<WasmInstruction>, state:StructuredEmission, id:Int, ys:Array<Int>):Void {
+		if (ys.length > 0) {
+			var last = ys[ys.length - 1];
+			body.push(Block(null));
+			state.frames.push(BlockFrame(last));
+			structuredWithin(body, state, id, ys.slice(0, ys.length - 1));
+			state.frames.pop();
+			body.push(End);
+			structuredTree(body, state, last);
+			return;
+		}
+		var block = state.structurer.analysis.graph.block(id);
+		emitBlockInstructions(body, block, state.values, state.functions, state.predecessor, state.layout, state.allocator, state.globals, state.strings,
+			state.methods, state.closureTypes);
 		if (block.terminator == null)
-			return false;
-		var condition:Null<IrValue> = null, whenTrue = -1, whenFalse = -1;
+			throw 'Reachable block $id has no terminator';
 		switch block.terminator.value {
-			case Branch(value, yes, no):
-				condition = value;
-				whenTrue = yes;
-				whenFalse = no;
-			default:
+			case Return(value):
+				restoreRoots(body);
+				if (value.type != Void)
+					body.push(LocalGet(requiredLocal(state.values, value.id)));
+				body.push(Return);
+			case Throw(_), Rethrow(_):
+				body.push(Unreachable);
+			case Jump(target):
+				structuredBranch(body, state, id, target);
+			case Branch(condition, yes, no):
+				if (yes == no) {
+					structuredBranch(body, state, id, yes);
+					return;
+				}
+				emit(body, [LocalGet(requiredLocal(state.values, condition.id)), If(null)]);
+				state.frames.push(IfFrame);
+				structuredBranch(body, state, id, yes);
+				body.push(Else);
+				structuredBranch(body, state, id, no);
+				state.frames.pop();
+				body.push(End);
 		}
-		if (condition == null || (loop.body != whenTrue && loop.body != whenFalse))
-			return false;
-		emit(body, [Block(null), Loop(null)]);
-		emitBlockInstructions(body, block, values, functions, predecessor, layout, allocator, globals, strings, methods, closureTypes);
-		emit(body, [LocalGet(requiredLocal(values, condition.id)), If(null)]);
-		if (loop.body == whenTrue) {
-			setPredecessor(body, predecessor, block.id);
-			if (!emitPath(body, loop.body, block.id, block.id, 1, structurer, functions, values, predecessor, visited.copy(), layout, allocator, globals,
-				strings, methods, closureTypes))
-				return false;
-			body.push(Else);
-			setPredecessor(body, predecessor, block.id);
-			emit(body, [Br(2)]);
-		} else {
-			setPredecessor(body, predecessor, block.id);
-			emit(body, [Br(2), Else]);
-			if (!emitPath(body, loop.body, block.id, block.id, 1, structurer, functions, values, predecessor, visited.copy(), layout, allocator, globals,
-				strings, methods, closureTypes))
-				return false;
-		}
-		emit(body, [End, End, End]);
-		return true;
+	}
+
+	/** The edge from `source` to `target`: a `br` to a loop or merge frame, or `target`'s own code inline. */
+	function structuredBranch(body:Array<WasmInstruction>, state:StructuredEmission, source:Int, target:Int):Void {
+		if (state.phiBlocks.exists(target))
+			setPredecessor(body, state.predecessor, source);
+		if (state.structurer.isBackEdge(source, target))
+			body.push(Br(state.depthOf(frame -> switch frame {
+				case LoopFrame(header): header == target;
+				default: false;
+			})));
+		else if (state.structurer.isMergeNode(target))
+			body.push(Br(state.depthOf(frame -> switch frame {
+				case BlockFrame(followedBy): followedBy == target;
+				default: false;
+			})));
+		else
+			structuredTree(body, state, target);
 	}
 
 	function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
