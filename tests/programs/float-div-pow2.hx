@@ -6,9 +6,29 @@ function sameBits(a:Float, b:Float):Bool {
 	return a == b;
 }
 
-function check(x:Float, divisor:Float, reciprocal:Float):Bool {
-	var divided = x / divisor, multiplied = x * reciprocal;
-	return divided != divided ? multiplied != multiplied : sameBits(divided, multiplied);
+function divideBy2(x:Float):Float {
+	return x / 2.0;
+}
+
+function divideByHalf(x:Float):Float {
+	return x / 0.5;
+}
+
+function divideBy1024(x:Float):Float {
+	return x / 1024.0;
+}
+
+function divideByNegative4(x:Float):Float {
+	return x / -4.0;
+}
+
+function divideByMinNormal(x:Float):Float {
+	return x / 2.2250738585072014e-308;
+}
+
+function check(actual:Float, x:Float, divisor:Float):Bool {
+	var expected = x / divisor;
+	return expected != expected ? actual != actual : sameBits(actual, expected);
 }
 
 function main():Int {
@@ -24,16 +44,18 @@ function main():Int {
 		Math.NEGATIVE_INFINITY,
 		Math.NaN
 	];
+	// Array loads keep the reference divisors opaque to strength reduction.
+	var divisors = [2.0, 0.5, 1024.0, -4.0, 2.2250738585072014e-308];
 	for (value in inputs) {
-		if (!check(value, 2.0, 0.5))
+		if (!check(divideBy2(value), value, divisors[0]))
 			return 1;
-		if (!check(value, 0.5, 2.0))
+		if (!check(divideByHalf(value), value, divisors[1]))
 			return 2;
-		if (!check(value, 1024.0, 0.0009765625))
+		if (!check(divideBy1024(value), value, divisors[2]))
 			return 3;
-		if (!check(value, -4.0, -0.25))
+		if (!check(divideByNegative4(value), value, divisors[3]))
 			return 4;
-		if (!check(value, 2.2250738585072014e-308, 4.49423283715579e307))
+		if (!check(divideByMinNormal(value), value, divisors[4]))
 			return 5;
 	}
 	// These constants are deliberately outside the rewrite set.
