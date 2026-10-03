@@ -89,13 +89,15 @@ class LexicalStorageAnalysis extends BindingWalker {
 			exceptions.set(declaration, true);
 	}
 
-	/** Calls of plain names and `local.method(...)` do not read the local as a value. */
+	/** A call of a plain name does not read the local as a value; at most it is a local function calling itself. */
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void {
 		if (declaration != null)
 			refersToItself(declaration);
 	}
 
-	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {}
+	/** `local.method(...)` reads the local as its receiver, so a closure that does so needs the shared cell like any other read. */
+	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
+		used(local, declaration, span);
 
 	function isCaptured(declaration:String):Bool
 		return insideLambda() && lambdaDepth > lambdaDepthOf(declaration);

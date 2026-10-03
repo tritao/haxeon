@@ -91,6 +91,7 @@ class TestCatalog {
 		"AmbiguousEnumAbstractValueMain",
 		"MethodCallInvalidationMain",
 		"OptionalParameterSignatureMain",
+		"SourceManifestPathMain",
 		"EnumAbstractValueShadowedByClassMain",
 		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",

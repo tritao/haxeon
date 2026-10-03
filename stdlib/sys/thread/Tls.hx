@@ -1,19 +1,27 @@
 package sys.thread;
 
 #if wasm
-/** Thread-local storage on a single-threaded target: one value. */
+/** Thread-local storage on a single-threaded target: one value for each stand-in thread (see ThreadState), unset until that thread sets it. */
 class Tls<T> {
 	public var value(get, set):T;
 
-	var stored:Null<T> = null;
+	final threads:Array<Int> = [];
+	final values:Array<Null<T>> = [];
 
 	public function new() {}
 
-	function get_value():T
-		return stored;
+	function get_value():T {
+		var index = threads.indexOf(ThreadState.current);
+		return index < 0 ? null : values[index];
+	}
 
 	function set_value(value:T):T {
-		stored = value;
+		var index = threads.indexOf(ThreadState.current);
+		if (index < 0) {
+			threads.push(ThreadState.current);
+			values.push(value);
+		} else
+			values[index] = value;
 		return value;
 	}
 }

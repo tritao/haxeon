@@ -111,6 +111,9 @@ extern function reflectObjectField(object:Dynamic, field:String):Dynamic;
 @:hlNative("haxeon_runtime", "__reflect_object_set_field")
 extern function reflectObjectSetField(object:Dynamic, field:String, value:Dynamic):Bool;
 
+@:hlNative("haxeon_runtime", "__reflect_object_delete_field")
+extern function reflectObjectDeleteField(object:Dynamic, field:String):Bool;
+
 @:hlNative("haxeon_runtime", "__reflect_object_field_count")
 extern function reflectObjectFieldCount(object:Dynamic):Int;
 
@@ -140,15 +143,10 @@ function reflectHasField(object:Dynamic, field:String):Bool {
 	return false;
 }
 
-/**
- * Dynamic objects lose the field. Compiled class and anonymous record layouts are fixed on Wasm, so their field is reset to
- * what a deleted field reads as on HashLink (null, or zero for plain numbers) and stays a slot of the layout.
- */
+/** Compiled class and anonymous record layouts are fixed on Wasm: only dynamic objects lose fields, and a typed object's field is reset. */
 function reflectDeleteField(object:Dynamic, field:String):Bool {
 	var dynamicObject = runtime.DynamicObject.of(object);
-	if (dynamicObject != null)
-		return dynamicObject.remove(field);
-	return reflectHasField(object, field) && reflectObjectSetField(object, field, null);
+	return dynamicObject == null ? reflectObjectDeleteField(object, field) : dynamicObject.remove(field);
 }
 
 function reflectFieldCount(object:Dynamic):Int {

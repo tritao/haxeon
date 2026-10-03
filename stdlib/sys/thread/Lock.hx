@@ -1,5 +1,30 @@
 package sys.thread;
 
+#if wasm
+/**
+	A counting lock on a single-threaded target, where a thread has already run to completion by the time anything waits
+	for it: each `release` lets one `wait` through. A `wait` with nothing to consume cannot be released by anyone else, so
+	with a timeout it gives up at once and without one it says so instead of hanging.
+**/
+class Lock {
+	var releases = 0;
+
+	public function new() {}
+
+	public function wait(?timeout:Float):Bool {
+		if (releases > 0) {
+			releases--;
+			return true;
+		}
+		if (timeout == null)
+			throw "Lock.wait would block forever on a single-threaded target";
+		return false;
+	}
+
+	public function release():Void
+		releases++;
+}
+#else
 /**
 	A counting lock, as in standard Haxe: each `release` lets one `wait` through,
 	whether the release comes before or after the wait starts.
@@ -43,3 +68,4 @@ class Lock {
 		condition.release();
 	}
 }
+#end

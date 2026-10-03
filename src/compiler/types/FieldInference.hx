@@ -41,7 +41,9 @@ class FieldInference {
 
 	static function arrayLiteralType(field:AstField, values:Array<AstExpression>):AstType {
 		if (values.length == 0)
-			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of empty array field "${field.name}"', field.span));
+			throw new CompileError(new Diagnostic("E1002",
+				'Cannot infer type of empty array field "${field.name}"; a field\'s type is part of its class, so annotate it, as in `var ${field.name}:Array<T> = [];`',
+				field.span));
 		var element = literalElementType(values[0]);
 		if (element == null)
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this array initializer', field.span));

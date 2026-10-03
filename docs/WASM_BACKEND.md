@@ -142,7 +142,23 @@ under `#if wasm`, shared by both targets:
 - `hl.Gc` controls are ignored and its counters read zero. `Sys.getEnv` returns
   null, `Sys.systemName` is `"Web"`, and `Sys.executablePath` is empty.
 
-Threads, `sys.io.Process` and `Sys.command` remain unsupported.
+- Threads are single-threaded stand-ins in `sys.thread`. `Thread.create` runs its
+  closure to completion before it returns, so the program sees the effects the
+  thread would eventually have; `Tls` keeps a separate value for each such
+  thread; `Mutex` has nothing to exclude. `Lock` counts releases, and a wait
+  with nothing to consume cannot be satisfied by any other thread, so it times
+  out at once or, without a timeout, throws instead of hanging. `Condition`
+  behaves the same way: `signal` and `broadcast` do nothing, `timedWait` times
+  out, and `wait` throws. A thread closure that waits on something the
+  creating code does only afterwards therefore fails on Wasm.
+- `Sys.exit` calls the host's `std.sys_exit`, which must unwind the guest.
+  `haxeon-host.js` throws `HaxeonWasmHost.HaxeonExit` carrying the status; the
+  guest's own `try`/`catch` never sees it.
+- `Reflect.deleteField` on a compiled class or record resets the field to null
+  (zero for numbers) and reports success, as HashLink does; only dynamic
+  objects actually lose the field.
+
+`sys.io.Process` and `Sys.command` remain unsupported.
 
 ## Host ABI
 

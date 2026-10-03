@@ -42,7 +42,8 @@ run_case() {
 	local expected_status=${2:-}
 	local reference_target=${3:-hl}
 	local official_source="$root_dir/tests/differential/$name.official.hx"
-	local realtime_source="$root_dir/tests/differential/$name.realtime.hx"
+	# Named from the repository root, where realtime_compile runs: `trace` prints the path a file is given by.
+	local realtime_source="tests/differential/$name.realtime.hx"
 	local official_output="$out_dir/$name.official.hl"
 	local realtime_output="$out_dir/$name.realtime.hl"
 	local official_dir
@@ -95,7 +96,7 @@ run_compile_failure() {
 	set +e
 	"$haxe" -cp "$official_dir" -main Main -hl "$out_dir/$name.official.hl" >/dev/null 2>&1
 	local official_status=$?
-	realtime_compile "$root_dir/tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
+	realtime_compile "tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
 	local realtime_status=$?
 	set -e
 	rm -rf "$official_dir"

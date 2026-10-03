@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.Compiler;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
+import sys.FileSystem;
 import sys.io.File;
 
 /** Loads a deterministic explicit source manifest into a compiler instance. */
@@ -20,15 +21,21 @@ class SourceManifestLoader {
 			}
 	}
 
+	/**
+	 * The path of a source file as its module sees it: relative to the source root it is under. A file and a root match
+	 * however each is written (relative to the working directory, absolute, with `.` or `..` segments), so a file given
+	 * by absolute path under a relative root still resolves to its module.
+	 */
 	public static function projectPath(path:String, roots:Array<String>, ?packageRoots:Array<PackageSourceRoot>):String {
-		var normalized = normalizePath(path);
+		var normalized = normalizePath(path),
+			canonicalFile = canonicalPath(path);
 		if (packageRoots != null)
 			for (root in packageRoots) {
-				var prefix = normalizePath(root.path);
+				var prefix = canonicalPath(root.path);
 				if (!StringTools.endsWith(prefix, "/"))
 					prefix += "/";
-				if (StringTools.startsWith(normalized, prefix)) {
-					var relative = normalized.substring(prefix.length, normalized.length),
+				if (StringTools.startsWith(canonicalFile, prefix)) {
+					var relative = canonicalFile.substring(prefix.length, canonicalFile.length),
 						packagePrefix = root.packageName.split(".").join("/");
 					if (!StringTools.startsWith(relative, packagePrefix + "/"))
 						relative = packagePrefix + "/" + relative;
@@ -36,13 +43,19 @@ class SourceManifestLoader {
 				}
 			}
 		for (root in roots) {
-			var prefix = normalizePath(root);
+			var prefix = canonicalPath(root);
 			if (!StringTools.endsWith(prefix, "/"))
 				prefix += "/";
-			if (StringTools.startsWith(normalized, prefix))
-				return normalized.substring(prefix.length, normalized.length);
+			if (StringTools.startsWith(canonicalFile, prefix))
+				return canonicalFile.substring(prefix.length, canonicalFile.length);
 		}
 		return normalized;
+	}
+
+	/** An absolute path with forward slashes and no `.` or `..` segments; a path that does not exist is resolved against the working directory too. */
+	static function canonicalPath(path:String):String {
+		var normalized = normalizePath(path);
+		return normalizePath(haxe.io.Path.normalize(haxe.io.Path.isAbsolute(normalized) ? normalized : FileSystem.absolutePath(normalized)));
 	}
 
 	static function normalizePath(path:String):String {

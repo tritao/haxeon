@@ -21,8 +21,8 @@ class IrBuilder {
 		return value;
 	}
 
-	public function constInt(value:Int):IrValue {
-		var out = temporary(I32);
+	public function constInt(value:Int, type:IrType = I32):IrValue {
+		var out = temporary(type);
 		emit(ConstInt(out, value));
 		return out;
 	}
