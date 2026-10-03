@@ -328,6 +328,28 @@ class ExpressionTyper {
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
 
+	/** `0...held.length`, the indices of the array a comprehension over `index => element` holds. */
+	static function indexRange(held:String, span:SourceSpan):AstExpression
+		return Range(IntegerLiteral(0, span), Member(Variable(held, span), "length", span), span);
+
+	/**
+	 * `expression` evaluated with `element` bound to `held[index]`. A nested `for` is flattened into its parent, so the
+	 * binding goes into each part of that inner comprehension rather than around it, which would hide it.
+	 */
+	static function bindElement(element:String, held:String, index:String, expression:AstExpression, span:SourceSpan):AstExpression
+		return switch expression {
+			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
+				ArrayComprehension(innerKey, innerValue, bindElement(element, held, index, iterable, span), bindOptional(element, held, index, filter, span),
+					bindElement(element, held, index, value, span), true, innerSpan);
+			default:
+				BlockExpression([
+					VarDeclaration(element, null, Index(Variable(held, span), Variable(index, span), span), span)
+				], expression, span);
+		};
+
+	static function bindOptional(element:String, held:String, index:String, expression:Null<AstExpression>, span:SourceSpan):Null<AstExpression>
+		return expression == null ? null : bindElement(element, held, index, expression, span);
+
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = typeExpressionCallback(iterable, scope, null, false);
@@ -347,8 +369,15 @@ class ExpressionTyper {
 		LoopFlow.enterExpressions(session, scope, bodyExpressions, span, valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
-				if (valueName != null)
-					fail("E1014", "Key/value array comprehension requires a Map", span);
+				if (valueName != null) {
+					// `[for (index => element in array) ...]` loops over the indices and binds each element.
+					var held = "__haxeon_array" + span.start;
+					return typeExpressionCallback(BlockExpression([VarDeclaration(held, null, iterable, span)],
+						ArrayComprehension(keyName, null, indexRange(held, span), bindOptional(valueName, held, keyName, predicate, span),
+							bindElement(valueName, held, keyName, value, span), flattened, span),
+						span),
+						scope, expectedType, false);
+				}
 				keyType = element;
 			case TIterator(element):
 				if (valueName != null)
@@ -421,8 +450,14 @@ class ExpressionTyper {
 			valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
-				if (valueName != null)
-					fail("E1014", "Key/value map comprehension requires a Map", span);
+				if (valueName != null) {
+					var held = "__haxeon_array" + span.start;
+					return typeExpressionCallback(BlockExpression([VarDeclaration(held, null, iterable, span)],
+						MapComprehension(keyName, null, indexRange(held, span), bindOptional(valueName, held, keyName, predicate, span),
+							bindElement(valueName, held, keyName, key, span), bindElement(valueName, held, keyName, value, span), span),
+						span),
+						scope, expectedType, false);
+				}
 				itemType = element;
 			case TIterator(element):
 				if (valueName != null)
