@@ -29,23 +29,47 @@ compare them with that in mind; `size` indexes each problem's two input sizes.
 
 ## Results
 
-Median of 9 whole-process runs (startup included), pinned to one core, `--size 0` inputs, load average about 4 on
+Median of 9 whole-process runs (startup included), pinned to core 0, `--size 0` inputs, load average 3.65 at the start and 5.49 at the end on
 20 CPUs (expect roughly ±5% noise). Seconds; peak RSS in MiB in parentheses.
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
-| binarytrees (18) | 1.202 (95) | 1.182 (95) | 0.943 (93) | 0.585 (72) |
-| nbody (5000000) | 0.255 (6) | 0.778 (7) | 0.178 (25) | 0.190 (6) |
-| spectral-norm (2000) | 0.259 (7) | 0.263 (8) | 0.157 (27) | 0.131 (6) |
-| fasta (2500000) | 0.655 (79) | 0.817 (79) | 0.407 (126) | 0.253 (9) |
-| merkletrees (16) | 0.501 (79) | 0.480 (79) | 0.329 (76) | 0.263 (49) |
-| lru (100 1000000) | 0.093 (8) | 0.097 (8) | 0.134 (27) | 0.108 (9) |
+| binarytrees (18) | 1.189 (95) | 1.184 (95) | 0.966 (93) | 0.590 (72) |
+| nbody (5000000) | 0.248 (6) | 0.781 (7) | 0.179 (25) | 0.192 (6) |
+| spectral-norm (2000) | 0.259 (7) | 0.263 (8) | 0.158 (27) | 0.130 (6) |
+| fasta (2500000) | 0.502 (79) | 0.541 (79) | 0.383 (127) | 0.253 (9) |
+| merkletrees (16) | 0.503 (79) | 0.485 (79) | 0.327 (76) | 0.263 (50) |
+| lru (100 1000000) | 0.090 (8) | 0.097 (8) | 0.135 (27) | 0.109 (9) |
 
 The spectral-norm and fasta Haxe sources were rewritten to match the C# and Dart variants (a local accumulator per row;
 integer generator state, a plain array and a byte buffer per output line). Before that the Haxeon column read 0.359s and
-0.831s, and stock Haxe 0.459s and 1.659s. A large part of the remaining fasta gap is output (about 0.2s): `Sys.println` flushes every
-line, which is 416,000 `write` calls into the harness's pipe where C# and Dart write in 16 to 64 KB chunks. The rest
-is a native call per generated character and the quality of the JIT's loop code.
+0.831s, and stock Haxe 0.459s and 1.659s. Redirected stdout now buffers by default: fasta makes about 6,200 `write`
+calls instead of 416,000, bringing Haxeon from the earlier 0.655s to about 0.502s and stock Haxe from 0.817s to 0.541s.
+`HL_STDOUT_FLUSH=1` restores flushing after each print. The remaining gap includes a native call per generated character
+and the quality of the JIT's loop code.
+
+### Load/store forwarding
+
+`HAXEON_LOADSTORE=0` disables block-local field/array reload forwarding independently of the inliner. A fresh comparison
+with the same buffered-stdout runtime (nine runs, core 0, size 0) gives these medians in seconds:
+
+| Problem | Forwarding off | Forwarding on |
+|---|---:|---:|
+| binarytrees | 1.192 | 1.189 |
+| nbody | 0.251 | 0.248 |
+| spectral-norm | 0.259 | 0.259 |
+| fasta | 0.504 | 0.502 |
+| merkletrees | 0.503 | 0.503 |
+| lru | 0.090 | 0.090 |
+
+The initial differences are small. Alternating nine on/off pairs on the same core confirmed nbody gains at both sizes:
+forwarding was faster in all nine pairs at 5,000,000 steps and all nine at 20,000,000, with median paired improvements
+of 3.3% and 4.1%. Fasta showed no repeatable gain (paired differences below 1%). No benchmark regressed beyond noise.
+The larger fasta improvement in the main table comes from stdout buffering, which both sides of this A/B use.
+
+The pre-pass post-inliner analysis predicted 9/53 loads removed in nbody (advance 4/23, energy 3/17, offsetMomentum 2/10)
+and 2/15 in fasta (genRandom 1/2, randomFasta 1/3). The other totals were binarytrees 0/7, spectral-norm 2/9,
+merkletrees 0/19 and lru 2/46. These static counts justified trying the pass; they were not a prediction of runtime gains.
 
 Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the Haxeon
 fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`,
