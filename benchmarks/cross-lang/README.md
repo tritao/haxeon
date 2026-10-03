@@ -30,22 +30,27 @@ compare them with that in mind; `size` indexes each problem's two input sizes.
 ## Results
 
 Median of 9 whole-process runs (startup included), pinned to one core, `--size 0` inputs, load average about 4 on
-20 CPUs (expect roughly ±5% noise). Seconds; peak RSS in MiB in parentheses. The spectral-norm row was measured
-separately, after its Haxe source was changed to accumulate in a local like the C# and Dart variants (it was 0.359s for
-Haxeon and 0.459s for stock Haxe with the original `Au[i] += ...`).
+20 CPUs (expect roughly ±5% noise). Seconds; peak RSS in MiB in parentheses.
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
-| binarytrees (18) | 1.212 (95) | 1.196 (95) | 0.931 (93) | 0.573 (73) |
-| nbody (5000000) | 0.260 (6) | 0.776 (7) | 0.178 (25) | 0.192 (7) |
-| spectral-norm (2000) | 0.261 (7) | 0.292 (8) | 0.158 (27) | 0.131 (7) |
-| fasta (2500000) | 0.831 (79) | 1.659 (76) | 0.405 (123) | 0.271 (9) |
-| merkletrees (16) | 0.541 (79) | 0.486 (79) | 0.332 (76) | 0.266 (50) |
-| lru (100 1000000) | 0.093 (8) | 0.098 (8) | 0.137 (27) | 0.109 (9) |
+| binarytrees (18) | 1.216 (95) | 1.197 (95) | 0.948 (93) | 0.584 (72) |
+| nbody (5000000) | 0.253 (6) | 0.780 (7) | 0.178 (25) | 0.190 (6) |
+| spectral-norm (2000) | 0.259 (7) | 0.263 (8) | 0.157 (27) | 0.131 (6) |
+| fasta (2500000) | 0.662 (79) | 0.864 (79) | 0.395 (126) | 0.253 (9) |
+| merkletrees (16) | 0.542 (79) | 0.489 (79) | 0.331 (76) | 0.266 (49) |
+| lru (100 1000000) | 0.094 (8) | 0.097 (8) | 0.136 (27) | 0.108 (9) |
+
+The spectral-norm and fasta Haxe sources were rewritten to match the C# and Dart variants (a local accumulator per row;
+integer generator state, a plain array and a byte buffer per output line). Before that the Haxeon column read 0.359s and
+0.831s, and stock Haxe 0.459s and 1.659s. A large part of the remaining fasta gap is output (about 0.2s): `Sys.println` flushes every
+line, which is 416,000 `write` calls into the harness's pipe where C# and Dart write in 16 to 64 KB chunks. The rest
+is a native call per generated character and the quality of the JIT's loop code.
 
 Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the Haxeon
-fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`
-and a `sqrtsd` intrinsic for `Math.sqrt`). With stock HashLink 1.16 the stock-Haxe column was binarytrees 2.75,
+fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`,
+a `sqrtsd` intrinsic for `Math.sqrt`, constant operands as immediates and division or remainder by a constant as a
+multiply). With stock HashLink 1.16 the stock-Haxe column was binarytrees 2.75,
 nbody 0.79, spectral-norm 0.47, fasta 2.40, merkletrees 1.01 and lru 0.10. The larger collection trigger trades memory
 for speed: binarytrees peaks at 95 MiB instead of 55. `HL_GC_MIN_TRIGGER=<bytes>` lowers it.
 
