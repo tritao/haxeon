@@ -29,35 +29,41 @@ compare them with that in mind; `size` indexes each problem's two input sizes.
 
 ## Results
 
-Median of 7 whole-process runs (startup included), pinned to one core, load average about 3.5 on 20 CPUs
-(expect roughly ±5% noise), `--size 0` inputs. Seconds; peak RSS in MiB in parentheses.
+Median of 9 whole-process runs (startup included), pinned to one core, `--size 0` inputs, load average about 4 on
+20 CPUs (expect roughly ±5% noise; spectral-norm showed one slow outlier run, p95 0.57s). Seconds; peak RSS in MiB in
+parentheses.
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
-| binarytrees (18) | 1.257 (95) | 1.193 (95) | 0.932 (93) | 0.575 (72) |
-| nbody (5000000) | 0.364 (6) | 0.778 (7) | 0.180 (25) | 0.191 (6) |
-| spectral-norm (2000) | 0.450 (7) | 0.454 (8) | 0.157 (27) | 0.130 (6) |
-| fasta (2500000) | 0.896 (79) | 1.619 (76) | 0.394 (124) | 0.268 (9) |
-| merkletrees (16) | 0.553 (79) | 0.487 (79) | 0.321 (76) | 0.262 (49) |
-| lru (100 1000000) | 0.095 (8) | 0.097 (8) | 0.134 (27) | 0.109 (9) |
+| binarytrees (18) | 1.212 (95) | 1.196 (95) | 0.931 (93) | 0.573 (73) |
+| nbody (5000000) | 0.260 (6) | 0.776 (7) | 0.178 (25) | 0.192 (7) |
+| spectral-norm (2000) | 0.359 (7) | 0.459 (8) | 0.158 (27) | 0.131 (7) |
+| fasta (2500000) | 0.831 (79) | 1.659 (76) | 0.405 (123) | 0.271 (9) |
+| merkletrees (16) | 0.541 (79) | 0.486 (79) | 0.332 (76) | 0.266 (50) |
+| lru (100 1000000) | 0.093 (8) | 0.098 (8) | 0.137 (27) | 0.109 (9) |
 
-Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the
-Haxeon fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing and
-`hl_dyn_castp`). With stock HashLink 1.16 the stock-Haxe column was binarytrees 2.75, nbody 0.79, spectral-norm 0.47,
-fasta 2.40, merkletrees 1.01 and lru 0.10. The fork's larger trigger trades memory for speed: binarytrees peaks at
-95 MiB instead of 55. `HL_GC_MIN_TRIGGER=<bytes>` lowers it.
+Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the Haxeon
+fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`
+and a `sqrtsd` intrinsic for `Math.sqrt`). With stock HashLink 1.16 the stock-Haxe column was binarytrees 2.75,
+nbody 0.79, spectral-norm 0.47, fasta 2.40, merkletrees 1.01 and lru 0.10. The larger collection trigger trades memory
+for speed: binarytrees peaks at 95 MiB instead of 55. `HL_GC_MIN_TRIGGER=<bytes>` lowers it.
 
-Where the time goes (`perf record` on HashLink, one core):
+Haxeon's IR inliner is on by default (`HAXEON_INLINE=0` turns it off). It matters mostly for nbody (0.34s without it)
+and spectral-norm (0.45s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
+function breakpoint on a fully inlined function does not stop, so build with `HAXEON_INLINE=0` when debugging.
+
+Where the time goes (`perf record` on HashLink, one core, measured before the inliner and JIT changes):
 
 | Problem | JIT code | GC and allocation | Runtime natives | Notes |
 |---|---|---|---|---|
 | binarytrees, merkletrees | 13% | about 65% | 0% | mark 30%, allocation 20%; limited by cache misses, not instruction count |
-| nbody, spectral-norm | 91-98% | 0-3% | 0-5% | IPC 3.8-4.6; the gap to C#/Dart is instruction count in the HL JIT |
+| nbody, spectral-norm | 91-98% | 0-3% | 0-5% | IPC 3.8-4.6; the gap to C#/Dart is instruction count in the HL JIT, and for spectral-norm a loop-carried accumulator held in memory |
 | fasta | 42% | 19% | 25% | `Float %`, `StringBuf.add`, `String.charAt`, `List` iteration |
 | lru | 34% | 57% | 1% | HL's int-keyed hash map and its dynamic casts |
 
-Haxeon is level with or ahead of stock Haxe on this VM everywhere except the two allocation-heavy problems, where
-stock Haxe is 5-12% faster; that gap is not yet explained.
+Haxeon is level with or ahead of stock Haxe on this VM everywhere except merkletrees, where stock Haxe is about 10%
+faster (binarytrees is within 1%); that gap is not yet explained. Note the C# `spectral-norm` variant accumulates in a
+local and the Haxe source writes `Au[i] += ...` to the array on every iteration, so that row is not the same code.
 
 ## Haxeon compile status
 
