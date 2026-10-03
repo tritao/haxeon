@@ -335,3 +335,4 @@ array-fused-boundaries	42
 array-fused-growth-alias	42
 array-fused-elements	42
 array-fused-shrink	42
+jit-call-save	42
