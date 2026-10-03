@@ -502,7 +502,7 @@ class FrontendCompilation {
 			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		for (name in IrInliner.run(ir, context.inlineCache()))
+		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled()))
 			if (regenerated.indexOf(name) < 0)
 				regenerated.push(name);
 		regenerated.sort(Reflect.compare);

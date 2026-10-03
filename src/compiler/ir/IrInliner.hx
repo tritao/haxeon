@@ -85,6 +85,7 @@ class IrInliner {
 	final subclasses:Map<String, Array<String>> = [];
 
 	final cache:IrInlineCache;
+	final allowInline:Bool;
 	final fingerprint:String;
 	final nextMemo:Map<String, InlineMemo> = [];
 
@@ -95,7 +96,8 @@ class IrInliner {
 	final frameImpure:Array<Bool> = [];
 	var depth = 0;
 
-	function new(program:IrProgram, cache:IrInlineCache) {
+	function new(program:IrProgram, cache:IrInlineCache, allowInline:Bool) {
+		this.allowInline = allowInline;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
 		for (fn in program.functions)
@@ -103,7 +105,7 @@ class IrInliner {
 		var lines:Array<String> = [
 			entryPoint,
 			"packed=" + packedValueFields,
-			"inline=" + enabled,
+			"inline=" + allowInline,
 			"loadstore=" + IrLoadStoreForwarding.enabled,
 			"strength=" + IrStrengthReduction.enabled
 		];
@@ -136,8 +138,8 @@ class IrInliner {
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
 	 */
-	public static function run(program:IrProgram, cache:IrInlineCache):Array<String> {
-		var inliner = new IrInliner(program, cache),
+	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool):Array<String> {
+		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [];
 		var published:Map<String, IrFunction> = [];
@@ -193,7 +195,7 @@ class IrInliner {
 		frames.push([]);
 		frameNames.push(name);
 		frameImpure.push(false);
-		var result = enabled ? inlineCalls(original) : original;
+		var result = allowInline ? inlineCalls(original) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, objects);
 		if (IrStrengthReduction.enabled)

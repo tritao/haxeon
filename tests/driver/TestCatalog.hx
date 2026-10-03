@@ -36,6 +36,7 @@ class TestCatalog {
 		"InlinerMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",
+		"InlineConfigurationMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",

@@ -74,6 +74,11 @@ running program after `--`:
 ./scripts/haxeon run -- --verbose
 ```
 
+For function breakpoints during debugging, set `"inline": false` in `haxeon.json`. Omit the field to inherit
+`HAXEON_INLINE`; an explicit boolean overrides that environment default. The choice applies to the root project's
+compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
+the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
+
 On Linux and macOS, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the
@@ -304,4 +309,3 @@ The workspace file lists the member projects. Paths are relative to the file:
   libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
   cached. Set `"cache": false` for a suite that depends on the clock, the network, or a peer process, or pass
   `--no-test-cache` to run everything.
-
