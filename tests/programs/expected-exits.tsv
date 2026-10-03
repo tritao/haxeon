@@ -323,3 +323,10 @@ int-const-divide	42
 ereg-split-offsets	42
 dynamic-unbox	42
 nullable-primitives	42
+loadstore-array-alias	42
+loadstore-call-kill	42
+loadstore-dynamic-field	42
+loadstore-handler	42
+loadstore-loop	42
+loadstore-numeric-fields	42
+loadstore-object-alias	42
