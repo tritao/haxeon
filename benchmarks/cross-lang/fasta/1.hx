@@ -13,7 +13,7 @@ class App {
 }
 
 class Fasta {
-	private var rnd:Float;
+	private var rnd:Int;
 
 	private var aluChar:String;
 
@@ -67,48 +67,44 @@ class Fasta {
 	public function randomFasta(tableChar:String, tableProb:Array<Float>, nn:Int):Void {
 		var width = 60;
 		var probList = makeCumulative(tableProb);
-		var buf = new StringBuf();
+		var codes = [for (i in 0...tableChar.length) tableChar.charCodeAt(i)];
+		var line = haxe.io.Bytes.alloc(width);
+		var length = 0;
 		for (ii in 0...nn) {
-			buf.add(tableChar.charAt(bisect(probList, genRandom())));
+			var pick = bisect(probList, genRandom());
+			if (pick >= 0) {
+				line.set(length, codes[pick]);
+				length++;
+			}
 			if ((ii + 1) % width == 0) {
-				Sys.println(buf.toString());
-				buf = new StringBuf();
+				Sys.println(line.getString(0, length));
+				length = 0;
 			}
 		}
 		if (nn % width != 0)
-			Sys.println(buf.toString());
+			Sys.println(line.getString(0, length));
 	}
 
 	private function genRandom():Float {
-		var lim = 1;
-		var ia = 3877;
-		var ic = 29573;
-		var im = 139968;
-
-		rnd = (rnd * ia + ic) % im;
-		return lim * rnd / im;
+		rnd = (rnd * 3877 + 29573) % 139968;
+		return rnd / 139968;
 	}
 
-	private function makeCumulative(tableProb:Array<Float>):List<Float> {
-		var probList = new List<Float>();
+	private function makeCumulative(tableProb:Array<Float>):Array<Float> {
+		var probList = new Array<Float>();
 		var prob = 0.0;
 		for (ii in 0...tableProb.length) {
 			prob += tableProb[ii];
-			probList.add(prob);
+			probList.push(prob);
 		}
 		return probList;
 	}
 
 	// replace this with binary search
-	private function bisect(list:List<Float>, item:Float):Int {
-		var ret = 0;
-		var iter = list.iterator();
-		while (iter.hasNext()) {
-			if (item < iter.next())
+	private function bisect(list:Array<Float>, item:Float):Int {
+		for (ret in 0...list.length)
+			if (item < list[ret])
 				return ret;
-			else
-				ret++;
-		}
 		return -1;
 	}
 }
