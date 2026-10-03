@@ -29,17 +29,17 @@ compare them with that in mind; `size` indexes each problem's two input sizes.
 
 ## Results
 
-Median of 9 whole-process runs (startup included), pinned to core 0, `--size 0` inputs, load average 3.65 at the start and 5.49 at the end on
+Median of 9 whole-process runs (startup included), pinned to core 0, `--size 0` inputs, load average 3.96 at the start and 6.88 at the end on
 20 CPUs (expect roughly ±5% noise). Seconds; peak RSS in MiB in parentheses.
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
-| binarytrees (18) | 1.189 (95) | 1.184 (95) | 0.966 (93) | 0.590 (72) |
-| nbody (5000000) | 0.248 (6) | 0.781 (7) | 0.179 (25) | 0.192 (6) |
-| spectral-norm (2000) | 0.259 (7) | 0.263 (8) | 0.158 (27) | 0.130 (6) |
-| fasta (2500000) | 0.502 (79) | 0.541 (79) | 0.383 (127) | 0.253 (9) |
-| merkletrees (16) | 0.503 (79) | 0.485 (79) | 0.327 (76) | 0.263 (50) |
-| lru (100 1000000) | 0.090 (8) | 0.097 (8) | 0.135 (27) | 0.109 (9) |
+| binarytrees (18) | 1.246 (95) | 1.235 (95) | 0.992 (93) | 0.636 (72) |
+| nbody (5000000) | 0.231 (6) | 0.783 (7) | 0.182 (25) | 0.209 (7) |
+| spectral-norm (2000) | 0.261 (7) | 0.269 (8) | 0.170 (27) | 0.132 (6) |
+| fasta (2500000) | 0.474 (79) | 0.550 (79) | 0.403 (127) | 0.254 (9) |
+| merkletrees (16) | 0.501 (79) | 0.506 (79) | 0.370 (76) | 0.267 (49) |
+| lru (100 1000000) | 0.094 (8) | 0.100 (8) | 0.140 (27) | 0.119 (9) |
 
 The spectral-norm and fasta Haxe sources were rewritten to match the C# and Dart variants (a local accumulator per row;
 integer generator state, a plain array and a byte buffer per output line). Before that the Haxeon column read 0.359s and
@@ -77,6 +77,37 @@ a `sqrtsd` intrinsic for `Math.sqrt`, constant operands as immediates and divisi
 multiply). With stock HashLink 1.16 the stock-Haxe column was binarytrees 2.75,
 nbody 0.79, spectral-norm 0.47, fasta 2.40, merkletrees 1.01 and lru 0.10. The larger collection trigger trades memory
 for speed: binarytrees peaks at 95 MiB instead of 55. `HL_GC_MIN_TRIGGER=<bytes>` lowers it.
+
+### Native properties, intrinsics and fused array reads
+
+The fork now resolves declared non-returning native markers instead of recognizing a bounds helper by its address.
+A signature-checked x86-64 intrinsic table handles sqrt, abs, floor and ceil (with a native fallback without SSE4.1).
+Min/max and string operations stay native to preserve their edge-case behavior without branching expansions.
+Int, Float and pointer array reads use fused checks and scaled loads through the existing `OGetArray` opcode;
+growing writes keep their current path.
+
+Nine alternating before/after pairs, core 0 and size 0, gave these Haxeon medians in seconds. The baseline uses the
+existing forwarding pass and buffered stdout; it predates the intrinsic and fused-read changes. Load began at 3.93
+and rose to 7.44, so the neutral rows should be read within the usual ±5% noise:
+
+| Problem | Before | After | Change |
+|---|---:|---:|---:|
+| binarytrees | 1.200 | 1.220 | 1.7% slower |
+| nbody | 0.257 | 0.229 | 10.9% faster |
+| spectral-norm | 0.262 | 0.261 | 0.2% faster |
+| fasta | 0.507 | 0.466 | 8.0% faster |
+| merkletrees | 0.507 | 0.513 | 1.3% slower |
+| lru | 0.093 | 0.091 | 2.9% faster |
+
+C0 initially measured nbody at 0.252s → 0.217s (13.7%), passing the 8% gate; spectral-norm was neutral at 0.261s.
+A later nine-run, three-way comparison at load 3.14–3.37 measured the same baseline at 0.242s, the retained prototype
+at 0.216s, and production at 0.215s: production matches the prototype's gain under the same conditions (about 11%).
+No other benchmark regressed beyond noise. Fasta improves by about 8% in the alternating comparison; this comes
+from fused array reads, since string intrinsics were not added. The full four-language table above is a separate
+nine-run measurement, starting at load 3.96; it also verifies every benchmark's output.
+
+Validation passed with the inliner both on and off. Details, mutation evidence and the native audit are in
+[`docs/JIT_NATIVE_PROPERTIES.md`](../../docs/JIT_NATIVE_PROPERTIES.md).
 
 Haxeon's IR inliner is on by default (`HAXEON_INLINE=0` turns it off). It matters mostly for nbody (0.34s without it)
 and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
