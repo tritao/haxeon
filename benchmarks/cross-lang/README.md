@@ -36,7 +36,7 @@ Median of 9 whole-process runs (startup included), pinned to core 0, `--size 0` 
 |---|---|---|---|---|
 | binarytrees (18) | 1.246 (95) | 1.235 (95) | 0.992 (93) | 0.636 (72) |
 | nbody (5000000) | 0.231 (6) | 0.783 (7) | 0.182 (25) | 0.209 (7) |
-| spectral-norm (2000) | 0.261 (7) | 0.269 (8) | 0.170 (27) | 0.132 (6) |
+| spectral-norm (2000) | 0.180 (7) | 0.269 (8) | 0.170 (27) | 0.132 (6) |
 | fasta (2500000) | 0.474 (79) | 0.550 (79) | 0.403 (127) | 0.254 (9) |
 | merkletrees (16) | 0.501 (79) | 0.506 (79) | 0.370 (76) | 0.267 (49) |
 | lru (100 1000000) | 0.094 (8) | 0.100 (8) | 0.140 (27) | 0.119 (9) |
@@ -70,6 +70,17 @@ The larger fasta improvement in the main table comes from stdout buffering, whic
 The pre-pass post-inliner analysis predicted 9/53 loads removed in nbody (advance 4/23, energy 3/17, offsetMomentum 2/10)
 and 2/15 in fasta (genRandom 1/2, randomFasta 1/3). The other totals were binarytrees 0/7, spectral-norm 2/9,
 merkletrees 0/19 and lru 2/46. These static counts justified trying the pass; they were not a prediction of runtime gains.
+
+### Exact division strength reduction
+
+`HAXEON_STRENGTH=0` disables the post-inline rewrite of `x / 2^k` to `x * 2^-k`. The raw IEEE-754 bits must describe a
+finite, nonzero normal power of two, and the reciprocal must also be normal and exactly representable. Constants on the
+left and divisors such as 3 or 10 remain divides.
+
+Nine alternating pairs on core 0 measured spectral-norm at 0.258599s with the pass off and 0.180365s with it on, a
+30.3% improvement. Nbody measured 0.214460s and 0.215242s respectively, a 0.36% difference within noise. In
+`App.eval_A`, disassembly changes the constant divide from `vdivsd` to `vmulsd`; the remaining data-dependent `vdivsd`
+is unchanged.
 
 Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the Haxeon
 fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`,

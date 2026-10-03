@@ -133,6 +133,14 @@ publication comparison. It also runs with `HAXEON_INLINE=0`. `HAXEON_LOADSTORE=0
 are included in the inliner memo fingerprint, compiler-worker identity and build artifact fingerprint. Wasm backends
 consume the same transformed IR.
 
+## Exact arithmetic strength reduction
+
+`IrStrengthReduction` runs on the same final post-inline function and rewrites an F64 `Div` only when its right operand
+is a `ConstFloat` whose raw bits are a normal power of two and whose reciprocal remains normal. It inserts a fresh exact
+reciprocal constant and changes the operation to `Mul`; the original constant is untouched because it may have other
+uses. Zero, subnormals, infinities, NaN, non-powers of two, `2^1023`, F32 operations and constant numerators are left
+unchanged. `HAXEON_STRENGTH=0` disables the pass and participates in the memo, worker and artifact fingerprints.
+
 ## Scalar replacement
 
 Candidate: `NewObject(v, T)` where `T` is a value class. Uses are found with `IrOperands.inputs` plus phi and terminator
