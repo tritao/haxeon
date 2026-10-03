@@ -28,7 +28,16 @@ function main():Int {
 	// The loop really allocated (Wasm reports zero for both counters, which also satisfies the bound).
 	if (allocated != 0 && allocated < 100000000)
 		return 2;
-	if (collections > 60)
+	// A smaller configured floor deliberately permits more collections. Keep
+	// checking pacing against that floor rather than the default-floor budget.
+	var limit = 60.0;
+	var configured = Sys.getEnv("HL_GC_MIN_TRIGGER");
+	if (configured != null) {
+		var minimum = Std.parseInt(configured);
+		if (minimum != null && minimum > 0)
+			limit = Math.max(limit, allocated / minimum + 1.0);
+	}
+	if (collections > limit)
 		return 3;
 	return 42;
 }
