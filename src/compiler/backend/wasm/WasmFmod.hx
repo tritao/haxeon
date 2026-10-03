@@ -27,8 +27,8 @@ class WasmFmod {
 			return [F64Const(0), F64Const(0), F64Div, Return];
 		function guard(condition:Array<WasmInstruction>, result:Array<WasmInstruction>):Array<WasmInstruction>
 			return condition.concat([If(null)]).concat(result).concat([End]);
-		return [].concat(guard([LocalGet(dividend), LocalGet(dividend), F64Eq, I32Eqz], returnNaN()))
-			.concat(guard([LocalGet(divisor), LocalGet(divisor), F64Eq, I32Eqz], returnNaN()))
+		return guard([LocalGet(dividend), LocalGet(dividend), F64Eq, I32Eqz],
+			returnNaN()).concat(guard([LocalGet(divisor), LocalGet(divisor), F64Eq, I32Eqz], returnNaN()))
 			.concat([
 				LocalGet(dividend),
 				F64Const(0),

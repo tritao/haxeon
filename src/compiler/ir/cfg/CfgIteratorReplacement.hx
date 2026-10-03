@@ -90,9 +90,11 @@ class CfgIteratorReplacement {
 		var storeCounts:Map<Int, Int> = [];
 		for (store in stores)
 			storeCounts.set(store.value, (storeCounts.exists(store.value) ? storeCounts.get(store.value) : 0) + 1);
-		for (store in stores)
-			if (!created.exists(store.value) || escaped.exists(store.value) || storeCounts.get(store.value) > 1)
+		for (store in stores) {
+			var count = storeCounts.get(store.value);
+			if (!created.exists(store.value) || escaped.exists(store.value) || (count != null && count > 1))
 				candidates.remove(store.name);
+		}
 		// The creations that will be replaced: stored once into a surviving candidate.
 		var stored:Map<Int, String> = [];
 		for (store in stores)
