@@ -263,6 +263,13 @@ class HlSymbolTable {
 				throw 'Enum type "$name" must be registered before use';
 			case Virtual(name):
 				throw 'Virtual type "$name" must be registered before use';
+			case Nullable(element):
+				// HashLink's own Null<T>: the same boxed representation as a dynamic value, with the primitive recorded.
+				var parameter = internType(element);
+				var nullIndex = types.length;
+				types.push(HlTypeDef.Parameterized(HlType.Null, parameter));
+				typeIndices.set(key, nullIndex);
+				return nullIndex;
 			default:
 		}
 		switch type {
@@ -289,6 +296,7 @@ class HlSymbolTable {
 					case RawPtr: HlType.Bytes;
 					case ManagedBytes: throw 'Managed byte type must be handled by the outer type switch';
 					case Dyn: HlType.Dyn;
+					case Nullable(_): throw 'Nullable type must be handled by the outer type switch';
 					case TypeRef: HlType.Type;
 					case Array(_): HlType.Array;
 					case Iterator(_): throw 'Iterator type must be handled by the outer type switch';
@@ -585,6 +593,7 @@ class HlSymbolTable {
 			case RawPtr: "raw-pointer";
 			case ManagedBytes: "abstract:realtime_bytes";
 			case Dyn: "dyn";
+			case Nullable(element): 'null:${typeKey(element)}';
 			case TypeRef: "type";
 			case Array(element): 'array:${typeKey(element)}';
 			case Iterator(_): 'abstract:realtime_iterator';

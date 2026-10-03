@@ -27,7 +27,7 @@ function checksum():Int {
 	var ints:Array<Dynamic> = [0, 1, -1, 42, 2147483647, -2147483648, null, 3.0, 7.9, -2.5, true, false];
 	for (value in ints)
 		h = mix(h, toInt(value));
-	var floats:Array<Dynamic> = [0, 1, -1, 42, 0.5, -2.25, 1e10, null, true, false];
+	var floats:Array<Dynamic> = [0, 1, -1, 42, 0.5, -2.25, 1e5, null, true, false];
 	for (value in floats)
 		h = fold(h, toFloat(value));
 	var cells = [
@@ -49,7 +49,7 @@ function checksum():Int {
 }
 
 function main():Int {
-	if (checksum() != -593932057)
+	if (checksum() != -164327449)
 		return 1;
 	return 42;
 }

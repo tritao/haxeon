@@ -103,7 +103,7 @@ class CHeaderEmitter {
 			case Bytes: "Bytes";
 			case RawPtr: "RawPtr";
 			case ManagedBytes: "haxe.io.Bytes";
-			case Dyn: "Dynamic";
+			case Dyn, Nullable(_): "Dynamic";
 			case TypeRef: "Type";
 			case Array(element): 'Array<${typeName(element)}>';
 			case Iterator(element): 'Iterator<${typeName(element)}>';

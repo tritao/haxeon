@@ -322,3 +322,4 @@ loop-live-across-calls	42
 int-const-divide	42
 ereg-split-offsets	42
 dynamic-unbox	42
+nullable-primitives	42

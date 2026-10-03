@@ -4,6 +4,7 @@ import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.IrNullableErasure;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmPatch;
 import compiler.backend.wasm.gc.WasmGcModuleBuilder;
@@ -24,7 +25,7 @@ class WasmBackend implements Backend {
 	 * full build; the filtered manifest is what the host publishes atomically.
 	 */
 	public function compilePatch(previous:Null<IrProgram>, program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
-		var decision = WasmPatch.plan(previous, program);
+		var decision = WasmPatch.plan(previous == null ? null : IrNullableErasure.run(previous), IrNullableErasure.run(program));
 		switch decision {
 			case Patch:
 			default:
@@ -40,6 +41,8 @@ class WasmBackend implements Backend {
 	}
 
 	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
+		// Wasm has no use for the distinction between a nullable primitive and a dynamic value.
+		program = IrNullableErasure.run(program);
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
 		if (target.referenceModel == Gc)
 			return WasmGcModuleBuilder.compile(program, options, patchChanged);

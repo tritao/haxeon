@@ -247,7 +247,7 @@ class WasmGcTypePlan {
 			case Abstract("native_pointer"): Ref(nullableType(nativePointerTypeIndex));
 			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
-			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
+			case Dyn, Nullable(_), Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
 		};
 	}
 
@@ -276,7 +276,7 @@ class WasmGcTypePlan {
 			case RawPtr: "p";
 			case Bytes: "B";
 			case ManagedBytes: "M";
-			case Dyn: "D";
+			case Dyn, Nullable(_): "D";
 			case TypeRef: "T";
 			case Array(element): "A" + segment(typeKey(element));
 			case Enum(name): "E" + segment(name);

@@ -251,7 +251,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				nativePointerRaw(leftLocal).concat(nativePointerRaw(rightLocal)).concat([I32Eq, LocalSet(output)]);
 			case I32, Bool, TypeRef, RawPtr, Abstract("native_callback"):
 				[LocalGet(leftLocal), LocalGet(rightLocal), I32Eq, LocalSet(output)];
-			case Dyn, Abstract(_), Virtual(_):
+			case Dyn, Nullable(_), Abstract(_), Virtual(_):
 				[
 					 LocalGet(leftLocal), RefCast({nullable: true, heap: Eq}),
 					LocalGet(rightLocal), RefCast({nullable: true, heap: Eq}),

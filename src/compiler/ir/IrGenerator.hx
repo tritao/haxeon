@@ -858,7 +858,7 @@ class IrGenerator {
 	static function checkedCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		var casted = builder.safeCast(value, target);
 		return switch target {
-			case Array(Dyn): casted;
+			case Array(Dyn), Array(Nullable(_)): casted;
 			case Array(element) if (nativeArrayChecks):
 				var checked = builder.call("__array_check_cast", [builder.safeCast(builder.toDyn(casted), Array(Dyn)), builder.typeValue(element)], Array(Dyn));
 				builder.safeCast(builder.toDyn(checked), target);
@@ -871,7 +871,15 @@ class IrGenerator {
 			return value;
 		if (target == Dyn)
 			return builder.toDyn(value);
-		if (value.type == Dyn)
+		var nullableTarget = IrTypeTools.nullableElement(target);
+		if (nullableTarget != null) {
+			// A primitive boxes straight into its nullable type; any other dynamic value is cast, which converts a box of
+			// another kind, so that a Null<Int> holds an Int box or null.
+			if (sameIrType(value.type, nullableTarget))
+				return builder.toDyn(value, target);
+			return builder.safeCast(IrTypeTools.isDynamic(value.type) ? value : builder.toDyn(value), target);
+		}
+		if (IrTypeTools.isDynamic(value.type))
 			return checkedCast(builder, value, target);
 		if (referenceCastType(value.type) && referenceCastType(target))
 			return checkedCast(builder, builder.toDyn(value), target);
@@ -881,7 +889,7 @@ class IrGenerator {
 	static function referenceResultCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
 			return value;
-		return abiBoundaryCast(builder, value.type == Dyn ? value : builder.toDyn(value), target);
+		return abiBoundaryCast(builder, IrTypeTools.isDynamic(value.type) ? value : builder.toDyn(value), target);
 	}
 
 	static function sameIrType(left:IrType, right:IrType):Bool
@@ -900,6 +908,10 @@ class IrGenerator {
 				};
 			case Virtual(name): switch right {
 					case Virtual(other): name == other;
+					default: false;
+				};
+			case Nullable(element): switch right {
+					case Nullable(other): sameIrType(element, other);
 					default: false;
 				};
 			case Array(element): switch right {
@@ -988,7 +1000,8 @@ class IrGenerator {
 					case TNullLiteral: builder.constNull(lowerType(expression.type));
 					// A narrowed read (`if (x != null) y = x`) is a cast of the nullable down to its value, and the
 					// assignment wraps it back up: reuse the existing box instead of unboxing and allocating a new one.
-					case TCast(inner) if (TypeRelations.equals(inner.type, expression.type) && lowerType(expression.type) == Dyn):
+					case TCast(inner) if (TypeRelations.equals(inner.type, expression.type)
+						&& IrTypeTools.isDynamic(lowerType(expression.type))):
 						lowerExpression(inner, builder, localTypes);
 					default:
 						var lowered = lowerExpression(value, builder, localTypes),
@@ -1121,8 +1134,8 @@ class IrGenerator {
 				// OJNull whatever the other side's reference type (a boxed Null<Int>, a Dynamic, a String).
 				isNullExpression(a) || isNullExpression(b) ? builder.equal(left,
 					right) : lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
-					Bool) : lowerType(a.type) == Dyn
-				|| lowerType(b.type) == Dyn ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
+				|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
@@ -1238,7 +1251,9 @@ class IrGenerator {
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
 				if (sameIrType(source.type,
-					target)) source; else if (source.type == Dyn) checkedCast(builder, source,
+					target)) source; else if (IrTypeTools.nullableElement(source.type) != null
+					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source,
+						target); else if (source.type == Dyn) checkedCast(builder, source,
 					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
 					checkedCast(builder, builder.toDyn(source),
 					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
@@ -2153,11 +2168,18 @@ class IrGenerator {
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
-			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : Dyn;
+			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : nullablePrimitive(lowerType(element));
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
+		};
+
+	/** `Nullable` of a boxed primitive, `Dyn` for anything else a nullable can hold. */
+	static function nullablePrimitive(element:IrType):IrType
+		return switch element {
+			case I32, I64, F64, F32, Bool: Nullable(element);
+			default: Dyn;
 		};
 
 	static function isRawPointer(declaration:compiler.types.DeclarationIndex.DeclarationId):Bool
@@ -2262,7 +2284,7 @@ class IrGenerator {
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
-		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && elementType != Dyn)
+		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
 			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
@@ -2292,27 +2314,28 @@ class IrGenerator {
 		var element = arrayElementType(array);
 		if (!nativeArrayChecks || element == null)
 			return builder.arrayGet(array, index, type);
-		if (element == Dyn) {
+		if (IrTypeTools.isDynamic(element)) {
 			var value = builder.call("__array_get_any", [array, index], Dyn);
-			return type == Dyn ? value : checkedCast(builder, value, type);
+			return type == Dyn ? value : abiBoundaryCast(builder, value, type);
 		}
 		var value = builder.arrayGet(array, index, type);
 		return switch type {
-			case Array(inner) if (inner != Dyn): checkedCast(builder, builder.toDyn(value), type);
+			case Array(inner) if (!IrTypeTools.isDynamic(inner)): checkedCast(builder, builder.toDyn(value), type);
 			default: value;
 		};
 	}
 
 	/** Writes one element; Array<Dynamic> writes convert to the storage element type. */
 	static function elementSet(builder:CfgBuilder, array:CfgValue, index:CfgValue, value:CfgValue):Void {
-		if (nativeArrayChecks && arrayElementType(array) == Dyn)
+		if (nativeArrayChecks && IrTypeTools.isDynamic(arrayElementType(array)))
 			builder.call("__array_set_any", [array, index, builder.toDyn(value)], Void);
 		else
 			builder.arraySet(array, index, value);
 	}
 
 	static function arrayNativeName(element:CompilerType, operation:String):String
-		return nativeArrayChecks && lowerType(element) == Dyn ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
+		return nativeArrayChecks
+			&& IrTypeTools.isDynamic(lowerType(element)) ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
 
 	static function enumLookupName(type:CompilerType):String
 		return switch type {
@@ -2395,7 +2418,7 @@ class IrGenerator {
 		var nativeName = arrayNativeName(element, operation);
 		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
 			case Array(_): return builder.call(nativeName, arguments, resultType);
-			case Obj(_), Enum(_), ManagedBytes, Abstract(_), Virtual(_), Function(_, _): Dyn;
+			case Obj(_), Enum(_), ManagedBytes, Abstract(_), Virtual(_), Function(_, _), Nullable(_): Dyn;
 			default: resultType;
 		} : resultType;
 		return referenceResultCast(builder, builder.call(nativeName, arguments, nativeResult), resultType);

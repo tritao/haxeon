@@ -19,6 +19,15 @@ enum IrType {
 	ManagedBytes;
 
 	Dyn;
+
+	/**
+	 * A boxed primitive that may be null (`Null<Int>`, `Null<Float>`, `Null<Bool>`, `Null<Int64>`). It has the
+	 * representation of `Dyn` and converts to and from it freely, but records which primitive it holds: HashLink gives it
+	 * a `HNull` register type, so the JIT can read the value without a runtime cast. `IrTypeTools.erase` turns it back
+	 * into `Dyn` for the backends that have no use for the distinction.
+	 */
+	Nullable(element:IrType);
+
 	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);

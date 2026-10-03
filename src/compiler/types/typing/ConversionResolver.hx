@@ -21,7 +21,8 @@ class ConversionResolver {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
 		switch expected {
-			case TNullable(element) if (value.type != TNull && !isNullable(value.type)):
+			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
+			case TNullable(element) if (value.type != TNull && value.type != TDynamic && !isNullable(value.type)):
 				var converted = coerce(value, element, context, code);
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
