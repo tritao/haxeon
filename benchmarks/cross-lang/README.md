@@ -34,12 +34,12 @@ Median of 9 whole-process runs (startup included), pinned to one core, `--size 0
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
-| binarytrees (18) | 1.216 (95) | 1.197 (95) | 0.948 (93) | 0.584 (72) |
-| nbody (5000000) | 0.253 (6) | 0.780 (7) | 0.178 (25) | 0.190 (6) |
+| binarytrees (18) | 1.202 (95) | 1.182 (95) | 0.943 (93) | 0.585 (72) |
+| nbody (5000000) | 0.255 (6) | 0.778 (7) | 0.178 (25) | 0.190 (6) |
 | spectral-norm (2000) | 0.259 (7) | 0.263 (8) | 0.157 (27) | 0.131 (6) |
-| fasta (2500000) | 0.662 (79) | 0.864 (79) | 0.395 (126) | 0.253 (9) |
-| merkletrees (16) | 0.542 (79) | 0.489 (79) | 0.331 (76) | 0.266 (49) |
-| lru (100 1000000) | 0.094 (8) | 0.097 (8) | 0.136 (27) | 0.108 (9) |
+| fasta (2500000) | 0.655 (79) | 0.817 (79) | 0.407 (126) | 0.253 (9) |
+| merkletrees (16) | 0.501 (79) | 0.480 (79) | 0.329 (76) | 0.263 (49) |
+| lru (100 1000000) | 0.093 (8) | 0.097 (8) | 0.134 (27) | 0.108 (9) |
 
 The spectral-norm and fasta Haxe sources were rewritten to match the C# and Dart variants (a local accumulator per row;
 integer generator state, a plain array and a byte buffer per output line). Before that the Haxeon column read 0.359s and
@@ -67,8 +67,9 @@ Where the time goes (`perf record` on HashLink, one core, measured before the in
 | fasta | 42% | 19% | 25% | `Float %`, `StringBuf.add`, `String.charAt`, `List` iteration |
 | lru | 34% | 57% | 1% | HL's int-keyed hash map and its dynamic casts |
 
-Haxeon is level with or ahead of stock Haxe on this VM everywhere except merkletrees, where stock Haxe is about 10%
-faster (binarytrees is within 1%); that gap is not yet explained.
+Haxeon is level with or ahead of stock Haxe on this VM on every problem (merkletrees and binarytrees are within 4% and
+2%). The merkletrees gap used to be 10%: Haxeon typed `Null<Int>` as a plain dynamic, so every unbox called the runtime
+cast, where stock Haxe reads the box inline. The IR now has a nullable primitive type that HashLink lowers to `HNull`.
 
 ## Haxeon compile status
 
