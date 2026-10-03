@@ -9,6 +9,8 @@ private typedef KnownElement = {final array:IrValue; final index:String; final v
 
 /** Block-local reload elimination. Stores and the input function are never changed. */
 class IrLoadStoreForwarding {
+	public static var enabled:Bool = Sys.getEnv("HAXEON_LOADSTORE") != "0";
+
 	/** Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too. */
 	public static function run(fn:IrFunction, ?objects:Map<String, IrObject>):IrFunction {
 		var substitutions:Map<Int, IrValue> = [], constants:Map<Int, Int> = [];

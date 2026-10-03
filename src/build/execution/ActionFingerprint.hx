@@ -61,6 +61,7 @@ class ActionFingerprint {
 	static function appendCompilerOptions(fields:FingerprintFields):Void {
 		// Inlining is on unless HAXEON_INLINE is "0" (see IrInliner.enabled).
 		fields.add("inline:" + (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on"));
+		fields.add("loadstore:" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on"));
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */

@@ -100,7 +100,12 @@ class IrInliner {
 		this.cache = cache;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		var lines:Array<String> = [entryPoint, "packed=" + packedValueFields];
+		var lines:Array<String> = [
+			entryPoint,
+			"packed=" + packedValueFields,
+			"inline=" + enabled,
+			"loadstore=" + IrLoadStoreForwarding.enabled
+		];
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.base != null) {
@@ -186,7 +191,9 @@ class IrInliner {
 		frames.push([]);
 		frameNames.push(name);
 		frameImpure.push(false);
-		var result = inlineCalls(original);
+		var result = enabled ? inlineCalls(original) : original;
+		if (IrLoadStoreForwarding.enabled)
+			result = IrLoadStoreForwarding.run(result, objects);
 		var consulted = frames.pop(), isImpure = frameImpure.pop();
 		frameNames.pop();
 		depth--;

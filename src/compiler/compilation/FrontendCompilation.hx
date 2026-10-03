@@ -501,13 +501,11 @@ class FrontendCompilation {
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
-		if (IrInliner.enabled) {
-			// A caller whose inlined callee changed is re-lowered and patched even though its own source did not.
-			for (name in IrInliner.run(ir, context.inlineCache()))
-				if (regenerated.indexOf(name) < 0)
-					regenerated.push(name);
-			regenerated.sort(Reflect.compare);
-		}
+		// Compare and publish the final IR even when only load/store forwarding is enabled.
+		for (name in IrInliner.run(ir, context.inlineCache()))
+			if (regenerated.indexOf(name) < 0)
+				regenerated.push(name);
+		regenerated.sort(Reflect.compare);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
