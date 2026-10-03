@@ -30,14 +30,15 @@ compare them with that in mind; `size` indexes each problem's two input sizes.
 ## Results
 
 Median of 9 whole-process runs (startup included), pinned to one core, `--size 0` inputs, load average about 4 on
-20 CPUs (expect roughly ±5% noise; spectral-norm showed one slow outlier run, p95 0.57s). Seconds; peak RSS in MiB in
-parentheses.
+20 CPUs (expect roughly ±5% noise). Seconds; peak RSS in MiB in parentheses. The spectral-norm row was measured
+separately, after its Haxe source was changed to accumulate in a local like the C# and Dart variants (it was 0.359s for
+Haxeon and 0.459s for stock Haxe with the original `Au[i] += ...`).
 
 | Problem (input) | Haxeon | Haxe/HL | C# (.NET 9) | Dart AOT |
 |---|---|---|---|---|
 | binarytrees (18) | 1.212 (95) | 1.196 (95) | 0.931 (93) | 0.573 (73) |
 | nbody (5000000) | 0.260 (6) | 0.776 (7) | 0.178 (25) | 0.192 (7) |
-| spectral-norm (2000) | 0.359 (7) | 0.459 (8) | 0.158 (27) | 0.131 (7) |
+| spectral-norm (2000) | 0.261 (7) | 0.292 (8) | 0.158 (27) | 0.131 (7) |
 | fasta (2500000) | 0.831 (79) | 1.659 (76) | 0.405 (123) | 0.271 (9) |
 | merkletrees (16) | 0.541 (79) | 0.486 (79) | 0.332 (76) | 0.266 (50) |
 | lru (100 1000000) | 0.093 (8) | 0.098 (8) | 0.137 (27) | 0.109 (9) |
@@ -49,7 +50,7 @@ nbody 0.79, spectral-norm 0.47, fasta 2.40, merkletrees 1.01 and lru 0.10. The l
 for speed: binarytrees peaks at 95 MiB instead of 55. `HL_GC_MIN_TRIGGER=<bytes>` lowers it.
 
 Haxeon's IR inliner is on by default (`HAXEON_INLINE=0` turns it off). It matters mostly for nbody (0.34s without it)
-and spectral-norm (0.45s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
+and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
 function breakpoint on a fully inlined function does not stop, so build with `HAXEON_INLINE=0` when debugging.
 
 Where the time goes (`perf record` on HashLink, one core, measured before the inliner and JIT changes):
@@ -62,8 +63,7 @@ Where the time goes (`perf record` on HashLink, one core, measured before the in
 | lru | 34% | 57% | 1% | HL's int-keyed hash map and its dynamic casts |
 
 Haxeon is level with or ahead of stock Haxe on this VM everywhere except merkletrees, where stock Haxe is about 10%
-faster (binarytrees is within 1%); that gap is not yet explained. Note the C# `spectral-norm` variant accumulates in a
-local and the Haxe source writes `Au[i] += ...` to the array on every iteration, so that row is not the same code.
+faster (binarytrees is within 1%); that gap is not yet explained.
 
 ## Haxeon compile status
 
