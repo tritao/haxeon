@@ -202,6 +202,8 @@ class TestCatalog {
 			mainCase("runtime", "namespace", "NamespaceMain", "namespace.hl", 42, "qualified nominal namespaces executed"),
 			mainCase("runtime", "instance-module", "InstanceModuleMain", "instance-module.hl", 42, "incremental instance class executed"),
 			hxmlCase("runtime", "static-field", "tests/hxml/static-field-test.hxml", "static-field-test.hl", 0, "static fields lower to persistent globals"),
+			hxmlCase("runtime", "jit-address-taken", "tests/hxml/jit-address-taken-test.hxml", "jit-address-taken-test.hl", 0,
+				"the JIT keeps reading locals whose address is passed to a callee from memory"),
 			hxmlCase("runtime", "inline-patch", "tests/hxml/inline-patch-test.hxml", "inline-patch-test.hl", 0,
 				"a callee edit patches every function that inlined it"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),

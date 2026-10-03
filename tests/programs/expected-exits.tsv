@@ -319,3 +319,5 @@ math-abs-min-max	42
 modulo-precedence	42
 math-sqrt	42
 loop-live-across-calls	42
+int-const-divide	42
+ereg-split-offsets	42
