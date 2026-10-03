@@ -16,11 +16,9 @@ private typedef Connection = {final socket:Socket; final token:String;}
  * build root share one per-user session directory, so the resident limits bound the whole machine.
  */
 class CompilerClient {
-	/** The worker reads HAXEON_INLINE once at startup, so a different setting needs a different worker. */
-	static function inlineOption():String {
-		var value = Sys.getEnv("HAXEON_INLINE");
-		return value == null ? "" : value;
-	}
+	/** The worker reads HAXEON_INLINE once at startup, so a different setting needs a different worker. Inlining is on unless it is "0" (see IrInliner.enabled). */
+	static function inlineOption():String
+		return Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on";
 
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
 			fallback:Void->Int):Int {
