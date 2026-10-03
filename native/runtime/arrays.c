@@ -104,6 +104,7 @@ static const uchar *realtime_array_type_name(hl_type *type) {
 	}
 }
 
+static HL_NO_RETURN( void realtime_array_retype_mismatch(varray *array, hl_type *elementType, int index, vdynamic *value) );
 static void realtime_array_retype_mismatch(varray *array, hl_type *elementType, int index, vdynamic *value) {
 	hl_error("Array element type mismatch: %s -> %s (element %d is %s)", realtime_array_type_name(array->at),
 		realtime_array_type_name(elementType), index, value == NULL ? USTR("null") : realtime_array_type_name(value->t));

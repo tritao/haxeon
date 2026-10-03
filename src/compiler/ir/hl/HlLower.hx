@@ -512,8 +512,8 @@ class HlLower {
 
 	/**
 	 * The out-of-range paths of an inlined array access: `array_out_of_bounds` for a read and `array_ensure` for a write.
-	 * The first only raises, which lets the JIT treat the call as never returning, so values stay in registers across
-	 * the bounds test instead of being spilled for the whole function.
+	 * The native declaration marks array_out_of_bounds as non-returning. The JIT loads that callee property from
+	 * its library, so values stay in registers across the bounds test. array_ensure remains an ordinary call.
 	 */
 	static function ensureRawArrayNative(natives:Array<IrNative>, array:IrType, operation:String):Void {
 		if (rawArrayShift(array) != null)

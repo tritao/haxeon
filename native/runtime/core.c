@@ -152,6 +152,7 @@ extern bool hl_hbremove( realtime_string_map *map, uchar *key );
 extern void hl_hbclear( realtime_string_map *map );
 extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
 
+static HL_NO_RETURN( void realtime_raise_module_exception( void ) );
 static void realtime_raise_module_exception( void ) {
 	/* A module exception owns generation-specific type metadata. Never let that
 	   value escape into the host exception machinery after the call returns. */
