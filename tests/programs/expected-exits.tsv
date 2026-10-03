@@ -318,3 +318,4 @@ math-fmod-native	42
 math-abs-min-max	42
 modulo-precedence	42
 math-sqrt	42
+loop-live-across-calls	42
