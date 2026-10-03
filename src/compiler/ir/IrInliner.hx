@@ -104,7 +104,8 @@ class IrInliner {
 			entryPoint,
 			"packed=" + packedValueFields,
 			"inline=" + enabled,
-			"loadstore=" + IrLoadStoreForwarding.enabled
+			"loadstore=" + IrLoadStoreForwarding.enabled,
+			"strength=" + IrStrengthReduction.enabled
 		];
 		for (object in program.objects) {
 			objects.set(object.name, object);
@@ -194,6 +195,8 @@ class IrInliner {
 		var result = enabled ? inlineCalls(original) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, objects);
+		if (IrStrengthReduction.enabled)
+			result = IrStrengthReduction.run(result);
 		var consulted = frames.pop(), isImpure = frameImpure.pop();
 		frameNames.pop();
 		depth--;
