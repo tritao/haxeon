@@ -7,6 +7,8 @@ import compiler.ir.IrVerifier;
 
 class InlinerMain {
 	static function main():Void {
+		// This unit suite exercises inlining explicitly, independently of the frontend option.
+		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "
 			+ "function twice(x:Int):Int return x + x; "
 			+ "inline function pickFirst(flag:Bool, a:Int, b:Int):Int { if (flag) return a; return b; } "
