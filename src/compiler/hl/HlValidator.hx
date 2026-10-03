@@ -283,7 +283,7 @@ class HlValidator {
 					requireRegister(fn, pointer);
 					requireRegister(fn, offset);
 					requireRegister(fn, source);
-				case ArraySize(destination, array):
+				case ArraySize(destination, array), RefData(destination, array):
 					requireRegister(fn, destination);
 					requireRegister(fn, array);
 				case MakeEnum(destination, constructor, arguments):
@@ -305,7 +305,7 @@ class HlValidator {
 					requireRegister(fn, right);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
-				case JumpSignedLess(left, right, target), JumpEqual(left, right, target):
+				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target), JumpEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))

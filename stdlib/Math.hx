@@ -40,6 +40,15 @@ extern function mathTan(value:Float):Float;
 @:pure @:hlNative("haxeon_runtime", "__math_sqrt")
 extern function mathSqrt(value:Float):Float;
 
+@:pure @:hlNative("haxeon_runtime", "__math_abs")
+extern function mathAbs(value:Float):Float;
+
+@:pure @:hlNative("haxeon_runtime", "__math_min")
+extern function mathMin(left:Float, right:Float):Float;
+
+@:pure @:hlNative("haxeon_runtime", "__math_max")
+extern function mathMax(left:Float, right:Float):Float;
+
 @:pure @:hlNative("haxeon_runtime", "__math_atan2")
 extern function mathAtan2(y:Float, x:Float):Float;
 
@@ -72,14 +81,26 @@ class Math {
 	/** IEEE 754 quiet NaN, as in the standard Haxe `Math`. */
 	public static inline var NaN:Float = 0.0 / 0.0;
 
+	// NaN in either operand gives NaN, and -0.0 is below 0.0. Wasm has an instruction for each; elsewhere the
+	// comparisons are inlined, which is cheaper than a native call.
+	#if wasm
 	public static inline function min(left:Float, right:Float):Float
-		return left < right ? left : right;
+		return mathMin(left, right);
 
 	public static inline function max(left:Float, right:Float):Float
-		return left > right ? left : right;
+		return mathMax(left, right);
+
+	#else
+	public static inline function min(left:Float, right:Float):Float
+		return left != left || right != right ? Math.NaN : (left < right ? left : (right < left ? right : (1 / left < 0 ? left : right)));
+
+	public static inline function max(left:Float, right:Float):Float
+		return left != left || right != right ? Math.NaN : (left > right ? left : (right > left ? right : (1 / left < 0 ? right : left)));
+
+	#end
 
 	public static inline function abs(value:Float):Float
-		return value < 0 ? -value : value;
+		return mathAbs(value);
 
 	public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
@@ -133,7 +154,7 @@ class Math {
 
 	/** Largest integral Float not above `value`; NaN, infinities, and values from 2^52 are already integral. */
 	public static function ffloor(value:Float):Float {
-		if (!(Math.abs(value) < 4503599627370496.0))
+		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
 		return truncated > value ? truncated - 1.0 : truncated;
@@ -141,7 +162,7 @@ class Math {
 
 	/** Smallest integral Float not below `value`. */
 	public static function fceil(value:Float):Float {
-		if (!(Math.abs(value) < 4503599627370496.0))
+		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
 		return truncated < value ? truncated + 1.0 : truncated;

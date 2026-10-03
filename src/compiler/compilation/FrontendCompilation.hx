@@ -85,7 +85,7 @@ class FrontendCompilation {
 					context.addTypeDependencies(state);
 					graphDependencyMs += Sys.time() * 1000.0 - phaseStarted;
 				}
-				if (cachedReachability.dependencyKeys.get(name) != state.dependencies.join("\n"))
+				if (cachedReachability.dependencyKeys.get(name) != CompilationContext.dependencyKey(state.dependencies))
 					reuseGraph = false;
 			}
 		if (!CompilationContext.mapIsEmpty(structuralChanged))
@@ -335,7 +335,9 @@ class FrontendCompilation {
 				// specialization was typed again in this request, its old lambdas that were not made again belong to the
 				// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
 				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
-				if (origin != null && owners.exists(origin) && !invalidated.exists(origin) && !supersededByRetyping) {
+				var sourceOwner = origin != null
+					&& initializerModule(origin, owners) != null ? origin.substr(0, origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
+				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 					retainedSpecializations.set(cached, true);
@@ -499,13 +501,11 @@ class FrontendCompilation {
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
-		if (IrInliner.enabled) {
-			// A caller whose inlined callee changed is re-lowered and patched even though its own source did not.
-			for (name in IrInliner.run(ir, context.inlineCache()))
-				if (regenerated.indexOf(name) < 0)
-					regenerated.push(name);
-			regenerated.sort(Reflect.compare);
-		}
+		// Compare and publish the final IR even when only load/store forwarding is enabled.
+		for (name in IrInliner.run(ir, context.inlineCache()))
+			if (regenerated.indexOf(name) < 0)
+				regenerated.push(name);
+		regenerated.sort(Reflect.compare);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
@@ -717,6 +717,8 @@ class FrontendCompilation {
 		var module:String;
 		if (owners.exists(origin))
 			module = owners.get(origin);
+		else if (initializerModule(origin, owners) != null)
+			module = initializerModule(origin, owners);
 		else if (typedByName.exists(origin))
 			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
 		else
@@ -727,6 +729,14 @@ class FrontendCompilation {
 	}
 
 	static inline var INITIALIZER_SUFFIX = ".__init";
+
+	/** Field initializers are pseudo-bodies owned by the declaring class module. */
+	static function initializerModule(name:String, owners:Map<String, String>):Null<String> {
+		if (!StringTools.endsWith(name, INITIALIZER_SUFFIX))
+			return null;
+		var className = name.substr(0, name.length - INITIALIZER_SUFFIX.length);
+		return owners.get(className + ".new");
+	}
 
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
 			typed:TypedProgram, owners:Map<String, String>, names:Array<String>, rollbackModules:Map<String, ModuleState>):Bool {
@@ -746,12 +756,8 @@ class FrontendCompilation {
 				owner:Null<String> = null;
 			if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
-			else if (StringTools.endsWith(dependency.functionName, INITIALIZER_SUFFIX)) {
-				// A field initializer is typed in a pseudo-body named "Class.__init", which is not a function of its own:
-				// its dependencies belong to the module that owns the class.
-				var className = dependency.functionName.substr(0, dependency.functionName.length - INITIALIZER_SUFFIX.length);
-				owner = owners.get(className + ".new");
-			}
+			else
+				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
 			var state = context.writableState(owner, rollbackModules);

@@ -51,7 +51,7 @@ run_case() {
 	cp "$official_source" "$official_dir/Main.hx"
 
 	"$haxe" -cp "$official_dir" -main Main -hl "$official_output"
-	realtime_compile "$realtime_source" "$realtime_output" >/dev/null
+	realtime_compile "tests/differential/$name.realtime.hx" "$realtime_output" >/dev/null
 
 	set +e
 	local official_log="$out_dir/$name.official.log"

@@ -27,6 +27,7 @@ var HaxeonWasmHost = (() => {
    *   memory      that module's WebAssembly.Memory
    *   contract    the host's memory contract; the guest's must match it field for field
    *   print       receives each complete line the guest prints (default console.log)
+   *   printError  receives each stderr line (default console.error); stream flush emits partial lines
    *   wrap        optional (module, name, fn) => fn applied to each forwarded C function, e.g. to time calls
    *   allocate    optional size => address of shared memory for a host error message, with release(address);
    *   release     both default to the Emscripten module's malloc and free when it exports them
@@ -34,7 +35,7 @@ var HaxeonWasmHost = (() => {
    * provide. Calling one of their functions throws haxeon.wasm.HostError into the guest, which Haxe code catches
    * like its own exceptions; a guest without exceptions gets a JavaScript Error, which stops it.
    */
-  async function instantiate(source, {emscripten, memory, contract, print = line => console.log(line), wrap = null,
+  async function instantiate(source, {emscripten, memory, contract, print = line => console.log(line), printError = line => console.error(line), wrap = null,
       allocate = emscripten && emscripten._malloc, release = emscripten && emscripten._free}) {
     const module = source instanceof WebAssembly.Module ? source
       : await WebAssembly.compileStreaming(source instanceof Response || source instanceof Promise ? source : fetch(source));
@@ -43,7 +44,8 @@ var HaxeonWasmHost = (() => {
       for (const field of CONTRACT_FIELDS)
         if (guestContract[field] !== contract[field])
           throw new Error(`guest and host memory contracts differ in ${field}`);
-    let exports = null, pending = "";
+    let exports = null;
+    const pending = ["", ""], sinks = [print, printError];
     const decoder = new TextDecoder();
     const cString = pointer => {
       const bytes = new Uint8Array(memory.buffer);
@@ -51,17 +53,28 @@ var HaxeonWasmHost = (() => {
       while (bytes[end] !== 0) end++;
       return decoder.decode(bytes.subarray(pointer, end));
     };
+    const writeOutput = (pointer, error) => {
+      const stream = error ? 1 : 0;
+      pending[stream] += cString(pointer);
+      let newline;
+      while ((newline = pending[stream].indexOf("\n")) >= 0) {
+        sinks[stream](pending[stream].slice(0, newline));
+        pending[stream] = pending[stream].slice(newline + 1);
+      }
+    };
+    const flushOutput = error => {
+      const stream = error ? 1 : 0;
+      if (pending[stream].length) {
+        sinks[stream](pending[stream]);
+        pending[stream] = "";
+      }
+    };
     const imports = {
       env: {memory},
       haxeon_host: {
-        print: pointer => {
-          pending += cString(pointer);
-          let newline;
-          while ((newline = pending.indexOf("\n")) >= 0) {
-            print(pending.slice(0, newline));
-            pending = pending.slice(newline + 1);
-          }
-        },
+        print: pointer => writeOutput(pointer, 0),
+        write_output: writeOutput,
+        flush_output: flushOutput,
         date_now: () => Date.now(),
         // Native code calls the table entry as a C function; it forwards to the guest's exported entry.
         callback_create: (entry, signature, id) => {

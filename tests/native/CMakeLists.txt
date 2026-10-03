@@ -37,3 +37,14 @@ if(UNIX AND NOT APPLE)
     endif()
   endforeach()
 endif()
+
+# Exercise primitive metadata across the external HDLL boundary.
+add_library(jit_native_properties SHARED jit_native_properties.c)
+target_include_directories(jit_native_properties PRIVATE "${CMAKE_SOURCE_DIR}/vendor/hashlink/src")
+target_link_libraries(jit_native_properties PRIVATE libhl)
+set_target_properties(jit_native_properties PROPERTIES
+  PREFIX ""
+  SUFFIX ".hdll"
+  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
+  LIBRARY_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
+)

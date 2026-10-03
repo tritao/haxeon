@@ -64,8 +64,11 @@ class IrInliner {
 	static inline var MaxFunctionInstructions = 3000;
 	static inline var MaxChainDepth = 24;
 
-	/** Off unless enabled; the incremental-safety rules in the design note must hold before it is on by default. */
-	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") == "1";
+	/**
+	 * On unless `HAXEON_INLINE=0`. The build tool derives its worker identity and cache fingerprint from the same
+	 * variable (`CompilerClient.inlineOption`, `ActionFingerprint.appendCompilerOptions`); keep the three in step.
+	 */
+	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") != "0";
 
 	/** Set for targets that store a value class field inline in its parent and hand out a pointer into it (HashLink). */
 	public static var packedValueFields:Bool = false;
@@ -97,7 +100,12 @@ class IrInliner {
 		this.cache = cache;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		var lines:Array<String> = [entryPoint, "packed=" + packedValueFields];
+		var lines:Array<String> = [
+			entryPoint,
+			"packed=" + packedValueFields,
+			"inline=" + enabled,
+			"loadstore=" + IrLoadStoreForwarding.enabled
+		];
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.base != null) {
@@ -183,7 +191,9 @@ class IrInliner {
 		frames.push([]);
 		frameNames.push(name);
 		frameImpure.push(false);
-		var result = inlineCalls(original);
+		var result = enabled ? inlineCalls(original) : original;
+		if (IrLoadStoreForwarding.enabled)
+			result = IrLoadStoreForwarding.run(result, objects);
 		var consulted = frames.pop(), isImpure = frameImpure.pop();
 		frameNames.pop();
 		depth--;
@@ -662,7 +672,8 @@ class IrInliner {
 		}
 	}
 
-	static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
+	/** The instruction with every value (inputs and outputs alike) passed through `use` and every block id through `block`. */
+	public static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
 		return switch instruction {
 			case Phi(out, inputs): Phi(use(out), [for (input in inputs) {block: block(input.block), value: use(input.value)}]);
 			case ConstVoid(out): ConstVoid(use(out));

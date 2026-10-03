@@ -72,9 +72,9 @@ class HlWriterCache {
 	public function retainSnapshots(active:Array<Bytes>):Void {
 		var kept = new ObjectMap<Bytes, Int>();
 		for (content in active) {
-			var mark = validatedSnapshots.get(content);
-			if (mark != null)
-				kept.set(content, mark);
+			var sourceHash = validatedSnapshots.get(content);
+			if (sourceHash != null)
+				kept.set(content, sourceHash);
 		}
 		validatedSnapshots = kept;
 	}

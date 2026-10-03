@@ -23,6 +23,7 @@
 @:hlNative("haxeon_runtime", "__reflect_compare")
 extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
 #else
+
 /**
  * HashLink's `hl_dyn_compare` order: null first, strings bytewise, numbers by value, and
  * `0xAABBCCDD` (HashLink's invalid-comparison result) for NaN or mismatched primitive kinds.
@@ -98,8 +99,12 @@ extern function reflectFieldCount(object:Dynamic):Int;
 @:hlNative("haxeon_runtime", "__reflect_field_name")
 extern function reflectFieldName(object:Dynamic, index:Int):String;
 #else
+@:hlNative("haxeon_runtime", "__reflect_object_copy")
+extern function reflectObjectCopy(object:Dynamic):Dynamic;
+
 // Wasm has no runtime field lookup: dynamic objects are runtime.DynamicObject, and the compiler
 // generates the __reflect_object_* functions from compiled class and anonymous record layouts.
+
 @:hlNative("haxeon_runtime", "__reflect_object_field")
 extern function reflectObjectField(object:Dynamic, field:String):Dynamic;
 
@@ -135,10 +140,15 @@ function reflectHasField(object:Dynamic, field:String):Bool {
 	return false;
 }
 
-/** Compiled class and anonymous record layouts are fixed on Wasm, so only dynamic objects lose fields. */
+/**
+ * Dynamic objects lose the field. Compiled class and anonymous record layouts are fixed on Wasm, so their field is reset to
+ * what a deleted field reads as on HashLink (null, or zero for plain numbers) and stays a slot of the layout.
+ */
 function reflectDeleteField(object:Dynamic, field:String):Bool {
 	var dynamicObject = runtime.DynamicObject.of(object);
-	return dynamicObject != null && dynamicObject.remove(field);
+	if (dynamicObject != null)
+		return dynamicObject.remove(field);
+	return reflectHasField(object, field) && reflectObjectSetField(object, field, null);
 }
 
 function reflectFieldCount(object:Dynamic):Int {
@@ -158,13 +168,28 @@ extern function reflectIsFunction(value:Dynamic):Bool;
 @:hlNative("haxeon_runtime", "__reflect_is_object")
 extern function reflectIsObject(value:Dynamic):Bool;
 
+#if !wasm
+@:hlNative("haxeon_runtime", "__reflect_copy")
+extern function reflectCopy(object:Dynamic):Dynamic;
+#end
+
 /** Supported reflection helpers backed by the stable runtime ABI. */
 class Reflect {
 	public static function copy(object:Dynamic):Dynamic {
+		#if wasm
+		if (object == null)
+			return null;
+		var dynamicObject = runtime.DynamicObject.of(object);
+		if (dynamicObject == null)
+			return reflectObjectCopy(object);
 		var result:Dynamic = {};
 		for (name in fields(object))
 			setField(result, name, field(object, name));
 		return result;
+		#else
+		// The native adapter retains declaration types, including null-valued fields.
+		return reflectCopy(object);
+		#end
 	}
 
 	public static inline function field(object:Dynamic, field:String):Dynamic

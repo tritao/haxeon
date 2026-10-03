@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  */
 
+#if wasm
 /** An efficient mutable buffer for incrementally constructing strings. */
 class StringBuf {
 	var parts:Array<String>;
@@ -57,3 +58,52 @@ class StringBuf {
 		return parts.join("");
 	}
 }
+#else
+private typedef StringBufferHandle = hl.Abstract<"realtime_string_buffer">;
+
+@:hlNative("haxeon_runtime", "__string_buffer_new")
+extern function stringBufferNew():StringBufferHandle;
+
+@:hlNative("haxeon_runtime", "__string_buffer_add")
+extern function stringBufferAdd(buffer:StringBufferHandle, value:String):Void;
+
+@:hlNative("haxeon_runtime", "__string_buffer_length")
+extern function stringBufferLength(buffer:StringBufferHandle):Int;
+
+@:hlNative("haxeon_runtime", "__string_buffer_to_string")
+extern function stringBufferToString(buffer:StringBufferHandle):String;
+
+/**
+ * An efficient mutable buffer for incrementally constructing strings. Characters are copied into one growing
+ * UTF-16 buffer in the runtime, so what was appended does not stay alive until `toString`.
+ */
+class StringBuf {
+	var buffer:StringBufferHandle;
+
+	public var length(get, never):Int;
+
+	public inline function new() {
+		buffer = stringBufferNew();
+	}
+
+	inline function get_length():Int {
+		return stringBufferLength(buffer);
+	}
+
+	public inline function add<T>(x:T):Void {
+		stringBufferAdd(buffer, Std.string(x));
+	}
+
+	public inline function addChar(c:Int):Void {
+		stringBufferAdd(buffer, String.fromCharCode(c));
+	}
+
+	public inline function addSub(s:String, pos:Int, ?len:Int):Void {
+		stringBufferAdd(buffer, len == null ? s.substr(pos) : s.substr(pos, len));
+	}
+
+	public inline function toString():String {
+		return stringBufferToString(buffer);
+	}
+}
+#end

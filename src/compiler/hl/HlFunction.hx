@@ -89,11 +89,19 @@ enum HlInstruction {
 	SetI16(pointer:Int, offset:Int, source:Int);
 	SetMem(pointer:Int, offset:Int, source:Int);
 	ArraySize(destination:Int, array:Int);
+
+	/** The address of an array's first element, for raw GetMem/SetMem access once its index is known to be in range. */
+	RefData(destination:Int, array:Int);
+
 	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
 	EnumIndex(destination:Int, value:Int);
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
 	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
 	JumpSignedLess(left:Int, right:Int, target:String);
+
+	/** Jumps when `left` is below `right` as unsigned integers, so a negative `left` never jumps: one test for 0 <= left < right. */
+	JumpUnsignedLess(left:Int, right:Int, target:String);
+
 	JumpNull(value:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);
 	JumpTrue(condition:Int, target:String);

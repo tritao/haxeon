@@ -42,7 +42,7 @@ class PlatformAbi {
 		return switch type {
 			case CompilerType.TString:
 				name == "bytes" ? {
-					type: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
+					type: CompilerType.THlBytes,
 					get: "__string_bytes",
 					set: null
 				} : null;
@@ -78,7 +78,7 @@ class PlatformAbi {
 		return switch name {
 			case "getData": {
 					arguments: noArguments(),
-					result: CompilerType.TAbstract("hl.Bytes", [], CompilerType.THlBytes),
+					result: CompilerType.THlBytes,
 					nativeName: "__bytes_get_data"
 				};
 			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};

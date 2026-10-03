@@ -27,6 +27,63 @@ static vstring *realtime_string_concat_many( vstring **parts, int count ) {
 	return result;
 }
 
+/* StringBuf: a growable buffer of UTF-16 code units. `add` copies characters in, so the pieces appended do not
+   stay alive until toString the way a list of parts would. The handle is scanned (it points at its storage);
+   the storage holds no pointers. */
+typedef struct realtime_string_buffer {
+	uchar *data;
+	int length;
+	int capacity;
+} realtime_string_buffer;
+
+static void realtime_string_buffer_reserve( realtime_string_buffer *buffer, int needed ) {
+	if( needed <= buffer->capacity )
+		return;
+	int capacity = buffer->capacity < 64 ? 64 : buffer->capacity;
+	while( capacity < needed ) {
+		if( capacity > 0x3FFFFFFF )
+			hl_error("StringBuf is too large");
+		capacity *= 2;
+	}
+	uchar *data = (uchar *)hl_gc_alloc_noptr((size_t)capacity * sizeof(uchar));
+	if( buffer->length > 0 )
+		memcpy(data, buffer->data, (size_t)buffer->length * sizeof(uchar));
+	buffer->data = data;
+	buffer->capacity = capacity;
+}
+
+HL_PRIM realtime_string_buffer *HL_NAME(__string_buffer_new)( void ) {
+	realtime_string_buffer *buffer = (realtime_string_buffer *)hl_gc_alloc_raw(sizeof(realtime_string_buffer));
+	memset(buffer, 0, sizeof(realtime_string_buffer));
+	return buffer;
+}
+
+HL_PRIM void HL_NAME(__string_buffer_add)( realtime_string_buffer *buffer, vstring *value ) {
+	int length = realtime_string_length(value);
+	if( length <= 0 )
+		return;
+	if( length > 0x7FFFFFFF - buffer->length )
+		hl_error("StringBuf is too large");
+	realtime_string_buffer_reserve(buffer, buffer->length + length);
+	if( length == 1 )
+		buffer->data[buffer->length] = value->bytes[0];
+	else
+		memcpy(buffer->data + buffer->length, value->bytes, (size_t)length * sizeof(uchar));
+	buffer->length += length;
+}
+
+HL_PRIM int HL_NAME(__string_buffer_length)( realtime_string_buffer *buffer ) {
+	return buffer->length;
+}
+
+HL_PRIM vstring *HL_NAME(__string_buffer_to_string)( realtime_string_buffer *buffer ) {
+	uchar *output;
+	vstring *result = realtime_string_alloc(buffer->length, &output);
+	if( buffer->length > 0 )
+		memcpy(output, buffer->data, (size_t)buffer->length * sizeof(uchar));
+	return result;
+}
+
 HL_PRIM vstring *HL_NAME(__string_concat3)( vstring *s0, vstring *s1, vstring *s2 ) {
 	vstring *parts[3] = { s0, s1, s2 };
 	return realtime_string_concat_many(parts,3);
@@ -239,15 +296,31 @@ HL_PRIM int HL_NAME(__string_char_code_at)( vstring *value, int index ) {
 	return value->bytes[index];
 }
 
+/* One-character strings for the code units below 256 are created once and shared. Strings are never modified in
+   place, so sharing is invisible, and `s.charAt(i)` in a loop stops allocating a String and its buffer per call. */
+#define REALTIME_SINGLE_CHAR_CACHE 256
+static vstring *realtime_single_char_cache[REALTIME_SINGLE_CHAR_CACHE];
+
+static vstring *realtime_single_char_string( uchar unit ) {
+	if( unit >= REALTIME_SINGLE_CHAR_CACHE )
+		return realtime_string_copy(&unit,1);
+	vstring *cached = realtime_single_char_cache[unit];
+	if( cached == NULL ) {
+		cached = realtime_string_copy(&unit,1);
+		hl_add_root(&realtime_single_char_cache[unit]);
+		realtime_single_char_cache[unit] = cached;
+	}
+	return cached;
+}
+
 HL_PRIM vstring *HL_NAME(__string_char_at)( vstring *value, int index ) {
 	bool present = index >= 0 && index < realtime_string_length(value);
-	return realtime_string_copy(present ? value->bytes + index : NULL, present ? 1 : 0);
+	return present ? realtime_single_char_string(value->bytes[index]) : realtime_string_copy(NULL,0);
 }
 
 HL_PRIM vstring *HL_NAME(__string_from_char_code)( int code ) {
 	if( (uchar)code == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	uchar unit = (uchar)code;
-	return realtime_string_copy(&unit,1);
+	return realtime_single_char_string((uchar)code);
 }
 
 HL_PRIM vstring *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {
@@ -357,10 +430,16 @@ HL_PRIM vstring *HL_NAME(__string_replace)( vstring *value, vstring *sub, vstrin
 
 HL_PRIM vstring *HL_NAME(__string_substring)( vstring *value, int start, int end ) {
 	int length = realtime_string_length(value);
+	// Both indexes clamp into the string, then a reversed pair is swapped, as in Haxe.
 	if( start < 0 ) start = 0;
-	if( end < start ) end = start;
+	if( end < 0 ) end = 0;
 	if( start > length ) start = length;
 	if( end > length ) end = length;
+	if( end < start ) {
+		int swap = start;
+		start = end;
+		end = swap;
+	}
 	return realtime_string_slice(realtime_string_data(value), start, end);
 }
 

@@ -68,6 +68,13 @@ class EnumVisibilityMain {
 		moduleImport.analyze("Main");
 		Sys.println("PASS: importing a module exposes the constructors of enums declared in it");
 
+		var typeTest = new Compiler();
+		typeTest.update("foreign/Value.hx", "package foreign; enum Value { Bool(value:Bool); Int(value:Int); String(value:String); }");
+		typeTest.update("Main.hx",
+			'import foreign.Value; class Main { static function main():Int { var value:Dynamic = 1; return Std.isOfType(value, Int) && !Std.isOfType(value, Bool) && !Std.isOfType(value, String) ? 42 : 0; } }');
+		typeTest.analyze("Main");
+		Sys.println("PASS: an imported enum constructor does not capture the type named in Std.isOfType");
+
 		var subTypeImport = new Compiler();
 		subTypeImport.update("foreign/Shape.hx",
 			"package foreign; enum Primitive { Box(size:Int); } enum Other { Loose; } class Shape { public function new() {} }");

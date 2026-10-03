@@ -491,9 +491,9 @@ class WasmValidator {
 					binary(stack, I64, I64, fn);
 				case I64Eq, I64LtS, I64LtU, I64LeS:
 					binary(stack, I64, I32, fn);
-				case F64Add, F64Sub, F64Mul, F64Div:
+				case F64Add, F64Sub, F64Mul, F64Div, F64Min, F64Max:
 					binary(stack, F64, F64, fn);
-				case F64Ceil, F64Floor:
+				case F64Ceil, F64Floor, F64Sqrt, F64Abs:
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(F64);

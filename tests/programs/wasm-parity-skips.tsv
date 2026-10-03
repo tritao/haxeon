@@ -9,9 +9,10 @@ date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
-string-utf16-length	skip	Wasm Strings count UTF-8 bytes; HashLink counts UTF-16 code units
 object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
-sys-exit	skip	Sys.exit needs the host sys_exit import, which the Wasm harness does not provide
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
 profile-span	skip	Profile spans are a HashLink diagnostics feature
 dynamic-method-call	skip	Calling a method of a Dynamic value is HashLink-only so far; neither Wasm backend lowers it
+sys-println-dynamic	skip	Prints through the host print import, which this suite does not provide (covered by wasm-host-services)
+string-buffer-unicode	skip	String.fromCharCode for a character beyond ASCII is wrong on Wasm (its charCodeAt differs from the literal)
+thread-gc-stress	skip	Threads are not implemented on Wasm

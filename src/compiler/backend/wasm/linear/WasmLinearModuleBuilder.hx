@@ -214,6 +214,7 @@ class WasmLinearModuleBuilder {
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
+		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
 		WasmLinearArrays.registerNativeAllocators(linear);
 		WasmLinearDynamicArrays.register(linear);
 		runtimeFunctionCount = module.functions.length;
@@ -282,7 +283,10 @@ class WasmLinearModuleBuilder {
 		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
 		if (bytesDataPointer == null)
 			throw "Linear Wasm bytes data pointer helper is missing";
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer);
+		var cstringCopy = functions.get("__haxeon_cstring_copy");
+		if (cstringCopy == null)
+			throw "Linear Wasm C string copy helper is missing";
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
 		closureAdapters.defineKeyQuery(module, functions, tableSlots);

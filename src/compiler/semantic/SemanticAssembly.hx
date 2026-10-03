@@ -201,7 +201,9 @@ class SemanticAssembly {
 			for (importPath in ast.imports) {
 				if (ModuleAnalyzer.isWildcardImport(importPath))
 					continue;
-				var importedTypes:Array<String> = [];
+				var importedTypes:Array<String> = [],
+					importConstructors:Map<String, String> = [],
+					ambiguousImportConstructors:Map<String, Bool> = [];
 				var importedType = sourceTypeAliases.get(importPath);
 				if (importedType != null)
 					importedTypes.push(importedType);
@@ -214,12 +216,21 @@ class SemanticAssembly {
 				for (type in importedTypes)
 					if (enumCasesByType.exists(type))
 						for (caseName in enumCasesByType.get(type))
-							if (!constructorTargets.exists(caseName))
-								constructorTargets.set(caseName, type + "." + caseName);
+							if (!importConstructors.exists(caseName))
+								importConstructors.set(caseName, type + "." + caseName);
 								// The same enum reached through its module and through
 							// its own import is not a clash.
-							else if (constructorTargets.get(caseName) != type + "." + caseName)
-								ambiguousConstructors.set(caseName, true);
+							else if (importConstructors.get(caseName) != type + "." + caseName)
+								ambiguousImportConstructors.set(caseName, true);
+				// A later explicit import supplies the default constructor, as in Haxe.
+				// Collisions within a single module import remain ambiguous.
+				for (caseName => target in importConstructors) {
+					constructorTargets.set(caseName, target);
+					if (ambiguousImportConstructors.exists(caseName))
+						ambiguousConstructors.set(caseName, true);
+					else
+						ambiguousConstructors.remove(caseName);
+				}
 			}
 			for (importPath in ast.imports) {
 				var importedModule = ModuleAnalyzer.importModulePath(importPath);

@@ -21,7 +21,8 @@ class ConversionResolver {
 		if (value.type == TNever)
 			return new TypedExpression(value.expression, expected, value.span);
 		switch expected {
-			case TNullable(element) if (value.type != TNull && !isNullable(value.type)):
+			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
+			case TNullable(element) if (value.type != TNull && value.type != TDynamic && !isNullable(value.type)):
 				var converted = coerce(value, element, context, code);
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
@@ -83,11 +84,37 @@ class ConversionResolver {
 	public function adaptFunction(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression
 		return functionAdapter(value, expected, span);
 
+	/** A callable's argument/result ABI needs an adapter even when both values are references. */
+	public static function functionSignaturesDiffer(actual:CompilerType, expected:CompilerType):Bool {
+		var source = expectedFunctionType(actual),
+			target = expectedFunctionType(expected);
+		return source != null
+			&& target != null
+			&& !TypeRelations.equals(TFunction(source.arguments, source.result), TFunction(target.arguments, target.result));
+	}
+
 	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
 		var sourceSignature = expectedFunctionType(value.type),
 			targetSignature = expectedFunctionType(expected);
 		if (sourceSignature == null || targetSignature == null)
 			return new TypedExpression(TCast(value), expected, span);
+		if (isNullable(value.type) && functionSignaturesDiffer(value.type, expected)) {
+			// Evaluate the callable once and retain null as null rather than creating
+			// a non-null wrapper which would call a missing function later.
+			var contextName = session.currentContext.name,
+				adapterId = session.functionAdapterCounts.exists(contextName) ? session.functionAdapterCounts.get(contextName) : 0,
+				localName = '$' + 'nullable-function-adapter:$contextName:$adapterId',
+				local = new TypedExpression(TLocal(localName), value.type, span),
+				sourceType = TFunction(sourceSignature.arguments, sourceSignature.result),
+				nonNull = new TypedExpression(TCast(local), sourceType, span),
+				adapted = functionAdapter(nonNull, expected, span),
+				nullValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+				condition = new TypedExpression(TEqual(local, nullValue), TBool, span),
+				result = new TypedExpression(TConditional(condition,
+					new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span), adapted),
+					expected, span);
+			return new TypedExpression(TBlockExpression([TVar(localName, value, span)], result), expected, span);
+		}
 		var sourceArguments = sourceSignature.arguments,
 			sourceResult = sourceSignature.result,
 			targetArguments = targetSignature.arguments,
@@ -143,6 +170,8 @@ class ConversionResolver {
 	function adaptFunctionValue(value:TypedExpression, target:CompilerType, span:SourceSpan):TypedExpression {
 		if (TypeRelations.equals(value.type, target))
 			return value;
+		if (functionSignaturesDiffer(value.type, target))
+			return functionAdapter(value, target, span);
 		if (value.type == TInt && target == TFloat)
 			return new TypedExpression(TIntToFloat(value), TFloat, span);
 		if (value.type == TInt && target == TInt64)

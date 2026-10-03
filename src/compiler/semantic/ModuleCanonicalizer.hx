@@ -289,7 +289,9 @@ class ModuleCanonicalizer {
 								{
 									name: argument.name,
 									type: canonicalType(argument.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-									span: argument.span
+									span: argument.span,
+									optional: argument.optional,
+									defaultValue: argument.defaultValue
 								}
 						],
 						result: canonicalType(method.result, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
@@ -497,7 +499,11 @@ class ModuleCanonicalizer {
 					resolved = imported;
 				else if (name.indexOf(".") < 0 && locals.get(name) == true)
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
-				Call(resolved, [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+				Call(resolved, [
+					for (index in 0...args.length)
+						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
+						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
+				], s);
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
 			case ClosureCall(callee, args, s):
 				ClosureCall(canonicalExpression(callee, module, entry, locals, aliases),
@@ -591,6 +597,20 @@ class ModuleCanonicalizer {
 			return null;
 		return resolveExpressionAlias(name, aliases);
 	}
+
+	static inline function isTypeTestCall(name:String):Bool
+		return name == "Std.isOfType" || name == "Std.isExactType" || name == "Std.downcast";
+
+	/**
+	 * The second argument of `Std.isOfType` and its siblings names a type. A bare name reaches here as an expression, so
+	 * an imported enum constructor of the same name (`Bool`, `Int`) must not capture it.
+	 */
+	static function canonicalTypeArgument(e:AstExpression, module:String, entry:String, locals:Map<String, Bool>,
+			aliases:Null<Map<String, String>>):AstExpression
+		return switch e {
+			case Variable(name, _) if (aliases != null && aliases.exists(EXPRESSION_ONLY_PREFIX + name)): e;
+			default: canonicalExpression(e, module, entry, locals, aliases);
+		};
 
 	static function expressionPath(expression:AstExpression):Null<String>
 		return switch expression {

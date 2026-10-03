@@ -483,6 +483,20 @@ class HxiParserMain {
 			"must use @inout");
 		expectError('interface bad @target("x86_64-linux-gnu") { extern fn read(values: nullable<ptr<u8>> @out_array("count"), count: ptr<u32> @inout) -> i32; }',
 			"UTF-8 pointer array");
+		for (target in ["portable-abi32", "portable-abi64"]) {
+			var voidBytes = parseValidated("void-input-bytes.hxi",
+				'interface void_bytes @target("$target") @library("void_bytes") { extern fn send(data: ptr<const<void>> @in_array("size"), size: u64) -> i32; }');
+			var voidByteSource = HxiProjection.source(voidBytes);
+			expect(voidByteSource.indexOf("function send(data:haxe.io.Bytes)") >= 0
+				&& voidByteSource.indexOf("haxe.Int64.ofInt(data.length)") >= 0,
+				"counted void pointers should project as borrowed byte buffers with inferred counts");
+		}
+		expectError('interface bad @target("portable-abi64") { extern fn send(data: ptr<const<void>> @in_array("size"), size: i32) -> void; }',
+			"requires an unsigned integer count parameter");
+		for (type in [I32, I64])
+			expect(compiler.ir.IrVerifier.validByteInputCount(type), "byte inputs must accept both ABI count widths");
+		for (type in [Bool, F32, F64, RawPtr, ManagedBytes, Dyn])
+			expect(!compiler.ir.IrVerifier.validByteInputCount(type), "byte inputs must reject non-integer count metadata");
 		var typedArrays = parseValidated("typed-arrays.hxi",
 			'interface typed_arrays @target("portable-abi64") @library("typed_arrays") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn map_points(values: ptr<const<point>> @in_array("count"), count: u64, results: ptr<point> @out_array("count")) -> i32; extern fn map_values(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32; }');
 		var typedArraySource = HxiProjection.source(typedArrays);

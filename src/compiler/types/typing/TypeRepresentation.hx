@@ -51,9 +51,12 @@ typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerTyp
  */
 class TypeRepresentation {
 	final session:TypingSession;
+	final conversions:ConversionResolver;
 
-	public function new(session:TypingSession)
+	public function new(session:TypingSession) {
 		this.session = session;
+		conversions = new ConversionResolver(session);
+	}
 
 	public function semanticType(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
 		return session.declarations.resolve(type, span, substitutions);
@@ -178,8 +181,13 @@ class TypeRepresentation {
 	}
 
 	/** Apply the ABI cast required to cross from a physical to semantic type. */
-	public function boundaryCast(value:TypedExpression, target:CompilerType):TypedExpression
-		return TypeRelations.equals(value.type, target) ? value : new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
+	public function boundaryCast(value:TypedExpression, target:CompilerType):TypedExpression {
+		if (TypeRelations.equals(value.type, target))
+			return value;
+		if (ConversionResolver.functionSignaturesDiffer(value.type, target))
+			return conversions.adaptFunction(value, target, value.span);
+		return new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
+	}
 
 	/** Resolve a class/interface field with both semantic and physical types. */
 	public function resolveField(type:CompilerType, name:String, span:SourceSpan):TypeRepresentationResult {

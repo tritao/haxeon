@@ -198,8 +198,8 @@ class IrBuilder {
 		return out;
 	}
 
-	public function toDyn(value:IrValue):IrValue {
-		var out = temporary(Dyn);
+	public function toDyn(value:IrValue, ?target:IrType):IrValue {
+		var out = temporary(target == null ? Dyn : target);
 		emit(ToDyn(out, value));
 		return out;
 	}

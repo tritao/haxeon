@@ -2091,7 +2091,7 @@ class HxiHaxeEmitter {
 	static function isByteElement(type:compiler.ffi.HxiModel.HxiType):Bool
 		return switch type {
 			case Const(element): isByteElement(element);
-			case Primitive("u8"): true;
+			case Primitive("void" | "u8"): true;
 			case _: false;
 		};
 

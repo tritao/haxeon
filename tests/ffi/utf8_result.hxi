@@ -1,0 +1,5 @@
+interface Utf8Result @target("portable-abi32") @library("utf8_result") {
+ extern fn text() -> utf8 @borrowed @symbol("borrowed_text");
+ extern fn optional(enabled:i32) -> nullable<utf8> @borrowed @symbol("optional_text");
+ extern fn overwrite() -> void @symbol("overwrite_text");
+}

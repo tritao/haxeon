@@ -44,6 +44,9 @@ extern function sysExecutablePath():String;
 @:hlNative("haxeon_runtime", "__sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
+@:hlNative("haxeon_runtime", "__sys_environment")
+extern function sysEnvironment():Array<String>;
+
 @:hlNative("haxeon_runtime", "__sys_system_name")
 extern function sysSystemName():String;
 
@@ -69,6 +72,9 @@ function sysExecutablePath():String
 
 function sysGetEnv(name:String):Null<String>
 	return null;
+
+function sysEnvironment():Array<String>
+	return [];
 
 function sysSystemName():String
 	return "Web";
@@ -116,6 +122,7 @@ extern function sysDelete(path:String):Bool;
 @:hlNative("haxeon_runtime", "__sys_rename")
 extern function sysRename(path:String, newPath:String):Bool;
 #else
+
 /** `mkdir` semantics: the parent must already exist. The mode is ignored. */
 function sysCreateDir(path:String, mode:Int):Bool
 	return runtime.MemoryFileSystem.createDirectory(path, false);
@@ -147,11 +154,19 @@ function sysPrint(value:String):Void
 extern function sysPrint(value:String):Void;
 #end
 
+#if wasm
+function sysStdout():sys.io.FileOutput
+	return new sys.io.FileOutput(false);
+
+function sysStderr():sys.io.FileOutput
+	return new sys.io.FileOutput(true);
+#else
 @:hlNative("haxeon_runtime", "__sys_stdout")
 extern function sysStdout():sys.io.FileOutput;
 
 @:hlNative("haxeon_runtime", "__sys_stderr")
 extern function sysStderr():sys.io.FileOutput;
+#end
 
 /** Supported host and process operations exposed through HashLink. */
 class Sys {
@@ -178,6 +193,17 @@ class Sys {
 
 	public static inline function getEnv(name:String):Null<String>
 		return sysGetEnv(name);
+
+	/** Returns a snapshot of the host process environment. */
+	public static function environment():Map<String, String> {
+		var result:Map<String, String> = new Map();
+		for (entry in sysEnvironment()) {
+			var separator = entry.indexOf("=");
+			if (separator > 0)
+				result.set(entry.substr(0, separator), entry.substr(separator + 1));
+		}
+		return result;
+	}
 
 	public static inline function systemName():String
 		return sysSystemName();
@@ -242,8 +268,8 @@ class Sys {
 	public static inline function getChar(echo:Bool):Int
 		return sysGetChar(echo);
 
-	public static inline function println(value:String):Void
-		sysPrint(value + "\n");
+	public static inline function println(value:Dynamic):Void
+		sysPrint(Std.string(value) + "\n");
 
 	public static inline function stdout():sys.io.FileOutput
 		return sysStdout();

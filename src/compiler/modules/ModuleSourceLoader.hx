@@ -9,6 +9,9 @@ class ModuleSourceLoader {
 	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
 
 	final roots:Array<{path:String, packagePrefix:Null<String>}> = [];
+	// Names no root holds a module for. Import resolution asks for the same missing names (a declaration path, then each
+	// parent) many times, each a file probe in every root. A copy starts empty, so each compile request probes again.
+	final missing:Map<String, Bool> = [];
 
 	public function new() {}
 
@@ -33,11 +36,14 @@ class ModuleSourceLoader {
 			if (root.path == path && root.packagePrefix == packagePrefix)
 				return;
 		roots.push({path: path, packagePrefix: packagePrefix});
+		missing.clear();
 	}
 
 	public function load(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
 		if (modules.exists(name))
 			return modules.get(name);
+		if (missing.exists(name))
+			return null;
 		var relative = name.split(".").join("/") + ".hx";
 		for (root in roots) {
 			var candidates = [relative];
@@ -65,6 +71,7 @@ class ModuleSourceLoader {
 			modules.set(name, state);
 			return state;
 		}
+		missing.set(name, true);
 		return null;
 	}
 

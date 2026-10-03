@@ -3,6 +3,50 @@ extern bool hl_obj_has_field(vdynamic *object, int field);
 extern bool hl_obj_delete_field(vdynamic *object, int field);
 extern varray *hl_obj_fields(vdynamic *object);
 
+extern vdynamic *hl_obj_copy(vdynamic *object);
+
+HL_PRIM vdynamic *HL_NAME(__reflect_copy)(vdynamic *object) {
+	if (!object) return NULL;
+	if (object->t->kind == HVIRTUAL && ((vvirtual *)object)->value)
+		return HL_NAME(__reflect_copy)(((vvirtual *)object)->value);
+	if (object->t->kind != HOBJ) return hl_obj_copy(object);
+
+	vdynamic *copy = (vdynamic *)hl_alloc_obj(object->t);
+	for (hl_type *type = object->t; type; type = type->obj->super) {
+		for (int index = 0; index < type->obj->nfields; index++) {
+			hl_runtime_obj *layout = type->obj->rt;
+			bool cached_interface = false;
+			for (int slot = 0; slot < layout->ninterfaces; slot++)
+				if (layout->interfaces[slot] == index) cached_interface = true;
+			if (cached_interface) continue;
+			hl_obj_field *field = &type->obj->fields[index];
+			int name = field->hashed_name;
+			hl_type *value_type = field->t;
+			switch (value_type->kind) {
+			case HUI8:
+			case HUI16:
+			case HI32:
+			case HBOOL:
+				hl_dyn_seti(copy, name, value_type, hl_dyn_geti(object, name, value_type));
+				break;
+			case HI64:
+				hl_dyn_seti64(copy, name, hl_dyn_geti64(object, name));
+				break;
+			case HF32:
+				hl_dyn_setf(copy, name, hl_dyn_getf(object, name));
+				break;
+			case HF64:
+				hl_dyn_setd(copy, name, hl_dyn_getd(object, name));
+				break;
+			default:
+				hl_dyn_setp(copy, name, value_type, hl_dyn_getp(object, name, value_type));
+				break;
+			}
+		}
+	}
+	return copy;
+}
+
 HL_PRIM vdynamic *HL_NAME(__reflect_field)(vdynamic *object, vstring *name) {
 	return name ? hl_obj_get_field(object, hl_hash((vbyte *)name->bytes)) : NULL;
 }

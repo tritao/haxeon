@@ -87,6 +87,10 @@ const runtime = {
   __std_int_f64: Math.trunc
 };
 
+class ProgramExit {
+  constructor(code) { this.code = code; }
+}
+
 async function run(name, target) {
   const file = path.join(root, "out", `wasm-parity-${target}-${name}.wasm`);
   if (!fs.existsSync(file)) {
@@ -97,7 +101,8 @@ async function run(name, target) {
   }
   const module = new WebAssembly.Module(fs.readFileSync(file));
   const imports = WebAssembly.Module.imports(module);
-  const missing = imports.filter(entry => entry.module !== "haxeon_runtime" || !(entry.name in runtime));
+  const missing = imports.filter(entry => entry.module === "std" ? entry.name !== "sys_exit"
+    : entry.module !== "haxeon_runtime" || !(entry.name in runtime));
   if (missing.length !== 0)
     return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
   if (target === "wasm-gc") {
@@ -106,10 +111,14 @@ async function run(name, target) {
     if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
       return {failure: "GC module contains custom root metadata"};
   }
-  const instance = await WebAssembly.instantiate(module, {haxeon_runtime: runtime});
+  // Sys.exit ends the program with its status, as on HL.
+  const std = {sys_exit: code => { throw new ProgramExit(code); }};
+  const instance = await WebAssembly.instantiate(module, {haxeon_runtime: runtime, std});
   try {
     return {exit: instance.exports.main()};
   } catch (error) {
+    if (error instanceof ProgramExit)
+      return {exit: error.code};
     // An uncaught Haxe exception ends the program with status 1, as on HL.
     if (error instanceof WebAssembly.Exception)
       return {exit: 1};

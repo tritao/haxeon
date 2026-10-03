@@ -73,15 +73,58 @@ class FieldInference {
 				pair == IntType ? IntType : null;
 			default: null;
 		};
-		if (inferred == null)
+		if (inferred == null) {
+			if (mentionsBareVariable(expression))
+				return InferredType;
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
+		}
 		return inferred;
+	}
+
+	/** True when a numeric expression refers to a bare name, such as a sibling static constant, that only the class context can type. */
+	static function mentionsBareVariable(expression:AstExpression):Bool
+		return switch expression {
+			case Variable(name, _): name.indexOf(".") < 0;
+			case Negate(value, _): mentionsBareVariable(value);
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
+				mentionsBareVariable(left) || mentionsBareVariable(right);
+			default: false;
+		};
+
+	/**
+	 * Types a numeric constant expression that names sibling static fields (`1.0 / DT`) by resolving those fields
+	 * first. Null when any operand is not a plain `Int` or `Float` constant, leaving the caller to report it.
+	 */
+	static function siblingNumericType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
+			resolving:Map<String, Bool>):Null<AstType> {
+		inline function operand(value:AstExpression)
+			return siblingNumericType(value, owner, classes, aliases, enums, enumAbstracts, resolving);
+		return switch expression {
+			case IntegerLiteral(_, _): IntType;
+			case FloatLiteral(_, _): FloatType;
+			case Variable("Math.PI" | "Math.NaN" | "Math.POSITIVE_INFINITY" | "Math.NEGATIVE_INFINITY", _): FloatType;
+			case Negate(value, _): operand(value);
+			case Variable(name, _) if (name.indexOf(".") < 0): var ownerClass = classes.get(owner),
+					target:Null<AstField> = null; if (ownerClass != null) for (candidate in ownerClass.fields) if (candidate.isStatic && candidate.name == name) target = candidate; if (target == null
+					|| resolving.exists(owner + "." + name)) return null; var type = resolveField(target, owner, classes, aliases, enums, enumAbstracts,
+					resolving); type == IntType || type == FloatType ? type : null;
+			case Div(left, right, _): operand(left) == null || operand(right) == null ? null : FloatType;
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): var leftType = operand(left),
+					rightType = operand(right); leftType == null || rightType == null ? null : leftType == FloatType
+				|| rightType == FloatType ? FloatType : IntType;
+			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): operand(left) == IntType && operand(right) == IntType ? IntType : null;
+			default: null;
+		};
 	}
 
 	static function nullableNumericType(expression:AstExpression):Null<AstType>
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
+			case Variable("Math.PI" | "Math.NaN" | "Math.POSITIVE_INFINITY" | "Math.NEGATIVE_INFINITY", _): FloatType;
 			case Negate(value, _): nullableNumericType(value);
 			case Div(left, right, _): numericPair(left, right) == null ? null : FloatType;
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): numericPair(left, right);
@@ -136,6 +179,11 @@ class FieldInference {
 				resolving.remove(key);
 				return callType;
 			}
+			var numericType = siblingNumericType(field.initializer, owner, classes, aliases, enums, enumAbstracts, resolving);
+			if (numericType != null) {
+				resolving.remove(key);
+				return numericType;
+			}
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		}
 		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
@@ -184,9 +232,11 @@ class FieldInference {
 			return null;
 		if (!hasArguments) {
 			var abstractName = resolveDeclaration(written, currentOwner, aliases, enumAbstracts);
-			var abstractDecl = abstractName == null ? null : enumAbstracts.get(abstractName);
-			if (abstractDecl != null) {
-				for (value in abstractDecl.values)
+			if (abstractName != null) {
+				var declaration = enumAbstracts.get(abstractName);
+				if (declaration == null)
+					return null;
+				for (value in declaration.values)
 					if (value.name == caseName)
 						return NamedType(written);
 				return null;
@@ -196,7 +246,9 @@ class FieldInference {
 		if (resolved == null)
 			return null;
 		var declaration = enums.get(resolved);
-		if (declaration == null || declaration.typeParameters.length > 0)
+		if (declaration == null)
+			return null;
+		if (declaration.typeParameters.length > 0)
 			return null;
 		for (enumCase in declaration.cases)
 			if (enumCase.name == caseName && (enumCase.params.length == 0) != hasArguments)

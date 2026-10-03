@@ -52,6 +52,9 @@ class WasmGcTypePlan {
 
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
+	/** The `i32` array behind every map's hash index: a slot holds an entry position plus one, and zero means empty. */
+	public var mapIndexTypeIndex(default, null):Int = -1;
+
 	/**
 	 * Supertype of every class struct, whose first field is the class id (`WasmModuleSupport.typeId(Obj(name))`). Reading it
 	 * from any Dynamic value is one test and one field read, which is what makes dispatch on a value's class independent of
@@ -244,7 +247,7 @@ class WasmGcTypePlan {
 			case Abstract("native_pointer"): Ref(nullableType(nativePointerTypeIndex));
 			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
 			// Abstracts and virtual interfaces retain Haxe's existing dispatch metadata and begin as opaque anyrefs.
-			case Dyn, Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
+			case Dyn, Nullable(_), Abstract(_), Virtual(_): Ref({nullable: true, heap: Any});
 		};
 	}
 
@@ -273,7 +276,7 @@ class WasmGcTypePlan {
 			case RawPtr: "p";
 			case Bytes: "B";
 			case ManagedBytes: "M";
-			case Dyn: "D";
+			case Dyn, Nullable(_): "D";
 			case TypeRef: "T";
 			case Array(element): "A" + segment(typeKey(element));
 			case Enum(name): "E" + segment(name);
@@ -521,6 +524,8 @@ class WasmGcTypePlan {
 		}
 		var orderedMapNames = [for (name in mapNames.keys()) name];
 		orderedMapNames.sort(Reflect.compare);
+		if (orderedMapNames.length > 0)
+			mapIndexTypeIndex = reserveType();
 		for (mapName in orderedMapNames)
 			mapTypes.set(mapName, {
 				wrapperTypeIndex: reserveType(),
@@ -655,13 +660,16 @@ class WasmGcTypePlan {
 	}
 
 	function defineMapTypes():Void {
+		if (mapIndexTypeIndex >= 0)
+			setType(mapIndexTypeIndex, true, [], Array({type: Value(I32), mutable: true}));
 		for (mapName in mapTypes.keys()) {
 			var map = mapTypes.get(mapName);
 			setType(map.wrapperTypeIndex, true, [], Struct([
 				{type: Value(I32), mutable: true},
 				{type: Value(I32), mutable: true},
 				{type: Value(Ref({nullable: false, heap: Type(arrayType(map.keyType))})), mutable: true},
-				{type: Value(Ref({nullable: false, heap: Type(arrayType(map.valueType))})), mutable: true}
+				{type: Value(Ref({nullable: false, heap: Type(arrayType(map.valueType))})), mutable: true},
+				{type: Value(Ref({nullable: false, heap: Type(mapIndexTypeIndex)})), mutable: true}
 			]));
 		}
 	}

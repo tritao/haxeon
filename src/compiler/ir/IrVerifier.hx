@@ -75,13 +75,13 @@ class IrVerifier {
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| !byteLengthType(native.arguments[lengthArgument]))
+						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
 				case BytesInputOutput(lengthArgument):
 					if (native.arguments[index] != ManagedBytes
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| !byteLengthType(native.arguments[lengthArgument]))
+						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
 				case BytesOutput(sizeArgument):
 					if (native.arguments[index] != ManagedBytes
@@ -98,6 +98,10 @@ class IrVerifier {
 				case Value | Output | InputOutput:
 			}
 	}
+
+	/** Counted byte inputs use the integer width declared by the native ABI. */
+	public static function validByteInputCount(type:IrType):Bool
+		return type == I32 || type == I64;
 
 	static function validAggregateLayout(size:Int, alignment:Int):Bool
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
@@ -237,8 +241,9 @@ class IrVerifier {
 				expect(out, TypeRef);
 			case ToDyn(out, value):
 				require(values, value);
-				if (out.type != Dyn)
-					throw 'IR dynamic conversion must produce Dyn';
+				// Boxing a primitive may keep it on record as a nullable of its own type.
+				if (out.type != Dyn && !(nullableOf(out.type) != null && sameType(nullableOf(out.type), value.type)))
+					throw 'IR dynamic conversion must produce Dyn or the nullable of its input';
 			case IntToFloat(out, value):
 				require(values, value);
 				if (value.type != I32 || out.type != F64)
@@ -253,8 +258,8 @@ class IrVerifier {
 					throw "IR Float-to-Int conversion requires F64 input and I32 output";
 			case SafeCast(out, value):
 				require(values, value);
-				if (value.type != Dyn)
-					throw 'IR safe cast source must be Dyn';
+				if (!IrTypeTools.isDynamic(value.type))
+					throw 'IR safe cast source must be Dyn or a nullable primitive';
 			case BeginTry(catchBlock, afterBlock):
 			case EndTry(_):
 			case Catch(out):
@@ -345,7 +350,7 @@ class IrVerifier {
 				require(values, closure);
 				for (argument in args) {
 					require(values, argument);
-					if (!sameType(argument.type, Dyn))
+					if (!IrTypeTools.compatible(Dyn, argument.type))
 						throw 'IR dynamic closure call argument must be Dynamic';
 				}
 				if (!sameType(out.type, Dyn))
@@ -621,6 +626,10 @@ class IrVerifier {
 					case Virtual(b): a == b;
 					default: false;
 				};
+			case Nullable(a): switch right {
+					case Nullable(b): sameType(a, b);
+					default: false;
+				};
 			case Array(a): switch right {
 					case Array(b): sameType(a, b);
 					default: false;
@@ -645,9 +654,12 @@ class IrVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, RawPtr, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
+
+	static function nullableOf(type:IrType):Null<IrType>
+		return IrTypeTools.nullableElement(type);
 
 	static function abiCompatible(actual:IrType, expected:IrType):Bool
 		return switch expected {
@@ -692,7 +704,7 @@ class IrVerifier {
 					case Dyn: true;
 					default: false;
 				};
-			case Bytes, RawPtr, Function(_, _): switch expected {
+			case Bytes, RawPtr, Function(_, _), Nullable(_): switch expected {
 					case Dyn: true;
 					default: false;
 				};
@@ -711,8 +723,4 @@ class IrVerifier {
 				return true;
 		return false;
 	}
-
-	/** A byte buffer's length argument: a C `int32_t`/`uint32_t`, or a 64-bit size such as `uint64_t`. */
-	static function byteLengthType(type:IrType):Bool
-		return type == I32 || type == I64;
 }

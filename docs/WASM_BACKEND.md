@@ -44,6 +44,12 @@ The supported IR subset is still growing; unsupported operations and native
 signatures fail explicitly during compilation. `scripts/test-wasm-gc-parity.sh`
 compiles shared language fixtures for both targets and checks their results.
 
+String storage remains UTF-8 for ABI transfers. `String.length`, `charCodeAt`,
+`charAt` and `substring` use UTF-16 coordinates on both targets, matching
+HashLink. Substrings selecting a surrogate half retain it through WTF-8
+storage. `haxe.io.Bytes` still counts bytes. The Wasm regular-expression engine
+uses UTF-16 match positions and consumes whole Unicode scalars.
+
 ## Wasm32 linear memory and collector
 
 Wasm32 modules export `main` and `memory` by default. The runtime uses a
@@ -146,8 +152,12 @@ Neither backend's value layout crosses the boundary, so one host serves both
 the wasm32 and wasm-gc targets.
 
 - `stdlib/haxeon/wasm/HaxeonHost.hxi` declares the host services (`print`,
-  `date_now`, `callback_create`, `callback_close`). The compiler registers it
-  for Wasm targets; `trace` (which prints Haxe's `File.hx:line: message` lines), `Sys.print` and `Date` use it.
+  `write_output`, `flush_output`, `date_now`, `callback_create`,
+  `callback_close`). The compiler registers it for Wasm targets; `trace`
+  (which prints Haxe's `File.hx:line: message` lines), `Sys.print`, `Sys.stdout()`,
+  `Sys.stderr()` and `Date` use it.
+  `write_output(text, error)` selects stdout with 0 or stderr with 1;
+  `flush_output(error)` publishes an unterminated line on that stream.
 - The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math
   imports remain.
 - C functions bound through HXI follow the Wasm32 C ABI as clang and
@@ -167,7 +177,10 @@ the wasm32 and wasm-gc targets.
 `stdlib/haxeon/wasm/haxeon-host.js` is the host side for a guest that shares
 memory with an Emscripten module: it checks the memory contracts, implements
 the services above, and forwards the guest's other imports to the Emscripten
-module's C exports.
+module's C exports. Its optional `print` and `printError` callbacks receive
+stdout and stderr lines respectively; defaults are `console.log` and
+`console.error`. The streams buffer separately, and `flush()` emits pending
+text without requiring a newline.
 
 ## Building and testing
 

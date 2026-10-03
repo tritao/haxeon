@@ -374,6 +374,30 @@ class Scope {
 	public function visibleLocalNames():Array<String>
 		return [for (value in visibleValues()) value.source];
 
+	/** Declared array locals visible here, respecting lexical shadowing. */
+	public function visibleArrayNames():Array<String> {
+		var result = [];
+		for (name in visibleDeclarations().keys())
+			switch resolveDeclared(name) {
+				case TArray(_):
+					result.push(name);
+				default:
+			}
+		return result;
+	}
+
+	/** Primitive-key map locals visible here, respecting lexical shadowing. */
+	public function visiblePrimitiveMapNames():Array<String> {
+		var result = [];
+		for (name in visibleDeclarations().keys())
+			switch resolveDeclared(name) {
+				case TMap(TString, _), TMap(TInt, _):
+					result.push(name);
+				default:
+			}
+		return result;
+	}
+
 	function visibleValues():Array<ScopeValue> {
 		var outer = parent,
 			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();

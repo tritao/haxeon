@@ -117,7 +117,9 @@ class CfgVerifier {
 					define(out, defined, available, block.id);
 				case ToDyn(out, value):
 					require(value, available, block.id);
-					expect(out, Dyn);
+					if (out.type != Dyn
+						&& !(IrTypeTools.nullableElement(out.type) != null && sameType(IrTypeTools.nullableElement(out.type), value.type)))
+						throw 'CFG dynamic conversion ${out.id} must produce Dyn or the nullable of its input';
 					define(out, defined, available, block.id);
 				case IntToFloat(out, value):
 					require(value, available, block.id);
@@ -136,7 +138,8 @@ class CfgVerifier {
 					define(out, defined, available, block.id);
 				case SafeCast(out, value):
 					require(value, available, block.id);
-					expect(value, Dyn);
+					if (!IrTypeTools.isDynamic(value.type))
+						throw 'CFG safe cast source ${value.id} must be Dyn or a nullable primitive';
 					define(out, defined, available, block.id);
 				case BeginTry(catchBlock, afterBlock):
 					targetBlock(catchBlock, blocks);
@@ -227,7 +230,7 @@ class CfgVerifier {
 								throw 'CFG dynamic closure call must produce a Dynamic value';
 							for (argument in arguments) {
 								require(argument, available, block.id);
-								if (!sameType(argument.type, Dyn))
+								if (!IrTypeTools.compatible(Dyn, argument.type))
 									throw 'CFG dynamic closure call has a non-Dynamic argument';
 							}
 						case Function(argumentTypes, result):
@@ -411,6 +414,10 @@ class CfgVerifier {
 					case Virtual(b): a == b;
 					default: false;
 				};
+			case Nullable(a): switch right {
+					case Nullable(b): sameType(a, b);
+					default: false;
+				};
 			case Array(a): switch right {
 					case Array(b): sameType(a, b);
 					default: false;
@@ -435,7 +442,7 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, RawPtr, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
 			default: false;
 		};
 }

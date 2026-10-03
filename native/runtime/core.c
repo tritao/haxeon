@@ -84,6 +84,24 @@ HL_PRIM double HL_NAME(__math_sqrt)(double value) {
 	return sqrt(value);
 }
 
+// Used by the HL host only through the Wasm-shaped natives; Math.abs/min/max are inlined there but the declarations
+// are still imported, so the library must define them. NaN in either operand gives NaN and -0.0 is below 0.0.
+HL_PRIM double HL_NAME(__math_abs)(double value) {
+	return fabs(value);
+}
+
+HL_PRIM double HL_NAME(__math_min)(double left, double right) {
+	if (left != left || right != right)
+		return NAN;
+	return left < right ? left : (right < left ? right : (signbit(left) ? left : right));
+}
+
+HL_PRIM double HL_NAME(__math_max)(double left, double right) {
+	if (left != left || right != right)
+		return NAN;
+	return left > right ? left : (right > left ? right : (signbit(left) ? right : left));
+}
+
 HL_PRIM double HL_NAME(__math_atan2)(double y, double x) {
 	return atan2(y, x);
 }
@@ -97,6 +115,18 @@ HL_PRIM double HL_NAME(__math_log)(double value) {
 }
 
 HL_PRIM double HL_NAME(__math_fmod)(double value, double modulus) {
+	// Whole numbers below 2^53 are exact in int64, and an integer remainder is much cheaper than the general fmod.
+	// Zero and negatives (which carry a sign) take the general path.
+	if (value >= 1.0 && value < 9007199254740992.0 && modulus >= 1.0 && modulus < 9007199254740992.0) {
+		int64_t a = (int64_t)value;
+		int64_t b = (int64_t)modulus;
+		if ((double)a == value && (double)b == modulus) {
+			// 32-bit division is several times cheaper than 64-bit on most cores.
+			if (((a | b) >> 32) == 0)
+				return (double)((uint32_t)a % (uint32_t)b);
+			return (double)(a % b);
+		}
+	}
 	return fmod(value, modulus);
 }
 
@@ -122,6 +152,7 @@ extern bool hl_hbremove( realtime_string_map *map, uchar *key );
 extern void hl_hbclear( realtime_string_map *map );
 extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
 
+static HL_NO_RETURN( void realtime_raise_module_exception( void ) );
 static void realtime_raise_module_exception( void ) {
 	/* A module exception owns generation-specific type metadata. Never let that
 	   value escape into the host exception machinery after the call returns. */

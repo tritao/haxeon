@@ -651,6 +651,8 @@ class HlWriter {
 					{opcode: HlOpcode.SetMem, operands: [pointer, offset, source]};
 				case ArraySize(destination, array):
 					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
+				case RefData(destination, array):
+					{opcode: HlOpcode.RefData, operands: [destination, array]};
 				case MakeEnum(destination, constructor, arguments):
 					{opcode: HlOpcode.MakeEnum, operands: [destination, constructor, arguments.length].concat(arguments)};
 				case EnumIndex(destination, value):
@@ -663,6 +665,9 @@ class HlWriter {
 				case JumpSignedLess(left, right, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
+				case JumpUnsignedLess(left, right, target):
+					var targetPosition = requireLabel(labels, target);
+					{opcode: HlOpcode.JULt, operands: [left, right, targetPosition - (result.length + 1)]};
 				case JumpNull(value, target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JNull, operands: [value, targetPosition - (result.length + 1)]};

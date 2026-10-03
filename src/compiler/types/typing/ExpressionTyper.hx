@@ -344,7 +344,7 @@ class ExpressionTyper {
 			loopScope = new Scope(scope),
 			keyType:Null<CompilerType> = null,
 			bodyExpressions = predicate == null ? [value] : [predicate, value];
-		LoopFlow.enterExpressions(session, scope, bodyExpressions, span);
+		LoopFlow.enterExpressions(session, scope, bodyExpressions, span, valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)
@@ -417,7 +417,8 @@ class ExpressionTyper {
 			originalIterable = typedIterable,
 			loopScope = new Scope(scope),
 			itemType:Null<CompilerType> = null;
-		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span);
+		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span,
+			valueName == null ? [keyName] : [keyName, valueName]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null)
@@ -742,8 +743,8 @@ class ExpressionTyper {
 		var targetType = target == null ? expectedType : lowerType(target);
 		if (targetType == null)
 			fail("E1003", "Untyped cast requires an expected type", span);
-		// The target guides typing of the operand (`([I32] : Array<IrType>)` resolves I32 by it); the conversion stays explicit.
-		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, targetType, false), targetType, span);
+		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
+		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, target == null ? null : targetType, false), targetType, span);
 	}
 
 	/**
@@ -1020,6 +1021,15 @@ class ExpressionTyper {
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
+			// Compare content in source operand order; reversing the numeric result
+			// must not reverse evaluation of side-effecting string expressions.
+			var order = new TypedExpression(TCall("__string_compare_full", [left, right]), TInt, span);
+			var zero = new TypedExpression(TIntLiteral(0), TInt, span);
+			var first = reversed ? zero : order,
+				second = reversed ? order : zero;
+			return new TypedExpression(operation == 0 ? TLess(first, second) : TLessEqual(first, second), TBool, span);
+		}
 		if (reversed) {
 			var original = left;
 			left = right;

@@ -36,6 +36,12 @@ boundary that carries your state across.
 
 ## 🚀 Quick start
 
+HashLink stdout flushes immediately on terminals and buffers output to pipes and
+files. It flushes before stdin reads, subprocesses, sleep, and exit; fatal signals
+attempt a best-effort flush. `Sys.stdout().flush()` flushes explicitly, and
+`HL_STDOUT_FLUSH=1` restores flushing after every print. SIGKILL can discard the
+buffered tail.
+
 Requirements: a C/C++ toolchain, CMake, and Git. The pinned Haxe, HashLink, and
 Ninja tools are installed locally by the setup scripts.
 

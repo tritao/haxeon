@@ -424,7 +424,7 @@ class IrProgramAssembler {
 									mapRuntimeNames.set(name.substring(2, operationStart), true);
 							}
 						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
-						case IteratorNext(output, _) if (output.type == Dyn):
+						case IteratorNext(output, _) if (IrTypeTools.isDynamic(output.type)):
 							needsArrayRuntime = true;
 							needsAnyArrayRuntime = true;
 						default:

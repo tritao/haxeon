@@ -492,7 +492,7 @@ class WasmGcInterop implements WasmInteropRepresentation {
 		// A record result lands in scratch storage: the C function writes it through a leading result pointer, or
 		// returns its single scalar, which is stored there.
 		var resultRecord = fixedAggregateResult ? allocateLocal(I32) : -1;
-		if (fixedAggregateResult) {
+		if (native.fixedResult != null) {
 			var layout = native.fixedResult;
 			if (layout == null)
 				throw 'Wasm GC C native "${native.name}" has no record result layout';
@@ -696,12 +696,14 @@ class WasmGcInterop implements WasmInteropRepresentation {
 			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
 			position = allocateLocal(I32),
 			body:Array<WasmInstruction> = [
-				I32Const(0),
-				LocalSet(length),
 				LocalGet(pointer),
 				I32Eqz,
 				If(null),
+				RefNull(Type(plan.bytesTypeIndex)),
+				LocalSet(outputLocal),
 				Else,
+				I32Const(0),
+				LocalSet(length),
 				Block(null),
 				Loop(null),
 				LocalGet(pointer),
@@ -715,7 +717,6 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				I32Add,
 				LocalSet(length),
 				Br(0),
-				End,
 				End,
 				End,
 				LocalGet(length),
@@ -748,7 +749,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 				I32Const(0),
 				LocalGet(length),
 				StructNew(plan.bytesTypeIndex),
-				LocalSet(outputLocal)
+				LocalSet(outputLocal),
+				End
 			];
 		return body;
 	}

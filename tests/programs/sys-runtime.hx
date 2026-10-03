@@ -50,6 +50,9 @@ function main():Int {
 		return 5;
 	if (!Sys.putEnv("HAXEON_SYS_É", "válue-ß") || Sys.getEnv("HAXEON_SYS_É") != "válue-ß")
 		return 6;
+	var snapshot = Sys.environment();
+	if (snapshot.get("HAXEON_SYS_É") != "válue-ß" || snapshot.get("PATH") != Sys.getEnv("PATH"))
+		return 14;
 	var command = systemName == "Windows" ? "cmd /C \"echo xé>nul\"" : "test xé = xé";
 	if (Sys.command(command) != 0)
 		return 7;

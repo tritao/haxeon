@@ -12,7 +12,7 @@
 | `Any.hx` | `std/Any.hx` | Represented as a source alias to `Dynamic` for the supported untyped-value subset. |
 | `Date.hx` | `std/Date.hx` | Limited to `now` and `getTime`; the abstract uses the project-owned native date representation. |
 | `Math.hx` | `std/Math.hx` | Limited to `isNaN`; the operation uses a source-declared stable runtime binding. |
-| `Reflect.hx` | `std/Reflect.hx` | Limited to `compare`; the operation uses a source-declared stable runtime binding. |
+| `Reflect.hx` | `std/Reflect.hx` | Provides field reflection, comparison and shallow copying. Copying preserves compiled object layouts and nullable field representations without running constructors; dynamic objects keep their field names and shallow values. Native operations use source-declared stable runtime bindings. |
 | `EReg.hx` | `std/EReg.hx` | Supports literal substring matching, case-insensitive matching, match inspection, replacement, and splitting; advanced regular-expression operators are not yet implemented. |
 | `List.hx` | `std/List.hx` | Represented by `Array<T>` with compatible `add`, `iterator`, and `length` behavior. |
 | `Std.hx` | `std/Std.hx` | Limited to conversion, parsing, and random helpers; `parseInt` retains the current non-nullable runtime ABI and returns `0` for invalid input. Wasm float strings use Haxeon's `runtime.Ryu.format`; native float strings use the pinned HashLink fork's vendored C Ryu in `src/std/buffer.c`, including 32-bit floats. |

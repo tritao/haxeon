@@ -1,6 +1,11 @@
 # Inlining and value types
 
-Status: design, 2026-09-30. Nothing here is implemented except the value-class fixes listed under "Done".
+Status: the inliner (stage 1) is implemented and on by default; set `HAXEON_INLINE=0` to turn it off. Stages 2 to 4 are
+still design. The inliner's incremental and hot-patch rules below are implemented and tested (`ModuleMain`,
+`CompilerSessionMain`, `InlinePatchMain`), and the build tool keys its compiler worker and artifact cache on the setting.
+The suite, the Wasm parity run, the differential tests and the self-hosting fixed point (`scripts/check-self-hosting.sh`)
+pass in both modes. Inlined code keeps its callee's provenance, so stack traces and profiles attribute it to the caller;
+use `HAXEON_INLINE=0` when you need exact frames.
 
 ## Why
 
@@ -110,6 +115,23 @@ callee parameters; split the caller block at the call into a head and a fresh co
 retarget the caller's successor phi inputs from the original block to the continuation. Keep `BeginTry` last in its
 block. Critical edges do not need splitting here (`PhiEdges.split` handles it at lowering). `IrVerifier` re-checks
 phis, dominance and types after the rewrite and is the safety net.
+
+## Block-local load/store forwarding
+
+`IrLoadStoreForwarding` removes repeated field and array reads within each basic block, including reloads after a store.
+It leaves every store in place and carries no memory facts across blocks. Calls, exception boundaries, raw stores and
+unknown effects clear the known values. A store through a possibly aliased object or array invalidates the affected
+entries. Only identical IR types can be forwarded; inline value-class fields are excluded, and storing an inline value
+clears all facts because earlier interior pointers may observe that copy.
+
+The pass returns the original function when no load is removed. Changed functions have fresh blocks and rewritten
+instruction operands, phi inputs, terminators and debug bindings, with surviving provenance preserved. Object layouts
+are supplied by the inliner solely to identify value-class fields; unknown object-valued fields are excluded too.
+
+Forwarding runs on each function's final form inside `IrInliner.inlinedVersion`, before memoization and the encoded-byte
+publication comparison. It also runs with `HAXEON_INLINE=0`. `HAXEON_LOADSTORE=0` disables it independently; both switches
+are included in the inliner memo fingerprint, compiler-worker identity and build artifact fingerprint. Wasm backends
+consume the same transformed IR.
 
 ## Scalar replacement
 

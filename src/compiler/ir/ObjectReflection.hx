@@ -29,7 +29,8 @@ class ObjectReflection {
 			}
 			if (layouts == null)
 				layouts = layoutsOf(objects == null ? [] : objects, reflectable == null ? [] : reflectable);
-			if (tableDispatch) {
+			// Copying allocates a value of the matching layout, so it keeps the per-layout dispatcher instead of joining the table.
+			if (tableDispatch && native.symbol != "__reflect_object_copy") {
 				remaining.push({
 					name: native.name,
 					library: native.library,
@@ -41,6 +42,7 @@ class ObjectReflection {
 				continue;
 			}
 			functions.push(switch native.symbol {
+				case "__reflect_object_copy": copy(native.name, layouts, functions);
 				case "__reflect_object_field": field(native.name, layouts, functions);
 				case "__reflect_object_set_field": setField(native.name, layouts, functions);
 				case "__reflect_object_field_count": fieldCount(native.name, layouts);
@@ -76,6 +78,14 @@ class ObjectReflection {
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];
 	}
+
+	static function copy(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
+		return perLayout(name, layouts, functions, Dyn, [], (builder, layout, typed, _) -> {
+			var result = builder.newObject(layout.name);
+			for (field in layout.fields)
+				builder.fieldSet(result, field.name, builder.fieldGet(typed, field.name, field.type));
+			builder.returnValue(builder.toDyn(result));
+		}, builder -> builder.constNull(Dyn));
 
 	static function field(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], fieldBody, builder -> builder.constNull(Dyn));
