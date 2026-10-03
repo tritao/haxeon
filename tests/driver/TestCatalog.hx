@@ -35,6 +35,7 @@ class TestCatalog {
 		"AuditVerifierMain",
 		"InlinerMain",
 		"LoadStoreMain",
+		"StrengthReductionMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",
