@@ -456,9 +456,9 @@ class ModuleCanonicalizer {
 				else if (name.indexOf(".") < 0 && locals.exists(name))
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
 				Call(resolved, [
-					for (index => a in args)
-						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(a, module, entry, locals,
-							aliases) : canonicalExpression(a, module, entry, locals, aliases)
+					for (index in 0...args.length)
+						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
+						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
 				], s);
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
 			case ClosureCall(callee, args, s):
