@@ -23,6 +23,9 @@ class ModuleAnalyzer {
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
 	final declarationOwners:Map<String, String>;
+	// Import resolution reads the declarations of modules that are not parsed yet, once per imported declaration. Each such
+	// parse is kept here until the module's own parse adopts it.
+	final lookupParses:Map<String, LookupParse> = [];
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:Map<String, String>) {
@@ -48,10 +51,11 @@ class ModuleAnalyzer {
 			return;
 		}
 		try {
-			var conditional = ConditionalCompilation.process(state.source, defines);
-			state.conditionalDefines = conditional.defines;
-			state.tokens = new Lexer(state.source, conditional.text).tokenize();
-			state.ast = new Parser(state.tokens).parseProgram();
+			var parsed = sourceParse(state);
+			lookupParses.remove(state.name);
+			state.conditionalDefines = parsed.defines;
+			state.tokens = parsed.tokens;
+			state.ast = parsed.ast;
 			for (declaration => owner in [for (declaration => owner in declarationOwners) declaration => owner])
 				if (owner == state.name)
 					declarationOwners.remove(declaration);
@@ -298,9 +302,19 @@ class ModuleAnalyzer {
 			return null;
 		if (state.ast != null)
 			return state.parsedAst();
+		var parsed = sourceParse(state);
+		lookupParses.set(moduleName, parsed);
+		return parsed.ast;
+	}
+
+	/** Parses the module's current source, or returns the lookup parse of that same source. */
+	function sourceParse(state:ModuleState):LookupParse {
+		var cached = lookupParses.get(state.name);
+		if (cached != null && cached.source == state.source)
+			return cached;
 		var conditional = ConditionalCompilation.process(state.source, defines),
 			tokens = new Lexer(state.source, conditional.text).tokenize();
-		return new Parser(tokens).parseProgram();
+		return new LookupParse(state.source, conditional.defines, tokens, new Parser(tokens).parseProgram());
 	}
 
 	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
@@ -469,4 +483,19 @@ class ModuleAnalyzer {
 	static function mergeChanges(target:Map<String, Bool>, source:Map<String, Bool>):Void
 		for (name in source.keys())
 			target.set(name, true);
+}
+
+/** A module's source parsed ahead of its own parse, for an import lookup. */
+private class LookupParse {
+	public final source:compiler.Source.SourceFile;
+	public final defines:Array<String>;
+	public final tokens:Array<compiler.syntax.Token>;
+	public final ast:compiler.syntax.Ast.AstProgram;
+
+	public function new(source, defines, tokens, ast) {
+		this.source = source;
+		this.defines = defines;
+		this.tokens = tokens;
+		this.ast = ast;
+	}
 }
