@@ -331,3 +331,7 @@ loadstore-loop	42
 loadstore-numeric-fields	42
 loadstore-object-alias	42
 math-int-rounding	42
+array-fused-boundaries	42
+array-fused-growth-alias	42
+array-fused-elements	42
+array-fused-shrink	42
