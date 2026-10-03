@@ -381,7 +381,53 @@ class ModuleAnalyzer {
 			return path;
 		var packageName = QualifiedName.parentOrEmpty(sourceModule),
 			nestedName = modulePath.substring(sourceModule.length + 1, modulePath.length);
+		// `import pkg.Module.member` names a function declared in the module or a static member of its main class (as in
+		// Haxe), which keeps its module qualifier so that a bare use resolves to it. Types are named by package instead.
+		if (nestedName.indexOf(".") < 0 && isImportedMember(sourceModule, nestedName))
+			return sourceModule + "." + nestedName;
 		return packageName.length == 0 ? nestedName : packageName + "." + nestedName;
+	}
+
+	/**
+	 * Whether `name` is a function declared at the top of the module, or else a static function or field of the class that
+	 * shares the module's name with no type of that name declared in the module.
+	 */
+	function isImportedMember(moduleName:String, name:String):Bool {
+		var ast = moduleAst(moduleName);
+		if (ast == null)
+			return false;
+		for (declaration in ast.functions)
+			if (declaration.name == name)
+				return true;
+		for (declaration in ast.classes)
+			if (declaration.name == name)
+				return false;
+		for (declaration in ast.enums)
+			if (declaration.name == name)
+				return false;
+		for (declaration in ast.abstracts)
+			if (declaration.name == name)
+				return false;
+		for (declaration in ast.enumAbstracts)
+			if (declaration.name == name)
+				return false;
+		for (declaration in ast.interfaces)
+			if (declaration.name == name)
+				return false;
+		for (declaration in ast.aliases)
+			if (declaration.name == name)
+				return false;
+		var mainName = QualifiedName.last(moduleName);
+		for (declaration in ast.classes)
+			if (declaration.name == mainName) {
+				for (method in declaration.methods)
+					if (method.isStatic && method.name == name)
+						return true;
+				for (field in declaration.fields)
+					if (field.isStatic && field.name == name)
+						return true;
+			}
+		return false;
 	}
 
 	function sourceModuleForDependency(path:String):Null<String> {
