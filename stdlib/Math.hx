@@ -90,8 +90,6 @@ class Math {
 	public static inline function max(left:Float, right:Float):Float
 		return mathMax(left, right);
 
-	public static inline function abs(value:Float):Float
-		return mathAbs(value);
 	#else
 	public static inline function min(left:Float, right:Float):Float
 		return left != left || right != right ? Math.NaN : (left < right ? left : (right < left ? right : (1 / left < 0 ? left : right)));
@@ -99,9 +97,10 @@ class Math {
 	public static inline function max(left:Float, right:Float):Float
 		return left != left || right != right ? Math.NaN : (left > right ? left : (right > left ? right : (1 / left < 0 ? right : left)));
 
-	public static inline function abs(value:Float):Float
-		return value <= 0 ? 0.0 - value : value;
 	#end
+
+	public static inline function abs(value:Float):Float
+		return mathAbs(value);
 
 	public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
@@ -155,7 +154,7 @@ class Math {
 
 	/** Largest integral Float not above `value`; NaN, infinities, and values from 2^52 are already integral. */
 	public static function ffloor(value:Float):Float {
-		if (!(Math.abs(value) < 4503599627370496.0))
+		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
 		return truncated > value ? truncated - 1.0 : truncated;
@@ -163,7 +162,7 @@ class Math {
 
 	/** Smallest integral Float not below `value`. */
 	public static function fceil(value:Float):Float {
-		if (!(Math.abs(value) < 4503599627370496.0))
+		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
 		return truncated < value ? truncated + 1.0 : truncated;

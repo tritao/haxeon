@@ -330,3 +330,4 @@ loadstore-handler	42
 loadstore-loop	42
 loadstore-numeric-fields	42
 loadstore-object-alias	42
+math-int-rounding	42
