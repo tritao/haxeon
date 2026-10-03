@@ -92,19 +92,20 @@ benchmark, debug, GC, self-hosting and startup-cost gates.
 
 ## Allocator experiments
 
-`HL_JIT_REGOPT` is a bitmask enabled by the x86-64 SysV backend only. Its
-default is `4`, enabling register phis in functions without returning calls;
-`0` selects the baseline. Other
+`HL_JIT_REGOPT` is a diagnostic bitmask enabled by the x86-64 SysV backend only.
+Its default is `5`, enabling the two accepted policies; `0` selects the
+baseline. Other
 architectures and the Windows ABI leave it zero. Each function reads only its own
 bytecode and module debug setting. Bit `1` selects call saving, and bit `4`
 selects register loop phis. Bits `2` and `8` are reserved for
 the rejected cold-exit weighting and phi-coalescing experiments.
 
-Call saving is opt-in because its whole-function analysis added about 4.5% to a
-small compiler invocation. `HL_JIT_REGOPT=5` enables the paired call-save and
-loop-phi policy. In bit-4-only mode, a function containing any returning call
-keeps the baseline allocator. This avoids both the analysis cost and register
-phis whose correct call crossing depends on bit 1.
+Call metadata is demand-driven. Ordinary liveness runs first, then only tracked
+loop phis that actually cross returning calls mark relevant instruction ranges.
+CFG classification and save tables are built only for calls in those ranges.
+Phi banks whose candidates all cross mandatory calls skip the second liveness
+pass. In bit-4-only mode, a function containing any returning call keeps the
+baseline allocator because call-crossing phis require the paired bit-1 policy.
 
 Call saving prefers the existing callee-saved register policy. A caller-saved
 value qualifies only when weighted loads plus its definition store exceed twice
