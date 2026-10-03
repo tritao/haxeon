@@ -667,6 +667,7 @@ class HlLower {
 				}
 			provenInRange.clear();
 			elementOffsets.clear();
+			validatedArrayAccesses.clear();
 			for (instruction in block.instructions) {
 				var instructionStart = instructions.length;
 				if (!keepsArrayBounds(instruction.value))
@@ -913,9 +914,11 @@ class HlLower {
 						instructions.push(HlInstruction.FieldSet(requireRegister(object, registers), requireObjectField(object, fieldName),
 							requireRegister(value, registers)));
 					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
-						var destination = defineRegister(output, registers, registerTypes);
-						lowerRawArrayAccess(array, index, "check", false, instructions, registers, registerTypes,
-							(data, offset) -> HlInstruction.GetMem(destination, data, offset));
+						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
+							requireRegister(index, registers)));
+						var key = '${array.id}:${index.id}';
+						provenInRange.set(key, true);
+						validatedArrayAccesses.set(key, true);
 					case ArraySet(array, index, value) if (rawArrayShift(array.type) != null):
 						var source = requireRegister(value, registers);
 						lowerRawArrayAccess(array, index, "ensure", true, instructions, registers, registerTypes,
@@ -1237,10 +1240,13 @@ class HlLower {
 	/** Array and index pairs, as `arrayId:indexId`, already known to be in range at this point of the block being lowered. */
 	final provenInRange:Map<String, Bool> = [];
 
+	/** Historical validation within this block, preserving compound-write semantics after a callee shrinks an array. */
+	final validatedArrayAccesses:Map<String, Bool> = [];
+
 	/**
 	 * The byte-offset register of every array and index pair accessed so far in the block being lowered. The offset
-	 * depends only on the index, so it stays valid however much code runs in between; the pair also records that its
-	 * index was validated, which `a[i] += f()` relies on to skip the re-check of its write after the call.
+	 * depends only on the index, so it stays valid however much code runs in between. Read validation is recorded
+	 * separately, since fused reads no longer need an offset register.
 	 */
 	final elementOffsets:Map<String, Int> = [];
 
@@ -1258,8 +1264,8 @@ class HlLower {
 		};
 
 	/**
-	 * An Int or Float array element access with the bounds test in the bytecode, as Haxe's own Array does. The
-	 * VM's `OGetArray`/`OSetArray` call into the runtime on every access; here an index in range (one unsigned
+	 * An Int or Float array write with the bounds test in the bytecode. Reads use OGetArray, whose x86-64 JIT
+	 * fuses its check and address calculation. Writes retain growth semantics: an index in range (one unsigned
 	 * test against the size, which also rejects a negative index) goes straight to the element, and only an
 	 * out-of-range index calls `operation` (`array_check` raises, `array_ensure` grows the array or raises for a
 	 * negative index).
@@ -1280,7 +1286,7 @@ class HlLower {
 		var arrayRegister = requireRegister(array, registers),
 			indexRegister = requireRegister(index, registers),
 			key = '${array.id}:${index.id}';
-		if (!provenInRange.exists(key) && !(writes && elementOffsets.exists(key))) {
+		if (!provenInRange.exists(key) && !(writes && validatedArrayAccesses.exists(key))) {
 			var id = rawArrayAccesses++,
 				outOfRange = '__array_out_of_range_$id',
 				inRange = '__array_in_range_$id',
@@ -1293,6 +1299,7 @@ class HlLower {
 			instructions.push(HlInstruction.Label(inRange));
 			provenInRange.set(key, true);
 		}
+		validatedArrayAccesses.set(key, true);
 		var offset = elementOffsets.get(key);
 		if (offset == null) {
 			var shift = temporaryRegister(IrType.I32, registerTypes);
