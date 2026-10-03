@@ -12,7 +12,7 @@ header. Not vendored: `json-serde` (needs input files and NuGet/pub packages).
 Haxeon requires explicit signatures and proven non-null arithmetic, so these
 files differ from upstream (everything else is verbatim):
 
-- `spectral-norm/1.hx`: removed a duplicated `return`; added `:Float`.
+- `spectral-norm/1.hx`: removed a duplicated `return`; added `:Float`. Accumulate each row in a local and store it once, as the C# and Dart variants do, instead of updating `Au[i]` in the array on every iteration.
 - `fasta/1.hx`: annotated the untyped parameters and return types.
 - `merkletrees/1.hx`: unwrap `Null<Int>` hashes with an explicit null check.
 - `nbody/1.hx`: added `:Float` return types.

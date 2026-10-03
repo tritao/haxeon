@@ -12,17 +12,19 @@ class App {
 
 	private static function eval_A_times_u(N:Int, u:Array<Float>, Au:Array<Float>) {
 		for (i in 0...N) {
-			Au[i] = 0;
+			var sum = 0.0;
 			for (j in 0...N)
-				Au[i] += eval_A(i, j) * u[j];
+				sum += eval_A(i, j) * u[j];
+			Au[i] = sum;
 		}
 	}
 
 	private static function eval_At_times_u(N:Int, u:Array<Float>, Au:Array<Float>) {
 		for (i in 0...N) {
-			Au[i] = 0;
+			var sum = 0.0;
 			for (j in 0...N)
-				Au[i] += eval_A(j, i) * u[j];
+				sum += eval_A(j, i) * u[j];
+			Au[i] = sum;
 		}
 	}
 
