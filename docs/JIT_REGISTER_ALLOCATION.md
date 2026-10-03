@@ -89,3 +89,47 @@ A scratch prototype, rather than an inferred instruction count, establishes the
 performance gap. The gate requires at least 10% lower runtime in nine alternating
 pairs on a pinned core. Each accepted stage must also satisfy the full correctness,
 benchmark, debug, GC, self-hosting and startup-cost gates.
+
+## Allocator experiments
+
+`HL_JIT_REGOPT` is a bitmask enabled by the x86-64 SysV backend only. Its
+default is `5`, enabling the two accepted stages; `0` selects the baseline. Other
+architectures and the Windows ABI leave it zero. Each function reads only its own
+bytecode and module debug setting. Bit `1` selects call saving, and bit `4`
+selects register loop phis. Bits `2` and `8` are reserved for
+the rejected cold-exit weighting and phi-coalescing experiments.
+
+Call saving prefers the existing callee-saved register policy. A caller-saved
+value qualifies only when weighted loads plus its definition store exceed twice
+its weighted returning-call count plus one. Weights use the existing loop-depth
+factor. Any mandatory returning call in a loop vetoes this choice: measured hot
+calls lost time despite reducing loads. A per-block, cached predecessor walk
+checks whether a back edge can be reached from the loop header while bypassing
+the call block. This is a conservative eligibility rule, not profiling or the
+proposed cold-exit weighting heuristic.
+
+Selected values retain their register and reserve a stack home. Stores precede
+argument shuffles, and reloads follow stack-argument cleanup and return-value
+copying, before edge phi moves. A later permanent spill supersedes call saving.
+Address-taken values stay in memory. Functions containing `OTrap` retain the old
+call allocation policy, ensuring handlers see authoritative values. Debug mode
+also retains the baseline.
+
+Register phis remove assignment-metadata pinning only outside debugger mode and
+try/catch, and only for no-call lifetimes or, with call saving enabled, lifetimes
+crossing no mandatory loop calls. The integer-pressure micro regressed under
+unrestricted unpinning; this generic call-policy gate preserves its baseline
+locations.
+
+A second guard estimates peak live intervals independently for the general and
+floating register banks, using baseline liveness. A bank qualifies only when its
+peak uses at most half its available registers. Crowded nbody and merkletrees
+loops regressed despite fewer stack values; they retain their baseline policy.
+The estimate includes already spilled and address-taken values, so it may reject
+opportunities. Selected banks recompute liveness with fresh reads, weights,
+preferences and edge-move lists; rejected banks keep their baseline ranges.
+
+Their liveness reaches their own natural loop end; an inner phi is not extended
+to an enclosing loop simply because the block layout interleaves the loops.
+Existing edge moves and debug-liveness tracking remain in use. No branching
+instruction expansion or cross-function allocation state is introduced.
