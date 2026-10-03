@@ -30,7 +30,7 @@ import compiler.types.TypedAst.TypedSwitchArrayPattern;
 
 typedef StatementExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef StatementCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
-typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement>, Int) -> Null<CompilerType>;
+typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
 typedef BindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
 typedef TypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>) -> Array<TypedStatement>;
 typedef ExhaustiveEnumCallback = (CompilerType, Array<TypedSwitchCase>) -> Bool;
@@ -232,8 +232,8 @@ class StatementTyper {
 						};
 					default:
 				}
-				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements,
-					statementIndex + 1) : session.declarations.resolve(declared, null, context.typeSubstitutions);
+				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements, statementIndex + 1,
+					scope) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {

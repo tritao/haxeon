@@ -297,3 +297,4 @@ comprehension-null-narrowing	42
 generic-property-setter	42
 thread-stand-ins	42
 captured-receiver-reassigned	42
+empty-literal-inference	42

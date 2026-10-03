@@ -322,7 +322,7 @@ class ExpressionTyper {
 			typedEntries.push({key: coerce(key, resolvedKey, "map key", "E1003"), value: coerce(value, resolvedValue, "map value", "E1003")});
 		}
 		if (keyType == null || valueType == null)
-			throw "Map key/value types were not resolved";
+			fail("E1003", "An empty map literal requires an expected key and value type", span);
 		if (session.mapName(keyType, valueType) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);

@@ -530,6 +530,7 @@ class TestMain {
 		expectCompileError('function main():Int { var x:Int; var read = () -> x; x = 1; return read(); }', 'Local "x" may be used before assignment');
 		expectCompileError('class Shape { public function new() {} } function main():Int { var s = new Shape(); return Std.downcast(s, Int) == null ? 0 : 1; }',
 			'Std.downcast expects a class or interface as its second argument');
+		expectCompileError('function main():Int { var scores = new Map(); return 0; }', 'An empty map literal requires an expected key and value type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
