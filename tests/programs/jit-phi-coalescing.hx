@@ -19,6 +19,16 @@ function oldValue(count:Int):Int {
 	return checksum;
 }
 
+function oldFloatValue(count:Int):Float {
+	var value = 0.0, checksum = 0.0;
+	for (i in 0...count) {
+		var before = value;
+		value += 1.0;
+		checksum += before * 2.0 + value;
+	}
+	return checksum;
+}
+
 function earlyExit():Float {
 	var value = 0.0;
 	while (value < 8.0) {
@@ -49,5 +59,7 @@ function main():Int {
 		return 3;
 	if (nested() != 46.0)
 		return 4;
+	if (oldFloatValue(8) != 92.0)
+		return 5;
 	return 42;
 }
