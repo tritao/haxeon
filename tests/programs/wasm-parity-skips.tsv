@@ -16,3 +16,4 @@ dynamic-method-call	skip	Calling a method of a Dynamic value is HashLink-only so
 sys-println-dynamic	skip	Prints through the host print import, which this suite does not provide (covered by wasm-host-services)
 string-buffer-unicode	skip	String.fromCharCode for a character beyond ASCII is wrong on Wasm (its charCodeAt differs from the literal)
 thread-gc-stress	skip	Threads are not implemented on Wasm
+test-shards	skip	A harness for HashLink test programs: it reads Sys.args and times its groups, which the Wasm hosts do not provide

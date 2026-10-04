@@ -153,7 +153,8 @@ run_isolated_integration_group \
 	tests/integration/test-cmake-native-package.sh \
 	tests/integration/test-git-package-lock.sh \
 	tests/integration/test-workspace.sh \
-	tests/integration/test-compiler-embedding.sh
+	tests/integration/test-compiler-embedding.sh \
+	tests/integration/test-workspace-shards.sh
 
 # The C++ FFI fixtures write distinct out/ files; with the native runtime already built
 # (HAXEON_NATIVE_READY) they share no build tree, so they share runner slots too.

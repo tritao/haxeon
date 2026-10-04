@@ -27,13 +27,18 @@ class LoweredWorkspaceProject {
 
 	public final testInputs:Array<String>;
 
-	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true, ?testInputs:Array<String>) {
+	/** See `WorkspaceProject.shards`. */
+	public final shards:Int;
+
+	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true, ?testInputs:Array<String>,
+			shards:Int = 1) {
 		this.name = name;
 		this.project = project;
 		this.output = output;
 		this.actions = actions.copy();
 		this.cacheTests = cacheTests;
 		this.testInputs = testInputs == null ? [] : testInputs.copy();
+		this.shards = shards;
 	}
 }
 
@@ -89,7 +94,7 @@ class WorkspaceBuild {
 				ids.push(action.id);
 				raw++;
 			}
-			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids, member.cacheTests, member.testInputs));
+			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids, member.cacheTests, member.testInputs, member.shards));
 		}
 		return new LoweredWorkspace(environment, new ExecutionPlan([for (key in order) merged.get(key)]), lowered, raw, requestedBy);
 	}
@@ -98,6 +103,10 @@ class WorkspaceBuild {
 	 * Adds one `test:<name>` action per project. It runs the project's module once its compile action, and
 	 * through it the native libraries the module loads, has finished. Output goes to a per-project log so
 	 * concurrent tests do not interleave; a failing test prints the tail of its log.
+	 *
+	 * A project with `shards` of N runs its module N times, as `test:<name>#<I>of<N>` actions that share the one compile and
+	 * run side by side, each with `--shard I/N`. Each has its own log and its own cached result, so an edit that leaves a
+	 * shard's inputs unchanged does not rerun it.
 	 */
 	public static function withTests(workspace:LoweredWorkspace, home:String, useCache:Bool = true):ExecutionPlan {
 		if (Sys.systemName() == "Windows")
@@ -132,15 +141,20 @@ class WorkspaceBuild {
 			if (existing != null && existing.length > 0)
 				directories.push(existing);
 			var testsDirectory = Path.join([workspace.environment.buildRoot, "tests"]),
-				safeName = StringTools.replace(member.name, "/", "-"),
-				environment = [variable => directories.join(":")],
-				log = Path.join([testsDirectory, safeName + ".log"]),
-				stamp = Path.join([testsDirectory, safeName + ".passed"]), // The stamp exists only while the last run of this action passed; the executor skips the run
-			// when it exists and every input is unchanged since a passing run.
-				script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)} > ${quote(log)} 2>&1; status=$$?; '
-					+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
-			actions.push(new ExecutionAction(new ActionId("test:" + member.name), [compile], inputs, [stamp], 'Test ${member.name} (log: $log)',
-				Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
+				environment = [variable => directories.join(":")];
+			for (shard in 1...member.shards + 1) {
+				var sharded = member.shards > 1,
+					runName = sharded ? member.name + "#" + shard + "of" + member.shards : member.name,
+					safeName = StringTools.replace(runName, "/", "-"),
+					log = Path.join([testsDirectory, safeName + ".log"]),
+					stamp = Path.join([testsDirectory, safeName + ".passed"]), // The stamp exists only while the last run of this action passed; the executor skips the run
+				// when it exists and every input is unchanged since a passing run.
+					arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
+					script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
+						+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+				actions.push(new ExecutionAction(new ActionId("test:" + runName), [compile], inputs, [stamp], 'Test $runName (log: $log)',
+					Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
+			}
 		}
 		return new ExecutionPlan(actions);
 	}

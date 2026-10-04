@@ -304,4 +304,10 @@ The workspace file lists the member projects. Paths are relative to the file:
   libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
   cached. Set `"cache": false` for a suite that depends on the clock, the network, or a peer process, or pass
   `--no-test-cache` to run everything.
+- `"shards": N` splits a project's tests across N processes that run side by side from the one compiled module, so a suite
+  made of independent groups takes as long as its slowest shard. Each runs `main.hl --shard I/N` as its own
+  `test:<name>#<I>of<N>` action, with its own log and its own cached result. The program lists its groups with
+  `haxeon.test.Shards.run`, which gives every group to exactly one shard for any N (heavier groups first, each to the
+  lightest shard so far, from the groups' `weight`s) and runs them all when started without `--shard`. The groups must not
+  depend on each other. Shard counts do not change what runs, only how it is spread across the machine's cores.
 

@@ -26,12 +26,20 @@ class WorkspaceProject {
 	 */
 	public final testInputs:Array<String>;
 
-	public function new(name:String, manifestPath:String, tags:Array<String>, cacheTests:Bool = true, ?testInputs:Array<String>) {
+	/**
+	 * How many processes the project's tests are split across. Each runs the program with `--shard I/N` (see
+	 * `haxeon.test.Shards`), so a suite of independent groups takes as long as its slowest shard. One means the program runs
+	 * once, with no arguments.
+	 */
+	public final shards:Int;
+
+	public function new(name:String, manifestPath:String, tags:Array<String>, cacheTests:Bool = true, ?testInputs:Array<String>, shards:Int = 1) {
 		this.name = name;
 		this.manifestPath = manifestPath;
 		this.tags = tags.copy();
 		this.cacheTests = cacheTests;
 		this.testInputs = testInputs == null ? [] : testInputs.copy();
+		this.shards = shards;
 	}
 
 	public function hasTag(tag:String):Bool
@@ -83,9 +91,14 @@ class WorkspaceManifest {
 			seen.set(name, true);
 			var cache:Null<Bool> = Reflect.field(entry, "cache"),
 				inputs:Null<Array<String>> = Reflect.field(entry, "inputs"),
+				declaredShards:Null<Float> = Reflect.field(entry, "shards"),
 				projectDirectory = Path.directory(manifestPath);
+			// Read as a number, not an Int: a JSON 1.5 must be refused, not truncated to 1 on the way in.
+			if (declaredShards != null && (declaredShards != Math.floor(declaredShards) || declaredShards < 1))
+				throw 'Workspace project "$name": "shards" must be a whole number of at least 1';
 			projects.push(new WorkspaceProject(name, manifestPath, tags == null ? [] : tags, cache != false,
-				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([projectDirectory, input]))]));
+				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([projectDirectory, input]))],
+				declaredShards == null ? 1 : Std.int(declaredShards)));
 		}
 		return new WorkspaceManifest(absolute, root, Path.normalize(Path.join([root, buildDir == null ? "build/workspace" : buildDir])), projects);
 	}
