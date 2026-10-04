@@ -202,3 +202,10 @@ Nine alternating pairs on core 0, identical bytecode and load <=4 measured binar
 the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
 See [the full report](../../docs/JIT_INLINE_ALLOCATION.md) for validation, startup limitations and all six results.
 The cross-language table above was not regenerated.
+
+### Rejected integer-box allocation experiment
+
+A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
+LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
+no new switch or runtime change remains. See [the experiment report](../../docs/JIT_BOXED_ALLOCATION.md).
+The cross-language table above was not regenerated.

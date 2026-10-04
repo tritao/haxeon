@@ -65,3 +65,9 @@ repository baseline was `9333bb65`. Profiling runs are not load-qualified accept
 
 This step does not validate a new runtime feature. AArch64, Windows, 32-bit and GC_DEBUG/memcheck were not profiled.
 The compiler workload is one fresh compilation, not a long-lived worker memory-retention test.
+
+## Prototype outcome
+
+The integer-box prototype cleared the merkletrees gain gate (19.63%) but was dropped because repeated LRU
+comparisons regressed against the accepted runtime. The accepted fork is unchanged. See
+[JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md) for all six results, validation and remaining uncertainties.
