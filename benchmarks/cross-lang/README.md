@@ -148,3 +148,26 @@ Haxeon deliberately differs from stock Haxe here, so the sources were adapted
 (see `NOTICE.md`): value-returning functions and ordinary parameters need type
 annotations (signatures are part of live-patch classification), and arithmetic
 on a `Null<Int>` needs a null check.
+
+### Small-allocation entry and zeroing
+
+The x86-64 TLAB allocator now handles ready small-allocation slots through a thin entry and clears up to five
+words with explicit stores. Special modes share the original full allocator's eligibility policy.
+`HL_GC_ALLOC_FAST=0` restores the full entry and original zeroing loop. This changes the shared HashLink runtime;
+no new cross-language comparison is implied.
+
+Nine alternating pairs against a frozen unmodified library, identical bytecode, core 0, size-0 inputs and
+one-minute load <=4 gave:
+
+| Benchmark | Original (s) | Fast entry + clearing (s) | Improvement | Peak RSS change |
+|---|---:|---:|---:|---:|
+| binarytrees | 1.210434 | 1.097347 | +9.34% | +0.00% |
+| merkletrees | 0.499628 | 0.451617 | +9.61% | +0.00% |
+| nbody | 0.215978 | 0.216932 | -0.44% | +0.00% |
+| fasta | 0.455936 | 0.451276 | +1.02% | +0.00% |
+| spectral-norm | 0.181919 | 0.181254 | +0.37% | +0.00% |
+| lru | 0.090623 | 0.089936 | +0.76% | +0.00% |
+
+Both trees improved in all nine pairs. RSS was unchanged, and the sub-1% nbody difference is within noise.
+Full validation and the rejected intermediate variants are recorded in
+[GC_ALLOCATION_PROFILE.md](../../docs/GC_ALLOCATION_PROFILE.md).

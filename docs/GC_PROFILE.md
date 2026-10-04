@@ -120,3 +120,7 @@ zero. Counter logs are named `gc-perf-<switch>-<benchmark>-<mode>.log`. They are
 replacement for the paired timing gate. Raw counters, profiles, timings, rejected patch and test logs remain under
 `out/optimization-next/`; `gc-measure.json` includes every pair's loads and build hashes. The benchmark README
 retains its accepted numbers.
+
+The subsequent fixed-size allocation follow-up is recorded in
+[GC_ALLOCATION_PROFILE.md](GC_ALLOCATION_PROFILE.md). It profiles allocation dispatch and zeroing separately;
+its accepted change does not revive the rejected mark/sweep experiments above.
