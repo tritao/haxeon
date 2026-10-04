@@ -1,3 +1,4 @@
+import compiler.tools.CompilerRequest.PackageSourceRoot;
 import compiler.tools.SourceManifestLoader;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -22,6 +23,12 @@ class SourceManifestPathMain {
 		expect(SourceManifestLoader.projectPath("elsewhere/Other.hx", [root]), "elsewhere/Other.hx", "outside every root");
 		// A root that is only a prefix of a directory name is not that directory.
 		expect(SourceManifestLoader.projectPath("tests/programs-extra/x.hx", [root]), "tests/programs-extra/x.hx", "sibling with a shared prefix");
+		// A package root puts its files under the package, unless their path already starts with it, and wins over a plain root.
+		var packages:Array<PackageSourceRoot> = [{path: "tests/programs/pkg", packageName: "lib.util"}];
+		expect(SourceManifestLoader.projectPath("tests/programs/pkg/Util.hx", [root], packages), "lib/util/Util.hx", "package root adds its package");
+		expect(SourceManifestLoader.projectPath(cwd + "/tests/programs/pkg/lib/util/Util.hx", [root], packages), "lib/util/Util.hx",
+			"package root keeps a path already under the package");
+		expect(SourceManifestLoader.projectPath("tests/programs/add.hx", [root], packages), "add.hx", "file outside the package root");
 		Sys.println("PASS: source files resolve to their module under relative and absolute roots");
 	}
 }
