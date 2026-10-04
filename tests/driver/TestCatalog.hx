@@ -127,7 +127,12 @@ class TestCatalog {
 		"SharedEqualityHelperEditMain",
 		"CompilerSessionMain"
 	];
-	static final runtimeMains = ["RuntimeDomainMain", "GcAllocationPathsMain", "BytesAsciiMain"];
+	static final runtimeMains = [
+		"RuntimeDomainMain",
+		"GcAllocationPathsMain",
+		"GcEmptyPagesMain",
+		"BytesAsciiMain"
+	];
 
 	public static function namedCases():Array<NamedCase> {
 		var result = [];
