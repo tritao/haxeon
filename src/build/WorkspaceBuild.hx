@@ -100,8 +100,8 @@ class WorkspaceBuild {
 	}
 
 	/**
-	 * Adds one `test:<name>` action per project. It runs the project's module once its compile action, and
-	 * through it the native libraries the module loads, has finished. Output goes to a per-project log so
+	 * Adds one `test:<name>` action per project. It runs the project's module once everything built for it, the compile
+	 * and the native libraries the module loads, has finished. Output goes to a per-project log so
 	 * concurrent tests do not interleave; a failing test prints the tail of its log.
 	 *
 	 * A project with `shards` of N runs its module N times, as `test:<name>#<I>of<N>` actions that share the one compile and
@@ -152,7 +152,7 @@ class WorkspaceBuild {
 					arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
 					script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
 						+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
-				actions.push(new ExecutionAction(new ActionId("test:" + runName), [compile], inputs, [stamp], 'Test $runName (log: $log)',
+				actions.push(new ExecutionAction(new ActionId("test:" + runName), member.actions, inputs, [stamp], 'Test $runName (log: $log)',
 					Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
 			}
 		}
