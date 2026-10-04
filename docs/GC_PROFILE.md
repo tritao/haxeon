@@ -69,7 +69,7 @@ already small phase, so a bitmap comparison is unlikely to meet the 5% gate by i
 ceiling, especially on merkletrees. Allocation locality is the larger target; none of these phase shares substitutes
 for paired timings. Reproduction scripts, stack dumps, reports and `phases.json` are in the scratch directory.
 
-## Candidates
+## Candidates and rejected experiments
 
 - **Pointer-free scan skip is already implemented.** `GC_PUSH_GEN` checks `MEM_HAS_PTR(page->page_kind)` before
   enqueuing an object. `hl_alloc_obj` chooses `MEM_KIND_NOPTR` when `rt->hasPtr` is false. This optimization needs no
@@ -85,8 +85,9 @@ for paired timings. Reproduction scripts, stack dumps, reports and `phases.json`
 - **Empty bitmap comparison (`HL_GC_FAST_EMPTY=1`).** Compare an entire page bitmap with a static zero bitmap in one
   libc operation instead of repeated 256-byte comparisons. Finalizers still run before freeing pages.
 
-Every experimental switch is disabled by default and accepts exactly `1`. These are runtime choices, so compiler
-fingerprints do not change. No experiment may be retained merely because its implementation is small.
+The tested switches were independent, disabled by default and accepted exactly `1`. They were runtime choices,
+so compiler fingerprints did not change. All three experiments failed the performance gate and were removed;
+none of these switches exists in the resulting VM. Pointer-free scanning and contiguous TLAB runs remain unchanged.
 
 The 32-bit free-list cursor fix's static size assertion and refill/overrun fatal checks remain active during all
 experiments. The three GC fixtures passed x20 with all switches enabled, both at the default collection threshold
@@ -96,5 +97,26 @@ in total. These independent checks use the frozen measurement runtime, so combin
 
 ## Acceptance measurements
 
-Pending low-load paired measurements. Raw counters, sampled profiles, timings and test logs live under
-`out/optimization-next/` and are intentionally not committed.
+Core 0, nine alternating pairs per switch and benchmark, identical bytecode and frozen VM/runtime libraries.
+Other experimental switches were zero. Every pair's recorded one-minute load stayed at or below 4; pairs
+crossing that threshold were discarded. Positive improvement means faster; RSS compares median peak observations.
+
+| Switch | Benchmark | Off (s) | On (s) | Improvement | Peak RSS change |
+|---|---|---:|---:|---:|---:|
+| `HL_GC_MARK_PREFETCH` | binarytrees | 1.1901 | 1.1921 | -0.17% | -0.00% |
+| `HL_GC_MARK_PREFETCH` | merkletrees | 0.4874 | 0.4862 | +0.24% | -0.00% |
+| `HL_GC_ADDRESS_ORDER` | binarytrees | 1.2013 | 1.1989 | +0.20% | +0.01% |
+| `HL_GC_ADDRESS_ORDER` | merkletrees | 0.4909 | 0.4907 | +0.04% | -0.17% |
+| `HL_GC_FAST_EMPTY` | binarytrees | 1.2024 | 1.2040 | -0.13% | +0.00% |
+| `HL_GC_FAST_EMPTY` | merkletrees | 0.4909 | 0.4924 | -0.29% | +0.00% |
+
+None approached the required 5% gain. RSS stayed well inside the 5% limit, but that does not satisfy the speed
+gate. All three changes were reverted and no fork commit or submodule bump was made for them. Other-benchmark
+regression runs were not needed because no tree result passed the first gate. The existing allocator's contiguous
+runs and pointer-free scan skip were retained rather than duplicated.
+
+`perf stat -e instructions,cycles` also completed for each switch, each tree and both modes, with other switches
+zero. Counter logs are named `gc-perf-<switch>-<benchmark>-<mode>.log`. They are supporting diagnostics, not a
+replacement for the paired timing gate. Raw counters, profiles, timings, rejected patch and test logs remain under
+`out/optimization-next/`; `gc-measure.json` includes every pair's loads and build hashes. The benchmark README
+retains its accepted numbers.
