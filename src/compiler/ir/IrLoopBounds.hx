@@ -12,6 +12,7 @@ class IrLoopBounds {
 	final homes:Map<Int, Int> = [];
 	final pureCalls:Map<String, Bool>;
 	final hasHandlers:Bool;
+	final stableLoops:Map<Int, Bool> = [];
 
 	public function new(fn:IrFunction, pureCalls:Map<String, Bool>) {
 		this.pureCalls = pureCalls;
@@ -125,7 +126,7 @@ class IrLoopBounds {
 							switch definitions.get(condition.id) {
 								case Less(_, left, right) if (left.id == index.id):
 									switch definitions.get(right.id) {
-										case ArraySize(_, receiver) if (receiver.id == array.id): return true;
+										case ArraySize(_, receiver) if (receiver.id == array.id): return unchangedSince(right, id);
 										default:
 									}
 								default:
@@ -244,21 +245,58 @@ class IrLoopBounds {
 	}
 
 	function stable(loop:BoundsLoop):Bool {
+		if (stableLoops.exists(loop.header))
+			return stableLoops.get(loop.header);
+		var result = computeStable(loop);
+		stableLoops.set(loop.header, result);
+		return result;
+	}
+
+	function computeStable(loop:BoundsLoop):Bool {
 		for (id in graph.order)
 			if (loop.members.exists(id))
 				for (located in graph.block(id).instructions)
-					switch located.value {
-						case Call(_, name, _) if (pureCalls.exists(name)):
-						case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _), MemoryStore(_, _, _), ArraySet(_, _, _),
-							IteratorNew(_, _), IteratorNext(_, _), IteratorHasNext(_, _):
-							return false;
-						case FieldSet(receiver, _, _):
-							switch receiver.type {
-								case Obj(_):
-								default: return false;
-							}
-						default:
-					}
+					if (mayResize(located.value))
+						return false;
 		return true;
+	}
+
+	/** A captured length must also survive code between its definition and loop entry. */
+	function unchangedSince(length:IrValue, guardBlock:Int):Bool {
+		var home = homes.get(length.id);
+		if (home == null || !graph.dominates(home, guardBlock))
+			return false;
+		var seen:Map<Int, Bool> = [], pending:Array<Int> = [guardBlock];
+		while (pending.length > 0) {
+			var id = pending.pop();
+			if (id == null || seen.exists(id))
+				continue;
+			seen.set(id, true);
+			var after = id != home;
+			for (located in graph.block(id).instructions) {
+				if (after && mayResize(located.value))
+					return false;
+				var output = IrOperands.output(located.value);
+				if (output != null && output.id == length.id)
+					after = true;
+			}
+			if (id != home)
+				for (predecessor in graph.predecessors.get(id))
+					pending.push(predecessor);
+		}
+		return true;
+	}
+
+	function mayResize(instruction:IrInstruction):Bool {
+		return switch instruction {
+			case Call(_, name, _) if (pureCalls.exists(name)): false;
+			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _), MemoryStore(_, _, _), ArraySet(_, _, _),
+				IteratorNew(_, _), IteratorNext(_, _), IteratorHasNext(_, _), SafeCast(_, _), ToVirtual(_, _): true;
+			case FieldSet(receiver, _, _): switch receiver.type {
+					case Obj(_): false;
+					default: true;
+				};
+			default: false;
+		};
 	}
 }
