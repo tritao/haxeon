@@ -132,6 +132,7 @@ class TestCatalog {
 		"GcAllocationPathsMain",
 		"GcEmptyPagesMain",
 		"JitInlineAllocationMain",
+		"JitBoxedAllocationMain",
 		"BytesAsciiMain"
 	];
 
