@@ -1,5 +1,9 @@
 # Next optimization work
 
+Later measurements identify empty-page release/refaulting as a substantial tree-benchmark cost, superseding the
+earlier cache-miss hypothesis. See [bounded empty-page retention](GC_EMPTY_PAGE_RETENTION.md) for the accepted
+policy, timings and validation. The original experiments below remain historical evidence.
+
 Status at `f4471151`. Medians of 9 pinned runs (seconds): binarytrees 1.21 (C# 0.99, Dart 0.64), merkletrees 0.50
 (0.37, 0.27), fasta 0.47 (0.40, 0.25), nbody 0.215 (0.18, 0.21), spectral-norm 0.18 (0.17, 0.13), lru 0.09 (0.14, 0.12).
 Do the stages in order. Each stage ends in a measurement gate; if the gate fails, record the result in the docs and

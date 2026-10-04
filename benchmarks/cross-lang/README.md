@@ -181,3 +181,15 @@ the other five benchmarks changed by −0.33% to +1.08%, within noise, with peak
 because allocation callbacks and finalizers can mutate or invalidate the input.
 See [the measurement and validation report](../../docs/FASTA_OUTPUT_PROFILE.md). The cross-language table above was
 not regenerated.
+
+### Bounded empty-page retention
+
+The GC now keeps reusable empty pages up to a 64 MiB cap and four times the recent nonempty-page capacity,
+aging out old peaks over four collections. It is enabled by default on Linux x86-64; `HL_GC_KEEP_EMPTY=0`
+restores immediate release, and `HL_GC_EMPTY_BUDGET=<bytes>` changes the cap.
+
+Nine alternating pairs on core 0, identical bytecode, load <=4, measured binarytrees at 1.082926 → 0.810813 s
+(25.13% faster) and merkletrees at 0.448802 → 0.374593 s (16.53%). Their peak RSS was essentially unchanged.
+The other benchmarks had no regression beyond noise. Reduced page release/refaulting corrects the earlier
+cache-miss explanation. See [the full measurement and validation report](../../docs/GC_EMPTY_PAGE_RETENTION.md).
+The cross-language table above was not regenerated.

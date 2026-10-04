@@ -1,5 +1,9 @@
 # GC and allocation locality profile
 
+Later measurements identify empty-page release/refaulting as a substantial tree-benchmark cost, superseding the
+earlier cache-miss hypothesis. See [bounded empty-page retention](GC_EMPTY_PAGE_RETENTION.md) for the accepted
+policy, timings and validation. The original experiments below remain historical evidence.
+
 The Stage 4 gate is at least 5% on binarytrees or merkletrees, no regression beyond noise in the other benchmarks,
 and no increase above 5% in peak RSS. Experiments use identical bytecode, core 0, and nine alternating pairs;
 acceptance runs require one-minute load average <= 4 for every pair and discard pairs crossing that threshold. Diagnostic profiles below were collected on a busy machine
