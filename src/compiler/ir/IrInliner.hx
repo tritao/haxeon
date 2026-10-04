@@ -9,14 +9,16 @@ import compiler.ir.codec.IrFunctionStateCodec;
 /** An inlined function together with everything its result depended on. */
 class InlineMemo {
 	public final source:IrFunction;
-	public final fingerprint:String;
+
+	/** Which program-wide fingerprint (see `IrInlineCache.fingerprintId`) the result was inlined under. */
+	public final fingerprint:Int;
 
 	/** The pristine callee functions consulted, transitively; the result is valid only while all are unchanged. */
 	public final dependencies:Array<IrFunction>;
 
 	public final result:IrFunction;
 
-	public function new(source:IrFunction, fingerprint:String, dependencies:Array<IrFunction>, result:IrFunction) {
+	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, result:IrFunction) {
 		this.source = source;
 		this.fingerprint = fingerprint;
 		this.dependencies = dependencies;
@@ -33,7 +35,23 @@ class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
 
+	var lastFingerprint:Null<String> = null;
+	var lastFingerprintId = 0;
+
 	public function new() {}
+
+	/**
+	 * A number that names a program-wide fingerprint: the same while the fingerprint text is unchanged, a new one when it
+	 * changes. A memo entry is checked against it for every function of the program on every compile, which as a
+	 * comparison of the (large, freshly built) text cost a third of an incremental compile.
+	 */
+	public function fingerprintId(text:String):Int {
+		if (lastFingerprint == null || lastFingerprint != text) {
+			lastFingerprint = text;
+			lastFingerprintId++;
+		}
+		return lastFingerprintId;
+	}
 
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
@@ -41,6 +59,8 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
+		result.lastFingerprint = lastFingerprint;
+		result.lastFingerprintId = lastFingerprintId;
 		return result;
 	}
 }
@@ -85,7 +105,7 @@ class IrInliner {
 	final subclasses:Map<String, Array<String>> = [];
 
 	final cache:IrInlineCache;
-	final fingerprint:String;
+	final fingerprint:Int;
 	final nextMemo:Map<String, InlineMemo> = [];
 
 	/** One entry per function being inlined: the callee functions it has consulted so far. */
@@ -127,7 +147,7 @@ class IrInliner {
 				].join(","));
 		}
 		lines.sort(Reflect.compare);
-		fingerprint = lines.join(";");
+		fingerprint = cache.fingerprintId(lines.join(";"));
 	}
 
 	/**

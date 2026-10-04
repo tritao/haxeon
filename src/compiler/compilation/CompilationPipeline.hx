@@ -113,6 +113,7 @@ class CompilationPipeline {
 				counts.set(key, (counts.exists(key) ? counts.get(key) : 0) + 1);
 			}
 			Sys.stderr().writeString("invalidation: " + frontend.invalidations.length + " artifacts, retyped " + retyped.length + "\n");
+			Sys.stderr().writeString("  regenerated " + regenerated.length + ": " + regenerated.slice(0, 6) + "\n");
 			for (key => count in counts)
 				Sys.stderr().writeString("  " + count + " " + key + "\n");
 			for (artifact in frontend.invalidations.slice(0, 12))
