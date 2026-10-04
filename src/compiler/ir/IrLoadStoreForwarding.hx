@@ -7,7 +7,9 @@ import compiler.ir.SourceProvenance.Located;
 private typedef KnownField = {final object:Int; final field:String; final value:IrValue;}
 private typedef KnownElement = {final array:IrValue; final index:String; final value:IrValue;}
 
-/** Block-local reload elimination. Stores and the input function are never changed. */
+/** Block-local reload elimination. Stores and the input function are never changed.
+ * Runtime array-cast checks enforce concrete storage types; differently typed arrays cannot alias
+ * the same elements. Erased dynamic array accesses use calls, which invalidate all known loads. */
 class IrLoadStoreForwarding {
 	public static var enabled:Bool = Sys.getEnv("HAXEON_LOADSTORE") != "0";
 
