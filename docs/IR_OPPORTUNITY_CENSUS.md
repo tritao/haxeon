@@ -2,7 +2,7 @@
 
 Measured on the final post-inline IR with the defaults at `34a3582b` plus the corrected read-only census. Counts include emitted standard-library functions even when the benchmark does not call them. Each cell is static count / sum of `8^natural-loop-depth`. Recursion and caller loop frequency are not represented; these are opportunity counts, not a runtime profile.
 
-| Benchmark | Reads | Writes | Counted | Reloads | Conversions | Allocations | Local allocs | Invariant arithmetic | Const div/mod |
+| Benchmark | Reads | Writes | Counted | Reloads | Conversions | Allocations | Local allocs | Invariant computations | Const div/mod |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | binarytrees | 3/17 | 1/1 | 0/0 | 0/0 | 1/8 | 3/3 | 0/0 | 2/16 | 0/0 |
 | merkletrees | 3/17 | 1/1 | 0/0 | 0/0 | 2/72 | 3/3 | 0/0 | 2/16 | 0/0 |
@@ -55,8 +55,29 @@ Ranks sum the weighted categories, which overlap. Standard-library support funct
 - **Stage 4: proceed to runtime profiling.** Both tree benchmarks recursively allocate and traverse objects; the loop-weight proxy systematically understates this work. GC and locality are the material candidate.
 - The conversion category includes scalar int/float conversion as well as boxing and casts. Spectral-norm's 256 weight is arithmetic conversion, not dynamic boxing; it does not justify a boxing pass.
 - Repeated loads are a conservative, block-local lower bound. Any store or unknown code execution clears the diagnostic table. Zero does not exclude opportunities requiring alias analysis or cross-block reasoning.
-- Invariant arithmetic counts only computations whose immediate inputs are constants or defined outside a natural loop. It does not count transitively invariant chains or field loads without an immutability proof.
+- Invariant computations counts only computations whose immediate inputs are constants or defined outside a natural loop. It does not count transitively invariant chains or field loads without an immutability proof.
 - Allocations include `NewObject` and `__array_alloc_*` calls. Direct field/array-only uses qualify as local; casts, phis, calls, returns and publication reject them conservatively. Fasta's local allocation is a character-code array: the scalar replacement pass handles value-class objects, not arrays. Tree nodes escape via recursive returns and child fields; nbody bodies are published into an array, and LRU nodes into the cache. There is no supported value-class allocation left for scalar replacement.
 - Constants, remainder and division counts are opportunities, not safety proofs. Fasta's RNG modulo dominates the constant-div/mod category. General reciprocal division is inexact; this census does not authorize that rewrite.
 
 Enable with `HAXEON_IR_CENSUS=1`. Lines prefixed `IR_CENSUS` contain JSON arrays in the label order carried by the TOTAL line. The diagnostic runs after the final functions are published, including cache hits and `HAXEON_INLINE=0`; it does not affect fingerprints or mutate IR.
+
+## Allocation explanations
+
+Each per-function JSON row now carries an `allocations` array: output value ID, type, whether locality is proven,
+and why scalar replacement leaves it in place. The first unsupported use is reported in instruction order; a call
+or phi is a conservative failure to prove locality, rather than proof that the allocation escapes. The actual
+per-compiler inlining choice is used when explaining disabled scalar replacement. All six totals and ranks above
+remain unchanged, and every benchmark allocation has an explanation.
+
+| Benchmark functions | Remaining allocations | Explanation |
+|---|---|---|
+| binarytrees / merkletrees `App.make` | Two `Node` sites each | Ordinary heap objects; returned from recursive construction. |
+| fasta `Fasta.randomFasta` | Local character-code Int array | Arrays are outside the value-class scalar replacement pass. |
+| fasta constructor / `makeCumulative` / `App.main` | Probability arrays and Fasta instance | Published in fields or passed to calls; ordinary arrays/objects are unsupported. |
+| nbody `App.main` | Body records and their array | Passed to runtime array operations / dynamic conversion; ordinary objects and arrays. |
+| spectral-norm `App.main` / `eval_AtA_times_u` | Float arrays | Passed to matrix-vector calls; arrays are not scalar-replacement candidates. |
+| lru main / constructors / insertion | Generators, cache, list and nodes | Method calls, field publication or dynamic conversion; ordinary objects. |
+
+`OpportunityCensusMain` checks these explanations, fresh constant fields, determinism and unchanged IR bytes.
+The constant divisor category now tests actual finite powers of two, including subnormals and powers whose
+reciprocal is not eligible for strength reduction. NaN, infinity and non-powers are not misclassified as powers.

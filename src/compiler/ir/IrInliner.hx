@@ -158,7 +158,7 @@ class IrInliner {
 			published.set(fn.name, result);
 		}
 		program.functions = functions;
-		IrOpportunityCensus.report(program);
+		IrOpportunityCensus.report(program, inliner.allowInline);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
 		return changed;

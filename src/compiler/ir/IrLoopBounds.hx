@@ -82,6 +82,9 @@ class IrLoopBounds {
 		return result;
 	}
 
+	public function dominates(a:Int, b:Int):Bool
+		return graph.dominates(a, b);
+
 	public function definition(value:Int):Null<IrInstruction>
 		return definitions.get(value);
 

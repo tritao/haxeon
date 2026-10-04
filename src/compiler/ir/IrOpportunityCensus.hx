@@ -2,7 +2,8 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-private typedef CensusRow = {final name:String; final counts:Array<Int>; final weighted:Array<Float>;}
+private typedef CensusAllocation = {final value:Int; final type:String; final local:Bool; final reason:String;}
+private typedef CensusRow = {final name:String; final counts:Array<Int>; final weighted:Array<Float>; final allocations:Array<CensusAllocation>;}
 
 /** Read-only post-pass census. Weights are static 8^natural-loop-depth, not measured execution counts. */
 class IrOpportunityCensus {
@@ -14,19 +15,23 @@ class IrOpportunityCensus {
 		"loopConversions",
 		"allocations",
 		"localAllocations",
-		"loopInvariantArithmetic",
+		"loopInvariantComputations",
 		"constantDivMod"
 	];
 
-	public static function report(program:IrProgram):Void {
+	public static function report(program:IrProgram, ?allowInline:Bool):Void {
 		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1")
 			return;
 		var rows:Array<CensusRow> = [],
 			totals:Array<Int> = [for (_ in labels) 0],
 			weights:Array<Float> = [for (_ in labels) 0.0];
-		var pureCalls = IrLoopBounds.pureNativeCalls(program.natives);
+		var pureCalls = IrLoopBounds.pureNativeCalls(program.natives),
+			objects:Map<String, IrObject> = [];
+		for (object in program.objects)
+			objects.set(object.name, object);
+		var inlineMode = allowInline == null ? IrInliner.enabled : allowInline;
 		for (fn in program.functions) {
-			var row = inspect(fn, pureCalls);
+			var row = inspect(fn, pureCalls, objects, inlineMode);
 			rows.push(row);
 			for (i in 0...labels.length) {
 				totals[i] += row.counts[i];
@@ -44,8 +49,9 @@ class IrOpportunityCensus {
 		}) + "\n");
 	}
 
-	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>):CensusRow {
-		var bounds = new IrLoopBounds(fn, pureCalls);
+	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool):CensusRow {
+		var bounds = new IrLoopBounds(fn, pureCalls),
+			allocations:Array<CensusAllocation> = [];
 		var counts:Array<Int> = [for (_ in labels) 0],
 			weighted:Array<Float> = [for (_ in labels) 0.0];
 		for (block in fn.blocks) {
@@ -73,13 +79,16 @@ class IrOpportunityCensus {
 						count(5);
 						if (localUses(fn, out))
 							count(6);
+						allocations.push(allocationInfo(fn, out, objects, allowInline));
 					case Call(out, name, _) if (StringTools.startsWith(name, "__array_alloc_")):
 						count(5);
 						if (localUses(fn, out))
 							count(6);
+						allocations.push(allocationInfo(fn, out, objects, allowInline));
 					default:
 				}
-				if (pureArithmetic(instruction) && bounds.invariantInputs(instruction, block.id))
+				if ((pureArithmetic(instruction) && bounds.invariantInputs(instruction, block.id))
+					|| constantField(fn, bounds, instruction, block.id, pureCalls))
 					count(7);
 				switch instruction {
 					case Div(_, _, divisor), Mod(_, _, divisor):
@@ -88,7 +97,7 @@ class IrOpportunityCensus {
 							case ConstFloat(_, n): n;
 							default: null;
 						};
-						if (value != null && value != 0 && !IrStrengthReduction.exactNormalReciprocal(value))
+						if (value != null && value != 0 && !isPowerOfTwo(value))
 							count(8);
 					default:
 				}
@@ -111,7 +120,12 @@ class IrOpportunityCensus {
 				}
 			}
 		}
-		return {name: fn.name, counts: counts, weighted: weighted};
+		return {
+			name: fn.name,
+			counts: counts,
+			weighted: weighted,
+			allocations: allocations
+		};
 	}
 
 	static function pureArithmetic(instruction:IrInstruction):Bool {
@@ -122,15 +136,117 @@ class IrOpportunityCensus {
 		};
 	}
 
-	/** Only direct field/element uses qualify. Phi, cast, argument, return and storing into another object escape. */
-	static function localUses(fn:IrFunction, value:IrValue):Bool {
+	/** Finite normal and subnormal powers, regardless of reciprocal eligibility. */
+	static function isPowerOfTwo(value:Float):Bool {
+		var bits = haxe.io.Bytes.alloc(8);
+		bits.setDouble(0, value);
+		var rawHigh = bits.getInt32(4), low = bits.getInt32(0);
+		var exponent = (rawHigh >>> 20) & 2047, high = rawHigh & 1048575;
+		if (exponent == 2047)
+			return false;
+		if (exponent != 0)
+			return high == 0 && low == 0;
+		return high != 0 ? low == 0 && (high & (high - 1)) == 0 : low != 0 && (low & (low - 1)) == 0;
+	}
+
+	/** Count only a constant scalar field of a fresh, unpublished object, initialized outside every loop. */
+	static function constantField(fn:IrFunction, bounds:IrLoopBounds, instruction:IrInstruction, at:Int, pureCalls:Map<String, Bool>):Bool {
+		if (bounds.depth(at) == 0)
+			return false;
+		var receiver:IrValue, field:String;
+		switch instruction {
+			case FieldGet(output, object, name):
+				switch output.type {
+					case I32, F64, Bool:
+					default: return false;
+				}
+				receiver = object;
+				field = name;
+			default:
+				return false;
+		}
+		switch bounds.definition(receiver.id) {
+			case NewObject(_, _):
+			default:
+				return false;
+		}
+		if (!localUses(fn, receiver))
+			return false;
+		var writes = 0, initialized:Null<Int> = null;
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case FieldSet(object, name, value) if (object.id == receiver.id && name == field):
+						writes++;
+						switch bounds.definition(value.id) {
+							case ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstString(_, _): initialized = block.id;
+							default: return false;
+						}
+					case Call(_, name, _) if (pureCalls.exists(name)):
+					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _), CallClosure(_, _, _), MemoryStore(_, _, _), BeginTry(_, _), EndTry(_),
+						Catch(_):
+						return false;
+					default:
+				}
+		return writes == 1 && initialized != null && bounds.depth(initialized) == 0 && bounds.dominates(initialized, at);
+	}
+
+	static function allocationInfo(fn:IrFunction, value:IrValue, objects:Map<String, IrObject>, allowInline:Bool):CensusAllocation {
+		var escape = localUseFailure(fn, value), local = escape == null;
+		var kind = switch value.type {
+			case Array(_): "arrays are not scalar-replacement candidates";
+			case Obj(name):
+				var object = objects.get(name);
+				if (object == null) "object layout unavailable"; else if (!object.isValue) "ordinary heap objects are not scalar-replacement candidates"; else
+					if (!allowInline) "scalar replacement does not run with inlining disabled"; else {
+					var nested = false, handlers = false;
+					for (field in object.fields)
+						switch field.type {
+							case Obj(child) if (objects.exists(child) && objects.get(child).isValue): nested = true;
+							default:
+						}
+					for (block in fn.blocks)
+						for (located in block.instructions)
+							switch located.value {
+								case BeginTry(_, _), EndTry(_), Catch(_): handlers = true;
+								default:
+							}
+					if (nested)
+						"inline value-class fields prevent scalar replacement";
+					else if (!local)
+						"non-field use prevents scalar replacement";
+					else if (handlers)
+						"handler regions restrict scalar replacement to single-block objects";
+					else
+						"remaining value-class candidate requires inspection";
+				}
+			default: "unsupported allocation type";
+		};
+		return {
+			value: value.id,
+			type: Std.string(value.type),
+			local: local,
+			reason: kind + (escape == null ? "" : "; locality not proven: " + escape)
+		};
+	}
+
+	static function constructorName(value:String):String {
+		var end = value.indexOf("(");
+		return end < 0 ? value : value.substr(0, end);
+	}
+
+	static function localUses(fn:IrFunction, value:IrValue):Bool
+		return localUseFailure(fn, value) == null;
+
+	/** Direct field/element uses remain local; report the first unsupported use in instruction order. */
+	static function localUseFailure(fn:IrFunction, value:IrValue):Null<String> {
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				switch located.value {
 					case Phi(_, inputs):
 						for (input in inputs)
 							if (input.value.id == value.id)
-								return false;
+								return "phi alias";
 					default:
 				}
 				for (input in IrOperands.inputs(located.value))
@@ -142,16 +258,16 @@ class IrOpportunityCensus {
 							case ArraySet(array, index, stored) if (array.id == value.id && index.id != value.id && stored.id != value.id):
 							case ArraySize(_, array) if (array.id == value.id):
 							default:
-								return false;
+								return constructorName(Std.string(located.value));
 						}
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
 					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _) if (v.id == value.id):
-						return false;
+						return constructorName(Std.string(block.terminator.value));
 					default:
 				}
 		}
-		return true;
+		return null;
 	}
 }

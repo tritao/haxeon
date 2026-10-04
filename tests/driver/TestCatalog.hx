@@ -38,6 +38,7 @@ class TestCatalog {
 		"StrengthReductionMain",
 		"InlineConfigurationMain",
 		"LoopBoundsMain",
+		"OpportunityCensusMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",
