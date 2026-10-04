@@ -171,3 +171,13 @@ one-minute load <=4 gave:
 Both trees improved in all nine pairs. RSS was unchanged, and the sub-1% nbody difference is within noise.
 Full validation and the rejected intermediate variants are recorded in
 [GC_ALLOCATION_PROFILE.md](../../docs/GC_ALLOCATION_PROFILE.md).
+
+### Short ASCII byte decoding
+
+The native Bytes-to-String decoder now widens ASCII ranges of at most 128 bytes directly from a stack snapshot taken
+before allocating the String. Unicode and larger ranges keep the existing decoder. `HL_TEXT_ASCII=0` restores the
+original path. Nine alternating pairs on core 0 measured fasta at 0.454398s before and 0.438277s after (3.55% faster);
+the other five benchmarks changed by −0.33% to +1.08%, within noise, with peak RSS level. The snapshot is required
+because allocation callbacks and finalizers can mutate or invalidate the input.
+See [the measurement and validation report](../../docs/FASTA_OUTPUT_PROFILE.md). The cross-language table above was
+not regenerated.
