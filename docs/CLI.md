@@ -299,6 +299,11 @@ The workspace file lists the member projects. Paths are relative to the file:
   jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
   oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the
   platform's default CMake generator.
+- Native compiles of CMake packages go through ccache when it is on `PATH` (`HAXEON_CCACHE=0` turns that off). The project root
+  is given to ccache as its base directory, so the same sources built in another checkout or worktree are served from the cache
+  instead of recompiled: a cold build of the Materia app in a second worktree got 567 of its 568 compiles from it. Configure
+  and link steps, and the Haxe compile, are not cached. Size the cache (`max_size` in ccache's configuration) for the objects of
+  every checkout you build, since entries beyond it are evicted.
 - `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
   is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
   libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never

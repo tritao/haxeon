@@ -56,4 +56,19 @@ rm "$project_dir/app/build/host/native/foo/foo.hdll"
 run_cli build --project "$project_dir/app/haxeon.json"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 
+# Native compiles go through ccache when it is installed, keyed by paths relative to the project root, and not with HAXEON_CCACHE=0.
+cache_of() {
+	grep -h '^CMAKE_CXX_COMPILER_LAUNCHER:' "$(find "$1" -name CMakeCache.txt -path '*foo*' | head -1)" || true
+}
+if command -v ccache >/dev/null 2>&1; then
+	[[ "$(cache_of "$project_dir/app/build")" == *ccache* ]]
+fi
+off_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cmake-no-ccache.XXXXXX")
+trap 'rm -rf -- "$project_dir" "$off_dir"' EXIT
+cp -r "$project_dir/app" "$project_dir/foo" "$off_dir/"
+rm -rf "$off_dir/app/build"
+HAXEON_CCACHE=0 run_cli build --project "$off_dir/app/haxeon.json"
+test -s "$off_dir/app/build/host/native/foo/foo.hdll"
+[[ -z "$(cache_of "$off_dir/app/build")" ]]
+
 echo "PASS: CMake native provider configures and builds a coarse package target"
