@@ -299,12 +299,16 @@ The workspace file lists the member projects. Paths are relative to the file:
   jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
   oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the
   platform's default CMake generator.
-- Native compiles of CMake packages go through ccache when it is on `PATH` (`HAXEON_CCACHE=0` turns that off). The project root
-  is given to ccache as its base directory, so the same sources built in another checkout or worktree are served from the cache
-  instead of recompiled: a cold build of the Materia app in a second worktree got 567 of its 568 compiles from it. Configure
-  and link steps, and the Haxe compile, are not cached. ccache runs in depend mode, which also caches sources whose preprocessed
-  output names files that do not exist (HarfBuzz's Ragel-generated parsers). Size the cache (`max_size` in ccache's configuration) for the objects of
-  every checkout you build, since entries beyond it are evicted.
+- Native compiles of CMake packages go through ccache when it is on `PATH` (`HAXEON_CCACHE=0` turns that off). The directory the
+  project root and the package's CMake sources share (the checkout, when they are kits of one repository) is given to ccache as
+  its base directory, so the same sources built in another checkout or worktree are served from the cache instead of
+  recompiled: a cold build of the Materia app in a second worktree gets every compile from it. ccache runs in depend mode,
+  which also caches sources whose preprocessed output names files that do not exist (HarfBuzz's Ragel-generated parsers).
+  Configure and link steps, and the Haxe compile, are not cached. Size the cache (`max_size` in ccache's configuration) for
+  the objects of every checkout you build, since entries beyond it are evicted.
+- A project's Haxe compile and its native libraries build side by side: the compiler reads only the FFI interfaces a module
+  imports, so its action waits for those and not for the libraries, which are loaded when the module runs. Whatever runs the
+  module (`test`) waits for everything built for its project.
 - `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
   is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
   libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
