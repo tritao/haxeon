@@ -12,6 +12,10 @@ import sys.FileSystem;
  * directory itself out of the key. A checkout in another place then reuses the objects of the first (a cold build of the app:
  * 568 compiles, 567 from the cache). Paths outside it, such as a prebuilt OpenCASCADE, stay absolute, which is right as they
  * are shared. The project's own directory is not enough: the app's native sources are in sibling kits.
+ *
+ * `CCACHE_DEPEND` has ccache take the files a compile reads from the compiler's dependency output rather than from the
+ * preprocessed source. Otherwise a source whose preprocessed output names a file that is not there (HarfBuzz's generated
+ * parsers carry `#line` markers for their Ragel grammars) is never cached, and its 11 s compile is repeated every build.
  */
 class NativeCompilerCache {
 	/** The ccache executable to launch compilers through, or null when it is turned off or not installed. */
@@ -48,6 +52,7 @@ class NativeCompilerCache {
 		if (ccache != null) {
 			result.set("CCACHE_BASEDIR", commonDirectory(projectRoot, source));
 			result.set("CCACHE_NOHASHDIR", "1");
+			result.set("CCACHE_DEPEND", "1");
 		}
 		return result;
 	}

@@ -302,7 +302,8 @@ The workspace file lists the member projects. Paths are relative to the file:
 - Native compiles of CMake packages go through ccache when it is on `PATH` (`HAXEON_CCACHE=0` turns that off). The project root
   is given to ccache as its base directory, so the same sources built in another checkout or worktree are served from the cache
   instead of recompiled: a cold build of the Materia app in a second worktree got 567 of its 568 compiles from it. Configure
-  and link steps, and the Haxe compile, are not cached. Size the cache (`max_size` in ccache's configuration) for the objects of
+  and link steps, and the Haxe compile, are not cached. ccache runs in depend mode, which also caches sources whose preprocessed
+  output names files that do not exist (HarfBuzz's Ragel-generated parsers). Size the cache (`max_size` in ccache's configuration) for the objects of
   every checkout you build, since entries beyond it are evicted.
 - `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
   is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
