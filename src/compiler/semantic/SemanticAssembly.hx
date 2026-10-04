@@ -26,6 +26,10 @@ typedef SemanticAssemblyResult = {
 	final selected:Map<String, Bool>;
 	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
+
+	/** The purity and no-return answers the invalidation was decided against, for the typer to use as they are. */
+	final facts:ProgramFacts;
+
 	final aliasSetupMs:Float;
 	final canonicalizationMs:Float;
 	final contributionReuseMs:Float;
@@ -523,10 +527,6 @@ class SemanticAssembly {
 			for (caller => record in dependencyState.purityQueries)
 				for (callee => wasPure in record)
 					if ((freshInferredPure.exists(callee) || isAnnotatedPure(callee)) != wasPure) {
-						if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null && !purityDrifted.exists(purityDependencyOwner(caller)))
-							Sys.stderr()
-								.writeString("  drift: " + caller + " asked about " + callee + " was=" + wasPure + " inferred="
-									+ freshInferredPure.exists(callee) + " annotated=" + isAnnotatedPure(callee) + "\n");
 						purityDrifted.set(purityDependencyOwner(caller), true);
 						break;
 					}
@@ -757,6 +757,10 @@ class SemanticAssembly {
 			selected: selected,
 			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint,
+			facts: {
+				pure: freshInferredPure,
+				noReturn: freshNoReturn
+			},
 			aliasSetupMs: aliasesPreparedAt - startedAt,
 			canonicalizationMs: canonicalizedAt - aliasesPreparedAt,
 			contributionReuseMs: contributionReuseMs,

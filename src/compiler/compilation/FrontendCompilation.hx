@@ -156,7 +156,7 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null);
+				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts);
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);

@@ -172,6 +172,12 @@ class TypingSession {
 		return true;
 	}
 
+	/** Takes the pure functions as already inferred, over the program this session types. */
+	public function usePureFunctions(known:Map<String, Bool>):Void {
+		localPurity = null;
+		inferredPureFunctions = known;
+	}
+
 	public function inferPureFunctions():Void {
 		localPurity = null;
 		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls, declarations.abstracts, enumDecls, isDeclaredPure,

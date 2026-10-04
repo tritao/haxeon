@@ -59,6 +59,28 @@ import compiler.Compiler.CompileResult;
 
 /** Executes the mutable frontend, IR, ABI-planning, and backend candidate phases. */
 class CompilationPipeline {
+	/**
+	 * Writes why an incremental compile redid its work to the compiler's standard error (the worker's log): how many artifacts
+	 * each kind of invalidation selected, a sample of them, and how many functions were retyped and regenerated. An edit that
+	 * retypes far more than it should shows up here as one kind of invalidation with a large count. Enabled by
+	 * `HAXEON_EXPLAIN_INVALIDATION`; see docs/PROFILING.md.
+	 */
+	static function explainInvalidation(invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>, retyped:Array<String>,
+			regenerated:Array<String>):Void {
+		var counts:Map<String, Int> = [];
+		for (artifact in invalidations) {
+			var reason = artifact.reasons[0],
+				key = Std.string(reason.kind) + (reason.via == null ? "" : " via " + reason.via);
+			counts.set(key, (counts.exists(key) ? counts.get(key) : 0) + 1);
+		}
+		Sys.stderr().writeString("invalidation: " + invalidations.length + " artifacts, retyped " + retyped.length + "\n");
+		Sys.stderr().writeString("  regenerated " + regenerated.length + ": " + regenerated.slice(0, 6) + "\n");
+		for (key => count in counts)
+			Sys.stderr().writeString("  " + count + " " + key + "\n");
+		for (artifact in invalidations.slice(0, 12))
+			Sys.stderr().writeString("  e.g. " + artifact.artifact + " <- " + artifact.reasons[0].kind + " " + artifact.reasons[0].cause + "\n");
+	}
+
 	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			transactionStartedAt:Float, snapshotDoneAt:Float, frontendStartedAt:Float, ?indexSemantics = true):CompileResult {
 		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true, indexSemantics);
@@ -105,20 +127,8 @@ class CompilationPipeline {
 		var invalidationReasonCount = 0;
 		for (artifact in frontend.invalidations)
 			invalidationReasonCount += artifact.reasons.length;
-		if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null) {
-			var counts:Map<String, Int> = [];
-			for (artifact in frontend.invalidations) {
-				var reason = artifact.reasons[0],
-					key = Std.string(reason.kind) + (reason.via == null ? "" : " via " + reason.via);
-				counts.set(key, (counts.exists(key) ? counts.get(key) : 0) + 1);
-			}
-			Sys.stderr().writeString("invalidation: " + frontend.invalidations.length + " artifacts, retyped " + retyped.length + "\n");
-			Sys.stderr().writeString("  regenerated " + regenerated.length + ": " + regenerated.slice(0, 6) + "\n");
-			for (key => count in counts)
-				Sys.stderr().writeString("  " + count + " " + key + "\n");
-			for (artifact in frontend.invalidations.slice(0, 12))
-				Sys.stderr().writeString("  e.g. " + artifact.artifact + " <- " + artifact.reasons[0].kind + " " + artifact.reasons[0].cause + "\n");
-		}
+		if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null)
+			explainInvalidation(frontend.invalidations, retyped, regenerated);
 		var allocationPhases = frontend.allocationPhases.concat(backend.allocationPhases);
 		allocationPhases.push(AllocationMeter.delta("finalize", allocationBeforeFinalize, AllocationMeter.sample()));
 		return {

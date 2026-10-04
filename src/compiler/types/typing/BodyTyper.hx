@@ -160,6 +160,11 @@ class BodyTyper {
 	/** Delegates to the free-standing analysis so the same inference can also run, on plain
 	 * canonical signatures, before typing to detect a purity/no-return answer that drifted.
 	 */
+	function useNoReturnFunctions(known:Map<String, Bool>):Void {
+		for (name in known.keys())
+			session.noReturnFunctions.set(name, true);
+	}
+
 	function inferNoReturnFunctions():Void {
 		var overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
 		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, session.classDecls, overridden).keys())
