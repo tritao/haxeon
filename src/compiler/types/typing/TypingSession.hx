@@ -235,7 +235,7 @@ class TypingSession {
 	}
 
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):TypingContext {
-		var owner = ownerOverride != null ? ownerOverride : StringTools.startsWith(name, "$lambda:") ? currentContext.lexicalOwner : parentPath(name),
+		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name) ? currentContext.lexicalOwner : parentPath(name),
 			body = new TypingContext(name, typeSubstitutions, owner);
 		bodyContexts.push(body);
 		return body;

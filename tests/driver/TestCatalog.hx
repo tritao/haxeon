@@ -46,6 +46,7 @@ class TestCatalog {
 		"SemanticDependencyCollectorMain",
 		"ResolvedSemanticDependencyMain",
 		"InvalidationMain",
+		"LambdaNameMain",
 		"IrProgramAssemblerMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",

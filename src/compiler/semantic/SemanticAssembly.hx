@@ -819,12 +819,7 @@ class SemanticAssembly {
 	 * Lambda names read `$lambda:<enclosing>:<id>`, and the enclosing name can itself be a generic specialization.
 	 */
 	static function enclosingFunction(name:String):String {
-		while (StringTools.startsWith(name, "$lambda:")) {
-			var end = name.lastIndexOf(":");
-			if (end <= 8)
-				break;
-			name = name.substring(8, end);
-		}
+		name = LambdaName.outermost(name);
 		if (StringTools.startsWith(name, "$generic:")) {
 			var bracket = name.indexOf("[", 9);
 			if (bracket > 0)
@@ -895,14 +890,8 @@ class SemanticAssembly {
 	 * closure is its own `$lambda:origin:offset` name. Only the top-level function is ever
 	 * independently retyped, so walk back through any lambda nesting to find it.
 	 */
-	static function purityDependencyOwner(name:String):String {
-		var owner = name;
-		while (StringTools.startsWith(owner, "$lambda:")) {
-			var lastColon = owner.lastIndexOf(":");
-			owner = owner.substring("$lambda:".length, lastColon);
-		}
-		return owner;
-	}
+	static function purityDependencyOwner(name:String):String
+		return LambdaName.outermost(name);
 
 	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */
 	static function dependencyCalls(state:ModuleState, rollbackModules:Map<String, ModuleState>, owner:String, fallback:Array<String>):Array<String> {

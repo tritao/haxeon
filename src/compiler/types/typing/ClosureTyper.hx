@@ -167,7 +167,7 @@ class ClosureTyper {
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
-		var lambdaName = '$' + 'lambda:${outerContext.name}:${span.start}',
+		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, span.start),
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
