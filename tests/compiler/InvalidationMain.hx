@@ -1,5 +1,6 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
+import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 
@@ -39,6 +40,20 @@ class InvalidationMain {
 		for (artifact in recovered.invalidations)
 			for (reason in artifact.reasons)
 				expect(reason.cause.indexOf("broken") < 0, "failed candidate leaked an invalidation reason");
+
+		// An edit that changes no meaning retypes nothing. Purity is inferred twice: over the signature table typing resolves
+		// calls against, and by the drift check that compares a cached body's answers with a fresh inference. Inferred over
+		// a different table, the second called functions pure that the first did not (`MessagePackReader.readFloat` among
+		// them), so cached bodies looked drifted on every edit.
+		var wire = new Compiler();
+		CompilerIntrinsics.register(wire);
+		wire.addSourceRoot("stdlib");
+		var wireSource = sys.io.File.getContent("tests/programs/messagepack-wire.hx");
+		wire.update("messagepack-wire.hx", wireSource);
+		wire.compile("messagepack-wire");
+		wire.update("messagepack-wire.hx", wireSource + "\n// a comment\n");
+		var commented = wire.compile("messagepack-wire");
+		expect(commented.retyped.length == 0, "a comment-only edit retyped " + commented.retyped);
 
 		Sys.println("PASS: structured invalidation reasons");
 	}

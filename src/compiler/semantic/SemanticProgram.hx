@@ -1,6 +1,9 @@
 package compiler.semantic;
 
+import compiler.syntax.Ast.AstAbstract;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstProgram;
 import compiler.types.DeclarationIndex;
 import compiler.types.SignatureInference;
@@ -204,26 +207,45 @@ class SemanticProgram {
 		}
 		signatures = [];
 		methodInfo = [];
-		for (decl in program.interfaces)
+		fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures, methodInfo);
+	}
+
+	/**
+	 * The table of function signatures typing resolves calls against: interface, class and abstract methods under their
+	 * qualified names, then the program's functions. Purity inference runs over it at typing time, and the drift check of
+	 * `SemanticAssembly` must run over the same table to agree with what a cached body relied on.
+	 */
+	public static function signatureTable(program:AstProgram):Map<String, AstFunction> {
+		var signatures:Map<String, AstFunction> = [];
+		fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures, null);
+		return signatures;
+	}
+
+	public static function fillSignatures(interfaces:Array<AstInterface>, classes:Array<AstClass>, abstracts:Array<AstAbstract>, functions:Array<AstFunction>,
+			signatures:Map<String, AstFunction>, methodInfo:Null<Map<String, SemanticMethodInfo>>):Void {
+		for (decl in interfaces)
 			for (method in decl.methods) {
 				var name = decl.name + "." + method.name;
 				signatures.set(name, method);
-				methodInfo.set(name, {owner: decl.name, isStatic: false, isConstructor: false});
+				if (methodInfo != null)
+					methodInfo.set(name, {owner: decl.name, isStatic: false, isConstructor: false});
 			}
-		for (decl in program.classes)
+		for (decl in classes)
 			for (method in decl.methods) {
 				var name = decl.name + "." + method.name;
 				signatures.set(name, method);
-				methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+				if (methodInfo != null)
+					methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
 			}
-		for (decl in program.abstracts)
+		for (decl in abstracts)
 			for (method in decl.methods) {
 				var name = decl.name + "." + method.name,
 					signature = withOwnerTypeParameters(method, decl.typeParameters);
 				signatures.set(name, signature);
-				methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+				if (methodInfo != null)
+					methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
 			}
-		for (fn in program.functions)
+		for (fn in functions)
 			signatures.set(fn.name, fn);
 	}
 

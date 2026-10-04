@@ -500,7 +500,10 @@ class SemanticAssembly {
 		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> = [for (enumDecl in enums) enumDecl.name => enumDecl];
 		var purityScopeEnumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [for (decl in enumAbstracts) decl.name => decl];
 		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [for (decl in abstracts) decl.name => decl];
-		var purityScopeSignatures:Map<String, AstFunction> = [for (fn in functions) fn.name => fn];
+		// The typer's own signature table: purity inferred over any other scope can disagree with what typing relied on, and
+		// every cached body then looks drifted on every edit.
+		var purityScopeSignatures:Map<String, AstFunction> = [];
+		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
 		var isAnnotatedPure = function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
 			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures, purityScopeClasses);
 		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations.isTypeName(candidate, purityScopeClasses,
@@ -517,6 +520,10 @@ class SemanticAssembly {
 			for (caller => record in dependencyState.purityQueries)
 				for (callee => wasPure in record)
 					if ((freshInferredPure.exists(callee) || isAnnotatedPure(callee)) != wasPure) {
+						if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null && !purityDrifted.exists(purityDependencyOwner(caller)))
+							Sys.stderr()
+								.writeString("  drift: " + caller + " asked about " + callee + " was=" + wasPure + " inferred="
+									+ freshInferredPure.exists(callee) + " annotated=" + isAnnotatedPure(callee) + "\n");
 						purityDrifted.set(purityDependencyOwner(caller), true);
 						break;
 					}

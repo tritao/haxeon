@@ -105,6 +105,19 @@ class CompilationPipeline {
 		var invalidationReasonCount = 0;
 		for (artifact in frontend.invalidations)
 			invalidationReasonCount += artifact.reasons.length;
+		if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null) {
+			var counts:Map<String, Int> = [];
+			for (artifact in frontend.invalidations) {
+				var reason = artifact.reasons[0],
+					key = Std.string(reason.kind) + (reason.via == null ? "" : " via " + reason.via);
+				counts.set(key, (counts.exists(key) ? counts.get(key) : 0) + 1);
+			}
+			Sys.stderr().writeString("invalidation: " + frontend.invalidations.length + " artifacts, retyped " + retyped.length + "\n");
+			for (key => count in counts)
+				Sys.stderr().writeString("  " + count + " " + key + "\n");
+			for (artifact in frontend.invalidations.slice(0, 12))
+				Sys.stderr().writeString("  e.g. " + artifact.artifact + " <- " + artifact.reasons[0].kind + " " + artifact.reasons[0].cause + "\n");
+		}
 		var allocationPhases = frontend.allocationPhases.concat(backend.allocationPhases);
 		allocationPhases.push(AllocationMeter.delta("finalize", allocationBeforeFinalize, AllocationMeter.sample()));
 		return {
