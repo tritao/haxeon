@@ -44,6 +44,9 @@ been measured. The historical mark percentages do not prove it would lose. See "
 
 ## Stage 0: bound the prize before building
 
+Completed: [Stage 0 measurements](BUMP_ALLOCATION_PROFILE.md) support a guarded Stage 1 prototype. No inline
+allocation implementation has been accepted; the measured 5% gate still applies.
+
 1. Freeze the current VM, library, native HDLL, bytecode and hashes with allocation-volume retention enabled on both
    sides. Record the retention cap and collection trigger. Measure fresh binarytrees/merkletrees medians and profile
    allocation, object setup, zeroing and collection again. Historical 0.797 s / 0.286 s values are context, not the gate.
