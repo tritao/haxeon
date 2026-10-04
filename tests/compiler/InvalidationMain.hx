@@ -55,6 +55,26 @@ class InvalidationMain {
 		var commented = wire.compile("messagepack-wire");
 		expect(commented.retyped.length == 0, "a comment-only edit retyped " + commented.retyped);
 
+		// A lambda is retyped with the function it is written in, and only then: editing `run` retypes the lambda inside it, while
+		// editing `other` leaves it alone.
+		var closures = new Compiler();
+		var closureSource = (body:String, otherValue:Int) -> "function apply(f:Int->Int, x:Int):Int return f(x);\n"
+			+ "function run(a:Int):Int { return apply(function(v:Int):Int return "
+			+ body
+			+ ", 1); }\n"
+			+ "function other():Int return "
+			+ otherValue
+			+ ";\n"
+			+ "function main():Int return run(1) + other();";
+		closures.update("Main.hx", closureSource("v + a", 1));
+		closures.compile("Main");
+		closures.update("Main.hx", closureSource("v * a", 1));
+		var lambdaEdit = closures.compile("Main");
+		expect(Lambdas.among(lambdaEdit.retyped, "Main.run") == 1, "editing a function retypes the lambda inside it: " + lambdaEdit.retyped);
+		closures.update("Main.hx", closureSource("v * a", 2));
+		var otherEdit = closures.compile("Main");
+		expect(Lambdas.among(otherEdit.retyped, "Main.run") == 0, "editing another function leaves the lambda alone: " + otherEdit.retyped);
+
 		Sys.println("PASS: structured invalidation reasons");
 	}
 
@@ -70,5 +90,16 @@ class InvalidationMain {
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)
 			throw message;
+	}
+}
+
+/** Counts the lambdas written in a function among `names`. */
+private class Lambdas {
+	public static function among(names:Array<String>, owner:String):Int {
+		var count = 0;
+		for (name in names)
+			if (compiler.semantic.LambdaName.enclosing(name) == owner)
+				count++;
+		return count;
 	}
 }

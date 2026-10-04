@@ -255,13 +255,9 @@ class FrontendCompilation {
 				state.noReturnQueries.remove(fn.name);
 			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
+			// A lambda names the function it is written in as its origin, so it is retyped with that function.
 			var semanticOrigin = fn.genericOrigin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
-			if (!semanticallyInvalidated) {
-				// A lambda is retyped with the function it is written in.
-				var enclosing = LambdaName.enclosing(fn.name);
-				semanticallyInvalidated = enclosing != null && invalidated.exists(enclosing);
-			}
 			if (semanticallyInvalidated)
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
@@ -345,13 +341,13 @@ class FrontendCompilation {
 				}
 			}
 			if (hasRetainedSpecializations)
-				for (nested in state.typedFunctions.keys()) {
-					var enclosing = LambdaName.enclosing(nested);
-					if (enclosing != null && retainedSpecializations.exists(enclosing)) {
+				for (nested => nestedFunction in state.typedFunctions)
+					if (LambdaName.is(nested)
+						&& nestedFunction.genericOrigin != null
+						&& retainedSpecializations.exists(nestedFunction.genericOrigin)) {
 						valid.set(nested, true);
 						owners.set(nested, name);
 					}
-				}
 			if (lowerToIr)
 				for (pending in state.pendingIrFunctions.keys())
 					valid.set(pending, true);
