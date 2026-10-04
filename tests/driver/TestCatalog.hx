@@ -131,6 +131,7 @@ class TestCatalog {
 		"RuntimeDomainMain",
 		"GcAllocationPathsMain",
 		"GcEmptyPagesMain",
+		"JitInlineAllocationMain",
 		"BytesAsciiMain"
 	];
 

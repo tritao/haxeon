@@ -340,3 +340,4 @@ jit-phi-coalescing	42
 float-div-pow2	42
 counted-array-loops	42
 bytes-ascii-decode	42
+jit-inline-allocation	42
