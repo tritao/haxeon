@@ -11,11 +11,16 @@ explains why mark prefetching and address-ordered runs were flat.
 At a collection, `gc_flush_empty_pages` retains reusable, completely empty pages up to:
 
 ```
-min(64 MiB, 4 * maximum nonempty-page capacity over the last four collections)
+min(64 MiB, maximum bytes allocated per collection cycle over the last four collections)
 ```
 
-Nonempty-page capacity counts whole mappings, not exact live payload bytes. Cached empty pages do not contribute
-to that peak, so the cache cannot sustain its own budget. Four quieter collections age out a previous working set.
+The next cycle is expected to allocate about as much as recent ones, so that is the amount worth keeping. Allocation
+volume does not depend on the cache, so the cache cannot sustain its own budget, and four collections that allocate
+nothing age out a previous working set. The earlier policy used four times the non-empty page capacity; merkletrees has a
+small live set but allocates far more than four times that between collections, so it still unmapped and re-faulted
+most of its garbage pages (107,500 page faults, 0.37 s against 19,900 and 0.28 s with this policy).
+Allocation counts whole TLAB runs and large allocations, so the budget can overestimate; the 64 MiB cap bounds that.
+
 Dedicated large-allocation pages are always released: the allocator cannot reuse them. Retained pages stay in the
 existing page/free lists; excess pages use the original unmapping path.
 
