@@ -111,3 +111,9 @@ its library hash was `d76c1b66980c41a6f214e179f3ea60f27be173969fa23c48bcc198e3e7
 
 The census remains useful: any follow-up should first isolate the runtime/library regression, then test integer
 boxing again. Arrays require a separate representation-specific opportunity measurement and design.
+
+## Follow-up
+
+A corrected opt-in implementation isolates the cold helpers from hot runtime text and removes the LRU regression.
+See [JIT_BOXED_ALLOCATION_LAYOUT.md](JIT_BOXED_ALLOCATION_LAYOUT.md) for the diagnosis, six-benchmark results,
+validation and pending compiler/startup timing gate. The rejection above describes the original prototype.

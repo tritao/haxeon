@@ -69,5 +69,10 @@ The compiler workload is one fresh compilation, not a long-lived worker memory-r
 ## Prototype outcome
 
 The integer-box prototype cleared the merkletrees gain gate (19.63%) but was dropped because repeated LRU
-comparisons regressed against the accepted runtime. The accepted fork is unchanged. See
-[JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md) for all six results, validation and remaining uncertainties.
+comparisons regressed against the accepted runtime. See
+[JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md) for that rejection.
+
+The follow-up isolates cold JIT helpers from ordinary runtime text, removes the LRU regression, and measures
+merkletrees at 0.259076 -> 0.207330 s (19.97% faster), with all six benchmarks and full correctness validation
+complete. The implementation is opt-in; final compiler and startup/JIT timings remain pending. See
+[JIT_BOXED_ALLOCATION_LAYOUT.md](JIT_BOXED_ALLOCATION_LAYOUT.md) for the controlled diagnosis and exact coverage.

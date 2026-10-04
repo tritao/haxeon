@@ -207,5 +207,14 @@ The cross-language table above was not regenerated.
 
 A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
 LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
-no new switch or runtime change remains. See [the experiment report](../../docs/JIT_BOXED_ALLOCATION.md).
+that variant was reverted. See [the experiment report](../../docs/JIT_BOXED_ALLOCATION.md).
 The cross-language table above was not regenerated.
+
+### Corrected integer-box allocation (opt-in; final timing gate pending)
+
+`HL_JIT_ALLOC_BOX=1` enables guarded integer boxing on Linux x86-64 SysV. Isolating cold JIT helpers from hot
+runtime text removes the earlier LRU regression. Nine alternating pairs on core 0, load <=4, with object allocation
+enabled on both sides measured merkletrees at 0.259076 → 0.207330 s (19.97% faster) and LRU at
+0.094389 → 0.093915 s (0.50% faster). The other four benchmarks and RSS showed no meaningful regression.
+Correctness validation is complete; compiler and startup/JIT paired timings remain pending due to external load.
+See [the follow-up report](../../docs/JIT_BOXED_ALLOCATION_LAYOUT.md). The cross-language table above was not regenerated.

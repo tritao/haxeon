@@ -8,9 +8,12 @@ with `HL_JIT_ALLOC_INLINE=1`; code-size and startup tradeoffs, exact validation 
 are recorded in [JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md). Stage 2 was tested and dropped: the local
 initialization proof measured -1.67% on binarytrees against its 2% gate;
 [JIT_ALLOCATION_INITIALIZATION.md](JIT_ALLOCATION_INITIALIZATION.md) records the experiment and skipped acceptance
-checks. Stage 3 was tested and dropped: integer boxing improved merkletrees about 20%, but repeated LRU
-comparisons regressed 1–2%. [JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md) records the six-benchmark results,
-full validation, skipped compiler timing and restored baseline. The broader census is in
+checks. The first Stage 3 prototype was dropped: integer boxing improved merkletrees about 20%, but repeated LRU
+comparisons regressed 1–2%. [JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md) records that rejection. A follow-up
+isolates cold helpers from hot runtime text and removes the LRU regression: merkletrees improves 19.97%, with full
+correctness validation and all six benchmark comparisons complete. It remains opt-in with `HL_JIT_ALLOC_BOX=1`;
+final compiler and startup/JIT timings are pending, so the acceptance gate is not yet complete. See
+[JIT_BOXED_ALLOCATION_LAYOUT.md](JIT_BOXED_ALLOCATION_LAYOUT.md). The broader census is in
 [ALLOCATION_CENSUS.md](ALLOCATION_CENSUS.md).
 
 ## Starting point
