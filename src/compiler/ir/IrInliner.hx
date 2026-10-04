@@ -10,18 +10,25 @@ import compiler.ir.codec.IrFunctionStateCodec;
 class InlineMemo {
 	public final source:IrFunction;
 
-	/** Which program-wide fingerprint (see `IrInlineCache.fingerprintId`) the result was inlined under. */
+	/** Which fingerprint of the program-wide settings (see `IrInlineCache.fingerprintId`) the result was inlined under. */
 	public final fingerprint:Int;
 
 	/** The pristine callee functions consulted, transitively; the result is valid only while all are unchanged. */
 	public final dependencies:Array<IrFunction>;
 
+	/**
+	 * The objects consulted, transitively, each with the print (see `IrInlineCache.objectPrintId`) it had; the result is valid
+	 * only while every one of them still has it.
+	 */
+	public final objects:Map<String, Int>;
+
 	public final result:IrFunction;
 
-	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, result:IrFunction) {
+	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>, result:IrFunction) {
 		this.source = source;
 		this.fingerprint = fingerprint;
 		this.dependencies = dependencies;
+		this.objects = objects;
 		this.result = result;
 	}
 }
@@ -37,6 +44,9 @@ class IrInlineCache {
 
 	var lastFingerprint:Null<String> = null;
 	var lastFingerprintId = 0;
+	var objectTexts:Map<String, String> = [];
+	var objectIds:Map<String, Int> = [];
+	var lastObjectId = 0;
 
 	public function new() {}
 
@@ -53,6 +63,21 @@ class IrInlineCache {
 		return lastFingerprintId;
 	}
 
+	/**
+	 * A number that names what an object's description said: the same while the description is unchanged, a new one when
+	 * it changes. An object that does not exist is described by null. A memo entry records the number of each object its
+	 * result depended on, so a new class or a changed method table invalidates only the functions that looked at it.
+	 */
+	public function objectPrintId(name:String, text:Null<String>):Int {
+		var known = objectTexts.exists(name);
+		if (!known || objectTexts.get(name) != text) {
+			objectTexts.set(name, text);
+			objectIds.set(name, ++lastObjectId);
+		}
+		var id = objectIds.get(name);
+		return id == null ? 0 : id;
+	}
+
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		for (name => entry in memo)
@@ -61,6 +86,11 @@ class IrInlineCache {
 			result.published.set(name, fn);
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
+		for (name => text in objectTexts)
+			result.objectTexts.set(name, text);
+		for (name => id in objectIds)
+			result.objectIds.set(name, id);
+		result.lastObjectId = lastObjectId;
 		return result;
 	}
 }
@@ -98,11 +128,13 @@ class IrInliner {
 	final dependenciesOf:Map<String, Array<IrFunction>> = [];
 	final impure:Map<String, Bool> = [];
 	final visiting:Map<String, Bool> = [];
-	final objects:Map<String, IrObject> = [];
 	final entryPoint:String;
 
-	/** Direct subclasses of each class, for resolving a virtual call when every override agrees. */
-	final subclasses:Map<String, Array<String>> = [];
+	/** The program's objects and the direct subclasses of each (for resolving a virtual call when every override agrees). */
+	final table:IrObjectTable;
+
+	/** The print of every object of the program, by name. */
+	final objectPrints:Map<String, Int> = [];
 
 	final cache:IrInlineCache;
 	final fingerprint:Int;
@@ -113,6 +145,13 @@ class IrInliner {
 
 	final frameNames:Array<String> = [];
 	final frameImpure:Array<Bool> = [];
+
+	/** Parallel to `frames`: the objects each function being inlined has consulted so far. */
+	final objectFrames:Array<Map<String, Bool>> = [];
+
+	/** The objects consulted, with their prints, by each function inlined or reused so far. */
+	final objectsOf:Map<String, Map<String, Int>> = [];
+
 	var depth = 0;
 
 	function new(program:IrProgram, cache:IrInlineCache) {
@@ -120,12 +159,16 @@ class IrInliner {
 		this.cache = cache;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		var lines:Array<String> = [
+		// What every function's inlining depends on whatever it looks at. Each object's own description is not here: a memo
+		// entry records the objects it consulted, so a change to one object does not invalidate the rest.
+		fingerprint = cache.fingerprintId([
 			entryPoint,
 			"packed=" + packedValueFields,
 			"inline=" + enabled,
 			"loadstore=" + IrLoadStoreForwarding.enabled
-		];
+		].join(";"));
+		var objects:Map<String, IrObject> = [],
+			subclasses:Map<String, Array<String>> = [];
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.base != null) {
@@ -134,20 +177,41 @@ class IrInliner {
 					subclasses.set(base, []);
 				subclasses.get(base).push(object.name);
 			}
-			if (!object.isValue)
-				lines.push(object.name
-					+ "<"
-					+ Std.string(object.base)
-					+ ":"
-					+ [for (method in object.methods) method.name + "=" + method.functionName].join(","));
-			if (object.isValue)
-				lines.push(object.name + ":" + [for (method in object.methods) method.name + "=" + method.functionName].join(",") + ":" + [
-					for (field in object.fields)
-						field.name + "=" + Std.string(field.type)
-				].join(","));
 		}
-		lines.sort(Reflect.compare);
-		fingerprint = cache.fingerprintId(lines.join(";"));
+		for (name => object in objects) {
+			var children = subclasses.get(name), text = describe(object);
+			if (children != null) {
+				var sorted = children.copy();
+				sorted.sort(Reflect.compare);
+				text += ">" + sorted.join(",");
+			}
+			objectPrints.set(name, cache.objectPrintId(name, text));
+		}
+		table = new IrObjectTable(objects, subclasses);
+	}
+
+	/** What the inliner can tell about an object: its base, its methods, and the fields of a value class. */
+	static function describe(object:IrObject):String {
+		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
+		if (!object.isValue)
+			return object.name + "<" + Std.string(object.base) + ":" + methods;
+		return object.name + ":" + methods + ":" + [
+			for (field in object.fields)
+				field.name + "=" + Std.string(field.type)
+		].join(",");
+	}
+
+	/** The print an object has now; one that is not in the program has its own, which a class of that name would change. */
+	function printOf(name:String):Int {
+		var print = objectPrints.get(name);
+		return print != null ? print : cache.objectPrintId(name, null);
+	}
+
+	function objectsCurrent(consulted:Map<String, Int>):Bool {
+		for (name => print in consulted)
+			if (printOf(name) != print)
+				return false;
+		return true;
 	}
 
 	/**
@@ -199,9 +263,14 @@ class IrInliner {
 		if (original == null)
 			return null;
 		var memo = cache.memo.get(name);
-		if (memo != null && memo.source == original && memo.fingerprint == fingerprint && dependenciesCurrent(memo.dependencies)) {
+		if (memo != null
+			&& memo.source == original
+			&& memo.fingerprint == fingerprint
+			&& dependenciesCurrent(memo.dependencies)
+			&& objectsCurrent(memo.objects)) {
 			done.set(name, memo.result);
 			dependenciesOf.set(name, memo.dependencies);
+			objectsOf.set(name, memo.objects);
 			nextMemo.set(name, memo);
 			consultResult(name);
 			return memo.result;
@@ -211,9 +280,14 @@ class IrInliner {
 		frames.push([]);
 		frameNames.push(name);
 		frameImpure.push(false);
+		var consultedObjects:Map<String, Bool> = [];
+		objectFrames.push(consultedObjects);
+		table.consulted = consultedObjects;
 		var result = enabled ? inlineCalls(original) : original;
 		if (IrLoadStoreForwarding.enabled)
-			result = IrLoadStoreForwarding.run(result, objects);
+			result = IrLoadStoreForwarding.run(result, table);
+		objectFrames.pop();
+		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
 		var consulted = frames.pop(), isImpure = frameImpure.pop();
 		frameNames.pop();
 		depth--;
@@ -223,12 +297,14 @@ class IrInliner {
 		names.sort(Reflect.compare);
 		for (dependencyName in names)
 			dependencies.push(consulted.get(dependencyName));
+		var objectPrintsOf:Map<String, Int> = [for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		done.set(name, result);
 		dependenciesOf.set(name, dependencies);
+		objectsOf.set(name, objectPrintsOf);
 		if (isImpure)
 			impure.set(name, true);
 		else
-			nextMemo.set(name, new InlineMemo(original, fingerprint, dependencies, result));
+			nextMemo.set(name, new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
 		consultResult(name);
 		return result;
 	}
@@ -252,6 +328,12 @@ class IrInliner {
 		if (dependencies != null)
 			for (dependency in dependencies)
 				frame.set(dependency.name, dependency);
+		var consultedObjects = objectsOf.get(name);
+		if (consultedObjects != null && objectFrames.length > 0) {
+			var objectFrame = objectFrames[objectFrames.length - 1];
+			for (objectName in consultedObjects.keys())
+				objectFrame.set(objectName, true);
+		}
 		if (impure.exists(name))
 			frameImpure[frameImpure.length - 1] = true;
 	}
@@ -312,7 +394,7 @@ class IrInliner {
 			if (implementation == null || (target != null && target != implementation))
 				return null;
 			target = implementation;
-			var children = subclasses.get(name);
+			var children = table.subclassesOf(name);
 			if (children != null)
 				for (child in children)
 					work.push(child);
@@ -323,7 +405,7 @@ class IrInliner {
 	function implementationIn(typeName:String, method:String):Null<String> {
 		var name:Null<String> = typeName, steps = 0;
 		while (name != null && steps < 64) {
-			var descriptor = objects.get(name);
+			var descriptor = table.get(name);
 			if (descriptor == null)
 				return null;
 			for (candidate in descriptor.methods)
@@ -451,9 +533,9 @@ class IrInliner {
 		var bindings = fn.debugBindings;
 		if (substitutions.keys().hasNext())
 			bindings = substitute(blocks, substitutions, bindings);
-		var replaced = IrScalarReplacement.run(blocks, objects, nextValue);
+		var replaced = IrScalarReplacement.run(blocks, table, nextValue);
 		if (packedValueFields)
-			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, objects, replaced.nextValue)};
+			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue)};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
 		var consult = function(name:String):Void {

@@ -22,7 +22,7 @@ typedef ScalarReplacementResult = {
  * handling only objects that live in a single block are replaced, because handler edges would need phis of their own.
  */
 class IrScalarReplacement {
-	public static function run(blocks:Array<IrBlock>, objects:Map<String, IrObject>, nextValue:Int):ScalarReplacementResult {
+	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int):ScalarReplacementResult {
 		var substitutions:Map<Int, IrValue> = [];
 		var candidates = findCandidates(blocks, objects);
 		if (candidates.length == 0)
@@ -63,7 +63,7 @@ class IrScalarReplacement {
 	 * instance is only written and then stored, write its fields straight into the parent's slot instead: take the
 	 * slot with FieldGet, then FieldSet each field (unwritten fields get the zero `New` would have given them).
 	 */
-	public static function constructInPlace(blocks:Array<IrBlock>, objects:Map<String, IrObject>, nextValue:Int):Int {
+	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int):Int {
 		for (block in blocks) {
 			var position = 0;
 			while (position < block.instructions.length) {
@@ -140,7 +140,7 @@ class IrScalarReplacement {
 		return found;
 	}
 
-	static function parentSlotIsInline(destination:IrValue, field:String, typeName:String, objects:Map<String, IrObject>):Bool {
+	static function parentSlotIsInline(destination:IrValue, field:String, typeName:String, objects:IrObjectTable):Bool {
 		var parentName = switch destination.type {
 			case Obj(name): name;
 			default: return false;
@@ -212,7 +212,7 @@ class IrScalarReplacement {
 		return -1;
 	}
 
-	static function findCandidates(blocks:Array<IrBlock>, objects:Map<String, IrObject>):Array<{
+	static function findCandidates(blocks:Array<IrBlock>, objects:IrObjectTable):Array<{
 		object:IrValue,
 		typeName:String,
 		block:IrBlock,
@@ -242,7 +242,7 @@ class IrScalarReplacement {
 	}
 
 	/** A nested value class field defaults to a zeroed struct, not null, so its default read is not a constant. */
-	static function hasValueField(descriptor:IrObject, objects:Map<String, IrObject>):Bool {
+	static function hasValueField(descriptor:IrObject, objects:IrObjectTable):Bool {
 		for (field in descriptor.fields)
 			switch field.type {
 				case Obj(name):

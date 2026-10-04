@@ -12,7 +12,7 @@ class IrLoadStoreForwarding {
 	public static var enabled:Bool = Sys.getEnv("HAXEON_LOADSTORE") != "0";
 
 	/** Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too. */
-	public static function run(fn:IrFunction, ?objects:Map<String, IrObject>):IrFunction {
+	public static function run(fn:IrFunction, ?objects:IrObjectTable):IrFunction {
 		var substitutions:Map<Int, IrValue> = [], constants:Map<Int, Int> = [];
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -155,7 +155,7 @@ class IrLoadStoreForwarding {
 			default: false;
 		};
 
-	static function excludedField(type:IrType, objects:Null<Map<String, IrObject>>):Bool
+	static function excludedField(type:IrType, objects:Null<IrObjectTable>):Bool
 		return switch type {
 			case Obj(name): var descriptor = objects == null ? null : objects.get(name); descriptor == null || descriptor.isValue;
 			default: false;
