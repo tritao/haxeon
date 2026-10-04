@@ -24,7 +24,7 @@ Its compilation completed successfully; instrumented compiler phase times are no
 
 ## Exact counts
 
-| Workload | Total allocations | Integer boxes | Box count share | Array allocations |
+| Workload | Total allocations | Integer boxes | Box count share | Array GC blocks |
 |---|---:|---:|---:|---:|
 | binarytrees | 68,332,307 | 0 | 0% | 2 |
 | merkletrees | 29,971,907 | 14,985,902 | 50.00% | 2 |
@@ -33,6 +33,9 @@ Its compilation completed successfully; instrumented compiler phase times are no
 | spectral-norm | 409 | 0 | 0% | 398 |
 | lru | 97,359 | 97,098 | 99.73% | 2 |
 | compiler | 157,033,514 | 15,372,371 | 9.79% | 32,256,676 |
+
+Array counts above are GC blocks (header, separate storage and growth), not array objects. The
+[array-specific follow-up](ARRAY_ALLOCATION_PROFILE.md) separates these and measures CPU headroom.
 
 Every counted `i32` allocation requested 16 bytes. Merkletrees additionally allocated 14,985,902 40-byte Nodes;
 boxes account for about 28.57% of its allocated bytes, versus half its allocation count. This is allocation volume,

@@ -14,7 +14,9 @@ isolates cold helpers from hot runtime text and removes the LRU regression: merk
 correctness validation and all six benchmark comparisons complete. It remains opt-in with `HL_JIT_ALLOC_BOX=1`;
 final compiler and startup/JIT timings are pending, so the acceptance gate is not yet complete. See
 [JIT_BOXED_ALLOCATION_LAYOUT.md](JIT_BOXED_ALLOCATION_LAYOUT.md). The broader census is in
-[ALLOCATION_CENSUS.md](ALLOCATION_CENSUS.md).
+[ALLOCATION_CENSUS.md](ALLOCATION_CENSUS.md). An array-specific follow-up counted 16.1 million compiler arrays,
+85.28% at lengths 0–3. Profiles found limited directly removable cost, so a small-array JIT expansion was not
+implemented. [ARRAY_ALLOCATION_PROFILE.md](ARRAY_ALLOCATION_PROFILE.md) records the no-go decision and evidence.
 
 ## Starting point
 
