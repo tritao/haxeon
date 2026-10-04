@@ -338,3 +338,4 @@ array-fused-shrink	42
 jit-call-save	42
 jit-phi-coalescing	42
 float-div-pow2	42
+counted-array-loops	42
