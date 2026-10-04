@@ -208,7 +208,8 @@ class ClosureTyper {
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({
 			name: lambdaName,
-			genericOrigin: outerContext.name,
+			origin: outerContext.name,
+			originKind: compiler.types.TypedAst.FunctionOriginKind.Lambda,
 			owner: environment,
 			isStatic: environment == null,
 			isConstructor: false,

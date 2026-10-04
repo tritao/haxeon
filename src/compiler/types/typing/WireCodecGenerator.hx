@@ -1207,7 +1207,8 @@ class WireCodecGenerator {
 			request:WireCodecRequest):TypedFunction
 		return {
 			name: name,
-			genericOrigin: request.origin,
+			origin: request.origin,
+			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			typeArguments: null,
 			owner: null,
 			isStatic: true,

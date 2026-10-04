@@ -307,7 +307,8 @@ class BodyTyper {
 		}
 		var resultFunction:TypedFunction = {
 			name: functionName,
-			genericOrigin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
+			origin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
+			originKind: specializedName == null ? null : compiler.types.TypedAst.FunctionOriginKind.Specialization,
 			typeArguments: typeArguments,
 			owner: owner,
 			isStatic: isStatic,

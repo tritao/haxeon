@@ -60,7 +60,7 @@ class TyperBoundaryMain {
 		for (fn in program.functions) {
 			if (fn.name == "main")
 				hasMain = true;
-			if (fn.genericOrigin == "identity")
+			if (fn.origin == "identity" && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization)
 				hasIdentitySpecialization = true;
 			if (StringTools.startsWith(fn.name, "$" + "lambda:"))
 				hasLambda = true;

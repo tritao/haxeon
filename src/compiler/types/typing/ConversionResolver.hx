@@ -153,7 +153,8 @@ class ConversionResolver {
 		session.closureConversion.addEnvironment(environmentName, captures);
 		session.closureConversion.addFunction({
 			name: adapterName,
-			genericOrigin: contextName,
+			origin: contextName,
+			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			owner: environmentName,
 			isStatic: false,
 			isConstructor: false,

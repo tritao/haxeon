@@ -267,6 +267,18 @@ typedef TypedEnum = {
 	final span:SourceSpan;
 }
 
+/** How a typed function relates to the function named by its `origin`. */
+enum abstract FunctionOriginKind(String) {
+	/** A copy of a generic function for particular type arguments; the origin is the generic function. */
+	var Specialization = "specialization";
+
+	/** A lambda; the origin is the function, or lambda, it is written in. */
+	var Lambda = "lambda";
+
+	/** A helper made on behalf of a function (an equality, wire codec or closure conversion adapter); the origin is that function. */
+	var Helper = "helper";
+}
+
 /**
  * Fully typed function or method body.
  *
@@ -275,7 +287,16 @@ typedef TypedEnum = {
  */
 typedef TypedFunction = {
 	final name:String;
-	final ?genericOrigin:String;
+
+	/**
+	 * The function this one is specialized from, written in, or made for. The two are typed, invalidated and kept together:
+	 * when `origin` is typed again so is this function, and the module that owns `origin` owns it.
+	 */
+	final ?origin:String;
+
+	/** Why `origin` is set. */
+	final ?originKind:FunctionOriginKind;
+
 	final ?typeArguments:Array<CompilerType>;
 	final owner:Null<String>;
 	final isStatic:Bool;

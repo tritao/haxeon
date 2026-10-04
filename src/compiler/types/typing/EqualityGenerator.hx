@@ -119,12 +119,19 @@ class EqualityGenerator {
 			statements = compareStatements(session, type, left, right, span);
 		return {
 			name: equalsName(type),
-			genericOrigin: request.origin,
+			origin: request.origin,
+			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			typeArguments: null,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			arguments: [{name: "left", type: type}, {name: "right", type: type}],
+			arguments: [
+				{
+					name: "left",
+					type: type
+				},
+				{name: "right", type: type}
+			],
 			result: TBool,
 			statements: statements,
 			cells: [],

@@ -1676,7 +1676,10 @@ class TestMain {
 			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); identity(new Box()); return identity(42); }'))
 			.tokenize()).parseProgram(),
 			shapedGeneric = Typer.type(shapedGenericProgram),
-			identityBodies = [for (fn in shapedGeneric.functions) if (fn.genericOrigin == "identity") fn];
+			identityBodies = [
+				for (fn in shapedGeneric.functions)
+					if (fn.origin == "identity" && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization) fn
+			];
 		if (identityBodies.length != 2)
 			throw "Generic reference instantiations did not share one representation body";
 		var identityShapes = [for (fn in identityBodies) SemanticSignature.type(fn.typeArguments[0])];

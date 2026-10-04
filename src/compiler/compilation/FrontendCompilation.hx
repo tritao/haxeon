@@ -228,6 +228,7 @@ class FrontendCompilation {
 		for (fn in typedNew.functions) {
 			if (token != null)
 				token.check();
+			checkLambdaOrigin(fn);
 			var generated = generatedFunctions.exists(fn.name),
 				module = resolveFunctionModule(fn, owners, typedByName, []);
 			if (generated) {
@@ -256,7 +257,7 @@ class FrontendCompilation {
 			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			// A lambda names the function it is written in as its origin, so it is retyped with that function.
-			var semanticOrigin = fn.genericOrigin;
+			var semanticOrigin = fn.origin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
 			if (semanticallyInvalidated)
 				retyped.push(fn.name);
@@ -326,7 +327,7 @@ class FrontendCompilation {
 			var retainedSpecializations:Map<String, Bool> = [];
 			var hasRetainedSpecializations = false;
 			for (cached => fn in state.typedFunctions) {
-				var origin = fn.genericOrigin;
+				var origin = fn.origin;
 				// A lambda or adapter made inside a specialization names that specialization as its origin. When the
 				// specialization was typed again in this request, its old lambdas that were not made again belong to the
 				// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
@@ -342,9 +343,9 @@ class FrontendCompilation {
 			}
 			if (hasRetainedSpecializations)
 				for (nested => nestedFunction in state.typedFunctions)
-					if (LambdaName.is(nested)
-						&& nestedFunction.genericOrigin != null
-						&& retainedSpecializations.exists(nestedFunction.genericOrigin)) {
+					if (nestedFunction.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda
+						&& nestedFunction.origin != null
+						&& retainedSpecializations.exists(nestedFunction.origin)) {
 						valid.set(nested, true);
 						owners.set(nested, name);
 					}
@@ -547,7 +548,7 @@ class FrontendCompilation {
 				if (!StringTools.startsWith(cached, "$equality:"))
 					continue;
 				holders.set(cached, state);
-				var origin = fn.genericOrigin;
+				var origin = fn.origin;
 				if (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin))) {
 					kept.set(cached, true);
 					pending.push(cached);
@@ -697,6 +698,18 @@ class FrontendCompilation {
 		return true;
 	}
 
+	/**
+	 * A lambda is retyped, kept and owned with the function it is written in, which it records as its origin; invalidation
+	 * relies on that and would skip a lambda that did not. So the two must agree: a function named like a lambda is a
+	 * `Lambda` with an origin, and nothing else is.
+	 */
+	static function checkLambdaOrigin(fn:compiler.types.TypedAst.TypedFunction):Void {
+		var named = LambdaName.is(fn.name),
+			kind = fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda;
+		if (named != kind || (kind && fn.origin == null))
+			throw 'Typed function "${fn.name}" disagrees about being a lambda: named like one: $named, origin kind lambda: $kind, origin: ${fn.origin}';
+	}
+
 	static function resolveFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, visiting:Map<String, Bool>):String {
 		if (owners.exists(fn.name))
@@ -704,7 +717,7 @@ class FrontendCompilation {
 		if (visiting.exists(fn.name))
 			throw 'Cyclic generated-function ownership involving "${fn.name}"';
 		visiting.set(fn.name, true);
-		var origin = fn.genericOrigin;
+		var origin = fn.origin;
 		if (origin == null)
 			throw 'No source module owns typed function "${fn.name}"';
 		var module:String;
