@@ -5,6 +5,43 @@ import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
 	static function main():Void {
+		var library = new LanguageService();
+		library.update("Helper.hx", "class Helper { public static function value():Int return 42; }");
+		library.analyze("Helper");
+		if (!library.isCurrent("Helper.hx") || library.documentSymbols("Helper.hx").length == 0)
+			throw "library analysis without main did not publish a current semantic snapshot";
+		library.update("Helper.hx", 'class Helper { public static function value():Int return "wrong"; }');
+		var rejectedBody = false;
+		try
+			library.analyze("Helper")
+		catch (_:compiler.Diagnostic.CompileError)
+			rejectedBody = true;
+		if (!rejectedBody || library.isCurrent("Helper.hx") || library.compiler.modules.get("Helper").diagnostics.length == 0)
+			throw "library analysis skipped body typing or published invalid source";
+		library.update("Helper.hx", "class Helper { public static function value():Int return 43; }");
+		library.analyze("Helper");
+		if (!library.isCurrent("Helper.hx"))
+			throw "library analysis failed to recover after a type fix";
+		var rejectedExecutable = false;
+		try
+			library.compile("Helper")
+		catch (error:Dynamic)
+			rejectedExecutable = Std.string(error).indexOf("entry point") >= 0;
+		if (!rejectedExecutable)
+			throw "executable compilation accepted a library without main";
+
+		library.update("Fields.hx", "class Fields { public static var inferred = 42; }");
+		var inferredSymbols = library.workspaceSymbols("inferred");
+		if (inferredSymbols.length != 1 || inferredSymbols[0].detail != "inferred:_")
+			throw "syntax-only workspace indexing did not retain an inferred field without a type annotation";
+		library.analyze("Fields");
+		var fieldSymbols = library.documentSymbols("Fields.hx"),
+			foundInferredField = false;
+		for (symbol in fieldSymbols)
+			if (symbol.name == "inferred" && symbol.detail == "inferred:_")
+				foundInferredField = true;
+		if (!foundInferredField)
+			throw "document symbols omitted an inferred field";
 		var formatSource = "function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
 			formatted = SourceFormatter.format(formatSource, 2, true),
 			expectedFormat = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n";

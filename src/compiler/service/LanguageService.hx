@@ -1838,7 +1838,11 @@ class LanguageService {
 	static inline function isIdentifierStart(code:Int):Bool
 		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || code == 95;
 
-	static function typeName(type:AstType):String
+	static function typeName(type:Null<AstType>):String {
+		// Syntax-only indexes may not have an inferred field/argument type yet.
+		// Use the same display placeholder as an explicit InferredType node.
+		if (type == null)
+			return "_";
 		return switch type {
 			case ErrorType(_): "_";
 			case IntType: "Int";
@@ -1856,6 +1860,7 @@ class LanguageService {
 			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
+	}
 
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {

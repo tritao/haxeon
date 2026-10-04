@@ -41,6 +41,7 @@ class BlockingDiagnosticLanguageService extends LanguageService {
 
 class LspProtocolMain {
 	static function main():Void {
+		haxeonManifestWorkspace();
 		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
 		var converted:Dynamic = positions.position(6);
 		if (positions.offset(1, 2) != 6 || converted.line != 1 || converted.character != 2)
@@ -1375,6 +1376,78 @@ class LspProtocolMain {
 		if (lifecycle.handle('{"jsonrpc":"2.0","method":"exit"}').length != 0 || !lifecycle.shouldExit())
 			throw "LSP exit lifecycle was not recorded";
 		Sys.println("PASS: standard LSP adapter maps compiler language queries");
+	}
+
+	static function haxeonManifestWorkspace():Void {
+		var base = sys.FileSystem.absolutePath("out/lsp-haxeon-workspace");
+		deleteTree(base);
+		for (directory in [
+			base,
+			base + "/app",
+			base + "/app/src",
+			base + "/app/src/app",
+			base + "/lib",
+			base + "/lib/code",
+			base + "/lib/code/dep"
+		])
+			sys.FileSystem.createDirectory(directory);
+		sys.io.File.saveContent(base + "/app/haxeon.json",
+			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"scopeSourceRoots":false,"dependencies":{"helper":{"path":"../lib"}}}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"scopeSourceRoots":false}');
+		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx", "package dep; class Value { public static function answer():Int return 42; }");
+		var mainPath = base + "/app/src/app/Main.hx",
+			uri = "file://" + mainPath,
+			source = "package app; import dep.Value; class Main { public static function main():Int { var answer = Value.answer(); return answer; } }",
+			protocol = new LspProtocol();
+		sys.io.File.saveContent(mainPath, source);
+		request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 801,
+			method: "initialize",
+			params: {rootUri: "file://" + base + "/app"}
+		}));
+		if (protocol.project.configurations.length != 1
+			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
+			|| !protocol.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
+			throw "haxeon.json source roots and local package dependencies were not discovered";
+		var broken = StringTools.replace(source, "var answer = Value.answer()", 'var answer:Int = "wrong"'),
+			messages = protocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				method: "textDocument/didOpen",
+				params: {
+					textDocument: {
+						uri: uri,
+						version: 1,
+						languageId: "haxe",
+						text: broken
+					}
+				}
+			})),
+			foundDiagnostic = false;
+		for (raw in messages) {
+			var message:Dynamic = Json.parse(raw);
+			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
+				foundDiagnostic = true;
+		}
+		if (!foundDiagnostic)
+			throw "manifest-backed document did not diagnose a type error";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: uri, version: 2},
+				contentChanges: [{text: source}]
+			}
+		}));
+		var symbols = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 802,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: uri}}
+		}));
+		if (symbols.error != null || symbols.result.length == 0)
+			throw "manifest-backed symbols did not recover after a fix";
+		deleteTree(base);
 	}
 
 	static function request(protocol:LspProtocol, message:String):Dynamic {
