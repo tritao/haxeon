@@ -89,6 +89,15 @@ class SemanticAssembly {
 			for (declaration in program.classes)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 		}
+		// Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"). They are attached to each module's
+		// table as shared layers instead of being copied into it.
+		var dottedSourceAliases:Map<String, String> = [],
+			plainSourceAliases:Map<String, String> = [];
+		for (sourceName => declarationName in sourceTypeAliases)
+			if (sourceName.indexOf(".") >= 0)
+				dottedSourceAliases.set(sourceName, declarationName);
+			else
+				plainSourceAliases.set(sourceName, declarationName);
 		var aliasUniverse = [
 			for (sourceName => declarationName in sourceTypeAliases)
 				sourceName + "=" + declarationName
@@ -188,14 +197,12 @@ class SemanticAssembly {
 				continue;
 			}
 			var locals:Map<String, Bool> = [],
-				aliases = context.importAliases(ast.imports, ast.importAliases);
+				aliases = AliasTable.of(context.importAliases(ast.imports, ast.importAliases));
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:
 			// in `package nav`, a plain `Path` is `nav.Path`, as in Haxe.
-			for (sourceName => declarationName in sourceTypeAliases)
-				if (sourceName.indexOf(".") >= 0 && !aliases.exists(sourceName))
-					aliases.set(sourceName, declarationName);
+			aliases.attach(dottedSourceAliases);
 			var constructorTargets:Map<String, String> = [],
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (importPath in ast.imports) {
@@ -247,12 +254,8 @@ class SemanticAssembly {
 			}
 			var visiblePackage = ast.packageName;
 			if (visiblePackage != null)
-				for (alias => target in visibleTypeAliases(visiblePackage, sourceTypeAliases, visibleAliasesByPackage))
-					if (!aliases.exists(alias))
-						aliases.set(alias, target);
-			for (sourceName => declarationName in sourceTypeAliases)
-				if (sourceName.indexOf(".") < 0 && !aliases.exists(sourceName))
-					aliases.set(sourceName, declarationName);
+				aliases.attach(visibleTypeAliases(visiblePackage, sourceTypeAliases, visibleAliasesByPackage));
+			aliases.attach(plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression
 			// aliases. Install them only after visible type aliases have been
@@ -344,7 +347,7 @@ class SemanticAssembly {
 			}
 			for (classDecl in ast.classes) {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-					classAliases:Map<String, String> = [for (alias => target in aliases) alias => target];
+					classAliases = aliases.child();
 				for (field in classDecl.fields)
 					if (constructorTargets.exists(field.name) && classAliases.get(field.name) == constructorTargets.get(field.name))
 						classAliases.remove(field.name);

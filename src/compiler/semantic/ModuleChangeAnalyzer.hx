@@ -23,8 +23,7 @@ typedef ModuleChangeAnalysis = {
 
 /** Classifies source changes without publishing candidate fingerprints to a module. */
 class ModuleChangeAnalyzer {
-	public static function analyze(state:ModuleState, entry:String, typeAliases:Map<String, String>, types:TypeRegistry,
-			compiledOnce:Bool):ModuleChangeAnalysis {
+	public static function analyze(state:ModuleState, entry:String, typeAliases:AliasTable, types:TypeRegistry, compiledOnce:Bool):ModuleChangeAnalysis {
 		var ast = state.parsedAst(),
 			bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],

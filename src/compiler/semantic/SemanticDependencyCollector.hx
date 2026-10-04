@@ -9,8 +9,7 @@ import compiler.modules.ModuleState.SemanticDependencyKind;
 
 /** Records semantic dependency edges without owning module/session invalidation. */
 class SemanticDependencyCollector {
-	public static function collectSemanticDependencies(state:ModuleState, entry:String,
-			typeAliases:Map<String, String>):Map<String, Array<SemanticDependency>> {
+	public static function collectSemanticDependencies(state:ModuleState, entry:String, typeAliases:AliasTable):Map<String, Array<SemanticDependency>> {
 		var result:Map<String, Array<SemanticDependency>> = [],
 			ast = state.parsedAst();
 		for (fn in ast.functions) {
@@ -45,7 +44,7 @@ class SemanticDependencyCollector {
 	}
 
 	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
-			type:compiler.syntax.Ast.AstType, aliases:Map<String, String>):Void
+			type:compiler.syntax.Ast.AstType, aliases:AliasTable):Void
 		switch type {
 			case NativeAbstractType(declaration, _):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(declaration, aliases));
@@ -76,9 +75,9 @@ class SemanticDependencyCollector {
 			switch statement {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, type, _):
-					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, []);
+					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 				case VarDeclaration(_, type, expression, _):
-					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, []);
+					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
@@ -117,7 +116,7 @@ class SemanticDependencyCollector {
 			}
 
 	public static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
-			type:Null<compiler.syntax.Ast.AstType>, aliases:Map<String, String>):Void {
+			type:Null<compiler.syntax.Ast.AstType>, aliases:AliasTable):Void {
 		if (type != null)
 			addTypeDependency(result, owner, kind, type, aliases);
 	}

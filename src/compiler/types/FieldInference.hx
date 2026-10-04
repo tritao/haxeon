@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.semantic.AliasTable;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstType;
@@ -98,7 +99,7 @@ class FieldInference {
 	 * Types a numeric constant expression that names sibling static fields (`1.0 / DT`) by resolving those fields
 	 * first. Null when any operand is not a plain `Int` or `Float` constant, leaving the caller to report it.
 	 */
-	static function siblingNumericType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+	static function siblingNumericType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):Null<AstType> {
 		inline function operand(value:AstExpression)
@@ -147,12 +148,12 @@ class FieldInference {
 	 * `enums` and `enumAbstracts` let an initializer that names an enum constructor or an enum abstract value, such
 	 * as `Kind.Rapid`, give the field that enum's (or abstract's) type.
 	 */
-	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+	public static function resolvedType(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			?enums:Map<String, compiler.syntax.Ast.AstEnum>, ?enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):AstType {
 		return resolveField(field, owner, classes, aliases, enums == null ? [] : enums, enumAbstracts == null ? [] : enumAbstracts, []);
 	}
 
-	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):AstType {
 		var inferred = parsedType(field);
@@ -209,9 +210,8 @@ class FieldInference {
 	 * takes precedence, and a generic enum is left alone: its type arguments would have to come from the
 	 * constructor's arguments.
 	 */
-	static function enumConstructorType(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>, enums:Map<String, compiler.syntax.Ast.AstEnum>,
-			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):Null<AstType> {
+	static function enumConstructorType(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):Null<AstType> {
 		var path:Null<String> = null, hasArguments = false;
 		switch expression {
 			case Member(Variable(owner, _), name, _):
@@ -258,7 +258,7 @@ class FieldInference {
 		return null;
 	}
 
-	static function resolveDeclaration<T>(name:String, currentOwner:String, aliases:Map<String, String>, enums:Map<String, T>):Null<String> {
+	static function resolveDeclaration<T>(name:String, currentOwner:String, aliases:AliasTable, enums:Map<String, T>):Null<String> {
 		if (aliases.exists(name) && enums.exists(aliases.get(name)))
 			return aliases.get(name);
 		if (enums.exists(name))
@@ -305,7 +305,7 @@ class FieldInference {
 	 * unqualified in the owning class) or static calls, with the literal rules: `/` gives Float,
 	 * `%` and the bit operators need Int, `+` joins two Strings. Null when an operand is anything else.
 	 */
-	static function operandType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+	static function operandType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):Null<AstType> {
 		function numeric(type:Null<AstType>):Bool
@@ -340,7 +340,7 @@ class FieldInference {
 	}
 
 	/** Type of a static field an operand names, qualified or as a bare name in the owning class. */
-	static function staticFieldType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>,
+	static function staticFieldType(expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):Null<AstType> {
 		var reference = staticFieldReference(expression);
@@ -362,7 +362,7 @@ class FieldInference {
 	}
 
 	static function staticCallResult(expression:AstExpression, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>):Null<AstType> {
+			aliases:AliasTable):Null<AstType> {
 		var call = switch expression {
 			case Call(name, _, _): name;
 			default: null;
@@ -380,7 +380,7 @@ class FieldInference {
 	}
 
 	static function staticMethodResult(owner:String, methodName:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
-			aliases:Map<String, String>, resolving:Map<String, Bool>):Null<AstType> {
+			aliases:AliasTable, resolving:Map<String, Bool>):Null<AstType> {
 		if (resolving.exists(owner))
 			return null;
 		resolving.set(owner, true);
@@ -424,7 +424,7 @@ class FieldInference {
 		};
 	}
 
-	static function resolveOwner(name:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:Map<String, String>):String {
+	static function resolveOwner(name:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable):String {
 		if (aliases.exists(name) && classes.exists(aliases.get(name)))
 			return aliases.get(name);
 		if (classes.exists(name))

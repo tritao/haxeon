@@ -1,3 +1,4 @@
+import compiler.semantic.AliasTable;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
@@ -42,7 +43,7 @@ class ModuleChangeAnalyzerMain {
 	}
 
 	static function analyze(state:ModuleState, types:TypeRegistry, compiledOnce:Bool):compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis {
-		var aliases:Map<String, String> = [];
+		var aliases = new AliasTable();
 		ModuleCanonicalizer.addDeclaredTypeAliases(aliases, state.parsedAst(), state.parsedAst().packageName);
 		return ModuleChangeAnalyzer.analyze(state, state.name, aliases, types, compiledOnce);
 	}

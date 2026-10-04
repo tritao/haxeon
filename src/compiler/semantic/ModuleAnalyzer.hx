@@ -195,7 +195,7 @@ class ModuleAnalyzer {
 		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
-		var typeAliases = importAliases(ast.imports, ast.importAliases);
+		var typeAliases = AliasTable.of(importAliases(ast.imports, ast.importAliases));
 		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
 		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
 		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
