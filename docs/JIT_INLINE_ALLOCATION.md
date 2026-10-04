@@ -105,3 +105,9 @@ Frozen SHA-256 values:
 | VM | `005e7e20dc7a38c59ea2af6e016cc6b9154ed46a8188f4194d584cb92cde461a` | `86ba2be25f5256b1027ccf6916da093f2ba23b56de780165dcf66a5d952e9400` |
 | libhl | `0825d0979866f9f5b8bbe8a9968f762148329f074db6e8b6e9801c607390c2f4` | `5f170fabb20238cd39ca986778ce4ecd841879f3ed4bcf64151f96b4e2b00618` |
 | native runtime, both | `aaa3e4576dd17bc0d7b491161a0937cb4969227b5d322115e70e19766ad3240f` | same |
+
+## Stage 2 follow-up
+
+A local proof that omitted immediately overwritten payload clearing was tested and dropped: binarytrees measured
+-1.67% against the required 2% gain. Stage 1 remains unchanged. See
+[JIT_ALLOCATION_INITIALIZATION.md](JIT_ALLOCATION_INITIALIZATION.md) for the paired gate and exact checks/skips.

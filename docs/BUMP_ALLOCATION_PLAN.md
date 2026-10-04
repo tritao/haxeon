@@ -5,7 +5,10 @@
 Stage 0 measured enough headroom to proceed. Stage 1 passed: binarytrees improved 29.15% and merkletrees 15.29%,
 with essentially unchanged RSS and no regression in the other four benchmarks. The implementation remains opt-in
 with `HL_JIT_ALLOC_INLINE=1`; code-size and startup tradeoffs, exact validation coverage and known debugger failures
-are recorded in [JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md). Stages 2 and 3 remain unimplemented.
+are recorded in [JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md). Stage 2 was tested and dropped: the local
+initialization proof measured -1.67% on binarytrees against its 2% gate;
+[JIT_ALLOCATION_INITIALIZATION.md](JIT_ALLOCATION_INITIALIZATION.md) records the experiment and skipped acceptance
+checks. Stage 3 remains unimplemented.
 
 ## Starting point
 
@@ -51,8 +54,8 @@ been measured. The historical mark percentages do not prove it would lose. See "
 
 ## Stage 0: bound the prize before building
 
-Completed: [Stage 0 measurements](BUMP_ALLOCATION_PROFILE.md) support a guarded Stage 1 prototype. No inline
-allocation implementation has been accepted; the measured 5% gate still applies.
+Completed: [Stage 0 measurements](BUMP_ALLOCATION_PROFILE.md) supported the guarded Stage 1 prototype, which
+subsequently passed its measured gate; see the status above.
 
 1. Freeze the current VM, library, native HDLL, bytecode and hashes with allocation-volume retention enabled on both
    sides. Record the retention cap and collection trigger. Measure fresh binarytrees/merkletrees medians and profile
