@@ -152,3 +152,10 @@ scratch directory. The committed reports and guard tests are the permanent artif
 
 Runtime commit: `2f49c4d4` in the fork. Submodule bump and guard tests: `2fc9cdde` in Haxeon. Both repositories
 remain on their existing branches; no push was performed.
+
+## Guarded JIT allocation follow-up
+
+Stage 1 passed its gate with full payload/padding initialization: binarytrees improved 29.15% and merkletrees
+15.29%, with essentially unchanged RSS. It remains opt-in (`HL_JIT_ALLOC_INLINE=1`). See
+[JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md) for the six-benchmark table, implementation, code-size and
+startup tradeoffs, mutation checks and exact validation coverage.

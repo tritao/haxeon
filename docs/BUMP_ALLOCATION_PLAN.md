@@ -1,5 +1,12 @@
 # Inline bump allocation plan
 
+## Status
+
+Stage 0 measured enough headroom to proceed. Stage 1 passed: binarytrees improved 29.15% and merkletrees 15.29%,
+with essentially unchanged RSS and no regression in the other four benchmarks. The implementation remains opt-in
+with `HL_JIT_ALLOC_INLINE=1`; code-size and startup tradeoffs, exact validation coverage and known debugger failures
+are recorded in [JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md). Stages 2 and 3 remain unimplemented.
+
 ## Starting point
 
 Allocation already bumps a pointer inside a thread-local run (TLAB). `docs/GC_ALLOCATION_PROFILE.md` shows 98.6% of

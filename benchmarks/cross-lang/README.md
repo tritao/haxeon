@@ -193,3 +193,12 @@ Nine alternating pairs on core 0, identical bytecode, load <=4, measured binaryt
 The other benchmarks had no regression beyond noise. Reduced page release/refaulting corrects the earlier
 cache-miss explanation. See [the full measurement and validation report](../../docs/GC_EMPTY_PAGE_RETENTION.md).
 The cross-language table above was not regenerated.
+
+### Guarded JIT object allocation (opt-in)
+
+`HL_JIT_ALLOC_INLINE=1` enables guarded inline allocation of eligible objects up to 40 bytes on Linux x86-64 SysV.
+Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
+(29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
+the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
+See [the full report](../../docs/JIT_INLINE_ALLOCATION.md) for validation, startup limitations and all six results.
+The cross-language table above was not regenerated.

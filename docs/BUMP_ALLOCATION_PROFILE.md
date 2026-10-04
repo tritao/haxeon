@@ -99,3 +99,10 @@ separately. Local scripts, outputs, profiles, disassemblies and manifests are in
 There is no VM/compiler change, so the full fixture, driver, Wasm, differential, self-hosting, GC stress, integration,
 DAP and mutation gates were not repeated in Stage 0. They are required for Stage 1. AArch64, Windows and 32-bit
 remain untested. No Stage 1 switch or default was added and nothing was pushed.
+
+## Guarded JIT allocation follow-up
+
+Stage 1 passed its gate with full payload/padding initialization: binarytrees improved 29.15% and merkletrees
+15.29%, with essentially unchanged RSS. It remains opt-in (`HL_JIT_ALLOC_INLINE=1`). See
+[JIT_INLINE_ALLOCATION.md](JIT_INLINE_ALLOCATION.md) for the six-benchmark table, implementation, code-size and
+startup tradeoffs, mutation checks and exact validation coverage.
