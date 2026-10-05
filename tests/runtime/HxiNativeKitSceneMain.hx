@@ -14,13 +14,13 @@ class HxiNativeKitSceneMain {
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
-		compiler.addSourceRoot(nativekitRoot + "/bindings/haxe");
-		compiler.addSourceRoot(nativekitRoot + "/modules/gpu/bindings/haxe");
+		compiler.addSourceRoot(Sys.getCwd() + "/packages/platform/src");
+		compiler.addSourceRoot(Sys.getCwd() + "/packages/gpu/src");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene/bindings/haxe");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene_render/bindings/haxe");
-		compiler.update("NativeKitWindow.hx", File.getContent(nativekitRoot + "/bindings/haxe/NativeKitWindow.hx"));
-		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(nativekitRoot + "/bindings/haxe/nativekit.hxmap"));
-		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(nativekitRoot + "/modules/gpu/bindings/nativekit-gpu.hxmap"));
+		compiler.update("NativeKitWindow.hx", File.getContent(Sys.getCwd() + "/packages/platform/src/NativeKitWindow.hx"));
+		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(Sys.getCwd() + "/packages/platform/bindings/nativekit.hxmap"));
+		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(Sys.getCwd() + "/packages/gpu/bindings/nativekit-gpu.hxmap"));
 		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot
 			+ "/modules/scene_render/bindings/nativekit-scene-render.hxmap"));
 		compiler.addFfiInterface("NativeKit.hxi", nativekitHxi);

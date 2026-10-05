@@ -189,3 +189,7 @@ than an editor-side workaround.
 
 The staged architecture, reload rules, and Pragtical conversion gates are
 tracked in the [roadmap](ROADMAP.md).
+
+## Platform and GPU libraries
+
+Optional native integration libraries live in [packages/](packages/README.md). NativeKit provides their C ABI; Haxeon owns the managed wrappers, FFI bindings, and integration tooling.

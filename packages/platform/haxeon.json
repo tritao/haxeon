@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-platform"
+  },
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "ffi": {
+    "interfaces": [
+      "bindings/nativekit.hxi"
+    ],
+    "projections": [
+      "bindings/nativekit.hxmap"
+    ]
+  },
+  "target": "host"
+}

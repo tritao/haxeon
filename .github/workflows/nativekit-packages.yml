@@ -1,0 +1,27 @@
+name: NativeKit packages
+on:
+  push:
+  pull_request:
+jobs:
+  bindings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NATIVEKIT_DIR: ${{ github.workspace }}/nativekit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v7
+        with:
+          repository: tritao/nativekit
+          ref: 6cf896189e2e90aadc91b067273a1030dc3c3ad9
+          path: nativekit
+          submodules: recursive
+      - name: Install build dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libffi-dev libfontconfig1-dev libgl1-mesa-dev libgles2-mesa-dev
+          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build python3-fonttools xvfb
+      - run: ./scripts/bootstrap-tools.sh
+      - run: ./packages/platform/tools/test-haxe-bindings.sh

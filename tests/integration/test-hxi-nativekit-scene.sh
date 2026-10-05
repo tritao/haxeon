@@ -13,8 +13,8 @@ mkdir -p "$generated_dir"
 
 scene_header="$nativekit_root/modules/scene/include/nativekit_scene.h"
 render_header="$nativekit_root/modules/scene_render/include/nativekit_scene_render.h"
-nativekit_import_header="$nativekit_root/bindings/haxe/nativekit_import.h"
-gpu_import_header="$nativekit_root/modules/gpu/bindings/nativekit_gpu_import.h"
+nativekit_import_header="$repo_dir/packages/platform/bindings/nativekit_import.h"
+gpu_import_header="$repo_dir/packages/gpu/bindings/nativekit_gpu_import.h"
 nativekit_header="$nativekit_root/include/nativekit.h"
 graphics_header="$nativekit_root/include/nativekit_graphics.h"
 gpu_header="$nativekit_root/modules/gpu/include/nativekit_gpu.h"
@@ -34,7 +34,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	--interface=NativeKitGpu \
 	--depends=NativeKit \
 	--include="$nativekit_root/modules/gpu/include" \
-	--include="$nativekit_root/modules/gpu/bindings" \
+	--include="$repo_dir/packages/gpu/bindings" \
 	--include="$nativekit_root/include" \
 	--exclude-header="$nativekit_header" \
 	--exclude-header="$graphics_header" \
