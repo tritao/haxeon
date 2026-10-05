@@ -9,6 +9,9 @@ import build.BuildPlanner;
 import build.Target;
 import build.TargetLayout;
 import build.NativeArtifactDemand.NativeArtifactDemand;
+import build.WorkspaceBuild;
+import build.WorkspaceBuild.LoweredWorkspace;
+import build.WorkspaceBuild.LoweredWorkspaceProject;
 import build.execution.ActionFingerprint;
 import build.execution.ActionId;
 import build.execution.ActionResult;
@@ -524,12 +527,29 @@ class BuildSystemMain {
 			&& executionText.indexOf("Link shared library foo") >= 0
 			&& executionText.indexOf("Compile Haxe package") >= 0,
 			"native sources, the requested shared library, and Haxe compilation should lower to concrete actions");
-		expect(execution.actions[execution.actions.length - 1].description.indexOf("Compile Haxe package") >= 0,
-			"the Haxe compiler request must follow native package actions");
+		// The compiler reads only FFI interfaces, so it does not wait for native package actions and the two build side by side.
+		var compileAction = compilerAction(execution);
+		expect(compileAction != null && compileAction.dependencies.length == 0, "the Haxe compiler request must not wait for native package actions");
+		expect(execution.actions.length > 1, "the native package actions are still part of the plan");
+		// ... but whatever runs the module waits for everything built for it, the native libraries it loads included.
+		if (Sys.systemName() != "Windows") {
+			var member = new LoweredWorkspaceProject("app", project, new TargetLayout(environment).hashLinkModulePath("main"),
+				[for (action in execution.actions) action.id]),
+				tests = WorkspaceBuild.withTests(new LoweredWorkspace(environment, execution, [member], execution.actions.length, new Map()), Sys.getCwd()),
+				testAction = [
+					for (action in tests.actions)
+						if (StringTools.startsWith(action.id.key(), "test:")) action
+				][0];
+			expect(testAction != null && [
+				for (action in execution.actions)
+					if (testAction.dependencies.indexOf(action.id) < 0) action
+			].length == 0,
+				"a workspace test must wait for the compile and the native actions of its project");
+		}
 		// Only live sessions ask the compiler to keep the history patches address a running module by.
 		var compilerArguments = function(plan:ExecutionPlan):Array<String> {
-			var last = plan.actions[plan.actions.length - 1];
-			return switch last.action {
+			var compile = compilerAction(plan);
+			return switch compile.action {
 				case Compiler(_, arguments, _, _, _): arguments;
 				default: [];
 			};
@@ -825,6 +845,16 @@ class BuildSystemMain {
 		for (entry in FileSystem.readDirectory(path))
 			removeTree(Path.join([path, entry]));
 		FileSystem.deleteDirectory(path);
+	}
+
+	static function compilerAction(plan:ExecutionPlan):Null<ExecutionAction> {
+		for (action in plan.actions)
+			switch action.action {
+				case Compiler(_, _, _, _, _):
+					return action;
+				default:
+			}
+		return null;
 	}
 
 	static function expect(condition:Bool, message:String):Void {

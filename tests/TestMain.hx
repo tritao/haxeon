@@ -594,6 +594,11 @@ class TestMain {
 			'Cyclic inline constant reference through "Invalid.VALUE"');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
 			'Cyclic field type inference through "First.value"');
+		expectCompileError('class Constants { public static final TEXT = "text"; public static final NUMBER = 1; } class Invalid { static final values = [Constants.TEXT, Constants.NUMBER]; } function main():Int return 0;',
+			'Array initializer for field "values" has mixed element types');
+		expectCompileError('class First { public static final values = [Second.values]; } class Second { public static final values = [First.values]; } function main():Int return 0;',
+			'Cyclic field type inference through "First.values"');
+
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		// A native binding on a function with a body would silently run the body instead.
@@ -1347,6 +1352,8 @@ class TestMain {
 		if (!boundedPolicyFound)
 			throw "Bounded specialization did not persist its concrete policy";
 		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable, Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
+		expectCompileError('interface Readable { function read():Int; } interface Writable { function write():Int; } class OnlyRead implements Readable {public function new() {} public function read():Int return 42;} class Reader {public function new(?v:Readable) {}} class Writer {public function new(?v:Writable) {}} function test(flag:Bool):Int {var v=flag ? new OnlyRead() : null;var r=new Reader(v);var w=new Writer(v);return 0;} function main():Int return test(true);',
+			'Type mismatch for argument 1 to "Writer.new"');
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Pair<T, U:T> {} function main():Int { var pair:Pair<Readable, Value>; return 42; }");
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Box<T:Readable> { public function new() {} } function main():Int { var box:Box<Value> = new Box<Value>(); return 42; }");
 		expectCompileError("interface Readable { function read():Int; } class Box<T:Readable> {} function main():Int { var box:Box<Int>; return 0; }",

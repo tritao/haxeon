@@ -2,6 +2,7 @@ import compiler.Frontend;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
+import compiler.ir.IrInliner.InlineMemo;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.IrVerifier;
 
@@ -133,6 +134,50 @@ class InlinerMain {
 		expect(baseCalls.indexOf("get") >= 0, "an overridden method must stay a virtual call");
 		expect(baseCalls.indexOf("twice") < 0, "an inherited method nobody overrides resolves and inlines");
 		expect(callsIn(programFunction(hierarchy, "viaLeaf")).indexOf("value") < 0, "a method with no override in the program resolves and inlines");
+		// A memo entry records the objects its inlining looked at, so a class that none of them touched leaves it alone: it is kept
+		// as it is, not worked out again to the same bytes.
+		var grown = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
+			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "
+			+ "override public function get():Int return n + 100; } class Leaf { public var v:Int; public function new(v:Int) this.v = v; "
+			+ "public function value():Int return v; } class LeafChild extends Leaf { public function new(v:Int) super(v); } "
+			+ "function viaBase(b:Base):Int return b.get() + b.twice(); function viaLeaf(l:Leaf):Int return l.value() + 1; "
+			+ "function main():Int return viaBase(new Derived(1)) + viaLeaf(new LeafChild(2));");
+		var grownPristine = grown.functions.copy(),
+			grownObjects = grown.objects.copy(),
+			grownCache = new IrInlineCache();
+		IrInliner.run(grown, grownCache);
+		var memosBefore:Map<String, InlineMemo> = [for (name => memo in grownCache.memo) name => memo];
+		grown.functions = grownPristine.copy();
+		grown.objects = grownObjects.concat([
+			{
+				name: "Unrelated",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [],
+				methods: []
+			}
+		]);
+		expect(IrInliner.run(grown, grownCache).length == 0, "a new class changes no function");
+		for (name => memo in memosBefore)
+			expect(grownCache.memo.get(name) == memo, 'a new class that $name never looked at must not redo it');
+		// A new subclass that overrides a method resolved through its base changes the functions that looked at that base, and only those.
+		grown.functions = grownPristine.copy();
+		grown.objects = grownObjects.concat([
+			{
+				name: "Override",
+				isValue: false,
+				base: "Base",
+				interfaces: [],
+				fields: [],
+				methods: [{name: "twice", functionName: "Override.twice"}]
+			}
+		]);
+		var overridden = IrInliner.run(grown, grownCache);
+		expect(overridden.indexOf("viaBase") >= 0, "a function that resolved a method through the base is redone when a subclass overrides it");
+		expect(callsIn(programFunction(grown, "viaBase")).indexOf("twice") >= 0, "an overridden method is no longer inlined");
+		expect(grownCache.memo.get("viaLeaf") == memosBefore.get("viaLeaf"), "a function that never looked at the base is not redone");
+		expect(overridden.indexOf("viaLeaf") < 0, "a function that never looked at the base is not reported");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main");
 		program.functions = originals.copy();

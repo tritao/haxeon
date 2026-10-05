@@ -156,7 +156,7 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null);
+				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr);
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
@@ -294,8 +294,8 @@ class FrontendCompilation {
 			if (modules.exists(module))
 				modules.get(module).typeVersion++;
 		var allocationBeforeModulePrune = AllocationMeter.sample();
-		// A structural equality helper has one origin, but every helper that calls it needs it kept.
-		var calledEqualityHelpers = equalityHelpersStillCalled(modules, names, typedByName, owners, invalidated);
+		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
+		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, typedByName, owners, invalidated);
 		for (name in names) {
 			if (token != null)
 				token.check();
@@ -309,7 +309,7 @@ class FrontendCompilation {
 				for (functionName in ownedFunctions)
 					valid.set(functionName, true);
 			for (cached in state.typedFunctions.keys())
-				if (calledEqualityHelpers.exists(cached)) {
+				if (calledGeneratedHelpers.exists(cached)) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 				}
@@ -341,14 +341,25 @@ class FrontendCompilation {
 					hasRetainedSpecializations = true;
 				}
 			}
-			if (hasRetainedSpecializations)
-				for (nested => nestedFunction in state.typedFunctions)
-					if (nestedFunction.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda
-						&& nestedFunction.origin != null
-						&& retainedSpecializations.exists(nestedFunction.origin)) {
-						valid.set(nested, true);
-						owners.set(nested, name);
+			if (hasRetainedSpecializations) {
+				// Retained generated functions own further closures and adapters. Follow
+				// that ownership transitively, but never revive children of a retyped body.
+				var pending = [for (functionName in retainedSpecializations.keys()) functionName];
+				while (pending.length > 0) {
+					var parent = pending.pop();
+					if (typedByName.exists(parent))
+						continue;
+					for (nested => fn in state.typedFunctions) {
+						if (valid.exists(nested))
+							continue;
+						if (fn.origin == parent || StringTools.startsWith(nested, "$lambda:" + parent + ":")) {
+							valid.set(nested, true);
+							owners.set(nested, name);
+							pending.push(nested);
+						}
 					}
+				}
+			}
 			if (lowerToIr)
 				for (pending in state.pendingIrFunctions.keys())
 					valid.set(pending, true);
@@ -496,7 +507,7 @@ class FrontendCompilation {
 			IrProgramAssembler.reflectableObjectsFrom(typedNew));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		for (name in IrInliner.run(ir, context.inlineCache()))
+		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled()))
 			if (regenerated.indexOf(name) < 0)
 				regenerated.push(name);
 		regenerated.sort(Reflect.compare);
@@ -529,27 +540,30 @@ class FrontendCompilation {
 
 	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
 	/**
-	 * The cached structural equality helpers that a helper kept by this build still calls, directly or through other
-	 * helpers. A helper reached through several comparisons has the origin of only one of them, so when that origin
-	 * is edited or stops comparing, pruning by origin alone would drop a helper that another kept helper calls and
+	 * Cached equality and wire helpers still called by retained helpers, directly or transitively.
+	 * A shared helper has only one recorded origin. When that origin is edited or stops requesting the helper,
+	 * pruning by origin or source-module reachability alone would drop a dependency of another retained helper and
 	 * the next verification fails on the unknown call. A helper is kept on its own when it was typed again in this
-	 * build or its origin is unchanged.
+	 * build or its origin is unchanged. Required helper owners join the artifact assembly/pruning set even when
+	 * their source module is no longer reachable; unrelated functions in that module are still pruned.
 	 */
-	static function equalityHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
+	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, invalidated:Map<String, Bool>):Map<String, Bool> {
+		var reachable = [for (name in names) name => true];
 		var holders:Map<String, compiler.modules.ModuleState> = [],
 			kept:Map<String, Bool> = [],
 			pending:Array<String> = [];
-		for (name in names) {
-			var state = modules.get(name);
-			if (state == null)
-				continue;
+		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
-				if (!StringTools.startsWith(cached, "$equality:"))
+				if (!StringTools.startsWith(cached, "$equality:")
+					&& !StringTools.startsWith(cached, "$wire:")
+					&& !StringTools.startsWith(cached, "$json:"))
 					continue;
-				holders.set(cached, state);
+				if (!holders.exists(cached) || reachable.exists(name))
+					holders.set(cached, state);
 				var origin = fn.origin;
-				if (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin))) {
+				if (reachable.exists(name)
+					&& (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin)))) {
 					kept.set(cached, true);
 					pending.push(cached);
 				}
@@ -566,13 +580,21 @@ class FrontendCompilation {
 			for (block in body.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
-						case Call(_, callee, _) if (holders.exists(callee) && !kept.exists(callee)):
-							kept.set(callee, true);
+						case Call(_, callee, _) if (holders.exists(callee)):
 							result.set(callee, true);
-							pending.push(callee);
+							var dependencyOwner = holders.get(callee).name;
+							if (!reachable.exists(dependencyOwner)) {
+								reachable.set(dependencyOwner, true);
+								names.push(dependencyOwner);
+							}
+							if (!kept.exists(callee)) {
+								kept.set(callee, true);
+								pending.push(callee);
+							}
 						default:
 					}
 		}
+		names.sort(Reflect.compare);
 		return result;
 	}
 

@@ -70,6 +70,15 @@ targets. `IrProgramAssembler.assemble` already scans all functions and rewrites 
 snapshots, and their fields are `final`. The pass is a pure function from the pristine IR set to fresh `IrFunction`
 objects for the program handed to the backend (memoized by input versions).
 
+**What invalidates a memoized function.** `IrInlineCache.memo` keeps a function's inlined form together with everything the
+inlining looked at, and reuses it, as the same object, while all of it is unchanged: the function's own pristine body; the
+pristine bodies of the callees it consulted (transitively); the settings every function depends on (entry point, the
+packed-value-field, inlining and load/store switches); and the *objects* it consulted. Objects are looked up through
+`IrObjectTable`, which records each name asked for, so a memo entry stores those names with a print of each (its base, its
+methods, a value class's fields, its direct subclasses). Adding a class, or changing one object's methods, therefore redoes
+only the functions that looked at that object, and not the rest of the program. Any new read of an object by the inliner or
+its passes must go through the table, or a stale function would be reused.
+
 ## Incremental and hot-patch safety (the main risk)
 
 Confirmed by the code:
@@ -132,6 +141,14 @@ Forwarding runs on each function's final form inside `IrInliner.inlinedVersion`,
 publication comparison. It also runs with `HAXEON_INLINE=0`. `HAXEON_LOADSTORE=0` disables it independently; both switches
 are included in the inliner memo fingerprint, compiler-worker identity and build artifact fingerprint. Wasm backends
 consume the same transformed IR.
+
+## Exact arithmetic strength reduction
+
+`IrStrengthReduction` runs on the same final post-inline function and rewrites an F64 `Div` only when its right operand
+is a `ConstFloat` whose raw bits are a normal power of two and whose reciprocal remains normal. It inserts a fresh exact
+reciprocal constant and changes the operation to `Mul`; the original constant is untouched because it may have other
+uses. Zero, subnormals, infinities, NaN, non-powers of two, `2^1023`, F32 operations and constant numerators are left
+unchanged. `HAXEON_STRENGTH=0` disables the pass and participates in the memo, worker and artifact fingerprints.
 
 ## Scalar replacement
 

@@ -54,7 +54,11 @@ class NativeCMakeProvider {
 			].concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
-			toolchain = new NativeToolchain(context.environment);
+			toolchain = new NativeToolchain(context.environment),
+			ccache = NativeCompilerCache.executable(),
+			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
+		for (argument in NativeCompilerCache.configureArguments(ccache))
+			configureArguments.push(argument);
 		if (native.cmake.library != null) {
 			configureArguments.push("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + outputDirectory);
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + outputDirectory);
@@ -72,7 +76,7 @@ class NativeCMakeProvider {
 		}
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
-				Process("cmake", configureArguments, runDirectory, new Map())),
+				Process("cmake", configureArguments, runDirectory, compilerCache)),
 			new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output', Process("cmake", [
 				"--build",
 				buildDirectory,
@@ -80,7 +84,7 @@ class NativeCMakeProvider {
 				native.cmake.target,
 				"--config",
 				configuration
-			], runDirectory, new Map()), true, true, ninja)
+			], runDirectory, compilerCache), true, true, ninja)
 		], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)

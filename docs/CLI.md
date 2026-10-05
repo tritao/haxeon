@@ -74,6 +74,11 @@ running program after `--`:
 ./scripts/haxeon run -- --verbose
 ```
 
+For function breakpoints during debugging, set `"inline": false` in `haxeon.json`. Omit the field to inherit
+`HAXEON_INLINE`; an explicit boolean overrides that environment default. The choice applies to the root project's
+compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
+the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
+
 On Linux and macOS, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the
@@ -299,9 +304,25 @@ The workspace file lists the member projects. Paths are relative to the file:
   jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
   oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the
   platform's default CMake generator.
+- Native compiles of CMake packages go through ccache when it is on `PATH` (`HAXEON_CCACHE=0` turns that off). The directory the
+  project root and the package's CMake sources share (the checkout, when they are kits of one repository) is given to ccache as
+  its base directory, so the same sources built in another checkout or worktree are served from the cache instead of
+  recompiled: a cold build of the Materia app in a second worktree gets every compile from it. ccache runs in depend mode,
+  which also caches sources whose preprocessed output names files that do not exist (HarfBuzz's Ragel-generated parsers).
+  Configure and link steps, and the Haxe compile, are not cached. Size the cache (`max_size` in ccache's configuration) for
+  the objects of every checkout you build, since entries beyond it are evicted.
+- A project's Haxe compile and its native libraries build side by side: the compiler reads only the FFI interfaces a module
+  imports, so its action waits for those and not for the libraries, which are loaded when the module runs. Whatever runs the
+  module (`test`) waits for everything built for its project.
 - `test` runs each project's compiled module and writes its output to `<buildDir>/tests/<name>.log`. A passing run
   is skipped while its inputs are unchanged: the module, the HashLink and Haxeon runtime libraries, the native
   libraries it loads, its project directory, and any files listed under `inputs`. Failing runs are never
   cached. Set `"cache": false` for a suite that depends on the clock, the network, or a peer process, or pass
   `--no-test-cache` to run everything.
+- `"shards": N` splits a project's tests across N processes that run side by side from the one compiled module, so a suite
+  made of independent groups takes as long as its slowest shard. Each runs `main.hl --shard I/N` as its own
+  `test:<name>#<I>of<N>` action, with its own log and its own cached result. The program lists its groups with
+  `haxeon.test.Shards.run`, which gives every group to exactly one shard for any N (heavier groups first, each to the
+  lightest shard so far, from the groups' `weight`s) and runs them all when started without `--shard`. The groups must not
+  depend on each other. Shard counts do not change what runs, only how it is spread across the machine's cores.
 

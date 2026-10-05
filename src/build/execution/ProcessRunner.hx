@@ -211,8 +211,10 @@ class ProcessRunner {
 			var bytes = Bytes.alloc(8192),
 				count = input.readBytes(bytes, 0, bytes.length);
 			while (count > 0) {
-				if (output != null)
+				if (output != null) {
 					output.writeBytes(bytes, 0, count);
+					output.flush();
+				}
 				count = input.readBytes(bytes, 0, bytes.length);
 			}
 			if (output != null)

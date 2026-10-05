@@ -68,8 +68,11 @@ extern function mathCeil(value:Float):Int;
 extern function mathFloor(value:Float):Int;
 
 /** Supported mathematical helpers backed by the stable runtime ABI. */
-@:pure
 class Math {
+	/** Pseudo-random value in [0, 1), using the existing portable integer RNG. */
+	public static inline function random():Float
+		return (Std.random(4096) * 4096.0 + Std.random(4096)) / 16777216.0;
+
 	public static inline var PI:Float = 3.141592653589793;
 
 	/** IEEE 754 positive infinity, as in the standard Haxe `Math`. */
@@ -84,76 +87,74 @@ class Math {
 	// NaN in either operand gives NaN, and -0.0 is below 0.0. Wasm has an instruction for each; elsewhere the
 	// comparisons are inlined, which is cheaper than a native call.
 	#if wasm
-	public static inline function min(left:Float, right:Float):Float
+	@:pure public static inline function min(left:Float, right:Float):Float
 		return mathMin(left, right);
 
-	public static inline function max(left:Float, right:Float):Float
+	@:pure public static inline function max(left:Float, right:Float):Float
 		return mathMax(left, right);
-
 	#else
-	public static inline function min(left:Float, right:Float):Float
+	@:pure public static inline function min(left:Float, right:Float):Float
 		return left != left || right != right ? Math.NaN : (left < right ? left : (right < left ? right : (1 / left < 0 ? left : right)));
 
-	public static inline function max(left:Float, right:Float):Float
+	@:pure public static inline function max(left:Float, right:Float):Float
 		return left != left || right != right ? Math.NaN : (left > right ? left : (right > left ? right : (1 / left < 0 ? right : left)));
-
 	#end
 
-	public static inline function abs(value:Float):Float
+	@:pure public static inline function abs(value:Float):Float
 		return mathAbs(value);
 
-	public static inline function isNaN(value:Float):Bool
+	@:pure public static inline function isNaN(value:Float):Bool
 		return mathIsNaN(value);
 
-	public static inline function isFinite(value:Float):Bool
+	@:pure public static inline function isFinite(value:Float):Bool
 		return mathIsFinite(value);
 
-	public static inline function pow(value:Float, exponent:Float):Float
+	@:pure public static inline function pow(value:Float, exponent:Float):Float
 		return mathPow(value, exponent);
 
-	public static inline function cos(value:Float):Float
+	@:pure public static inline function cos(value:Float):Float
 		return mathCos(value);
 
-	public static inline function sin(value:Float):Float
+	@:pure public static inline function sin(value:Float):Float
 		return mathSin(value);
 
-	public static inline function tan(value:Float):Float
+	@:pure public static inline function tan(value:Float):Float
 		return mathTan(value);
 
-	public static inline function sqrt(value:Float):Float
+	@:pure public static inline function sqrt(value:Float):Float
 		return mathSqrt(value);
 
-	public static inline function atan2(y:Float, x:Float):Float
+	@:pure public static inline function atan2(y:Float, x:Float):Float
 		return mathAtan2(y, x);
 
-	public static inline function acos(value:Float):Float
+	@:pure public static inline function acos(value:Float):Float
 		return mathAtan2(mathSqrt(1.0 - value * value), value);
 
-	public static inline function asin(value:Float):Float
+	@:pure public static inline function asin(value:Float):Float
 		return mathAtan2(value, mathSqrt(1.0 - value * value));
 
-	public static inline function atan(value:Float):Float
+	@:pure public static inline function atan(value:Float):Float
 		return mathAtan2(value, 1.0);
 
 	/** e raised to `value`. */
-	public static inline function exp(value:Float):Float
+	@:pure public static inline function exp(value:Float):Float
 		return mathExp(value);
 
 	/** Natural logarithm: NaN below zero, negative infinity at zero. */
-	public static inline function log(value:Float):Float
+	@:pure public static inline function log(value:Float):Float
 		return mathLog(value);
 
-	public static inline function round(value:Float):Int
+	@:pure public static inline function round(value:Float):Int
 		return mathRound(value);
 
-	public static inline function ceil(value:Float):Int
+	@:pure public static inline function ceil(value:Float):Int
 		return mathCeil(value);
 
-	public static inline function floor(value:Float):Int
+	@:pure public static inline function floor(value:Float):Int
 		return mathFloor(value);
 
 	/** Largest integral Float not above `value`; NaN, infinities, and values from 2^52 are already integral. */
-	public static function ffloor(value:Float):Float {
+	@:pure public static function ffloor(value:Float):Float {
 		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
@@ -161,7 +162,7 @@ class Math {
 	}
 
 	/** Smallest integral Float not below `value`. */
-	public static function fceil(value:Float):Float {
+	@:pure public static function fceil(value:Float):Float {
 		if (value == 0.0 || !(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var truncated = value - value % 1.0;
@@ -169,7 +170,7 @@ class Math {
 	}
 
 	/** Nearest integral Float, with halves rounded up like `round`. */
-	public static function fround(value:Float):Float {
+	@:pure public static function fround(value:Float):Float {
 		if (!(Math.abs(value) < 4503599627370496.0))
 			return value;
 		var lower = ffloor(value);

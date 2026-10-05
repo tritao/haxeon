@@ -36,7 +36,7 @@ Median of 9 whole-process runs (startup included), pinned to core 0, `--size 0` 
 |---|---|---|---|---|
 | binarytrees (18) | 1.246 (95) | 1.235 (95) | 0.992 (93) | 0.636 (72) |
 | nbody (5000000) | 0.231 (6) | 0.783 (7) | 0.182 (25) | 0.209 (7) |
-| spectral-norm (2000) | 0.261 (7) | 0.269 (8) | 0.170 (27) | 0.132 (6) |
+| spectral-norm (2000) | 0.180 (7) | 0.269 (8) | 0.170 (27) | 0.132 (6) |
 | fasta (2500000) | 0.474 (79) | 0.550 (79) | 0.403 (127) | 0.254 (9) |
 | merkletrees (16) | 0.501 (79) | 0.506 (79) | 0.370 (76) | 0.267 (49) |
 | lru (100 1000000) | 0.094 (8) | 0.100 (8) | 0.140 (27) | 0.119 (9) |
@@ -70,6 +70,17 @@ The larger fasta improvement in the main table comes from stdout buffering, whic
 The pre-pass post-inliner analysis predicted 9/53 loads removed in nbody (advance 4/23, energy 3/17, offsetMomentum 2/10)
 and 2/15 in fasta (genRandom 1/2, randomFasta 1/3). The other totals were binarytrees 0/7, spectral-norm 2/9,
 merkletrees 0/19 and lru 2/46. These static counts justified trying the pass; they were not a prediction of runtime gains.
+
+### Exact division strength reduction
+
+`HAXEON_STRENGTH=0` disables the post-inline rewrite of `x / 2^k` to `x * 2^-k`. The raw IEEE-754 bits must describe a
+finite, nonzero normal power of two, and the reciprocal must also be normal and exactly representable. Constants on the
+left and divisors such as 3 or 10 remain divides.
+
+Nine alternating pairs on core 0 measured spectral-norm at 0.258599s with the pass off and 0.180365s with it on, a
+30.3% improvement. Nbody measured 0.214460s and 0.215242s respectively, a 0.36% difference within noise. In
+`App.eval_A`, disassembly changes the constant divide from `vdivsd` to `vmulsd`; the remaining data-dependent `vdivsd`
+is unchanged.
 
 Read the Haxe/HL column with care: both HashLink columns run on the same `.tools/hashlink` VM, which is the Haxeon
 fork (thread-local allocation buffers, a 64 MB minimum collection trigger, cheaper allocation zeroing, `hl_dyn_castp`,
@@ -137,3 +148,73 @@ Haxeon deliberately differs from stock Haxe here, so the sources were adapted
 (see `NOTICE.md`): value-returning functions and ordinary parameters need type
 annotations (signatures are part of live-patch classification), and arithmetic
 on a `Null<Int>` needs a null check.
+
+### Small-allocation entry and zeroing
+
+The x86-64 TLAB allocator now handles ready small-allocation slots through a thin entry and clears up to five
+words with explicit stores. Special modes share the original full allocator's eligibility policy.
+`HL_GC_ALLOC_FAST=0` restores the full entry and original zeroing loop. This changes the shared HashLink runtime;
+no new cross-language comparison is implied.
+
+Nine alternating pairs against a frozen unmodified library, identical bytecode, core 0, size-0 inputs and
+one-minute load <=4 gave:
+
+| Benchmark | Original (s) | Fast entry + clearing (s) | Improvement | Peak RSS change |
+|---|---:|---:|---:|---:|
+| binarytrees | 1.210434 | 1.097347 | +9.34% | +0.00% |
+| merkletrees | 0.499628 | 0.451617 | +9.61% | +0.00% |
+| nbody | 0.215978 | 0.216932 | -0.44% | +0.00% |
+| fasta | 0.455936 | 0.451276 | +1.02% | +0.00% |
+| spectral-norm | 0.181919 | 0.181254 | +0.37% | +0.00% |
+| lru | 0.090623 | 0.089936 | +0.76% | +0.00% |
+
+Both trees improved in all nine pairs. RSS was unchanged, and the sub-1% nbody difference is within noise.
+Full validation and the rejected intermediate variants are recorded in
+[GC_ALLOCATION_PROFILE.md](../../docs/GC_ALLOCATION_PROFILE.md).
+
+### Short ASCII byte decoding
+
+The native Bytes-to-String decoder now widens ASCII ranges of at most 128 bytes directly from a stack snapshot taken
+before allocating the String. Unicode and larger ranges keep the existing decoder. `HL_TEXT_ASCII=0` restores the
+original path. Nine alternating pairs on core 0 measured fasta at 0.454398s before and 0.438277s after (3.55% faster);
+the other five benchmarks changed by −0.33% to +1.08%, within noise, with peak RSS level. The snapshot is required
+because allocation callbacks and finalizers can mutate or invalidate the input.
+See [the measurement and validation report](../../docs/FASTA_OUTPUT_PROFILE.md). The cross-language table above was
+not regenerated.
+
+### Bounded empty-page retention
+
+The GC now keeps reusable empty pages up to a 64 MiB cap and four times the recent nonempty-page capacity,
+aging out old peaks over four collections. It is enabled by default on Linux x86-64; `HL_GC_KEEP_EMPTY=0`
+restores immediate release, and `HL_GC_EMPTY_BUDGET=<bytes>` changes the cap.
+
+Nine alternating pairs on core 0, identical bytecode, load <=4, measured binarytrees at 1.082926 → 0.810813 s
+(25.13% faster) and merkletrees at 0.448802 → 0.374593 s (16.53%). Their peak RSS was essentially unchanged.
+The other benchmarks had no regression beyond noise. Reduced page release/refaulting corrects the earlier
+cache-miss explanation. See [the full measurement and validation report](../../docs/GC_EMPTY_PAGE_RETENTION.md).
+The cross-language table above was not regenerated.
+
+### Guarded JIT object allocation (opt-in)
+
+`HL_JIT_ALLOC_INLINE=1` enables guarded inline allocation of eligible objects up to 40 bytes on Linux x86-64 SysV.
+Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
+(29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
+the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
+See [the full report](../../docs/JIT_INLINE_ALLOCATION.md) for validation, startup limitations and all six results.
+The cross-language table above was not regenerated.
+
+### Rejected integer-box allocation experiment
+
+A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
+LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
+that variant was reverted. See [the experiment report](../../docs/JIT_BOXED_ALLOCATION.md).
+The cross-language table above was not regenerated.
+
+### Corrected integer-box allocation (opt-in; final timing gate pending)
+
+`HL_JIT_ALLOC_BOX=1` enables guarded integer boxing on Linux x86-64 SysV. Isolating cold JIT helpers from hot
+runtime text removes the earlier LRU regression. Nine alternating pairs on core 0, load <=4, with object allocation
+enabled on both sides measured merkletrees at 0.259076 → 0.207330 s (19.97% faster) and LRU at
+0.094389 → 0.093915 s (0.50% faster). The other four benchmarks and RSS showed no meaningful regression.
+Correctness validation is complete; compiler and startup/JIT paired timings remain pending due to external load.
+See [the follow-up report](../../docs/JIT_BOXED_ALLOCATION_LAYOUT.md). The cross-language table above was not regenerated.

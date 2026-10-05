@@ -65,6 +65,10 @@ class LexicalStorageAnalysis extends BindingWalker {
 	}
 
 	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void {
+		read(declaration);
+	}
+
+	function read(declaration:Null<String>):Void {
 		if (declaration == null)
 			return;
 		if (!refersToItself(declaration) && knownWrites != null && isCaptured(declaration) && knownWrites.exists(declaration))
@@ -89,15 +93,14 @@ class LexicalStorageAnalysis extends BindingWalker {
 			exceptions.set(declaration, true);
 	}
 
-	/** A call of a plain name does not read the local as a value; at most it is a local function calling itself. */
+	/** A closure reads its callee/receiver binding even without a bare value use. */
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void {
-		if (declaration != null)
-			refersToItself(declaration);
+		read(declaration);
 	}
 
-	/** `local.method(...)` reads the local as its receiver, so a closure that does so needs the shared cell like any other read. */
-	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
-		used(local, declaration, span);
+	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
+		read(declaration);
+	}
 
 	function isCaptured(declaration:String):Bool
 		return insideLambda() && lambdaDepth > lambdaDepthOf(declaration);

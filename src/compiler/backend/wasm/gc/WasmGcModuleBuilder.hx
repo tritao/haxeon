@@ -383,9 +383,22 @@ class WasmGcModuleBuilder {
 				functions.set(native.name,
 					module.addFunction(new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), WasmFmod.locals(),
 						WasmFmod.body())));
+		// Inline runtime calls also need real functions when their addresses escape.
+		// Keep aliases under their declared names while lowering their ABI symbols.
+		var addressed:Map<String, Bool> = [];
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (instruction in block.instructions)
+					switch instruction.value {
+						case StaticClosure(_, name):
+							addressed.set(name, true);
+						default:
+					}
 		for (native in program.natives)
 			if (used.exists(native.name)
-				&& (native.name == "__string_compare_full"
+				&& !functions.exists(native.name)
+				&& (addressed.exists(native.name)
+					|| native.name == "__string_compare_full"
 					|| native.name == "__math_ceil"
 					|| native.name == "__math_floor"
 					|| native.name == "__math_sqrt"
@@ -404,14 +417,16 @@ class WasmGcModuleBuilder {
 				var arguments = [
 					for (index in 0...native.arguments.length)
 						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
-				], result = new IrValue(-1, native.name + "_result", native.result), resultLocal = allocateLocal(plan.valueType(native.result)),
-					bodyResult = functionRepresentation.lowerRuntimeCall(native.name, result, arguments, resultLocal,
+				], result = new IrValue(-1, native.name + "_result",
+					native.result), resultLocal = native.result == Void ? -1 : allocateLocal(plan.valueType(native.result)),
+					bodyResult = functionRepresentation.lowerRuntimeCall(native.symbol, result, arguments, resultLocal,
 						[for (index in 0...arguments.length) index]),
 					body = switch bodyResult {
 						case Handled(instructions): instructions;
 						case UseDefault: throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
 					};
-				body.push(LocalGet(resultLocal));
+				if (native.result != Void)
+					body.push(LocalGet(resultLocal));
 				body.push(Return);
 				functions.set(native.name, module.addFunction(new WasmFunction(native.name, functionType, locals, body)));
 			}

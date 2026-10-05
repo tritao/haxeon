@@ -1206,6 +1206,8 @@ class IrGenerator {
 				switch receiver.type {
 					case TArray(element) if (operation == "index_of" && isEnumType(element)):
 						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
+					case TArray(element) if (operation == "remove" && isEnumType(element)):
+						lowerEnumArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
@@ -2412,6 +2414,35 @@ class IrGenerator {
 		builder.jump(scan);
 		builder.select(done);
 		return builder.load(resultName, I32);
+	}
+
+	/**
+	 * `Array.remove` on an array of enum values removes the first value `indexOf` finds, which compares as `==` does for
+	 * enums; the array native it would otherwise use compares references and never finds a constructor evaluated elsewhere.
+	 */
+	static function lowerEnumArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
+		var array = arguments[0], id = array.id, arrayName = '$' + 'enum-remove-array:$id', foundName = '$' + 'enum-remove-found:$id',
+			removedName = '$' + 'enum-remove-result:$id', removeBlock = builder.createBlock(), missingBlock = builder.createBlock(),
+			doneBlock = builder.createBlock();
+		localTypes.set(arrayName, array.type);
+		localTypes.set(foundName, I32);
+		localTypes.set(removedName, Bool);
+		builder.store(arrayName, array);
+		builder.store(foundName, lowerEnumArrayIndexOf(builder, localTypes, element, arguments));
+		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), removeBlock, missingBlock);
+		builder.select(removeBlock);
+		lowerArrayNativeCall(builder, element, "splice", [
+			builder.load(arrayName, array.type),
+			builder.load(foundName, I32),
+			builder.constInt(1)
+		], lowerType(TArray(element)));
+		builder.store(removedName, builder.constBool(true));
+		builder.jump(doneBlock);
+		builder.select(missingBlock);
+		builder.store(removedName, builder.constBool(false));
+		builder.jump(doneBlock);
+		builder.select(doneBlock);
+		return builder.load(removedName, Bool);
 	}
 
 	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {

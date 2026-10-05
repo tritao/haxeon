@@ -56,6 +56,8 @@ class CompilerProvider {
 			}
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
+		if (project.manifest.inlineEnabled != null)
+			arguments.push("--define=haxeon-inline=" + (project.manifest.inlineEnabled ? "1" : "0"));
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
 		if (context.live)
 			arguments.push("--live");

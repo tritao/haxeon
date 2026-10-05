@@ -2,6 +2,7 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
+import compiler.ir.IrObjectTable;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.IrLoadStoreForwarding;
 import compiler.ir.SourceProvenance;
@@ -126,7 +127,7 @@ class LoadStoreMain {
 		b.fieldSet(o, "v", value);
 		var v1 = b.fieldGet(o, "v", Obj("Value")),
 			v2 = b.fieldGet(o, "v", Obj("Value"));
-		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), objects)) == 2, "inline value fields must not be forwarded");
+		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), IrObjectTable.of(objects))) == 2, "inline value fields must not be forwarded");
 		// Replacing an inline value also changes primitive fields reached through interior pointers.
 		b = new IrBuilder();
 		o = b.argument("holder", Obj("Box"));
@@ -134,7 +135,8 @@ class LoadStoreMain {
 		value = b.argument("replacement", Obj("Value"));
 		b.fieldGet(interior, "n", I32);
 		b.fieldSet(o, "v", value);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), objects)) == 2, "inline copies kill interior facts");
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects))) == 2,
+			"inline copies kill interior facts");
 		// Facts stop at blocks, but eliminated values are substituted in successor phis.
 		b = new IrBuilder();
 		o = b.argument("o", Obj("Box"));

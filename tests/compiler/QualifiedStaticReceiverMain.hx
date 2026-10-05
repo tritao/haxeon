@@ -21,10 +21,29 @@ class QualifiedStaticReceiverMain {
 		qualified.analyze("Main");
 		Sys.println("PASS: fully qualified static field receivers resolve");
 
+		var imported = new Compiler();
+		imported.update("shapes/Holder.hx", HOLDER);
+		imported.update("Main.hx",
+			"import shapes.Holder; class Main { var shapes:String = 'unrelated'; public function new() {} function run():Int return Holder.VALUES.indexOf(2); static function main():Int return new Main().run(); }");
+		imported.analyze("Main");
+		Sys.println("PASS: imported receiver ignores an introduced package root shadowed by a field");
+
+		imported.update("Main.hx",
+			"import shapes.Holder; class Main { var shapes:String = 'updated'; public function new() {} function run():Int return Holder.BOX.sides.indexOf(6); static function main():Int return new Main().run(); }");
+		imported.analyze("Main");
+		Sys.println("PASS: imported receiver provenance survives incremental reanalysis");
+
+		var aliasShadowed = new Compiler();
+		aliasShadowed.update("shapes/Holder.hx", HOLDER);
+		aliasShadowed.update("Main.hx",
+			"import shapes.Holder; class Main { static function main():Int { var Holder = { VALUES: ['nine'] }; return Holder.VALUES.indexOf('nine'); } }");
+		aliasShadowed.analyze("Main");
+		Sys.println("PASS: source alias value still shadows an imported type");
+
 		var shadowed = new Compiler();
 		shadowed.update("shapes/Holder.hx", HOLDER);
 		shadowed.update("Main.hx",
-			"class Main { static function main():Int { var shapes = { Holder: { VALUES: [9] } }; return shapes.Holder.VALUES.indexOf(9); } }");
+			"class Main { static function main():Int { var shapes = { Holder: { VALUES: ['nine'] } }; return shapes.Holder.VALUES.indexOf('nine'); } }");
 		shadowed.analyze("Main");
 		Sys.println("PASS: a local value shadows a package of the same name");
 	}

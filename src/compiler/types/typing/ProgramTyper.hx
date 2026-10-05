@@ -40,7 +40,7 @@ class ProgramTyper {
 	}
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
-			?cachedMetadata:TypedProgram):MeasuredTypedProgram {
+			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -117,8 +117,14 @@ class ProgramTyper {
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSetup = AllocationMeter.sample();
-		bodyTyper.inferNoReturnFunctions();
-		session.inferPureFunctions();
+		// With the facts of `SemanticAssembly` there is nothing to infer: they are about this same program.
+		if (facts == null) {
+			bodyTyper.inferNoReturnFunctions();
+			session.inferPureFunctions();
+		} else {
+			bodyTyper.useNoReturnFunctions(facts.noReturn);
+			session.usePureFunctions(facts.pure);
+		}
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		var allocationAfterNoReturn = AllocationMeter.sample();
 		if (requireMain) {

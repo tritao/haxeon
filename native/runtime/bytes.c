@@ -103,10 +103,35 @@ static vstring *realtime_string_from_utf8( const char *utf8 ) {
 	return result;
 }
 
+/* Read once per native-library instance; concurrent first calls may cache the same value. */
+static atomic_int realtime_bytes_ascii_mode = ATOMIC_VAR_INIT(-1);
+static bool realtime_bytes_ascii_enabled( void ) {
+	int mode = atomic_load_explicit(&realtime_bytes_ascii_mode,memory_order_relaxed);
+	if( mode < 0 ) {
+		const char *option = getenv("HL_TEXT_ASCII");
+		mode = option == NULL || strcmp(option,"0") != 0;
+		atomic_store_explicit(&realtime_bytes_ascii_mode,mode,memory_order_relaxed);
+	}
+	return mode != 0;
+}
+
 /* Decodes `length` UTF-8 bytes, which must not contain NUL. */
 static vstring *realtime_string_from_utf8_bytes( const vbyte *data, int length ) {
 	if( length > 0 && memchr(data,0,(size_t)length) != NULL )
 		hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
+	if( length <= 128 && realtime_bytes_ascii_enabled() ) {
+		// Snapshot before allocating: GC/finalizers and allocation callbacks may invalidate or mutate the source.
+		vbyte snapshot[128];
+		if( length > 0 ) memcpy(snapshot,data,(size_t)length);
+		unsigned int bits = 0;
+		for( int i = 0; i < length; i++ ) bits |= snapshot[i];
+		if( (bits & 0x80) == 0 ) {
+			uchar *output;
+			vstring *result = realtime_string_alloc(length,&output);
+			for( int i = 0; i < length; i++ ) output[i] = (uchar)snapshot[i];
+			return result;
+		}
+	}
 	char *utf8 = (char *)malloc((size_t)length + 1);
 	if( utf8 == NULL ) hl_error("Could not allocate byte string");
 	if( length > 0 ) memcpy(utf8, data, (size_t)length);

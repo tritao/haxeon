@@ -160,6 +160,11 @@ class BodyTyper {
 	/** Delegates to the free-standing analysis so the same inference can also run, on plain
 	 * canonical signatures, before typing to detect a purity/no-return answer that drifted.
 	 */
+	function useNoReturnFunctions(known:Map<String, Bool>):Void {
+		for (name in known.keys())
+			session.noReturnFunctions.set(name, true);
+	}
+
 	function inferNoReturnFunctions():Void {
 		var overridden = compiler.types.analysis.OverrideAnalysis.overriddenMethods(session.classDecls);
 		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, session.classDecls, overridden).keys())
@@ -824,8 +829,14 @@ class BodyTyper {
 			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
 			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
 			case MapLiteral(entries, _): entries.length == 0;
-			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
-			case SwitchExpression(_, _, _, _): true;
+			// Preserve a concrete branch type rather than erasing it to one later interface use.
+			case Conditional(_, whenTrue, whenFalse, _): usesLocalExpectedType(whenTrue) && usesLocalExpectedType(whenFalse);
+			case SwitchExpression(_, cases, defaultExpression, _):
+				var needsContext = defaultExpression == null || usesLocalExpectedType(defaultExpression);
+				for (arm in cases)
+					if (!usesLocalExpectedType(arm.result))
+						needsContext = false;
+				needsContext;
 			default: false;
 		};
 
@@ -1620,6 +1631,38 @@ class BodyTyper {
 
 	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
+		// Result annotations are represented by a parser-generated local binding.
+		// Fill only omitted parameter types from the surrounding function context;
+		// keep the explicit result so an incompatible annotation is still rejected.
+		var expression = BlockExpression(statements, result, span);
+		var literal = LambdaSyntax.literal(expression);
+		if (literal != expression && expectedType != null)
+			switch statements[0] {
+				case VarDeclaration(_, FunctionType(parameters, resultType), _, _):
+					switch expectedType {
+						case TFunction(expectedParameters, expectedResult) if (parameters.length == expectedParameters.length):
+							var resolved = [
+								for (index in 0...parameters.length)
+									switch parameters[index] {
+										case InferredType:
+											expectedParameters[index];
+										case NullableType(InferredType):
+											switch expectedParameters[index] {
+												case TNullable(_): expectedParameters[index];
+												default: TNullable(expectedParameters[index]);
+											}
+										default:
+											session.declarations.resolve(parameters[index], span, context.typeSubstitutions);
+									}
+							];
+							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
+							var value = typeExpression(literal, scope, TFunction(resolved, result));
+							// An unbound generic result uses Dynamic as an inference hint.
+							return expectedResult == TDynamic ? value : coerce(value, expectedType, "annotated lambda", "E1003");
+						default:
+					}
+				default:
+			}
 		var blockScope = new Scope(scope),
 			typedStatements = typeStatements(statements, blockScope, context.expectedReturnType);
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))

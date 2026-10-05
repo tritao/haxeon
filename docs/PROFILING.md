@@ -71,3 +71,10 @@ values cover request preparation, compilation, artifact encoding, and writing.
 Use the unprofiled benchmark for latency comparisons, since live sampling adds
 CPU overhead.
 
+To see why an incremental edit recompiled what it did, run the build with `HAXEON_EXPLAIN_INVALIDATION=1`. The compiler worker
+then writes, for each compile, how many artifacts each kind of invalidation selected (`source-revision`, `body-changed`,
+`signature-changed`, `dependency-signature`, `purity-dependency`, ...), a sample of the artifacts with their causes, and how many
+functions were retyped and regenerated, to its log under the session directory (`HAXEON_COMPILER_SESSION_DIR`, default
+`~/.cache/haxeon/compiler`). A comment-only edit should retype nothing; if it reports a long list, the kind with the large count
+names the dependency that is invalidating too much.
+

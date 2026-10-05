@@ -350,3 +350,17 @@ captured-receiver-reassigned	42
 empty-literal-inference	42
 abstract-underlying-this	42
 nullable-comprehensions	42
+test-shards	42
+array-key-value-comprehension	42
+enum-array-contains	42
+float-div-pow2	42
+counted-array-loops	42
+bytes-ascii-decode	42
+jit-inline-allocation	42
+jit-boxed-allocation	42
+gc-shared-graph	42
+captured-call-reassignment	42
+rpc-lifecycle	42
+native-static-codec	42
+static-array-inference	42
+nullable-concrete-interfaces	42
