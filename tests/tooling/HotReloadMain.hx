@@ -652,6 +652,14 @@ class HotReloadMain {
 		for (_ in 0...100)
 			HlAssemblerStateCodec.decode(assemblerBytes);
 		probeCompiler("assembler");
+		// Version 1 omitted import ordering, so an initialized baseline cannot safely resume.
+		var state = assembler.exportState(),
+			legacyBytes = assemblerBytes.sub(0, 25 + 4 + state.symbols.length + 4 + state.cache.length);
+		legacyBytes.set(3, 1);
+		var legacyRejected = false;
+		try HlAssemblerStateCodec.decode(legacyBytes) catch (error:Dynamic)
+			legacyRejected = Std.string(error).indexOf("native-import ordering") >= 0;
+		if (!legacyRejected) throw "Legacy assembler baseline was accepted without import ordering";
 		var uninterruptedAssembler = assembler.copy(),
 			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
 			editedCompiler = new Compiler();
