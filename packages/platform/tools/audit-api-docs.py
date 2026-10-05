@@ -596,8 +596,8 @@ def json_report(root: Path, c: CReport, hxi: list[HxiReport], include_fields: bo
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path(os.environ.get("NATIVEKIT_DIR", str(Path(__file__).resolve().parents[4] / "nativekit"))),
-                        help="NativeKit root (default: NATIVEKIT_DIR or sibling checkout)")
+    parser.add_argument("--root", type=Path, default=Path(os.environ.get("NATIVEKIT_DIR", str(Path(__file__).resolve().parents[3] / "vendor/nativekit"))),
+                        help="NativeKit root (default: NATIVEKIT_DIR or vendor/nativekit)")
     parser.add_argument("--c-header", action="append", type=Path, dest="c_headers",
                         help="C header to scan; repeatable (default: public headers)")
     parser.add_argument("--hxi", action="append", type=Path, dest="hxi_files",

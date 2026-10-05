@@ -6,7 +6,7 @@ The first extraction preserves existing NativeKit namespaces. Public `haxeon.pla
 
 ## Native dependency
 
-The supported NativeKit revision is recorded in `../nativekit.lock` and pinned in the package CI workflow. Check out NativeKit alongside Haxeon, or set `NATIVEKIT_DIR=/path/to/nativekit`. `HAXEON_DIR` may override the compiler checkout. Native libraries must be built and available on the runtime library search path; the package manifest does not build or bundle them.
+The `vendor/nativekit` submodule pins the supported NativeKit revision. Initialize it and its native dependencies from the Haxeon repository root with `git submodule update --init --recursive vendor/nativekit`. Set `NATIVEKIT_DIR=/path/to/nativekit` to use a separate checkout. `HAXEON_DIR` may override the compiler checkout. Native libraries must be built and available on the runtime library search path; the package manifest does not build or bundle them.
 
 ## Tooling
 

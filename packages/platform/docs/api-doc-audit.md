@@ -1,7 +1,7 @@
 # API documentation audit
 
 Run the audit from the Haxeon repository root. The native header inventory uses
-`NATIVEKIT_DIR`, or the sibling NativeKit checkout by default:
+`NATIVEKIT_DIR`, or `vendor/nativekit` by default:
 
 ```sh
 ./packages/platform/tools/audit-api-docs.py --only-missing

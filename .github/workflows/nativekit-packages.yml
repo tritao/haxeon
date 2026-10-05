@@ -6,17 +6,9 @@ jobs:
   bindings:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      NATIVEKIT_DIR: ${{ github.workspace }}/nativekit
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: recursive
-      - uses: actions/checkout@v7
-        with:
-          repository: tritao/nativekit
-          ref: 16b5635a08ccde73af56c2daa379341648faa9c4
-          path: nativekit
           submodules: recursive
       - name: Install build dependencies
         run: >-

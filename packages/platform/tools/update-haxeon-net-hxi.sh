@@ -3,7 +3,7 @@ set -euo pipefail
 
 package_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$package_dir/../.." && pwd)"}
-nativekit_dir=${NATIVEKIT_DIR:-"$(dirname "$haxeon_dir")/nativekit"}
+nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
 platform_dir="$haxeon_dir/packages/platform"
 gpu_dir="$haxeon_dir/packages/gpu"
 output="$platform_dir/bindings/nativekit-net.hxi"
