@@ -829,8 +829,14 @@ class BodyTyper {
 			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
 			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
 			case MapLiteral(entries, _): entries.length == 0;
-			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
-			case SwitchExpression(_, _, _, _): true;
+			// Preserve a concrete branch type rather than erasing it to one later interface use.
+			case Conditional(_, whenTrue, whenFalse, _): usesLocalExpectedType(whenTrue) && usesLocalExpectedType(whenFalse);
+			case SwitchExpression(_, cases, defaultExpression, _):
+				var needsContext = defaultExpression == null || usesLocalExpectedType(defaultExpression);
+				for (arm in cases)
+					if (!usesLocalExpectedType(arm.result))
+						needsContext = false;
+				needsContext;
 			default: false;
 		};
 

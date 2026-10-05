@@ -1328,6 +1328,8 @@ class TestMain {
 		if (!boundedPolicyFound)
 			throw "Bounded specialization did not persist its concrete policy";
 		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable, Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
+		expectCompileError('interface Readable { function read():Int; } interface Writable { function write():Int; } class OnlyRead implements Readable {public function new() {} public function read():Int return 42;} class Reader {public function new(?v:Readable) {}} class Writer {public function new(?v:Writable) {}} function test(flag:Bool):Int {var v=flag ? new OnlyRead() : null;var r=new Reader(v);var w=new Writer(v);return 0;} function main():Int return test(true);',
+			'Type mismatch for argument 1 to "Writer.new"');
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Pair<T, U:T> {} function main():Int { var pair:Pair<Readable, Value>; return 42; }");
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Box<T:Readable> { public function new() {} } function main():Int { var box:Box<Value> = new Box<Value>(); return 42; }");
 		expectCompileError("interface Readable { function read():Int; } class Box<T:Readable> {} function main():Int { var box:Box<Int>; return 0; }",
