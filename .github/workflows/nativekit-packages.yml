@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: tritao/nativekit
-          ref: 6cf896189e2e90aadc91b067273a1030dc3c3ad9
+          ref: 16b5635a08ccde73af56c2daa379341648faa9c4
           path: nativekit
           submodules: recursive
       - name: Install build dependencies
