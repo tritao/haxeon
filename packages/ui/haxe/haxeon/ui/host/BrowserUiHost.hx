@@ -107,8 +107,8 @@ class BrowserUiHost {
 		pending = new UiHostPendingResources();
 		loaded = new Map();
 		for (font in options.fonts) {
-			var resource = new Resource();
-			resource.set_struct_size(Resource.size());
+			var resource = new ResourceValue();
+			resource.set_struct_size(ResourceValue.size());
 			resource.set_flags(ResourceFlags.Readable);
 			resource.set_uri(font.uri);
 			resource.set_mime_type("font/ttf");
