@@ -143,7 +143,12 @@ class IrInterpreter {
 				null;
 			case ArrayGet(_, array, index): arrayGet(value(values, array), Std.int(value(values, index)));
 			case ArraySet(array, index, input):
-				arraySet(value(values, array), Std.int(value(values, index)), value(values, input));
+				var initial = switch array.type {
+					case Array(Bool): false;
+					case Array(element): defaultValue(element);
+					default: null;
+				};
+				arraySet(value(values, array), Std.int(value(values, index)), value(values, input), initial);
 				null;
 			case ArraySize(_, array): interpArray(value(values, array)).values.length;
 			case IteratorNew(_, array): new InterpIterator(interpArray(value(values, array)));
@@ -291,10 +296,14 @@ class IrInterpreter {
 		return value.values[index];
 	}
 
-	function arraySet(array:Dynamic, index:Int, input:Dynamic):Void {
+	function arraySet(array:Dynamic, index:Int, input:Dynamic, initial:Dynamic):Void {
 		var value = interpArray(array);
-		if (index < 0 || index >= value.values.length)
+		if (index < 0)
 			throw 'IR interpreter array index $index is out of bounds';
+		// Haxe array writes grow the array. Iterator comprehensions start with
+		// an empty result because their final length is not known in advance.
+		while (value.values.length <= index) value.values.push(initial);
+		if (value.capacity < value.values.length) value.capacity = value.values.length + 8;
 		value.values[index] = input;
 	}
 

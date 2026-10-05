@@ -174,6 +174,18 @@ class TestMain {
 		if (new IrInterpreter(scientificLiteralProgram).run("main") != 42)
 			throw "Scientific-notation literals did not parse or type as Float values";
 		Frontend.compile('class NullableIntegerField { public var value:Null<Int>; public function new(value:Null<Int>) this.value = value; } function main():Int { var box = new NullableIntegerField(42); if (box.value != null) { var required:Int = box.value; return required; } return 0; }');
+		var nullableComprehension = Frontend.compile('function twice(values:Null<Array<Int>>):Int { var doubled = [for (value in values) value * 2]; return doubled[0]; } function main():Int return twice([21]);');
+		if (new IrInterpreter(nullableComprehension).run("main") != 42)
+			throw "Nullable array comprehensions did not follow ordinary for-loop iteration";
+		var nullableIteratorComprehension = Frontend.compile('class NullableItems { public function new() {} public function iterator():Null<Iterator<Int>> return [21].iterator(); } function main():Int { var doubled = [for (value in new NullableItems()) value * 2]; return doubled[0]; }');
+		if (new IrInterpreter(nullableIteratorComprehension).run("main") != 42)
+			throw "Comprehensions did not unwrap nullable iterator results";
+		var grownArray = Frontend.compile('function main():Int { var values:Array<Int> = []; values[2] = 42; return values[0] + values[2]; }');
+		if (new IrInterpreter(grownArray).run("main") != 42)
+			throw "IR array writes did not grow with zero-filled integer gaps";
+		var grownBoolArray = Frontend.compile('function main():Int { var values:Array<Bool> = []; values[2] = true; return values[0] ? 0 : 42; }');
+		if (new IrInterpreter(grownBoolArray).run("main") != 42)
+			throw "IR array writes did not grow with false-filled boolean gaps";
 		var nullableFieldAssignmentProgram = Frontend.compile('class NullableFieldCache { public var value:Null<Int>; public function new() {} public function get():Int { if (value == null) value = 42; return value; } } function main():Int return new NullableFieldCache().get();');
 		if (new IrInterpreter(nullableFieldAssignmentProgram).run("main") != 42)
 			throw "Nullable field assignment did not preserve its non-null flow refinement";
