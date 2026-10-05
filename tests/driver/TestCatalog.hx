@@ -167,6 +167,8 @@ class TestCatalog {
 				"null coerces to reference-like types while primitives remain strict"),
 			mainCase("runtime", "stdlib", "StdlibMain", "stdlib.hl", 42, "vendored stdlib compiled and executed"),
 			mainCase("runtime", "pure-call-flow", "PureCallFlowMain", "pure-call-flow.hl", 42, "@:pure calls preserve nullable field refinements"),
+			mainCase("runtime", "contextual-typed-lambda", "ContextualTypedLambdaMain", "contextual-typed-lambda.hl", 42,
+				"result-annotated callbacks infer parameters and preserve rejection after edits"),
 			mainCase("runtime", "bytes-view", "BytesViewMain", "bytes-view.hl", 42, "managed byte views alias their source"),
 			mainCase("runtime", "language-features", "LanguageFeaturesMain", "language-features.hl", 42,
 				"self-hosted FFI language constructs compiled and executed"),

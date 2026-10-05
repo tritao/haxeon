@@ -460,7 +460,7 @@ class CallResolver {
 	}
 
 	static function lambdaParametersAnnotated(expression:AstExpression):Bool
-		return switch expression {
+		return switch LambdaSyntax.literal(expression) {
 			case Lambda(arguments, _, _):
 				var annotated = true;
 				for (argument in arguments)
@@ -472,7 +472,7 @@ class CallResolver {
 		};
 
 	static function isLambdaLiteral(expression:AstExpression):Bool
-		return switch expression {
+		return switch LambdaSyntax.literal(expression) {
 			case Lambda(_, _, _): true;
 			default: false;
 		};
