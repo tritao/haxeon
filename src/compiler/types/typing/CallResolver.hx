@@ -798,7 +798,9 @@ class CallResolver {
 		if (abstractDeclaration != null && scope.resolve("this") != null)
 			for (candidate in abstractDeclaration.methods)
 				if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
-					return typeAbstractMethodCall(typeExpressionValue(Variable("this", span), scope), name, arguments, span, scope);
+					return typeAbstractMethodCall(session.representation.boundaryCast(typeExpressionValue(Variable("this", span), scope),
+						scope.resolve("this")), name, arguments, span,
+						scope);
 		var methodInfo = findMethod(owner, name);
 		if (methodInfo == null)
 			return null;

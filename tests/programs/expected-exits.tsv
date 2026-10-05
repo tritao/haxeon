@@ -348,3 +348,4 @@ jit-phi-coalescing	42
 thread-stand-ins	42
 captured-receiver-reassigned	42
 empty-literal-inference	42
+abstract-underlying-this	42

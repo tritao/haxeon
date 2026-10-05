@@ -1307,6 +1307,18 @@ class TestMain {
 		if (genericAliasTyped.functions[0].result != compiler.types.Type.CompilerType.TInt)
 			throw "Generic type aliases were not substituted by the typer";
 		Sys.println("PASS: generic type aliases substitute their arguments");
+		var underlyingThisProgram = Frontend.compile(File.getContent("tests/programs/abstract-underlying-this.hx"));
+		if (new IrInterpreter(underlyingThisProgram).run("main") != 42)
+			throw "Abstract receivers did not expose their underlying values inside their implementation";
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function read(value:Voltage):Float return value; function main():Int return 42;',
+			"Type mismatch for return");
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function main():Int { var value:Voltage = 48.0; return 42; }',
+			'Type mismatch for local "value"');
+		expectCompileError('abstract DcVoltage(Float) { public function new(value:Float) this = value; } abstract AcVoltage(Float) { public function new(value:Float) this = value; } function read(value:DcVoltage):Int return 42; function main():Int return read(new AcVoltage(400.0));',
+			'Type mismatch for argument 1 to "read"');
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; public function same():Voltage return this; } function main():Int { var value = new Voltage(1.0).same(); return 42; }',
+			"Type mismatch for return");
+		Sys.println("PASS: abstract underlying receivers preserve nominal boundaries outside their implementation");
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
 			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42)) + new Identity<Int>(0).unwrap();"))
 			.tokenize()).parseProgram();
