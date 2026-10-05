@@ -2,7 +2,8 @@
 
 The integer-box prototype's LRU regression came from the library change, not the new VM or the boxing fast path.
 Separating the new cold JIT helpers from ordinary runtime text removed it. The corrected prototype passed the full
-correctness suites and the six-benchmark gate. Compiler and startup/JIT paired timing are pending; this report does
+correctness suites and the six-benchmark gate. Startup/JIT paired timing is complete; compiler self-compilation
+timing is still pending. This report does
 not yet mark Stage 3 accepted. The opt-in implementation is committed in fork `d7f0620a`; main-repository
 commit `dc1a3985` bumps the submodule and adds the tests. Nothing was pushed.
 
@@ -73,11 +74,14 @@ The separate library-only LRU control and the full corrected runtime both remove
 
 ## Compiler, JIT latency and code size
 
-Paired compiler self-compilation and startup/JIT timings are pending. A scratch VM measures process CPU time
-from `hl_jit_init` through `hl_jit_code`, separately from whole-process time for compiling a trivial input. The timer
-is not part of the production patch. Its smoke check produced identical bytecode in both modes. The final
-controllers remain queued until one-minute load is <=4; unrelated builds kept it above the gate during final review.
-No noisy samples are substituted for these missing measurements.
+Nine alternating startup pairs on core 0, load <=4 before/after accepted samples, are complete. Whole-process
+trivial-input compilation medians were 0.229652 -> 0.231868 s (0.96% longer).
+Initial-JIT process CPU medians were 205.064 -> 206.434 ms (0.67% longer).
+These small differences are within normal timing variation. Bytecode outputs matched across all samples.
+
+The scratch timer measures process CPU from `hl_jit_init` through `hl_jit_code`, separately from whole-process
+compilation time; it is not part of the production patch. Paired full compiler self-compilation remains pending:
+pairs crossing the load limit are discarded. No noisy samples substitute for that missing acceptance measurement.
 
 The corrected VM executable is identical to the earlier prototype, so its recorded code-size counters are unchanged:
 merkletrees JIT code 4336 -> 5312 bytes (+22.51%); compiler JIT code on the trivial-input workload 5,856,464 ->
@@ -113,7 +117,7 @@ checks were not repeated here. Other DAP tests, AArch64, Windows, 32-bit, Clang 
 
 The earlier rejection remains documented in [JIT_BOXED_ALLOCATION.md](JIT_BOXED_ALLOCATION.md). Evidence for this
 follow-up is under `out/boxed-allocation/`: `isolate-final.json`, `cold-lru.json`, diagnostic profiles/counters,
-`cold-final-six.json`, `cold-validation.log`, suite logs, and `cold-final-hashes.json`. The final VM SHA-256 is
+`cold-final-six.json`, `startup-jit.json`, `cold-validation.log`, suite logs, and `cold-final-hashes.json`. The final VM SHA-256 is
 `de6d0ff23543079c99d5a3074d7911d755d0377fcfe8530ab49b2a01e2954b91`, its library is
 `cb9a22ca1108ffbf2f533ed25f69347eb29059830c3d8d1d7381966fd9fbdf43`, and the unchanged native HDLL is
 `aaa3e4576dd17bc0d7b491161a0937cb4969227b5d322115e70e19766ad3240f`.
