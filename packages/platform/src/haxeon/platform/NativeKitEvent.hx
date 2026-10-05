@@ -4,6 +4,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitEventContext;
 import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitAudioEvents;
 import haxeon.platform.NativeKitInputEvents;
 import haxeon.platform.NativeKitResourceEvents;
 import haxeon.platform.NativeKitServiceEvents;
@@ -45,6 +46,7 @@ class NativeKitEvent {
 			return None;
 		var value = NativeKitWindowEvents.decode(context);
 		if (value == null) value = NativeKitInputEvents.decode(context);
+		if (value == null) value = NativeKitAudioEvents.decode(context);
 		if (value == null) value = NativeKitServiceEvents.decode(context);
 		if (value == null) value = NativeKitResourceEvents.decode(context);
 		return value != null ? value : Raw(context.kind, context.source, context.request,

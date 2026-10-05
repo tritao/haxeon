@@ -53,6 +53,23 @@ enum NativeKitEventValue {
 	ShareReceived(text:Null<String>, subject:Null<String>, items:Array<NativeKitResource>);
 	ResourceDrop(source:Handle, x:Float, y:Float, text:Null<String>, items:Array<NativeKitResource>);
 	ResourceCommit(request:haxe.Int64, result:Result, downloadInitiated:Bool);
+	ResourceAssetReady(source:Handle, request:haxe.Int64);
+	ResourceAssetLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+	AudioClipReady(source:Handle, request:haxe.Int64);
+	AudioClipLoadFailed(source:Handle, request:haxe.Int64, result:Result);
+	AudioVoiceReady(source:Handle);
+	AudioVoiceLoadFailed(source:Handle, result:Result);
+	AudioVoiceComplete(source:Handle);
+	AudioVoiceStolen(source:Handle);
+	AudioVoiceVirtualized(source:Handle);
+	AudioVoiceResumed(source:Handle);
+	AudioVoiceStreamFailed(source:Handle, result:Result);
+	AudioDeviceStarted;
+	AudioDeviceStopped;
+	AudioDeviceRerouted;
+	AudioDeviceInterruptionBegan;
+	AudioDeviceInterruptionEnded;
+
 }
 
 class NativeKitTextEdit {
