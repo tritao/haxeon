@@ -1,3 +1,6 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #define HL_NAME(n) realtime_##n
 #include <hl.h>
 #include <hlmodule.h>
@@ -32,6 +35,7 @@
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"
 #include "runtime/processes.c"
+#include "runtime/child_processes.c"
 #include "runtime/native_call.c"
 #include "runtime/memory.c"
 #include "runtime/module_runtime.c"

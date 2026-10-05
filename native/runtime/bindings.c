@@ -603,3 +603,12 @@ DEFINE_PRIM(_STRING,__process_read_stderr,_ABSTRACT(hl_process));
 DEFINE_PRIM(_I32,__process_exit,_ABSTRACT(hl_process));
 DEFINE_PRIM(_VOID,__process_close,_ABSTRACT(hl_process));
 DEFINE_PRIM(_VOID,__process_kill,_ABSTRACT(hl_process));
+
+DEFINE_PRIM(_ABSTRACT(realtime_child_process),__process_spawn,_STRING _ARR _STRING _ARR _ARR);
+DEFINE_PRIM(_I32,__child_read_stdout,_ABSTRACT(realtime_child_process) _ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_I32,__child_read_stderr,_ABSTRACT(realtime_child_process) _ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_I32,__child_write,_ABSTRACT(realtime_child_process) _ABSTRACT(realtime_bytes) _I32 _I32);
+DEFINE_PRIM(_VOID,__child_close_stdin,_ABSTRACT(realtime_child_process));
+DEFINE_PRIM(_I32,__child_poll_exit,_ABSTRACT(realtime_child_process));
+DEFINE_PRIM(_VOID,__child_cancel,_ABSTRACT(realtime_child_process));
+DEFINE_PRIM(_VOID,__child_close,_ABSTRACT(realtime_child_process));

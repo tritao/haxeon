@@ -1,9 +1,16 @@
 package sys.io;
 
+import sys.io.ChildProcess;
+
 private typedef ProcessHandle = hl.Abstract<"hl_process">;
 
-/** HashLink subprocess with argument-safe creation and blocking whole-stream capture. */
+/** Subprocess creation. Existing run/capture methods retain their blocking behavior. */
 extern abstract Process(ProcessHandle) {
+	/** Spawn an independent streaming process. Environment entries override inherited values. */
+	@:hlNative("haxeon_runtime", "__process_spawn")
+	public static function spawn(command:String, arguments:Array<String>, cwd:String = "",
+		?environmentKeys:Array<String>, ?environmentValues:Array<String>):ChildProcess;
+
 	@:hlNative("haxeon_runtime", "__process_run")
 	public static function run(command:String, arguments:Array<String>):Process;
 
