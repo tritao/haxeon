@@ -134,7 +134,8 @@ class DebugMetadataMain {
 			for (compiledFunction in code.functions)
 				compiledFunction.functionIndex => compiledFunction.functionIndex
 		], patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16),
-			[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1, code.ints.length, code.floats.length, code.strings.length, code.types.length));
+			[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1, code.ints.length, code.floats.length,
+			code.strings.length, code.types.length));
 		for (index in 0...patch.functions.length) {
 			var actual = patch.functions[index].debug,
 				expected = code.functions[index].debugLocations;

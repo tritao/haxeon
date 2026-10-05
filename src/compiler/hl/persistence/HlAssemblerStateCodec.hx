@@ -64,18 +64,21 @@ class HlAssemblerStateCodec {
 			IrTypeCodec.writeString(out, native.library);
 			IrTypeCodec.writeString(out, native.symbol);
 			out.writeInt32(native.arguments.length);
-			for (type in native.arguments) IrTypeCodec.writeType(out, type, 0);
+			for (type in native.arguments)
+				IrTypeCodec.writeType(out, type, 0);
 			IrTypeCodec.writeType(out, native.result, 0);
 			var dependencies = native.generatedFunctionDependencies;
 			out.writeInt32(dependencies == null ? 0 : dependencies.length);
 			if (dependencies != null)
-				for (name in dependencies) IrTypeCodec.writeString(out, name);
+				for (name in dependencies)
+					IrTypeCodec.writeString(out, name);
 		}
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
-		if (count < 0 || count > 0x100000) throw "Invalid native import count";
+		if (count < 0 || count > 0x100000)
+			throw "Invalid native import count";
 		return count;
 	}
 
@@ -88,10 +91,17 @@ class HlAssemblerStateCodec {
 				arguments = [for (_ in 0...readCount(input)) IrTypeCodec.readType(input, limit, 0)],
 				returnType = IrTypeCodec.readType(input, limit, 0),
 				dependencies = [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, limit)];
-			if (names.exists(name)) throw "Duplicate native import in assembler state";
+			if (names.exists(name))
+				throw "Duplicate native import in assembler state";
 			names.set(name, true);
-			result.push({name: name, library: library, symbol: symbol, arguments: arguments,
-				result: returnType, generatedFunctionDependencies: dependencies.length == 0 ? null : dependencies});
+			result.push({
+				name: name,
+				library: library,
+				symbol: symbol,
+				arguments: arguments,
+				result: returnType,
+				generatedFunctionDependencies: dependencies.length == 0 ? null : dependencies
+			});
 		}
 		return result;
 	}

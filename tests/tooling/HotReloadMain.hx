@@ -93,11 +93,11 @@ class HotReloadMain {
 			throw "HLP did not encode the source float symbol delta";
 		if (decoded.baseStrings != initial.module.strings.length || decoded.strings.indexOf("patched source") < 0)
 			throw "HLP did not encode the source string symbol delta";
-		if (decoded.debugFiles.indexOf("Value.hx") < 0
-			|| decoded.functions.length != changed.changedFunctions.length)
+		if (decoded.debugFiles.indexOf("Value.hx") < 0 || decoded.functions.length != changed.changedFunctions.length)
 			throw "HLP did not preserve opcode-indexed source debug metadata";
 		for (fn in decoded.functions) {
-			if (fn.debug.length != fn.instructions.length) throw "HLP lost opcode-indexed source locations";
+			if (fn.debug.length != fn.instructions.length)
+				throw "HLP lost opcode-indexed source locations";
 			for (location in fn.debug)
 				if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
 					throw "HLP contains an invalid source debug location";
@@ -666,9 +666,12 @@ class HotReloadMain {
 			legacyBytes = assemblerBytes.sub(0, 25 + 4 + state.symbols.length + 4 + state.cache.length);
 		legacyBytes.set(3, 1);
 		var legacyRejected = false;
-		try HlAssemblerStateCodec.decode(legacyBytes) catch (error:Dynamic)
+		try
+			HlAssemblerStateCodec.decode(legacyBytes)
+		catch (error:Dynamic)
 			legacyRejected = Std.string(error).indexOf("native-import ordering") >= 0;
-		if (!legacyRejected) throw "Legacy assembler baseline was accepted without import ordering";
+		if (!legacyRejected)
+			throw "Legacy assembler baseline was accepted without import ordering";
 		var uninterruptedAssembler = assembler.copy(),
 			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
 			editedCompiler = new Compiler();
