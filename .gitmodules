@@ -15,3 +15,25 @@
 [submodule "vendor/nativekit"]
 	path = vendor/nativekit
 	url = https://github.com/tritao/nativekit.git
+[submodule "packages/ui/vendor/budouxc"]
+	path = packages/ui/vendor/budouxc
+	url = https://github.com/memononen/budouxc.git
+[submodule "packages/ui/vendor/clay"]
+	path = packages/ui/vendor/clay
+	url = https://github.com/tritao/clay.git
+	branch = nativekit
+[submodule "packages/ui/vendor/harfbuzz"]
+	path = packages/ui/vendor/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "packages/ui/vendor/libunibreak"]
+	path = packages/ui/vendor/libunibreak
+	url = https://github.com/adah1972/libunibreak.git
+[submodule "packages/ui/vendor/nanovg"]
+	path = packages/ui/vendor/nanovg
+	url = https://github.com/tritao/nanovg.git
+[submodule "packages/ui/vendor/sheenbidi"]
+	path = packages/ui/vendor/sheenbidi
+	url = https://github.com/Tehreer/SheenBidi.git
+[submodule "packages/ui/vendor/skribidi"]
+	path = packages/ui/vendor/skribidi
+	url = https://github.com/tritao/Skribidi.git

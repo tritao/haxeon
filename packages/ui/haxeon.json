@@ -1,0 +1,16 @@
+{
+	"version": 1,
+	"package": { "name": "uikit" },
+	"sourceRoots": ["haxe", "bindings/haxe"],
+	"scopeSourceRoots": false,
+	"dependencies": {
+		"haxeon-platform": { "path": "../haxeon/packages/platform" },
+		"haxeon-gpu": { "path": "../haxeon/packages/gpu" },
+		"editorkit": { "path": "../editorkit" }
+	},
+	"ffi": {
+		"interfaces": ["bindings/nativekit-ui.hxi"],
+		"projections": ["bindings/nativekit-ui.hxmap"]
+	},
+	"target": "host"
+}

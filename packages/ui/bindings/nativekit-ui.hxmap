@@ -1,0 +1,31 @@
+{
+  "interface": "NativeKitUI",
+	"callbackErrorType": "NativeKitUICallbackError",
+  "dependencyModules": {
+    "NativeKit": "nativekit.ffi.NativeKit"
+  },
+  "enumNames": {
+    "nkui_result": "UiStatus",
+    "nkui_command_opcode": "CommandOpcode",
+    "nkui_composite_mode": "UiCompositeMode",
+    "nkui_path_line_cap": "UiLineCap",
+    "nkui_path_line_join": "UiLineJoin",
+    "nkui_font_family": "UiFontFamily",
+    "nkui_text_wrap": "UiTextWrap",
+    "nkui_text_alignment": "UiTextAlignment",
+    "nkui_text_direction": "UiTextDirection",
+    "nkui_text_navigation_behavior": "TextNavigationBehavior",
+    "nkui_path_verb": "UiPathVerb",
+    "nkui_image_format": "UiImageFormat",
+    "nkui_image_filter": "UiImageFilter",
+    "nkui_layout_visual_kind": "UiLayoutVisualKind",
+    "nkui_layout_sizing": "UiLayoutSizing",
+    "nkui_layout_direction": "UiLayoutDirection",
+    "nkui_layout_alignment": "UiLayoutAlignment"
+  },
+  "typeNames": {
+    "nk_handle": "nativekit.ffi.NativeKitTypes.Handle",
+    "nk_surface": "nativekit.ffi.NativeKitTypes.SurfaceHandle",
+    "nk_graphics_image": "nativekit.ffi.NativeKitTypes.GraphicsImage"
+  }
+}

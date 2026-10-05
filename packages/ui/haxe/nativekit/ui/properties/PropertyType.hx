@@ -1,0 +1,12 @@
+package nativekit.ui.properties;
+
+/** Editor control family used to render and validate a property. */
+enum PropertyType {
+	Bool;
+	Int;
+	Float;
+	Text;
+	Enum;
+	/** Application-defined property type resolved by PropertyEditorRegistry. */
+	Custom(typeId:String);
+}

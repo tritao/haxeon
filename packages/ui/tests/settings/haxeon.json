@@ -1,0 +1,12 @@
+{
+	"version": 1,
+	"package": { "name": "uikit-settings-tests" },
+	"entry": "SettingsTests",
+	"sourceRoots": ["src"],
+	"scopeSourceRoots": false,
+	"dependencies": {
+		"uikit": { "path": "../.." }
+	},
+	"target": "host",
+	"outputDir": "build"
+}
