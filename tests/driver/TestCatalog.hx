@@ -85,6 +85,7 @@ class TestCatalog {
 		"DependencyKeyMain",
 		"PackageRootModuleMain",
 		"QualifiedStaticReceiverMain",
+		"MathRandomMain",
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
 		"ImportedSecondaryEnumMain",
