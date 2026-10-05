@@ -17,10 +17,13 @@ Initialize dependencies from the Haxeon root:
 git submodule update --init --recursive vendor/nativekit
 ```
 
-Use a path dependency on this package in `haxeon.json`. Its CMake provider
-builds NativeKit with `NK_BUILD_AUDIO=ON`. Applications combining audio with
-another provider that builds NativeKit (such as UI) should build one shared
-NativeKit runtime with audio enabled rather than loading separate core runtimes.
+Use a path dependency on this package in `haxeon.json`. For a headless audio
+application, also depend on `packages/audio/native` (`haxeon-audio-native`),
+whose CMake provider builds NativeKit with `NK_BUILD_AUDIO=ON`.
+Applications combining UI and audio should use one native provider that builds
+NativeKit with audio and GPU enabled, plus UI. Audio Lab demonstrates this
+composition in `examples/audio-lab/CMakeLists.txt`; its managed dependency on
+`haxeon-audio` does not introduce a second core runtime.
 
 To run the existing native and managed coverage:
 

@@ -20,17 +20,5 @@
       "bindings/nativekit-audio.hxmap"
     ]
   },
-  "native": {
-    "cmake": {
-      "source": ".",
-      "target": "nativekit",
-      "library": "nativekit",
-      "inputs": [
-        "CMakeLists.txt",
-        "../../vendor/nativekit/CMakeLists.txt",
-        "../../vendor/nativekit/modules/audio/CMakeLists.txt"
-      ]
-    }
-  },
   "target": "host"
 }

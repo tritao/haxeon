@@ -12,6 +12,9 @@
   "dependencies": {
     "haxeon-audio": {
       "path": ".."
+    },
+    "haxeon-audio-native": {
+      "path": "../native"
     }
   },
   "target": "host",

@@ -8,7 +8,9 @@
 | `editor` | `haxeon-editor` | `haxeon.editor.*` |
 | `ui` | `haxeon-ui` | `haxeon.ui.*` |
 
-Audio and GPU depend on platform. UI depends on platform, GPU, and editor. The editor
+Audio and GPU depend on platform. Headless audio applications can add the
+optional `audio/native` provider (`haxeon-audio-native`). UI/audio applications
+can share a native provider, as shown in `examples/audio-lab`. UI depends on platform, GPU, and editor. The editor
 package is independent of UI and native services. SceneKit remains in Materia,
 including the orbit camera (`nativekit.scene.PerspectiveCamera`).
 
