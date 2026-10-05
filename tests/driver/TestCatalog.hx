@@ -44,6 +44,7 @@ class TestCatalog {
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",
 		"DeterministicNamesMain",
+		"NestedAdapterRetentionMain",
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",

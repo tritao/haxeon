@@ -344,17 +344,25 @@ class FrontendCompilation {
 					hasRetainedSpecializations = true;
 				}
 			}
-			if (hasRetainedSpecializations)
-				for (nested in state.typedFunctions.keys()) {
-					if (!StringTools.startsWith(nested, "$lambda:"))
+			if (hasRetainedSpecializations) {
+				// Retained generated functions own further closures and adapters. Follow
+				// that ownership transitively, but never revive children of a retyped body.
+				var pending = [for (functionName in retainedSpecializations.keys()) functionName];
+				while (pending.length > 0) {
+					var parent = pending.pop();
+					if (typedByName.exists(parent))
 						continue;
-					for (specialization in retainedSpecializations.keys())
-						if (StringTools.startsWith(nested, "$lambda:" + specialization + ":")) {
+					for (nested => fn in state.typedFunctions) {
+						if (valid.exists(nested))
+							continue;
+						if (fn.genericOrigin == parent || StringTools.startsWith(nested, "$lambda:" + parent + ":")) {
 							valid.set(nested, true);
 							owners.set(nested, name);
-							break;
+							pending.push(nested);
 						}
+					}
 				}
+			}
 			if (lowerToIr)
 				for (pending in state.pendingIrFunctions.keys())
 					valid.set(pending, true);
