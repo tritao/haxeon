@@ -15,8 +15,8 @@
     "haxeon-gpu": {
       "path": "../gpu"
     },
-    "editorkit": {
-      "path": "../../../editorkit"
+    "haxeon-editor": {
+      "path": "../editor"
     }
   },
   "ffi": {

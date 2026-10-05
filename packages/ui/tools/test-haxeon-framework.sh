@@ -5,7 +5,7 @@ module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
-editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+editor_dir=${HAXEON_EDITOR_DIR:-"$haxeon_dir/packages/editor"}
 build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 artifact="$build_dir/haxeon-ui-framework.hl"
 
@@ -35,7 +35,7 @@ fi
 	--root="$module_dir/tests/haxeon" \
 	--root="$haxeon_dir/packages/platform/tests" \
 	--root="$module_dir/haxe" \
-	--root="$editorkit_dir/haxe" \
+	--root="$editor_dir/src" \
 	--root="$module_dir/bindings/haxe" \
 	--root="$haxeon_dir/packages/platform/src" \
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
@@ -44,7 +44,7 @@ fi
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
 	"$module_dir/tests/haxeon/FrameworkSmoke.hx" \
 	"$haxeon_dir/packages/platform/tests/NativeKitEventDecoderTests.hx" \
-	"$editorkit_dir/haxe/nativekit/editorkit/"*.hx \
+	"$editor_dir/src/haxeon/editor/"*.hx \
 	"$module_dir/haxe/haxeon/ui/core/"*.hx \
 	"$module_dir/haxe/haxeon/ui/style/"*.hx \
 	"$module_dir/haxe/haxeon/ui/widgets/"*.hx \

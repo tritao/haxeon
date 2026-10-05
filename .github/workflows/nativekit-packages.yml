@@ -21,17 +21,10 @@ jobs:
   ui:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      EDITORKIT_DIR: ${{ github.workspace }}/.deps/materia/editorkit
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: actions/checkout@v7
-        with:
-          repository: tritao/materia
-          ref: 111384a5f4e06d1be1e6412e74b19c12f0718c90
-          path: .deps/materia
       - name: Install UI build dependencies
         run: >-
           sudo apt-get update && sudo apt-get install -y

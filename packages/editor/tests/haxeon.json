@@ -1,0 +1,12 @@
+{
+	"version": 1,
+	"package": { "name": "haxeon-editor-check" },
+	"entry": "DocCheck",
+	"sourceRoots": ["src"],
+	"scopeSourceRoots": false,
+	"dependencies": {
+		"haxeon-editor": { "path": ".." }
+	},
+	"target": "host",
+	"outputDir": "build"
+}

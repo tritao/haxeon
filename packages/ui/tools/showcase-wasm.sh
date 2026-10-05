@@ -5,7 +5,7 @@ module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
-editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+editor_dir=${HAXEON_EDITOR_DIR:-"$haxeon_dir/packages/editor"}
 compiler_module=${NATIVEKIT_HAXEON_COMPILER_MODULE:-"$haxeon_dir/bootstrap/compiler.hl"}
 haxe_bin=${NATIVEKIT_HAXE_BIN:-"$haxeon_dir/.tools/haxe/haxe"}
 build_dir=${NATIVEKIT_WASM_BUILD_DIR:-"$repo_dir/build-wasm"}
@@ -105,7 +105,7 @@ compiler_args=(
 	--wasm-memory-contract="$memory_contract"
 	--root="$module_dir/examples/ui_showcase"
 	--root="$module_dir/haxe"
-	--root="$editorkit_dir/haxe"
+	--root="$editor_dir/src"
 	--root="$module_dir/bindings/haxe"
 	--root="$haxeon_dir/packages/platform/src"
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi"
@@ -120,7 +120,7 @@ compiler_args=(
 	"$module_dir/examples/ui_showcase/UiExplorer.hx"
 	"$module_dir/examples/ui_showcase/ShowcaseCube.hx"
 	"$module_dir/haxe/haxeon/ui/core/"*.hx
-	"$editorkit_dir/haxe/nativekit/editorkit/"*.hx
+	"$editor_dir/src/haxeon/editor/"*.hx
 	"$module_dir/haxe/haxeon/ui/style/"*.hx
 	"$module_dir/haxe/haxeon/ui/widgets/"*.hx
 	"$module_dir/haxe/haxeon/ui/docking/"*.hx

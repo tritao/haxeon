@@ -42,7 +42,7 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.theme.TextRole;
-import nativekit.editorkit.TextDocument;
+import haxeon.editor.TextDocument;
 
 /** Text editor composed from a Haxe box and NativeUI text primitive. */
 class TextField implements View {

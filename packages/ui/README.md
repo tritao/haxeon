@@ -22,10 +22,9 @@ Initialize the native dependencies from the Haxeon root:
 git submodule update --init --recursive vendor/nativekit packages/ui/vendor
 ```
 
-EditorKit and SceneKit remain in Materia for this migration. The manifest
-expects `editorkit` alongside Haxeon. Direct compiler tools accept
-`EDITORKIT_DIR` (or `MATERIA_DIR`) to select another checkout. A standalone
-Haxeon clone therefore still needs that external dependency for the UI package.
+The text model comes from `../editor` (`haxeon.editor`). Direct compiler
+tools accept `HAXEON_EDITOR_DIR` to select another editor package checkout.
+UI has no dependency on a Materia or SceneKit checkout.
 
 Compiler and native artifacts should live under Haxeon’s `out/` tree or an
 explicit build directory, rather than inside the package’s source folders.

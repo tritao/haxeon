@@ -1,7 +1,7 @@
 package haxeon.ui.widgets.text;
 
 import haxeon.ui.FontFamily;
-import nativekit.editorkit.TextDocument;
+import haxeon.editor.TextDocument;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.ParagraphStyle;

@@ -16,7 +16,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextColorRange;
-import nativekit.editorkit.TextDocument;
+import haxeon.editor.TextDocument;
 
 /** Retained layouts for bounded groups of paragraphs in one editor document. */
 class TextEditorLayout {

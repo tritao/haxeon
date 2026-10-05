@@ -157,7 +157,7 @@ import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.text.TextSelection;
 import haxeon.ui.widgets.text.EditTransaction;
-import nativekit.editorkit.TextDocument;
+import haxeon.editor.TextDocument;
 import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.layout.Stack;
@@ -273,7 +273,7 @@ class FrameworkSmoke {
 		canvas.reset();
 		for (step in 0...7) {
 			var beforeRanges = paintedRanges;
-			var offsets = new nativekit.editorkit.TextDocument(editor.text);
+			var offsets = new haxeon.editor.TextDocument(editor.text);
 			var start = step == 0 ? 0 : offsets.paragraphRangeAtIndex(step >= 3 ? 190 : 63).start;
 			var end = step == 2 ? offsets.paragraphRangeAtIndex(67).start : start;
 			if (step == 5) {
@@ -282,7 +282,7 @@ class FrameworkSmoke {
 				// Exercise local splitting above the hard 128-paragraph bound.
 				if (!editor.replace(start, start, many.toString()))
 					throw "chunk overflow insertion was ignored";
-				offsets = new nativekit.editorkit.TextDocument(editor.text);
+				offsets = new haxeon.editor.TextDocument(editor.text);
 				start = offsets.paragraphRangeAtIndex(190).start;
 				end = start;
 			}
@@ -303,7 +303,7 @@ class FrameworkSmoke {
 			if (Math.abs(actualSize.height - expectedSize.height) > 0.001 ||
 				Math.abs(actualSize.width - expectedSize.width) > 0.001)
 				throw "newline chunk metrics differ from fresh layout";
-			var current = new nativekit.editorkit.TextDocument(editor.text);
+			var current = new haxeon.editor.TextDocument(editor.text);
 			paintedRanges = [];
 			editor.layout.paint(canvas, new Color(1.0, 1.0, 1.0), 0.0, actualSize.height);
 			canvas.reset();

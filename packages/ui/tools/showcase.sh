@@ -5,7 +5,7 @@ module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
-editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+editor_dir=${HAXEON_EDITOR_DIR:-"$haxeon_dir/packages/editor"}
 build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 artifact="$build_dir/nativekit_ui_showcase.hl"
 build_only=false
@@ -39,7 +39,7 @@ fi
     --entry=ShowcaseDesktop \
     --root="$module_dir/examples/ui_showcase" \
     --root="$module_dir/haxe" \
-    --root="$editorkit_dir/haxe" \
+    --root="$editor_dir/src" \
     --root="$module_dir/bindings/haxe" \
     --root="$haxeon_dir/packages/gpu/src" \
     --root="$haxeon_dir/packages/platform/src" \
@@ -57,7 +57,7 @@ fi
     "$module_dir/examples/ui_showcase/UiExplorer.hx" \
     "$module_dir/examples/ui_showcase/ShowcaseCube.hx" \
     "$module_dir/haxe/haxeon/ui/core/"*.hx \
-    "$editorkit_dir/haxe/nativekit/editorkit/"*.hx \
+    "$editor_dir/src/haxeon/editor/"*.hx \
     "$module_dir/haxe/haxeon/ui/style/"*.hx \
     "$module_dir/haxe/haxeon/ui/widgets/"*.hx \
     "$module_dir/haxe/haxeon/ui/docking/"*.hx \

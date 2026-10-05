@@ -5,7 +5,7 @@ module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
 materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
 repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
-editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+editor_dir=${HAXEON_EDITOR_DIR:-"$haxeon_dir/packages/editor"}
 
 cd "$repo_dir"
 

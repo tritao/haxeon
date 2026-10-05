@@ -4,7 +4,7 @@ import haxeon.ui.Color;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.TextStyle;
 import haxeon.ui.core.View;
-import nativekit.editorkit.TextDocument;
+import haxeon.editor.TextDocument;
 
 /** Multiline text editor sharing the TextField IME and selection model. */
 class TextArea extends TextField implements View {

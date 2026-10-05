@@ -18,8 +18,8 @@ import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.TextStyle;
-import nativekit.editorkit.TextDocument;
-import nativekit.editorkit.TextOffsetMap;
+import haxeon.editor.TextDocument;
+import haxeon.editor.TextOffsetMap;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
 class TextEditorState {

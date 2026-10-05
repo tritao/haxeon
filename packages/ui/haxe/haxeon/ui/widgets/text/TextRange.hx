@@ -1,4 +1,4 @@
 package haxeon.ui.widgets.text;
 
 /** Compatibility name for the editor core type. */
-typedef TextRange = nativekit.editorkit.TextRange;
+typedef TextRange = haxeon.editor.TextRange;

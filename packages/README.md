@@ -1,13 +1,15 @@
-# Native integration packages
+# Haxeon packages
 
 | Folder | Package name | Managed API |
 | --- | --- | --- |
 | `platform` | `haxeon-platform` | `haxeon.platform.*` |
 | `gpu` | `haxeon-gpu` | `haxeon.gpu.*` |
+| `editor` | `haxeon-editor` | `haxeon.editor.*` |
 | `ui` | `haxeon-ui` | `haxeon.ui.*` |
 
-GPU depends on platform. UI depends on both, and also on the external Materia
-EditorKit package. EditorKit and SceneKit keep their existing namespaces.
+GPU depends on platform. UI depends on platform, GPU, and editor. The editor
+package is independent of UI and native services. SceneKit remains in Materia,
+including the orbit camera (`nativekit.scene.PerspectiveCamera`).
 
 The `vendor/nativekit` submodule pins the native implementation. Initialize it
 and UI's private dependencies with:

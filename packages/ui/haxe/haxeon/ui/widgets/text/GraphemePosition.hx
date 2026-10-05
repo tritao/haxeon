@@ -1,4 +1,4 @@
 package haxeon.ui.widgets.text;
 
 /** Compatibility name for the editor core type. */
-typedef GraphemePosition = nativekit.editorkit.GraphemePosition;
+typedef GraphemePosition = haxeon.editor.GraphemePosition;
