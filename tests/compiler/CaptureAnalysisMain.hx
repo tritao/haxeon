@@ -15,6 +15,13 @@ class CaptureAnalysisMain {
 		expect(count(lexicalMutable.mutableCaptures) == 1, "the resolver must identify exactly one mutable captured declaration");
 		expect(firstKey(lexicalMutable.mutableCaptures).indexOf("value@") == 0, "storage identities must include the declaration site");
 
+		var receiver = analyzeLexically('function main():Int { var box = new Box(1); box = new Box(2); var read = () -> box.answer(); return read(); }');
+		expect(count(receiver.mutableCaptures) == 1, "method-only captured receivers must use cells from their declaration");
+		var callee = analyzeLexically('function main():Int { var f = () -> 1; f = () -> 2; var read = () -> f(); return read(); }');
+		expect(count(callee.mutableCaptures) == 1, "call-only captured functions must use cells from their declaration");
+		var immutable = analyzeLexically('function main():Int { var box = new Box(1); var read = () -> box.answer(); return read(); }');
+		expect(count(immutable.mutableCaptures) == 0, "immutable receiver captures should remain direct values");
+
 		var exception = analyzeLexically('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
 		expect(count(exception.exceptionCells) == 1 && firstKey(exception.exceptionCells).indexOf("value@") == 0,
 			"local crossing a throwing edge should require stable storage");
