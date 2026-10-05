@@ -274,11 +274,9 @@ class BuildContext {
 			idsByPath.set(path, id);
 			cachedIdCount++;
 		}
+		if (!patching && !claimed.add(id.value))
+			throw 'Duplicate widget ID ${id.value}; existing=${stateStore.describe(id)} current=$path';
 		stateStore.rememberPath(id, path);
-		if (patching)
-			return id;
-		if (!claimed.add(id.value))
-			throw 'Duplicate widget ID ${id.value}; use distinct keys for sibling views';
 		return id;
 	}
 
