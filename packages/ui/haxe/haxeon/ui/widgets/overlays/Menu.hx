@@ -3,6 +3,14 @@ import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.text.MiddleEllipsisText;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.TextLayout;
+import haxeon.ui.TextWrap;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.style.StyleTarget;
+import haxeon.ui.style.StyleProperty;
 
 import haxeon.ui.Rect;
 import haxeon.ui.LayoutAxis;
@@ -41,6 +49,7 @@ class Menu implements View {
 
 	public function build(context:BuildContext):haxeon.ui.core.RenderNode {
 		var children:Array<KeyedView> = [];
+		var widestItem = 220.0;
 		for (item in items) {
 			var button = new Button(item.label, null, function() {
 				if (item.hasSelectHandler)
@@ -53,10 +62,34 @@ class Menu implements View {
 			button.enabled = item.enabled;
 			button.semanticRole = AccessibilityRole.MenuItem;
 			button.semanticActions = AccessibilityAction.Select;
-			children.push(new KeyedView(item.key, button));
+			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
+				["menu-item", "navigation"], ["button"], 0), button.style);
+			var itemStyle = computed.toLayoutStyle();
+			var typography = context.resolveTextRole(TextRole.Button, TextStyleOverride.paragraph(TextWrap.None));
+			var fontSource = computed.source(StyleProperty.FontSize);
+			var letterSource = computed.source(StyleProperty.LetterSpacing);
+			typography = typography.merge(new TextStyleOverride(null,
+				fontSource != null && fontSource.layer != "framework" ? computed.get(StyleProperty.FontSize) : null,
+				letterSource != null && letterSource.layer != "framework" ? computed.get(StyleProperty.LetterSpacing) : null));
+			var labelStyle = TextStyleOverride.combine(TextStyleOverride.fromTextStyle(typography.textStyle),
+				TextStyleOverride.foreground(item.enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled));
+			if (context.fonts != null) {
+				var measurement = TextLayout.createStyled(context.fonts, item.label, 100000.0,
+					typography.textStyle, typography.paragraphStyle);
+				widestItem = Math.max(widestItem, Math.ceil(measurement.measure().width) + itemStyle.padding.left + itemStyle.padding.right);
+				measurement.dispose();
+			}
+			var label = new MiddleEllipsisText("menu-label", item.label, false, labelStyle);
+			button.labelView = label;
+			var tooltip = new Tooltip("menu-label-tooltip", button, new Text(item.label), 0.0, 28.0);
+			tooltip.fillAnchor = true;
+			tooltip.showWhen = function() return label.truncated;
+			children.push(new KeyedView(item.key, tooltip));
 		}
 		var menuStyle = new LayoutStyle();
-		menuStyle.width = LayoutAxis.fixed(Math.max(1.0, Math.min(220.0, context.viewportWidth - 8.0)));
+		// Include popup padding in the 360px cap and leave 8px at each window edge.
+		var availableWidth = Math.max(1.0, Math.min(360.0, context.viewportWidth - 16.0) - 8.0);
+		menuStyle.width = LayoutAxis.fixed(Math.min(widestItem, availableWidth));
 		menuStyle.childGap = 2.0;
 		var content = new Column("menu-items", children, menuStyle);
 		var popupStyle = new LayoutStyle();
@@ -65,13 +98,14 @@ class Menu implements View {
 		popupStyle.clipToParent = false;
 		var scrollStyle = new LayoutStyle();
 		scrollStyle.width = menuStyle.width;
-		scrollStyle.height = LayoutAxis.fit(0.0, Math.max(1.0, context.viewportHeight - 8.0));
+		scrollStyle.height = LayoutAxis.fit(0.0, Math.max(1.0, context.viewportHeight - 24.0));
 		var scroll = new ScrollView("menu-scroll", content, scrollStyle);
 		var popup = new Popup(key, scroll, x, y, popupStyle,
 			hasDismissHandler ? onDismiss : null);
 		popup.anchorRectProvider = function() return new Rect(x, y, 0.0, 0.0);
 		popup.label = "Menu";
 		popup.menuSurface = true;
+		popup.viewportMargin = 8.0;
 		popup.flipHorizontally = true;
 		popup.modal = true;
 		popup.dimBackdrop = false;

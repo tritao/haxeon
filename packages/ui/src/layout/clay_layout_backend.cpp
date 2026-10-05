@@ -378,7 +378,7 @@ Clay_TextLayoutResult LayoutEngine::Impl::layout_text(Clay_StringSlice text,
             state.callback_lines.push_back(
                 {{line.bounds.width, line.bounds.height},
                  {static_cast<int32_t>(line.text_length), line_chars, text.chars},
-                 {line.bounds.x, 0.0f}});
+                 {line.bounds.x, line.bounds.y}});
         }
         result.baseline = native_layout.first_line_baseline;
         result.hasBaseline = native_layout.has_baseline && std::isfinite(result.baseline);

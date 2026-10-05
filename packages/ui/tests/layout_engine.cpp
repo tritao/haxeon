@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     nodes.push_back(root);
 
     nodes.push_back(text(2, 0,
-                         "NativeKit layout delegates paragraph wrapping to Skribidi while Clay "
+                         "NativeKit layout delegates paragraph wrapping to Skribidi while Clay\n"
                          "keeps box constraints and geometry"));
 
     LayoutNode panel = box(3, 0);
@@ -94,6 +94,10 @@ int main(int argc, char **argv) {
         if (primitive.text_layout_id != text_layout->id ||
             primitive.text_line_index != title_line_count)
             return 11;
+        const auto &line = text_layout->lines[title_line_count];
+        if (std::abs(primitive.bounds.x - title_item->bounds.x - line.bounds.x) > .001f ||
+            std::abs(primitive.bounds.y - title_item->bounds.y - line.bounds.y) > .001f)
+            return 14;
         ++title_line_count;
     }
     if (title_line_count != text_layout->lines.size())

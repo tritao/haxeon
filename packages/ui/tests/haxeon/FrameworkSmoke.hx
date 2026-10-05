@@ -2477,7 +2477,7 @@ class FrameworkSmoke {
 		var menuGeometry:ResolvedLayoutItem = cast menuRoot.children[2].resolved;
 		if (context.focus.focusedId == null ||
 			menuRoot.children[0].layout.style.background.alpha != 0.0 ||
-			Math.abs(menuGeometry.x - Math.min(32.0, dialogFrame.width - menuGeometry.width)) > 0.1 ||
+			Math.abs(menuGeometry.x - Math.max(8.0, Math.min(32.0, dialogFrame.width - menuGeometry.width - 8.0))) > 0.1 ||
 			menuGeometry.y != 24.0 ||
 			menuRoot.children[2].layout.style.radiusTopLeft != 0.0)
 			return 74;
@@ -2498,8 +2498,8 @@ class FrameworkSmoke {
 		if (context.focus.focusedId == null) return 1016;
 		// A menu that fits to the right of its anchor opens there.
 		var unavailableMenuBounds = unavailableMenuRoot.children[2].resolved;
-		if (unavailableMenuBounds == null || Math.abs(unavailableMenuBounds.x - 4.0) > 0.1 ||
-			Math.abs(unavailableMenuBounds.y - 4.0) > 0.1) return 1019;
+		if (unavailableMenuBounds == null || Math.abs(unavailableMenuBounds.x - 8.0) > 0.1 ||
+			Math.abs(unavailableMenuBounds.y - 8.0) > 0.1) return 1019;
 		context.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (unavailableMenuDismissals != 1) return 1017;
 
@@ -2518,7 +2518,7 @@ class FrameworkSmoke {
 			overflowMenuBounds.x + overflowMenuBounds.width > 256.1 ||
 			overflowMenuBounds.y + overflowMenuBounds.height > 120.1) return 1008;
 		// Without room to the right, the menu opens to the left of its anchor.
-		if (Math.abs(overflowMenuBounds.x + overflowMenuBounds.width - 250.0) > 0.1) return 1020;
+		if (Math.abs(overflowMenuBounds.x + overflowMenuBounds.width - 248.0) > 0.1) return 1020;
 		// The menu surface must follow the panel after edge placement moves it.
 		var overflowSurfaceBounds = overflowMenuRoot.children[2].children[0].resolved;
 		if (overflowSurfaceBounds == null ||
@@ -2544,6 +2544,26 @@ class FrameworkSmoke {
 		if (lastOverflowBounds.y < 0 || lastOverflowBounds.y + lastOverflowBounds.height > 120.1) return 1015;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
 		if (overflowChoice != 17) return 1012;
+
+		var longMenuLabel = "Attach existing Codex thread with a very long descriptive name…";
+		var boundedMenu = new Menu("bounded-menu-smoke", [new MenuItem("long-action", longMenuLabel)], 799.0, 399.0);
+		var boundedMenuFrame = new LayoutFrame(800.0, 400.0);
+		var boundedMenuRoot = context.submit(boundedMenu, boundedMenuFrame);
+		boundedMenuRoot = context.submit(boundedMenu, boundedMenuFrame);
+		var boundedMenuBounds = boundedMenuRoot.children[2].resolved;
+		if (boundedMenuBounds == null || boundedMenuBounds.width > 360.1 ||
+			boundedMenuBounds.x < 7.9 || boundedMenuBounds.x + boundedMenuBounds.width > 792.1) return 1021;
+		var hasEllipsis = false, hasFullActionName = false;
+		boundedMenuRoot.walk(function(node) {
+			if (node.layout.text != null && node.layout.text != longMenuLabel && StringTools.endsWith(node.layout.text, "…")) hasEllipsis = true;
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem && node.semantics.label == longMenuLabel) hasFullActionName = true;
+		});
+		if (!hasEllipsis || !hasFullActionName) return 1022;
+		var narrowMenuRoot = context.submit(boundedMenu, new LayoutFrame(180.0, 200.0));
+		narrowMenuRoot = context.submit(boundedMenu, new LayoutFrame(180.0, 200.0));
+		var narrowMenuBounds = narrowMenuRoot.children[2].resolved;
+		if (narrowMenuBounds == null || narrowMenuBounds.x < 7.9 ||
+			narrowMenuBounds.x + narrowMenuBounds.width > 172.1) return 1023;
 
 		var tooltip = new Tooltip("tooltip-smoke", new Button("Anchor"), new Text("Hint"));
 		var tooltipFrame = new LayoutFrame(256.0, 192.0);
