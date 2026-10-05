@@ -1,248 +1,257 @@
+import haxeon.ui.TextLayout.TextPosition;
+import haxeon.ui.TextLayout.TextRangeRect;
+
+import haxeon.ui.LayoutSession;
+import haxeon.ui.Paint;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.PathBuilder;
+import haxeon.ui.Surface;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import Color;
-import Canvas;
-import DisplayList;
-import CompositeMode;
-import FontCollection;
-import FontFamily;
-import GradientStop;
-import Image;
-import ImageFormat;
-import ImageFilter;
-import Insets;
-import Path;
-import SolidPaint;
-import nativekit.ui.icons.IconName;
-import LayoutAlignmentX;
-import LayoutAlignmentY;
-import LayoutAxis;
-import LayoutDirection;
-import LayoutFrame;
-import LayoutPositioning;
-import LayoutSizing;
-import LayoutStyle;
-import LayoutSizing;
-import LayoutVisualKind;
-import TextAlignment;
-import Rect;
-import Point;
-import ResolvedLayoutItem;
-import Transform2D;
-import TextLayout;
-import TextDirection;
-import TextStyle;
-import TextColorRange;
-import nativekit.ui.widgets.text.TextDecoration;
-import nativekit.ui.widgets.text.TextDecorationKind;
-import TextWrap;
-import NativeKitEventValue;
-import NativeKitEventValue.NativeKitTextEdit;
-import NativeKitEvents;
-import NativeKitRuntime;
+import haxeon.ui.Color;
+import haxeon.ui.Canvas;
+import haxeon.ui.DisplayList;
+import haxeon.ui.CompositeMode;
+import haxeon.ui.FontCollection;
+import haxeon.ui.FontFamily;
+import haxeon.ui.GradientStop;
+import haxeon.ui.Image;
+import haxeon.ui.ImageFormat;
+import haxeon.ui.ImageFilter;
+import haxeon.ui.Insets;
+import haxeon.ui.Path;
+import haxeon.ui.Paint.SolidPaint;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.LayoutAlignmentX;
+import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutPositioning;
+import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.TextAlignment;
+import haxeon.ui.Rect;
+import haxeon.ui.Point;
+import haxeon.ui.ResolvedLayoutItem;
+import haxeon.ui.Transform2D;
+import haxeon.ui.TextLayout;
+import haxeon.ui.TextDirection;
+import haxeon.ui.TextStyle;
+import haxeon.ui.TextColorRange;
+import haxeon.ui.widgets.text.TextDecoration;
+import haxeon.ui.widgets.text.TextDecorationKind;
+import haxeon.ui.TextWrap;
+import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
+import haxeon.platform.NativeKitEvents;
+import haxeon.platform.NativeKitRuntime;
 import NativeKitEventDecoderTests;
-import nativekit.ui.core.NativeInputAdapter;
-import nativekit.ui.core.CursorShape as UiCursorShape;
-import nativekit.ui.core.CachePolicy;
-import nativekit.ui.core.BuildContext;
-import nativekit.ui.core.Command;
-import nativekit.ui.core.CommandContext;
-import nativekit.ui.core.CommandParameters;
-import nativekit.ui.core.CommandRegistry;
-import nativekit.ui.core.CommandResult;
-import nativekit.ui.docking.DockDropZone;
-import nativekit.ui.widgets.docking.DockDropTarget;
-import nativekit.ui.docking.DockNode;
-import nativekit.ui.docking.DockPanelDescriptor;
-import nativekit.ui.docking.DockWorkspaceStorage;
-import nativekit.ui.docking.DockWorkspaceCommands;
-import nativekit.ui.widgets.docking.DockPanelContent;
-import nativekit.ui.docking.DockSplitAxis;
-import nativekit.ui.docking.DockWorkspacePersistence;
-import nativekit.ui.docking.DockWorkspaceModel;
-import nativekit.ui.widgets.docking.DockWorkspaceInteraction;
-import nativekit.ui.editing.EditorDocument;
-import nativekit.ui.editing.EditHistory;
-import nativekit.ui.editing.EditOperation;
-import nativekit.ui.properties.PropertyDescriptor;
-import nativekit.ui.properties.PropertyDescriptorOptions;
-import nativekit.ui.properties.PropertyBinding;
-import nativekit.ui.properties.PropertyEditResult;
-import nativekit.ui.properties.PropertyEditorExtension;
-import nativekit.ui.properties.PropertyEditorRegistry;
-import nativekit.ui.properties.PropertyInspectorSection;
-import nativekit.ui.properties.PropertyOption;
-import nativekit.ui.properties.PropertyType;
-import nativekit.ui.properties.PropertyValue;
-import nativekit.ui.properties.PropertyValueTools;
-import nativekit.ui.plotting.PlotModel;
-import nativekit.ui.plotting.PlotPoint;
-import nativekit.ui.plotting.PlotSeries;
-import nativekit.ui.core.ViewportCamera;
-import nativekit.ui.core.ViewportContent;
-import nativekit.ui.core.EventDispatcher;
-import nativekit.ui.core.FocusManager;
-import nativekit.ui.core.HitTest;
-import nativekit.ui.core.HitTestBehavior;
-import nativekit.ui.core.InteractionStateStore;
-import nativekit.ui.core.RenderNode;
-import nativekit.ui.core.State;
-import nativekit.ui.core.StateStore;
-import nativekit.ui.core.UiContext;
-import nativekit.ui.core.UiDirtyFlag;
-import nativekit.ui.core.UiEventKind;
-import nativekit.ui.core.UiKey;
-import nativekit.ui.core.UiModifier;
-import nativekit.ui.core.UiTouchData;
-import nativekit.ui.core.WidgetId;
-import nativekit.ui.core.View;
-import nativekit.ui.core.Shortcut;
-import nativekit.ui.semantics.AccessibilityAction;
-import nativekit.ui.semantics.AccessibilityBridge;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.semantics.AccessibilityState;
-import nativekit.ui.semantics.AccessibilityRequest;
-import nativekit.ui.semantics.Semantics;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.controls.ButtonVariant;
-import nativekit.ui.widgets.commands.CommandButton;
-import nativekit.ui.widgets.commands.CommandMenu;
-import nativekit.ui.widgets.commands.CommandPalette;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.layout.Align;
-import nativekit.ui.widgets.layout.AppShell;
-import nativekit.ui.widgets.CanvasView;
-import nativekit.ui.widgets.Shape;
-import nativekit.ui.widgets.controls.Checkbox;
-import nativekit.ui.widgets.ImageView;
-import nativekit.ui.widgets.LayeredImageView;
-import nativekit.ui.widgets.LayeredImageView.ImageLayer;
-import nativekit.ui.widgets.NineSliceView;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.collections.ListView;
-import nativekit.ui.widgets.collections.ListViewModel;
-import nativekit.ui.widgets.layout.Padding;
-import nativekit.ui.widgets.controls.ProgressBar;
-import nativekit.ui.widgets.properties.PropertyEditor;
-import nativekit.ui.widgets.properties.PropertyInspector;
-import nativekit.ui.widgets.GpuViewport;
-import nativekit.ui.widgets.plotting.PlotView;
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.docking.DockWorkspace;
-import nativekit.ui.widgets.text.DefaultTextStyle;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.MenuItem;
-import nativekit.ui.widgets.overlays.Popup;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.scroll.ScrollAxis;
-import nativekit.ui.widgets.scroll.ScrollController;
-import nativekit.ui.widgets.scroll.ScrollView;
-import nativekit.ui.widgets.controls.SearchField;
-import nativekit.ui.widgets.layout.SizedBox;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.core.TextStyleOverride;
-import nativekit.ui.widgets.text.TextEditorState;
-import nativekit.ui.widgets.text.TextEditorHistoryKind;
-import nativekit.ui.widgets.text.TextEditorDiagnostics;
-import nativekit.ui.widgets.text.TextArea;
-import nativekit.ui.widgets.text.TextField;
-import nativekit.ui.widgets.text.TextSelection;
-import nativekit.ui.widgets.text.EditTransaction;
+import haxeon.ui.core.NativeInputAdapter;
+import haxeon.ui.core.CursorShape as UiCursorShape;
+import haxeon.ui.core.CachePolicy;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.Command;
+import haxeon.ui.core.CommandContext;
+import haxeon.ui.core.CommandParameters;
+import haxeon.ui.core.CommandRegistry;
+import haxeon.ui.core.CommandResult;
+import haxeon.ui.docking.DockDropZone;
+import haxeon.ui.widgets.docking.DockDropTarget;
+import haxeon.ui.docking.DockNode;
+import haxeon.ui.docking.DockPanelDescriptor;
+import haxeon.ui.docking.DockWorkspaceStorage;
+import haxeon.ui.docking.DockWorkspaceCommands;
+import haxeon.ui.widgets.docking.DockPanelContent;
+import haxeon.ui.docking.DockSplitAxis;
+import haxeon.ui.docking.DockWorkspacePersistence;
+import haxeon.ui.docking.DockWorkspaceModel;
+import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
+import haxeon.ui.editing.EditorDocument;
+import haxeon.ui.editing.EditHistory;
+import haxeon.ui.editing.EditOperation;
+import haxeon.ui.properties.PropertyDescriptor;
+import haxeon.ui.properties.PropertyDescriptorOptions;
+import haxeon.ui.properties.PropertyBinding;
+import haxeon.ui.properties.PropertyEditResult;
+import haxeon.ui.properties.PropertyEditorExtension;
+import haxeon.ui.properties.PropertyEditorRegistry;
+import haxeon.ui.properties.PropertyInspectorSection;
+import haxeon.ui.properties.PropertyOption;
+import haxeon.ui.properties.PropertyType;
+import haxeon.ui.properties.PropertyValue;
+import haxeon.ui.properties.PropertyValueTools;
+import haxeon.ui.plotting.PlotModel;
+import haxeon.ui.plotting.PlotPoint;
+import haxeon.ui.plotting.PlotSeries;
+import haxeon.ui.core.ViewportCamera;
+import haxeon.ui.core.ViewportContent;
+import haxeon.ui.core.EventDispatcher;
+import haxeon.ui.core.FocusManager;
+import haxeon.ui.core.HitTest;
+import haxeon.ui.core.HitTestBehavior;
+import haxeon.ui.core.InteractionStateStore;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.State;
+import haxeon.ui.core.StateStore;
+import haxeon.ui.core.UiContext;
+import haxeon.ui.core.UiDirtyFlag;
+import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
+import haxeon.ui.core.UiTouchData;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.core.View;
+import haxeon.ui.core.Shortcut;
+import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.semantics.AccessibilityBridge;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.Semantics;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.ButtonVariant;
+import haxeon.ui.widgets.commands.CommandButton;
+import haxeon.ui.widgets.commands.CommandMenu;
+import haxeon.ui.widgets.commands.CommandPalette;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.layout.Align;
+import haxeon.ui.widgets.layout.AppShell;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.Shape;
+import haxeon.ui.widgets.controls.Checkbox;
+import haxeon.ui.widgets.ImageView;
+import haxeon.ui.widgets.LayeredImageView;
+import haxeon.ui.widgets.LayeredImageView.ImageLayer;
+import haxeon.ui.widgets.NineSliceView;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.collections.ListView;
+import haxeon.ui.widgets.collections.ListViewModel;
+import haxeon.ui.widgets.layout.Padding;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.properties.PropertyEditor;
+import haxeon.ui.widgets.properties.PropertyInspector;
+import haxeon.ui.widgets.GpuViewport;
+import haxeon.ui.widgets.plotting.PlotView;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.docking.DockWorkspace;
+import haxeon.ui.widgets.text.DefaultTextStyle;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.MenuItem;
+import haxeon.ui.widgets.overlays.Popup;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollController;
+import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.widgets.controls.SearchField;
+import haxeon.ui.widgets.layout.SizedBox;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.widgets.text.TextEditorState;
+import haxeon.ui.widgets.text.TextEditorHistoryKind;
+import haxeon.ui.widgets.text.TextEditorDiagnostics;
+import haxeon.ui.widgets.text.TextArea;
+import haxeon.ui.widgets.text.TextField;
+import haxeon.ui.widgets.text.TextSelection;
+import haxeon.ui.widgets.text.EditTransaction;
 import nativekit.editorkit.TextDocument;
-import nativekit.ui.widgets.layout.Spacer;
-import nativekit.ui.widgets.controls.Slider;
-import nativekit.ui.widgets.layout.Stack;
-import nativekit.ui.widgets.layout.StackChild;
-import nativekit.ui.widgets.controls.Spinner;
-import nativekit.ui.widgets.controls.SpinnerPainter;
-import nativekit.ui.widgets.controls.SpinnerKind;
-import nativekit.ui.widgets.layout.SplitOrientation;
-import nativekit.ui.widgets.layout.SplitSide;
-import nativekit.ui.widgets.layout.SplitView;
-import nativekit.ui.widgets.layout.SplitViewOptions;
-import nativekit.ui.widgets.collections.TableColumn;
-import nativekit.ui.widgets.collections.TableView;
-import nativekit.ui.widgets.controls.Toggle;
-import nativekit.ui.widgets.overlays.Tooltip;
-import nativekit.ui.widgets.controls.Toolbar;
-import nativekit.ui.widgets.collections.TreeView;
-import nativekit.ui.widgets.collections.TreeViewModel;
-import nativekit.ui.widgets.collections.TreeRootMetadata;
-import nativekit.ui.widgets.text.Utf8Text;
-import nativekit.ui.widgets.collections.VirtualGrid;
-import nativekit.ui.widgets.collections.VirtualList;
-import nativekit.ui.widgets.collections.VirtualExtentViewport;
-import nativekit.ui.widgets.collections.VirtualExtentIndex;
-import nativekit.ui.widgets.collections.VirtualizationPolicy;
-import nativekit.ui.widgets.collections.VirtualViewport;
-import nativekit.ui.widgets.WindowChrome;
-import nativekit.ui.theme.Theme;
-import nativekit.ui.theme.ThemeTokens;
-import nativekit.ui.theme.TextRole;
-import nativekit.ui.style.ComputedStyle;
-import nativekit.ui.style.DecorationChain;
-import nativekit.ui.style.Decoration;
-import nativekit.ui.style.BackgroundDecoration;
-import nativekit.ui.style.BorderDecoration;
-import nativekit.ui.style.GradientDecoration;
-import nativekit.ui.style.ShadowDecoration;
-import nativekit.ui.style.StyleDiff;
-import nativekit.ui.style.StyleResolver;
-import nativekit.ui.style.StyleProperty;
-import nativekit.ui.style.StyleImpact;
-import nativekit.ui.style.StyleSource;
-import nativekit.ui.style.StyleDiff;
-import nativekit.ui.style.StyleSelector;
-import nativekit.ui.style.StyleSheet;
-import nativekit.ui.style.StyleSource;
-import nativekit.ui.style.StyleState;
-import nativekit.ui.style.StyleStateUtil;
-import nativekit.ui.style.StyleTarget;
-import nativekit.ui.style.StyleValue;
-import nativekit.ui.style.EffectChain;
-import nativekit.ui.style.EffectKind;
-import nativekit.ui.style.BlurEffect;
-import nativekit.ui.style.BrightnessEffect;
-import nativekit.ui.style.ContrastEffect;
-import nativekit.ui.style.SaturateEffect;
-import nativekit.ui.style.HueRotateEffect;
-import nativekit.ui.style.ColorMatrixEffect;
-import nativekit.ui.style.DropShadowEffect;
-import nativekit.ui.style.CustomEffect;
-import nativekit.ui.style.CustomEffectDefinition;
-import nativekit.ui.style.EffectParameter;
-import nativekit.ui.style.EffectParameterType;
-import nativekit.ui.style.InkOverflow;
-import nativekit.ui.style.Mask;
-import nativekit.ui.style.Environment;
-import nativekit.ui.style.EnvironmentColorScheme;
-import nativekit.ui.style.StyleEnvironment;
-import nativekit.ui.gestures.GestureEvent;
-import nativekit.ui.gestures.TapRecognizer;
-import nativekit.ui.gestures.DoubleTapRecognizer;
-import nativekit.ui.gestures.LongPressRecognizer;
-import nativekit.ui.gestures.DragRecognizer;
-import nativekit.ui.widgets.GestureDetector;
-import nativekit.ui.widgets.controls.RadioGroup;
-import nativekit.ui.widgets.controls.RadioOption;
-import nativekit.ui.widgets.controls.Tabs;
-import nativekit.ui.widgets.controls.TabItem;
-import nativekit.ui.animation.AnimationController;
-import nativekit.ui.animation.AnimationScheduler;
-import nativekit.ui.animation.SpringController;
-import nativekit.ui.animation.LoopAnimation;
-import nativekit.ui.animation.Easing;
-import nativekit.ui.debug.UiInspector;
-import nativekit.ui.debug.UiFrameMetrics;
-import nativekit.ui.debug.AccessibilityAudit;
+import haxeon.ui.widgets.layout.Spacer;
+import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.layout.Stack;
+import haxeon.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.controls.Spinner;
+import haxeon.ui.widgets.controls.SpinnerPainter;
+import haxeon.ui.widgets.controls.SpinnerKind;
+import haxeon.ui.widgets.layout.SplitOrientation;
+import haxeon.ui.widgets.layout.SplitSide;
+import haxeon.ui.widgets.layout.SplitView;
+import haxeon.ui.widgets.layout.SplitViewOptions;
+import haxeon.ui.widgets.collections.TableColumn;
+import haxeon.ui.widgets.collections.TableView;
+import haxeon.ui.widgets.controls.Toggle;
+import haxeon.ui.widgets.overlays.Tooltip;
+import haxeon.ui.widgets.controls.Toolbar;
+import haxeon.ui.widgets.collections.TreeView;
+import haxeon.ui.widgets.collections.TreeViewModel;
+import haxeon.ui.widgets.collections.TreeRootMetadata;
+import haxeon.ui.widgets.text.Utf8Text;
+import haxeon.ui.widgets.collections.VirtualGrid;
+import haxeon.ui.widgets.collections.VirtualList;
+import haxeon.ui.widgets.collections.VirtualExtentViewport;
+import haxeon.ui.widgets.collections.VirtualExtentIndex;
+import haxeon.ui.widgets.collections.VirtualizationPolicy;
+import haxeon.ui.widgets.collections.VirtualViewport;
+import haxeon.ui.widgets.WindowChrome;
+import haxeon.ui.theme.Theme;
+import haxeon.ui.theme.ThemeTokens;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.style.ComputedStyle;
+import haxeon.ui.style.DecorationChain;
+import haxeon.ui.style.Decoration;
+import haxeon.ui.style.BackgroundDecoration;
+import haxeon.ui.style.BorderDecoration;
+import haxeon.ui.style.GradientDecoration;
+import haxeon.ui.style.ShadowDecoration;
+import haxeon.ui.style.StyleDiff;
+import haxeon.ui.style.StyleResolver;
+import haxeon.ui.style.StyleProperty;
+import haxeon.ui.style.StyleImpact;
+import haxeon.ui.style.StyleSource;
+import haxeon.ui.style.StyleDiff;
+import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleSheet;
+import haxeon.ui.style.StyleSource;
+import haxeon.ui.style.StyleState;
+import haxeon.ui.style.StyleStateUtil;
+import haxeon.ui.style.StyleTarget;
+import haxeon.ui.style.StyleValue;
+import haxeon.ui.style.EffectChain;
+import haxeon.ui.style.EffectKind;
+import haxeon.ui.style.BlurEffect;
+import haxeon.ui.style.BrightnessEffect;
+import haxeon.ui.style.ContrastEffect;
+import haxeon.ui.style.SaturateEffect;
+import haxeon.ui.style.HueRotateEffect;
+import haxeon.ui.style.ColorMatrixEffect;
+import haxeon.ui.style.DropShadowEffect;
+import haxeon.ui.style.CustomEffect;
+import haxeon.ui.style.CustomEffectDefinition;
+import haxeon.ui.style.EffectParameter;
+import haxeon.ui.style.EffectParameterType;
+import haxeon.ui.style.InkOverflow;
+import haxeon.ui.style.Mask;
+import haxeon.ui.style.Environment;
+import haxeon.ui.style.EnvironmentColorScheme;
+import haxeon.ui.style.StyleEnvironment;
+import haxeon.ui.gestures.GestureEvent;
+import haxeon.ui.gestures.TapRecognizer;
+import haxeon.ui.gestures.DoubleTapRecognizer;
+import haxeon.ui.gestures.LongPressRecognizer;
+import haxeon.ui.gestures.DragRecognizer;
+import haxeon.ui.widgets.GestureDetector;
+import haxeon.ui.widgets.controls.RadioGroup;
+import haxeon.ui.widgets.controls.RadioOption;
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.controls.TabItem;
+import haxeon.ui.animation.AnimationController;
+import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.SpringController;
+import haxeon.ui.animation.LoopAnimation;
+import haxeon.ui.animation.Easing;
+import haxeon.ui.debug.UiInspector;
+import haxeon.ui.debug.UiFrameMetrics;
+import haxeon.ui.debug.AccessibilityAudit;
 import AccessibilityContract;
-import nativekit.ui.host.UiHostFrameState;
-import nativekit.ui.host.UiHostSession;
-import nativekit.ui.host.UiHostSession.UiHostLifecycle;
-import nativekit.ui.host.UiHostContext;
-import nativekit.ui.host.UiHostRuntime;
-import nativekit.ui.host.UiApplication;
-import nativekit.ui.host.UiHostPendingResources;
+import haxeon.ui.host.UiHostFrameState;
+import haxeon.ui.host.UiHostSession;
+import haxeon.ui.host.UiHostSession.UiHostLifecycle;
+import haxeon.ui.host.UiHostContext;
+import haxeon.ui.host.UiHostRuntime;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiHostPendingResources;
 
 class FrameworkSmoke {
 	static function newlineChunksValid(fonts:FontCollection):Bool {
@@ -470,12 +479,12 @@ class FrameworkSmoke {
 		return true;
 	}
 
-	static function clickEvent(time:Float, x:Float = 10.0, button:Int = 0):nativekit.ui.core.UiEvent
-		return new nativekit.ui.core.UiEvent(UiEventKind.Click, new WidgetId(90502), x, 10.0, 0.0, 0.0, button, 0, 0, null, null, 0, 0, time);
+	static function clickEvent(time:Float, x:Float = 10.0, button:Int = 0):haxeon.ui.core.UiEvent
+		return new haxeon.ui.core.UiEvent(UiEventKind.Click, new WidgetId(90502), x, 10.0, 0.0, 0.0, button, 0, 0, null, null, 0, 0, time);
 
-	@:access(nativekit.ui.core.TextInputBridge)
+	@:access(haxeon.ui.core.TextInputBridge)
 	static function main():Int {
-		var originalTypography = new nativekit.ui.core.ResolvedTextStyle(
+		var originalTypography = new haxeon.ui.core.ResolvedTextStyle(
 			new TextStyle(16.0), new ParagraphStyle(TextWrap.WordCharacter), Color.fromBytes(0, 0, 0));
 		var mergedTypography = originalTypography.merge(new TextStyleOverride(null, 20.0, null,
 			TextWrap.None, null, 0.0));
@@ -489,7 +498,7 @@ class FrameworkSmoke {
 		copiedTypography.paragraphStyle.wrap = TextWrap.Word;
 		if (mergedTypography.textStyle.fontSize != 20.0 || mergedTypography.paragraphStyle.wrap != TextWrap.None)
 			throw "Typography copies must remain independent";
-		var clickSequence = new nativekit.ui.core.PointerClickSequence();
+		var clickSequence = new haxeon.ui.core.PointerClickSequence();
 		if (clickSequence.register("a", clickEvent(1.0)) != 1 || clickSequence.register("a", clickEvent(1.1)) != 2
 			|| clickSequence.register("a", clickEvent(1.2)) != 1 || clickSequence.register("b", clickEvent(1.3)) != 1
 			|| clickSequence.register("b", clickEvent(2.0)) != 1 || clickSequence.register("b", clickEvent(2.1, 30.0)) != 1
@@ -652,18 +661,18 @@ class FrameworkSmoke {
 			return 275;
 		var publishedRects:Array<Float> = [];
 		var inputRects = [new TextRangeRect(0, 1, 2.0, 3.0, 4.0, 5.0)];
-		nativekit.ui.core.TextInputBridge.rememberRects(inputRects, publishedRects);
-		if (!nativekit.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects))
+		haxeon.ui.core.TextInputBridge.rememberRects(inputRects, publishedRects);
+		if (!haxeon.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects))
 			throw "Unchanged input geometry should reuse its published snapshot";
 		inputRects[0] = new TextRangeRect(0, 1, 3.0, 3.0, 4.0, 5.0);
-		if (nativekit.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects))
+		if (haxeon.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects))
 			throw "Moving input geometry must invalidate the published snapshot";
 		inputRects[0] = new TextRangeRect(0, 1, 2.0, 3.0, 4.0, 5.0, false);
-		if (nativekit.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects) ||
-			nativekit.ui.core.TextInputBridge.matchesRects([], publishedRects))
+		if (haxeon.ui.core.TextInputBridge.matchesRects(inputRects, publishedRects) ||
+			haxeon.ui.core.TextInputBridge.matchesRects([], publishedRects))
 			throw "Direction changes and cleared selections must be published";
-		nativekit.ui.core.TextInputBridge.rememberRects(null, publishedRects);
-		if (!nativekit.ui.core.TextInputBridge.matchesRects([], publishedRects))
+		haxeon.ui.core.TextInputBridge.rememberRects(null, publishedRects);
+		if (!haxeon.ui.core.TextInputBridge.matchesRects([], publishedRects))
 			throw "Empty input geometry should reuse its published snapshot";
 		var nativeDeleteEditor = new TextEditorState(fonts, "ab");
 		var nativeDelete = new NativeKitTextEdit(TextEditAction.Delete, null, 1, 2,
@@ -1455,7 +1464,7 @@ class FrameworkSmoke {
 			return 61;
 		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0,
 			0.0, 1.0, "Loading");
-		indeterminateProgress.mode = nativekit.ui.widgets.controls.ProgressMode.Indeterminate;
+		indeterminateProgress.mode = haxeon.ui.widgets.controls.ProgressMode.Indeterminate;
 		var indeterminateRoot = context.submit(indeterminateProgress,
 			new LayoutFrame(256.0, 192.0));
 		var indeterminateSemantics:Semantics = cast indeterminateRoot.semantics;
@@ -2605,8 +2614,8 @@ class FrameworkSmoke {
 		var tabChanges = 0;
 		var retainedHeaderBuilds = 0;
 		var retainedHeaderRevision = "initial";
-		var retainedTabOptions = new nativekit.ui.widgets.controls.TabsOptions();
-		retainedTabOptions.selectionMode = nativekit.ui.widgets.controls.TabsSelectionMode.Controlled;
+		var retainedTabOptions = new haxeon.ui.widgets.controls.TabsOptions();
+		retainedTabOptions.selectionMode = haxeon.ui.widgets.controls.TabsSelectionMode.Controlled;
 		var retainedTabs = Tabs.withOptions("retained-tabs-smoke", [
 			new TabItem("first", "First", new Text("first page")),
 			new TabItem("second", "Second", new Text("second page"))
@@ -2716,7 +2725,7 @@ class FrameworkSmoke {
 		for (value in ["🙂🙂🙂🙂🙂🙂🙂🙂-a-very-long-filename.txt", "日本語の長いファイル名-a-very-long-filename.hx"]) {
 			var ellipsisStyle = new LayoutStyle();
 			ellipsisStyle.width = LayoutAxis.fixed(31);
-			var ellipsis = new nativekit.ui.widgets.text.MiddleEllipsisText("unicode-ellipsis", value);
+			var ellipsis = new haxeon.ui.widgets.text.MiddleEllipsisText("unicode-ellipsis", value);
 			context.submit(new Row("unicode-ellipsis-row", [new KeyedView("label", ellipsis)], ellipsisStyle), tabsFrame);
 			context.submit(new Row("unicode-ellipsis-row", [new KeyedView("label", ellipsis)], ellipsisStyle), tabsFrame);
 			if (!ellipsis.truncated) throw "Unicode ellipsis fixture did not exercise truncation";
@@ -3994,7 +4003,7 @@ class FrameworkSmoke {
 	}
 
 	static function propertyInputContrastValid(fonts:FontCollection):Bool {
-		var theme = nativekit.ui.theme.Theme.light();
+		var theme = haxeon.ui.theme.Theme.light();
 		var context = new UiContext(null, fonts, theme);
 		var values = ["1.5", "0.1", "Blue box", "#458AFF"];
 		for (index in 0...values.length) {
@@ -4005,8 +4014,8 @@ class FrameworkSmoke {
 			field.enabled = index != 1;
 			var root = context.submit(field, new LayoutFrame(240.0, 40.0));
 			var expected = field.enabled ? theme.tokens.textPrimary : theme.tokens.textDisabled;
-			var foreground:Color = root.computedStyle.get(nativekit.ui.style.StyleProperty.TextColor);
-			var background:Color = root.computedStyle.get(nativekit.ui.style.StyleProperty.Background);
+			var foreground:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.TextColor);
+			var background:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.Background);
 			var rendered:Color = root.children[0].children[0].layout.textColor;
 			if (foreground == null || background == null || rendered == null ||
 				root.children[0].children[0].layout.visualKind != LayoutVisualKind.Text ||
@@ -4026,11 +4035,11 @@ class FrameworkSmoke {
 	}
 
 	static function defaultTextFieldContrastValid(fonts:FontCollection):Bool {
-		for (theme in [nativekit.ui.theme.Theme.light(), nativekit.ui.theme.Theme.dark()]) {
+		for (theme in [haxeon.ui.theme.Theme.light(), haxeon.ui.theme.Theme.dark()]) {
 			var context = new UiContext(null, fonts, theme);
 			var root = context.submit(new TextField("default-field", "Rename me"),
 				new LayoutFrame(280.0, 48.0));
-			var background:Color = root.computedStyle.get(nativekit.ui.style.StyleProperty.Background);
+			var background:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.Background);
 			var foreground:Color = root.children[0].children[0].layout.textColor;
 			var valid = background != null && foreground != null &&
 				background.red == theme.tokens.surfaceSunken.red &&
@@ -4102,7 +4111,7 @@ class FrameworkSmoke {
 	}
 
 	static function tabHierarchyValid(fonts:FontCollection):Bool {
-		var theme = nativekit.ui.theme.Theme.light();
+		var theme = haxeon.ui.theme.Theme.light();
 		var context = new UiContext(null, fonts, theme);
 		var tabs = new Tabs("hierarchy-test", [
 			new TabItem("one", "One", new Text("First")),
@@ -4189,13 +4198,13 @@ class FrameworkSmoke {
 		});
 		if (failedSession.state != UiHostLifecycle.Failed || failedSession.error == null ||
 			factoryCalls != 1) return false;
-		var originalError:nativekit.ui.host.UiHostSession.UiHostError = cast failedSession.error;
+		var originalError:haxeon.ui.host.UiHostSession.UiHostError = cast failedSession.error;
 		var originalFailure = originalError.message;
 		failedRuntime.start(function(_) {
 			factoryCalls++;
 			return new SmokeHostApplication(false);
 		});
-		var retainedError:nativekit.ui.host.UiHostSession.UiHostError = cast failedSession.error;
+		var retainedError:haxeon.ui.host.UiHostSession.UiHostError = cast failedSession.error;
 		if (factoryCalls != 1 || retainedError.message != originalFailure ||
 			originalError.stack.length == 0) return false;
 
@@ -5020,7 +5029,7 @@ class FrameworkSmoke {
 		var before = context.buildContext.stateStore.diagnosticCounts();
 		for (index in 0...40) {
 			var content = new LayoutStyle(); content.height = LayoutAxis.fixed(500);
-			var label = new nativekit.ui.widgets.text.MiddleEllipsisText("label-" + index, "A long transient label");
+			var label = new haxeon.ui.widgets.text.MiddleEllipsisText("label-" + index, "A long transient label");
 			var children:Array<KeyedView> = [new KeyedView("label", label)];
 			var scroll = new ScrollView("scroll-" + index, new Column("content", children, content));
 			context.submit(scroll, frame);
@@ -5032,7 +5041,7 @@ class FrameworkSmoke {
 
 	static function selfUpdatingLifetimeValid(context:UiContext):Bool {
 		var field = new TextField("builder-lifetime", "document");
-		var view = new nativekit.ui.core.RetainedView("builder-retained", function(_) return field);
+		var view = new haxeon.ui.core.RetainedView("builder-retained", function(_) return field);
 		var frame = new LayoutFrame(240, 80);
 		var root = context.submit(view, frame);
 		var id = root.id;
@@ -5086,7 +5095,7 @@ class FrameworkSmoke {
 
 	static function scrollbarVisibilityValid(context:UiContext):Bool {
 		var clock = new AnimationScheduler();
-		var visibility = new nativekit.ui.widgets.scroll.ScrollbarVisibilityController();
+		var visibility = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
 		visibility.attach(clock, function() {}); visibility.setAvailable(true);
 		if (visibility.opacity != 0) return false;
 		visibility.reveal(); clock.advance(0.49);
@@ -5099,20 +5108,20 @@ class FrameworkSmoke {
 		if (visibility.opacity != 1 || clock.activeCount != 0) return false;
 		visibility.setDragging(false); clock.advance(0.71);
 		if (visibility.opacity != 0 || clock.activeCount != 0) return false;
-		visibility.configure(nativekit.ui.widgets.scroll.ScrollbarVisibility.Auto, true);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, true);
 		visibility.reveal(); clock.advance(0.49);
 		if (visibility.opacity != 1) return false;
 		clock.advance(0.02); if (visibility.opacity != 0) return false;
-		visibility.configure(nativekit.ui.widgets.scroll.ScrollbarVisibility.Always, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Always, false);
 		if (visibility.opacity != 1 || clock.activeCount != 0) return false;
-		visibility.configure(nativekit.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
 		visibility.setHovered(true); if (visibility.opacity != 0) return false;
 		visibility.setHovered(false);
-		visibility.configure(nativekit.ui.widgets.scroll.ScrollbarVisibility.Auto, false);
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, false);
 		visibility.reveal(); visibility.dispose(); if (clock.activeCount != 0) return false;
 
 		var oldPolicy = context.buildContext.environment.scrollbarVisibility;
-		context.buildContext.environment.scrollbarVisibility = nativekit.ui.widgets.scroll.ScrollbarVisibility.Auto;
+		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
 		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(180); style.height = LayoutAxis.fixed(80);
 		var content = new LayoutStyle(); content.width = LayoutAxis.fixed(180); content.height = LayoutAxis.fixed(600);
 		var frame = new LayoutFrame(180, 80); frame.deltaSeconds = 0;
@@ -5138,13 +5147,13 @@ class FrameworkSmoke {
 		frame.deltaSeconds = 0;
 		context.scroll(20, 20, 0, 40); root = context.submit(view, frame);
 		if (scrollbarAlpha(root) != 1 || controller.offsetY != 40) return false;
-		context.buildContext.environment.scrollbarVisibility = nativekit.ui.widgets.scroll.ScrollbarVisibility.Hidden;
+		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden;
 		root = context.submit(view, frame);
 		if (root.children.length != 1 || controller.offsetY != 40 || context.animations.activeCount != 0) return false;
-		context.buildContext.environment.scrollbarVisibility = nativekit.ui.widgets.scroll.ScrollbarVisibility.Always;
+		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
 		root = context.submit(view, frame); root = context.submit(view, frame);
 		if (scrollbarAlpha(root) != 1) return false;
-		context.buildContext.environment.scrollbarVisibility = nativekit.ui.widgets.scroll.ScrollbarVisibility.Auto;
+		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
 		context.pointerMove(track.x + 5, track.y + 50);
 		root = context.submit(view, frame);
 		context.pointerMove(20, 20);
@@ -5199,15 +5208,15 @@ class FrameworkSmoke {
 	}
 
 	static function sidebarValid(context:UiContext):Bool {
-		var model = new nativekit.ui.widgets.sidebar.SidebarModel();
+		var model = new haxeon.ui.widgets.sidebar.SidebarModel();
 		var files = 0, search = 0;
 		model.register("search", function() { search++; return new Text("Search content"); },
-			new nativekit.ui.widgets.sidebar.SidebarModeOptions("Search", 10, true));
+			new haxeon.ui.widgets.sidebar.SidebarModeOptions("Search", 10, true));
 		model.register("files", function() { files++; return new Text("Files content"); },
-			new nativekit.ui.widgets.sidebar.SidebarModeOptions("Files", 0, true));
+			new haxeon.ui.widgets.sidebar.SidebarModeOptions("Files", 0, true));
 		model.select("files");
 		if (files != 0 || search != 0 || model.modes[0].id != "files") return false;
-		var view = new nativekit.ui.widgets.sidebar.SidebarHost("sidebar-regression", model, function(id) { model.select(id); });
+		var view = new haxeon.ui.widgets.sidebar.SidebarHost("sidebar-regression", model, function(id) { model.select(id); });
 		context.submit(view, new LayoutFrame(240, 240));
 		if (files != 1 || search != 0) return false;
 		model.select("search");
@@ -5217,10 +5226,10 @@ class FrameworkSmoke {
 		model.setVisible(false);
 		context.submit(view, new LayoutFrame(320, 240));
 		if (files != 1 || search != 1) return false;
-		var state = model.encode(), restored = new nativekit.ui.widgets.sidebar.SidebarModel();
+		var state = model.encode(), restored = new haxeon.ui.widgets.sidebar.SidebarModel();
 		if (!restored.restore(state)) return false;
-		restored.register("files", function() return new Text("Files"), new nativekit.ui.widgets.sidebar.SidebarModeOptions("Files"));
-		restored.register("search", function() return new Text("Search"), new nativekit.ui.widgets.sidebar.SidebarModeOptions("Search"));
+		restored.register("files", function() return new Text("Files"), new haxeon.ui.widgets.sidebar.SidebarModeOptions("Files"));
+		restored.register("search", function() return new Text("Search"), new haxeon.ui.widgets.sidebar.SidebarModeOptions("Search"));
 		var searchMode = restored.find("search");
 		if (searchMode == null || restored.activeId != "search" || restored.visible || restored.width != 320) return false;
 		var before = restored.encode();
@@ -5246,7 +5255,7 @@ class FrameworkSmoke {
 			case _: return false;
 		}
 		if (!restored.unregister("search") || !restored.restore("1|future|1|future,360,1")) return false;
-		restored.register("future", function() return new Text("Future"), new nativekit.ui.widgets.sidebar.SidebarModeOptions("Future"));
+		restored.register("future", function() return new Text("Future"), new haxeon.ui.widgets.sidebar.SidebarModeOptions("Future"));
 		var future = restored.selected();
 		if (future == null || future.id != "future" || restored.width != 360) return false;
 		trace("PASS: sidebar lazy providers, shared width, deferred registration and atomic persistence");
@@ -5304,19 +5313,19 @@ class FrameworkSmoke {
 		var singletonDock = new DockWorkspaceModel();
 		var groupedDock = new DockWorkspaceModel();
 		groupedDock.register(new DockPanelDescriptor("surface", "Surface", false, true, null,
-			nativekit.ui.docking.DockPanelHeaderMode.Content,
-			new nativekit.ui.docking.DockPanelGrouping("surfaces", false)));
+			haxeon.ui.docking.DockPanelHeaderMode.Content,
+			new haxeon.ui.docking.DockPanelGrouping("surfaces", false)));
 		groupedDock.register(new DockPanelDescriptor("tool-a", "Tool A", true, true, null,
-			nativekit.ui.docking.DockPanelHeaderMode.Dock,
-			new nativekit.ui.docking.DockPanelGrouping("tools")));
+			haxeon.ui.docking.DockPanelHeaderMode.Dock,
+			new haxeon.ui.docking.DockPanelGrouping("tools")));
 		groupedDock.register(new DockPanelDescriptor("tool-b", "Tool B", true, true, null,
-			nativekit.ui.docking.DockPanelHeaderMode.Dock,
-			new nativekit.ui.docking.DockPanelGrouping("tools")));
+			haxeon.ui.docking.DockPanelHeaderMode.Dock,
+			new haxeon.ui.docking.DockPanelGrouping("tools")));
 		groupedDock.setDefaultLayout(DockNode.Panel("surface"));
 		if (groupedDock.canDock("tool-a", "surface", DockDropZone.Center) ||
 			groupedDock.dock("tool-a", "surface", DockDropZone.TabBefore) ||
 			!groupedDock.open("tool-a", "surface") || !groupedDock.open("tool-b", "surface")) return false;
-		var groupedSnapshot = new nativekit.ui.docking.DockWorkspaceSnapshot(DockNode.Tabs(["surface", "tool-a", "tool-b"], "tool-b"), "tool-b");
+		var groupedSnapshot = new haxeon.ui.docking.DockWorkspaceSnapshot(DockNode.Tabs(["surface", "tool-a", "tool-b"], "tool-b"), "tool-b");
 		if (!groupedDock.restorePersisted(groupedSnapshot) || groupedDock.activePanelId != "tool-b") return false;
 		switch groupedDock.root {
 			case Split(Vertical, _, Panel("surface"), Tabs(ids, selected)):
@@ -5329,7 +5338,7 @@ class FrameworkSmoke {
 			!groupedDock.dock("tool-a", "surface", DockDropZone.Right)) return false;
 		var contentHeaderDock = new DockWorkspaceModel();
 		contentHeaderDock.register(new DockPanelDescriptor("content-header", "Content header", false,
-			true, null, nativekit.ui.docking.DockPanelHeaderMode.Content));
+			true, null, haxeon.ui.docking.DockPanelHeaderMode.Content));
 		contentHeaderDock.register(new DockPanelDescriptor("tool-header", "Tool header"));
 		contentHeaderDock.setDefaultLayout(DockNode.Panel("content-header"));
 		var contentHeaderWorkspace = new DockWorkspace("content-header-workspace", contentHeaderDock);
@@ -6018,7 +6027,7 @@ private class ExternalScrollbarSmoke implements View {
 	final controller:ScrollController;
 	public function new(controller:ScrollController) this.controller = controller;
 	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new nativekit.ui.core.Key("external-scrollbar-smoke"), function() {
+		return context.withScope(new haxeon.ui.core.Key("external-scrollbar-smoke"), function() {
 			var style = new LayoutStyle(); style.width = LayoutAxis.fixed(240); style.height = LayoutAxis.fixed(80);
 			style.direction = LayoutDirection.LeftToRight;
 			var host = new RenderNode(context.id("host"), LayoutVisualKind.Box, style);

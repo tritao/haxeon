@@ -29,7 +29,7 @@
 		"nk_result": {
 			"successValue": "NK_OK",
 			"diagnosticFunction": "nk_last_error",
-			"errorType": "NativeKitError",
+			"errorType": "haxeon.platform.NativeKitError",
 			"checkedSuffix": "_checked"
 		}
 	}

@@ -1,19 +1,19 @@
 package inspector;
 
-import Canvas;
-import LayoutAxis;
-import LayoutStyle;
-import Point;
-import Rect;
-import ResolvedLayoutItem;
+import haxeon.ui.Canvas;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.Point;
+import haxeon.ui.Rect;
+import haxeon.ui.ResolvedLayoutItem;
 import UiExplorer;
-import nativekit.ui.core.HitTest;
-import nativekit.ui.core.RenderNode;
-import nativekit.ui.core.UiEventKind;
-import nativekit.ui.core.WidgetId;
-import nativekit.ui.debug.UiNodeSnapshot;
-import nativekit.ui.widgets.CanvasView;
-import nativekit.ui.widgets.layout.StackChild;
+import haxeon.ui.core.HitTest;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.debug.UiNodeSnapshot;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.layout.StackChild;
 
 /** Pointer selection, focus tracking, and clipped render-node highlighting. */
 class InspectionOverlay {

@@ -1,27 +1,27 @@
 package pages;
 
-import Canvas;
-import Color;
-import GradientStop;
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
-import Rect;
+import haxeon.ui.Canvas;
+import haxeon.ui.Color;
+import haxeon.ui.GradientStop;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.Rect;
 import UiExplorer;
-import nativekit.ui.style.BlurEffect;
-import nativekit.ui.style.BrightnessEffect;
-import nativekit.ui.style.ContrastEffect;
-import nativekit.ui.style.DropShadowEffect;
-import nativekit.ui.style.EffectChain;
-import nativekit.ui.style.HueRotateEffect;
-import nativekit.ui.style.Mask;
-import nativekit.ui.style.SaturateEffect;
-import nativekit.ui.style.StyleSelector;
-import nativekit.ui.style.StyleValue;
-import nativekit.ui.widgets.CanvasView;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
+import haxeon.ui.style.BlurEffect;
+import haxeon.ui.style.BrightnessEffect;
+import haxeon.ui.style.ContrastEffect;
+import haxeon.ui.style.DropShadowEffect;
+import haxeon.ui.style.EffectChain;
+import haxeon.ui.style.HueRotateEffect;
+import haxeon.ui.style.Mask;
+import haxeon.ui.style.SaturateEffect;
+import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleValue;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
 
 /** Showcase for post-layout effects and their stylesheet-facing contracts. */
 class EffectsPage {

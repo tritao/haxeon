@@ -1,32 +1,34 @@
 package inspector;
 
-import nativekit.ui.widgets.collections.ListView;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.controls.Checkbox;
-import nativekit.ui.widgets.controls.ComboBox;
-import nativekit.ui.widgets.controls.ProgressBar;
-import nativekit.ui.widgets.controls.ProgressMode;
-import nativekit.ui.widgets.controls.Radio;
-import nativekit.ui.widgets.controls.RadioGroup;
-import nativekit.ui.widgets.controls.Slider;
-import nativekit.ui.widgets.controls.Tabs;
-import nativekit.ui.widgets.controls.Toggle;
-import nativekit.ui.widgets.controls.Toolbar;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.MenuItem;
-import nativekit.ui.widgets.scroll.ScrollAxis;
-import nativekit.ui.widgets.scroll.ScrollView;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.widgets.text.TextField;
+import haxeon.ui.Image;
+
+import haxeon.ui.widgets.collections.ListView;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.Checkbox;
+import haxeon.ui.widgets.controls.ComboBox;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.controls.ProgressMode;
+import haxeon.ui.widgets.controls.Radio;
+import haxeon.ui.widgets.controls.RadioGroup;
+import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.controls.Toggle;
+import haxeon.ui.widgets.controls.Toolbar;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.MenuItem;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.widgets.text.TextField;
 
 
-import Rect;
-import nativekit.ui.semantics.AccessibilityAction;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.semantics.AccessibilityState;
+import haxeon.ui.Rect;
+import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.AccessibilityState;
 
 /** API synopsis and canonical usage examples keyed by semantic widget role. */
 class WidgetDocsRegistry {

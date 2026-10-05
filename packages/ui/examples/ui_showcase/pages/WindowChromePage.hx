@@ -1,11 +1,11 @@
 package pages;
 
-import LayoutAxis;
-import LayoutDirection;
-import LayoutStyle;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
 
 /** Explains and launches the interactive multi-window custom chrome demo. */
 class WindowChromePage {

@@ -1,4 +1,4 @@
-import nativekit.ui.widgets.KeyedView;
+import haxeon.ui.widgets.KeyedView;
 
 /** Searchable catalog metadata and builder for one Explorer page. */
 class ExplorerPage {

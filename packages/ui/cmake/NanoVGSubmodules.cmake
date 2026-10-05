@@ -1,14 +1,14 @@
 foreach(dependency IN ITEMS nanovg)
-    if(NOT EXISTS "${NK_VENDOR_DIR}/${dependency}/.git")
+    if(NOT EXISTS "${NKUI_VENDOR_DIR}/${dependency}/.git")
         message(FATAL_ERROR
             "${dependency} submodule is missing; run git submodule update --init")
     endif()
 endforeach()
 
 add_library(nkui_nanovg_core STATIC
-    "${NK_VENDOR_DIR}/nanovg/src/nanovg.c")
+    "${NKUI_VENDOR_DIR}/nanovg/src/nanovg.c")
 target_include_directories(nkui_nanovg_core
-    PUBLIC "$<BUILD_INTERFACE:${NK_VENDOR_DIR}/nanovg/src>"
+    PUBLIC "$<BUILD_INTERFACE:${NKUI_VENDOR_DIR}/nanovg/src>"
 )
 target_compile_definitions(nkui_nanovg_core
     PUBLIC NVG_NO_TEXT=1

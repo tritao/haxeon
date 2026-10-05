@@ -1,9 +1,9 @@
 package testing;
 
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.Popup;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.Popup;
+import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;
@@ -58,7 +58,7 @@ class ExplorerVisualCases {
 				state.selectedPage = "controls";
 				state.lightTheme = true;
 				state.visualPropertyInputs = true;
-				explorer.context.setTheme(nativekit.ui.theme.Theme.light());
+				explorer.context.setTheme(haxeon.ui.theme.Theme.light());
 			case ExplorerVisualCase.ControlsFocused:
 				state.selectedPage = "controls";
 				state.visualFocusLabel = "Primary action";

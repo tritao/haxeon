@@ -1,22 +1,24 @@
 package pages;
 
-import nativekit.ui.widgets.layout.Padding;
-import nativekit.ui.widgets.layout.Stack;
+import haxeon.ui.Insets;
+
+import haxeon.ui.widgets.layout.Padding;
+import haxeon.ui.widgets.layout.Stack;
 
 
-import LayoutAlignmentX;
-import LayoutAlignmentY;
-import LayoutAxis;
-import LayoutDistribution;
-import LayoutDirection;
-import LayoutStyle;
-import LayoutWrapMode;
+import haxeon.ui.LayoutAlignmentX;
+import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDistribution;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutWrapMode;
 import UiExplorer;
-import nativekit.ui.core.View;
-import nativekit.ui.widgets.layout.Align;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
+import haxeon.ui.core.View;
+import haxeon.ui.widgets.layout.Align;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
 
 /** Demonstrations of the framework's compositional layout widgets. */
 class LayoutPage {

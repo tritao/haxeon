@@ -1,19 +1,19 @@
 package shell;
 
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
 import ExplorerCatalog;
 import ExplorerPage;
 import components.SectionHeader;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.controls.ButtonVariant;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.scroll.ScrollAxis;
-import nativekit.ui.widgets.scroll.ScrollView;
-import nativekit.ui.widgets.controls.SearchField;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.ButtonVariant;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.widgets.controls.SearchField;
 
 /** Search and navigation surface for the Explorer's page catalog. */
 class CatalogSidebar {

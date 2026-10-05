@@ -1,10 +1,10 @@
 foreach(dependency IN ITEMS harfbuzz sheenbidi libunibreak skribidi)
-    if(NOT EXISTS "${NK_VENDOR_DIR}/${dependency}/.git")
+    if(NOT EXISTS "${NKUI_VENDOR_DIR}/${dependency}/.git")
         message(FATAL_ERROR
             "${dependency} submodule is missing; run git submodule update --init")
     endif()
 endforeach()
-if(NKUI_ENABLE_BUDOUX AND NOT EXISTS "${NK_VENDOR_DIR}/budouxc/.git")
+if(NKUI_ENABLE_BUDOUX AND NOT EXISTS "${NKUI_VENDOR_DIR}/budouxc/.git")
     message(FATAL_ERROR
         "budouxc submodule is missing; run git submodule update --init")
 endif()
@@ -23,7 +23,7 @@ option(NKUI_ENABLE_HARFBUZZ_SIZE_OPTIMIZATION
 set(NKUI_HARFBUZZ_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/third_party/harfbuzz")
 set(NKUI_SAVED_BUILD_SHARED_LIBS "${BUILD_SHARED_LIBS}")
 set(BUILD_SHARED_LIBS OFF)
-add_subdirectory("${NK_VENDOR_DIR}/harfbuzz" "${NKUI_HARFBUZZ_BUILD_DIR}" EXCLUDE_FROM_ALL)
+add_subdirectory("${NKUI_VENDOR_DIR}/harfbuzz" "${NKUI_HARFBUZZ_BUILD_DIR}" EXCLUDE_FROM_ALL)
 set(BUILD_SHARED_LIBS "${NKUI_SAVED_BUILD_SHARED_LIBS}")
 unset(NKUI_SAVED_BUILD_SHARED_LIBS)
 set_target_properties(harfbuzz PROPERTIES POSITION_INDEPENDENT_CODE YES)
@@ -64,44 +64,44 @@ target_compile_options(harfbuzz PRIVATE
     $<$<CXX_COMPILER_ID:AppleClang>:-Wno-format>
     $<$<CXX_COMPILER_ID:AppleClang>:-Wno-error=format>)
 set_property(TARGET harfbuzz PROPERTY INTERFACE_INCLUDE_DIRECTORIES
-    "$<BUILD_INTERFACE:${NK_VENDOR_DIR}/harfbuzz/src>"
+    "$<BUILD_INTERFACE:${NKUI_VENDOR_DIR}/harfbuzz/src>"
     "$<BUILD_INTERFACE:${NKUI_HARFBUZZ_BUILD_DIR}/src>")
 
 add_library(nkui_sheenbidi STATIC
-    "${NK_VENDOR_DIR}/sheenbidi/Source/SheenBidi.c")
+    "${NKUI_VENDOR_DIR}/sheenbidi/Source/SheenBidi.c")
 target_compile_definitions(nkui_sheenbidi PRIVATE SB_CONFIG_UNITY)
 target_include_directories(nkui_sheenbidi
-    PUBLIC "$<BUILD_INTERFACE:${NK_VENDOR_DIR}/sheenbidi/Headers>"
-    PRIVATE "${NK_VENDOR_DIR}/sheenbidi/Source")
+    PUBLIC "$<BUILD_INTERFACE:${NKUI_VENDOR_DIR}/sheenbidi/Headers>"
+    PRIVATE "${NKUI_VENDOR_DIR}/sheenbidi/Source")
 
 add_library(nkui_libunibreak STATIC
-    "${NK_VENDOR_DIR}/libunibreak/src/eastasianwidthdata.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/eastasianwidthdef.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/emojidata.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/emojidef.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/graphemebreak.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/graphemebreakdata.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/indicconjunctbreakdata.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/linebreak.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/linebreakdata.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/linebreakdef.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/unibreakbase.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/unibreakdef.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/wordbreak.c"
-    "${NK_VENDOR_DIR}/libunibreak/src/wordbreakdata.c")
+    "${NKUI_VENDOR_DIR}/libunibreak/src/eastasianwidthdata.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/eastasianwidthdef.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/emojidata.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/emojidef.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/graphemebreak.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/graphemebreakdata.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/indicconjunctbreakdata.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/linebreak.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/linebreakdata.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/linebreakdef.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/unibreakbase.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/unibreakdef.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/wordbreak.c"
+    "${NKUI_VENDOR_DIR}/libunibreak/src/wordbreakdata.c")
 target_include_directories(nkui_libunibreak PUBLIC
-    "$<BUILD_INTERFACE:${NK_VENDOR_DIR}/libunibreak/src>")
+    "$<BUILD_INTERFACE:${NKUI_VENDOR_DIR}/libunibreak/src>")
 
 if(NKUI_ENABLE_BUDOUX)
     add_library(nkui_budouxc STATIC
-        "${NK_VENDOR_DIR}/budouxc/src/budoux.c")
+        "${NKUI_VENDOR_DIR}/budouxc/src/budoux.c")
     target_compile_features(nkui_budouxc PUBLIC c_std_17)
     target_include_directories(nkui_budouxc
-        PUBLIC "$<BUILD_INTERFACE:${NK_VENDOR_DIR}/budouxc/include>"
-        PRIVATE "${NK_VENDOR_DIR}/budouxc/src")
+        PUBLIC "$<BUILD_INTERFACE:${NKUI_VENDOR_DIR}/budouxc/include>"
+        PRIVATE "${NKUI_VENDOR_DIR}/budouxc/src")
 endif()
 
-set(NKUI_SKRIBIDI_DIR "${NK_VENDOR_DIR}/skribidi")
+set(NKUI_SKRIBIDI_DIR "${NKUI_VENDOR_DIR}/skribidi")
 add_library(nkui_skribidi STATIC
     "${NKUI_SKRIBIDI_DIR}/src/skb_attributes.c"
     "${NKUI_SKRIBIDI_DIR}/src/skb_attribute_collection.c"

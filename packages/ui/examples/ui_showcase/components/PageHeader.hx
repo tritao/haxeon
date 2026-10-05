@@ -1,8 +1,8 @@
 package components;
 
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.theme.TextRole;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.theme.TextRole;
 
 /** Standard Explorer page title and supporting description. */
 class PageHeader {

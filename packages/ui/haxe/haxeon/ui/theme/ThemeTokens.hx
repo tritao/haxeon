@@ -1,0 +1,157 @@
+package haxeon.ui.theme;
+
+import haxeon.ui.Color;
+
+/** Semantic palette and spacing tokens consumed by the built-in stylesheet. */
+class ThemeTokens {
+	public var accent:Color;
+	public var text:Color;
+	public var mutedText:Color;
+	public var disabledText:Color;
+	public var buttonText:Color;
+	public var disabledButtonText:Color;
+	public var buttonBackground:Color;
+	public var buttonHover:Color;
+	public var buttonPressed:Color;
+	public var buttonFocused:Color;
+	public var buttonSelected:Color;
+	public var buttonDisabled:Color;
+	public var navigationBackground:Color;
+	public var navigationHover:Color;
+	public var navigationPressed:Color;
+	public var navigationFocused:Color;
+	public var navigationSelected:Color;
+	public var navigationDisabled:Color;
+	public var controlSelected:Color;
+	public var controlUnselected:Color;
+	public var controlDisabled:Color;
+	public var progressTrack:Color;
+	public var progressFill:Color;
+	public var selectionField:Color;
+	public var selectionHover:Color;
+	public var selectionPressed:Color;
+	public var selectionHighlight:Color;
+	public var selectionBorder:Color;
+	public var selectionPopupShadow:Color;
+	public var panelBackground:Color;
+	public var overlayBackdrop:Color;
+	public var tooltipBackground:Color;
+	public var radiusSmall:Float;
+	public var radiusMedium:Float;
+	public var radiusLarge:Float;
+	public var spacingSmall:Float;
+	public var spacingMedium:Float;
+	public var spacingLarge:Float;
+
+	// Application-independent visual meanings. Component defaults are derived below.
+	public var accentHover:Color;
+	public var accentPressed:Color;
+	public var textPrimary:Color;
+	public var textSecondary:Color;
+	public var textDisabled:Color;
+	public var textOnAccent:Color;
+	public var surface:Color;
+	public var surfaceRaised:Color;
+	public var surfaceSunken:Color;
+	public var surfaceHover:Color;
+	public var border:Color;
+	public var borderStrong:Color;
+	public var focusRing:Color;
+	public var info:Color;
+	public var success:Color;
+	public var warning:Color;
+	public var danger:Color;
+	public var selection:Color;
+
+	public function new() {
+		accent = Color.rgba(0.22, 0.48, 0.86, 1.0);
+		text = Color.rgba(0.96, 0.97, 0.99, 1.0);
+		mutedText = Color.rgba(0.69, 0.72, 0.77, 1.0);
+		disabledText = Color.rgba(0.53, 0.55, 0.59, 1.0);
+		buttonText = text;
+		disabledButtonText = disabledText;
+		buttonBackground = Color.rgba(0.16, 0.4, 0.78, 1.0);
+		buttonHover = Color.rgba(0.21, 0.46, 0.84, 1.0);
+		buttonPressed = Color.rgba(0.13, 0.34, 0.67, 1.0);
+		buttonFocused = Color.rgba(0.27, 0.52, 0.91, 1.0);
+		buttonSelected = Color.rgba(0.17, 0.37, 0.68, 1.0);
+		buttonDisabled = Color.rgba(0.22, 0.24, 0.28, 1.0);
+		navigationBackground = Color.rgba(0.075, 0.10, 0.16, 1.0);
+		navigationHover = Color.rgba(0.12, 0.18, 0.28, 1.0);
+		navigationPressed = Color.rgba(0.15, 0.23, 0.36, 1.0);
+		navigationFocused = Color.rgba(0.14, 0.25, 0.41, 1.0);
+		navigationSelected = Color.rgba(0.16, 0.29, 0.50, 1.0);
+		navigationDisabled = Color.rgba(0.10, 0.12, 0.16, 1.0);
+		controlSelected = accent;
+		controlUnselected = Color.rgba(0.16, 0.18, 0.22, 1.0);
+		controlDisabled = Color.rgba(0.20, 0.21, 0.24, 1.0);
+		progressTrack = Color.rgba(0.20, 0.23, 0.29, 1.0);
+		progressFill = accent;
+		selectionField = Color.rgba(0.13, 0.14, 0.17, 1.0);
+		selectionHover = Color.rgba(0.18, 0.21, 0.27, 1.0);
+		selectionPressed = Color.rgba(0.15, 0.18, 0.24, 1.0);
+		selectionHighlight = Color.rgba(0.16, 0.29, 0.50, 1.0);
+		selectionBorder = Color.rgba(0.31, 0.35, 0.42, 1.0);
+		selectionPopupShadow = Color.rgba(0.0, 0.0, 0.0, 0.36);
+		panelBackground = Color.rgba(0.13, 0.14, 0.17, 1.0);
+		overlayBackdrop = Color.rgba(0.0, 0.0, 0.0, 0.48);
+		tooltipBackground = Color.rgba(0.08, 0.09, 0.11, 0.96);
+		radiusSmall = 3.0;
+		radiusMedium = 6.0;
+		radiusLarge = 10.0;
+		spacingSmall = 4.0;
+		spacingMedium = 8.0;
+		spacingLarge = 12.0;
+		accentHover = buttonHover;
+		accentPressed = buttonPressed;
+		textPrimary = text;
+		textSecondary = mutedText;
+		textDisabled = disabledText;
+		textOnAccent = buttonText;
+		surface = panelBackground;
+		surfaceRaised = navigationBackground;
+		surfaceSunken = selectionField;
+		surfaceHover = navigationHover;
+		border = selectionBorder;
+		borderStrong = controlUnselected;
+		focusRing = buttonFocused;
+		info = Color.rgba(0.25, 0.61, 0.89, 1.0);
+		success = Color.rgba(0.26, 0.72, 0.45, 1.0);
+		warning = Color.rgba(0.95, 0.68, 0.23, 1.0);
+		danger = Color.rgba(0.87, 0.32, 0.34, 1.0);
+		selection = selectionHighlight;
+		deriveComponents();
+	}
+
+	/** Set component defaults from the semantic palette. Call after changing palette colors. */
+	public function deriveComponents():Void {
+		text = textPrimary;
+		mutedText = textSecondary;
+		disabledText = textDisabled;
+		buttonText = textOnAccent;
+		disabledButtonText = textDisabled;
+		buttonBackground = accent;
+		buttonHover = accentHover;
+		buttonPressed = accentPressed;
+		buttonFocused = focusRing;
+		buttonSelected = selection;
+		buttonDisabled = surfaceSunken;
+		navigationBackground = surfaceRaised;
+		navigationHover = surfaceHover;
+		navigationPressed = surfaceSunken;
+		navigationFocused = focusRing;
+		navigationSelected = selection;
+		navigationDisabled = surface;
+		controlSelected = accent;
+		controlUnselected = borderStrong;
+		controlDisabled = border;
+		progressTrack = surfaceSunken;
+		progressFill = accent;
+		selectionField = surfaceSunken;
+		selectionHover = surfaceHover;
+		selectionPressed = surfaceRaised;
+		selectionHighlight = selection;
+		selectionBorder = border;
+		panelBackground = surface;
+	}
+}

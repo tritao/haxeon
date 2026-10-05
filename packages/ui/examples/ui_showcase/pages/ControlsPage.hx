@@ -1,30 +1,30 @@
 package pages;
 
-import nativekit.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.Button;
 
 
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.icons.IconName;
-import nativekit.ui.widgets.layout.Align;
-import nativekit.ui.widgets.controls.Checkbox;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.controls.ComboBox;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.controls.IconButton;
-import nativekit.ui.widgets.controls.ProgressBar;
-import nativekit.ui.widgets.controls.ProgressMode;
-import nativekit.ui.widgets.controls.RadioGroup;
-import nativekit.ui.widgets.controls.RadioOption;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.controls.Spinner;
-import nativekit.ui.widgets.controls.SpinnerKind;
-import nativekit.ui.widgets.controls.Select;
-import nativekit.ui.widgets.controls.SelectOption;
-import nativekit.ui.widgets.controls.Toggle;
-import nativekit.ui.widgets.text.TextField;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.widgets.layout.Align;
+import haxeon.ui.widgets.controls.Checkbox;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.controls.ComboBox;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.controls.IconButton;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.controls.ProgressMode;
+import haxeon.ui.widgets.controls.RadioGroup;
+import haxeon.ui.widgets.controls.RadioOption;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.controls.Spinner;
+import haxeon.ui.widgets.controls.SpinnerKind;
+import haxeon.ui.widgets.controls.Select;
+import haxeon.ui.widgets.controls.SelectOption;
+import haxeon.ui.widgets.controls.Toggle;
+import haxeon.ui.widgets.text.TextField;
 
 /** Interactive primitive controls and their common input states. */
 class ControlsPage {
@@ -142,7 +142,7 @@ class ControlsPage {
 		return new IconButton("search-action", IconName.Search, "Search", function() {}, buttonStyle);
 	}
 
-	static function labeledIconButton(explorer:UiExplorer):nativekit.ui.widgets.controls.Button {
+	static function labeledIconButton(explorer:UiExplorer):haxeon.ui.widgets.controls.Button {
 		var button = explorer.button("Search", "labeled-search-action", function() {});
 		button.leadingIcon = IconName.Search;
 		return button;

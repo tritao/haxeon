@@ -1,49 +1,49 @@
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
-import FontCollection;
-import LayoutAxis;
-import LayoutDirection;
-import LayoutFrame;
-import LayoutSession;
-import LayoutStyle;
-import LayoutVisualKind;
-import ResolvedLayoutItem;
-import nativekit.ui.core.Key;
-import nativekit.ui.core.HitTest;
-import nativekit.ui.core.RenderNode;
-import nativekit.ui.core.UiContext;
-import nativekit.ui.core.UiEventKind;
-import nativekit.ui.core.UiKey;
-import nativekit.ui.core.UiModifier;
-import nativekit.ui.core.WidgetId;
-import nativekit.ui.debug.AccessibilityAudit;
-import nativekit.ui.debug.AccessibilityIssue;
-import nativekit.ui.semantics.AccessibilityAction;
-import nativekit.ui.semantics.AccessibilityBridge;
-import nativekit.ui.semantics.AccessibilityOrientation;
-import nativekit.ui.semantics.AccessibilityRequest;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.semantics.AccessibilitySnapshotNode;
-import nativekit.ui.semantics.AccessibilityState;
-import nativekit.ui.semantics.Semantics;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.controls.ComboBox;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.MenuItem;
-import nativekit.ui.widgets.controls.ProgressBar;
-import nativekit.ui.widgets.controls.Select;
-import nativekit.ui.widgets.controls.SelectOption;
-import nativekit.ui.widgets.layout.Stack;
-import nativekit.ui.widgets.layout.StackChild;
-import nativekit.ui.widgets.controls.TabItem;
-import nativekit.ui.widgets.controls.Tabs;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.widgets.controls.Toggle;
-import nativekit.ui.widgets.text.Utf8Text;
-import nativekit.ui.widgets.collections.VirtualList;
+import haxeon.ui.FontCollection;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutSession;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.ResolvedLayoutItem;
+import haxeon.ui.core.Key;
+import haxeon.ui.core.HitTest;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiContext;
+import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.debug.AccessibilityAudit;
+import haxeon.ui.debug.AccessibilityIssue;
+import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.semantics.AccessibilityBridge;
+import haxeon.ui.semantics.AccessibilityOrientation;
+import haxeon.ui.semantics.AccessibilityRequest;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.AccessibilitySnapshotNode;
+import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.Semantics;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.ComboBox;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.MenuItem;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.controls.Select;
+import haxeon.ui.widgets.controls.SelectOption;
+import haxeon.ui.widgets.layout.Stack;
+import haxeon.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.controls.TabItem;
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.widgets.controls.Toggle;
+import haxeon.ui.widgets.text.Utf8Text;
+import haxeon.ui.widgets.collections.VirtualList;
 
 /** Headless deterministic contract checks for the Haxe accessibility layer. */
 class AccessibilityContract {
@@ -252,7 +252,7 @@ class AccessibilityContract {
 		var listStyle = new LayoutStyle();
 		listStyle.width = LayoutAxis.fixed(256.0);
 		listStyle.height = LayoutAxis.fixed(320.0);
-		var controller = new nativekit.ui.widgets.scroll.ScrollController();
+		var controller = new haxeon.ui.widgets.scroll.ScrollController();
 		var logicalRows = new VirtualList("accessibility-large-list", 10000, 20.0,
 			function(index) return new Text('Row $index'), listStyle, null, controller, 320.0);
 		context.submit(logicalRows, new LayoutFrame(256.0, 320.0));
@@ -704,10 +704,10 @@ class AccessibilityContract {
 	}
 }
 
-private class DisabledSemanticContainer implements nativekit.ui.core.View {
+private class DisabledSemanticContainer implements haxeon.ui.core.View {
 	public function new() {}
 
-	public function build(context:nativekit.ui.core.BuildContext):RenderNode {
+	public function build(context:haxeon.ui.core.BuildContext):RenderNode {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
@@ -720,10 +720,10 @@ private class DisabledSemanticContainer implements nativekit.ui.core.View {
 	}
 }
 
-private class AccessibilityMetadataView implements nativekit.ui.core.View {
+private class AccessibilityMetadataView implements haxeon.ui.core.View {
 	public function new() {}
 
-	public function build(context:nativekit.ui.core.BuildContext):RenderNode {
+	public function build(context:haxeon.ui.core.BuildContext):RenderNode {
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.fixed(256.0);
 		rootStyle.height = LayoutAxis.fixed(192.0);

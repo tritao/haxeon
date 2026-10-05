@@ -1,19 +1,19 @@
 package pages;
 
-import nativekit.ui.widgets.controls.Select;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.widgets.controls.Select;
+import haxeon.ui.widgets.text.Text;
 
 
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.core.UiKey;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.text.TextArea;
-import nativekit.ui.widgets.text.TextEditorDiagnostics;
-import nativekit.ui.widgets.text.TextField;
+import haxeon.ui.core.UiKey;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.text.TextArea;
+import haxeon.ui.widgets.text.TextEditorDiagnostics;
+import haxeon.ui.widgets.text.TextField;
 
 /** Interactive text editing, multilingual shaping, selection and IME diagnostics. */
 class TextPage {

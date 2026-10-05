@@ -1,0 +1,106 @@
+package haxeon.ui.widgets.controls;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Align;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.text.TextField;
+
+import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAlignmentX;
+import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDistribution;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.Key;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.View;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.widgets.Icon;
+
+/** Reusable single-line search input with leading affordance and clear action. */
+class SearchField implements View {
+	public final key:String;
+	public var value:String;
+	public var placeholder:String;
+	public var label:String;
+	public var enabled:Bool;
+	public final style:LayoutStyle;
+	public var onChange:Null<String->Void>;
+	public var onSubmit:Null<String->Void>;
+
+	public function new(key:String, value:String = "", ?onChange:String->Void,
+			?style:LayoutStyle, placeholder:String = "Search") {
+		if (key == null || key.length == 0)
+			throw "Search fields require a stable key";
+		this.key = key;
+		this.value = value == null ? "" : value;
+		this.onChange = onChange;
+		onSubmit = null;
+		this.placeholder = placeholder == null || placeholder.length == 0 ? "Search" : placeholder;
+		label = this.placeholder;
+		enabled = true;
+		this.style = style == null ? defaultStyle() : style.copy();
+		this.style.childAlignY = LayoutAlignmentY.Center;
+	}
+
+	public function build(context:BuildContext):RenderNode {
+		return context.withScope(new Key(key), function() {
+			var icon = new Icon("search-icon", IconName.Search, 15.0,
+				context.theme.mutedText);
+			var leadingStyle = new LayoutStyle();
+			leadingStyle.width = LayoutAxis.fixed(18.0);
+			leadingStyle.height = LayoutAxis.fixed(18.0);
+			var leading = new Align("leading", icon, LayoutAlignmentX.Center,
+				LayoutAlignmentY.Center, leadingStyle);
+
+			var inputStyle = new LayoutStyle();
+			inputStyle.width = LayoutAxis.grow();
+			inputStyle.height = LayoutAxis.fixed(24.0);
+			inputStyle.padding = new Insets(0.0, 0.0, 0.0, 0.0);
+			inputStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
+			var input = new TextField("input", value, function(next) {
+				value = next;
+				if (onChange != null)
+					onChange(next);
+			}, inputStyle, label);
+			input.placeholder = placeholder;
+			input.enabled = enabled;
+			input.onSubmit = onSubmit;
+
+			var children:Array<KeyedView> = [
+				new KeyedView("icon", leading),
+				new KeyedView("input", input)
+			];
+			if (value.length > 0) {
+				var clearStyle = new LayoutStyle();
+				clearStyle.width = LayoutAxis.fixed(24.0);
+				clearStyle.height = LayoutAxis.fixed(24.0);
+				clearStyle.padding = new Insets(2.0, 2.0, 2.0, 2.0);
+				clearStyle.childDistribution = LayoutDistribution.Center;
+				clearStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
+				var clear = new Button("", clearStyle, function() {
+					value = "";
+					if (onChange != null)
+						onChange("");
+				}, "clear");
+				clear.accessibilityLabel = "Clear search";
+				clear.leadingIcon = IconName.Close;
+				clear.variant = ButtonVariant.Navigation;
+				clear.enabled = enabled;
+				children.push(new KeyedView("clear", clear));
+			}
+			return new Row("search-field", children, style).build(context);
+		});
+	}
+
+	static function defaultStyle():LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = LayoutAxis.grow();
+		result.height = LayoutAxis.fixed(38.0);
+		result.padding = new Insets(10.0, 7.0, 10.0, 7.0);
+		result.childGap = 8.0;
+		result.childAlignY = LayoutAlignmentY.Center;
+		return result;
+	}
+}

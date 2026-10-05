@@ -1,9 +1,9 @@
 package testing;
 
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.Popup;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.Popup;
+import haxeon.ui.widgets.text.Text;
 
 
 /** Stable numeric identities retained for the ShowcaseWeb screenshot ABI. */

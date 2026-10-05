@@ -2,10 +2,11 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-materia_dir=$(dirname "$module_dir")
-repo_dir=${NATIVEKIT_DIR:-"$materia_dir/nativekit"}
-haxeon_dir=${HAXEON_DIR:-"$materia_dir/haxeon"}
-build_dir=${NATIVEKIT_BUILD_DIR:-"$repo_dir/build-ui"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
+materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
+repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 
 cmake --build "$build_dir" --target nativekit_ui
 "$module_dir/tools/check-hxi.sh"
@@ -33,15 +34,15 @@ fi
     --root="$module_dir/tests/haxeon" \
     --root="$module_dir/haxe" \
     --root="$module_dir/bindings/haxe" \
-    --root="$repo_dir/bindings/haxe" \
-    --ffi-interface="$repo_dir/bindings/haxe/nativekit.hxi" \
-    --ffi-projection="$repo_dir/bindings/haxe/nativekit.hxmap" \
+    --root="$haxeon_dir/packages/platform/src" \
+    --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
+    --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
     --ffi-interface="$module_dir/bindings/nativekit-ui.hxi" \
     --ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
     "$module_dir/tests/haxeon/Transaction.hx" \
-    "$module_dir/haxe/nativekit/ui/style/"*.hx \
-    "$repo_dir/bindings/haxe/GraphicsImageRef.hx" \
-    "$module_dir/bindings/haxe/"*.hx)
+    "$module_dir/haxe/haxeon/ui/style/"*.hx \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/GraphicsImageRef.hx" \
+    "$module_dir/bindings/haxe/haxeon/ui/"*.hx)
 
 (cd "$haxeon_dir/out" && \
     NKUI_TEST_FONT_PATH="$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf" \

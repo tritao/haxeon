@@ -1,3 +1,10 @@
+import haxeon.platform.NativeKitEvent;
+import haxeon.platform.NativeKitEventBytes;
+import haxeon.platform.NativeKitEventContext;
+import haxeon.platform.NativeKitInputEvents;
+import haxeon.platform.NativeKitResourceEvents;
+import haxeon.platform.NativeKitWindowEvents;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 

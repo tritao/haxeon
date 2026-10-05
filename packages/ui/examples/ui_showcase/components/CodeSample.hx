@@ -1,8 +1,8 @@
 package components;
 
-import Color;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.Color;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.text.Text;
 
 /** Syntax-colored snippet line for the inspector's API documentation view. */
 class CodeSample {

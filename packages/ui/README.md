@@ -1,4 +1,4 @@
-# NativeKit UI
+# Haxeon UI
 
 NativeKit UI is the retained UI layer above NativeKit core and GPU. NativeKit
 core owns windows, surfaces, input, IME, and shared graphics-image handles.
@@ -8,9 +8,31 @@ lists, `RenderPlan`, and `UiRenderer`, which submits UI work through
 `nkgpu_*`. The Haxe framework owns `View`, `RenderNode`, state, focus, events,
 gestures, semantics, animation, and widgets.
 
+## Package integration
+
+The package name is `haxeon-ui`. Managed bindings live in `haxeon.ui.*`, with
+widgets and application hosting in its subpackages. It depends on
+`haxeon-platform` and `haxeon-gpu`; C symbols, libraries, and CMake targets
+retain their NativeKit names. Raw generated FFI modules retain their existing
+names and are implementation details.
+
+Initialize the native dependencies from the Haxeon root:
+
+```sh
+git submodule update --init --recursive vendor/nativekit packages/ui/vendor
+```
+
+EditorKit and SceneKit remain in Materia for this migration. The manifest
+expects `editorkit` alongside Haxeon. Direct compiler tools accept
+`EDITORKIT_DIR` (or `MATERIA_DIR`) to select another checkout. A standalone
+Haxeon clone therefore still needs that external dependency for the UI package.
+
+Compiler and native artifacts should live under Haxeon’s `out/` tree or an
+explicit build directory, rather than inside the package’s source folders.
+
 ## Component Lab
 
-The Haxe package `nativekit.ui.lab` provides a reusable isolated-component
+The Haxe package `haxeon.ui.lab` provides a reusable isolated-component
 browser. `ComponentStory` describes one stable view case,
 `ComponentStoryRegistry` collects application and library stories, and
 `ComponentLab` renders the catalog surface using ordinary UIKit
@@ -89,8 +111,9 @@ into one ordered render plan. `UiRenderer` owns UI-specific drawing vocabulary
 such as paths, glyphs, images, and image composition, while NativeKit GPU owns
 passes, resources, GPU state, and backend submission.
 
-Configure UIKit directly; its standalone build adds the sibling NativeKit
-checkout and enables the GPU dependency. The public CMake targets are `NativeKit::nativekit`, `NativeKit::gpu`, and
+Configure this package directly; its standalone build adds Haxeon’s pinned
+`vendor/nativekit` checkout and enables the GPU dependency. `NATIVEKIT_DIR` or
+`NKUI_NATIVEKIT_DIR` can select another native checkout. The public CMake targets are `NativeKit::nativekit`, `NativeKit::gpu`, and
 `NativeKit::ui`. Sokol headers, configuration, runtime ownership, and resource
 handles stay inside `modules/gpu`. The canonical UI shaders are split by family
 under `shaders/`; their GLSL, HLSL5, and MSL source variants are checked in as

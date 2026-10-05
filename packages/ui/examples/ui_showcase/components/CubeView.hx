@@ -1,24 +1,26 @@
 package components;
 
-import GraphicsSurface;
-import LayoutAxis;
-import LayoutStyle;
-import LayoutVisualKind;
-import Rect;
+import haxeon.ui.Image;
+
+import haxeon.ui.GraphicsSurface;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.Rect;
 import ShowcaseCube;
-import Canvas;
-import ResolvedLayoutItem;
-import nativekit.ui.animation.Animation;
-import nativekit.ui.animation.AnimationHandle;
-import nativekit.ui.animation.AnimationScheduler;
-import nativekit.ui.animation.LoopAnimation;
-import nativekit.ui.core.BuildContext;
-import nativekit.ui.core.Key;
-import nativekit.ui.core.RenderNode;
-import nativekit.ui.core.State;
-import nativekit.ui.core.View;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.semantics.Semantics;
+import haxeon.ui.Canvas;
+import haxeon.ui.ResolvedLayoutItem;
+import haxeon.ui.animation.Animation;
+import haxeon.ui.animation.AnimationHandle;
+import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.LoopAnimation;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.Key;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.State;
+import haxeon.ui.core.View;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 
 /** Retained native 3D surface composited as an ordinary UI view. */
 class CubeView implements View {

@@ -1,14 +1,14 @@
 package components;
 
-import LayoutAxis;
-import LayoutStyle;
-import LayoutVisualKind;
-import nativekit.ui.core.BuildContext;
-import nativekit.ui.core.Key;
-import nativekit.ui.core.RenderNode;
-import nativekit.ui.core.View;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.semantics.Semantics;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.Key;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.View;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 
 /** Haxeon-owned layout placeholder synchronized to a native child WebView. */
 class WebViewSlot implements View {

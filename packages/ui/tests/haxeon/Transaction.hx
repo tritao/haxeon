@@ -1,10 +1,34 @@
+import haxeon.ui.Paint.SolidPaint;
+
+import haxeon.ui.Canvas;
+import haxeon.ui.Color;
+import haxeon.ui.DisplayList;
+import haxeon.ui.FontCollection;
+import haxeon.ui.FontFamily;
+import haxeon.ui.FrameInfo;
+import haxeon.ui.Image;
+import haxeon.ui.ImageFormat;
+import haxeon.ui.LineCap;
+import haxeon.ui.LineJoin;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.PathBuilder;
+import haxeon.ui.Rect;
+import haxeon.ui.Renderer;
+import haxeon.ui.Surface;
+import haxeon.ui.TextAlignment;
+import haxeon.ui.TextColorRange;
+import haxeon.ui.TextDirection;
+import haxeon.ui.TextLayout;
+import haxeon.ui.TextStyle;
+import haxeon.ui.TextWrap;
+
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKit;
 import haxe.io.Bytes;
-import NativeKitEvents;
-import NativeKitEventValue;
-import NativeKitRuntime;
+import haxeon.platform.NativeKitEvents;
+import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitRuntime;
 
 class Transaction {
 	static function main():Int {

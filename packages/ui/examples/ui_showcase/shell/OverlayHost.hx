@@ -1,15 +1,15 @@
 package shell;
 
-import LayoutAxis;
-import LayoutStyle;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.overlays.Dialog;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.overlays.Menu;
-import nativekit.ui.widgets.overlays.MenuItem;
-import nativekit.ui.widgets.overlays.Popup;
-import nativekit.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.overlays.Dialog;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.overlays.Menu;
+import haxeon.ui.widgets.overlays.MenuItem;
+import haxeon.ui.widgets.overlays.Popup;
+import haxeon.ui.widgets.layout.StackChild;
 
 /** Builds global popup, menu and dialog layers above the Explorer shell. */
 class OverlayHost {

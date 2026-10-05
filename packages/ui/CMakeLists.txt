@@ -5,8 +5,12 @@ project(UIKit VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CTest)
 
-set(NKUI_NATIVEKIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../nativekit" CACHE PATH
+set(NKUI_NATIVEKIT_DIR "$ENV{NATIVEKIT_DIR}" CACHE PATH
     "Path to the NativeKit source checkout")
+if(NOT NKUI_NATIVEKIT_DIR)
+    set(NKUI_NATIVEKIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../vendor/nativekit" CACHE PATH
+        "Path to the NativeKit source checkout" FORCE)
+endif()
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(NK_BUILD_GPU ON CACHE BOOL "Build NativeKit GPU for UIKit" FORCE)
@@ -22,8 +26,8 @@ if(NK_BUILD_SHARED AND NOT EMSCRIPTEN)
     set(NK_LIBRARY_TYPE SHARED)
 endif()
 
-if(NOT DEFINED NK_VENDOR_DIR)
-    set(NK_VENDOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor")
+if(NOT DEFINED NKUI_VENDOR_DIR)
+    set(NKUI_VENDOR_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor")
 endif()
 
 option(NKUI_ENABLE_SECTION_GC
@@ -70,8 +74,8 @@ target_include_directories(nativekit_ui
         $<BUILD_INTERFACE:${NKUI_NATIVEKIT_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
     PRIVATE src)
-target_include_directories(nativekit_ui PRIVATE "${NK_VENDOR_DIR}/clay")
-target_include_directories(nativekit_ui PRIVATE "${NK_VENDOR_DIR}/nanovg/src")
+target_include_directories(nativekit_ui PRIVATE "${NKUI_VENDOR_DIR}/clay")
+target_include_directories(nativekit_ui PRIVATE "${NKUI_VENDOR_DIR}/nanovg/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
 target_link_libraries(nativekit_ui PUBLIC NativeKit::gpu
@@ -181,7 +185,7 @@ if(NK_BUILD_TESTS)
     endif()
     add_executable(nativekit_ui_abi_test tests/abi.c)
     target_compile_definitions(nativekit_ui_abi_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_abi_test PRIVATE NativeKit::ui)
     add_test(NAME nativekit_ui_abi COMMAND nativekit_ui_abi_test)
     add_executable(nativekit_ui_display_list_test
@@ -211,9 +215,9 @@ if(NK_BUILD_TESTS)
         src/prepare/system_fonts.cpp)
     target_include_directories(nativekit_ui_text_engine_test PRIVATE src)
     target_compile_definitions(nativekit_ui_text_engine_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf"
-        NKUI_TEST_MONO_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexMono-Regular.ttf"
-        NKUI_TEST_COLOR_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/NotoColorEmoji-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf"
+        NKUI_TEST_MONO_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexMono-Regular.ttf"
+        NKUI_TEST_COLOR_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/NotoColorEmoji-Regular.ttf")
     target_link_libraries(nativekit_ui_text_engine_test PRIVATE nkui_skribidi)
     add_test(NAME nativekit_ui_text_engine COMMAND nativekit_ui_text_engine_test)
     add_executable(nativekit_ui_compositor_test
@@ -240,41 +244,41 @@ if(NK_BUILD_TESTS)
         src/prepare/text_engine.cpp
         src/prepare/system_fonts.cpp)
     target_include_directories(nativekit_ui_layout_engine_test PRIVATE
-        src "${NK_VENDOR_DIR}/clay")
+        src "${NKUI_VENDOR_DIR}/clay")
     target_compile_definitions(nativekit_ui_layout_engine_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_engine_test PRIVATE nkui_skribidi)
     add_test(NAME nativekit_ui_layout_engine COMMAND nativekit_ui_layout_engine_test)
     add_executable(nativekit_ui_clay_measure_element_test
-        "${NK_VENDOR_DIR}/clay/tests/measure_element.cpp")
+        "${NKUI_VENDOR_DIR}/clay/tests/measure_element.cpp")
     target_compile_features(nativekit_ui_clay_measure_element_test PRIVATE cxx_std_20)
     target_include_directories(nativekit_ui_clay_measure_element_test PRIVATE
-        "${NK_VENDOR_DIR}/clay")
+        "${NKUI_VENDOR_DIR}/clay")
     add_test(NAME nativekit_ui_clay_measure_element
         COMMAND nativekit_ui_clay_measure_element_test)
     add_executable(nativekit_ui_clay_floating_order_test
-        "${NK_VENDOR_DIR}/clay/tests/floating_order.cpp")
+        "${NKUI_VENDOR_DIR}/clay/tests/floating_order.cpp")
     target_compile_features(nativekit_ui_clay_floating_order_test PRIVATE cxx_std_20)
     target_include_directories(nativekit_ui_clay_floating_order_test PRIVATE
-        "${NK_VENDOR_DIR}/clay")
+        "${NKUI_VENDOR_DIR}/clay")
     add_test(NAME nativekit_ui_clay_floating_order
         COMMAND nativekit_ui_clay_floating_order_test)
     # Clay's public single-header interface must also remain valid C.
     add_library(nativekit_ui_clay_c_compile OBJECT
-        "${NK_VENDOR_DIR}/clay/tests/c_compile.c")
+        "${NKUI_VENDOR_DIR}/clay/tests/c_compile.c")
     target_compile_features(nativekit_ui_clay_c_compile PRIVATE c_std_11)
-    target_include_directories(nativekit_ui_clay_c_compile PRIVATE "${NK_VENDOR_DIR}/clay")
+    target_include_directories(nativekit_ui_clay_c_compile PRIVATE "${NKUI_VENDOR_DIR}/clay")
     add_executable(nativekit_ui_clay_state_capacity_test
-        "${NK_VENDOR_DIR}/clay/tests/state_capacity.cpp")
+        "${NKUI_VENDOR_DIR}/clay/tests/state_capacity.cpp")
     target_compile_features(nativekit_ui_clay_state_capacity_test PRIVATE cxx_std_20)
     target_include_directories(nativekit_ui_clay_state_capacity_test PRIVATE
-        "${NK_VENDOR_DIR}/clay")
+        "${NKUI_VENDOR_DIR}/clay")
     add_test(NAME nativekit_ui_clay_state_capacity COMMAND nativekit_ui_clay_state_capacity_test)
     add_executable(nativekit_ui_clay_layout_benchmark
-        "${NK_VENDOR_DIR}/clay/tests/layout_benchmark.cpp")
+        "${NKUI_VENDOR_DIR}/clay/tests/layout_benchmark.cpp")
     target_compile_features(nativekit_ui_clay_layout_benchmark PRIVATE cxx_std_20)
     target_include_directories(nativekit_ui_clay_layout_benchmark PRIVATE
-        "${NK_VENDOR_DIR}/clay")
+        "${NKUI_VENDOR_DIR}/clay")
     add_test(NAME nativekit_ui_clay_layout_benchmark
         COMMAND nativekit_ui_clay_layout_benchmark)
     add_executable(nativekit_ui_layout_invariants_test
@@ -283,9 +287,9 @@ if(NK_BUILD_TESTS)
         src/prepare/text_engine.cpp
         src/prepare/system_fonts.cpp)
     target_include_directories(nativekit_ui_layout_invariants_test PRIVATE
-        src "${NK_VENDOR_DIR}/clay")
+        src "${NKUI_VENDOR_DIR}/clay")
     target_compile_definitions(nativekit_ui_layout_invariants_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_invariants_test PRIVATE nkui_skribidi)
     add_test(NAME nativekit_ui_layout_invariants COMMAND nativekit_ui_layout_invariants_test)
     add_executable(nativekit_ui_layout_render_compiler_test
@@ -303,9 +307,9 @@ if(NK_BUILD_TESTS)
     src/compositor/render_plan.cpp)
     target_include_directories(nativekit_ui_layout_render_compiler_test PRIVATE
         src "${NKUI_NATIVEKIT_DIR}/include" "${NKUI_NATIVEKIT_DIR}/modules/gpu/include"
-        "${NK_VENDOR_DIR}/clay")
+        "${NKUI_VENDOR_DIR}/clay")
     target_compile_definitions(nativekit_ui_layout_render_compiler_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_render_compiler_test PRIVATE
         nkui_nanovg_core nkui_skribidi NativeKit::nativekit)
     add_test(NAME nativekit_ui_layout_render_compiler
@@ -313,7 +317,7 @@ if(NK_BUILD_TESTS)
     add_executable(nativekit_ui_layout_session_test
         tests/layout_session.cpp)
     target_compile_definitions(nativekit_ui_layout_session_test PRIVATE
-        NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_session_test PRIVATE NativeKit::ui)
     add_test(NAME nativekit_ui_layout_session COMMAND nativekit_ui_layout_session_test)
     add_executable(nativekit_ui_hit_test_benchmark
@@ -332,7 +336,7 @@ if(NK_BUILD_TESTS)
         target_include_directories(nativekit_ui_public_renderer_smoke_test PRIVATE
             "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
         target_compile_definitions(nativekit_ui_public_renderer_smoke_test PRIVATE
-            NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+            NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
         target_link_libraries(nativekit_ui_public_renderer_smoke_test PRIVATE
             NativeKit::ui)
         if(NOT EMSCRIPTEN AND NOT ANDROID)
@@ -349,7 +353,7 @@ if(NK_BUILD_TESTS)
         target_include_directories(nativekit_ui_session_render_smoke_test PRIVATE
             "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
         target_compile_definitions(nativekit_ui_session_render_smoke_test PRIVATE
-            NKUI_TEST_FONT_PATH="${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+            NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
         target_link_libraries(nativekit_ui_session_render_smoke_test PRIVATE
             NativeKit::ui)
         if(NOT EMSCRIPTEN AND NOT ANDROID)
@@ -421,7 +425,7 @@ if(NK_BUILD_EXAMPLES)
     target_compile_definitions(nativekit_ui PRIVATE NKUI_ENABLE_SHOWCASE_PRODUCER=1)
     add_executable(nativekit_ui_c_api examples/ui_c_api/showcase.cpp)
     set(NKUI_C_API_FONT_PATH
-        "${NK_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+        "${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_compile_definitions(nativekit_ui_c_api PRIVATE
         NKUI_TEST_FONT_PATH="${NKUI_C_API_FONT_PATH}")
     target_link_libraries(nativekit_ui_c_api PRIVATE NativeKit::ui NativeKit::nativekit
@@ -456,7 +460,7 @@ if(NK_BUILD_EXAMPLES)
     set(NKUI_HAXEON_DIR "$ENV{HAXEON_DIR}" CACHE PATH
         "Haxeon checkout used to compile the NativeKit UI sources")
     if(NOT NKUI_HAXEON_DIR)
-        set(NKUI_HAXEON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../haxeon" CACHE PATH
+        set(NKUI_HAXEON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.." CACHE PATH
             "Haxeon checkout used to compile the NativeKit UI sources" FORCE)
     endif()
     set(NKUI_HAXEON_HAXE_BIN "$ENV{NATIVEKIT_HAXE_BIN}")
@@ -546,9 +550,9 @@ if(NK_BUILD_EXAMPLES)
             endif()
             file(GLOB_RECURSE NKUI_HAXEON_GUEST_HX_DEPS CONFIGURE_DEPENDS
                 "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_showcase/*.hx"
-                "${CMAKE_CURRENT_SOURCE_DIR}/haxe/nativekit/ui/*.hx"
-                "${CMAKE_CURRENT_SOURCE_DIR}/bindings/haxe/*.hx"
-                "${NKUI_NATIVEKIT_DIR}/bindings/haxe/*.hx")
+                "${CMAKE_CURRENT_SOURCE_DIR}/haxe/haxeon/ui/*.hx"
+                "${CMAKE_CURRENT_SOURCE_DIR}/bindings/haxe/haxeon/ui/*.hx"
+                "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx")
             set(NKUI_HAXEON_MEMORY_CONTRACT_VERSION 1)
             set(NKUI_HAXEON_WASM_PAGE_SIZE 65536)
             set(NKUI_HAXEON_HOST_HEAP_BASE 0)
@@ -594,9 +598,9 @@ if(NK_BUILD_EXAMPLES)
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase.hxmap"
-                    "${NKUI_NATIVEKIT_DIR}/bindings/haxe/nativekit-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui.hxmap"
-                    "${NKUI_NATIVEKIT_DIR}/bindings/haxe/nativekit.hxmap"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
                     ${NKUI_HAXEON_GUEST_HX_DEPS}
                     ${NKUI_HAXEON_DEPS}
                 WORKING_DIRECTORY "${NKUI_NATIVEKIT_DIR}"
@@ -612,7 +616,7 @@ if(NK_BUILD_EXAMPLES)
             target_link_libraries(nativekit_ui_haxeon PRIVATE NativeKit::ui NativeKit::nativekit
                 NativeKit::wasm_host_allocator)
             add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_guest)
-            set(NKUI_HAXEON_FONT_DIR "${NK_VENDOR_DIR}/skribidi/example/data")
+            set(NKUI_HAXEON_FONT_DIR "${NKUI_VENDOR_DIR}/skribidi/example/data")
             set(NKUI_HAXEON_FONT_PATHS
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSans-Regular.ttf"
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSansArabic-Regular.ttf"
@@ -862,16 +866,16 @@ if(NOT EMSCRIPTEN AND NK_LIBRARY_TYPE STREQUAL "STATIC")
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES
-    "${NK_VENDOR_DIR}/skribidi/LICENSE"
+    "${NKUI_VENDOR_DIR}/skribidi/LICENSE"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/Skribidi)
 install(FILES
-    "${NK_VENDOR_DIR}/nanovg/LICENSE.txt"
+    "${NKUI_VENDOR_DIR}/nanovg/LICENSE.txt"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/NanoVG)
-install(FILES "${NK_VENDOR_DIR}/harfbuzz/COPYING"
+install(FILES "${NKUI_VENDOR_DIR}/harfbuzz/COPYING"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/HarfBuzz)
-install(FILES "${NK_VENDOR_DIR}/sheenbidi/LICENSE"
+install(FILES "${NKUI_VENDOR_DIR}/sheenbidi/LICENSE"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/SheenBidi)
-install(FILES "${NK_VENDOR_DIR}/libunibreak/LICENCE"
+install(FILES "${NKUI_VENDOR_DIR}/libunibreak/LICENCE"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/libunibreak)
-install(FILES "${NK_VENDOR_DIR}/budouxc/LICENSE"
+install(FILES "${NKUI_VENDOR_DIR}/budouxc/LICENSE"
     DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/NativeKit/UI/BudouX-C)

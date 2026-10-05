@@ -1,9 +1,9 @@
 package components;
 
-import Color;
-import nativekit.ui.theme.TextRole;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.Color;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.text.Text;
 
 /** Compact inspector line for a resolved property or runtime state value. */
 class PropertyRow {

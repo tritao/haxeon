@@ -2,10 +2,11 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-materia_dir=$(dirname "$module_dir")
-repo_dir=${NATIVEKIT_DIR:-"$materia_dir/nativekit"}
-haxeon_dir=${HAXEON_DIR:-"$materia_dir/haxeon"}
-build_dir=${NATIVEKIT_BUILD_DIR:-"$repo_dir/build-ui"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
+materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
+repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 artifact="$build_dir/haxeon-ui-framework.hl"
 
 cmake --build "$build_dir" --target nativekit_ui
@@ -32,35 +33,37 @@ fi
 	--output="$artifact" \
 	--entry=FrameworkSmoke \
 	--root="$module_dir/tests/haxeon" \
+	--root="$haxeon_dir/packages/platform/tests" \
 	--root="$module_dir/haxe" \
-	--root="$materia_dir/editorkit/haxe" \
+	--root="$editorkit_dir/haxe" \
 	--root="$module_dir/bindings/haxe" \
-	--root="$repo_dir/bindings/haxe" \
-	--ffi-interface="$repo_dir/bindings/haxe/nativekit.hxi" \
-	--ffi-projection="$repo_dir/bindings/haxe/nativekit.hxmap" \
+	--root="$haxeon_dir/packages/platform/src" \
+	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
+	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
 	--ffi-interface="$module_dir/bindings/nativekit-ui.hxi" \
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
 	"$module_dir/tests/haxeon/FrameworkSmoke.hx" \
-	"$materia_dir/editorkit/haxe/nativekit/editorkit/"*.hx \
-	"$module_dir/haxe/nativekit/ui/core/"*.hx \
-	"$module_dir/haxe/nativekit/ui/style/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/"*.hx \
-	"$module_dir/haxe/nativekit/ui/docking/"*.hx \
-	"$module_dir/haxe/nativekit/ui/editing/"*.hx \
-	"$module_dir/haxe/nativekit/ui/plotting/"*.hx \
-	"$module_dir/haxe/nativekit/ui/properties/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/collections/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/commands/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/controls/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/docking/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/layout/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/overlays/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/plotting/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/properties/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/scroll/"*.hx \
-	"$module_dir/haxe/nativekit/ui/widgets/text/"*.hx \
-	"$module_dir/haxe/nativekit/ui/host/"*.hx \
-	"$module_dir/bindings/haxe/"*.hx)
+	"$haxeon_dir/packages/platform/tests/NativeKitEventDecoderTests.hx" \
+	"$editorkit_dir/haxe/nativekit/editorkit/"*.hx \
+	"$module_dir/haxe/haxeon/ui/core/"*.hx \
+	"$module_dir/haxe/haxeon/ui/style/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/"*.hx \
+	"$module_dir/haxe/haxeon/ui/docking/"*.hx \
+	"$module_dir/haxe/haxeon/ui/editing/"*.hx \
+	"$module_dir/haxe/haxeon/ui/plotting/"*.hx \
+	"$module_dir/haxe/haxeon/ui/properties/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/collections/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/commands/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/controls/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/docking/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/layout/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/overlays/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/plotting/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/properties/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/scroll/"*.hx \
+	"$module_dir/haxe/haxeon/ui/widgets/text/"*.hx \
+	"$module_dir/haxe/haxeon/ui/host/"*.hx \
+	"$module_dir/bindings/haxe/haxeon/ui/"*.hx)
 
 runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:$haxeon_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if command -v xvfb-run >/dev/null; then

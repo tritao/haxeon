@@ -41,43 +41,43 @@ fi
     --ffi-interface="$gpu_dir/bindings/nativekit-gpu.hxi" \
     --ffi-projection="$gpu_dir/bindings/nativekit-gpu.hxmap" \
     "$gpu_dir/tests/Triangle.hx" \
-    "$gpu_dir/src/nativekit/gpu/Buffer.hx" \
-    "$gpu_dir/src/nativekit/gpu/BufferDesc.hx" \
-    "$gpu_dir/src/nativekit/gpu/AttachmentAction.hx" \
-    "$gpu_dir/src/nativekit/gpu/Batch.hx" \
-    "$gpu_dir/src/nativekit/gpu/CommandBuffer.hx" \
-    "$gpu_dir/src/nativekit/gpu/Enums.hx" \
-    "$gpu_dir/src/nativekit/gpu/Features.hx" \
-    "$gpu_dir/src/nativekit/gpu/Image.hx" \
-    "$gpu_dir/src/nativekit/gpu/ImageFormatSupport.hx" \
-    "$gpu_dir/src/nativekit/gpu/Limits.hx" \
-    "$gpu_dir/src/nativekit/gpu/Pipeline.hx" \
-    "$gpu_dir/src/nativekit/gpu/Readback.hx" \
-    "$gpu_dir/src/nativekit/gpu/Renderer.hx" \
-    "$gpu_dir/src/nativekit/gpu/Sampler.hx" \
-    "$gpu_dir/src/nativekit/gpu/Shader.hx" \
-    "$gpu_dir/src/nativekit/gpu/Surface.hx" \
-    "$gpu_dir/src/nativekit/gpu/SurfaceFrame.hx" \
-    "$gpu_dir/src/nativekit/gpu/Timestamp.hx" \
-    "$gpu_dir/src/nativekit/gpu/Uniforms.hx" \
-    "$gpu_dir/src/nativekit/gpu/GpuResult.hx" \
-    "$gpu_dir/src/nativekit/gpu/ImageDesc.hx" \
-    "$gpu_dir/src/nativekit/gpu/RenderPassDesc.hx" \
-    "$platform_dir/src/GraphicsImageRef.hx" \
-    "$platform_dir/src/NativeKitEvent.hx" \
-    "$platform_dir/src/NativeKitEvents.hx" \
-    "$platform_dir/src/NativeKitEventValue.hx" \
-    "$platform_dir/src/NativeKitEventContext.hx" \
-    "$platform_dir/src/NativeKitEventBytes.hx" \
-    "$platform_dir/src/NativeKitWindowEvents.hx" \
-    "$platform_dir/src/NativeKitInputEvents.hx" \
-    "$platform_dir/src/NativeKitServiceEvents.hx" \
-    "$platform_dir/src/NativeKitResourceEvents.hx" \
-    "$platform_dir/src/NativeKitRequests.hx" \
-    "$platform_dir/src/NativeKitRequestOutcome.hx" \
-    "$platform_dir/src/NativeKitWindow.hx" \
-    "$platform_dir/src/NativeKitWebView.hx" \
-    "$platform_dir/src/NativeKitRuntime.hx")
+    "$gpu_dir/src/haxeon/gpu/Buffer.hx" \
+    "$gpu_dir/src/haxeon/gpu/BufferDesc.hx" \
+    "$gpu_dir/src/haxeon/gpu/AttachmentAction.hx" \
+    "$gpu_dir/src/haxeon/gpu/Batch.hx" \
+    "$gpu_dir/src/haxeon/gpu/CommandBuffer.hx" \
+    "$gpu_dir/src/haxeon/gpu/Enums.hx" \
+    "$gpu_dir/src/haxeon/gpu/Features.hx" \
+    "$gpu_dir/src/haxeon/gpu/Image.hx" \
+    "$gpu_dir/src/haxeon/gpu/ImageFormatSupport.hx" \
+    "$gpu_dir/src/haxeon/gpu/Limits.hx" \
+    "$gpu_dir/src/haxeon/gpu/Pipeline.hx" \
+    "$gpu_dir/src/haxeon/gpu/Readback.hx" \
+    "$gpu_dir/src/haxeon/gpu/Renderer.hx" \
+    "$gpu_dir/src/haxeon/gpu/Sampler.hx" \
+    "$gpu_dir/src/haxeon/gpu/Shader.hx" \
+    "$gpu_dir/src/haxeon/gpu/Surface.hx" \
+    "$gpu_dir/src/haxeon/gpu/SurfaceFrame.hx" \
+    "$gpu_dir/src/haxeon/gpu/Timestamp.hx" \
+    "$gpu_dir/src/haxeon/gpu/Uniforms.hx" \
+    "$gpu_dir/src/haxeon/gpu/GpuResult.hx" \
+    "$gpu_dir/src/haxeon/gpu/ImageDesc.hx" \
+    "$gpu_dir/src/haxeon/gpu/RenderPassDesc.hx" \
+    "$platform_dir/src/haxeon/platform/GraphicsImageRef.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitEventContext.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitEventBytes.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitWindowEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitInputEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitServiceEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitResourceEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitRequests.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitRequestOutcome.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitWindow.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitWebView.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitRuntime.hx")
 
 set +e
 (cd "$haxeon_dir/out" && \

@@ -1,12 +1,42 @@
+import haxeon.ui.Paint.SolidPaint;
+import haxeon.ui.TextLayout.TextPosition;
+
+import haxeon.ui.Canvas;
+import haxeon.ui.Color;
+import haxeon.ui.DisplayList;
+import haxeon.ui.FontCollection;
+import haxeon.ui.FrameInfo;
+import haxeon.ui.GraphicsSurface;
+import haxeon.ui.Image;
+import haxeon.ui.ImageFormat;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutNode;
+import haxeon.ui.LayoutSession;
+import haxeon.ui.LineCap;
+import haxeon.ui.LineJoin;
+import haxeon.ui.NativeKitUIResource;
+import haxeon.ui.Paint;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.Path;
+import haxeon.ui.PathBuilder;
+import haxeon.ui.Rect;
+import haxeon.ui.Renderer;
+import haxeon.ui.Surface;
+import haxeon.ui.TextLayout;
+import haxeon.ui.TextStyle;
+
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import NativeKitUI;
 import nativekit.ffi.NativeKitConstants;
-import NativeKitEvent;
-import NativeKitEventValue;
+import haxeon.platform.NativeKitEvent;
+import haxeon.platform.NativeKitEventValue;
 import haxe.io.Bytes;
-import GradientStop;
-import LinearGradientPaint;
+import haxeon.ui.GradientStop;
+import haxeon.ui.LinearGradientPaint;
 
 /**
  * NativeKit Graphics Lab.

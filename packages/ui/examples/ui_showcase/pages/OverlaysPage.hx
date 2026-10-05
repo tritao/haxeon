@@ -1,14 +1,14 @@
 package pages;
 
-import nativekit.ui.widgets.layout.Stack;
+import haxeon.ui.widgets.layout.Stack;
 
 
 import UiExplorer;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.controls.TabItem;
-import nativekit.ui.widgets.controls.Tabs;
-import nativekit.ui.widgets.overlays.Tooltip;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.controls.TabItem;
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.overlays.Tooltip;
 
 /** Tabs and transient overlay demonstrations. */
 class OverlaysPage {

@@ -1,16 +1,16 @@
 package testing;
 
-import nativekit.ui.widgets.text.TextArea;
-import nativekit.ui.widgets.text.TextField;
+import haxeon.ui.widgets.text.TextArea;
+import haxeon.ui.widgets.text.TextField;
 
 
 import UiExplorer;
-import NativeKitEventValue.NativeKitTextEdit;
+import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
-import nativekit.ui.core.State;
-import nativekit.ui.core.WidgetId;
-import nativekit.ui.semantics.AccessibilityRole;
-import nativekit.ui.widgets.text.TextEditorState;
+import haxeon.ui.core.State;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.widgets.text.TextEditorState;
 
 /** Applies deterministic focus/selection requests after a page is submitted. */
 class ExplorerFocusSequence {

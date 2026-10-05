@@ -1,17 +1,19 @@
 package pages;
 
-import nativekit.ui.widgets.controls.Tabs;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.Insets;
+
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;
 import components.DemoCard;
 import components.DemoGrid;
-import LayoutAxis;
-import LayoutStyle;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
 
 /** Landing page for the Haxeon UI framework and its live catalog. */
 class OverviewPage {

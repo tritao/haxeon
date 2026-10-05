@@ -18,7 +18,7 @@ class HxiNativeKitSceneMain {
 		compiler.addSourceRoot(Sys.getCwd() + "/packages/gpu/src");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene/bindings/haxe");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene_render/bindings/haxe");
-		compiler.update("NativeKitWindow.hx", File.getContent(Sys.getCwd() + "/packages/platform/src/NativeKitWindow.hx"));
+		compiler.update("haxeon/platform/NativeKitWindow.hx", File.getContent(Sys.getCwd() + "/packages/platform/src/haxeon/platform/NativeKitWindow.hx"));
 		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(Sys.getCwd() + "/packages/platform/bindings/nativekit.hxmap"));
 		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(Sys.getCwd() + "/packages/gpu/bindings/nativekit-gpu.hxmap"));
 		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot
@@ -38,13 +38,13 @@ import NativeKitSceneRender;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import NativeKitEventValue;
-import NativeKitRuntime;
+import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitRuntime;
 import nativekit.scene.Scene;
 import nativekit.scene.SceneView;
 import nativekit.scene.SceneRenderer;
-import nativekit.gpu.Renderer;
-import nativekit.gpu.Surface;
+import haxeon.gpu.Renderer;
+import haxeon.gpu.Surface;
 import haxe.io.Bytes;
 
 class Main {

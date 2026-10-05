@@ -2,7 +2,7 @@
 
 This package owns NativeKit's Haxeon GPU API bindings and managed wrappers. NativeKit owns the public C headers, native implementation, and native tests.
 
-The first extraction preserves existing NativeKit namespaces. Public `haxeon.gpu` namespaces are a subsequent API migration. Generated HXI and projection maps live in `bindings/`; managed code lives in `src/`.
+Managed APIs live in `haxeon.gpu.*`. Generated HXI and projection maps live in `bindings/`; managed code lives in `src/`.
 
 ## Native dependency
 

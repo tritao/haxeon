@@ -17,3 +17,31 @@ jobs:
           libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build python3-fonttools xvfb
       - run: ./scripts/bootstrap-tools.sh
       - run: ./packages/platform/tools/test-haxe-bindings.sh
+
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EDITORKIT_DIR: ${{ github.workspace }}/.deps/materia/editorkit
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/checkout@v7
+        with:
+          repository: tritao/materia
+          ref: 111384a5f4e06d1be1e6412e74b19c12f0718c90
+          path: .deps/materia
+      - name: Install UI build dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libffi-dev libfontconfig1-dev libgl1-mesa-dev libgles2-mesa-dev
+          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build xvfb
+      - run: ./scripts/bootstrap-tools.sh
+      - name: Configure the UI native runtime
+        run: >-
+          cmake -S packages/ui -B out/packages/ui/native -GNinja
+          -DCMAKE_BUILD_TYPE=Debug -DNK_BUILD_SHARED=ON
+          -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=OFF
+      - name: Run managed UI framework coverage
+        run: ./packages/ui/tools/test-haxeon-framework.sh

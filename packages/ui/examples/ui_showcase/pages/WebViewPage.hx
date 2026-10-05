@@ -2,7 +2,7 @@ package pages;
 
 import UiExplorer;
 import components.WebViewSlot;
-import nativekit.ui.widgets.KeyedView;
+import haxeon.ui.widgets.KeyedView;
 
 /** Native WebView embedded into Haxeon layout through a synchronized viewport slot. */
 class WebViewPage {

@@ -1,13 +1,18 @@
+import haxeon.platform.NativeKitSurface.NativeKitSurfaceFrameSubscription;
+import haxeon.ui.UiResult.UiError;
+
+import haxeon.ui.FontCollection;
+
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitGpu;
-import NativeKitEventValue;
-import NativeKitEvents;
-import NativeKitEvents.NativeKitEventSubscription;
-import NativeKitSurface;
-import NativeKitError;
-import nativekit.ui.core.NativeInputAdapter;
+import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitEvents;
+import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
+import haxeon.platform.NativeKitSurface;
+import haxeon.platform.NativeKitError;
+import haxeon.ui.core.NativeInputAdapter;
 import WindowChromeDemo;
 
 private class ShowcaseFrameState {

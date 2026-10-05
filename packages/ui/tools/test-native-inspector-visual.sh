@@ -2,10 +2,10 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-materia_dir=$(dirname "$module_dir")
-nativekit_dir=${NATIVEKIT_DIR:-"$materia_dir/nativekit"}
-haxeon_dir=${HAXEON_DIR:-"$materia_dir/haxeon"}
-build_dir=${NATIVEKIT_BUILD_DIR:-"$nativekit_dir/build-ui"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
+materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
+nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 
 for dependency in xvfb-run xdotool import python3; do
     command -v "$dependency" >/dev/null || { echo "Missing $dependency" >&2; exit 1; }

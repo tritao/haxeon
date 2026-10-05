@@ -27,7 +27,7 @@ The validity check and the ID claim are therefore O(nodes) even on a hit, and th
 
 ## Design
 
-One primitive in `nativekit.ui.core`, used by all three:
+One primitive in `haxeon.ui.core`, used by all three:
 
 ```haxe
 context.retained(id, key:RetainedKey, function() return view)   // returns the cached RenderNode or builds and stores it

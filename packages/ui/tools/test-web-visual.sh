@@ -50,7 +50,7 @@ fi
 guest_source_artifact="$build_dir/nativekit_ui_showcase_wasm32.wasm"
 guest_build_artifact="$guest_wasm_artifact"
 [[ ! -f "$guest_source_artifact" ]] || guest_build_artifact="$guest_source_artifact"
-nativekit_dir=${NATIVEKIT_DIR:-"$(dirname "$repo_dir")/nativekit"}
+nativekit_dir=${NATIVEKIT_DIR:-"$(cd "$repo_dir/../.." && pwd)/vendor/nativekit"}
 stale_native_source=$(find "$repo_dir/src" "$repo_dir/include" \
     "$repo_dir/cmake" "$repo_dir/vendor" "$nativekit_dir/src" "$nativekit_dir/include" \
     \( -type d \( -name .git -o -name build -o -name build-web -o -name build-ui \
@@ -63,12 +63,12 @@ if [[ -z "$haxeon_dir" && -f "$build_dir/build.ninja" ]]; then
     haxeon_dir=$(sed -n 's/.*HAXEON_DIR=\([^[:space:]]*\).*/\1/p' \
         "$build_dir/build.ninja" | head -n 1)
 fi
-haxeon_dir=${haxeon_dir:-"$repo_dir/../haxeon"}
+haxeon_dir=${haxeon_dir:-"$(cd "$repo_dir/../.." && pwd)"}
 haxe_source_dirs=(
     "$repo_dir/haxe"
     "$repo_dir/bindings"
     "$repo_dir/examples/ui_showcase"
-    "$nativekit_dir/bindings"
+    "$haxeon_dir/packages/platform/bindings"
 )
 [[ ! -d "$haxeon_dir/src" ]] || haxe_source_dirs+=("$haxeon_dir/src")
 stale_haxe_source=$(find "${haxe_source_dirs[@]}" -type f \

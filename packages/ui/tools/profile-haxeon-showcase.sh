@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-haxeon_dir=${HAXEON_DIR:-"$(dirname "$repo_dir")/haxeon"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$repo_dir/../.." && pwd)"}
 runs=${NATIVEKIT_HAXEON_PROFILE_RUNS:-3}
 allocation_interval=${NATIVEKIT_HAXEON_PROFILE_ALLOC_INTERVAL:-65536}
 output_root=${NATIVEKIT_HAXEON_PROFILE_DIR:-"$repo_dir/out/haxeon-showcase-profile"}

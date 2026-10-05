@@ -1,19 +1,19 @@
 package shell;
 
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
-import LayoutAlignmentY;
-import LayoutAxis;
-import LayoutDistribution;
-import LayoutDirection;
-import LayoutStyle;
-import Insets;
+import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDistribution;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.Insets;
 import UiExplorer;
-import nativekit.ui.icons.IconName;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.core.View;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.WindowChrome;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.core.View;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.WindowChrome;
 
 /** Top-level branding and global Explorer actions. */
 class TopBar {

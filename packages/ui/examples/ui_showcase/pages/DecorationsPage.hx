@@ -1,25 +1,27 @@
 package pages;
 
-import Canvas;
-import Color;
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
-import Rect;
+import haxeon.ui.Image;
+
+import haxeon.ui.Canvas;
+import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.Rect;
 import UiExplorer;
-import nativekit.ui.style.BackgroundDecoration;
-import nativekit.ui.style.BorderDecoration;
-import nativekit.ui.style.DecorationChain;
-import nativekit.ui.style.GradientDecoration;
-import nativekit.ui.style.ImageDecoration;
-import nativekit.ui.style.NineSliceDecoration;
-import nativekit.ui.style.ShadowDecoration;
-import nativekit.ui.style.StyleSelector;
-import nativekit.ui.style.StyleValue;
-import nativekit.ui.widgets.CanvasView;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Row;
+import haxeon.ui.style.BackgroundDecoration;
+import haxeon.ui.style.BorderDecoration;
+import haxeon.ui.style.DecorationChain;
+import haxeon.ui.style.GradientDecoration;
+import haxeon.ui.style.ImageDecoration;
+import haxeon.ui.style.NineSliceDecoration;
+import haxeon.ui.style.ShadowDecoration;
+import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleValue;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Row;
 
 /** Showcase for first-class, stylesheet-driven post-layout decorations. */
 class DecorationsPage {

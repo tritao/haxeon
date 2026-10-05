@@ -1,3 +1,6 @@
+import haxeon.ui.GraphicsSurface;
+import haxeon.ui.UiResult;
+
 import NativeKitUIShowcase;
 
 /** Showcase-only typed facade for the native rotating-cube surface producer. */

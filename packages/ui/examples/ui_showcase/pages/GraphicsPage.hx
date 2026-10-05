@@ -1,33 +1,35 @@
 package pages;
 
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.Paint;
+
+import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;
-import Color;
-import Insets;
-import GradientStop;
-import Image;
-import LayoutAxis;
-import LayoutDirection;
-import LayoutStyle;
-import LineCap;
-import LineJoin;
-import PathBuilder;
-import Rect;
-import Transform2D;
-import nativekit.ui.core.View;
-import nativekit.ui.core.CachePolicy;
-import nativekit.ui.widgets.CanvasView;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.ImageFit;
-import nativekit.ui.widgets.ImageView;
-import nativekit.ui.widgets.LayeredImageView;
-import nativekit.ui.widgets.LayeredImageView.ImageLayer;
-import nativekit.ui.widgets.NineSliceView;
-import nativekit.ui.widgets.layout.Row;
-import RendererStats;
+import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.GradientStop;
+import haxeon.ui.Image;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LineCap;
+import haxeon.ui.LineJoin;
+import haxeon.ui.PathBuilder;
+import haxeon.ui.Rect;
+import haxeon.ui.Transform2D;
+import haxeon.ui.core.View;
+import haxeon.ui.core.CachePolicy;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.ImageFit;
+import haxeon.ui.widgets.ImageView;
+import haxeon.ui.widgets.LayeredImageView;
+import haxeon.ui.widgets.LayeredImageView.ImageLayer;
+import haxeon.ui.widgets.NineSliceView;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.Renderer.RendererStats;
 import components.CubeView;
 
 /** The original retained graphics workload, presented as an Explorer page. */

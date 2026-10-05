@@ -1,16 +1,21 @@
+import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
+
+import haxeon.platform.NativeKitError;
+import haxeon.platform.NativeKitRequests;
+
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import NativeKitEventValue;
-import NativeKitEvents;
-import NativeKitEventBytes;
+import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitEvents;
+import haxeon.platform.NativeKitEventBytes;
 import NativeKitEventDecoderTests;
-import NativeKitTextInput;
-import NativeKitRuntime;
-import NativeKitWindow;
-import NativeKitRequestOutcome;
-import NativeFuture;
-import NativePromise;
+import haxeon.platform.NativeKitTextInput;
+import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.NativeKitWindow;
+import haxeon.platform.NativeKitRequestOutcome;
+import haxeon.platform.NativeFuture;
+import haxeon.platform.NativePromise;
 
 class Smoke {
 	static function main():Int {

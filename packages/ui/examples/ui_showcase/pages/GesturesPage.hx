@@ -1,25 +1,25 @@
 package pages;
 
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.text.Text;
 
 
-import Color;
-import Insets;
-import LayoutAxis;
-import LayoutStyle;
+import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.core.View;
-import nativekit.ui.gestures.DoubleTapRecognizer;
-import nativekit.ui.gestures.DragRecognizer;
-import nativekit.ui.gestures.LongPressRecognizer;
-import nativekit.ui.gestures.TapRecognizer;
-import nativekit.ui.widgets.GestureDetector;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Padding;
-import nativekit.ui.widgets.layout.Row;
-import nativekit.ui.widgets.layout.Stack;
-import nativekit.ui.widgets.layout.StackChild;
+import haxeon.ui.core.View;
+import haxeon.ui.gestures.DoubleTapRecognizer;
+import haxeon.ui.gestures.DragRecognizer;
+import haxeon.ui.gestures.LongPressRecognizer;
+import haxeon.ui.gestures.TapRecognizer;
+import haxeon.ui.widgets.GestureDetector;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Padding;
+import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.layout.Stack;
+import haxeon.ui.widgets.layout.StackChild;
 
 /** Gesture arbitration and Haxe-owned tween/spring motion demonstrations. */
 class GesturesPage {
@@ -111,7 +111,7 @@ class GesturesPage {
 		style.background = background;
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		return new Padding("motion-marker-padding", new nativekit.ui.widgets.text.Text(label, null,
+		return new Padding("motion-marker-padding", new haxeon.ui.widgets.text.Text(label, null,
 			UiExplorer.color(1.0, 1.0, 1.0)), style.padding, style);
 	}
 }

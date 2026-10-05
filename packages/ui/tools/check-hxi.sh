@@ -2,9 +2,10 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-materia_dir=$(dirname "$module_dir")
-repo_dir=${NATIVEKIT_DIR:-"$materia_dir/nativekit"}
-haxeon_dir=${HAXEON_DIR:-"$materia_dir/haxeon"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
+materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
+repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
 output=${1:-"$module_dir/bindings/nativekit-ui.hxi"}
 
 "$haxeon_dir/scripts/haxeon-ffi-audit" \
@@ -16,7 +17,7 @@ output=${1:-"$module_dir/bindings/nativekit-ui.hxi"}
     --library=nativekit_ui \
     --interface=NativeKitUI \
     --depends=NativeKit \
-    --dependency-hxi="$repo_dir/bindings/haxe/nativekit.hxi" \
+    --dependency-hxi="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
     --include="$module_dir/include" \
     --include="$module_dir/bindings" \
     --include="$repo_dir/include" \

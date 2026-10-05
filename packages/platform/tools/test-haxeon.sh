@@ -55,28 +55,28 @@ fi
         --ffi-interface="$platform_dir/bindings/nativekit-vulkan.hxi" \
         --ffi-projection="$platform_dir/bindings/nativekit-vulkan.hxmap" \
         "$platform_dir/tests/Smoke.hx" \
-        "$platform_dir/src/NativeKitEvent.hx" \
-        "$platform_dir/src/NativeKitEventValue.hx" \
-        "$platform_dir/src/NativeKitEventContext.hx" \
-		"$platform_dir/src/NativeKitEventBytes.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitEventContext.hx" \
+		"$platform_dir/src/haxeon/platform/NativeKitEventBytes.hx" \
 		"$platform_dir/tests/NativeKitEventDecoderTests.hx" \
-        "$platform_dir/src/NativeKitWindowEvents.hx" \
-        "$platform_dir/src/NativeKitInputEvents.hx" \
-		"$platform_dir/src/NativeKitTextInput.hx" \
-        "$platform_dir/src/NativeKitRuntime.hx" \
-        "$platform_dir/src/NativeKitWindow.hx" \
-        "$platform_dir/src/NativeKitSurface.hx" \
-        "$platform_dir/src/NativeKitWebView.hx" \
-        "$platform_dir/src/NativeKitError.hx" \
-        "$platform_dir/src/NativeKitVulkanExtensions.hx" \
-        "$platform_dir/src/NativeKitServiceEvents.hx" \
-        "$platform_dir/src/NativeKitResourceEvents.hx" \
-        "$platform_dir/src/NativeKitRequestOutcome.hx" \
-        "$platform_dir/src/NativeFuture.hx" \
-        "$platform_dir/src/NativePromise.hx" \
-        "$platform_dir/src/NativeTask.hx" \
-        "$platform_dir/src/NativeKitRequests.hx" \
-        "$platform_dir/src/NativeKitEvents.hx"
+        "$platform_dir/src/haxeon/platform/NativeKitWindowEvents.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitInputEvents.hx" \
+		"$platform_dir/src/haxeon/platform/NativeKitTextInput.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitRuntime.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitWindow.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitSurface.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitWebView.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitError.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitVulkanExtensions.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitServiceEvents.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitResourceEvents.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitRequestOutcome.hx" \
+        "$platform_dir/src/haxeon/platform/NativeFuture.hx" \
+        "$platform_dir/src/haxeon/platform/NativePromise.hx" \
+        "$platform_dir/src/haxeon/platform/NativeTask.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitRequests.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitEvents.hx"
 )
 
 set +e

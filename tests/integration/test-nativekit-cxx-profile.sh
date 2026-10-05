@@ -19,14 +19,14 @@ if [[ -z "$build_dir" ]]; then
 fi
 build_dir=$(cd "$build_dir" && pwd)
 
-header="$nativekit_root/modules/ui/src/display_list/display_list.h"
+header="$repo_dir/packages/ui/src/display_list/display_list.h"
 compile_commands="$build_dir/compile_commands.json"
 library=${NATIVEKIT_UI_LIBRARY:-}
 if [[ -z "$library" ]]; then
 	for candidate in \
-		"$build_dir/modules/ui/libnativekit_ui.so" \
-		"$build_dir/modules/ui/libnativekit_ui.dylib" \
-		"$build_dir/modules/ui/nativekit_ui.dll"; do
+		"$build_dir/libnativekit_ui.so" \
+		"$build_dir/libnativekit_ui.dylib" \
+		"$build_dir/nativekit_ui.dll"; do
 		if [[ -f "$candidate" ]]; then
 			library="$candidate"
 			break
@@ -72,7 +72,7 @@ set +e
 	--language=c++ \
 	--std=c++20 \
 	--target="$target" \
-	--include="$nativekit_root/modules/ui/src" \
+	--include="$repo_dir/packages/ui/src" \
 	--compile-commands="$compile_commands" \
 	--library="$library" \
 	--interface=NativeKitUiInternalCxx \
@@ -107,7 +107,7 @@ positive_library="$positive_dir/libnativekit_display_list_fixture.so"
 	--language=c++ \
 	--std=c++20 \
 	--target="$target" \
-	--include="$nativekit_root/modules/ui/src" \
+	--include="$repo_dir/packages/ui/src" \
 	--library="$positive_library" \
 	--interface=NativeKitDisplayList \
 	--cxx-thunks="$positive_thunks" \
@@ -123,19 +123,19 @@ case "$(uname -s)" in
 	Linux)
 		positive_library="$positive_dir/libnativekit_display_list_fixture.so"
 		"$cxx" -std=c++20 -fPIC "$shared_flag" \
-			"$nativekit_root/modules/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/packages/ui/src/display_list/display_list.cpp" \
 			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
 			"$positive_thunks" \
-			-I"$nativekit_root/modules/ui/src" \
+			-I"$repo_dir/packages/ui/src" \
 			-o "$positive_library"
 		;;
 	Darwin)
 		positive_library="$positive_dir/libnativekit_display_list_fixture.dylib"
 		"$cxx" -std=c++20 -fPIC "$shared_flag" \
-			"$nativekit_root/modules/ui/src/display_list/display_list.cpp" \
+			"$repo_dir/packages/ui/src/display_list/display_list.cpp" \
 			"$repo_dir/tests/ffi/nativekit_display_list_bridge.cpp" \
 			"$positive_thunks" \
-			-I"$nativekit_root/modules/ui/src" \
+			-I"$repo_dir/packages/ui/src" \
 			-o "$positive_library"
 		;;
 esac

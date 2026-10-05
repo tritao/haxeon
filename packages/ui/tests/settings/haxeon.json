@@ -1,12 +1,18 @@
 {
-	"version": 1,
-	"package": { "name": "uikit-settings-tests" },
-	"entry": "SettingsTests",
-	"sourceRoots": ["src"],
-	"scopeSourceRoots": false,
-	"dependencies": {
-		"uikit": { "path": "../.." }
-	},
-	"target": "host",
-	"outputDir": "build"
+  "version": 1,
+  "package": {
+    "name": "haxeon-ui-settings-tests"
+  },
+  "entry": "SettingsTests",
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-ui": {
+      "path": "../.."
+    }
+  },
+  "target": "host",
+  "outputDir": "build"
 }

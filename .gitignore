@@ -1,2 +1,7 @@
-.tools/
+.tools
 out/
+
+# Native integration package artifacts.
+/packages/ui/build*/
+/packages/ui/out/
+/packages/ui/tests/settings/build/

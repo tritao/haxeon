@@ -1,25 +1,25 @@
 package components;
 
-import Color;
-import Insets;
-import LayoutAxis;
-import LayoutDirection;
-import LayoutStyle;
+import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutStyle;
 import UiExplorer;
-import nativekit.ui.core.View;
-import nativekit.ui.theme.Theme;
-import nativekit.ui.theme.ThemeTokens;
-import nativekit.ui.theme.TextRole;
-import nativekit.ui.widgets.controls.Button;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.layout.Padding;
-import nativekit.ui.widgets.controls.Slider;
-import nativekit.ui.widgets.layout.Stack;
-import nativekit.ui.widgets.layout.StackChild;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.widgets.text.TextArea;
-import nativekit.ui.widgets.text.TextField;
+import haxeon.ui.core.View;
+import haxeon.ui.theme.Theme;
+import haxeon.ui.theme.ThemeTokens;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Padding;
+import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.layout.Stack;
+import haxeon.ui.widgets.layout.StackChild;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.widgets.text.TextArea;
+import haxeon.ui.widgets.text.TextField;
 
 /** Showcase-only styling and small compositions built from framework widgets. */
 @:allow(UiExplorer)

@@ -1,10 +1,12 @@
 package components;
 
-import LayoutStyle;
-import nativekit.ui.widgets.layout.Column;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.text.Text;
-import nativekit.ui.theme.TextRole;
+import haxeon.ui.Color;
+
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.text.Text;
+import haxeon.ui.theme.TextRole;
 
 /** Overview card composed from ordinary NativeKit layout and text widgets. */
 class DemoCard {

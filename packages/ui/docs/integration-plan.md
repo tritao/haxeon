@@ -135,7 +135,7 @@ same submitted frame. Absolute children report the same parent clipping used by
 rendering, so Haxe hit testing and accessibility geometry agree with pixels.
 
 The Haxe framework lives separately from the low-level generated bindings in
-`haxe/nativekit/ui/`. Its current foundation includes:
+`haxe/haxeon/ui/`. Its current foundation includes:
 
 - rebuilt `View` trees, one `RenderNode` per visual/interactive identity,
   scoped keys, duplicate-ID checks, and persistent `State<T>` storage;

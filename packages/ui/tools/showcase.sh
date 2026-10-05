@@ -2,10 +2,11 @@
 set -euo pipefail
 
 module_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-materia_dir=$(dirname "$module_dir")
-repo_dir=${NATIVEKIT_DIR:-"$materia_dir/nativekit"}
-haxeon_dir=${HAXEON_DIR:-"$materia_dir/haxeon"}
-build_dir=${NATIVEKIT_BUILD_DIR:-"$repo_dir/build-ui"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$module_dir/../.." && pwd)"}
+materia_dir=${MATERIA_DIR:-"$(dirname "$haxeon_dir")"}
+repo_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+editorkit_dir=${EDITORKIT_DIR:-"$materia_dir/editorkit"}
+build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 artifact="$build_dir/nativekit_ui_showcase.hl"
 build_only=false
 program_args=()
@@ -24,7 +25,7 @@ if [[ ! -x "$haxeon_dir/.tools/haxe/haxe" ]]; then
     exit 1
 fi
 
-cmake -S "$module_dir" -B "$build_dir" -DNK_BUILD_EXAMPLES=ON
+cmake -S "$module_dir" -B "$build_dir" -DNKUI_NATIVEKIT_DIR="$repo_dir" -DNK_BUILD_EXAMPLES=ON
 cmake --build "$build_dir" --target nativekit_ui
 "$module_dir/tools/check-hxi.sh"
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
@@ -38,16 +39,16 @@ fi
     --entry=ShowcaseDesktop \
     --root="$module_dir/examples/ui_showcase" \
     --root="$module_dir/haxe" \
-    --root="$materia_dir/editorkit/haxe" \
+    --root="$editorkit_dir/haxe" \
     --root="$module_dir/bindings/haxe" \
-    --root="$repo_dir/modules/gpu/bindings/haxe" \
-    --root="$repo_dir/bindings/haxe" \
-    --ffi-interface="$repo_dir/bindings/haxe/nativekit.hxi" \
-    --ffi-projection="$repo_dir/bindings/haxe/nativekit.hxmap" \
+    --root="$haxeon_dir/packages/gpu/src" \
+    --root="$haxeon_dir/packages/platform/src" \
+    --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
+    --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
     --ffi-interface="$module_dir/bindings/nativekit-ui.hxi" \
     --ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
-    --ffi-interface="$repo_dir/modules/gpu/bindings/nativekit-gpu.hxi" \
-    --ffi-projection="$repo_dir/modules/gpu/bindings/nativekit-gpu.hxmap" \
+    --ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxi" \
+    --ffi-projection="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxmap" \
     --ffi-interface="$module_dir/bindings/nativekit-ui-showcase.hxi" \
     --ffi-projection="$module_dir/bindings/nativekit-ui-showcase.hxmap" \
     "$module_dir/examples/ui_showcase/ShowcaseDesktop.hx" \
@@ -55,44 +56,44 @@ fi
     "$module_dir/examples/ui_showcase/Showcase.hx" \
     "$module_dir/examples/ui_showcase/UiExplorer.hx" \
     "$module_dir/examples/ui_showcase/ShowcaseCube.hx" \
-    "$module_dir/haxe/nativekit/ui/core/"*.hx \
-    "$materia_dir/editorkit/haxe/nativekit/editorkit/"*.hx \
-    "$module_dir/haxe/nativekit/ui/style/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/"*.hx \
-    "$module_dir/haxe/nativekit/ui/docking/"*.hx \
-    "$module_dir/haxe/nativekit/ui/editing/"*.hx \
-    "$module_dir/haxe/nativekit/ui/plotting/"*.hx \
-    "$module_dir/haxe/nativekit/ui/properties/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/collections/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/commands/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/controls/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/docking/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/layout/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/overlays/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/plotting/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/properties/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/scroll/"*.hx \
-    "$module_dir/haxe/nativekit/ui/widgets/text/"*.hx \
-    "$module_dir/haxe/nativekit/ui/theme/"*.hx \
-    "$module_dir/haxe/nativekit/ui/semantics/"*.hx \
-    "$module_dir/haxe/nativekit/ui/debug/"*.hx \
-    "$module_dir/haxe/nativekit/ui/gestures/"*.hx \
-    "$module_dir/haxe/nativekit/ui/animation/"*.hx \
-    "$repo_dir/bindings/haxe/GraphicsImageRef.hx" \
-    "$module_dir/bindings/haxe/"*.hx \
-    "$repo_dir/bindings/haxe/NativeKitEvent.hx" \
-    "$repo_dir/bindings/haxe/NativeKitEvents.hx" \
-    "$repo_dir/bindings/haxe/NativeKitEventValue.hx" \
-    "$repo_dir/bindings/haxe/NativeKitEventContext.hx" \
-    "$repo_dir/bindings/haxe/NativeKitEventBytes.hx" \
-    "$repo_dir/bindings/haxe/NativeKitWindowEvents.hx" \
-    "$repo_dir/bindings/haxe/NativeKitInputEvents.hx" \
-    "$repo_dir/bindings/haxe/NativeKitServiceEvents.hx" \
-    "$repo_dir/bindings/haxe/NativeKitResourceEvents.hx" \
-    "$repo_dir/bindings/haxe/NativeKitRequests.hx" \
-    "$repo_dir/bindings/haxe/NativeKitRequestOutcome.hx" \
-    "$repo_dir/bindings/haxe/NativeKitWindow.hx" \
-    "$repo_dir/bindings/haxe/NativeKitWebView.hx")
+    "$module_dir/haxe/haxeon/ui/core/"*.hx \
+    "$editorkit_dir/haxe/nativekit/editorkit/"*.hx \
+    "$module_dir/haxe/haxeon/ui/style/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/"*.hx \
+    "$module_dir/haxe/haxeon/ui/docking/"*.hx \
+    "$module_dir/haxe/haxeon/ui/editing/"*.hx \
+    "$module_dir/haxe/haxeon/ui/plotting/"*.hx \
+    "$module_dir/haxe/haxeon/ui/properties/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/collections/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/commands/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/controls/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/docking/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/layout/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/overlays/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/plotting/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/properties/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/scroll/"*.hx \
+    "$module_dir/haxe/haxeon/ui/widgets/text/"*.hx \
+    "$module_dir/haxe/haxeon/ui/theme/"*.hx \
+    "$module_dir/haxe/haxeon/ui/semantics/"*.hx \
+    "$module_dir/haxe/haxeon/ui/debug/"*.hx \
+    "$module_dir/haxe/haxeon/ui/gestures/"*.hx \
+    "$module_dir/haxe/haxeon/ui/animation/"*.hx \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/GraphicsImageRef.hx" \
+    "$module_dir/bindings/haxe/haxeon/ui/"*.hx \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvent.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventValue.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventContext.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventBytes.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindowEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitInputEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitServiceEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitResourceEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequests.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequestOutcome.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindow.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWebView.hx")
 
 echo "showcase: built $artifact"
 if [[ "$build_only" == true ]]; then

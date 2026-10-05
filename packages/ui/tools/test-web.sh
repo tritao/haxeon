@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-nativekit_dir=${NATIVEKIT_DIR:-"$(dirname "$repo_dir")/nativekit"}
+nativekit_dir=${NATIVEKIT_DIR:-"$(cd "$repo_dir/../.." && pwd)/vendor/nativekit"}
 artifact_dir=${NATIVEKIT_WEB_ARTIFACT_DIR:-"$repo_dir/build-web"}
 build_dir=${NATIVEKIT_WEB_BUILD_DIR:-"$repo_dir/build-web"}
 browser=${NK_WEB_BROWSER:-}

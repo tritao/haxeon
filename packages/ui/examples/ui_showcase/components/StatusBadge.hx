@@ -1,8 +1,8 @@
 package components;
 
-import Color;
-import nativekit.ui.widgets.KeyedView;
-import nativekit.ui.widgets.text.Text;
+import haxeon.ui.Color;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.text.Text;
 
 /** Colored status line used for visible-range and live demo feedback. */
 class StatusBadge {
