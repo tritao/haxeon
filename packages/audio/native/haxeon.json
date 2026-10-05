@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-audio-native"
+  },
+  "sourceRoots": [],
+  "native": {
+    "cmake": {
+      "source": "..",
+      "target": "nativekit",
+      "library": "nativekit",
+      "inputs": [
+        "../CMakeLists.txt",
+        "../../../vendor/nativekit/CMakeLists.txt",
+        "../../../vendor/nativekit/modules/audio/CMakeLists.txt"
+      ]
+    }
+  },
+  "target": "host"
+}

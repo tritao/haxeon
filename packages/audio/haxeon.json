@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-audio"
+  },
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-platform": {
+      "path": "../platform"
+    }
+  },
+  "ffi": {
+    "interfaces": [
+      "bindings/nativekit-audio.hxi"
+    ],
+    "projections": [
+      "bindings/nativekit-audio.hxmap"
+    ]
+  },
+  "target": "host"
+}

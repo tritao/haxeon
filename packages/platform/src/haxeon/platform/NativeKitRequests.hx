@@ -220,6 +220,8 @@ class NativeKitRequests {
 			case NotificationActivated(id, _): Std.string(id);
 			case NotificationFailed(id, _): Std.string(id);
 			case Resources(_, id, _, _, _): Std.string(id);
+			case ResourceAssetReady(_, id): Std.string(id);
+			case ResourceAssetLoadFailed(_, id, _): Std.string(id);
 			case ResourceCommit(id, _, _): Std.string(id);
 			// nk_resource_load_async completes with the loaded bytes in a raw event.
 			case Raw(kind, _, id, _, _, _, _) if (kind == EventKind.ResourceDataComplete): Std.string(id);

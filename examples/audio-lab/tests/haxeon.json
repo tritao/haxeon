@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "package": {
+    "name": "audio-lab-smoke"
+  },
+  "entry": "AudioLabSmoke",
+  "sourceRoots": [
+    ".",
+    "../src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-audio": {
+      "path": "../../../packages/audio"
+    },
+    "haxeon-audio-native": {
+      "path": "../../../packages/audio/native"
+    }
+  },
+  "target": "host",
+  "outputDir": "build",
+  "sources": [
+    "AudioLabSmoke.hx",
+    "../src/audiolab/AudioLabEngine.hx",
+    "../src/audiolab/AudioLabPreset.hx"
+  ]
+}

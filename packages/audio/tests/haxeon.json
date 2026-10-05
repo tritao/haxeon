@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-audio-smoke"
+  },
+  "entry": "AudioSmoke",
+  "sourceRoots": [
+    ".",
+    "../../platform/tests"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-audio": {
+      "path": ".."
+    },
+    "haxeon-audio-native": {
+      "path": "../native"
+    }
+  },
+  "target": "host",
+  "outputDir": "build"
+}
