@@ -94,12 +94,14 @@ class HotReloadMain {
 		if (decoded.baseStrings != initial.module.strings.length || decoded.strings.indexOf("patched source") < 0)
 			throw "HLP did not encode the source string symbol delta";
 		if (decoded.debugFiles.indexOf("Value.hx") < 0
-			|| decoded.functions.length != 1
-			|| decoded.functions[0].debug.length != decoded.functions[0].instructions.length)
+			|| decoded.functions.length != changed.changedFunctions.length)
 			throw "HLP did not preserve opcode-indexed source debug metadata";
-		for (location in decoded.functions[0].debug)
-			if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
-				throw "HLP contains an invalid source debug location";
+		for (fn in decoded.functions) {
+			if (fn.debug.length != fn.instructions.length) throw "HLP lost opcode-indexed source locations";
+			for (location in fn.debug)
+				if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
+					throw "HLP contains an invalid source debug location";
+		}
 		var nativeDecoded = Runtime.inspectPatch(changed.patchBytes);
 		if (nativeDecoded.baseRevision != decoded.baseRevision
 			|| nativeDecoded.revision != decoded.revision
@@ -113,7 +115,11 @@ class HotReloadMain {
 				throw error;
 		}
 		var compilerIndex = changed.functionIds.get("Value.value");
-		if (changed.changedFunctions.length != 1 || changed.changedFunctions[0] != compilerIndex)
+		// Inlined callers also need regeneration when Value.value changes.
+		if (changed.changedFunctions.length != 3
+			|| changed.changedFunctions.indexOf(compilerIndex) < 0
+			|| changed.changedFunctions.indexOf(readIndex) < 0
+			|| changed.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
 			throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
 		var corruptHash = changed.patchBytes.sub(0, changed.patchBytes.length),
 			hashPosition = skipIndex(corruptHash, 24);
@@ -127,7 +133,7 @@ class HotReloadMain {
 		}
 		Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		liveRevision = changed.revision;
-		if (Runtime.patchJitCount(loaded) != 1)
+		if (Runtime.patchJitCount(loaded) != changed.changedFunctions.length)
 			throw "one-function patch did not JIT exactly one function";
 		if (Runtime.callInt(loaded, valueIndex) != 43)
 			throw "patched generation did not return 43";
@@ -192,7 +198,10 @@ class HotReloadMain {
 		compiler.update("Value.hx", "function value():Int { return 46; }");
 		compiler.update("Probe.hx", "function read():Int { var result = Value.value(); return result; }");
 		var pair = compiler.compile("Main");
-		if (pair.changedFunctions.length != 2)
+		if (pair.changedFunctions.length != 3
+			|| pair.changedFunctions.indexOf(valueIndex) < 0
+			|| pair.changedFunctions.indexOf(readIndex) < 0
+			|| pair.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
 			throw "two-function edit did not produce an atomic pair";
 		var pairDecoded = HlPatchReader.decode(pair.patchBytes),
 			hasRelocation = false;
@@ -203,8 +212,8 @@ class HotReloadMain {
 			throw "patched calls were not encoded as stable-ID relocations";
 		Runtime.patchSet(loaded, new PatchSet(liveRevision, pair.revision, pair.patchBytes, pair.changedFunctions));
 		liveRevision = pair.revision;
-		if (Runtime.patchJitCount(loaded) - beforePair != 2)
-			throw "two-function patch did not JIT exactly two functions";
+		if (Runtime.patchJitCount(loaded) - beforePair != pair.changedFunctions.length)
+			throw "patch did not JIT exactly the edited functions and their inlined caller";
 		if (Runtime.callInt(loaded, readIndex) != 46)
 			throw "two-function patch was not committed together";
 
