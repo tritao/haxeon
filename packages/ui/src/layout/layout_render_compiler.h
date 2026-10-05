@@ -72,6 +72,8 @@ class LayoutRenderFrame {
     std::unique_ptr<TextEngine> text_engine_;
     TextEngine *text_engine_source_ = nullptr;
     std::vector<std::shared_ptr<PreparedPath>> paths_;
+    // Retain capacity across frames; IDs link atlas preparation to publication.
+    std::vector<TextLayoutId> text_layout_ids_;
 };
 
 /** Compiles NativeKit-owned layout output into the backend-neutral render plan. */

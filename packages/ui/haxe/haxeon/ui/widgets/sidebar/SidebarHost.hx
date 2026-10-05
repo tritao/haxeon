@@ -36,7 +36,11 @@ class SidebarHost implements View {
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.style = new LayoutStyle();
 		options.style.width = LayoutAxis.stretch(); options.style.height = LayoutAxis.grow();
-		options.style.clipHorizontal = true; options.style.clipVertical = true;
+		options.style.clipHorizontal = true;
+		// The tab stack must shrink its page to the available height. Vertical
+		// clipping here makes Clay treat the whole stack as scroll content and
+		// leaves the page at its intrinsic height instead of sizing its viewport.
+		// Each destination owns its vertical clipping and scrolling.
 		var tabs = Tabs.withOptions(key, items, selected.id, onSelect, options);
 		var node = context.withScope(new Key(key + "-rail"), function() {
 			var state = context.state(context.id("scroll"), new SidebarRailState()).value;

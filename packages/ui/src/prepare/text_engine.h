@@ -12,6 +12,9 @@
 
 namespace nkui {
 
+/** PreparedAtlas requires a matching prepare_glyph_atlas call before publication. */
+enum class GlyphPreparation { Rasterize, PreparedAtlas };
+
 enum class GlyphMode : uint8_t {
     Alpha = 1,
     Sdf,
@@ -214,6 +217,10 @@ class TextEngine {
 
     bool valid() const;
     bool set_atlas_namespace(uint16_t value);
+    /** Changes when atlas pages are created or their glyph coordinates change. */
+    uint64_t atlas_generation_key() const;
+    /** Rasterize a layout, or one line, without publishing geometry or UVs. */
+    bool prepare_glyph_atlas(TextLayoutId id, int32_t line_index, float pixel_scale, GlyphMode mode);
     bool add_font(const char *path, FontFamily family = FontFamily::Default);
     bool add_font_from_data(const char *name, const void *data, std::size_t bytes,
                             FontFamily family = FontFamily::Default);
@@ -250,7 +257,8 @@ class TextEngine {
                                  float pixel_scale, GlyphMode mode, PreparedGlyphs &output);
     bool prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                  float origin_y, float pixel_scale, GlyphMode mode,
-                                 PreparedGlyphs &output);
+                                 PreparedGlyphs &output,
+                                 GlyphPreparation preparation = GlyphPreparation::Rasterize);
     /**
      * Returns an immutable glyph snapshot for one layout or one of its lines.
      *
@@ -264,11 +272,13 @@ class TextEngine {
     std::shared_ptr<const PreparedGlyphs> published_glyphs(TextLayoutId id, float origin_x,
                                                            float origin_y, float pixel_scale,
                                                            GlyphMode mode, GlyphTint tint = {},
-                                                           const std::vector<GlyphColorRange> &ranges = {});
+                                                           const std::vector<GlyphColorRange> &ranges = {},
+                                                           GlyphPreparation preparation = GlyphPreparation::Rasterize);
     std::shared_ptr<const PreparedGlyphs>
     published_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x, float origin_y,
                               float pixel_scale, GlyphMode mode, GlyphTint tint = {},
-                              const std::vector<GlyphColorRange> &ranges = {});
+                              const std::vector<GlyphColorRange> &ranges = {},
+                              GlyphPreparation preparation = GlyphPreparation::Rasterize);
     bool prepared_glyphs_current(const PreparedGlyphs &glyphs) const;
     int32_t text_count() const;
     TextRect bounds() const;
@@ -304,10 +314,12 @@ class TextEngine {
                                                          float origin_x, float origin_y,
                                                          float pixel_scale, GlyphMode mode,
                                                          GlyphTint tint,
-                                                         const std::vector<GlyphColorRange> &ranges, int32_t end_line = -1);
+                                                         const std::vector<GlyphColorRange> &ranges, int32_t end_line = -1,
+                                                         GlyphPreparation preparation = GlyphPreparation::Rasterize);
     bool prepare_glyphs_internal(TextLayoutId id, float origin_x, float origin_y, float pixel_scale,
                                  GlyphMode mode, PreparedGlyphs &output, int32_t line_start,
-                                 int32_t line_end, float line_x, float line_y, int32_t line_index = -1, int32_t end_line = -1);
+                                 int32_t line_end, float line_x, float line_y, int32_t line_index = -1, int32_t end_line = -1,
+                                 GlyphPreparation preparation = GlyphPreparation::Rasterize);
 
     State *state_ = nullptr;
 };

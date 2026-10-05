@@ -1453,6 +1453,77 @@ int main() {
         session_backend.pass_count == 0 || session_backend.path_count == 0)
         return 63;
 
+    // Later labels force the compact atlas to grow. Every earlier binding,
+    // including the immutable set used by threaded rendering, must refer to
+    // the final atlas dimensions and generation rather than its initial UVs.
+    for (bool retained : {false, true}) {
+        LayoutSnapshot growing_snapshot = snapshot;
+        growing_snapshot.primitives.clear();
+        growing_snapshot.text_layouts.clear();
+        TextEngine retained_engine(shared_fonts);
+        for (unsigned index = 0; index < 16; ++index) {
+            LayoutPrimitive text;
+            text.kind = LayoutPrimitiveKind::Text;
+            text.node_id = 200 + index;
+            text.visible = true;
+            text.bounds = {0, static_cast<float>(index * 40), 2000, 80};
+            text.text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            text.text_style.font_size = 16.0f + index * 2;
+            text.color = {0, 0, 0, 1};
+            if (retained) {
+                TextLayoutOptions options;
+                options.font_size = text.text_style.font_size;
+                options.wrap = TextWrapMode::None;
+                TextLayoutResult result;
+                if (!retained_engine.layout_utf8(text.text.c_str(), text.bounds.width, options, &result))
+                    return 69;
+                text.text_layout_id = result.id;
+                LayoutTextLayout descriptor;
+                descriptor.id = result.id;
+                for (const auto &line : result.lines)
+                    descriptor.lines.push_back({line.text_offset, line.text_length,
+                                                {line.bounds.x, line.bounds.y, line.bounds.width, line.bounds.height}});
+                growing_snapshot.text_layouts.push_back(std::move(descriptor));
+            }
+            growing_snapshot.primitives.push_back(std::move(text));
+        }
+        LayoutRenderFrame growing_frame;
+        if (!compiler.compile(growing_snapshot, main_target, 1.0f, growing_frame, &compile_error, false,
+                              retained ? &retained_engine : nullptr))
+            return 65;
+        const auto uploads = growing_frame.text_engine()->atlas_uploads(true);
+        bool grew = false;
+        unsigned bindings = 0;
+        uint64_t emitted_batches = 0;
+        for (const auto &upload : uploads)
+            grew = grew || upload.generation > 1;
+        for (const auto &pass : growing_frame.plan().passes) {
+            for (const auto &command : pass.commands) {
+                if (command.kind != RenderCommandKind::GlyphBatch)
+                    continue;
+                ++bindings;
+                const auto *glyphs = growing_frame.resources().text(command.resource);
+                if (!glyphs || growing_frame.owned_resources().text(command.resource) != glyphs)
+                    return 66;
+                emitted_batches += glyphs->batches.size();
+                for (const auto &batch : glyphs->batches) {
+                    if (std::none_of(uploads.begin(), uploads.end(), [&](const AtlasUpload &upload) {
+                            return upload.texture.value == batch.atlas.value &&
+                                   upload.generation == batch.atlas_generation;
+                        }))
+                        return 67;
+                }
+            }
+        }
+        if (!grew || bindings != growing_snapshot.primitives.size())
+            return 68;
+        // Atlas preparation must not allocate geometry for discarded early drafts.
+        // Each label's batches are generated exactly once, after all atlas growth.
+        if (growing_frame.text_engine()->stats().prepared_batch_count != emitted_batches)
+            return 70;
+
+    }
+
     std::cout << "PASS: layout snapshot compiles through NativeKit render plan\n";
     return 0;
 #endif
