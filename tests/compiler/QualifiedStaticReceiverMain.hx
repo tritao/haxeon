@@ -36,14 +36,14 @@ class QualifiedStaticReceiverMain {
 		var aliasShadowed = new Compiler();
 		aliasShadowed.update("shapes/Holder.hx", HOLDER);
 		aliasShadowed.update("Main.hx",
-			"import shapes.Holder; class Main { static function main():Int { var Holder = { VALUES: [9] }; return Holder.VALUES.indexOf(9); } }");
+			"import shapes.Holder; class Main { static function main():Int { var Holder = { VALUES: ['nine'] }; return Holder.VALUES.indexOf('nine'); } }");
 		aliasShadowed.analyze("Main");
 		Sys.println("PASS: source alias value still shadows an imported type");
 
 		var shadowed = new Compiler();
 		shadowed.update("shapes/Holder.hx", HOLDER);
 		shadowed.update("Main.hx",
-			"class Main { static function main():Int { var shapes = { Holder: { VALUES: [9] } }; return shapes.Holder.VALUES.indexOf(9); } }");
+			"class Main { static function main():Int { var shapes = { Holder: { VALUES: ['nine'] } }; return shapes.Holder.VALUES.indexOf('nine'); } }");
 		shadowed.analyze("Main");
 		Sys.println("PASS: a local value shadows a package of the same name");
 	}
