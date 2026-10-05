@@ -6,7 +6,9 @@ import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ProcessRunner;
 import build.execution.CompilerClient;
+import build.execution.Directories;
 import project.ResolvedProject;
+import sys.io.File;
 
 /** One project-level request to the persistent Haxeon compiler service. */
 class CompilerProvider {
@@ -19,6 +21,7 @@ class CompilerProvider {
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "", compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
+			sourcePaths:Array<String> = [],
 			arguments = [
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 				"--output=" + output,
@@ -35,7 +38,7 @@ class CompilerProvider {
 				for (sourceRoot in resolvedPackage.sourceRoots)
 					arguments.push('--package-root=${resolvedPackage.name}=$sourceRoot');
 			for (source in resolvedPackage.sources)
-				arguments.push(source);
+				sourcePaths.push(source);
 			for (projection in resolvedPackage.ffiProjections)
 				arguments.push("--ffi-projection=" + projection);
 			for (interfacePath in resolvedPackage.ffiInterfaces)
@@ -54,6 +57,11 @@ class CompilerProvider {
 					inputs.push(projectionManifest);
 				}
 			}
+		// Keep the process command line short on Windows; CompilerArguments already supports
+		// newline-delimited source manifests, as used by the compiler bootstrap.
+		sourcePaths.sort(Reflect.compare);
+		var sourceManifest = output + ".sources.txt";
+		arguments.push("--sources-file=" + sourceManifest);
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		if (project.manifest.inlineEnabled != null)
@@ -87,15 +95,18 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				inputs.push(interfacePath);
 		}
+		var invoke = function():Int {
+			Directories.ensure(haxe.io.Path.directory(sourceManifest));
+			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
+			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
+				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
+					() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
+						runtimeLibraryEnvironment(context.compilerHome),
+						() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
+		};
 		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions", output + ".hli", output + ".live.json"],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler(command, argumentsWithLauncher, context.compilerHome, environment,
-				() -> context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
-					environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
-						project.root,
-						() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
-							runtimeLibraryEnvironment(context.compilerHome),
-							() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)))),
+			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke),
 			false);
 	}
 
