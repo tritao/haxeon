@@ -9,11 +9,11 @@ import compiler.Diagnostic.CompileError;
 
 /** Resolves field annotations before class signatures and bodies are typed. */
 class FieldInference {
-	public static function parsedType(field:AstField):AstType {
+	public static function parsedType(field:AstField, ?expression:AstExpression):AstType {
 		var declaredType = field.type;
 		if (declaredType != null)
 			return declaredType;
-		var initializer = field.initializer;
+		var initializer = expression == null ? field.initializer : expression;
 		if (initializer == null)
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" without an initializer', field.span));
 		return switch initializer {
@@ -45,9 +45,10 @@ class FieldInference {
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of empty array field "${field.name}"; a field\'s type is part of its class, so annotate it, as in `var ${field.name}:Array<T> = [];`',
 				field.span));
+		for (value in values)
+			if (literalElementType(value) == null)
+				return InferredType;
 		var element = literalElementType(values[0]);
-		if (element == null)
-			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this array initializer', field.span));
 		for (index in 1...values.length)
 			if (literalElementType(values[index]) != element)
 				throw new CompileError(new Diagnostic("E1002", 'Array initializer for field "${field.name}" has mixed element types', field.span));
@@ -156,35 +157,52 @@ class FieldInference {
 	static function resolveField(field:AstField, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):AstType {
-		var inferred = parsedType(field);
-		if (inferred != InferredType)
-			return inferred;
+		if (field.type != null)
+			return field.type;
 		var key = owner + "." + field.name;
 		if (resolving.exists(key))
 			throw new CompileError(new Diagnostic("E1002", 'Cyclic field type inference through "$key"', field.span));
 		resolving.set(key, true);
-		var enumType = enumConstructorType(field.initializer, owner, classes, aliases, enums, enumAbstracts);
+		var result = resolveValue(field, field.initializer, owner, classes, aliases, enums, enumAbstracts, resolving);
+		resolving.remove(key);
+		return result;
+	}
+
+	static function resolveValue(field:AstField, expression:AstExpression, owner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
+			aliases:AliasTable, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
+			resolving:Map<String, Bool>):AstType {
+		var inferred = parsedType(field, expression);
+		if (inferred != InferredType)
+			return inferred;
+		switch expression {
+			case ArrayLiteral(values, _):
+				var element = resolveValue(field, values[0], owner, classes, aliases, enums, enumAbstracts, resolving);
+				for (index in 1...values.length) {
+					var next = resolveValue(field, values[index], owner, classes, aliases, enums, enumAbstracts, resolving);
+					if (compiler.semantic.SemanticSignature.parsed(element, []) != compiler.semantic.SemanticSignature.parsed(next, []))
+						throw new CompileError(new Diagnostic("E1002", 'Array initializer for field "${field.name}" has mixed element types', field.span));
+				}
+				return ArrayType(element);
+			default:
+		}
+		var enumType = enumConstructorType(expression, owner, classes, aliases, enums, enumAbstracts);
 		if (enumType != null) {
-			resolving.remove(key);
 			return enumType;
 		}
-		if (isOperator(field.initializer)) {
-			var operatorType = operandType(field.initializer, owner, classes, aliases, enums, enumAbstracts, resolving);
+		if (isOperator(expression)) {
+			var operatorType = operandType(expression, owner, classes, aliases, enums, enumAbstracts, resolving);
 			if (operatorType == null)
 				throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
-			resolving.remove(key);
 			return operatorType;
 		}
-		var reference = staticFieldReference(field.initializer);
+		var reference = staticFieldReference(expression);
 		if (reference == null) {
-			var callType = staticCallResult(field.initializer, owner, classes, aliases);
+			var callType = staticCallResult(expression, owner, classes, aliases);
 			if (callType != null) {
-				resolving.remove(key);
 				return callType;
 			}
-			var numericType = siblingNumericType(field.initializer, owner, classes, aliases, enums, enumAbstracts, resolving);
+			var numericType = siblingNumericType(expression, owner, classes, aliases, enums, enumAbstracts, resolving);
 			if (numericType != null) {
-				resolving.remove(key);
 				return numericType;
 			}
 			throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of field "${field.name}" from this initializer', field.span));
@@ -200,7 +218,6 @@ class FieldInference {
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" from unknown static field "${reference.owner}.${reference.name}"', field.span));
 		var result = resolveField(target, targetOwner, classes, aliases, enums, enumAbstracts, resolving);
-		resolving.remove(key);
 		return result;
 	}
 

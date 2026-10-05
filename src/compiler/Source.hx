@@ -144,11 +144,15 @@ class SourceSpan {
 	/** Parser-recorded qualification for a variable or named call reference. */
 	public final isBareReference:Bool;
 
-	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false) {
+	/** Original named-call path before import expansion; introduced package roots are not value bindings. */
+	public final referenceName:Null<String>;
+
+	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String) {
 		this.file = file;
 		this.start = start;
 		this.end = end;
 		this.isBareReference = isBareReference;
+		this.referenceName = referenceName;
 	}
 
 	public function merge(other:SourceSpan):SourceSpan

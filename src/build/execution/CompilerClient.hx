@@ -18,7 +18,8 @@ private typedef Connection = {final socket:Socket; final token:String;}
 class CompilerClient {
 	/** Optimization switches are read once at startup, so each combination needs a separate worker. */
 	static function inlineOption():String
-		return (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore=" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on");
+		return (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore=" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
+			+ (Sys.getEnv("HAXEON_STRENGTH") == "0" ? "off" : "on");
 
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
 			fallback:Void->Int):Int {

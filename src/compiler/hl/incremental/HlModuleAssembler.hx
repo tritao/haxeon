@@ -22,6 +22,7 @@ typedef HlAssemblerState = {
 	final publishedTypes:Int;
 	final symbols:haxe.io.Bytes;
 	final cache:haxe.io.Bytes;
+	@:optional final runtimeNatives:Array<IrNative>;
 }
 
 /** Module plus identity and delta metadata produced by one assembly transaction. */
@@ -98,13 +99,19 @@ class HlModuleAssembler {
 			publishedStrings: publishedStrings,
 			publishedTypes: publishedTypes,
 			symbols: HlSymbolStateCodec.encode(symbols.exportState()),
-			cache: HlFunctionCacheStateCodec.encode(cache.exportState())
+			cache: HlFunctionCacheStateCodec.encode(cache.exportState()),
+			runtimeNatives: runtimeNatives.copy()
 		};
 
 	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
 		var result = new HlModuleAssembler();
 		result.symbols = HlSymbolStateCodec.restore(state.symbols);
 		result.cache = HlFunctionCacheStateCodec.restore(state.cache);
+		if (state.runtimeNatives != null)
+			result.runtimeNatives = state.runtimeNatives.copy();
+		else if (state.initialized)
+			// Import indices are part of the published layout; guessing can patch the wrong slots.
+			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
 		if (state.revision < 0
 			|| state.publishedInts < 0
 			|| state.publishedFloats < 0

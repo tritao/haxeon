@@ -501,7 +501,8 @@ class ModuleCanonicalizer {
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
 						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
-				], s);
+				], imported == null || imported == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
+					s.referenceName == null ? name : s.referenceName));
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
 			case ClosureCall(callee, args, s):
 				ClosureCall(canonicalExpression(callee, module, entry, locals, aliases),

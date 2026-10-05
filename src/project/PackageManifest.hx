@@ -63,6 +63,10 @@ class PackageManifest {
 	public final workspace:Array<String>;
 	public final target:String;
 	public final defines:Array<String>;
+
+	/** Explicit project choice; null inherits HAXEON_INLINE. */
+	public final inlineEnabled:Null<Bool>;
+
 	public final outputDir:String;
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
@@ -73,7 +77,8 @@ class PackageManifest {
 
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, scopeSourceRoots:Bool,
 			workspace:Array<String>, target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>,
-			native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility) {
+			native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility,
+			inlineEnabled:Null<Bool>) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -84,6 +89,7 @@ class PackageManifest {
 		this.workspace = workspace.copy();
 		this.target = target;
 		this.defines = defines.copy();
+		this.inlineEnabled = inlineEnabled;
 		this.outputDir = outputDir;
 		this.dependencies = dependencies;
 		this.native = native;
@@ -115,6 +121,7 @@ class PackageManifest {
 			workspace = stringArray(raw, "workspace", path, []),
 			target = optionalString(raw, "target", "host", path),
 			defines = stringArray(raw, "defines", path, []),
+			inlineEnabled:Null<Bool> = Reflect.hasField(raw, "inline") ? optionalBool(raw, "inline", true, path) : null,
 			outputDir = optionalString(raw, "outputDir", "build", path),
 			compatibility = PackageCompatibility.parse(Reflect.field(raw, "compatibility"), path),
 			dependencies:Map<String, PackageDependency> = new Map();
@@ -192,7 +199,7 @@ class PackageManifest {
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, scopeSourceRoots, workspace, target, defines, outputDir,
-			dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility);
+			dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled);
 	}
 
 	static function isObject(value:Dynamic):Bool

@@ -1616,6 +1616,38 @@ class BodyTyper {
 
 	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
+		// Result annotations are represented by a parser-generated local binding.
+		// Fill only omitted parameter types from the surrounding function context;
+		// keep the explicit result so an incompatible annotation is still rejected.
+		var expression = BlockExpression(statements, result, span);
+		var literal = LambdaSyntax.literal(expression);
+		if (literal != expression && expectedType != null)
+			switch statements[0] {
+				case VarDeclaration(_, FunctionType(parameters, resultType), _, _):
+					switch expectedType {
+						case TFunction(expectedParameters, expectedResult) if (parameters.length == expectedParameters.length):
+							var resolved = [
+								for (index in 0...parameters.length)
+									switch parameters[index] {
+										case InferredType:
+											expectedParameters[index];
+										case NullableType(InferredType):
+											switch expectedParameters[index] {
+												case TNullable(_): expectedParameters[index];
+												default: TNullable(expectedParameters[index]);
+											}
+										default:
+											session.declarations.resolve(parameters[index], span, context.typeSubstitutions);
+									}
+							];
+							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
+							var value = typeExpression(literal, scope, TFunction(resolved, result));
+							// An unbound generic result uses Dynamic as an inference hint.
+							return expectedResult == TDynamic ? value : coerce(value, expectedType, "annotated lambda", "E1003");
+						default:
+					}
+				default:
+			}
 		var blockScope = new Scope(scope),
 			typedStatements = typeStatements(statements, blockScope, context.expectedReturnType);
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))

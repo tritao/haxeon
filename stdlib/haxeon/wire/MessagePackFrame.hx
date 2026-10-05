@@ -25,6 +25,8 @@ class MessagePackFrame {
 		checkByte(flags, "flags");
 		if (flags != 0)
 			throw new MessagePackError("Unsupported MessagePack frame flags");
+		if (payload.length > 0x7fffffff - HEADER_BYTES)
+			throw new MessagePackError("MessagePack frame length exceeds addressable size");
 		var frame = Bytes.alloc(HEADER_BYTES + payload.length);
 		frame.set(0, MAGIC_0);
 		frame.set(1, MAGIC_1);
@@ -47,23 +49,36 @@ class MessagePackFrame {
 		checkByte(expectedVersion, "expected version");
 		if (maxPayload < 0)
 			throw new MessagePackError("MessagePack frame limit cannot be negative");
-		if (frame.length < HEADER_BYTES)
+		var length = payloadLength(frame, maxPayload, expectedVersion);
+		if (frame.length - HEADER_BYTES != length)
+			throw new MessagePackError("MessagePack frame length mismatch");
+		var payload = Bytes.alloc(length);
+		for (index in 0...length)
+			payload.set(index, frame.get(HEADER_BYTES + index));
+		return payload;
+	}
+
+	/** Validates the header and bounds length before any payload allocation. */
+	public static function payloadLength(frame:Bytes, maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES, expectedVersion:Int = CURRENT_VERSION):Int {
+		if (frame == null || frame.length < HEADER_BYTES)
 			throw new MessagePackError("MessagePack frame is truncated");
+		if (maxPayload < 0)
+			throw new MessagePackError("MessagePack frame limit cannot be negative");
+		checkByte(expectedVersion, "expected version");
 		if (frame.get(0) != MAGIC_0 || frame.get(1) != MAGIC_1 || frame.get(2) != MAGIC_2 || frame.get(3) != MAGIC_3)
 			throw new MessagePackError("Invalid MessagePack frame magic");
 		if (frame.get(4) != expectedVersion)
 			throw new MessagePackError("Unsupported MessagePack frame version");
 		if (frame.get(5) != 0)
 			throw new MessagePackError("Unsupported MessagePack frame flags");
-		var length = frame.get(6) * 0x1000000 + frame.get(7) * 0x10000 + frame.get(8) * 0x100 + frame.get(9);
-		if (length > maxPayload)
-			throw new MessagePackError("MessagePack frame payload exceeds configured limit");
-		if (frame.length != HEADER_BYTES + length)
-			throw new MessagePackError("MessagePack frame length mismatch");
-		var payload = Bytes.alloc(length);
-		for (index in 0...length)
-			payload.set(index, frame.get(HEADER_BYTES + index));
-		return payload;
+		var length = 0;
+		for (index in 6...10) {
+			var byte = frame.get(index);
+			if (byte > maxPayload || length > Std.int((maxPayload - byte) / 256))
+				throw new MessagePackError("MessagePack frame payload exceeds configured limit");
+			length = length * 256 + byte;
+		}
+		return length;
 	}
 
 	static function checkByte(value:Int, name:String):Void {

@@ -112,6 +112,8 @@ build_prebuilt_compilers() {
 run_timed prebuilt-compilers build_prebuilt_compilers
 run_timed hxi-value-records bash "$root_dir/scripts/test-hxi-value-records.sh"
 run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.sh"
+run_timed run-output bash "$root_dir/tests/integration/test-run-output.sh"
+run_timed wire-incremental-helpers bash "$root_dir/tests/integration/test-wire-incremental-helpers.sh"
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
 run_haxeon_build() {

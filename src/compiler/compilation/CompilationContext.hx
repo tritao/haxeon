@@ -99,6 +99,15 @@ class CompilationContext {
 	public function inlineCache():compiler.ir.IrInliner.IrInlineCache
 		return owner.inlineCache;
 
+	public function inlineEnabled():Bool {
+		var option = owner.defines.get("haxeon-inline");
+		if (option == null)
+			return compiler.ir.IrInliner.enabled;
+		if (option != "0" && option != "1")
+			throw "haxeon-inline must be 0 or 1";
+		return option == "1";
+	}
+
 	public function irCNatives():Array<IrCNative>
 		return owner.irCNatives();
 

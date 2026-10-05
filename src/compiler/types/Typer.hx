@@ -31,7 +31,7 @@ class Typer {
 
 	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
-			?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts):MeasuredTypedProgram
+			?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts, requireMain:Bool = true):MeasuredTypedProgram
 		return new ProgramTyper(new BodyTyper(externals, specializations,
-			nativeAbiTarget)).typeProgramMeasured(semantic, selected, true, entryPoint, cachedMetadata, facts);
+			nativeAbiTarget)).typeProgramMeasured(semantic, selected, requireMain, entryPoint, cachedMetadata, facts);
 }

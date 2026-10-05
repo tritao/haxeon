@@ -137,6 +137,7 @@ class IrInliner {
 	final objectPrints:Map<String, Int> = [];
 
 	final cache:IrInlineCache;
+	final allowInline:Bool;
 	final fingerprint:Int;
 	final nextMemo:Map<String, InlineMemo> = [];
 
@@ -154,7 +155,8 @@ class IrInliner {
 
 	var depth = 0;
 
-	function new(program:IrProgram, cache:IrInlineCache) {
+	function new(program:IrProgram, cache:IrInlineCache, allowInline:Bool) {
+		this.allowInline = allowInline;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
 		for (fn in program.functions)
@@ -164,8 +166,9 @@ class IrInliner {
 		fingerprint = cache.fingerprintId([
 			entryPoint,
 			"packed=" + packedValueFields,
-			"inline=" + enabled,
-			"loadstore=" + IrLoadStoreForwarding.enabled
+			"inline=" + allowInline,
+			"loadstore=" + IrLoadStoreForwarding.enabled,
+			"strength=" + IrStrengthReduction.enabled
 		].join(";"));
 		var objects:Map<String, IrObject> = [],
 			subclasses:Map<String, Array<String>> = [];
@@ -219,8 +222,8 @@ class IrInliner {
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
 	 */
-	public static function run(program:IrProgram, cache:IrInlineCache):Array<String> {
-		var inliner = new IrInliner(program, cache),
+	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool):Array<String> {
+		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [];
 		var published:Map<String, IrFunction> = [];
@@ -239,6 +242,7 @@ class IrInliner {
 			published.set(fn.name, result);
 		}
 		program.functions = functions;
+		IrOpportunityCensus.report(program, inliner.allowInline);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
 		return changed;
@@ -283,9 +287,11 @@ class IrInliner {
 		var consultedObjects:Map<String, Bool> = [];
 		objectFrames.push(consultedObjects);
 		table.consulted = consultedObjects;
-		var result = enabled ? inlineCalls(original) : original;
+		var result = allowInline ? inlineCalls(original) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, table);
+		if (IrStrengthReduction.enabled)
+			result = IrStrengthReduction.run(result);
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
 		var consulted = frames.pop(), isImpure = frameImpure.pop();

@@ -7,6 +7,7 @@ import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import project.ProjectDiscovery;
 
 class HaxeProjectConfiguration {
 	public final id:String;
@@ -197,7 +198,7 @@ class ProjectWorkspace {
 		for (root in workspaceRootPaths)
 			if (FileSystem.exists(root) && FileSystem.isDirectory(root))
 				for (name in FileSystem.readDirectory(root))
-					if (name == "haxe.json" || StringTools.endsWith(name, ".hxml")) {
+					if (name == "haxe.json" || name == "haxeon.json" || StringTools.endsWith(name, ".hxml")) {
 						configFiles.push(Path.join([root, name]));
 						configuredRoots.set(root, true);
 					}
@@ -329,6 +330,17 @@ class ProjectWorkspace {
 	}
 
 	function parseJson(file:String):HaxeProjectConfiguration {
+		if (Path.withoutDirectory(file) == "haxeon.json") {
+			// Share validated local package discovery with the build driver. It does
+			// not acquire remote dependencies or build native artifacts.
+			var resolved = ProjectDiscovery.discover(file),
+				roots:Array<String> = [];
+			for (value in resolved.packages.packages)
+				for (root in value.sourceRoots)
+					if (roots.indexOf(root) < 0)
+						roots.push(root);
+			return new HaxeProjectConfiguration(file, roots, resolved.manifest.entry == null ? [] : [resolved.manifest.entry], resolved.manifest.defines, []);
+		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),
 			classPaths:Array<String> = [],

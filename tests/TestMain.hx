@@ -582,6 +582,11 @@ class TestMain {
 			'Cyclic inline constant reference through "Invalid.VALUE"');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
 			'Cyclic field type inference through "First.value"');
+		expectCompileError('class Constants { public static final TEXT = "text"; public static final NUMBER = 1; } class Invalid { static final values = [Constants.TEXT, Constants.NUMBER]; } function main():Int return 0;',
+			'Array initializer for field "values" has mixed element types');
+		expectCompileError('class First { public static final values = [Second.values]; } class Second { public static final values = [First.values]; } function main():Int return 0;',
+			'Cyclic field type inference through "First.values"');
+
 		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		// A native binding on a function with a body would silently run the body instead.
