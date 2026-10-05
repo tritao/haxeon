@@ -542,27 +542,28 @@ class FrontendCompilation {
 	/**
 	 * Cached equality and wire helpers still called by retained helpers, directly or transitively.
 	 * A shared helper has only one recorded origin. When that origin is edited or stops requesting the helper,
-	 * pruning by origin alone would drop a dependency of another retained helper and
+	 * pruning by origin or source-module reachability alone would drop a dependency of another retained helper and
 	 * the next verification fails on the unknown call. A helper is kept on its own when it was typed again in this
-	 * build or its origin is unchanged.
+	 * build or its origin is unchanged. Required helper owners join the artifact assembly/pruning set even when
+	 * their source module is no longer reachable; unrelated functions in that module are still pruned.
 	 */
 	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, invalidated:Map<String, Bool>):Map<String, Bool> {
+		var reachable = [for (name in names) name => true];
 		var holders:Map<String, compiler.modules.ModuleState> = [],
 			kept:Map<String, Bool> = [],
 			pending:Array<String> = [];
-		for (name in names) {
-			var state = modules.get(name);
-			if (state == null)
-				continue;
+		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
 				if (!StringTools.startsWith(cached, "$equality:")
 					&& !StringTools.startsWith(cached, "$wire:")
 					&& !StringTools.startsWith(cached, "$json:"))
 					continue;
-				holders.set(cached, state);
+				if (!holders.exists(cached) || reachable.exists(name))
+					holders.set(cached, state);
 				var origin = fn.origin;
-				if (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin))) {
+				if (reachable.exists(name)
+					&& (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin)))) {
 					kept.set(cached, true);
 					pending.push(cached);
 				}
@@ -579,13 +580,21 @@ class FrontendCompilation {
 			for (block in body.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
-						case Call(_, callee, _) if (holders.exists(callee) && !kept.exists(callee)):
-							kept.set(callee, true);
+						case Call(_, callee, _) if (holders.exists(callee)):
 							result.set(callee, true);
-							pending.push(callee);
+							var dependencyOwner = holders.get(callee).name;
+							if (!reachable.exists(dependencyOwner)) {
+								reachable.set(dependencyOwner, true);
+								names.push(dependencyOwner);
+							}
+							if (!kept.exists(callee)) {
+								kept.set(callee, true);
+								pending.push(callee);
+							}
 						default:
 					}
 		}
+		names.sort(Reflect.compare);
 		return result;
 	}
 
