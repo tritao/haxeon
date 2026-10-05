@@ -116,11 +116,12 @@ class ScrollView implements View {
 					geometry.contentBounds.x + geometry.contentBounds.width);
 				var contentHeight = Math.max(geometry.height,
 					geometry.contentBounds.y + geometry.contentBounds.height);
+				// Clamping notifies the binding and mutates the style; compare with the pre-clamp transform.
+				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
 				var nextTransform = Transform2D.identity().translated(-controller.offsetX,
 					-controller.offsetY);
-				var transform = translatedContent.layout.style.transform;
 				if (transform.tx != nextTransform.tx || transform.ty != nextTransform.ty) {
 					translatedContent.layout.style.transform = nextTransform;
 					context.requestLayoutFeedback();
