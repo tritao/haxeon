@@ -58,6 +58,18 @@ class RpcConnection {
 	public function activeRequests():Int
 		return activeCount;
 
+	/** Earliest active deadline, for the host's event-loop scheduler. */
+	public function nextDeadline():Null<Float> {
+		var earliest:Null<Float> = null;
+		for (call in pending)
+			if (earliest == null || call.deadline < earliest)
+				earliest = call.deadline;
+		for (request in active)
+			if (earliest == null || request.deadline < earliest)
+				earliest = request.deadline;
+		return earliest;
+	}
+
 	public function bufferedBytes():Int
 		return queuedBytes + (held == null ? 0 : held.length);
 
@@ -239,17 +251,18 @@ class RpcConnection {
 
 	/** Bounds messages/encoded bytes in each direction, including handler replies.
 	 * Deadline scanning is additionally bounded by maxCalls in each direction. */
-	public function poll(messageBudget:Int = 32, byteBudget:Int = 4 * 1024 * 1024):Int {
+	public function poll(messageBudget:Int = 32, ?byteBudget:Int):Int {
+		var bytes = byteBudget == null ? maxMessageBytes : byteBudget;
 		if (polling)
 			throw "RPC poll is not reentrant";
-		if (messageBudget < 1 || byteBudget < maxMessageBytes)
+		if (messageBudget < 1 || bytes < maxMessageBytes)
 			throw "Invalid RPC poll budget";
 		polling = true;
 		sendMessagesLeft = messageBudget;
-		sendBytesLeft = byteBudget;
+		sendBytesLeft = bytes;
 		var count:Int;
 		try
-			count = pollInternal(messageBudget, byteBudget)
+			count = pollInternal(messageBudget, bytes)
 		catch (failure:Dynamic) {
 			polling = false;
 			throw failure;

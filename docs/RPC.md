@@ -1,10 +1,51 @@
 # Typed RPC runtime
 
 `haxeon.rpc` supplies transport-independent RPC over the existing typed wire
-codecs. The runtime currently operates on one **established connection**.
-Handshake, capability negotiation, reconnect and application resume integration
-are still under development; an adapter must establish and authorize a connection
-before exposing `RpcConnection` to privileged methods.
+codecs. `RpcConnection` owns one established generation; `RpcHandshake`
+negotiates it and `RpcClient` manages cancellable connection attempts and reconnect.
+
+## Handshake and reconnect
+
+Create immutable `RpcPeerOptions` with an application version string, offered
+capabilities, required capabilities and resource limits. Protocol and codec
+versions are checked independently; application compatibility is a service policy.
+The server intersects capabilities and can apply an authorization callback before
+sending Welcome. Transport authentication must already have succeeded at the
+adapter boundary. No privileged connection is exposed before negotiation succeeds.
+
+```haxe
+var options = new RpcPeerOptions("workspace/1", ["files.read", "events"], ["files.read"]);
+var client = new RpcClient(connector, monotonicMilliseconds, randomUnit, options,
+    function(connection, generation, capabilities) {
+        // Explicitly attach resources or resume subscriptions using saved cursors.
+        // Fence deferred application callbacks with client.isCurrent(generation).
+    });
+```
+
+A `RpcConnector` completes with an owned transport or a structured failure and
+returns a cancellable attempt. Completion may be synchronous. Cancellation after
+completion must not close a transferred transport. Late completions are fenced;
+a stale newly opened transport is closed. Each new attempt has a fresh generation,
+handshake and connection. Disconnect fails accepted calls with ambiguity; no calls
+or resource-creating subscriptions are automatically replayed.
+
+Poll from the host event loop, including on transport readiness. `nextWakeAt()`
+returns the next absolute clock deadline for connection timeout, handshake,
+backoff or pending RPC work; the host owns timers and cancellation. Polling is
+nonblocking and non-reentrant. Retry delay doubles to a configured cap with
+injected jitter in the upper half of each delay. A stable connected lifetime
+resets backoff. Explicit close cancels attempts and disables retry. Authentication,
+protocol/codec, capability and malformed-protocol failures are terminal.
+
+Reconnect capabilities can only shrink within a client lifetime. Regaining
+permissions requires an explicit new client/policy decision. Capability negotiation
+does not itself enforce method permissions: services must gate their handlers.
+The ready hook is the explicit restoration point; cursor storage, replay-gap
+handling, snapshots and mutation reconciliation remain application responsibilities.
+
+A rejected server handshake sends Refused and waits for peer close or its original
+bounded deadline before abrupt transport cleanup, preserving delivery of the
+accepted refusal. Handshake polling processes at most one send and one receive.
 
 ## Methods and asynchronous responses
 
