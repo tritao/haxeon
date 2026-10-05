@@ -141,3 +141,9 @@ installed library was modified. Census source SHA-256 is
 `6315b26a92a7ff700650c021357c9acbdc8ec4010509655453b5856a57f7a3a2`; output SHA-256 is
 `975ea9291b0e380cd92620fb1ded6bfc91ca4b7251c247c00da5693ade6f2454`. The source-list SHA-256 is
 `c2e78c0fc457f328746f2f73ac7a6bfe167e7b10ba258c073841b952c1674f76`. Instrumentation timings are not benchmark results.
+
+## Follow-up
+
+[Compiler GC marking and refill experiments](COMPILER_GC_MARKING.md) investigate the larger profile costs.
+The candidate reuses non-atomic bitmap updates for configured one-worker marking, behind `HL_GC_MARK_SERIAL=1`.
+Correctness validation passed; load-qualified performance acceptance remains pending. Multi-worker marking stays atomic.

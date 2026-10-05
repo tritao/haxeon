@@ -17,6 +17,8 @@ final compiler and startup/JIT timings are pending, so the acceptance gate is no
 [ALLOCATION_CENSUS.md](ALLOCATION_CENSUS.md). An array-specific follow-up counted 16.1 million compiler arrays,
 85.28% at lengths 0–3. Profiles found limited directly removable cost, so a small-array JIT expansion was not
 implemented. [ARRAY_ALLOCATION_PROFILE.md](ARRAY_ALLOCATION_PROFILE.md) records the no-go decision and evidence.
+The [compiler GC follow-up](COMPILER_GC_MARKING.md) keeps an opt-in one-worker bitmap candidate after full
+correctness validation; its final performance gate remains pending.
 
 ## Starting point
 

@@ -128,3 +128,9 @@ retains its accepted numbers.
 The subsequent fixed-size allocation follow-up is recorded in
 [GC_ALLOCATION_PROFILE.md](GC_ALLOCATION_PROFILE.md). It profiles allocation dispatch and zeroing separately;
 its accepted change does not revive the rejected mark/sweep experiments above.
+
+## Compiler follow-up
+
+[Compiler GC marking and refill experiments](COMPILER_GC_MARKING.md) profile the compiler workload separately.
+The opt-in one-worker bitmap candidate passed correctness validation; quiet performance acceptance is pending.
+It does not revive the rejected tree prefetch/page-order/empty-comparison experiments.
