@@ -174,6 +174,18 @@ class TestMain {
 		if (new IrInterpreter(scientificLiteralProgram).run("main") != 42)
 			throw "Scientific-notation literals did not parse or type as Float values";
 		Frontend.compile('class NullableIntegerField { public var value:Null<Int>; public function new(value:Null<Int>) this.value = value; } function main():Int { var box = new NullableIntegerField(42); if (box.value != null) { var required:Int = box.value; return required; } return 0; }');
+		var nullableComprehension = Frontend.compile('function twice(values:Null<Array<Int>>):Int { var doubled = [for (value in values) value * 2]; return doubled[0]; } function main():Int return twice([21]);');
+		if (new IrInterpreter(nullableComprehension).run("main") != 42)
+			throw "Nullable array comprehensions did not follow ordinary for-loop iteration";
+		var nullableIteratorComprehension = Frontend.compile('class NullableItems { public function new() {} public function iterator():Null<Iterator<Int>> return [21].iterator(); } function main():Int { var doubled = [for (value in new NullableItems()) value * 2]; return doubled[0]; }');
+		if (new IrInterpreter(nullableIteratorComprehension).run("main") != 42)
+			throw "Comprehensions did not unwrap nullable iterator results";
+		var grownArray = Frontend.compile('function main():Int { var values:Array<Int> = []; values[2] = 42; return values[0] + values[2]; }');
+		if (new IrInterpreter(grownArray).run("main") != 42)
+			throw "IR array writes did not grow with zero-filled integer gaps";
+		var grownBoolArray = Frontend.compile('function main():Int { var values:Array<Bool> = []; values[2] = true; return values[0] ? 0 : 42; }');
+		if (new IrInterpreter(grownBoolArray).run("main") != 42)
+			throw "IR array writes did not grow with false-filled boolean gaps";
 		var nullableFieldAssignmentProgram = Frontend.compile('class NullableFieldCache { public var value:Null<Int>; public function new() {} public function get():Int { if (value == null) value = 42; return value; } } function main():Int return new NullableFieldCache().get();');
 		if (new IrInterpreter(nullableFieldAssignmentProgram).run("main") != 42)
 			throw "Nullable field assignment did not preserve its non-null flow refinement";
@@ -1312,6 +1324,18 @@ class TestMain {
 		if (genericAliasTyped.functions[0].result != compiler.types.Type.CompilerType.TInt)
 			throw "Generic type aliases were not substituted by the typer";
 		Sys.println("PASS: generic type aliases substitute their arguments");
+		var underlyingThisProgram = Frontend.compile(File.getContent("tests/programs/abstract-underlying-this.hx"));
+		if (new IrInterpreter(underlyingThisProgram).run("main") != 42)
+			throw "Abstract receivers did not expose their underlying values inside their implementation";
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function read(value:Voltage):Float return value; function main():Int return 42;',
+			"Type mismatch for return");
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function main():Int { var value:Voltage = 48.0; return 42; }',
+			'Type mismatch for local "value"');
+		expectCompileError('abstract DcVoltage(Float) { public function new(value:Float) this = value; } abstract AcVoltage(Float) { public function new(value:Float) this = value; } function read(value:DcVoltage):Int return 42; function main():Int return read(new AcVoltage(400.0));',
+			'Type mismatch for argument 1 to "read"');
+		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; public function same():Voltage return this; } function main():Int { var value = new Voltage(1.0).same(); return 42; }',
+			"Type mismatch for return");
+		Sys.println("PASS: abstract underlying receivers preserve nominal boundaries outside their implementation");
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
 			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42)) + new Identity<Int>(0).unwrap();"))
 			.tokenize()).parseProgram();

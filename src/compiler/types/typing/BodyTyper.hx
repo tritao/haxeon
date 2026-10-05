@@ -1446,12 +1446,21 @@ class BodyTyper {
 						default:
 					}
 			}
-			new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
+			var value = new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
 				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
 					scope) != null ? TCellLocal(scope.requireId(name),
 						requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
 				type, span, false, scope.mapKeySource(name), scope.isCapture(name)
 				|| boundCell(name, scope) != null ? scope.resolveDeclared(name) : null);
+			// An abstract's implementation reads `this` as its underlying value.
+			// Keep the nominal receiver in scope for calls to its own methods.
+			if (name == "this" && context.lexicalOwner != null && session.declarations.abstracts.exists(context.lexicalOwner))
+				switch type {
+					case TAbstract(_, _, representation):
+						value = session.representation.boundaryCast(value, representation);
+					default:
+				}
+			value;
 		} else {
 			var owner = context.lexicalOwner;
 			if (owner != null && name.indexOf(".") < 0) {

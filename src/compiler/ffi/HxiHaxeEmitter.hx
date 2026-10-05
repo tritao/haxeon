@@ -632,12 +632,12 @@ class HxiHaxeEmitter {
 						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
 						if (projectedCallback != null) {
 							var projectedName = projectedCallback.name;
-							output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:${projectedName}Callback):Bool;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_close") extern function __hxi_callback_close_$name(callback:hl.Abstract<"native_callback">):Bool;\n');
 							output.add('@:hlNative("haxeon_runtime", "native_callback_from_pointer") extern function __hxi_callback_from_pointer_$name(signature:haxe.io.Bytes, pointerSizes:haxe.io.Bytes, pointerNullable:haxe.io.Bytes, pointer:hl.Abstract<"native_pointer">):hl.Abstract<"native_callback">;\n');
 							var invokeParameters = [for (index in 0...parameters.length) 'arg$index:Dynamic'];
-							output.add('@:hlNative("haxeon_runtime", "native_callback_invoke_${parameters.length}") extern function __hxi_callback_invoke_$name(callback:${projectedName}Callback${invokeParameters.length == 0 ? "" : ", " + invokeParameters.join(", ")}):Dynamic;\n');
-							output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:${projectedName}Callback):Int;\n');
-							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:${projectedName}Callback):Null<haxe.io.Bytes>;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_invoke_${parameters.length}") extern function __hxi_callback_invoke_$name(callback:hl.Abstract<"native_callback">${invokeParameters.length == 0 ? "" : ", " + invokeParameters.join(", ")}):Dynamic;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_error_kind") extern function __hxi_callback_error_kind_$name(callback:hl.Abstract<"native_callback">):Int;\n');
+							output.add('@:hlNative("haxeon_runtime", "native_callback_take_error") extern function __hxi_callback_take_error_$name(callback:hl.Abstract<"native_callback">):Null<haxe.io.Bytes>;\n');
 						}
 					case _:
 				}

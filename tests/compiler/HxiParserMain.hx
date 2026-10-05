@@ -750,7 +750,7 @@ class HxiParserMain {
 		opaqueCallbackCompiler.addFfiInterface("opaque_callbacks.hxi",
 			'interface opaque_callbacks @target("x86_64-linux-gnu") @library("opaque_callbacks") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; extern fn visit(callback: Visit) -> void; }');
 		opaqueCallbackCompiler.update("OpaqueCallbackMain.hx",
-			"import opaque_callbacks; function main():Int { var callback = new VisitCallback(function(value:Null<Context>) {}); opaque_callbacks.visit(callback); callback.close(); return 0; }");
+			"import opaque_callbacks; function main():Int { var callback = new VisitCallback(function(value:Null<Context>) {}); opaque_callbacks.visit(callback); callback.errorKind(); callback.takeError(); callback.close(); return 0; }");
 		opaqueCallbackCompiler.analyze("OpaqueCallbackMain");
 		var distinctOpaqueCompiler = new Compiler();
 		distinctOpaqueCompiler.addFfiInterface("opaque_handles.hxi",

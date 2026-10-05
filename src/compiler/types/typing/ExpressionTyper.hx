@@ -352,14 +352,14 @@ class ExpressionTyper {
 
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedIterable = typeExpressionCallback(iterable, scope, null, false);
+		var typedIterable = unwrapNullable(typeExpressionCallback(iterable, scope, null, false));
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
 		if (forwardedArray != null)
 			typedIterable = session.representation.boundaryCast(typedIterable, forwardedArray);
 		// Haxe iterates any class instance or structure through its `iterator()` method.
 		switch typedIterable.type {
 			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):
-				typedIterable = typeExpressionCallback(MethodCall(iterable, "iterator", [], span), scope, null, false);
+				typedIterable = unwrapNullable(typeExpressionCallback(MethodCall(iterable, "iterator", [], span), scope, null, false));
 			default:
 		}
 		var originalIterable = typedIterable,
