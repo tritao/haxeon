@@ -859,8 +859,11 @@ class CallResolver {
 				// A value in scope wins; otherwise the longest dotted prefix that
 				// names a type is the receiver, so "pkg.Type.FIELD.method()"
 				// types FIELD as a static member of pkg.Type.
-				receiverName = parts[0];
+				var sourceParts = span.referenceName == null ? parts : splitPath(span.referenceName);
+				receiverName = sourceParts[0];
 				receiver = resolveCallReceiver(receiverName, span, scope);
+				if (receiver != null)
+					parts = sourceParts;
 				var prefixLength = parts.length - 1;
 				while (receiver == null && prefixLength >= 1) {
 					var prefix = parts.slice(0, prefixLength).join(".");
