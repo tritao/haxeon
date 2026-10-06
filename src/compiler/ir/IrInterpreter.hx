@@ -144,7 +144,6 @@ class IrInterpreter {
 			case ArrayGet(_, array, index): arrayGet(value(values, array), Std.int(value(values, index)));
 			case ArraySet(array, index, input):
 				var initial = switch array.type {
-					case Array(Bool): false;
 					case Array(element): defaultValue(element);
 					default: null;
 				};
@@ -344,7 +343,8 @@ class IrInterpreter {
 
 	static function defaultValue(type:compiler.ir.Ir.IrType):Dynamic
 		return switch type {
-			case I32, Bool: 0;
+			case I32: 0;
+			case Bool: false;
 			case F32, F64: 0.0;
 			default: null;
 		};
