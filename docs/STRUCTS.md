@@ -77,7 +77,7 @@ field.
   data are not flat. A flat struct gets:
   - a C layout wherever it is stored;
   - use through `RawPtr<T>`, `NativeSpan<T>` and `Arena`;
-  - reflection (`typeInfo<T>()`) and C header output.
+  - a full descriptor, with offsets (see Reflection), and C header output.
 - **`Portable`:** flat, and no `RawPtr` anywhere, including in nested fields.
   - Its layout is identical on every supported target. Pointer width is the
     only layout difference between `hl` (64-bit), `wasm32` and native
@@ -90,8 +90,9 @@ Both properties can be used as generic constraints: `T:Flat`, `T:Portable`.
 FFI records are flat. Data that crosses processes or targets should be
 portable.
 
-A struct that isn't flat is still a valid value type. It just can't be placed
-in native memory or reflected.
+A struct that isn't flat is still a valid value type. It can't be placed in
+native memory or exported as a C header, and it gets a reduced descriptor
+instead of a full one.
 
 ## Layout and bytes
 
@@ -147,15 +148,58 @@ A flat struct field can be a fixed array, `var slots:Int32[4];`.
 
 ## Reflection
 
-`typeInfo<T>()` for a flat struct folds to a constant descriptor:
+`typeInfo<T>()` folds to a constant descriptor for every struct:
 
-- the name, size and alignment;
-- each field's name, offset, type and typed annotations;
-- a content hash over all of the above.
+- **Flat structs** get a full descriptor:
+  - the name, size and alignment;
+  - each field's name, offset, type and typed annotations;
+  - a content hash over all of the above.
+- **Non-flat structs** get a reduced descriptor: the name, each field's
+  name, type and typed annotations, and a content hash. There are no
+  offsets or size, because the layout is not a C layout. Element types of
+  arrays and nested structs are described recursively.
+
+Non-flat descriptors have three known consumers in Beartooth:
+- generator parameters, which hold child lists and arrays;
+- remote-event payloads, which hold strings and lists;
+- saved player data.
+
+All three need tooling, codecs and schema evolution without being flat.
 
 The build also writes descriptors out as an artifact, in a versioned binary
 format with a JSON dump for tests. Descriptors are cached incrementally and
 invalidated with their module, like IR.
+
+### Descriptors and the wire layer
+
+Haxeon ends up with two schema strategies. Each fits a different kind of
+data, and both stay:
+
+| | `@:wire` + `@:id(n)` ([MESSAGEPACK.md](MESSAGEPACK.md)) | Descriptors |
+|---|---|---|
+| Field identity | permanent numeric IDs, written by the programmer | field names, plus `@renamedFrom` for renames |
+| Schema at runtime | compiled into both ends; not sent | sent with the data, or checked by hash |
+| Fits | protocols between independently versioned programs whose schema programmers own (RPC services, an engine's session protocol, tool protocols) | schemas owned by end users (game creators), types known only at runtime, and data files that embed their schema |
+| Precedent | protobuf | Avro |
+
+Rules for descriptor-driven encoding:
+- **Same build at both ends** (checked by comparing schema hashes): encode
+  fields by position. No IDs or names are written.
+- **Across builds** (persisted data, messages between different versions):
+  record the writer's schema hash and keep its descriptor available. The
+  reader matches fields by name:
+  - added fields take their defaults;
+  - removed fields are skipped;
+  - `@renamedFrom` maps old names.
+
+  A changed field type needs an explicit migration function.
+- **No numbering.** The compiler never numbers fields automatically.
+  Numbers derived from declaration order would decode reordered fields
+  into the wrong fields without any error, once data crosses builds.
+
+A descriptor-driven codec reuses the wire layer's MessagePack writer and
+reader, its limits and its canonical byte rules. Only how fields are looked
+up differs.
 
 ### Typed annotations
 
@@ -256,8 +300,11 @@ point green.
    - Lower `RawPtr` operations to linear memory.
    - Checkpoint: the native-memory parity programs pass on `wasm32`.
 5. **Reflection and typed annotations.**
-   - Descriptors, the descriptor artifact, incremental caching and
+   - Full descriptors for flat structs and reduced descriptors for
+     non-flat ones, the descriptor artifact, incremental caching and
      `@:annotation` types.
+   - A descriptor-driven MessagePack codec: positional within one build,
+     matched by name across builds.
 6. **C header output.** The HXI round-trip test.
 7. **Fixed arrays.**
 8. **Context-hidden fields.**
@@ -272,11 +319,5 @@ point green.
   already agree with `HxiAbi` for every flat field type? If not, the compiler
   has to insert explicit padding fields when it lowers flat structs inside
   GC objects.
-- **Non-flat reflection.** Should non-flat structs get a reduced descriptor
-  (names, types and annotations, without offsets)? There is a concrete
-  consumer. Beartooth plans to declare ProceduralKit generator parameters
-  as structs, so the same inspector and text notation handle recipe
-  parameters and component fields. Those parameters include
-  variable-length data (child lists, arrays), so they are non-flat.
 - **Generic structs.** Value classes don't support generics yet. Deferred
   until a concrete need, such as a fixed-capacity ring buffer.
