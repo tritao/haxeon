@@ -25,6 +25,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
+		IrGenerator.bindValueClasses(typed.classes);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
 		return assemble(functions, nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
 			staticInitializersFrom(typed, null, functions), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
