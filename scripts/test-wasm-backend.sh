@@ -164,6 +164,11 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-closures.wasm --entry=wasm-gc-closures \
 	--root=tests/programs tests/programs/wasm-gc-closures.hx
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async \
+		--target="$target" --output="out/wasm-cli-object-map-$target.wasm" --entry=wasm-object-map \
+		--root=tests/programs tests/programs/wasm-object-map.hx
+done
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-dynamic.wasm --entry=wasm-gc-dynamic \
 	--root=tests/programs tests/programs/wasm-gc-dynamic.hx
@@ -195,7 +200,11 @@ haxeon_compile_async \
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-ffi-nested-array.wasm --entry=wasm-gc-ffi-nested-array \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_nested.hxi tests/ffi/wasm-gc-ffi-nested-array.hx
+haxeon_compile_async \
+	--target=wasm-gc --wasm-import-memory --output=out/wasm-cli-arena.wasm --entry=wasm-arena \
+	--root=tests/programs tests/programs/wasm-arena.hx
 haxeon_compile_wait
+(cd "$root_dir" && node tests/runtime/wasm-arena-host.js out/wasm-cli-arena.wasm)
 
 node - "$root_dir" <<'JS'
 const fs = require("fs");
@@ -281,6 +290,8 @@ const cases = [
 	["out/wasm-cli-gc-enums.wasm", 42],
 	["out/wasm-gc-closures.wasm", 42],
 	["out/wasm-cli-gc-closures.wasm", 42],
+	["out/wasm-cli-object-map-wasm32.wasm", 42],
+	["out/wasm-cli-object-map-wasm-gc.wasm", 42],
 	["out/wasm-gc-dynamic.wasm", 42],
 	["out/wasm-cli-gc-dynamic.wasm", 42],
 	["out/wasm-gc-exceptions.wasm", 42],
