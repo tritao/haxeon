@@ -1888,6 +1888,12 @@ class Parser {
 				return filtered;
 			}
 		}
+		// A block that always leaves, like `{ log(); throw error; }`, never yields a value.
+		if (statements.length > 0 && statementTerminates(statements[statements.length - 1]) && check(TokenKind.RightBrace)) {
+			var last = statementSpan(statements[statements.length - 1]),
+				end = consume(TokenKind.RightBrace).span;
+			return BlockExpression(statements, Unreachable(last), start.merge(end));
+		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression", span));

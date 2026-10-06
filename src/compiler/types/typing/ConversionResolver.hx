@@ -17,9 +17,18 @@ class ConversionResolver {
 	public function new(session:TypingSession)
 		this.session = session;
 
+	/** A Never value takes the expected type; a block's value is its result, so the result takes it too. */
+	static function neverAs(value:TypedExpression, expected:CompilerType):TypedExpression
+		return switch value.expression {
+			case TBlockExpression(statements, result) if (result.type == TNever):
+				new TypedExpression(TBlockExpression(statements, neverAs(result, expected)), expected, value.span);
+			default:
+				new TypedExpression(value.expression, expected, value.span);
+		};
+
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
-			return new TypedExpression(value.expression, expected, value.span);
+			return neverAs(value, expected);
 		switch expected {
 			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
 			case TNullable(element) if (value.type != TNull && value.type != TDynamic && !isNullable(value.type)):
