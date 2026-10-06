@@ -1,4 +1,7 @@
 import compiler.ffi.HxiInterfaceOrder;
+import compiler.Compiler;
+import compiler.Compiler.FfiConfiguration;
+import compiler.Compiler.FfiInterfaceSource;
 
 /** FFI interfaces are registered dependencies first, whatever order their files sort in. */
 class HxiInterfaceOrderMain {
@@ -7,7 +10,7 @@ class HxiInterfaceOrderMain {
 		return 'interface $name @target("portable-abi64") @library("$name")$depends {\n}\n';
 	}
 
-	static function names(sources:Array<{path:String, text:String}>):String
+	static function names(sources:Array<FfiInterfaceSource>):String
 		return [for (s in sources) s.path].join(",");
 
 	static function main():Void {
@@ -22,6 +25,16 @@ class HxiInterfaceOrderMain {
 		if (ordered != "b-runtime.hxi,a-policy.hxi,d-other.hxi,c-simkit.hxi")
 			throw 'dependencies did not come first: $ordered';
 		Sys.println("PASS: interfaces come after the interfaces they depend on");
+		var configuration = new FfiConfiguration(sorted);
+		var compiler = new Compiler(null, null, configuration);
+		if (compiler.ffiInterfaces().length != 4)
+			throw "Compiler configuration did not register the entire dependency graph";
+		if (names(sorted) != "a-policy.hxi,b-runtime.hxi,c-simkit.hxi,d-other.hxi")
+			throw "Compiler configuration mutated the caller's interface order";
+		sorted[0].text = source("Changed", []);
+		if (configuration.interfaceSources()[1].text.indexOf("interface Policy ") != 0)
+			throw "Compiler configuration did not snapshot the supplied sources";
+		Sys.println("PASS: Compiler accepts unordered immutable FFI configuration snapshots");
 
 		var already = [
 			{path: "1.hxi", text: source("A", [])},
