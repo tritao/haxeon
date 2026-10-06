@@ -163,12 +163,12 @@ interface NativeKitNet @target("portable-abi64") @library("nativekit") @depends(
 		reserved: array<u64, 2> @offset(80);
 	}
 	/**
-	 * UTF-8 header view. Sizes exclude a trailing NUL and are authoritative.
+	 * UTF-8 header byte views; pointers are not NUL-terminated and sizes are authoritative.
 	 */
 	struct nk_http_header @layout(32, 8) {
-		name: utf8 @offset(0);
+		name: ptr<const<c_char>> @offset(0) @borrowed @length_field("name_size");
 		name_size: u32 @offset(8);
-		value: utf8 @offset(16);
+		value: ptr<const<c_char>> @offset(16) @borrowed @length_field("value_size");
 		value_size: u32 @offset(24);
 	}
 	/**
@@ -200,7 +200,7 @@ interface NativeKitNet @target("portable-abi64") @library("nativekit") @depends(
 		struct_size: u32 @offset(0) @struct_size;
 		method: nk_http_method @offset(4);
 		url: utf8 @offset(8);
-		headers: ptr<const<nk_http_header>> @offset(16);
+		headers: ptr<const<nk_http_header>> @offset(16) @borrowed @length_field("header_count");
 		header_count: u32 @offset(24);
 		body: ptr<const<void>> @offset(32) @borrowed @length_field("body_size");
 		body_size: u64 @offset(40);

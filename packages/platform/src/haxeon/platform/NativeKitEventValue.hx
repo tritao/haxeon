@@ -21,6 +21,11 @@ enum NativeKitEventValue {
 	TaskComplete(source:Handle, result:Result, data:haxe.io.Bytes);
 	TaskFailed(source:Handle, result:Result, data:haxe.io.Bytes);
 	TaskCancelled(source:Handle, result:Result, data:haxe.io.Bytes);
+	HttpHeaders(source:Handle, request:haxe.Int64, result:Result, response:NativeKitHttpResponse);
+	HttpDataAvailable(source:Handle, request:haxe.Int64);
+	HttpProgressEvent(source:Handle, request:haxe.Int64, downloaded:haxe.Int64,
+		downloadTotal:haxe.Int64, uploaded:haxe.Int64, uploadTotal:haxe.Int64);
+	HttpComplete(source:Handle, request:haxe.Int64, result:Result, response:NativeKitHttpResponse);
 	Raw(kind:EventKind, source:Handle, request:haxe.Int64, result:Result,
 		flags:Int, dataCount:Int, data:haxe.io.Bytes);
 	WindowClose(source:Handle);

@@ -10,6 +10,7 @@ import haxeon.platform.NativeKitEventValue;
 import haxeon.platform.NativeKitEvents;
 import haxeon.platform.NativeKitEventBytes;
 import NativeKitEventDecoderTests;
+import NativeKitHttpEventTests;
 import haxeon.platform.NativeKitTextInput;
 import haxeon.platform.NativeKitRuntime;
 import haxeon.platform.NativeKitWindow;
@@ -222,6 +223,7 @@ class Smoke {
 		}
 
 		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == -3 && NativeKit.nk_last_error() != null;
+		var httpEventOk = NativeKitHttpEventTests.run(events);
 		runtime.dispose();
 		if (!events.isDisposed() || !lifetimeSubscription.isDisposed())
 			return 21;
@@ -243,6 +245,8 @@ class Smoke {
 			return 7;
 		if (!NativeKitEventDecoderTests.run())
 			return 8;
+		if (!httpEventOk)
+			return 26;
 		return 42;
 	}
 

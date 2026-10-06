@@ -45,6 +45,8 @@ fi
     --root="$haxeon_dir/packages/platform/src" \
     --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
     --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
+    --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net.hxi" \
+    --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap" \
     --ffi-interface="$module_dir/bindings/nativekit-ui.hxi" \
     --ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
     --ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxi" \
@@ -84,6 +86,8 @@ fi
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvent.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvents.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventValue.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitHttpEvents.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitHttpResponse.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventContext.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventBytes.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindowEvents.hx" \

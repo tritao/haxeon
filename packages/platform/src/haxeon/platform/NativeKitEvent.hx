@@ -9,6 +9,9 @@ import haxeon.platform.NativeKitInputEvents;
 import haxeon.platform.NativeKitResourceEvents;
 import haxeon.platform.NativeKitServiceEvents;
 import haxeon.platform.NativeKitWindowEvents;
+#if !wasm
+import haxeon.platform.NativeKitHttpEvents;
+#end
 
 /** Owns one polled NativeKit event and releases its native payload exactly once. */
 class NativeKitEvent {
@@ -54,8 +57,20 @@ class NativeKitEvent {
 	}
 
 	/** Decodes known event formats without releasing this event. */
-	public function decode():NativeKitEventValue
+	public function decode():NativeKitEventValue {
+		#if !wasm
+		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete ||
+			kind == EventKind.HttpDataAvailable || kind == EventKind.HttpProgress)
+			return NativeKitHttpEvents.decode(this);
+		#end
 		return decodeContext(snapshot());
+	}
+
+	@:allow(haxeon.platform.NativeKitHttpEvents)
+	private function nativeEvent():Event {
+		ensureOpen();
+		return event;
+	}
 
 	/** Decodes and releases the event, including when decoding throws. */
 	public function take():NativeKitEventValue {
