@@ -26,6 +26,11 @@ in. HashLink has no stack structs, so removing those temporaries has to happen i
   to a value class `V` (E1002), and an instance field of type `Null<V>` is rejected (E1022). Nullable value locals,
   parameters and returns are still allowed because they are pointers. Before this, `h.v = null`, an unguarded optional
   parameter stored into a field, and a `Null<V>` field all crashed with SIGSEGV at address 0.
+- Maps of value classes: on HashLink a value class is a struct with no `hl_type *` header, so it cannot sit in the map
+  runtime's dynamic value slot. `set` passed the struct pointer through unboxed, and `get` then cast it back by reading a
+  header it does not have (SIGSEGV at address 0). Each entry is now stored as a one-element array of the value class,
+  unboxed by `get`, key-value iteration and `values`. Wasm keeps storing references directly
+  (`tests/programs/value-class-map.hx`).
 
 ## Value semantics
 

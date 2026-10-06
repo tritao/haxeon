@@ -7,7 +7,7 @@ The current subset includes:
 - Classes, interfaces, anonymous structures, enums, and enum abstracts
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
-- Primitive and reference-valued `Map<String, T>` and `Map<Int, T>` forms
+- Primitive, reference and value-class valued `Map<String, T>` and `Map<Int, T>` forms
 - Arithmetic, bitwise operations, comparisons, string operations, and casts
 - `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
 - Array iteration and comprehensions

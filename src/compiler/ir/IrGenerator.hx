@@ -8,6 +8,7 @@ import compiler.runtime.PlatformAbi;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.ValueCopyLayout;
+import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
@@ -54,6 +55,8 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
+	static var valueClasses:Map<String, Bool> = [];
+	static var boxValueClassMapEntries:Bool = true;
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 
@@ -71,6 +74,18 @@ class IrGenerator {
 	}
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
+	/** Supply the program's value classes, whose map entries are stored boxed (see `mapValueBox`). */
+	public static function bindValueClasses(classes:Array<TypedClass>):Void {
+		valueClasses = [];
+		for (classDecl in classes)
+			if (classDecl.isValue)
+				valueClasses.set(Std.string(classDecl.name), true);
+	}
+
+	/** HashLink stores value classes as headerless structs; Wasm represents them as ordinary references. */
+	public static function bindValueClassMapBoxing(enabled:Bool):Void
+		boxValueClassMapEntries = enabled;
+
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
 
@@ -596,8 +611,9 @@ class IrGenerator {
 					}
 					if (valueName != null)
 						initializeLocal(valueName,
-							lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey, mapValue), builder,
-							localTypes);
+							lowerMapGet(builder, localTypes, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey,
+								mapValue),
+							builder, localTypes);
 					var loop:LoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
@@ -749,18 +765,100 @@ class IrGenerator {
 		return [for (temporary in temporaries) builder.load(temporary.name, temporary.type)];
 	}
 
-	static function lowerMapGet(builder:CfgBuilder, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType,
+	static function lowerMapGet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType,
 			?resultType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType),
 			target = lowerType(resultType == null ? valueType : resultType);
 		var value = builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], Dyn);
-		return abiBoundaryCast(builder, value, target);
+		var box = mapValueBox(valueType);
+		if (box == null)
+			return abiBoundaryCast(builder, value, target);
+		var storedName = '$' + 'map-box:${value.id}',
+			resultName = '$' + 'map-box-value:${value.id}',
+			presentBlock = builder.createBlock(),
+			missingBlock = builder.createBlock(),
+			afterBlock = builder.createBlock();
+		localTypes.set(storedName, Dyn);
+		localTypes.set(resultName, target);
+		builder.store(storedName, value);
+		builder.branch(builder.equal(builder.load(storedName, Dyn), builder.constNull(Dyn)), missingBlock, presentBlock);
+		builder.select(missingBlock);
+		builder.store(resultName, builder.constNull(target));
+		builder.jump(afterBlock);
+		builder.select(presentBlock);
+		builder.store(resultName, unboxMapValue(builder, builder.load(storedName, Dyn), box, target));
+		builder.jump(afterBlock);
+		builder.select(afterBlock);
+		return builder.load(resultName, target);
 	}
 
 	static function lowerMapSet(builder:CfgBuilder, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
 		var name = RuntimeType.requireMapName(keyType, valueType);
-		var stored = StringTools.endsWith(name, "_ref") && requiresDynamicBox(value.type) ? abiBoundaryCast(builder, value, Dyn) : value;
+		var stored = value;
+		if (mapValueBox(valueType) != null)
+			stored = boxMapValue(builder, value, valueType);
+		else if (StringTools.endsWith(name, "_ref") && requiresDynamicBox(value.type))
+			stored = abiBoundaryCast(builder, value, Dyn);
 		return builder.call('__${name}_set', [map, lowerMapKey(builder, key, keyType), stored], Void);
+	}
+
+	/**
+	 * The box a map stores `valueType` entries in, or null when they are stored directly. A HashLink value class is a
+	 * struct with no `hl_type *` header, so it can neither be boxed into the map runtime's dynamic value slot nor cast
+	 * back from it; each entry is stored as a one-element array of the value class instead.
+	 */
+	static function mapValueBox(valueType:CompilerType):Null<CompilerType>
+		return switch valueType {
+			case TAbstract(_, _, representation): mapValueBox(representation);
+			case TInstance(NominalKind.Class, name, _) if (boxValueClassMapEntries && valueClasses.exists(Std.string(name))): TArray(valueType);
+			default: null;
+		};
+
+	static function boxMapValue(builder:CfgBuilder, value:CfgValue, valueType:CompilerType):CfgValue {
+		var element = switch mapValueBox(valueType) {
+			case TArray(element): element;
+			default: throw 'Map value ${valueType} is not boxed';
+		};
+		var box = lowerArrayAllocation(builder, element, builder.constInt(1));
+		elementSet(builder, box, builder.constInt(0), value);
+		return builder.toDyn(box);
+	}
+
+	static function unboxMapValue(builder:CfgBuilder, stored:CfgValue, box:CompilerType, target:IrType):CfgValue {
+		var array = abiBoundaryCast(builder, stored, lowerType(box));
+		return elementGet(builder, array, builder.constInt(0), target);
+	}
+
+	/** `Map.values` of boxed entries: the native values array holds the boxes, so each is unboxed into a typed array. */
+	static function lowerBoxedMapValues(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
+			valueType:CompilerType):CfgValue {
+		var box = mapValueBox(valueType),
+			elementType = lowerType(valueType),
+			resultType:IrType = Array(elementType),
+			boxes = builder.call(RuntimeType.mapNative(keyType, valueType, "values"), [map], Array(Dyn)),
+			boxesName = '$' + 'map-boxes:${boxes.id}',
+			resultName = '$' + 'map-boxed-values:${boxes.id}',
+			indexName = '$' + 'map-boxes-index:${boxes.id}';
+		localTypes.set(boxesName, Array(Dyn));
+		localTypes.set(resultName, resultType);
+		localTypes.set(indexName, I32);
+		builder.store(boxesName, boxes);
+		builder.store(resultName, lowerArrayAllocation(builder, valueType, builder.arraySize(builder.load(boxesName, Array(Dyn)))));
+		builder.store(indexName, builder.constInt(0));
+		var conditionBlock = builder.createBlock(),
+			bodyBlock = builder.createBlock(),
+			afterBlock = builder.createBlock();
+		builder.jump(conditionBlock);
+		builder.select(conditionBlock);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(boxesName, Array(Dyn)))), bodyBlock, afterBlock);
+		builder.select(bodyBlock);
+		var index = builder.load(indexName, I32),
+			stored = elementGet(builder, builder.load(boxesName, Array(Dyn)), index, Dyn);
+		elementSet(builder, builder.load(resultName, resultType), index, unboxMapValue(builder, stored, box, elementType));
+		builder.store(indexName, builder.add(index, builder.constInt(1)));
+		builder.jump(conditionBlock);
+		builder.select(afterBlock);
+		return builder.load(resultName, resultType);
 	}
 
 	static function mapEnumName(type:CompilerType):Null<String>
@@ -1212,6 +1310,8 @@ class IrGenerator {
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value) if (operation == "values" && mapValueBox(value) != null):
+						lowerBoxedMapValues(builder, localTypes, lowered[0], key, value);
 					case TMap(key, value) if (operation == "exists" || operation == "remove"):
 						lowered[1] = lowerMapKey(builder, lowered[1], key);
 						builder.call(nativeName, lowered, lowerType(expression.type));
@@ -1560,8 +1660,8 @@ class IrGenerator {
 					builder.store(keyName, elementGet(builder, builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(keyType)));
 				if (valueName != null)
 					builder.store(valueName,
-						lowerMapGet(builder, builder.load(mapName, lowerType(iterable.type)), builder.load(keyName, lowerType(keyType)), mapTypes.key,
-							mapTypes.value));
+						lowerMapGet(builder, localTypes, builder.load(mapName, lowerType(iterable.type)), builder.load(keyName, lowerType(keyType)),
+							mapTypes.key, mapTypes.value));
 				var conditionValue = condition;
 				if (conditionValue == null) {
 					if (flattened)
@@ -1646,7 +1746,7 @@ class IrGenerator {
 					builder.store(keyName, elementGet(builder, builder.load(inputName, inputType), builder.load(indexName, I32), lowerType(itemType)));
 				if (valueName != null)
 					builder.store(valueName,
-						lowerMapGet(builder, builder.load(sourceMapName, lowerType(iterable.type)), builder.load(keyName, lowerType(itemType)),
+						lowerMapGet(builder, localTypes, builder.load(sourceMapName, lowerType(iterable.type)), builder.load(keyName, lowerType(itemType)),
 							sourceMapTypes.key, sourceMapTypes.value));
 				var conditionValue = condition;
 				if (conditionValue == null) {
@@ -1773,7 +1873,7 @@ class IrGenerator {
 					default: throw "Map read requires a map value";
 				};
 				var operands = lowerOperands([map, key], builder, localTypes);
-				lowerMapGet(builder, operands[0], operands[1], mapType.key, mapType.value, expression.type);
+				lowerMapGet(builder, localTypes, operands[0], operands[1], mapType.key, mapType.value, expression.type);
 			case TArrayLength(array):
 				builder.arraySize(lowerExpression(array, builder, localTypes));
 			case TStringLength(value):
