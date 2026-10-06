@@ -406,6 +406,7 @@ class UiContext {
 		// be able to access widget state while that event is being dispatched.
 		stateStore.endFrame();
 		buildContext.pruneSelfUpdatingBuilds(nodesById);
+		buildContext.pruneKeyCaches(nodesById);
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedStateRevision = resolvedStateRevision;
 		submittedInteractionRevision = interactionStates.revision;

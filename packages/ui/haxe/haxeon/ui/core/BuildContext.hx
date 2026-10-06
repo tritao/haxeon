@@ -370,6 +370,21 @@ class BuildContext {
 			pendingPatches = [for (entry in pendingPatches) if (entry.root != null) entry];
 	}
 
+	/** Cache identities only for the committed tree and retained application state. */
+	public function pruneKeyCaches(mounted:Map<Int, RenderNode>):Void {
+		var stale:Array<String> = null;
+		for (path => id in idsByPath)
+			if (!mounted.exists(id.value) && !stateStore.contains(id)) {
+				if (stale == null) stale = [];
+				stale.push(path);
+			}
+		if (stale != null) for (path in stale) {
+			idsByPath.remove(path);
+			cachedIdCount--;
+		}
+		rootScope.prune(function(path) return idsByPath.exists(path));
+	}
+
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
 		selfUpdatingBuilds.clear();

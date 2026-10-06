@@ -53,6 +53,40 @@ class KeyScope {
 	public inline function cachedEntries():Int
 		return root.entries;
 
+	/** Discard cached paths for unmounted widgets; IDs remain deterministic on remount. */
+	public function prune(keep:String->Bool):Bool {
+		var live = false;
+		if (widgetPaths != null) {
+			var stale:Array<String> = null;
+			for (key => path in widgetPaths) {
+				if (keep(path)) live = true;
+				else {
+					if (stale == null) stale = [];
+					stale.push(key);
+				}
+			}
+			if (stale != null) for (key in stale) {
+				widgetPaths.remove(key);
+				root.entries--;
+			}
+		}
+		if (children != null) {
+			var stale:Array<String> = null;
+			for (key => child in children) {
+				if (child.prune(keep)) live = true;
+				else {
+					if (stale == null) stale = [];
+					stale.push(key);
+				}
+			}
+			if (stale != null) for (key in stale) {
+				children.remove(key);
+				root.entries--;
+			}
+		}
+		return live;
+	}
+
 	public static function widgetIdForPath(fullPath:String):WidgetId {
 		var bytes = Bytes.ofString(fullPath);
 		var hash = -2128831035;
