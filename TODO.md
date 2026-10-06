@@ -17,3 +17,15 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   package heuristic.
 - **`Type.getClassName` and `Type.getClass` are missing** from the standard
   library (`E1007: Unknown function "Type.getClassName"`).
+- **No signal type in the standard library.** Applications hand-roll
+  listener lists. Add a general synchronous `Signal<T>`:
+  - `connect(handler)` returns a `Connection`, removed with
+    `disconnect()`, never by comparing closures for equality;
+  - the firing side is a separate, private object, so only the owner can
+    emit;
+  - the payload is one type parameter, so several arguments are passed as
+    a struct.
+
+  Beartooth decided against C#-style delegates or events as a language
+  feature and relies on this type for UI and tools instead (its engine
+  events are queued channels, a separate thing).
