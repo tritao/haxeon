@@ -251,6 +251,9 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		 * Font intended to provide emoji glyphs.
 		 */
 		NKUI_FONT_FAMILY_EMOJI = 1;
+		/**
+		 * Fixed-width text, independent of general-purpose UI fonts.
+		 */
 		NKUI_FONT_FAMILY_MONOSPACE = 4;
 	}
 	/**
@@ -501,6 +504,10 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		 * The graphics backend could not initialize or execute the render.
 		 */
 		NKUI_ERROR_RENDERING = -5;
+		/**
+		 * A frame exceeded its stream budget or could not allocate another page. Retryable.
+		 */
+		NKUI_ERROR_RESOURCE_LIMIT = -6;
 	}
 	/**
 	 * Horizontal alignment of paragraph lines.
@@ -867,6 +874,18 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_text_layout_create_styled(fonts: nkui_resource, text: nullable<utf8>, width: f32, text_style: ptr<const<nkui_text_style>>, paragraph_style: ptr<const<nkui_paragraph_style>>, out_layout: ptr<nkui_resource> @out) -> nkui_result;
 	/**
+	 * Replaces a half-open codepoint range using the layout's current width and style.
+	 * The replacement is UTF-8; null represents an empty string. Invalid ranges leave
+	 * the layout unchanged. Rendering and geometry use the resulting layout together.
+	 */
+	extern fn nkui_text_layout_edit(layout: nkui_resource, start: i32, end: i32, replacement: nullable<utf8>) -> nkui_result;
+	/**
+	 * Returns logical visual-line rectangles intersecting both ranges. Text offsets
+	 * count codepoints; vertical bounds use layout-local coordinates. The buffer
+	 * contains packed nkui_text_rect records, as in selection_rects.
+	 */
+	extern fn nkui_text_layout_get_line_rects(layout: nkui_resource, start: i32, end: i32, min_y: f32, max_y: f32, out_buffer: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nkui_result;
+	/**
 	 * Returns the visual rectangles covered by a code-point selection.
 	 *
 	 * Query the required buffer size by passing NULL. On NKUI_OK, `inout_bytes` is
@@ -933,10 +952,6 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * Re-shapes an existing layout while retaining its native resource handle; null text is empty.
 	 */
 	extern fn nkui_text_layout_update(layout: nkui_resource, text: nullable<utf8>, width: f32, text_style: ptr<const<nkui_text_style>>, paragraph_style: ptr<const<nkui_paragraph_style>>) -> nkui_result;
-	/** Replaces a half-open codepoint range in a retained text layout. */
-	extern fn nkui_text_layout_edit(layout: nkui_resource, start: i32, end: i32, replacement: nullable<utf8>) -> nkui_result;
-	/** Returns visual-line rectangles intersecting a codepoint and vertical range. */
-	extern fn nkui_text_layout_get_line_rects(layout: nkui_resource, start: i32, end: i32, min_y: f32, max_y: f32, out_buffer: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nkui_result;
 	/**
 	 * Returns a half-open insertion-offset range for the word under a hit-tested position.
 	 */

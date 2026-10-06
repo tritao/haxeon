@@ -91,13 +91,13 @@ for test_artifact in \
     fi
 done
 
-python3 "$repo_dir/tools/web_dataset_smoke.py" \
+python3 "$nativekit_dir/tools/web_dataset_smoke.py" \
     --debug-port "$debug_port" --page-url "$page_url" \
-    --test-page "http://127.0.0.1:${http_port}/tests/nativekit_platform_parity.html" \
+    --test-page "http://127.0.0.1:${http_port}/nativekit/tests/nativekit_platform_parity.html" \
     --dataset-key nativekitPlatformParity \
-    --test-page "http://127.0.0.1:${http_port}/tests/nativekit_web_accessibility.html" \
+    --test-page "http://127.0.0.1:${http_port}/nativekit/tests/nativekit_web_accessibility.html" \
     --dataset-key nativekitAccessibilityResult \
-    --test-page "http://127.0.0.1:${http_port}/tests/nativekit_web_system_equivalents.html" \
+    --test-page "http://127.0.0.1:${http_port}/nativekit/tests/nativekit_web_system_equivalents.html" \
     --dataset-key nativekitSystemResult \
-    --test-page "http://127.0.0.1:${http_port}/tests/nativekit_web_system_equivalents.html?orientation-smoke" \
+    --test-page "http://127.0.0.1:${http_port}/nativekit/tests/nativekit_web_system_equivalents.html?orientation-smoke" \
     --dataset-key nativekitSystemResult

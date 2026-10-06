@@ -3876,9 +3876,10 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	extern fn nk_surface_set_text_input_geometry(target: nk_handle, selection_start: nk_text_position, selection_end: nk_text_position, composition_start: nk_text_position, composition_end: nk_text_position, selection_rects: ptr<const<u8>> @in_array("selection_rect_bytes"), selection_rect_bytes: u32, composition_rects: ptr<const<u8>> @in_array("composition_rect_bytes"), composition_rect_bytes: u32) -> nk_result;
 	/**
 	 * Synchronizes a custom editor with the platform IME using absolute code-point positions.
-	 * Linux, Android, and Web use a graphics-surface handle. Windows and macOS accept a window
-	 * handle because those backends do not yet expose graphics surfaces. Desktop backends may
-	 * also accept a window handle when the IME is associated directly with that window.
+	 * Linux, Android, and Web use a graphics-surface handle. Windows accepts a surface or its
+	 * parent window; surface-local caret geometry is translated to that window's coordinates.
+	 * macOS accepts a window handle. Desktop backends may also accept a window handle when
+	 * the IME is associated directly with that window.
 	 */
 	extern fn nk_surface_set_text_input_state(target: nk_handle, state: ptr<const<nk_text_input_state>>) -> nk_result;
 	/**

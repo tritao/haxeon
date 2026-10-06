@@ -661,132 +661,23 @@ if(NK_BUILD_EXAMPLES)
                 add_custom_target(nativekit_ui_haxeon_fonts)
             endif()
             add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_fonts)
-            set(NKUI_HAXEON_EXPORTED_FUNCTIONS
-                _main
-                _nk_api_version
-                _nk_clipboard_read_text
-                _nk_clipboard_set_text
-                _nk_cursor_create_custom
-                _nk_cursor_create_standard
-                _nk_cursor_destroy
-                _nk_event_release
-                _nk_get_capabilities
-                _nk_init
-                _nk_last_error
-                _nk_poll_event
-                _nk_pointer_button_get_state
-                _nk_resource_load_async
-                _nk_shutdown
-                _nk_time_seconds
-                _nk_surface_accessibility_clear
-                _nk_surface_accessibility_remove_node
-                _nk_surface_accessibility_set_focus
-                _nk_surface_accessibility_set_node
-                _nk_surface_accessibility_update_with_removed_ids
-                _nk_surface_create
-                _nk_surface_destroy
-                _nk_surface_get_framebuffer_size
-                _nk_surface_make_current
-                _nk_surface_present
-                _nk_surface_set_bounds
-                _nk_surface_set_text_input_active
-                _nk_surface_set_text_input_geometry
-                _nk_surface_set_text_input_state
-                _nk_window_create
-                _nk_window_destroy
-                _nk_window_get_scale
-                _nk_window_get_cursor_mode
-                _nk_window_set_cursor
-                _nk_window_set_cursor_mode
-                _nk_window_set_decoration_regions
-                _nk_webview_create
-                _nk_webview_destroy
-                _nk_webview_set_bounds
-                _nk_webview_set_html
-                _nk_webview_show
-                _nkui_display_list_create
-                _nkui_display_list_destroy
-                _nkui_display_list_get_info
-                _nkui_display_list_reset
-                _nkui_display_list_submit
-                _nkui_font_collection_add
-                _nkui_font_collection_add_data
-                _nkui_font_collection_add_system_fallbacks
-                _nkui_font_collection_create
-                _nkui_image_create
-                _nkui_image_create_filtered
-                _nkui_image_load_file
-                _nkui_layout_session_clear_custom_paint
-                _nkui_layout_session_clear_custom_paint_composite
-                _nkui_layout_session_clear_custom_paints
-                _nkui_layout_session_create
-                _nkui_layout_session_destroy
-                _nkui_layout_session_get_hit_test_stats
-                _nkui_layout_session_get_resolved_items
-                _nkui_layout_session_hit_test
-                _nkui_layout_session_hit_test_into
-                _nkui_layout_session_render_frame
-                _nkui_layout_session_set_custom_paint
-                _nkui_layout_session_set_custom_paint_composite
-                _nkui_layout_session_set_custom_paint_cache_policy
-                _nkui_layout_session_set_cache_policy
-                _nkui_layout_session_set_font_collection
-                _nkui_layout_session_set_measure_callback
-                _nkui_layout_session_submit
-                _nkui_paint_create_linear_gradient
-                _nkui_paint_create_solid
-                _nkui_path_create
-                _nkui_renderer_create
-                _nkui_renderer_destroy
-                _nkui_renderer_get_gpu_renderer
-                _nkui_renderer_get_stats
-                _nkui_renderer_prepare
-                _nkui_renderer_render
-                _nkui_renderer_render_frame
-                _nkui_resource_destroy
-                _nkui_text_layout_align_grapheme
-                _nkui_text_layout_caret
-                _nkui_text_layout_create
-                _nkui_text_layout_create_styled
-                _nkui_text_layout_get_selection_rects
-                _nkui_text_layout_hit_test
-                _nkui_text_layout_line_range_at
-                _nkui_text_layout_measure
-                _nkui_text_layout_move_paragraph
-                _nkui_text_layout_move_word
-                _nkui_text_layout_next_grapheme
-                _nkui_text_layout_position_offset
-                _nkui_text_layout_previous_grapheme
-                _nkui_text_layout_set_text
-                _nkui_text_layout_set_color
-                _nkui_text_layout_update
-                _nkui_text_layout_edit
-                _nkui_text_layout_get_line_rects
-                _nkui_text_layout_word_range_at
-                _nkui_text_layout_word_range
-                _nkui_showcase_cube_create
-                _nkui_showcase_cube_set_rotation
-                _nkui_showcase_diagnostic_report
-                _nkui_showcase_diagnostic_message
-                _nkui_showcase_diagnostic_stack
-                _nkui_showcase_diagnostic_breadcrumbs
-                _nkgpu_last_error
-                _nkui_haxeon_memory_contract_status
-                _nkui_haxeon_memory_contract_version
-                _nkui_haxeon_memory_contract_page_size
-                _nkui_haxeon_memory_contract_host_base
-                _nkui_haxeon_memory_contract_host_limit
-                _nkui_haxeon_memory_contract_base
-                _nkui_haxeon_memory_contract_guest_base
-                _nkui_haxeon_memory_contract_guest_limit
-                _nkui_haxeon_memory_contract_memory_size
-                _nkui_haxeon_memory_contract_limit)
-            list(JOIN NKUI_HAXEON_EXPORTED_FUNCTIONS ","
-                NKUI_HAXEON_EXPORTED_FUNCTIONS_CSV)
+            # Derive native exports from the compiled guest so new UI calls cannot become runtime stubs.
+            find_program(NKUI_NODE_EXECUTABLE node REQUIRED)
+            set(NKUI_HAXEON_HOST_EXPORTS "${CMAKE_CURRENT_BINARY_DIR}/nativekit_ui_host_exports.json")
+            add_custom_command(OUTPUT "${NKUI_HAXEON_HOST_EXPORTS}"
+                COMMAND "${NKUI_NODE_EXECUTABLE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
+                    "${NKUI_HAXEON_GUEST_WASM}" "${NKUI_HAXEON_HOST_EXPORTS}"
+                DEPENDS "${NKUI_HAXEON_GUEST_WASM}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
+                VERBATIM)
+            add_custom_target(nativekit_ui_haxeon_exports DEPENDS "${NKUI_HAXEON_HOST_EXPORTS}")
+            add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_exports)
+            set_property(TARGET nativekit_ui_haxeon APPEND PROPERTY LINK_DEPENDS "${NKUI_HAXEON_HOST_EXPORTS}")
             target_link_options(nativekit_ui_haxeon PRIVATE
                 "-sINITIAL_MEMORY=${NKUI_HAXEON_MEMORY_LIMIT}"
                 "-sALLOW_MEMORY_GROWTH=0"
-                "-sEXPORTED_FUNCTIONS=[${NKUI_HAXEON_EXPORTED_FUNCTIONS_CSV}]"
+                "-sEXPORTED_FUNCTIONS=@${NKUI_HAXEON_HOST_EXPORTS}"
                 # The page adds the guest's native callbacks to the function table.
                 "-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction"
                 "-sALLOW_TABLE_GROWTH=1"

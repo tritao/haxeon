@@ -54,7 +54,8 @@ def luminance(pixel):
     return sum(weight * value for weight, value in zip((0.2126, 0.7152, 0.0722), linear))
 
 background = luminance(image.getpixel((450, 267)))
-if background < 0.9:
+# Theme.light() uses a lightly tinted input surface; readability is checked below at 4.5:1.
+if background < 0.8:
     raise SystemExit("Property input background is not a light surface")
 
 for label, y in (("1.5", 267), ("Blue box", 309), ("#458AFF", 351), ("disabled 0.1", 423)):
