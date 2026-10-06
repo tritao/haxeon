@@ -302,8 +302,10 @@ class IrInterpreter {
 			throw 'IR interpreter array index $index is out of bounds';
 		// Haxe array writes grow the array. Iterator comprehensions start with
 		// an empty result because their final length is not known in advance.
-		while (value.values.length <= index) value.values.push(initial);
-		if (value.capacity < value.values.length) value.capacity = value.values.length + 8;
+		while (value.values.length <= index)
+			value.values.push(initial);
+		if (value.capacity < value.values.length)
+			value.capacity = value.values.length + 8;
 		value.values[index] = input;
 	}
 
