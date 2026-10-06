@@ -213,6 +213,7 @@ const cases = [
   ["out/wasm-utf8-result-wasm32.wasm", 42],
   ["out/wasm-utf8-result-wasm-gc.wasm", 42],
   ["out/wasm-backend-test.wasm", 42],
+  ["out/wasm-gc-raw-pointer.wasm", 42],
   ["out/wasm-backend-branch.wasm", 42],
   ["out/wasm-backend-loop.wasm", 6],
   ["out/wasm-backend-object.wasm", 42],
@@ -317,6 +318,8 @@ const cases = [
     let shortStructImportCalled = false;
     let hostServicesCheck = null;
     const imports = {};
+    if (relative.endsWith("wasm-gc-raw-pointer.wasm"))
+      imports.fixture = {inspect_raw_pointer: pointer => pointer};
     if (relative.includes("wasm-utf8-result-")) {
       let pointer = 0;
       const bytes = new TextEncoder().encode("é🙂\0");
@@ -710,10 +713,12 @@ const cases = [
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
       const nestedArray = relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm");
+      const rawPointer = relative.endsWith("wasm-gc-raw-pointer.wasm");
       // The value-record fixture's natives need the scratch bridge, so it has memory and imports of its own.
       const valueRecords = relative.endsWith("wasm-cli-gc-hxi-value-records.wasm");
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
-      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && WebAssembly.Module.imports(compiled).length !== 0)
+      if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && !rawPointer && WebAssembly.Module.imports(compiled).length !== 0)
+          || (rawPointer && WebAssembly.Module.imports(compiled).length !== 1)
           || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && hasMemory)
           || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
           || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
@@ -741,7 +746,7 @@ const cases = [
         throw new Error("wrong-sized fixed-layout structure reached the native import instead of trapping");
       continue;
     }
-    const value = instance.exports.main();
+    const value = relative.endsWith("wasm-gc-raw-pointer.wasm") ? instance.exports.main(42) : instance.exports.main();
     if (value !== expected)
       throw new Error(`${relative}: expected ${expected}, got ${value}`);
     if (hostServicesCheck)

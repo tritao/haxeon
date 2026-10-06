@@ -555,7 +555,7 @@ class WasmGcModuleBuilder {
 			}
 		switch native.result {
 			case Void:
-			case I32, Bool, I64, F32, F64:
+			case I32, Bool, I64, F32, F64, RawPtr:
 				gcCNativeValueType(native.result);
 			case Bytes:
 			case ManagedBytes if (native.fixedResult != null):
@@ -636,7 +636,7 @@ class WasmGcModuleBuilder {
 
 	static function gcCNativeValueType(type:IrType):WasmValueType
 		return switch type {
-			case I32, Bool, Bytes, ManagedBytes: I32;
+			case I32, Bool, Bytes, ManagedBytes, RawPtr: I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
