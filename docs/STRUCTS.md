@@ -273,6 +273,10 @@ point green.
   has to insert explicit padding fields when it lowers flat structs inside
   GC objects.
 - **Non-flat reflection.** Should non-flat structs get a reduced descriptor
-  (names and types, without offsets) for tooling?
+  (names, types and annotations, without offsets)? There is a concrete
+  consumer. Beartooth plans to declare ProceduralKit generator parameters
+  as structs, so the same inspector and text notation handle recipe
+  parameters and component fields. Those parameters include
+  variable-length data (child lists, arrays), so they are non-flat.
 - **Generic structs.** Value classes don't support generics yet. Deferred
   until a concrete need, such as a fixed-capacity ring buffer.
