@@ -765,8 +765,10 @@ class BuildSystemMain {
 
 	static function testPackageSourceModel():Void {
 		var manifest = PackageManifest.parse("/tmp/example/haxeon.json",
-			'{"package":{"name":"app"},"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
+			'{"package":{"name":"app"},"sourceRoots":["src","examples"],"unscopedSourceRoots":["examples"],"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
 		expect(manifest.packageId.equals(new project.PackageId("app")), "package manifests should expose stable package identity");
+		expect(manifest.unscopedSourceRoots.length == 1 && manifest.unscopedSourceRoots[0] == "examples",
+			"packages should select source roots that remain outside their namespace");
 		var git = manifest.dependencies.get("git-dependency"),
 			path = manifest.dependencies.get("path-dependency");
 		expect(git != null && path != null && PackageSourceTools.describe(git.source) == "git:https://example.invalid/foo.git@main",

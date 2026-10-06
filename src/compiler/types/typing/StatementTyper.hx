@@ -480,6 +480,9 @@ class StatementTyper {
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = assignmentRules.arrayElementType(typedArray.type, span),
 					value = coerce(typeExpression(expression, scope, element, false), element, "array element", "E1002");
+				// A stored value can replace any literal-index element reached through an alias.
+				// Drop these transient refinements globally rather than retaining an unsound path fact.
+				scope.invalidateExpressionNamespace("array-entry:");
 				TIndexAssign(typedArray, typedIndex, value, span);
 		};
 	}

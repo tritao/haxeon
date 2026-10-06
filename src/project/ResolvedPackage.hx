@@ -10,6 +10,7 @@ class ResolvedPackage {
 	public final manifest:PackageManifest;
 	public final source:PackageSource;
 	public final sourceRoots:Array<String>;
+	public final unscopedSourceRoots:Array<String>;
 	public final sources:Array<String>;
 	public final dependencies:Array<String>;
 	public final nativeSources:Array<String>;
@@ -19,15 +20,16 @@ class ResolvedPackage {
 	public final ffiProjections:Array<String>;
 	public final ffiImports:Array<ResolvedFfiImport>;
 
-	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, sources:Array<String>, dependencies:Array<String>,
-			nativeSources:Array<String>, includeDirs:Array<String>, nativeCMakeInputs:Array<String>, ffiInterfaces:Array<String>,
-			ffiProjections:Array<String>, ?ffiImports:Array<ResolvedFfiImport>, ?source:PackageSource) {
+	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, unscopedSourceRoots:Array<String>,
+			sources:Array<String>, dependencies:Array<String>, nativeSources:Array<String>, includeDirs:Array<String>, nativeCMakeInputs:Array<String>,
+			ffiInterfaces:Array<String>, ffiProjections:Array<String>, ?ffiImports:Array<ResolvedFfiImport>, ?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;
 		this.manifest = manifest;
 		this.source = source == null ? PackageSource.Path(root) : source;
 		this.sourceRoots = sourceRoots.copy();
+		this.unscopedSourceRoots = unscopedSourceRoots.copy();
 		this.sources = sources.copy();
 		this.dependencies = dependencies.copy();
 		this.nativeSources = nativeSources.copy();

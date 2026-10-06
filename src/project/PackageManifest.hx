@@ -63,6 +63,10 @@ class PackageManifest {
 	public final entry:Null<String>;
 	public final legacySources:Array<String>;
 	public final sourceRoots:Array<String>;
+
+	/** Source roots intentionally outside this package's namespace, even when scoped roots are enabled. */
+	public final unscopedSourceRoots:Array<String>;
+
 	public final scopeSourceRoots:Bool;
 	public final workspace:Array<String>;
 	public final target:String;
@@ -79,16 +83,17 @@ class PackageManifest {
 	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
-	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>, scopeSourceRoots:Bool,
-			workspace:Array<String>, target:String, defines:Array<String>, outputDir:String, dependencies:Map<String, PackageDependency>,
-			native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String, androidAppLabel:String, compatibility:PackageCompatibility,
-			inlineEnabled:Null<Bool>) {
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>,
+			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String, defines:Array<String>, outputDir:String,
+			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String,
+			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
 		this.entry = entry;
 		this.legacySources = legacySources.copy();
 		this.sourceRoots = sourceRoots.copy();
+		this.unscopedSourceRoots = unscopedSourceRoots.copy();
 		this.scopeSourceRoots = scopeSourceRoots;
 		this.workspace = workspace.copy();
 		this.target = target;
@@ -121,6 +126,7 @@ class PackageManifest {
 			entry = optionalNullableString(raw, "entry", path),
 			legacySources = stringArray(raw, "sources", path, []),
 			sourceRoots = stringArray(raw, "sourceRoots", path, ["src"]),
+			unscopedSourceRoots = stringArray(raw, "unscopedSourceRoots", path, []),
 			scopeSourceRoots = optionalBool(raw, "scopeSourceRoots", true, path),
 			workspace = stringArray(raw, "workspace", path, []),
 			target = optionalString(raw, "target", "host", path),
@@ -133,6 +139,9 @@ class PackageManifest {
 			throw '$path requires a non-empty package name';
 		if (sourceRoots.length == 0)
 			throw '$path must list at least one path in "sourceRoots"';
+		for (sourceRoot in unscopedSourceRoots)
+			if (sourceRoots.indexOf(sourceRoot) < 0)
+				throw '$path "unscopedSourceRoots" must name roots listed in "sourceRoots"';
 		try {
 			Target.parse(target);
 		} catch (error:Dynamic) {
@@ -216,8 +225,8 @@ class PackageManifest {
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
-		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, scopeSourceRoots, workspace, target, defines, outputDir,
-			dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled);
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots, scopeSourceRoots, workspace, target, defines,
+			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled);
 	}
 
 	static function isObject(value:Dynamic):Bool

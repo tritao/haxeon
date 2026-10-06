@@ -240,6 +240,11 @@ class FlowAnalysis {
 			case TField(object, name):
 				var parent = accessPath(object);
 				parent == null ? null : parent + "." + name;
+			case TIndex(array, index): var parent = accessPath(array),
+					literalIndex:Null<Int> = switch index.expression {
+						case TIntLiteral(value): value;
+						default: null;
+					}; parent == null || literalIndex == null ? null : 'array-entry:$parent:$literalIndex';
 			case TMapGet(map, key): mapEntryPath(map, key);
 			case TCast(value), TAbiCast(value), TToDynamic(value): accessPath(value);
 			default: null;

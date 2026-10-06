@@ -205,6 +205,24 @@ class TestMain {
 		var nullableOptionalDefaultProgram = Frontend.compile('function read(?value:Int = null):Int return value == null ? 42 : value; function main():Int return read();');
 		if (new IrInterpreter(nullableOptionalDefaultProgram).run("main") != 42)
 			throw "Optional parameters with an explicit null default were not nullable";
+		var nullableArrayFieldProgram = Frontend.compile('typedef AssemblyPhysicalPart = { var id:String; @:optional var collisionHull:Array<Float>; } function hullLength(source:Array<AssemblyPhysicalPart>, definitionId:String):Int { var parts = [for (part in source) if (part.id == definitionId) part]; if (parts.length != 1 || parts[0].collisionHull == null || parts[0].collisionHull.length < 3 || parts[0].collisionHull.length % 3 != 0) throw "bad hull"; var vertices = parts[0].collisionHull; return vertices.length; } function main():Int return hullLength([{id: "part", collisionHull: [1.0, 2.0, 3.0]}], "part");');
+		if (new IrInterpreter(nullableArrayFieldProgram).run("main") != 3)
+			throw "A null-checked optional field on a constant-indexed array element was not narrowed";
+		var nullableImportedArrayFieldCompiler = new Compiler();
+		nullableImportedArrayFieldCompiler.update("cadbridge/AssemblySimulationBridge.hx",
+			"package cadbridge; typedef AssemblyPhysicalPart = { var id:String; @:optional var collisionHull:Array<Float>; }");
+		nullableImportedArrayFieldCompiler.update("Main.hx",
+			'import cadbridge.AssemblySimulationBridge.AssemblyPhysicalPart; function hullLength(source:Array<AssemblyPhysicalPart>, definitionId:String):Int { var parts = [for (part in source) if (part.id == definitionId) part]; if (parts.length != 1 || parts[0].collisionHull == null || parts[0].collisionHull.length < 3 || parts[0].collisionHull.length % 3 != 0) throw "bad hull"; var vertices = parts[0].collisionHull; return vertices.length; } function main():Int return hullLength([{id: "part", collisionHull: [1.0, 2.0, 3.0]}], "part");');
+		nullableImportedArrayFieldCompiler.compile("Main");
+		var packageScopedSourceCompiler = new Compiler();
+		packageScopedSourceCompiler.addPackageSourceRoot("app", "tests");
+		packageScopedSourceCompiler.update("app/RobotArm.hx", "class RobotArm { public function new() {} }");
+		packageScopedSourceCompiler.update("app/Main.hx", "package app; import app.RobotArm; function main():Int { new RobotArm(); return 42; }");
+		packageScopedSourceCompiler.compile("app.Main");
+		Sys.println("PASS: package-scoped roots assign their package to package-less source modules");
+		expectCompileError('typedef OptionalHull = { @:optional hull:Array<Float>; } function hullLength(parts:Array<OptionalHull>, alias:Array<OptionalHull>):Int { if (parts[0].hull == null) return 0; alias[0] = {}; return parts[0].hull.length; } function main():Int return 0;',
+			'Field "length" requires an object');
+		Sys.println("PASS: array-element field refinements work and expire after indexed stores");
 		var switchExpressionBlockProgram = Frontend.compile('function main():Int return switch (1) { case 1: { var prefix = 1; { var value = 1; prefix + value + 40; }; } default: 0; };');
 		if (new IrInterpreter(switchExpressionBlockProgram).run("main") != 42)
 			throw "A switch expression block after preceding statements lost its result";

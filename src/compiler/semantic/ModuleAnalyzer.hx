@@ -8,6 +8,7 @@ import compiler.syntax.Parser;
 import compiler.QualifiedName;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.PlatformAbi;
+import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleSourceLoader;
 import compiler.types.FieldInference;
@@ -342,8 +343,25 @@ class ModuleAnalyzer {
 		if (cached != null && cached.source == state.source)
 			return cached;
 		var conditional = ConditionalCompilation.process(state.source, defines),
-			tokens = new Lexer(state.source, conditional.text).tokenize();
-		return new LookupParse(state.source, conditional.defines, tokens, new Parser(tokens).parseProgram());
+			tokens = new Lexer(state.source, conditional.text).tokenize(),
+			program = new Parser(tokens).parseProgram();
+		if (program.packageName == null) {
+			var packageName = ModulePath.packageName(state.name);
+			if (packageName != null)
+				program = {
+					packageName: packageName,
+					imports: program.imports,
+					importAliases: program.importAliases,
+					aliases: program.aliases,
+					enums: program.enums,
+					enumAbstracts: program.enumAbstracts,
+					abstracts: program.abstracts,
+					interfaces: program.interfaces,
+					classes: program.classes,
+					functions: program.functions
+				};
+		}
+		return new LookupParse(state.source, conditional.defines, tokens, program);
 	}
 
 	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {

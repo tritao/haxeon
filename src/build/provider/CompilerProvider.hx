@@ -35,7 +35,8 @@ class CompilerProvider {
 					|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + "."));
 			if (shouldScopeRoot)
 				for (sourceRoot in resolvedPackage.sourceRoots)
-					arguments.push('--package-root=${resolvedPackage.name}=$sourceRoot');
+					if (resolvedPackage.unscopedSourceRoots.indexOf(sourceRoot) < 0)
+						arguments.push('--package-root=${resolvedPackage.name}=$sourceRoot');
 			for (source in resolvedPackage.sources)
 				sourcePaths.push(source);
 			for (projection in resolvedPackage.ffiProjections)

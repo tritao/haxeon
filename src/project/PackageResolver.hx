@@ -68,7 +68,10 @@ class PackageResolver {
 			var sourceRoots = [
 				for (sourceRoot in manifest.sourceRoots)
 					resolveDirectory(resolvedRoot, sourceRoot, 'source root', manifest.packageName)
-			],
+			], unscopedSourceRoots = [
+				for (sourceRoot in manifest.unscopedSourceRoots)
+					resolveDirectory(resolvedRoot, sourceRoot, 'unscoped source root', manifest.packageName)
+				],
 				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
 					manifest.packageName, "source"),
 				nativeSources:Array<String> = [], includeDirs:Array<String> = [], nativeCMakeInputs:Array<String> = [], ffiInterfaces:Array<String> = [],
@@ -130,8 +133,8 @@ class PackageResolver {
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);
-			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, sources, resolvedDependencies, nativeSources,
-				includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, ffiImports, acquired.source);
+			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, unscopedSourceRoots, sources,
+				resolvedDependencies, nativeSources, includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, ffiImports, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,
