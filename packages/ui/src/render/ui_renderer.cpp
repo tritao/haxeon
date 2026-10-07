@@ -737,7 +737,11 @@ bool create_target(UiRendererImpl::State &state, UiRendererImpl::State::Target &
     color_desc.struct_size = sizeof(color_desc);
     color_desc.width = static_cast<uint32_t>(width);
     color_desc.height = static_cast<uint32_t>(height);
-    color_desc.format = NKGPU_IMAGEFORMAT_RGBA8;
+    // Pipelines inherit the surface attachment format. Cached/offscreen draws
+    // must use that same format; explicit backends use BGRA window targets.
+    const auto backend = nkgpu_query_backend(state.renderer);
+    color_desc.format = backend == NKGPU_BACKEND_D3D11 || backend == NKGPU_BACKEND_METAL
+                            ? NKGPU_IMAGEFORMAT_BGRA8 : NKGPU_IMAGEFORMAT_RGBA8;
     color_desc.usage = NKGPU_IMAGE_SAMPLED | NKGPU_IMAGE_RENDER_TARGET;
     if (!gpu_result(state, nkgpu_image_create_desc(state.renderer, &color_desc, &target.color)))
         return false;
@@ -2445,14 +2449,20 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
 
 namespace {
 
+float render_target_v(const UiRendererImpl::State &state, float top_fraction) {
+    // GL render textures have a bottom-left origin; D3D/Metal use top-left.
+    return state.graphics_api == NK_GRAPHICS_D3D11 || state.graphics_api == NK_GRAPHICS_METAL
+               ? top_fraction : 1.0f - top_fraction;
+}
+
 std::vector<TextureVertex> composite_vertices(float x, float y, float width, float height,
-                                              const float transform[6]) {
+                                              const float transform[6], float top_v, float bottom_v) {
     const auto point = [transform](float px, float py, float u, float v) {
         return TextureVertex{px * transform[0] + py * transform[2] + transform[4],
                              px * transform[1] + py * transform[3] + transform[5], u, v};
     };
-    return {point(x, y, 0.0f, 1.0f), point(x + width, y, 1.0f, 1.0f),
-            point(x + width, y + height, 1.0f, 0.0f), point(x, y + height, 0.0f, 0.0f)};
+    return {point(x, y, 0.0f, top_v), point(x + width, y, 1.0f, top_v),
+            point(x + width, y + height, 1.0f, bottom_v), point(x, y + height, 0.0f, bottom_v)};
 }
 
 bool valid_composite(UiRendererImpl::State &state, const float transform[6], float opacity) {
@@ -2467,7 +2477,8 @@ bool valid_composite(UiRendererImpl::State &state, const float transform[6], flo
 bool draw_composite(UiRendererImpl::State &state, float x, float y, float width, float height,
                     const float transform[6], float opacity, nkgpu_image image,
                     nk_graphics_image external_image, nkgpu_sampler sampler) {
-    const auto vertices = composite_vertices(x, y, width, height, transform);
+    const auto vertices = composite_vertices(x, y, width, height, transform,
+                                             render_target_v(state, 0.0f), render_target_v(state, 1.0f));
     const std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
     const std::array<float, 4> tint = {opacity, opacity, opacity, opacity};
     return draw_mesh(state, state.composite_pipeline, vertices, indices, tint.data(), sizeof(tint),
@@ -2514,8 +2525,8 @@ bool UiRendererImpl::applyEffectRegion(ResourceId source, const EffectDescriptor
     const float source_height = static_cast<float>(found->height);
     const float u0 = has_region ? x / source_width : 0.0f;
     const float u1 = has_region ? (x + region_width) / source_width : 1.0f;
-    const float v1 = has_region ? 1.0f - y / source_height : 1.0f;
-    const float v0 = has_region ? 1.0f - (y + region_height) / source_height : 0.0f;
+    const float v1 = render_target_v(*state_, has_region ? y / source_height : 0.0f);
+    const float v0 = render_target_v(*state_, has_region ? (y + region_height) / source_height : 1.0f);
     const std::vector<TextureVertex> vertices = {
         {0.0f, 0.0f, u0, v1},
         {width, 0.0f, u1, v1},
@@ -2595,8 +2606,8 @@ bool UiRendererImpl::applyCustomEffectRegion(ResourceId source,
     const float source_height = static_cast<float>(found->height);
     const float u0 = has_region ? x / source_width : 0.0f;
     const float u1 = has_region ? (x + region_width) / source_width : 1.0f;
-    const float v1 = has_region ? 1.0f - y / source_height : 1.0f;
-    const float v0 = has_region ? 1.0f - (y + region_height) / source_height : 0.0f;
+    const float v1 = render_target_v(*state_, has_region ? y / source_height : 0.0f);
+    const float v0 = render_target_v(*state_, has_region ? (y + region_height) / source_height : 1.0f);
     const std::vector<TextureVertex> vertices = {{0.0f, 0.0f, u0, v1},
                                                  {width, 0.0f, u1, v1},
                                                  {width, height, u1, v0},
@@ -2649,11 +2660,13 @@ bool UiRendererImpl::applyMask(ResourceId source, const MaskDescriptor &mask,
 
     const float width = static_cast<float>(state_->width);
     const float height = static_cast<float>(state_->height);
+    const float top_v = render_target_v(*state_, 0.0f);
+    const float bottom_v = render_target_v(*state_, 1.0f);
     const std::vector<TextureVertex> vertices = {
-        {0.0f, 0.0f, 0.0f, 1.0f},
-        {width, 0.0f, 1.0f, 1.0f},
-        {width, height, 1.0f, 0.0f},
-        {0.0f, height, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, top_v},
+        {width, 0.0f, 1.0f, top_v},
+        {width, height, 1.0f, bottom_v},
+        {0.0f, height, 0.0f, bottom_v},
     };
     const std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
     MaskUniforms uniforms{};
