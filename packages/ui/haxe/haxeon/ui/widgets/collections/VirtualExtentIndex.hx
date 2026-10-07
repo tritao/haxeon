@@ -17,6 +17,7 @@ class VirtualExtentIndex {
 
 	final deltas:Array<Float>;
 	final measured:Map<Int, Float>;
+	var deltasInitialized:Bool;
 	final totalExtentOverride:Null<Float>;
 
 	public var totalExtent(get, never):Float;
@@ -49,8 +50,7 @@ class VirtualExtentIndex {
 		this.last = 0;
 		this.totalExtentOverride = totalExtent;
 		deltas = [];
-		for (_ in 0...(itemCount + 1))
-			deltas.push(0.0);
+		deltasInitialized = false;
 		measured = new Map();
 		update(viewportExtent, offset, leadingOverscan, trailingOverscan);
 	}
@@ -64,6 +64,7 @@ class VirtualExtentIndex {
 		var delta = extent - previous;
 		if (delta == 0.0)
 			return;
+		ensureDeltas();
 		var cursor = index + 1;
 		while (cursor <= itemCount) {
 			deltas[cursor] += delta;
@@ -131,6 +132,8 @@ class VirtualExtentIndex {
 	}
 
 	function prefixDelta(count:Int):Float {
+		if (!deltasInitialized)
+			return 0.0;
 		var result = 0.0;
 		var cursor = count;
 		while (cursor > 0) {
@@ -138,6 +141,14 @@ class VirtualExtentIndex {
 			cursor -= (cursor & -cursor);
 		}
 		return result;
+	}
+
+	function ensureDeltas():Void {
+		if (deltasInitialized)
+			return;
+		for (_ in 0...(itemCount + 1))
+			deltas.push(0.0);
+		deltasInitialized = true;
 	}
 
 	static inline function finite(value:Float):Bool

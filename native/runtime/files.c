@@ -14,6 +14,10 @@ extern varray *hl_sys_stat( vbyte *path );
 
 #ifdef HL_WIN
 #include <wchar.h>
+#else
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 static char *realtime_utf8_copy( vstring *value ) {
@@ -107,6 +111,88 @@ HL_PRIM varray *HL_NAME(__sys_read_dir)( vstring *path ) {
 	vstring **target = hl_aptr(result,vstring *);
 	for( int index = 0; index < platform->size; index++ )
 		target[index] = realtime_string_from_platform(source[index]);
+	return result;
+}
+
+static void realtime_directory_entries_reserve( varray **array, vstring ***current, int *capacity, int needed, int used ) {
+	if( needed <= *capacity ) return;
+	int next_capacity = *capacity == 0 ? 32 : *capacity * 2;
+	while( next_capacity < needed ) next_capacity *= 2;
+	varray *next = hl_alloc_array(hl_string_type,next_capacity);
+	vstring **storage = hl_aptr(next,vstring *);
+	if( *current != NULL ) memcpy(storage,*current,(size_t)used * sizeof(vstring*));
+	*array = next;
+	*current = storage;
+	*capacity = next_capacity;
+}
+
+#ifndef HL_WIN
+static bool realtime_posix_entry_is_directory( DIR *directory, const struct dirent *entry ) {
+#if defined(DT_DIR) && defined(DT_UNKNOWN) && defined(DT_LNK)
+	if( entry->d_type == DT_DIR ) return true;
+	if( entry->d_type != DT_UNKNOWN && entry->d_type != DT_LNK ) return false;
+#endif
+	struct stat info;
+	return fstatat(dirfd(directory),entry->d_name,&info,0) == 0 && S_ISDIR(info.st_mode);
+}
+#endif
+
+/* Returns alternating name and "d"/"f" markers so callers can classify a
+   listing without issuing one filesystem query per child. */
+HL_PRIM varray *HL_NAME(__sys_read_dir_entries)( vstring *path ) {
+	char *owned;
+	vbyte *argument = realtime_platform_argument(path,&owned);
+	varray *result = NULL;
+	vstring **current = NULL;
+	int capacity = 0;
+	int position = 0;
+	vstring *directory_marker;
+	vstring *file_marker;
+#ifdef HL_WIN
+	directory_marker = realtime_string_from_platform((vbyte*)L"d");
+	file_marker = realtime_string_from_platform((vbyte*)L"f");
+	int path_length = (int)pstrlen((pchar*)argument);
+	hl_buffer *pattern = hl_alloc_buffer();
+	hl_buffer_str(pattern,(pchar*)argument);
+	if( path_length != 0 && ((pchar*)argument)[path_length-1] != '/' && ((pchar*)argument)[path_length-1] != '\\' )
+		hl_buffer_str(pattern,USTR("/*.*"));
+	else
+		hl_buffer_str(pattern,USTR("*.*"));
+	HANDLE handle;
+	WIN32_FIND_DATAW entry;
+	handle = FindFirstFileW((wchar_t*)hl_buffer_content(pattern,NULL),&entry);
+	if( handle == INVALID_HANDLE_VALUE ) {
+		free(owned);
+		return NULL;
+	}
+	do {
+		if( entry.cFileName[0] == L'.' && (entry.cFileName[1] == 0 || (entry.cFileName[1] == L'.' && entry.cFileName[2] == 0)) ) continue;
+		realtime_directory_entries_reserve(&result,&current,&capacity,position + 2,position);
+		current[position++] = realtime_string_from_platform((vbyte*)entry.cFileName);
+		current[position++] = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? directory_marker : file_marker;
+	} while( FindNextFileW(handle,&entry) );
+	FindClose(handle);
+#else
+	directory_marker = realtime_string_from_platform((vbyte*)"d");
+	file_marker = realtime_string_from_platform((vbyte*)"f");
+	DIR *directory = opendir((const char*)argument);
+	if( directory == NULL ) {
+		free(owned);
+		return NULL;
+	}
+	struct dirent *entry;
+	while( (entry = readdir(directory)) != NULL ) {
+		if( entry->d_name[0] == '.' && (entry->d_name[1] == 0 || (entry->d_name[1] == '.' && entry->d_name[2] == 0)) ) continue;
+		bool is_directory = realtime_posix_entry_is_directory(directory,entry);
+		realtime_directory_entries_reserve(&result,&current,&capacity,position + 2,position);
+		current[position++] = realtime_string_from_platform((vbyte*)entry->d_name);
+		current[position++] = is_directory ? directory_marker : file_marker;
+	}
+	closedir(directory);
+#endif
+	free(owned);
+	if( result == NULL ) result = hl_alloc_array(hl_string_type,0);
+	result->size = position;
 	return result;
 }
 
