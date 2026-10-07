@@ -1225,6 +1225,30 @@ class FrameworkSmoke {
 		if (wordEditor.selectionFocus != 8)
 			return 198;
 		#end
+		for (readOnly in [false, true]) {
+			var pageText = [for (_ in 0...100) "abcdefghij"].join("\n");
+			var pageArea = new TextArea("page-navigation-" + readOnly, pageText);
+			pageArea.readOnly = readOnly;
+			pageArea.pageHeightProvider = function() return 80.0;
+			var pageRoot = context.submit(pageArea, new LayoutFrame(256.0, 192.0));
+			var pageState:State<TextEditorState> = context.buildContext.existingState(pageRoot.id);
+			var pageEditor:TextEditorState = cast pageState.value;
+			if (!context.focusWidget(pageRoot.id)) throw "page navigation field did not focus";
+			pageEditor.placeCaret(3, false);
+			context.key(UiEventKind.KeyDown, UiKey.PageDown, 0);
+			var pageEnd = pageEditor.selectionFocus;
+			if (pageEnd <= 14 || pageEnd >= pageText.length || pageEnd % 11 != 3)
+				throw "PageDown did not move a page while preserving the column";
+			context.key(UiEventKind.KeyDown, UiKey.PageUp, 0);
+			if (pageEditor.selectionFocus != 3) throw "PageUp did not return to the original line";
+			context.key(UiEventKind.KeyDown, UiKey.PageDown, UiModifier.Shift);
+			if (pageEditor.selectionAnchor != 3 || pageEditor.selectionFocus != pageEnd)
+				throw "Shift PageDown did not extend the selection";
+			context.key(UiEventKind.KeyDown, UiKey.PageUp, UiModifier.Shift);
+			if (pageEditor.selectionAnchor != 3 || pageEditor.selectionFocus != 3)
+				throw "Shift PageUp did not contract the selection";
+			if (pageEditor.text != pageText) throw "page navigation changed document text";
+		}
 		var lineArea = new TextArea("visual-line-navigation", "first line\nsecond\nthird line");
 		var lineRoot = context.submit(lineArea, new LayoutFrame(256.0, 192.0));
 		var lineState:State<TextEditorState> = context.buildContext.existingState(lineRoot.id);
