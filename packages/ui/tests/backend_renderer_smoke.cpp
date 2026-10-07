@@ -3,6 +3,7 @@
 #include "nativekit_gpu.h"
 #include "nativekit_time.h"
 #include "nativekit_ui.h"
+#include "nativekit_ui_layout.h"
 #include "nativekit_window.h"
 #include "adapter_internal.h"
 #include "core/executor.hpp"
@@ -12,9 +13,20 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <d3d11.h>
+#include <wrl/client.h>
+#endif
 
 namespace {
 
@@ -70,6 +82,7 @@ struct RenderTask {
     nkgpu_renderer producer{};
     nkgpu_image image_resource{};
     nk_graphics_image image{};
+    void *payload = nullptr;
 };
 
 struct BlockingRenderTask {
@@ -160,6 +173,220 @@ bool dispatch_render_task(RenderTask &task) {
         task.condition.wait(lock, [&task] { return task.complete; });
     }
     return task.success;
+}
+
+#if defined(_WIN32)
+struct TextRowReadback {
+    std::vector<Microsoft::WRL::ComPtr<ID3D11Texture2D>> sources;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+    ID3D11DeviceContext *context = nullptr;
+};
+
+void prepare_text_row_readback(RenderTask &task) noexcept {
+    auto &readback = *static_cast<TextRowReadback *>(task.payload);
+    auto *swapchain = reinterpret_cast<IDXGISwapChain *>(task.target.native_present_target);
+    auto *device = reinterpret_cast<ID3D11Device *>(task.target.native_device);
+    readback.context = reinterpret_cast<ID3D11DeviceContext *>(task.target.native_context);
+    DXGI_SWAP_CHAIN_DESC swapchain_desc{};
+    if (FAILED(swapchain->GetDesc(&swapchain_desc)))
+        return;
+    // Submission can acquire a different buffer than PLATFORM's current one.
+    // Keep the flip-sequential buffers alive and inspect the rendered one.
+    for (UINT index = 0; index < swapchain_desc.BufferCount; ++index) {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> source;
+        if (FAILED(swapchain->GetBuffer(index, IID_PPV_ARGS(&source))))
+            return;
+        readback.sources.push_back(std::move(source));
+    }
+    D3D11_TEXTURE2D_DESC desc{};
+    readback.sources.front()->GetDesc(&desc);
+    desc.Usage = D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+    task.success = SUCCEEDED(device->CreateTexture2D(&desc, nullptr, &readback.staging));
+}
+
+void compare_text_row_pixels(RenderTask &task) noexcept {
+    auto &readback = *static_cast<TextRowReadback *>(task.payload);
+    for (const auto &source : readback.sources) {
+        readback.context->CopyResource(readback.staging.Get(), source.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (FAILED(readback.context->Map(readback.staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+            return;
+        int dark_pixels = 0, white_pixels = 0, different_pixels = 0;
+        for (int y = 0; y < 48; ++y) {
+            for (int x = 0; x < 200; ++x) {
+                const auto *cached = static_cast<const uint8_t *>(mapped.pData) +
+                                     (y + 8) * mapped.RowPitch + (x + 8) * 4;
+                const auto *direct = static_cast<const uint8_t *>(mapped.pData) +
+                                     (y + 80) * mapped.RowPitch + (x + 8) * 4;
+                dark_pixels += cached[0] < 200 && cached[1] < 200 && cached[2] < 200;
+                white_pixels += cached[0] == 255 && cached[1] == 255 && cached[2] == 255;
+                bool different = false;
+                for (int channel = 0; channel < 3; ++channel)
+                    different |= std::abs(int(cached[channel]) - int(direct[channel])) > 2;
+                different_pixels += different;
+            }
+        }
+        readback.context->Unmap(readback.staging.Get(), 0);
+        if (dark_pixels > 20 && white_pixels > 1000 && different_pixels == 0) {
+            task.success = true;
+            return;
+        }
+        std::fprintf(stderr, "cached text buffer pixels: dark=%d white=%d different=%d\n",
+                     dark_pixels, white_pixels, different_pixels);
+    }
+}
+#endif
+
+bool check_cached_text_rows(nk_window window, nk_surface surface) {
+    nkui_resource fonts{}, text{}, background{};
+    nkui_resource direct_text[2]{};
+    nkui_display_list list{};
+    nkui_layout_session session{};
+    nkui_renderer renderer{};
+    const bool success = [&]() {
+        const nkui_text_style style{sizeof(style), NKUI_FONT_FAMILY_DEFAULT, 18.0f, 0.0f};
+        const nkui_paragraph_style paragraph{sizeof(paragraph), 24.0f, NKUI_TEXT_WRAP_NONE,
+                                              NKUI_TEXT_ALIGN_START, NKUI_TEXT_DIRECTION_AUTO};
+        if (!check(nkui_font_collection_create(&fonts) == NKUI_OK &&
+                       nkui_font_collection_add(fonts, NKUI_TEST_FONT_PATH,
+                                                NKUI_FONT_FAMILY_DEFAULT) == NKUI_OK &&
+                       nkui_text_layout_create_styled(fonts, "Cached editor row\nSecond row", 200.0f,
+                                                       &style, &paragraph, &text) == NKUI_OK &&
+                       nkui_text_layout_set_color(text, {0.12f, 0.16f, 0.21f, 1.0f}) == NKUI_OK &&
+                       nkui_display_list_create(&list) == NKUI_OK &&
+                       nkui_layout_session_create(&session) == NKUI_OK &&
+                       nkui_renderer_create(&renderer) == NKUI_OK,
+                   "cached text row resources"))
+            return false;
+        const char *reference_rows[] = {"Cached editor row", "Second row"};
+        for (int row = 0; row < 2; ++row) {
+            // Long unwrapped paragraphs use the existing direct glyph path.
+            // Trailing spaces keep the visible glyphs identical to the cached row.
+            const std::string reference = std::string(reference_rows[row]) + std::string(2049, ' ');
+            if (nkui_text_layout_create_styled(fonts, reference.c_str(), 200.0f, &style, &paragraph,
+                                                &direct_text[row]) != NKUI_OK ||
+                nkui_text_layout_set_color(direct_text[row], {0.12f, 0.16f, 0.21f, 1.0f}) != NKUI_OK)
+                return false;
+        }
+        const uint8_t white[] = {255, 255, 255, 255};
+        if (nkui_image_create(1, 1, NKUI_IMAGE_RGBA8, white, sizeof(white), &background) != NKUI_OK)
+            return false;
+        nkui_draw_rect_command fill{};
+        fill.header = {NKUI_COMMAND_DRAW_IMAGE, NKUI_COMMAND_VERSION, sizeof(fill)};
+        fill.resource = background;
+        fill.width = 240.0f;
+        fill.height = 160.0f;
+        nkui_draw_rect_command draw{};
+        draw.header = {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(draw)};
+        draw.resource = text;
+        draw.x = 8.0f;
+        draw.y = 8.0f;
+        std::vector<uint8_t> commands;
+        const auto append = [&](const auto &command) {
+            const auto *bytes = reinterpret_cast<const uint8_t *>(&command);
+            commands.insert(commands.end(), bytes, bytes + sizeof(command));
+        };
+        append(fill);
+        append(draw);
+        for (int row = 0; row < 2; ++row) {
+            draw.resource = direct_text[row];
+            draw.y = 80.0f + row * 24.0f;
+            append(draw);
+        }
+        if (!check(nkui_display_list_submit(list, commands.data(),
+                                            static_cast<uint32_t>(commands.size())) == NKUI_OK,
+                   "cached text custom paint"))
+            return false;
+        std::vector<uint8_t> transaction(NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
+                                         NKUI_LAYOUT_NODE_RECORD_BYTES);
+        const auto write = [&](size_t offset, const auto &value) {
+            std::memcpy(transaction.data() + offset, &value, sizeof(value));
+        };
+        write(0, uint32_t{NKUI_LAYOUT_TRANSACTION_VERSION});
+        write(4, uint32_t{1});
+        write(8, uint32_t{NKUI_LAYOUT_NODE_RECORD_BYTES});
+        write(12, static_cast<uint32_t>(transaction.size()));
+        const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
+        write(node + NKUI_LAYOUT_NODE_ID_OFFSET, uint32_t{1});
+        write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t{-1});
+        write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_CUSTOM});
+        write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
+        write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 18.0f);
+        write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, static_cast<uint32_t>(transaction.size()));
+        write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+        write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 240.0f);
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
+        const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
+        if (!check(nkui_layout_session_submit(session, transaction.data(),
+                                              static_cast<uint32_t>(transaction.size()),
+                                              &layout_frame) == NKUI_OK &&
+                       nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
+                   "cached text layout submission"))
+            return false;
+        nkui_renderer_stats stats[2]{};
+        for (int repeat = 0; repeat < 2; ++repeat) {
+            int32_t width = 0, height = 0;
+            nk_surface_frame_target target{};
+            if (!acquire_surface_frame(window, surface, width, height, target))
+                return false;
+#if defined(_WIN32)
+            TextRowReadback readback;
+            if (target.api == NK_GRAPHICS_D3D11) {
+                RenderTask prepare{};
+                prepare.target = target;
+                prepare.payload = &readback;
+                prepare.function = &prepare_text_row_readback;
+                if (!dispatch_render_task(prepare))
+                    return false;
+            }
+#endif
+            const nkui_frame_info frame{sizeof(frame), static_cast<float>(width),
+                                        static_cast<float>(height), width, height, 1.0f};
+            if (!check(nkui_layout_session_render_frame(renderer, session, surface, &frame, 0) ==
+                           NKUI_OK,
+                       "cached text render"))
+                return false;
+            RenderTask barrier{};
+            barrier.function = [](RenderTask &task) noexcept { task.success = true; };
+            if (!dispatch_render_task(barrier) ||
+                !check(nkui_renderer_get_stats(renderer, &stats[repeat]) == NKUI_OK &&
+                           stats[repeat].render_submission_failures == 0 &&
+                           stats[repeat].gpu_frames >= static_cast<uint64_t>(repeat + 1),
+                       "cached text GPU execution"))
+                return false;
+#if defined(_WIN32)
+            if (target.api == NK_GRAPHICS_D3D11) {
+                RenderTask compare{};
+                compare.payload = &readback;
+                compare.function = &compare_text_row_pixels;
+                if (!dispatch_render_task(compare))
+                    return false;
+            }
+#endif
+            if (!nk::core::render_executor_physical() && nk_surface_present(surface) != NK_OK)
+                return false;
+        }
+        return check(stats[0].raster_cache_misses >= 2 &&
+                         stats[1].raster_cache_hits >= stats[0].raster_cache_hits + 2,
+                     "cached text row reuse");
+    }();
+    if (renderer.id) nkui_renderer_destroy(renderer);
+    if (session.id) nkui_layout_session_destroy(session);
+    if (list.id) nkui_display_list_destroy(list);
+    if (text.id) nkui_resource_destroy(text);
+    for (auto reference : direct_text)
+        if (reference.id) nkui_resource_destroy(reference);
+    if (background.id) nkui_resource_destroy(background);
+    if (fonts.id) nkui_resource_destroy(fonts);
+    return success;
 }
 
 void create_offscreen_resources(RenderTask &task) noexcept {
@@ -573,6 +800,11 @@ int main() {
             result = 19;
             goto cleanup;
         }
+    }
+
+    if (!check_cached_text_rows(window, surface)) {
+        result = 40;
+        goto cleanup;
     }
 
     if (nk::core::render_executor_physical()) {

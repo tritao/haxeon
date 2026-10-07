@@ -138,6 +138,8 @@ if(NK_BUILD_TESTS)
         add_executable(nativekit_ui_backend_smoke_test
             tests/backend_renderer_smoke.cpp)
         target_compile_definitions(nativekit_ui_backend_smoke_test PRIVATE NKGPU_TESTING=1)
+        target_compile_definitions(nativekit_ui_backend_smoke_test PRIVATE
+            NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
         target_include_directories(nativekit_ui_backend_smoke_test PRIVATE
             "${NKUI_NATIVEKIT_DIR}/src" "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
         target_link_libraries(nativekit_ui_backend_smoke_test PRIVATE
