@@ -21,17 +21,19 @@ class SidebarHost implements View {
 	final model:SidebarModel;
 	final onSelect:String->Void;
 	final iconProvider:Null<String->Null<haxeon.ui.icons.IconName>>;
-	public function new(key:String, model:SidebarModel, onSelect:String->Void, ?iconProvider:String->Null<haxeon.ui.icons.IconName>) {
+	final activeOnly:Bool;
+	public function new(key:String, model:SidebarModel, onSelect:String->Void, ?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
+		this.activeOnly = activeOnly;
 		this.iconProvider = iconProvider;
 		this.key = key; this.model = model; this.onSelect = onSelect;
 	}
 	public function build(context:BuildContext):RenderNode {
 		if (!model.visible) return new haxeon.ui.widgets.layout.Spacer(key, LayoutAxis.fixed(0), LayoutAxis.fixed(0)).build(context);
-		var items:Array<TabItem> = [];
-		for (mode in model.modes) if (mode.visible)
-			items.push(new TabItem(mode.id, mode.label, new SidebarPage(mode), true, iconProvider == null ? null : iconProvider(mode.id)));
 		var selected = model.selected();
 		if (selected == null) return new Text("No sidebar modes").build(context);
+		var items:Array<TabItem> = [];
+		for (mode in model.modes) if (mode.visible && (!activeOnly || mode.id == selected.id))
+			items.push(new TabItem(mode.id, mode.label, new SidebarPage(mode), true, iconProvider == null ? null : iconProvider(mode.id)));
 		var options = new TabsOptions();
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.style = new LayoutStyle();

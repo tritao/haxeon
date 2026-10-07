@@ -51,6 +51,8 @@ class TextField implements View {
 	public var label:Null<String>;
 	/** Muted visual hint shown only while the editor is empty. */
 	public var placeholder:Null<String>;
+	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
+	public var ellipsizeWhenUnfocused:Bool = false;
 	public final multiline:Bool;
 	public final style:LayoutStyle;
 	public final textStyle:Null<TextStyle>;
@@ -259,7 +261,9 @@ class TextField implements View {
 			}
 			// Unfocused, unselected fields need only their text node. State changes
 			// invalidate the frame before selection or caret decoration is painted.
-			if (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0) {
+			var showEllipsis = ellipsizeWhenUnfocused && !multiline && !editor.focused && editor.documentLength() > 0
+				&& colorRangeProvider == null && decorationProvider == null;
+			if (!showEllipsis && (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0)) {
 				var selectionStyle = new LayoutStyle();
 				selectionStyle.width = LayoutAxis.grow();
 				selectionStyle.height = LayoutAxis.grow();
@@ -304,6 +308,10 @@ class TextField implements View {
 			var textNodeColor = showsPlaceholder ? context.theme.mutedText :
 				(colorSource != null && colorSource.layer != "framework"
 					? computed.get(StyleProperty.TextColor) : resolved.textColor);
+			if (showEllipsis)
+				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
+					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,
+						textNodeTextStyle.letterSpacing, TextWrap.None, null, null, null, textNodeColor)).build(context);
 			textNode.applyTextStyle(new ResolvedTextStyle(textNodeTextStyle,
 				editor.paragraphStyle, textNodeColor));
 			if (!showsPlaceholder) {
