@@ -169,9 +169,13 @@ class WasmGcModuleBuilder {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
-			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(module, fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
-					gcContext.methods, closureTypes, tableSlots, exceptionTag, [], program, representation, staticData.addresses));
+			try {
+				module.setFunction(functionIndex,
+					WasmFunctionLower.lower(module, fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
+						gcContext.methods, closureTypes, tableSlots, exceptionTag, [], program, representation, staticData.addresses));
+			} catch (error:Dynamic) {
+				throw 'Wasm GC lowering failed in ${fn.name}: ${Std.string(error)}';
+			}
 		}
 		module.exportTable = module.tableMin != null;
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});

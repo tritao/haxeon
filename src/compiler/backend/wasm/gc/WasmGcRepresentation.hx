@@ -130,14 +130,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
-		if (isNativePointerType(value.type))
-			throw "Wasm GC cannot convert a borrowed native pointer to Dynamic";
 		var boxed = switch value.type {
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback"): plan.boxedPrimitiveType(value.type);
 			default: null;
 		};
 		if (boxed == null)
 			return switch value.type {
+				// The pointer address stays inside the managed NativePointer wrapper. Dynamic retains
+				// that wrapper; SafeCast still refuses to recover a native pointer from Dynamic.
+				case Abstract("native_pointer"):
+					[LocalGet(valueLocal), LocalSet(destination)];
 				case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_), Virtual(_):
 					[LocalGet(valueLocal), LocalSet(destination)];
 				default:
@@ -147,8 +149,6 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
-		if (isNativePointerType(output.type) && value.type == Dyn)
-			throw "Wasm GC cannot cast Dynamic to a borrowed native pointer";
 		var boxType = switch output.type {
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback") if (value.type == Dyn): plan.boxedPrimitiveType(output.type);
 			default: null;
@@ -184,6 +184,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				End
 			];
 		return switch output.type {
+			case Abstract("native_pointer") if (value.type == Dyn):
+				// Dynamic stores the managed wrapper, not its raw address. RefCast checks that the
+				// value is a native-pointer wrapper before a typed HXI call can use it.
+				[LocalGet(valueLocal), RefCast({nullable: true, heap: Type(plan.nativePointerTypeIndex)}), LocalSet(destination)];
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
 				var target = switch plan.valueType(output.type) {
 					case Ref(reference): reference;
