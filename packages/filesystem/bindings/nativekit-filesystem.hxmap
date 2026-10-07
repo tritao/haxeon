@@ -1,0 +1,23 @@
+{
+  "interface": "NativeKitFilesystem",
+  "package": "nativekit.ffi",
+  "modules": {
+    "functions": "NativeKitFilesystem",
+    "types": "NativeKitFilesystemTypes",
+    "constants": "NativeKitFilesystemConstants"
+  },
+  "dependencyModules": {
+    "NativeKit": "nativekit.ffi.NativeKit"
+  },
+  "dependencyTypeModules": {
+    "NativeKit": "nativekit.ffi.NativeKitTypes"
+  },
+  "typePrefix": "nk_filesystem_",
+  "typeNames": {
+    "nk_result": "NativeKitTypes.Result",
+    "nk_filesystem_entry": "FileSystemEntry"
+  },
+  "enumNames": {
+    "nk_filesystem_entry_kind": "FileSystemEntryKind"
+  }
+}
