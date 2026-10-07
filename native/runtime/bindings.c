@@ -517,6 +517,7 @@ DEFINE_PRIM(_BOOL,__sys_remove_dir,_STRING);
 DEFINE_PRIM(_BOOL,__sys_delete,_STRING);
 DEFINE_PRIM(_BOOL,__sys_rename,_STRING _STRING);
 DEFINE_PRIM(_ARR,__sys_read_dir,_STRING);
+DEFINE_PRIM(_ARR,__sys_read_dir_entries,_STRING);
 DEFINE_PRIM(_ARR,__sys_metadata,_STRING);
 DEFINE_PRIM(_STRING,__sys_get_env,_STRING);
 DEFINE_PRIM(_ARR,__sys_environment,_NO_ARG);
