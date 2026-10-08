@@ -234,7 +234,7 @@ class WasmLinearRuntime {
 					stringEqual = addStringEqual(module, "__string_equal");
 					functions.set("__string_equal", stringEqual);
 				}
-				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual));
+				functions.set(native.name, addDynamicEqual(module, native.name, stringEqual, program));
 			}
 	}
 
@@ -4107,7 +4107,7 @@ class WasmLinearRuntime {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
 			[LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
 
-	public static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int):Int {
+	public static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int, program:IrProgram):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 			left = builder.parameter("left", 0),
 			right = builder.parameter("right", 1),
@@ -4211,18 +4211,87 @@ class WasmLinearRuntime {
 											builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 											builder.emit(I64Eq);
 											builder.localSet(result);
-										}, function(_) {});
+										}, function(builder) {
+											appendNullaryEnumEqual(builder, program, left, right, leftType, result);
+										});
 									});
 								});
 							});
 						});
-					}, function(_) {});
+					}, function(builder) {
+						// A boxed Int equals a boxed Float of the same value, as Dynamic comparison does in Haxe.
+						appendMixedNumberEqual(builder, left, right, leftType, rightType, result);
+					});
 				});
 			});
 		});
 		builder.localGet(result);
 		builder.return_();
 		return module.addFunction(builder.finish());
+	}
+
+	/** Two values of the same enum are equal when they are the same constructor and it takes no arguments. */
+	static function appendNullaryEnumEqual(builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
+			result:WasmLocalRef):Void {
+		for (enumDecl in program.enums) {
+			var nullary = [
+				for (index in 0...enumDecl.cases.length)
+					if (enumDecl.cases[index].params.length == 0) index
+			];
+			if (nullary.length == 0)
+				continue;
+			builder.localGet(leftType);
+			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(left);
+				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
+				builder.localGet(right);
+				builder.emit(I32Load(WasmLayout.HEADER_SIZE));
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					for (position in 0...nullary.length) {
+						builder.localGet(left);
+						builder.emit(I32Load(WasmLayout.HEADER_SIZE));
+						builder.i32Const(nullary[position]);
+						builder.emit(I32Eq);
+						if (position > 0)
+							builder.emit(I32Or);
+					}
+					builder.localSet(result);
+				});
+			});
+		}
+	}
+
+	static function appendMixedNumberEqual(builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef, rightType:WasmLocalRef,
+			result:WasmLocalRef):Void {
+		for (intOnLeft in [true, false]) {
+			builder.localGet(leftType);
+			builder.i32Const(WasmModuleSupport.typeId(intOnLeft ? I32 : F64));
+			builder.emit(I32Eq);
+			builder.localGet(rightType);
+			builder.i32Const(WasmModuleSupport.typeId(intOnLeft ? F64 : I32));
+			builder.emit(I32Eq);
+			builder.emit(I32And);
+			builder.if_(function(builder) {
+				builder.localGet(left);
+				if (intOnLeft) {
+					builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+					builder.emit(F64ConvertI32S);
+				} else
+					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+				builder.localGet(right);
+				if (intOnLeft)
+					builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+				else {
+					builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+					builder.emit(F64ConvertI32S);
+				}
+				builder.emit(F64Eq);
+				builder.localSet(result);
+			});
+		}
 	}
 
 	static function requiredStringOffset(strings:Map<String, Int>, value:String):Int {

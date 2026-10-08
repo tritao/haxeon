@@ -187,7 +187,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case Abstract("native_pointer") if (value.type == Dyn):
 				// Dynamic stores the managed wrapper, not its raw address. RefCast checks that the
 				// value is a native-pointer wrapper before a typed HXI call can use it.
-				[LocalGet(valueLocal), RefCast({nullable: true, heap: Type(plan.nativePointerTypeIndex)}), LocalSet(destination)];
+				[
+					LocalGet(valueLocal),
+					RefCast({nullable: true, heap: Type(plan.nativePointerTypeIndex)}),
+					LocalSet(destination)
+				];
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
 				var target = switch plan.valueType(output.type) {
 					case Ref(reference): reference;
@@ -317,11 +321,87 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalGet(rightLocal),
 			RefCast({nullable: true, heap: Eq}),
 			RefEq,
-			LocalSet(output),
-			End
+			LocalSet(output)
 		]);
+		instructions = instructions.concat(mixedNumberEqual(output, leftLocal, rightLocal)).concat(nullaryEnumEqual(output, leftLocal, rightLocal));
+		instructions.push(End);
 		for (_ in boxedTypes)
 			instructions.push(End);
+		return instructions;
+	}
+
+	/** A boxed Int equals a boxed Float of the same value, as Dynamic comparison does in Haxe. */
+	function mixedNumberEqual(output:Int, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
+		var intBox = plan.boxedPrimitiveType(I32),
+			floatBox = plan.boxedPrimitiveType(F64),
+			instructions:Array<WasmInstruction> = [];
+		for (intOnLeft in [true, false]) {
+			var intLocal = intOnLeft ? leftLocal : rightLocal,
+				floatLocal = intOnLeft ? rightLocal : leftLocal;
+			instructions = instructions.concat([
+				LocalGet(intLocal),
+				RefTest({nullable: false, heap: Type(intBox)}),
+				LocalGet(floatLocal),
+				RefTest({nullable: false, heap: Type(floatBox)}),
+				I32And,
+				If(null),
+				LocalGet(intLocal),
+				RefCast({nullable: false, heap: Type(intBox)}),
+				StructGet(intBox, 0),
+				F64ConvertI32S,
+				LocalGet(floatLocal),
+				RefCast({nullable: false, heap: Type(floatBox)}),
+				StructGet(floatBox, 0),
+				F64Eq,
+				LocalSet(output),
+				End
+			]);
+		}
+		return instructions;
+	}
+
+	/** Two values of the same enum are equal when they are the same constructor and it takes no arguments. */
+	function nullaryEnumEqual(output:Int, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
+		var instructions:Array<WasmInstruction> = [];
+		for (enumDecl in plan.program.enums) {
+			var nullary = [
+				for (index in 0...enumDecl.cases.length)
+					if (enumDecl.cases[index].params.length == 0) index
+			];
+			if (nullary.length == 0)
+				continue;
+			var base = plan.enumType(enumDecl.name);
+			instructions = instructions.concat([
+				LocalGet(leftLocal),
+				RefTest({nullable: false, heap: Type(base)}),
+				LocalGet(rightLocal),
+				RefTest({nullable: false, heap: Type(base)}),
+				I32And,
+				If(null),
+				LocalGet(leftLocal),
+				RefCast({nullable: false, heap: Type(base)}),
+				StructGet(base, 0),
+				LocalGet(rightLocal),
+				RefCast({nullable: false, heap: Type(base)}),
+				StructGet(base, 0),
+				I32Eq,
+				If(null),
+				LocalGet(leftLocal),
+				RefCast({nullable: false, heap: Type(base)}),
+				StructGet(base, 0)
+			]);
+			for (position in 0...nullary.length) {
+				if (position > 0)
+					instructions.push(LocalGet(leftLocal));
+				if (position > 0)
+					instructions = instructions.concat([RefCast({nullable: false, heap: Type(base)}), StructGet(base, 0)]);
+				instructions = instructions.concat([I32Const(nullary[position]), I32Eq]);
+				if (position > 0)
+					instructions.push(I32Or);
+			}
+			// Only ever upgrades the result: the same object is already equal by reference.
+			instructions = instructions.concat([LocalGet(output), I32Or, LocalSet(output), End, End]);
+		}
 		return instructions;
 	}
 

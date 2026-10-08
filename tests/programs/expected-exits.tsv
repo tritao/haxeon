@@ -366,3 +366,4 @@ rpc-lifecycle	42
 native-static-codec	42
 static-array-inference	42
 nullable-concrete-interfaces	42
+dynamic-equality-semantics	42
