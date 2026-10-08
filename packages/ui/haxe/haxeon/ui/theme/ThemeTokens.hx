@@ -133,13 +133,13 @@ class ThemeTokens {
 		buttonBackground = accent;
 		buttonHover = accentHover;
 		buttonPressed = accentPressed;
-		buttonFocused = focusRing;
-		buttonSelected = selection;
+		buttonFocused = accent;
+		buttonSelected = accentPressed;
 		buttonDisabled = surfaceSunken;
 		navigationBackground = surfaceRaised;
 		navigationHover = surfaceHover;
 		navigationPressed = surfaceSunken;
-		navigationFocused = focusRing;
+		navigationFocused = surfaceRaised;
 		navigationSelected = selection;
 		navigationDisabled = surface;
 		controlSelected = accent;

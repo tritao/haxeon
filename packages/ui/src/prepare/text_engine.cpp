@@ -80,6 +80,12 @@ struct TextEngine::State {
     uint32_t last_scale_key = 0;
     uint32_t scale_generation = 0;
     std::unordered_map<uint64_t, std::weak_ptr<const PreparedGlyphs>> published_glyphs;
+    // The public buffer API asks for size and contents separately. Retain one
+    // bounded query so neither that pair nor repeated paints rewalks the text.
+    TextLayoutId selection_layout_id = 0;
+    uint64_t selection_layout_generation = 0;
+    TextPosition selection_start{}, selection_end{};
+    std::vector<TextRect> selection_rectangles;
 };
 
 namespace {
@@ -1443,6 +1449,14 @@ std::vector<TextRect> TextEngine::selection_rects(TextPosition start, TextPositi
     const auto *layout = active_layout(*state_);
     if (!layout)
         return rectangles;
+    const auto generation = skb_layout_get_generation(layout->layout.get());
+    if (state_->selection_layout_id == state_->active_layout_id &&
+        state_->selection_layout_generation == generation &&
+        state_->selection_start.offset == start.offset &&
+        state_->selection_start.affinity == start.affinity &&
+        state_->selection_end.offset == end.offset &&
+        state_->selection_end.affinity == end.affinity)
+        return state_->selection_rectangles;
     const skb_text_range_t range = {
         {start.offset, static_cast<skb_caret_affinity_t>(start.affinity)},
         {end.offset, static_cast<skb_caret_affinity_t>(end.affinity)}};
@@ -1478,6 +1492,17 @@ std::vector<TextRect> TextEngine::selection_rects(TextPosition start, TextPositi
             }
         }
         normalized.push_back(rect);
+    }
+    constexpr std::size_t maximum_cached_selection_rectangles = 256;
+    if (normalized.size() <= maximum_cached_selection_rectangles) {
+        state_->selection_layout_id = state_->active_layout_id;
+        state_->selection_layout_generation = generation;
+        state_->selection_start = start;
+        state_->selection_end = end;
+        state_->selection_rectangles = normalized;
+    } else {
+        state_->selection_layout_id = 0;
+        state_->selection_rectangles.clear();
     }
     return normalized;
 }

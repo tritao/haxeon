@@ -48,6 +48,11 @@ class DesktopUiHost {
 		var frameRequestCounts:Map<String, Int> = new Map();
 		var captureState = {startedAt: -1.0, readyFrames: 0};
 		var frameGc = FrameGcScheduler.fromEnvironment();
+		var script = options.inputScriptPath == null ? null : new ScriptedInput(options.inputScriptPath);
+		var scriptedCount = 0;
+		var scriptedAt = -1.0;
+		var scriptedDeliveredAt = -1.0;
+		var scriptedDispatch = 0.0;
 		var result = 0;
 		var step:Void->Bool = function() return false;
 		var failureRecorded = false;
@@ -81,7 +86,9 @@ class DesktopUiHost {
 			windowOptions.set_width(options.width);
 			windowOptions.set_height(options.height);
 			windowOptions.set_title(options.title);
-			windowOptions.set_flags(WindowFlags.Resizable);
+			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
+				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
+			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0));
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
@@ -180,6 +187,7 @@ class DesktopUiHost {
 			session = new UiHostSession(function() active = false);
 			var hostContext = new DesktopUiHostContext(fonts, pump, window, surface,
 				function() session.stop(), scheduleFrame);
+			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
 			runtime = new UiHostRuntime(session, hostContext, window, surface,
 				options.width, options.height);
 			runtime.start(function(_) return create(hostContext));
@@ -210,6 +218,9 @@ class DesktopUiHost {
 					case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
 						runtime.setScale(scale);
 						scheduleFrameWithReason("window-scale");
+					case WindowStateChanged(source, flags) if (source.rawValue() == window.rawValue()):
+						if (hostContext.windowControls != null) hostContext.windowControls.observe(flags);
+						scheduleFrameWithReason("window-state");
 					case WindowMove(source, _, _) if (source.rawValue() == window.rawValue()):
 						// Moving the top-level window does not change the surface contents.
 						// On X11 this event is emitted for every position update while the
@@ -235,6 +246,11 @@ class DesktopUiHost {
 									var requestReason = frameRequestReason;
 									var requestSerial = frameRequestSerial;
 									// Keep delivered text input even if caret/API requests coalesce.
+									var scriptedFrameCount = scriptedCount;
+									var scriptedFrameAt = scriptedAt;
+									var scriptedFrameDeliveredAt = scriptedDeliveredAt;
+									var scriptedFrameDispatch = scriptedDispatch;
+									scriptedCount = 0; scriptedAt = -1.0; scriptedDeliveredAt = -1.0; scriptedDispatch = 0.0;
 									var textInputRequestedAt = inputRequestedAt;
 									var textInputCount = inputRequestCount;
 									var textInputDispatchSeconds = inputDispatchSeconds;
@@ -244,6 +260,7 @@ class DesktopUiHost {
 									frameRequested = false;
 									runtime.resize(runtime.logicalWidth, runtime.logicalHeight, width, height);
 									var frameStartedAt = Sys.time();
+									var gcCollectionsAtStart = hl.Gc.collections();
 									frameGc.beginFrame();
 									var rendered = runtime.render(Sys.time(), repaintOnly);
 									var collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
@@ -255,7 +272,10 @@ class DesktopUiHost {
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
-									if (captureReady) captureState.readyFrames++;
+									if (captureReady) {
+										captureState.readyFrames++;
+										if (script != null) script.start(Sys.time());
+									}
 									if (options.captureSeconds > 0.0 && captureState.startedAt < 0.0 && captureReady)
 										captureState.startedAt = frameStartedAt;
 									if (options.captureDirectory != null) {
@@ -264,15 +284,26 @@ class DesktopUiHost {
 											frame: runtime.rendered,
 											repaintOnly: repaintOnly,
 											allocatedBytes: runtime.lastFrameAllocatedBytes,
+											prepareSeconds: runtime.lastPrepareSeconds,
+											applicationSubmitSeconds: runtime.lastApplicationSubmitSeconds,
+											contextRenderSeconds: runtime.lastContextRenderSeconds,
+											prepareAllocatedBytes: runtime.lastPrepareAllocatedBytes,
+											submitAllocatedBytes: runtime.lastSubmitAllocatedBytes,
 											startedAtSeconds: frameStartedAt,
 											requestReason: requestReason,
 											requestSerial: requestSerial,
+											scriptedInputCount: scriptedFrameCount,
+											scriptedInputRequestAgeSeconds: scriptedFrameAt < 0 ? null : frameStartedAt - scriptedFrameAt,
+											scriptedInputDeliveryAgeSeconds: scriptedFrameDeliveredAt < 0 ? null : frameStartedAt - scriptedFrameDeliveredAt,
+											scriptedInputDispatchSeconds: scriptedFrameDispatch,
 											textInputCount: textInputCount,
 											textInputRequestAgeSeconds: textInputRequestedAt < 0.0 ? null : frameStartedAt - textInputRequestedAt,
 											textInputDispatchSeconds: textInputDispatchSeconds,
 											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
 											frameSeconds: Sys.time() - frameStartedAt,
 											frameGcSeconds: collectionSeconds,
+											gcCollections: hl.Gc.collections() - gcCollectionsAtStart,
+											gcLastPauseSeconds: hl.Gc.lastPauseMicros() / 1000000.0,
 											submitSeconds: metrics == null ? null : metrics.submitSeconds,
 											styleResolutions: metrics == null ? null : metrics.styleResolutions,
 											styleCacheHits: metrics == null ? null : metrics.styleCacheHits,
@@ -330,15 +361,41 @@ class DesktopUiHost {
 				}
 			});
 
+			var checkpoint = function(label:String):Void {
+				var activeScript = script;
+				if (activeScript == null) return;
+				if (recordPath != null) File.appendContent(recordPath, Json.stringify({kind:"checkpoint",
+					label:label, at:Sys.time(), scheduledAt:activeScript.scheduledAt,
+					delivered:activeScript.delivered, appState:(cast runtime.app():DesktopUiApplication).diagnosticState()}) + "\n");
+			};
+			var beforeScriptedInput = function(at:Float):Void {
+				if (scriptedAt < 0) {
+					scriptedAt = at;
+					scriptedDeliveredAt = Sys.time();
+				}
+				scriptedCount++;
+			};
+			var afterScriptedInput = function(seconds:Float):Void { scriptedDispatch += seconds; };
+			var drainScriptedInput = function():Bool {
+				var delivered = false;
+				while (script != null && script.tick(Sys.time(), pump, window, checkpoint,
+					beforeScriptedInput, afterScriptedInput)) delivered = true;
+				return delivered;
+			};
 			step = function() {
 				if (!active) return false;
 				try {
-				var hadEvent = pump.poll();
+				// Native polling can render. Deliver already-due scripted input first,
+				// then catch deadlines that elapsed during a native callback.
+				var hadEvent = drainScriptedInput();
+				if (pump.poll()) hadEvent = true;
+				if (drainScriptedInput()) hadEvent = true;
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
 				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0 &&
-					Sys.time() - captureState.startedAt >= options.captureSeconds) {
+					Sys.time() - captureState.startedAt >= options.captureSeconds &&
+					(script == null || script.complete && scriptedCount == 0)) {
 					writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
 						eventHistory, frameHistory, eventCounts, frameRequestCounts);
 					session.stop();
@@ -354,7 +411,12 @@ class DesktopUiHost {
 					framePending = true;
 				}
 				if (active && !hadEvent && !frameRequested && !framePending) frameGc.idle();
-				if (active && !hadEvent) pump.wait(1.0 / options.targetFps);
+				if (active && !hadEvent) {
+					var waitSeconds = 1.0 / options.targetFps;
+					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
+					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+					pump.wait(waitSeconds);
+				}
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
 					recordFailure("desktop-host", error);

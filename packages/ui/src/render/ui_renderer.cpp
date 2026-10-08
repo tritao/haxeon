@@ -2379,8 +2379,11 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
     if (snap_quads) {
         const float device_x = origin_x * transform[0] + transform[4];
         const float device_y = origin_y * transform[3] + transform[5];
-        snap_x = std::round(device_x) - device_x;
-        snap_y = std::round(device_y) - device_y;
+        // Ties must round the same way after an integer translation. std::round
+        // rounds negative halves away from zero, shifting row-local rasters by
+        // one pixel relative to the same glyphs drawn in window coordinates.
+        snap_x = std::floor(device_x + 0.5f) - device_x;
+        snap_y = std::floor(device_y + 0.5f) - device_y;
     }
     for (const auto &batch : glyphs.batches) {
         const auto atlas = state_->atlases.find(atlas_key(batch.atlas, batch.atlas_generation));
@@ -2423,8 +2426,8 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
                 std::abs((corners[3].y - corners[0].y) -
                          (corners[3].v - corners[0].v) * atlas->second.height) < 0.001f;
             if (batch.mode == GlyphMode::Alpha && (snap_quads || native_size_alpha)) {
-                const float shift_x = std::round(corners[0].x) - corners[0].x;
-                const float shift_y = std::round(corners[0].y) - corners[0].y;
+                const float shift_x = std::floor(corners[0].x + 0.5f) - corners[0].x;
+                const float shift_y = std::floor(corners[0].y + 0.5f) - corners[0].y;
                 for (auto &vertex : corners) {
                     vertex.x += shift_x;
                     vertex.y += shift_y;

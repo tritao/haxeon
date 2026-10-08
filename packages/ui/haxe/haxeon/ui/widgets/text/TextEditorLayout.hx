@@ -481,6 +481,10 @@ class TextEditorLayout {
 		ensureLive();
 		if (paragraphs.length == 0)
 			return new TextPosition(0, 0);
+		// Blank space below the document selects its end, independently of
+		// horizontal position. Within the last line, retain normal hit testing.
+		if (y >= contentHeight)
+			return new TextPosition(offsets.codepointCount, 0);
 		var record = paragraphAtY(y);
 		var hit = record.layout.hitTest(x, y - record.y);
 		return new TextPosition(clamp(hit.offset + record.start, record.start, record.end), hit.affinity);
@@ -507,10 +511,13 @@ class TextEditorLayout {
 			value.slope, value.direction);
 	}
 
-	public function selectionRects(start:TextPosition, end:TextPosition):Array<Rect> {
+	public function selectionRects(start:TextPosition, end:TextPosition,
+			minY:Float = -1.0e30, maxY:Float = 1.0e30):Array<Rect> {
 		ensureLive();
 		if (start == null || end == null)
 			throw "Text selection endpoints cannot be null";
+		if (!Math.isFinite(minY) || !Math.isFinite(maxY) || maxY < minY)
+			throw "Text selection geometry bounds are invalid";
 		var first = clamp(start.offset, 0, offsets.codepointCount);
 		var last = clamp(end.offset, 0, offsets.codepointCount);
 		if (last < first) {
@@ -521,7 +528,18 @@ class TextEditorLayout {
 		if (first == last)
 			return [];
 		var result:Array<Rect> = [];
-		for (record in paragraphs) {
+		var low = 0;
+		var high = paragraphs.length;
+		while (low < high) {
+			var middle = (low + high) >> 1;
+			if (paragraphs[middle].y + paragraphs[middle].height <= minY)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		for (index in low...paragraphs.length) {
+			var record = paragraphs[index];
+			if (record.y >= maxY) break;
 			var localStart:Int = first > record.start ? first : record.start;
 			var localEnd:Int = last < record.end ? last : record.end;
 			if (localEnd <= localStart)
@@ -529,7 +547,8 @@ class TextEditorLayout {
 			for (rect in record.layout.selectionRects(
 				new TextPosition(localStart - record.start, start.affinity),
 				new TextPosition(localEnd - record.start, end.affinity)))
-				result.push(new Rect(rect.x, rect.y + record.y, rect.width, rect.height));
+				if (rect.y + record.y < maxY && rect.y + record.y + rect.height > minY)
+					result.push(new Rect(rect.x, rect.y + record.y, rect.width, rect.height));
 		}
 		return result;
 	}

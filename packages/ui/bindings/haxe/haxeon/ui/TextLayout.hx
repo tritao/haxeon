@@ -8,6 +8,21 @@ class TextLayout extends NativeKitUIResource {
 	public var width(default, null):Float;
 	public final textStyle:TextStyle;
 	public final paragraphStyle:ParagraphStyle;
+	// Canonical grapheme geometry is stable until shaping changes. Bound the cache
+	// for standalone long-line layouts as well as editor paragraph chunks.
+	static inline var maximumCachedGraphemes = 8192;
+	var graphemeGeometry:Map<Int, TextRangeRect> = new Map();
+	var cachedGraphemes = 0;
+
+	function clearGraphemeGeometry():Void {
+		graphemeGeometry.clear();
+		cachedGraphemes = 0;
+	}
+
+	override public function dispose():Void {
+		clearGraphemeGeometry();
+		super.dispose();
+	}
 
 	private function new(value:nkui_resource, text:String, width:Float, textStyle:TextStyle,
 			paragraphStyle:ParagraphStyle) {
@@ -40,6 +55,7 @@ class TextLayout extends NativeKitUIResource {
 	public function setText(value:String):Void {
 		var actualText = value == null ? "" : value;
 		UiResult.check(NativeKitUI.nkui_text_layout_set_text(nativeHandle(), actualText), "textLayout.setText");
+		clearGraphemeGeometry();
 		text = actualText;
 	}
 
@@ -80,6 +96,7 @@ class TextLayout extends NativeKitUIResource {
 		var ownedParagraphStyle = copyParagraphStyle(paragraph);
 		UiResult.check(NativeKitUI.nkui_text_layout_update(nativeHandle(), actualText, newWidth,
 			nativeTextStyle(ownedTextStyle), nativeParagraphStyle(ownedParagraphStyle)), "textLayout.update");
+		clearGraphemeGeometry();
 		text = actualText;
 		width = newWidth;
 		textStyle.font = ownedTextStyle.font;
@@ -97,6 +114,7 @@ class TextLayout extends NativeKitUIResource {
 			throw "Text layout edit arguments are invalid";
 		UiResult.check(NativeKitUI.nkui_text_layout_edit(nativeHandle(), start, end, replacement),
 			"textLayout.edit");
+		clearGraphemeGeometry();
 		text = nextText;
 	}
 
@@ -225,6 +243,8 @@ class TextLayout extends NativeKitUIResource {
 	public function selectionRangeRects(start:TextPosition, end:TextPosition):Array<TextRangeRect> {
 		if (start == null || end == null)
 			throw "Text selection endpoints cannot be null";
+		nativeHandle();
+		if (cachedGraphemes >= maximumCachedGraphemes) clearGraphemeGeometry();
 		// Affinity identifies a visual glyph edge; tags must use logical insertion offsets.
 		var startOffset = offsetFromPosition(start), endOffset = offsetFromPosition(end);
 		var forward = startOffset <= endOffset;
@@ -237,7 +257,16 @@ class TextLayout extends NativeKitUIResource {
 		var result:Array<TextRangeRect> = [];
 		var cursor = first;
 		while (cursor < last) {
+			var cached = graphemeGeometry.get(cursor);
+			var canonicalStart = cursor != first || (firstPosition.offset == cursor && firstPosition.affinity == 0);
+			if (cached != null && cached.end <= last && canonicalStart &&
+				(cached.end != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
+				result.push(cached);
+				cursor = cached.end;
+				continue;
+			}
 			var next = nextGrapheme(cursor);
+			var wholeGrapheme = next <= last;
 			if (next <= cursor)
 				next = cursor + 1;
 			if (next > last)
@@ -254,8 +283,16 @@ class TextLayout extends NativeKitUIResource {
 			var bottom = Math.max(startCaret.y + startCaret.descender, endCaret.y + endCaret.descender);
 			if (Math.isFinite(left) && Math.isFinite(top) && Math.isFinite(right) &&
 				Math.isFinite(bottom) && right > left && bottom > top)
-				result.push(new TextRangeRect(cursor, next, left, top, right - left, bottom - top,
-					startCaret.direction != TextDirection.Rtl));
+			{
+				var rect = new TextRangeRect(cursor, next, left, top, right - left, bottom - top,
+					startCaret.direction != TextDirection.Rtl);
+				result.push(rect);
+				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes &&
+					(next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
+					graphemeGeometry.set(cursor, rect);
+					cachedGraphemes++;
+				}
+			}
 			cursor = next;
 		}
 		return result;

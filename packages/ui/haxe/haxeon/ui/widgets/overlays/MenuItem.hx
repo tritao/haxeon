@@ -7,8 +7,13 @@ class MenuItem {
 	public final onSelect:Void->Void;
 	public final hasSelectHandler:Bool;
 	public final enabled:Bool;
+	public final shortcut:Null<String>;
+	public final separatorBefore:Bool;
 
-	public function new(key:String, label:String, ?onSelect:Void->Void, enabled:Bool = true) {
+	public function new(key:String, label:String, ?onSelect:Void->Void, enabled:Bool = true,
+			?shortcut:String, separatorBefore:Bool = false) {
+		this.shortcut = shortcut;
+		this.separatorBefore = separatorBefore;
 		if (key == null || key.length == 0)
 			throw "Menu items require stable non-empty keys";
 		this.key = key;

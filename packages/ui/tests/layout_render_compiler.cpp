@@ -452,6 +452,27 @@ int main() {
         floating_paint->scissor_x != 78.0f || floating_paint->scissor_y != 54.0f ||
         floating_paint->scissor_width != 1.5f || floating_paint->scissor_height != 3.0f)
         return 291;
+    // Floating Clay scissors can retain pre-scroll coordinates. The resolved
+    // scene clip already includes every ancestor in viewport space.
+    auto stale_clip_snapshot = floating_snapshot;
+    LayoutPrimitive stale_clip;
+    stale_clip.kind = LayoutPrimitiveKind::ClipBegin;
+    stale_clip.bounds = {52.0f, 336.0f, 100.0f, 80.0f};
+    LayoutPrimitive stale_clip_end;
+    stale_clip_end.kind = LayoutPrimitiveKind::ClipEnd;
+    stale_clip_snapshot.primitives.insert(stale_clip_snapshot.primitives.begin(), stale_clip);
+    stale_clip_snapshot.primitives.push_back(stale_clip_end);
+    LayoutRenderFrame stale_clip_frame;
+    if (!compiler.compile(stale_clip_snapshot, main_target, 1.5f, stale_clip_frame,
+                          &compile_error, false, engine.text_engine(), &custom_paints))
+        return 304;
+    const auto &stale_commands = stale_clip_frame.plan().passes.front().commands;
+    const auto stale_paint = std::find_if(stale_commands.begin(), stale_commands.end(),
+        [](const RenderCommand &command) { return command.custom_payload; });
+    if (stale_paint == stale_commands.end() || !stale_paint->has_scissor ||
+        stale_paint->scissor_x != 78.0f || stale_paint->scissor_y != 54.0f ||
+        stale_paint->scissor_width != 1.5f || stale_paint->scissor_height != 3.0f)
+        return 305;
     LayoutRenderCompiler::RasterPaintNodes floating_raster_nodes{2};
     LayoutRenderFrame floating_raster_frame;
     if (!compiler.compile(floating_snapshot, main_target, 1.5f, floating_raster_frame,

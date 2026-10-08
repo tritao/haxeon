@@ -41,6 +41,57 @@ int main() {
             if (stats.atlas_bytes > 256 * 256 * 4) return 187;
         }
     }
+    // Buffer-size and buffer-fill queries repeat the same selection. Cached
+    // geometry must remain value-owned and agree with a fresh layout after
+    // edits, endpoint/affinity changes, wrapping and font-size changes.
+    {
+        TextEngine cached(shared_fonts);
+        std::string text(1024, 'a');
+        TextLayoutOptions options;
+        options.font_size = 15.0f;
+        float width = 128.0f;
+        const auto equal = [](const std::vector<TextRect> &a, const std::vector<TextRect> &b) {
+            if (a.size() != b.size()) return false;
+            for (std::size_t index = 0; index < a.size(); ++index)
+                if (a[index].x != b[index].x || a[index].y != b[index].y ||
+                    a[index].width != b[index].width || a[index].height != b[index].height)
+                    return false;
+            return true;
+        };
+        const auto verify = [&]() {
+            TextEngine fresh(shared_fonts);
+            if (!fresh.layout_utf8(text.c_str(), width, options)) return false;
+            for (const auto endpoints : {std::pair{TextPosition{0, 0}, TextPosition{80, 0}},
+                    std::pair{TextPosition{0, 0}, TextPosition{81, 0}},
+                    std::pair{TextPosition{80, 0}, TextPosition{0, 0}},
+                    std::pair{TextPosition{0, 2}, TextPosition{80, 2}},
+                    std::pair{TextPosition{0, 0}, TextPosition{80, 0}}}) {
+                const auto expected = fresh.selection_rects(endpoints.first, endpoints.second);
+                auto actual = cached.selection_rects(endpoints.first, endpoints.second);
+                if (!equal(actual, expected)) return false;
+                if (!actual.empty()) actual.front().x += 100.0f;
+                if (!equal(cached.selection_rects(endpoints.first, endpoints.second), expected)) return false;
+            }
+            return true;
+        };
+        if (!cached.layout_utf8(text.c_str(), width, options) || !verify()) return 190;
+        text[32] = 'w';
+        if (!cached.edit_utf8(32, 33, "w", nullptr) ||
+            cached.stats().incremental_ascii_edits != 1 || !verify()) return 191;
+        text.replace(32, 1, "é");
+        if (!cached.edit_utf8(32, 33, "é", nullptr) || !verify()) return 192;
+        width = 64.0f;
+        if (!cached.layout_utf8(text.c_str(), width, options) || !verify()) return 193;
+        options.font_size = 22.0f;
+        if (!cached.layout_utf8(text.c_str(), width, options) || !verify()) return 194;
+        text = "abc אבג 🙂 é xyz\nsecond line with mixed text " + text;
+        if (!cached.layout_utf8(text.c_str(), width, options) || !verify()) return 195;
+        // Large selections bypass retention but still return complete geometry.
+        text = std::string(4096, 'a');
+        if (!cached.layout_utf8(text.c_str(), 16.0f, options)) return 196;
+        const auto large = cached.selection_rects({0, 0}, {4096, 0});
+        if (large.size() <= 256 || !equal(large, cached.selection_rects({0, 0}, {4096, 0}))) return 197;
+    }
     TextEngine empty_hit_test(shared_fonts);
     for (const char *text : {"", "\n", "abc\n", "abc\n\n"}) {
         if (!empty_hit_test.layout_utf8("previous content", 200.0f, 16.0f) ||

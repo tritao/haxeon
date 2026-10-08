@@ -35,4 +35,11 @@ enum abstract IconName(Int) from Int to Int {
 	var AlertTriangle = 30;
 	var ErrorCircle = 31;
 	var InfoCircle = 32;
+	var Bell = 33;
+	var Remote = 34;
+	var Check = 35;
+	var WindowMinimize = 36;
+	var WindowMaximize = 37;
+	var WindowRestore = 38;
+	var Settings = 39;
 }

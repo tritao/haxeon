@@ -27,6 +27,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 #include <vector>
@@ -727,6 +728,87 @@ int main() {
                                                &row_paragraph, &wrapped_rows) != NKUI_OK)
                 result = 47;
         }
+        if (!result && (nkui_text_layout_set_text(wrapped_rows, "Hg\nHg\nHg\nHg") != NKUI_OK ||
+            nkui_text_layout_set_color(wrapped_rows, {0.0f, 0.0f, 0.85f, 1.0f}) != NKUI_OK)) result = 61;
+        if (!result) {
+            std::vector<uint8_t> initial_commands;
+            append_bytes(initial_commands, nkui_draw_rect_command{
+                {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(nkui_draw_rect_command)},
+                wrapped_rows, 0, 0, 0, 0});
+            if (nkui_display_list_submit(text_list, initial_commands.data(), initial_commands.size()) != NKUI_OK)
+                result = 61;
+        }
+        // Fractionally moving text must avoid one-use row textures. Once it
+        // stops, cached pixels must match the direct frame and then be reused.
+        if (!result && nkui_layout_session_set_cache_policy(session, 2, NKUI_LAYOUT_CACHE_NONE) != NKUI_OK)
+            result = 61;
+        for (float zoom : {1.0f, 1.5f, 2.0f}) {
+            if (result) break;
+            const nkui_frame_info moving_info{sizeof(moving_info), framebuffer_width / zoom,
+                framebuffer_height / zoom, framebuffer_width, framebuffer_height, zoom};
+            nkui_renderer_stats moving{}, stationary{}, cached{};
+            std::vector<uint8_t> direct_pixels(framebuffer_width * framebuffer_height * 4);
+            for (float y : {0.25f, 1.5f, 2.75f}) {
+                if (result) break;
+                std::vector<uint8_t> moving_commands;
+                append_bytes(moving_commands, nkui_transform_command{
+                    {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
+                    {1.0f, 0.0f, 0.0f, 1.0f, 8.0f, y}});
+                append_bytes(moving_commands, nkui_draw_rect_command{
+                    {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(nkui_draw_rect_command)},
+                    wrapped_rows, 0, 0, 0, 0});
+                nkui_renderer_stats before{};
+                if (nkui_renderer_get_stats(renderer, &before) != NKUI_OK ||
+                    nkui_display_list_submit(text_list, moving_commands.data(), moving_commands.size()) != NKUI_OK ||
+                    nkui_layout_session_render_frame(renderer, session, surface, &moving_info, 0) != NKUI_OK ||
+                    nkui_renderer_get_stats(renderer, &moving) != NKUI_OK ||
+                    moving.raster_cache_misses != before.raster_cache_misses) result = 61;
+            }
+            if (!result) {
+                glReadPixels(0, 0, framebuffer_width, framebuffer_height, GL_RGBA, GL_UNSIGNED_BYTE, direct_pixels.data());
+                if (nkui_layout_session_render_frame(renderer, session, surface, &moving_info, 0) != NKUI_OK ||
+                    nkui_renderer_get_stats(renderer, &stationary) != NKUI_OK ||
+                    stationary.raster_cache_misses <= moving.raster_cache_misses) result = 62;
+                std::vector<uint8_t> cached_pixels(direct_pixels.size());
+                glReadPixels(0, 0, framebuffer_width, framebuffer_height, GL_RGBA, GL_UNSIGNED_BYTE, cached_pixels.data());
+                if (cached_pixels != direct_pixels) {
+                    int maximum_difference = 0; size_t changed = 0;
+                    for (size_t index = 0; index < cached_pixels.size(); ++index) {
+                        const int difference = std::abs(int(cached_pixels[index]) - int(direct_pixels[index]));
+                        maximum_difference = std::max(maximum_difference, difference);
+                        changed += difference != 0;
+                    }
+                    std::fprintf(stderr, "row cache pixel difference zoom=%g max=%d changed=%zu\n", zoom, maximum_difference, changed);
+                    result = 63;
+                }
+                if (!result && (nkui_layout_session_render_frame(renderer, session, surface, &moving_info, 0) != NKUI_OK ||
+                    nkui_renderer_get_stats(renderer, &cached) != NKUI_OK ||
+                    cached.raster_cache_misses != stationary.raster_cache_misses ||
+                    cached.raster_cache_hits <= stationary.raster_cache_hits)) result = 64;
+                // Two layout pixels are whole device pixels at every tested zoom.
+                // Moving by that amount must reuse the stationary row textures.
+                std::vector<uint8_t> translated_commands;
+                append_bytes(translated_commands, nkui_transform_command{
+                    {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
+                    {1.0f, 0.0f, 0.0f, 1.0f, 8.0f, 4.75f}});
+                append_bytes(translated_commands, nkui_draw_rect_command{
+                    {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(nkui_draw_rect_command)},
+                    wrapped_rows, 0, 0, 0, 0});
+                nkui_renderer_stats translated{};
+                if (!result && (nkui_display_list_submit(text_list, translated_commands.data(),
+                        static_cast<uint32_t>(translated_commands.size())) != NKUI_OK ||
+                    nkui_layout_session_render_frame(renderer, session, surface, &moving_info, 0) != NKUI_OK ||
+                    nkui_renderer_get_stats(renderer, &translated) != NKUI_OK ||
+                    translated.raster_cache_misses != cached.raster_cache_misses ||
+                    translated.raster_cache_hits <= cached.raster_cache_hits)) result = 65;
+                if (!result) std::puts("PASS: fractional movement draws directly; stationary and whole-pixel movement reuse exact row rasters");
+            }
+        }
+        if (std::getenv("NKUI_MOVING_ROWS_TEST_ONLY")) return result;
+        const std::string restored_word(512, 'a');
+        if (!result && (nkui_text_layout_set_text(wrapped_rows, restored_word.c_str()) != NKUI_OK ||
+            nkui_text_layout_set_color(wrapped_rows, {1, 1, 1, 1}) != NKUI_OK ||
+            nkui_layout_session_set_cache_policy(session, 2, NKUI_LAYOUT_CACHE_RASTER) != NKUI_OK)) result = 61;
         if (!result) {
             std::vector<uint8_t> row_commands;
             append_bytes(row_commands,
@@ -740,6 +822,8 @@ int main() {
             nkui_renderer_stats before_rows{}, first_rows{}, repeated_rows{}, edited_rows{};
             if (nkui_display_list_submit(text_list, row_commands.data(),
                                          static_cast<uint32_t>(row_commands.size())) != NKUI_OK ||
+                // First placement draws directly; the repeat can populate row textures.
+                nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) != NKUI_OK ||
                 nkui_renderer_get_stats(renderer, &before_rows) != NKUI_OK ||
                 nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) != NKUI_OK ||
                 nkui_renderer_get_stats(renderer, &first_rows) != NKUI_OK ||
@@ -791,8 +875,10 @@ int main() {
                 nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) != NKUI_OK ||
                 nkui_renderer_get_stats(renderer, &moved_rows) != NKUI_OK))
                 result = 52;
+            // The inserted row is blank and has no glyph texture. Only the
+            // enclosing custom-node raster misses; moved text rows must hit.
             if (!result && (moved_rows.raster_cache_hits < unicode_rows.raster_cache_hits + 2 ||
-                moved_rows.raster_cache_misses != unicode_rows.raster_cache_misses + 2)) {
+                moved_rows.raster_cache_misses != unicode_rows.raster_cache_misses + 1)) {
                 std::fprintf(stderr, "Newline insertion discarded moved row rasters\n");
                 result = 53;
             }
@@ -861,17 +947,24 @@ int main() {
                 std::vector<uint8_t> pixels(framebuffer_width * framebuffer_height * 4);
                 glReadPixels(0, 0, framebuffer_width, framebuffer_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
                 std::vector<int> starts;
-                bool previous = false;
-                for (int y = 0; y < framebuffer_height; ++y) {
+                int band_start = -1;
+                // transaction() places the custom node at y=20 with height=64.
+                // Compare complete glyph bands from the top: clipped bands
+                // have truncated bounds and cannot establish row spacing.
+                const int clip_top = static_cast<int>(std::ceil(20.0f * zoom));
+                const int clip_bottom = static_cast<int>(std::floor(84.0f * zoom));
+                for (int y = 0; y <= framebuffer_height; ++y) {
                     bool ink = false;
-                    for (int x = 0; x < framebuffer_width; ++x) {
-                        const auto *rgba = &pixels[(y * framebuffer_width + x) * 4];
+                    for (int x = 0; y < framebuffer_height && x < framebuffer_width; ++x) {
+                        const auto *rgba = &pixels[((framebuffer_height - y - 1) * framebuffer_width + x) * 4];
                         ink = ink || (rgba[2] > 150 && rgba[0] < 80 && rgba[1] < 80);
                     }
-                    if (ink && !previous) starts.push_back(y);
-                    previous = ink;
+                    if (ink && band_start < 0) band_start = y;
+                    if (!ink && band_start >= 0) {
+                        if (band_start > clip_top && y < clip_bottom) starts.push_back(band_start);
+                        band_start = -1;
+                    }
                 }
-                // The fixed-size custom node clips the last row at larger zooms.
                 if (starts.size() < 2 || starts.size() > 4) result = 59;
                 for (size_t row = 1; row < starts.size(); ++row)
                     if (std::abs((starts[row] - starts[row - 1]) - 24.0f * zoom) > 1.0f) result = 60;

@@ -482,6 +482,67 @@ class FrameworkSmoke {
 	static function clickEvent(time:Float, x:Float = 10.0, button:Int = 0):haxeon.ui.core.UiEvent
 		return new haxeon.ui.core.UiEvent(UiEventKind.Click, new WidgetId(90502), x, 10.0, 0.0, 0.0, button, 0, 0, null, null, 0, 0, time);
 
+	static function viewportSelectionGeometryValid(fonts:FontCollection):Bool {
+		var lines = [for (index in 0...200) "line " + index + " abc אבג 🙂 é long wrapped content"];
+		var document = new TextDocument(lines.join("\n"));
+		var layout = new haxeon.ui.widgets.text.TextEditorLayout(fonts, document.text, 96.0,
+			new TextStyle(16.0), new ParagraphStyle(TextWrap.WordCharacter));
+		var valid = true;
+		for (reverse in 0...2) {
+			var start = new TextPosition(reverse == 0 ? 1 : document.codepointCount - 1, 0);
+			var end = new TextPosition(reverse == 0 ? document.codepointCount - 1 : 1, 0);
+			var full = layout.selectionRects(start, end);
+			for (bounds in [[0.0, 0.0], [0.0, 80.0], [2500.5, 2670.25], [9000.0, 9100.0], [1.0e20, 1.0e21]]) {
+				var expected = full.filter(function(rect) return rect.y < bounds[1] && rect.y + rect.height > bounds[0]);
+				var actual = layout.selectionRects(start, end, bounds[0], bounds[1]);
+				if (actual.length != expected.length) valid = false;
+				else for (index in 0...actual.length) {
+					var a = actual[index], b = expected[index];
+					if (Math.abs(a.x - b.x) > 0.01 || Math.abs(a.y - b.y) > 0.01 ||
+						Math.abs(a.width - b.width) > 0.01 || Math.abs(a.height - b.height) > 0.01) valid = false;
+				}
+			}
+		}
+		layout.dispose();
+		if (valid) Sys.println("PASS: viewport selection paint geometry matches full bidi/wrapped selection");
+		return valid;
+	}
+
+	static function cachedSelectionGeometryValid(fonts:FontCollection):Bool {
+		var text = "abc אבג 🙂 é xyz\nsecond line";
+		var layout = TextLayout.create(fonts, text, 96.0);
+		var verify = function():Bool {
+			var length = new TextDocument(layout.text).codepointCount;
+			layout.selectionRangeRects(new TextPosition(0, 0), new TextPosition(length, 0));
+			var fresh = TextLayout.create(fonts, layout.text, layout.width, layout.textStyle, layout.paragraphStyle);
+			var valid = true;
+			for (reverse in 0...2) {
+				var start = new TextPosition(reverse == 0 ? 1 : length - 1, 0);
+				var end = new TextPosition(reverse == 0 ? length - 1 : 1, 0);
+				var actual = layout.selectionRangeRects(start, end);
+				var expected = fresh.selectionRangeRects(start, end);
+				if (actual.length != expected.length) valid = false;
+				else for (index in 0...actual.length) {
+					var a = actual[index], b = expected[index];
+					if (a.start != b.start || a.end != b.end || a.visualLeftIsStart != b.visualLeftIsStart ||
+						Math.abs(a.x - b.x) > 0.01 || Math.abs(a.y - b.y) > 0.01 ||
+						Math.abs(a.width - b.width) > 0.01 || Math.abs(a.height - b.height) > 0.01) valid = false;
+				}
+			}
+			fresh.dispose();
+			return valid;
+		};
+		var valid = verify();
+		layout.update(text, 48.0, new TextStyle(20.0), new ParagraphStyle(TextWrap.WordCharacter));
+		valid = verify() && valid;
+		layout.setText("new 🙂 content with wrapping");
+		valid = verify() && valid;
+		layout.edit(0, 3, "changed", "changed 🙂 content with wrapping");
+		valid = verify() && valid;
+		layout.dispose();
+		return valid;
+	}
+
 	@:access(haxeon.ui.core.TextInputBridge)
 	static function main():Int {
 		var originalTypography = new haxeon.ui.core.ResolvedTextStyle(
@@ -527,11 +588,15 @@ class FrameworkSmoke {
 			return 2;
 		var fonts = FontCollection.create();
 		fonts.add(fontPath);
+		if (!cachedSelectionGeometryValid(fonts)) return 1040;
+		if (!viewportSelectionGeometryValid(fonts)) return 1041;
 		// Visual affinity positions name a glyph; range tags name logical insertion offsets.
 		var affinityLayout = TextLayout.create(fonts, "abc", 100.0);
 		var affinityStart = new TextPosition(0, 2), affinityEnd = new TextPosition(2, 2);
 		if (affinityLayout.offsetFromPosition(affinityStart) != 1 ||
 			affinityLayout.offsetFromPosition(affinityEnd) != 3) return 1021;
+		// Warm canonical entries before querying distinct visual-affinity endpoints.
+		affinityLayout.selectionRangeRects(new TextPosition(0, 0), new TextPosition(3, 0));
 		var affinityRects = affinityLayout.selectionRangeRects(affinityStart, affinityEnd);
 		var reversedAffinityRects = affinityLayout.selectionRangeRects(affinityEnd, affinityStart);
 		if (affinityRects.length != 2 || reversedAffinityRects.length != 2) return 1022;
@@ -600,8 +665,19 @@ class FrameworkSmoke {
 			return 277;
 		}
 		clippingEditor.dispose();
+		if (Sys.getEnv("NKUI_SELECTION_TEST_ONLY") == "1") {
+			fonts.dispose();
+			Sys.println("PASS: selection geometry, cache invalidation, affinity, bidi and clipping");
+			return 0;
+		}
 		var session = LayoutSession.create();
 		var context = new UiContext(session, fonts);
+		if (Sys.getEnv("NKUI_DRAG_TEST_ONLY") == "1") {
+			SelectionDragTests.run(fonts, context);
+			context.dispose();
+			fonts.dispose();
+			return 0;
+		}
 		if (!retainedStateUsageValid())
 			return 305;
 		if (!themeSwapChangesStyleRevision())
@@ -1098,51 +1174,7 @@ class FrameworkSmoke {
 		if (arabicEditor.text != "مرحبا بالعالم" || hebrewEditor.text != "x")
 			return 224;
 
-		var semanticDrag = new TextEditorState(fonts, "first second\nthird fourth\nfifth");
-		semanticDrag.beginPointerSelection(new TextPosition(2, 0), 2, false);
-		semanticDrag.extendPointerSelection(new TextPosition(8, 0));
-		if (semanticDrag.selectionStart != 0 || semanticDrag.selectionEnd != 12) throw "word drag lost whole-word selection";
-		semanticDrag.beginPointerSelection(new TextPosition(8, 0), 2, false);
-		semanticDrag.extendPointerSelection(new TextPosition(2, 0));
-		if (semanticDrag.selectionAnchor != 12 || semanticDrag.selectionFocus != 0) throw "backward word drag lost its anchor";
-		semanticDrag.beginPointerSelection(new TextPosition(2, 0), 3, false);
-		semanticDrag.extendPointerSelection(new TextPosition(15, 0));
-		if (semanticDrag.selectionStart != 0 || semanticDrag.selectionEnd != 26) throw "line drag lost whole-line selection";
-		semanticDrag.placeCaret(3, false);
-		semanticDrag.beginPointerSelection(new TextPosition(8, 0), 1, true);
-		semanticDrag.extendPointerSelection(new TextPosition(10, 0));
-		if (semanticDrag.selectionAnchor != 3 || semanticDrag.selectionFocus != 10) throw "shift drag changed its original anchor";
-		semanticDrag.dispose();
-		var edgeStyle = new LayoutStyle();
-		edgeStyle.width = LayoutAxis.fixed(200.0); edgeStyle.height = LayoutAxis.fixed(64.0);
-		var edgeText = [for (line in 0...80) "row " + line].join("\n");
-		var edgeArea = new TextArea("selection-edge-scroll", edgeText, null, edgeStyle);
-		var edgeFrame = new LayoutFrame(200.0, 64.0);
-		var edgeRoot = context.submit(edgeArea, edgeFrame);
-		var edgeState:State<TextEditorState> = context.buildContext.existingState(edgeRoot.id);
-		var edgeEditor:TextEditorState = cast edgeState.value;
-		edgeEditor.placeCaret(0, false);
-		edgeEditor.scrollBy(-100000.0);
-		context.submit(edgeArea, edgeFrame);
-		var edgeBounds = edgeRoot.globalBounds();
-		context.pointerDown(edgeBounds.x + 15.0, edgeBounds.y + 12.0, 0);
-		context.pointerMove(edgeBounds.x + 15.0, edgeBounds.y + edgeBounds.height + 20.0);
-		var scrollBeforeTick = edgeEditor.scrollOffsetY;
-		edgeFrame.deltaSeconds = 0.05;
-		for (tick in 0...6) context.submit(edgeArea, edgeFrame);
-		if (edgeEditor.scrollOffsetY <= scrollBeforeTick || edgeEditor.selectionEnd <= edgeEditor.selectionStart)
-			throw "stationary edge drag did not scroll and extend selection";
-		context.pointerUp(edgeBounds.x + 15.0, edgeBounds.y + edgeBounds.height + 20.0, 0);
-		var stoppedScroll = edgeEditor.scrollOffsetY;
-		for (tick in 0...3) context.submit(edgeArea, edgeFrame);
-		if (edgeEditor.scrollOffsetY != stoppedScroll) throw "edge scroll continued after pointer release";
-		#if (mac || ios)
-		edgeEditor.placeCaret(2, false);
-		context.key(UiEventKind.KeyDown, UiKey.Right, UiModifier.Super | UiModifier.Shift);
-		if (edgeEditor.selectionAnchor != 2 || edgeEditor.selectionFocus != 5) throw "Cmd+Shift+Right did not select to line end";
-		context.key(UiEventKind.KeyDown, UiKey.Left, UiModifier.Super);
-		if (edgeEditor.selectionFocus != 0) throw "Cmd+Left did not move to line start";
-		#end
+		SelectionDragTests.run(fonts, context);
 		var wordArea = new TextArea("word-navigation", "one two\nthree four");
 		var wordAreaRoot = context.submit(wordArea, new LayoutFrame(256.0, 192.0));
 		var wordAreaState:State<TextEditorState> = context.buildContext.existingState(wordAreaRoot.id);
@@ -2375,6 +2407,17 @@ class FrameworkSmoke {
 		if (tree.toggleExpanded("no-longer-visible") ||
 			tree.setExpanded("no-longer-visible", true))
 			return 174;
+		// A directory hint keeps an empty folder expandable with no child rows.
+		var emptyFolderTree = new TreeView("empty-folder-tree-smoke", treeModel, treeStyle,
+			new ScrollController(), 120.0);
+		emptyFolderTree.hasChildrenHint = function(key) return key == "root:0" || key == "root:0:child:2";
+		context.submit(emptyFolderTree, new LayoutFrame(256.0, 120.0));
+		if (!emptyFolderTree.toggleExpanded("root:0:child:2") || !emptyFolderTree.isExpanded("root:0:child:2"))
+			return 176;
+		context.submit(emptyFolderTree, new LayoutFrame(256.0, 120.0));
+		if (!emptyFolderTree.isExpanded("root:0:child:2") || !emptyFolderTree.toggleExpanded("root:0:child:2") ||
+			emptyFolderTree.isExpanded("root:0:child:2"))
+			return 177;
 		// Exercise the session capacity and the framework as one realistic,
 		// nested settings tree. The custom painter sits between ordinary text
 		// siblings inside the clipped, scrollable content.

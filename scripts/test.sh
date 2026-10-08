@@ -86,6 +86,7 @@ fi
 
 run_timed native-build build_native_quietly
 export HAXEON_NATIVE_READY=1
+run_timed gc-root-index "$root_dir/tests/integration/test-gc-root-index.sh"
 mkdir -p "$root_dir/out"
 
 # Build the compiler entry points and the build tool to HashLink bytecode once. The test driver,
