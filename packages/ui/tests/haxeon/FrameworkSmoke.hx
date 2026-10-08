@@ -2726,7 +2726,7 @@ class FrameworkSmoke {
 		], "first", function(_) { tabChanges++; });
 		var tabsFrame = new LayoutFrame(256.0, 192.0);
 		var tabsRoot = context.submit(tabs, tabsFrame);
-		var secondTab = tabsRoot.children[0].children[1].children[0];
+		var secondTab = tabStrip(tabsRoot).children[1].children[0];
 		var secondTabGeometry:ResolvedLayoutItem = cast secondTab.resolved;
 		context.pointerDown(secondTabGeometry.x + 2.0, secondTabGeometry.y + 2.0, 0);
 		context.pointerUp(secondTabGeometry.x + 2.0, secondTabGeometry.y + 2.0, 0);
@@ -2735,34 +2735,34 @@ class FrameworkSmoke {
 		tabsRoot = context.submit(tabs, tabsFrame);
 		var secondPage:Semantics = cast tabsRoot.children[1].semantics;
 		if (secondPage.role != AccessibilityRole.TabPanel || secondPage.label != "Second" ||
-			(cast(tabsRoot.children[0].children[1].children[0].semantics, Semantics).states &
+			(cast(tabStrip(tabsRoot).children[1].children[0].semantics, Semantics).states &
 			AccessibilityState.Selected) == 0)
 			return 96;
-		if (!context.focusWidget(tabsRoot.children[0].children[1].children[0].id))
+		if (!context.focusWidget(tabStrip(tabsRoot).children[1].children[0].id))
 			return 97;
 		context.key(UiEventKind.KeyDown, UiKey.Left);
 		if (tabs.selectedKey != "first" || context.focus.focusedId == null ||
-			!context.focus.focusedId.equals(tabsRoot.children[0].children[0].children[0].id))
+			!context.focus.focusedId.equals(tabStrip(tabsRoot).children[0].children[0].id))
 			return 98;
 
 		var tabMenus = 0;
 		var menuTab = "";
 		tabs.onTabContextMenu = function(key, event) { tabMenus++; menuTab = key; };
 		tabsRoot = context.submit(tabs, tabsFrame);
-		var tabContextGeometry = tabsRoot.children[0].children[1].children[0].resolved;
+		var tabContextGeometry = tabStrip(tabsRoot).children[1].children[0].resolved;
 		if (tabContextGeometry == null) return 1001;
 		context.pointerDown(tabContextGeometry.x + 2.0, tabContextGeometry.y + 2.0, 1);
 		context.pointerUp(tabContextGeometry.x + 2.0, tabContextGeometry.y + 2.0, 1);
 		if (tabMenus != 1 || menuTab != "second" || tabs.selectedKey != "first" || tabChanges != 2)
 			return 1002;
-		if (!context.focusWidget(tabsRoot.children[0].children[0].children[0].id)) return 1003;
+		if (!context.focusWidget(tabStrip(tabsRoot).children[0].children[0].id)) return 1003;
 		context.key(UiEventKind.KeyDown, UiKey.F10);
 		if (tabMenus != 1) return 1004;
 		context.key(UiEventKind.KeyDown, UiKey.F10, UiModifier.Shift);
 		if (tabMenus != 2 || menuTab != "first" || tabs.selectedKey != "first") return 1005;
 		context.key(UiEventKind.KeyDown, UiKey.Menu);
 		if (tabMenus != 3 || menuTab != "first") return 1018;
-		var lockedTabContextGeometry = tabsRoot.children[0].children[2].children[0].resolved;
+		var lockedTabContextGeometry = tabStrip(tabsRoot).children[2].children[0].resolved;
 		if (lockedTabContextGeometry == null) return 1006;
 		context.pointerDown(lockedTabContextGeometry.x + 2.0, lockedTabContextGeometry.y + 2.0, 1);
 		context.pointerUp(lockedTabContextGeometry.x + 2.0, lockedTabContextGeometry.y + 2.0, 1);
@@ -2776,14 +2776,14 @@ class FrameworkSmoke {
 		closeTabs.headerRevision = function() return "stable";
 		context.pointerMove(0, 180);
 		var closeRoot = context.submit(closeTabs, tabsFrame);
-		var closeRow = closeRoot.children[0].children[1].children[0];
+		var closeRow = tabStrip(closeRoot).children[1].children[0];
 		var closeNode = closeRow.children[1].children[0];
 		var closeWidth = closeRow.globalBounds().width;
 		if (closeNode.layout.style.visible || cast(closeNode.semantics, Semantics).label != "Close Close me") throw "Close buttons must start hidden and expose an accessible name";
 		var closeBounds = closeRow.globalBounds();
 		context.pointerMove(closeBounds.x + 2, closeBounds.y + 2);
 		closeRoot = context.submit(closeTabs, tabsFrame);
-		closeRow = closeRoot.children[0].children[1].children[0];
+		closeRow = tabStrip(closeRoot).children[1].children[0];
 		closeNode = closeRow.children[1].children[0];
 		if (!closeNode.layout.style.visible || closeRow.globalBounds().width != closeWidth) throw "Hover must reveal the close target without changing tab width";
 		closeBounds = closeNode.globalBounds();
@@ -2797,12 +2797,12 @@ class FrameworkSmoke {
 		context.pointerUp(tabBody.x + 2, tabBody.y + 2, 2);
 		if (closes != 2 || closeSelections != 0 || closeDrags != 0 || closeTabs.selectedKey != "keep")
 			throw "Middle-click must close an inactive tab without selecting or dragging it";
-		closeRow = closeRoot.children[0].children[1].children[0];
+		closeRow = tabStrip(closeRoot).children[1].children[0];
 		closeNode = closeRow.children[1].children[0];
-		context.focusWidget(closeRoot.children[0].children[0].children[0].id);
+		context.focusWidget(tabStrip(closeRoot).children[0].children[0].id);
 		context.pointerMove(0, 180);
 		closeRoot = context.submit(closeTabs, tabsFrame);
-		closeRow = closeRoot.children[0].children[1].children[0];
+		closeRow = tabStrip(closeRoot).children[1].children[0];
 		closeNode = closeRow.children[1].children[0];
 		if (closeNode.layout.style.visible) throw "Leaving a tab must hide its close target";
 		context.focusWidget(closeRow.children[0].id);
@@ -4197,6 +4197,17 @@ class FrameworkSmoke {
 		return retained && !store.contains(id) && disposals == 1;
 	}
 
+	static function tabStrip(root:RenderNode):RenderNode {
+		var found:RenderNode = null;
+		root.walk(function(node) {
+			if (node.children.length == 0 || node.children[0].children.length == 0) return;
+			var semantics = node.children[0].children[0].semantics;
+			if (found == null && semantics != null && semantics.role == AccessibilityRole.Tab) found = node;
+		});
+		if (found == null) throw "Missing tab strip";
+		return found;
+	}
+
 	static function tabHierarchyValid(fonts:FontCollection):Bool {
 		var theme = haxeon.ui.theme.Theme.light();
 		var context = new UiContext(null, fonts, theme);
@@ -4205,8 +4216,8 @@ class FrameworkSmoke {
 			new TabItem("two", "Two", new Text("Second"))
 		], "one");
 		var root = context.submit(tabs, new LayoutFrame(300.0, 120.0));
-		var first = root.children[0].children[0];
-		var second = root.children[0].children[1];
+		var first = tabStrip(root).children[0];
+		var second = tabStrip(root).children[1];
 		var active = first.children[0].layout.style.background;
 		var inactive = second.children[0].layout.style.background;
 		var indicator = first.children[1].layout.style.background;
