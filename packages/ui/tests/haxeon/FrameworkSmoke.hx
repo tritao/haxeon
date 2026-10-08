@@ -2375,6 +2375,17 @@ class FrameworkSmoke {
 		if (tree.toggleExpanded("no-longer-visible") ||
 			tree.setExpanded("no-longer-visible", true))
 			return 174;
+		// A directory hint keeps an empty folder expandable with no child rows.
+		var emptyFolderTree = new TreeView("empty-folder-tree-smoke", treeModel, treeStyle,
+			new ScrollController(), 120.0);
+		emptyFolderTree.hasChildrenHint = function(key) return key == "root:0" || key == "root:0:child:2";
+		context.submit(emptyFolderTree, new LayoutFrame(256.0, 120.0));
+		if (!emptyFolderTree.toggleExpanded("root:0:child:2") || !emptyFolderTree.isExpanded("root:0:child:2"))
+			return 176;
+		context.submit(emptyFolderTree, new LayoutFrame(256.0, 120.0));
+		if (!emptyFolderTree.isExpanded("root:0:child:2") || !emptyFolderTree.toggleExpanded("root:0:child:2") ||
+			emptyFolderTree.isExpanded("root:0:child:2"))
+			return 177;
 		// Exercise the session capacity and the framework as one realistic,
 		// nested settings tree. The custom painter sits between ordinary text
 		// siblings inside the clipped, scrollable content.

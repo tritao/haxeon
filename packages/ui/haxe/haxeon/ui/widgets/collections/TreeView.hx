@@ -499,7 +499,7 @@ class TreeView implements View {
 		if (childCount < 0)
 			throw 'TreeView child count for ${branch.key} must be non-negative';
 		branch.detailsKnown = true;
-		branch.hasChildren = childCount > 0;
+		branch.hasChildren = childCount > 0 || (hasChildrenHint != null && hasChildrenHint(branch.key));
 		if (!branch.hasChildren) {
 			branch.expanded = false;
 			branch.visibleCount = 1;
