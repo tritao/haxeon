@@ -818,6 +818,15 @@ class TextEditorState {
 		return replace(selectionEnd, next, "");
 	}
 
+	/** Dragging beyond the document selects its boundary, independent of horizontal position.
+	 * Inside the document, use the viewport-clamped Y so edge scrolling stays incremental. */
+	public function hitTestSelectionDrag(x:Float, documentY:Float, viewportY:Float):TextPosition {
+		ensureLive();
+		if (documentY < 0.0) return new TextPosition(0, 0);
+		if (documentY >= layout.measure().height) return new TextPosition(offsets.codepointCount, 0);
+		return hitTest(x, viewportY);
+	}
+
 	public function hitTest(x:Float, y:Float):TextPosition {
 		ensureLive();
 		var hit = layout.hitTest(x, y);

@@ -520,7 +520,9 @@ class TextField implements View {
 				var clip = geometry.clipBounds;
 				var clampedY = Math.max(clip.y, Math.min(clip.y + clip.height, y));
 				var point = geometry.viewportToLayout(x, clampedY);
-				var position = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+				var pointer = geometry.viewportToLayout(x, y);
+				var position = editor.hitTestSelectionDrag(point.x - geometry.x,
+					pointer.y - geometry.y + editor.scrollOffsetY, point.y - geometry.y + editor.scrollOffsetY);
 				if (editor.extendPointerSelection(position)) {
 					editor.resetCaretBlink(Sys.time());
 					updateState();

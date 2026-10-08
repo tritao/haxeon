@@ -1099,6 +1099,18 @@ class FrameworkSmoke {
 			return 224;
 
 		var semanticDrag = new TextEditorState(fonts, "first second\nthird fourth\nfifth");
+		for (x in [-100.0, 0.0, 40.0, 1000.0]) {
+			semanticDrag.beginPointerSelection(new TextPosition(15, 0), 1, false);
+			semanticDrag.extendPointerSelection(semanticDrag.hitTestSelectionDrag(x, -1.0, 0.0));
+			if (semanticDrag.selectionAnchor != 15 || semanticDrag.selectionFocus != 0)
+				throw "drag above document depended on horizontal position";
+			semanticDrag.extendPointerSelection(semanticDrag.hitTestSelectionDrag(x, semanticDrag.layout.measure().height + 1.0, 0.0));
+			if (semanticDrag.selectionAnchor != 15 || semanticDrag.selectionFocus != Utf8Text.length(semanticDrag.text))
+				throw "drag below document depended on horizontal position";
+			var insideY = semanticDrag.layout.measure().height * 0.5;
+			if (semanticDrag.hitTestSelectionDrag(x, insideY, 0.0).offset != semanticDrag.hitTest(x, 0.0).offset)
+				throw "drag within document ignored viewport clamping";
+		}
 		semanticDrag.beginPointerSelection(new TextPosition(2, 0), 2, false);
 		semanticDrag.extendPointerSelection(new TextPosition(8, 0));
 		if (semanticDrag.selectionStart != 0 || semanticDrag.selectionEnd != 12) throw "word drag lost whole-word selection";
