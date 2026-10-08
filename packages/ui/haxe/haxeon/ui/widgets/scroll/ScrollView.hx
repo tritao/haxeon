@@ -32,6 +32,8 @@ class ScrollView implements View {
 	public var onScroll:UiEvent->Void;
 	/** Shows an interactive overlay scrollbar when vertical content overflows. */
 	public var showScrollbar:Bool;
+	/** Expand content to fill a short viewport while retaining intrinsic scroll overflow. */
+	public var fillViewport:Bool = false;
 	/** Null inherits the application environment policy. */
 	public var scrollbarVisibility:Null<Int> = null;
 	/** Optional non-scrolling ancestor with the same vertical extent. */
@@ -87,8 +89,8 @@ class ScrollView implements View {
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
 
 			var contentStyle = new LayoutStyle();
-			contentStyle.width = axis == ScrollAxis.Vertical ? LayoutAxis.stretch() : LayoutAxis.fit();
-			contentStyle.height = axis == ScrollAxis.Horizontal ? LayoutAxis.grow() : LayoutAxis.fit();
+			contentStyle.width = axis == ScrollAxis.Vertical ? LayoutAxis.stretch() : fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
+			contentStyle.height = axis == ScrollAxis.Horizontal || fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
 			contentStyle.transform = Transform2D.identity().translated(-controller.offsetX,
 				-controller.offsetY);
 			var translatedContent = new RenderNode(context.id("scroll-content"),

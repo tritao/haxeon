@@ -481,6 +481,10 @@ class TextEditorLayout {
 		ensureLive();
 		if (paragraphs.length == 0)
 			return new TextPosition(0, 0);
+		// Blank space below the document selects its end, independently of
+		// horizontal position. Within the last line, retain normal hit testing.
+		if (y >= contentHeight)
+			return new TextPosition(offsets.codepointCount, 0);
 		var record = paragraphAtY(y);
 		var hit = record.layout.hitTest(x, y - record.y);
 		return new TextPosition(clamp(hit.offset + record.start, record.start, record.end), hit.affinity);
