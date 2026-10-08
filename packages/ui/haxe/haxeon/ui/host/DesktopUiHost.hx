@@ -81,7 +81,9 @@ class DesktopUiHost {
 			windowOptions.set_width(options.width);
 			windowOptions.set_height(options.height);
 			windowOptions.set_title(options.title);
-			windowOptions.set_flags(WindowFlags.Resizable);
+			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
+				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
+			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0));
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
@@ -180,6 +182,7 @@ class DesktopUiHost {
 			session = new UiHostSession(function() active = false);
 			var hostContext = new DesktopUiHostContext(fonts, pump, window, surface,
 				function() session.stop(), scheduleFrame);
+			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
 			runtime = new UiHostRuntime(session, hostContext, window, surface,
 				options.width, options.height);
 			runtime.start(function(_) return create(hostContext));
@@ -210,6 +213,9 @@ class DesktopUiHost {
 					case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
 						runtime.setScale(scale);
 						scheduleFrameWithReason("window-scale");
+					case WindowStateChanged(source, flags) if (source.rawValue() == window.rawValue()):
+						if (hostContext.windowControls != null) hostContext.windowControls.observe(flags);
+						scheduleFrameWithReason("window-state");
 					case WindowMove(source, _, _) if (source.rawValue() == window.rawValue()):
 						// Moving the top-level window does not change the surface contents.
 						// On X11 this event is emitted for every position update while the

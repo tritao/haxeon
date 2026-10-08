@@ -7,6 +7,17 @@ import haxeon.ui.PathBuilder;
 class IconData {
 	public static function build(name:IconName):Path {
 		return switch name {
+			case IconName.WindowMinimize: new PathBuilder().moveTo(5, 12).lineTo(19, 12).build();
+			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5, 19).lineTo(5, 5).build();
+			case IconName.WindowRestore: new PathBuilder().moveTo(8, 8).lineTo(8, 4).lineTo(20, 4).lineTo(20, 16).lineTo(16, 16)
+				.moveTo(4, 8).lineTo(16, 8).lineTo(16, 20).lineTo(4, 20).lineTo(4, 8).build();
+			case IconName.Check: new PathBuilder().moveTo(4, 12).lineTo(9, 17).lineTo(20, 6).build();
+			case IconName.Remote: new PathBuilder().moveTo(15, 3).lineTo(21, 9).lineTo(15, 15)
+				.moveTo(9, 9).lineTo(3, 15).lineTo(9, 21).build();
+			case IconName.Bell: new PathBuilder().moveTo(18, 8)
+				.cubicTo(18, 4.69, 15.31, 2, 12, 2).cubicTo(8.69, 2, 6, 4.69, 6, 8)
+				.cubicTo(6, 15, 3, 15, 3, 17).lineTo(21, 17).cubicTo(21, 15, 18, 15, 18, 8)
+				.moveTo(10, 21).cubicTo(11, 22.33, 13, 22.33, 14, 21).build();
 			case IconName.AlertTriangle: new PathBuilder().moveTo(12, 3).lineTo(22, 21).lineTo(2, 21).lineTo(12, 3)
 				.moveTo(12, 9).lineTo(12, 14).moveTo(12, 17).lineTo(12, 17.2).build();
 			case IconName.ErrorCircle: new PathBuilder().moveTo(22, 12).cubicTo(22, 17.52, 17.52, 22, 12, 22)

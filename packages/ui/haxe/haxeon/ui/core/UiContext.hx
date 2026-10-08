@@ -1026,10 +1026,10 @@ class UiContext {
 			if (right <= left || bottom <= top)
 				return;
 			var region = new WindowDecorationRegion();
-			region.set_x(left);
-			region.set_y(top);
-			region.set_width(right - left);
-			region.set_height(bottom - top);
+			region.set_x(left * platformCoordinateScale);
+			region.set_y(top * platformCoordinateScale);
+			region.set_width((right - left) * platformCoordinateScale);
+			region.set_height((bottom - top) * platformCoordinateScale);
 			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
 			region.set_kind(kind);
 			region.set_cursor_shape(node.windowDecorationCursor == null

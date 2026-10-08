@@ -2,6 +2,7 @@ package haxeon.ui.host;
 
 /** Window, pacing, and deterministic-capture policy for DesktopUiHost. */
 class DesktopUiHostOptions extends UiHostOptions {
+	public var customTitlebar:Bool = false;
 	public var targetFps:Float = 60.0;
 	public var captureDirectory:Null<String> = null;
 	/** Append-only JSONL trace of native events and host failures. */
