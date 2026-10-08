@@ -362,8 +362,13 @@ class UiContext {
 					" parent=" + (missingNode == null || missingNode.parent == null ? "?" : missingNode.parent.styleType) +
 					" parentVisible=" + (missingNode == null || missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
 			}
-			if (!buildContext.consumeLayoutFeedback() || layoutPass == 1)
+			if (!buildContext.consumeLayoutFeedback())
 				break;
+			// Dependent geometry (text reflow, scroll extent, overlay placement)
+			// must settle before publishing the frame. Never silently discard
+			// a requested pass; fail explicitly if callbacks cannot converge.
+			if (layoutPass >= 7)
+				throw "UI layout feedback did not converge after 8 passes";
 			resolved = session.submit(next.layout, frame);
 			layoutPass++;
 		}
