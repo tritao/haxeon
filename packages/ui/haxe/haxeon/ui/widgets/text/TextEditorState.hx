@@ -822,7 +822,7 @@ class TextEditorState {
 	 * Inside the document, use the viewport-clamped Y so edge scrolling stays incremental. */
 	public function hitTestSelectionDrag(x:Float, documentY:Float, viewportY:Float):TextPosition {
 		ensureLive();
-		if (documentY < 0.0) return new TextPosition(0, 0);
+		if (documentY <= 0.0) return new TextPosition(0, 0);
 		if (documentY >= layout.measure().height) return new TextPosition(offsets.codepointCount, 0);
 		return hitTest(x, viewportY);
 	}

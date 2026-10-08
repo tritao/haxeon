@@ -482,8 +482,11 @@ class TextField implements View {
 						refresh();
 				}
 			});
+			var drag = context.resourceState(context.id("selection-drag"),
+				function() return new SelectionDragController(), function(value) value.dispose()).value;
 			textNode.onResolved(function(geometry) {
 				editor.updateLayout(geometry.width);
+				drag.layoutResolved();
 				if (onLayoutResolved != null) onLayoutResolved(editor.layout, geometry);
 				if (multiline && !readOnly && editorContent.resolved != null &&
 					editor.ensureCaretVisible(editorContent.resolved.height))
@@ -518,8 +521,6 @@ class TextField implements View {
 			node.on(UiEventKind.Blur, blur);
 			node.on(UiEventKind.FocusLost, blur);
 
-			var drag = context.resourceState(context.id("selection-drag"),
-				function() return new SelectionDragController(), function(value) value.dispose()).value;
 			var extendDrag = function(x:Float, y:Float):Void {
 				var geometry = textNode.resolved;
 				if (geometry == null) return;
