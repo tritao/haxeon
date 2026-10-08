@@ -48,6 +48,10 @@ class DesktopUiHost {
 		var frameRequestCounts:Map<String, Int> = new Map();
 		var captureState = {startedAt: -1.0, readyFrames: 0};
 		var frameGc = FrameGcScheduler.fromEnvironment();
+		var script = options.inputScriptPath == null ? null : new ScriptedInput(options.inputScriptPath);
+		var scriptedCount = 0;
+		var scriptedAt = -1.0;
+		var scriptedDispatch = 0.0;
 		var result = 0;
 		var step:Void->Bool = function() return false;
 		var failureRecorded = false;
@@ -241,6 +245,10 @@ class DesktopUiHost {
 									var requestReason = frameRequestReason;
 									var requestSerial = frameRequestSerial;
 									// Keep delivered text input even if caret/API requests coalesce.
+									var scriptedFrameCount = scriptedCount;
+									var scriptedFrameAt = scriptedAt;
+									var scriptedFrameDispatch = scriptedDispatch;
+									scriptedCount = 0; scriptedAt = -1.0; scriptedDispatch = 0.0;
 									var textInputRequestedAt = inputRequestedAt;
 									var textInputCount = inputRequestCount;
 									var textInputDispatchSeconds = inputDispatchSeconds;
@@ -250,6 +258,7 @@ class DesktopUiHost {
 									frameRequested = false;
 									runtime.resize(runtime.logicalWidth, runtime.logicalHeight, width, height);
 									var frameStartedAt = Sys.time();
+									var gcCollectionsAtStart = hl.Gc.collections();
 									frameGc.beginFrame();
 									var rendered = runtime.render(Sys.time(), repaintOnly);
 									var collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
@@ -261,7 +270,10 @@ class DesktopUiHost {
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
-									if (captureReady) captureState.readyFrames++;
+									if (captureReady) {
+										captureState.readyFrames++;
+										if (script != null) script.start(Sys.time());
+									}
 									if (options.captureSeconds > 0.0 && captureState.startedAt < 0.0 && captureReady)
 										captureState.startedAt = frameStartedAt;
 									if (options.captureDirectory != null) {
@@ -270,15 +282,25 @@ class DesktopUiHost {
 											frame: runtime.rendered,
 											repaintOnly: repaintOnly,
 											allocatedBytes: runtime.lastFrameAllocatedBytes,
+											prepareSeconds: runtime.lastPrepareSeconds,
+											applicationSubmitSeconds: runtime.lastApplicationSubmitSeconds,
+											contextRenderSeconds: runtime.lastContextRenderSeconds,
+											prepareAllocatedBytes: runtime.lastPrepareAllocatedBytes,
+											submitAllocatedBytes: runtime.lastSubmitAllocatedBytes,
 											startedAtSeconds: frameStartedAt,
 											requestReason: requestReason,
 											requestSerial: requestSerial,
+											scriptedInputCount: scriptedFrameCount,
+											scriptedInputRequestAgeSeconds: scriptedFrameAt < 0 ? null : frameStartedAt - scriptedFrameAt,
+											scriptedInputDispatchSeconds: scriptedFrameDispatch,
 											textInputCount: textInputCount,
 											textInputRequestAgeSeconds: textInputRequestedAt < 0.0 ? null : frameStartedAt - textInputRequestedAt,
 											textInputDispatchSeconds: textInputDispatchSeconds,
 											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
 											frameSeconds: Sys.time() - frameStartedAt,
 											frameGcSeconds: collectionSeconds,
+											gcCollections: hl.Gc.collections() - gcCollectionsAtStart,
+											gcLastPauseSeconds: hl.Gc.lastPauseMicros() / 1000000.0,
 											submitSeconds: metrics == null ? null : metrics.submitSeconds,
 											styleResolutions: metrics == null ? null : metrics.styleResolutions,
 											styleCacheHits: metrics == null ? null : metrics.styleCacheHits,
@@ -340,11 +362,20 @@ class DesktopUiHost {
 				if (!active) return false;
 				try {
 				var hadEvent = pump.poll();
+				while (script != null && script.tick(Sys.time(), pump, window, function(label) {
+					if (recordPath != null) File.appendContent(recordPath, Json.stringify({kind:"checkpoint",
+						label:label, at:Sys.time(), scheduledAt:script.scheduledAt,
+						delivered:script.delivered, appState:(cast runtime.app():DesktopUiApplication).diagnosticState()}) + "\n");
+				}, function(at) {
+					if (scriptedAt < 0) scriptedAt = at;
+					scriptedCount++;
+				}, function(seconds) { scriptedDispatch += seconds; })) hadEvent = true;
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
 				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0 &&
-					Sys.time() - captureState.startedAt >= options.captureSeconds) {
+					Sys.time() - captureState.startedAt >= options.captureSeconds &&
+					(script == null || script.complete && scriptedCount == 0)) {
 					writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
 						eventHistory, frameHistory, eventCounts, frameRequestCounts);
 					session.stop();
