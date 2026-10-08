@@ -36,6 +36,8 @@ class Menu implements View {
 	public final y:Float;
 	public var onDismiss:Void->Void;
 	public var hasDismissHandler(default, null):Bool;
+	/** Keyboard invocation selects an item; pointer invocation focuses only the menu. */
+	public var selectFirstOnOpen:Bool = false;
 
 	public function new(key:String, items:Array<MenuItem>, x:Float = 0.0, y:Float = 0.0,
 			?onDismiss:Void->Void) {
@@ -138,8 +140,30 @@ class Menu implements View {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem && node.enabled)
 				focusableItems.push(node);
 		});
-		if (menuViewport != null && focusableItems.length == 0) menuViewport.focusable = true;
-		root.on(UiEventKind.KeyDown, function(event) {
+		// Keep the modal keyboard owner independent of the highlighted action.
+		root.focusable = !selectFirstOnOpen || focusableItems.length == 0;
+		var initialFocusPending = context.state(root.id, true);
+		root.onResolved(function(_) {
+			if (!initialFocusPending.value) return;
+			initialFocusPending.update(false);
+			var initial = selectFirstOnOpen && focusableItems.length > 0 ? focusableItems[0] : root;
+			context.requestFocusAfterLayout(initial.id);
+		});
+		root.on(UiEventKind.PointerMove, function(event) {
+			var node = root.find(event.target);
+			while (node != null && node != root) {
+				if (node.enabled && node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem) {
+					context.requestFocus(node.id);
+					break;
+				}
+				node = node.parent;
+			}
+		}, "capture");
+		var navigate = function(event:haxeon.ui.core.UiEvent) {
+			if (event.target.equals(root.id) && (event.key == UiKey.Enter || event.key == UiKey.Space)) {
+				event.preventDefault();
+				return;
+			}
 			if (event.defaultPrevented || (event.key != UiKey.Down && event.key != UiKey.Up))
 				return;
 			if (focusableItems.length > 0) {
@@ -168,7 +192,12 @@ class Menu implements View {
 				if (!context.requestFocus(target.id)) context.requestFocusAfterLayout(target.id);
 			}
 			event.preventDefault();
-		}, "capture");
+		};
+		root.on(UiEventKind.KeyDown, navigate, "capture");
+		root.on(UiEventKind.KeyRepeat, navigate, "capture");
+		// Capture visits ancestors only; the neutral menu can itself be the target.
+		root.on(UiEventKind.KeyDown, navigate);
+		root.on(UiEventKind.KeyRepeat, navigate);
 		var semantics = new Semantics(AccessibilityRole.Menu, "Menu");
 		semantics.states |= AccessibilityState.Modal;
 		if (hasDismissHandler)

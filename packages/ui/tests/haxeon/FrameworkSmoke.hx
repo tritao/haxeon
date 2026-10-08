@@ -678,6 +678,7 @@ class FrameworkSmoke {
 			fonts.dispose();
 			return 0;
 		}
+		MenuInteractionTests.run(context);
 		if (!retainedStateUsageValid())
 			return 305;
 		if (!themeSwapChangesStyleRevision())
@@ -2540,6 +2541,7 @@ class FrameworkSmoke {
 			new MenuItem("open", "Open", function() { selectedMenuItem = "open"; }),
 			new MenuItem("disabled", "Unavailable", null, false)
 		], 32.0, 24.0, function() { menuDismissals++; });
+		menu.selectFirstOnOpen = true;
 		var menuRoot = context.submit(menu, dialogFrame);
 		var menuGeometry:ResolvedLayoutItem = cast menuRoot.children[2].resolved;
 		if (context.focus.focusedId == null ||
@@ -2578,6 +2580,7 @@ class FrameworkSmoke {
 				function() { overflowChoice = choice; }));
 		}
 		var overflowMenu = new Menu("overflow-menu-smoke", overflowMenuItems, 250.0, 115.0);
+		overflowMenu.selectFirstOnOpen = true;
 		var overflowMenuFrame = new LayoutFrame(256.0, 120.0);
 		var overflowMenuRoot = context.submit(overflowMenu, overflowMenuFrame);
 		var overflowMenuBounds = overflowMenuRoot.children[2].resolved;
@@ -4991,8 +4994,10 @@ class FrameworkSmoke {
 		if (!uiContext.accessibilityAction(commandButton.id.value, AccessibilityAction.Activate,
 			null, -1, -1, 1) || surfaceRuns != 1)
 			return false;
-		var menuRoot = uiContext.submit(new CommandMenu("surface-menu", ["surface.run", "surface.stop"],
-			24.0, 24.0, surfaceRegistry), new LayoutFrame(480.0, 320.0));
+		var commandMenu = new CommandMenu("surface-menu", ["surface.run", "surface.stop"],
+			24.0, 24.0, surfaceRegistry);
+		commandMenu.selectFirstOnOpen = true;
+		var menuRoot = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		if (menuRoot == null || menuRoot.semantics == null ||
 			menuRoot.semantics.role != AccessibilityRole.Menu)
 			return false;
@@ -5006,8 +5011,7 @@ class FrameworkSmoke {
 			firstItem.computedStyle.get(StyleProperty.Background).red !=
 			uiContext.buildContext.theme.tokens.selectionField.red)
 			return false;
-		var settledMenu = uiContext.submit(new CommandMenu("surface-menu", ["surface.run", "surface.stop"],
-			24.0, 24.0, surfaceRegistry), new LayoutFrame(480.0, 320.0));
+		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		var settledFirst:Null<RenderNode> = settledMenu.find(firstItem.id);
 		if (settledFirst == null ||
 			settledFirst.computedStyle.get(StyleProperty.Background).red !=
