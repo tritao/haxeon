@@ -402,9 +402,12 @@ class Theme {
 		styles.rule(StyleSelector.widget("dialog-heading"),
 			[StyleValue.textColor(text)]);
 		styles.rule(StyleSelector.widget("tooltip"), [
-			StyleValue.padding(new Insets(6.0, 6.0, 4.0, 4.0)),
-			StyleValue.background(tooltipBackground),
-			StyleValue.textColor(Color.rgba(0.96, 0.97, 0.99, 1.0)),
+			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
+			StyleValue.background(tokens.surfaceRaised),
+			StyleValue.textColor(tokens.textPrimary),
+			StyleValue.borderColor(tokens.borderStrong), StyleValue.borderWidth(1.0),
+			StyleValue.shadowColor(tokens.selectionPopupShadow),
+			StyleValue.of(StyleProperty.ShadowOffsetY, 2.0), StyleValue.shadowBlur(6.0),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, tokens.radiusSmall),
