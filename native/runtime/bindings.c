@@ -626,3 +626,6 @@ DEFINE_PRIM(_VOID,__host_set_private_umask,_NO_ARG);
 DEFINE_PRIM(_VOID,__host_install_stop_signals,_NO_ARG);
 DEFINE_PRIM(_BOOL,__host_stop_requested,_NO_ARG);
 DEFINE_PRIM(_STRING,__host_regular_file_identity,_STRING);
+DEFINE_PRIM(_ABSTRACT(realtime_process_identity),__host_process_identity_open,_I32 _STRING);
+DEFINE_PRIM(_BOOL,__host_process_identity_terminate,_ABSTRACT(realtime_process_identity));
+DEFINE_PRIM(_VOID,__host_process_identity_close,_ABSTRACT(realtime_process_identity));

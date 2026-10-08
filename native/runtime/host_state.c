@@ -1,10 +1,14 @@
 /* Host primitives for private state, secure randomness, loopback ports and lifetime locks. */
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #ifdef HL_WIN
 #include <windows.h>
 #include <aclapi.h>
 #include <bcrypt.h>
 #include <wchar.h>
 #else
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <arpa/inet.h>
@@ -13,6 +17,10 @@
 #include <sys/socket.h>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#ifdef __linux__
+#include <sys/syscall.h>
+#endif
 #include <unistd.h>
 #endif
 
@@ -26,6 +34,109 @@ typedef struct realtime_file_lock {
 #endif
 	bool closed;
 } realtime_file_lock;
+
+typedef struct realtime_process_identity {
+	void (*finalize)(void *);
+#ifdef HL_WIN
+	HANDLE process;
+#else
+	int fd;
+#endif
+	bool closed;
+} realtime_process_identity;
+
+static void realtime_process_identity_close(void *value) {
+	realtime_process_identity *handle = value;
+	if (handle->closed) return;
+#ifdef HL_WIN
+	if (handle->process != NULL) CloseHandle(handle->process);
+	handle->process = NULL;
+#else
+	if (handle->fd >= 0) close(handle->fd);
+	handle->fd = -1;
+#endif
+	handle->closed = true;
+}
+
+#ifdef HL_WIN
+static bool realtime_process_image_matches(HANDLE process, vstring *expected) {
+	wchar_t actual[32768], expected_path[32768], actual_path[32768];
+	DWORD actual_length = sizeof(actual) / sizeof(actual[0]);
+	DWORD expected_length, full_actual_length;
+	if (!QueryFullProcessImageNameW(process, 0, actual, &actual_length)) return false;
+	const wchar_t *expected_value = (const wchar_t *)realtime_string_data(expected);
+	full_actual_length = GetFullPathNameW(actual, sizeof(actual_path) / sizeof(actual_path[0]), actual_path, NULL);
+	if (full_actual_length == 0 || full_actual_length >= sizeof(actual_path) / sizeof(actual_path[0])) return false;
+	expected_length = GetFullPathNameW(expected_value, sizeof(expected_path) / sizeof(expected_path[0]), expected_path, NULL);
+	if (expected_length == 0 || expected_length >= sizeof(expected_path) / sizeof(expected_path[0])) return false;
+	for (DWORD index = 0; index < full_actual_length; index++) if (actual_path[index] == L'/') actual_path[index] = L'\\';
+	for (DWORD index = 0; index < expected_length; index++) if (expected_path[index] == L'/') expected_path[index] = L'\\';
+	return CompareStringOrdinal(actual_path, (int)full_actual_length, expected_path, (int)expected_length, TRUE) == CSTR_EQUAL;
+}
+#endif
+
+HL_PRIM realtime_process_identity *HL_NAME(__host_process_identity_open)(int pid, vstring *expected_executable) {
+#ifdef HL_WIN
+	if (pid <= 0 || expected_executable == NULL) return NULL;
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | SYNCHRONIZE, FALSE, (DWORD)pid);
+	if (process == NULL || GetProcessId(process) != (DWORD)pid || !realtime_process_image_matches(process, expected_executable)) {
+		if (process != NULL) CloseHandle(process);
+		return NULL;
+	}
+	realtime_process_identity *handle = hl_gc_alloc_finalizer(sizeof(realtime_process_identity));
+	memset(handle, 0, sizeof(*handle));
+	handle->finalize = realtime_process_identity_close;
+	handle->process = process;
+	return handle;
+#else
+	(void)expected_executable;
+#if defined(__linux__) && defined(SYS_pidfd_open)
+	if (pid <= 0) return NULL;
+	int fd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
+	if (fd < 0) {
+		if (errno == ESRCH || errno == ENOSYS || errno == EINVAL) return NULL;
+		hl_error("Could not open manager process handle: %s", strerror(errno));
+	}
+	realtime_process_identity *handle = hl_gc_alloc_finalizer(sizeof(realtime_process_identity));
+	memset(handle, 0, sizeof(*handle));
+	handle->finalize = realtime_process_identity_close;
+	handle->fd = fd;
+	return handle;
+#else
+	(void)pid;
+	return NULL;
+#endif
+#endif
+}
+
+HL_PRIM bool HL_NAME(__host_process_identity_terminate)(realtime_process_identity *handle) {
+#ifdef HL_WIN
+	if (handle == NULL || handle->closed || handle->process == NULL) return false;
+	DWORD status = 0;
+	if (!GetExitCodeProcess(handle->process, &status)) hl_error("Could not inspect manager process: %d", (int)GetLastError());
+	if (status != STILL_ACTIVE) return false;
+	if (TerminateProcess(handle->process, 0)) return true;
+	DWORD error = GetLastError();
+	if (WaitForSingleObject(handle->process, 0) == WAIT_OBJECT_0) return false;
+	hl_error("Could not stop manager process: %d", (int)error);
+	return false;
+#else
+#if defined(__linux__) && defined(SYS_pidfd_send_signal)
+	if (handle == NULL || handle->closed || handle->fd < 0) return false;
+	if (syscall(SYS_pidfd_send_signal, handle->fd, SIGTERM, NULL, 0) == 0) return true;
+	if (errno == ESRCH) return false;
+	hl_error("Could not stop manager process: %s", strerror(errno));
+	return false;
+#else
+	(void)handle;
+	return false;
+#endif
+#endif
+}
+
+HL_PRIM void HL_NAME(__host_process_identity_close)(realtime_process_identity *handle) {
+	if (handle != NULL) realtime_process_identity_close(handle);
+}
 
 #ifdef HL_WIN
 static bool realtime_host_current_sid(PSID *sid, void **storage) {
