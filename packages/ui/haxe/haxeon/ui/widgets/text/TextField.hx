@@ -51,6 +51,8 @@ class TextField implements View {
 	public var label:Null<String>;
 	/** Muted visual hint shown only while the editor is empty. */
 	public var placeholder:Null<String>;
+	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
+	public var ellipsizeWhenUnfocused:Bool = false;
 	public final multiline:Bool;
 	public final style:LayoutStyle;
 	public final textStyle:Null<TextStyle>;
@@ -69,6 +71,8 @@ class TextField implements View {
 	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
 	/** Handles navigation of all selections when additional carets are present. */
 	public var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout)->Bool>;
+	/** Logical viewport height when an outer scroll container owns scrolling. */
+	public var pageHeightProvider:Null<Void->Float>;
 	/** Return true after applying an operation; the live layout supplies shaped word boundaries. */
 	/** True when an application document owns undo/redo. */
 	public var historyManagedExternally:Bool = false;
@@ -259,7 +263,9 @@ class TextField implements View {
 			}
 			// Unfocused, unselected fields need only their text node. State changes
 			// invalidate the frame before selection or caret decoration is painted.
-			if (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0) {
+			var showEllipsis = ellipsizeWhenUnfocused && !multiline && !editor.focused && editor.documentLength() > 0
+				&& colorRangeProvider == null && decorationProvider == null;
+			if (!showEllipsis && (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0)) {
 				var selectionStyle = new LayoutStyle();
 				selectionStyle.width = LayoutAxis.grow();
 				selectionStyle.height = LayoutAxis.grow();
@@ -304,6 +310,10 @@ class TextField implements View {
 			var textNodeColor = showsPlaceholder ? context.theme.mutedText :
 				(colorSource != null && colorSource.layer != "framework"
 					? computed.get(StyleProperty.TextColor) : resolved.textColor);
+			if (showEllipsis)
+				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
+					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,
+						textNodeTextStyle.letterSpacing, TextWrap.None, null, null, null, textNodeColor)).build(context);
 			textNode.applyTextStyle(new ResolvedTextStyle(textNodeTextStyle,
 				editor.paragraphStyle, textNodeColor));
 			if (!showsPlaceholder) {
@@ -333,9 +343,9 @@ class TextField implements View {
 					if (!editor.isDisposed()) {
 						var now = Sys.time();
 						var active = context.textInput.isOwner(id);
-						if (active && !readOnly && (editor.selectionStart == editor.selectionEnd || hasAdditionalCaret))
+						if (active && (editor.selectionStart == editor.selectionEnd || hasAdditionalCaret))
 							context.textInput.requestCaretFrameAt(editor.nextCaretBlinkTime(now));
-						paintEditorDecorations(canvas, editor, active, context.theme, now, !readOnly, additionalSelections);
+						paintEditorDecorations(canvas, editor, active, context.theme, now, true, additionalSelections);
 					}
 				});
 				editorContent.add(paintNode);
@@ -560,6 +570,16 @@ class TextField implements View {
 			});
 
 			editor.configureHistory(!historyManagedExternally);
+			var pageStep = function(direction:Int):Int {
+				var height = pageHeightProvider != null ? pageHeightProvider() :
+					editorContent.resolved == null ? 0.0 : editorContent.resolved.height;
+				var caret = editor.layout.caret(editor.focusPosition());
+				var lineHeight = editor.layout.paragraphStyle.lineHeight;
+				var step = lineHeight == null ? Math.abs(caret.descender - caret.ascender) : lineHeight;
+				// Keep one line of overlap between consecutive pages.
+				return direction * (Math.isFinite(height) && height > 0
+					? Std.int(Math.max(1, Math.floor(height / Math.max(1.0, step)) - 1)) : 1);
+			};
 			var handleKey = function(event:UiEvent) {
 				if (!enabled)
 					return;
@@ -599,6 +619,8 @@ class TextField implements View {
 							multiline ? VisualLine(-1, extend) : null;
 						case UiKey.Down: wordNavigation ? Paragraph(1, extend, macWordNavigation) :
 							multiline ? VisualLine(1, extend) : null;
+						case UiKey.PageUp: multiline ? VisualLine(pageStep(-1), extend) : null;
+						case UiKey.PageDown: multiline ? VisualLine(pageStep(1), extend) : null;
 						case UiKey.Home: LineBoundary(false, extend);
 						case UiKey.End: LineBoundary(true, extend);
 						case _: null;
@@ -668,6 +690,10 @@ class TextField implements View {
 					changed = editor.moveCaretByParagraph(-1, extend, macWordNavigation);
 				else if (wordNavigation && event.key == UiKey.Down)
 					changed = editor.moveCaretByParagraph(1, extend, macWordNavigation);
+				else if (multiline && event.key == UiKey.PageUp)
+					changed = editor.moveCaretVertically(pageStep(-1), extend);
+				else if (multiline && event.key == UiKey.PageDown)
+					changed = editor.moveCaretVertically(pageStep(1), extend);
 				else if (multiline && event.key == UiKey.Up)
 					changed = editor.moveCaretVertically(-1, extend);
 				else if (multiline && event.key == UiKey.Down)

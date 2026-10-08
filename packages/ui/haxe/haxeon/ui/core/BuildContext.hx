@@ -270,7 +270,7 @@ class BuildContext {
 				idsByPath.clear();
 				cachedIdCount = 0;
 			}
-			id = KeyScope.widgetIdForPath(path);
+			id = stateStore.resolveWidgetId(path);
 			idsByPath.set(path, id);
 			cachedIdCount++;
 		}
