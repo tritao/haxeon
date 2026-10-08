@@ -231,7 +231,7 @@ class CommandRegistry {
 	 * therefore wins without mutating the registry's persistent scope stack.
 	 */
 	public function dispatchContextInScopes(key:Int, modifiers:Int,
-			context:Null<CommandContext>, pathScopes:Null<Array<String>>):CommandResult {
+			context:Null<CommandContext>, pathScopes:Null<Array<String>>, repeated:Bool = false):CommandResult {
 		var normalized = Shortcut.normalizeModifiers(modifiers);
 		var actual = context == null ? new CommandContext() : context;
 		var scopes:Array<String> = [];
@@ -272,6 +272,7 @@ class CommandRegistry {
 						notifyInvocation(id, disabled);
 						break;
 					}
+					if (repeated && !command.repeatable) return CommandResult.executed(false);
 					var result = command.executeContext(actual);
 					notifyInvocation(id, result);
 					if (result.succeeded) {

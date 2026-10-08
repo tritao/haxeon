@@ -737,6 +737,8 @@ class TextEditorLayout {
 		return clamp(record.start + moved, record.start, record.end);
 	}
 
+	public function isDisposed():Bool return disposed;
+
 	public function dispose():Void {
 		if (disposed)
 			return;
