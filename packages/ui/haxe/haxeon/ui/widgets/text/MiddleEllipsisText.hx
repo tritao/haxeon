@@ -57,19 +57,25 @@ class MiddleEllipsisText implements View {
           var layout = TextLayout.createStyled(context.fonts, value, 100000.0,
             resolved.textStyle, paragraph);
           next = value;
-          if (layout.measure().width > available + 1.0) {
-            var document = new TextDocument(value);
-            var low = 0, high = document.codepointCount;
-            while (low < high) {
-              var count = (low + high + 1) >> 1;
-              var prefix = middle ? (count + 1) >> 1 : count;
-              var candidate = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (count - prefix), document.codepointCount);
-              layout.setText(candidate);
-              if (layout.measure().width <= available) low = count;
-              else high = count - 1;
+          if (layout.measure().width > available) {
+            // The marker must satisfy the same bound as every candidate. If it
+            // cannot fit, return no paintable text rather than a clipped marker.
+            layout.setText("…");
+            if (layout.measure().width > available) next = "";
+            else {
+              var document = new TextDocument(value);
+              var low = 0, high = document.codepointCount;
+              while (low < high) {
+                var count = (low + high + 1) >> 1;
+                var prefix = middle ? (count + 1) >> 1 : count;
+                var candidate = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (count - prefix), document.codepointCount);
+                layout.setText(candidate);
+                if (layout.measure().width <= available) low = count;
+                else high = count - 1;
+              }
+              var prefix = middle ? (low + 1) >> 1 : low;
+              next = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (low - prefix), document.codepointCount);
             }
-            var prefix = middle ? (low + 1) >> 1 : low;
-            next = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (low - prefix), document.codepointCount);
           }
           layout.dispose();
           memo.store(value, available, resolved.textStyle, resolved.paragraphStyle, next);
