@@ -41,4 +41,5 @@ enum abstract IconName(Int) from Int to Int {
 	var WindowMinimize = 36;
 	var WindowMaximize = 37;
 	var WindowRestore = 38;
+	var Settings = 39;
 }

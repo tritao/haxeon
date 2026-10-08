@@ -7,6 +7,7 @@ import haxeon.ui.PathBuilder;
 class IconData {
 	public static function build(name:IconName):Path {
 		return switch name {
+			case IconName.Settings: settings();
 			case IconName.WindowMinimize: new PathBuilder().moveTo(5, 12).lineTo(19, 12).build();
 			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5, 19).lineTo(5, 5).build();
 			case IconName.WindowRestore: new PathBuilder().moveTo(8, 8).lineTo(8, 4).lineTo(20, 4).lineTo(20, 16).lineTo(16, 16)
@@ -77,6 +78,21 @@ class IconData {
 				.moveTo(20, 12).lineTo(10, 12).cubicTo(6, 12, 4, 14, 4, 18).build();
 			case _: throw "Unsupported icon name";
 		};
+	}
+
+	static function settings():Path {
+		var path = new PathBuilder();
+		for (index in 0...32) {
+			var angle = -Math.PI / 2 + index * Math.PI / 16;
+			var radius = index % 4 == 0 || index % 4 == 3 ? 8 : 10;
+			var x = 12 + Math.cos(angle) * radius, y = 12 + Math.sin(angle) * radius;
+			if (index == 0) path.moveTo(x, y); else path.lineTo(x, y);
+		}
+		path.close();
+		path.moveTo(15, 12).cubicTo(15, 13.657, 13.657, 15, 12, 15)
+			.cubicTo(10.343, 15, 9, 13.657, 9, 12).cubicTo(9, 10.343, 10.343, 9, 12, 9)
+			.cubicTo(13.657, 9, 15, 10.343, 15, 12);
+		return path.build();
 	}
 
 	static function magnet():Path
