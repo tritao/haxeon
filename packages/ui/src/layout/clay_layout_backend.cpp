@@ -249,7 +249,11 @@ LayoutEngine::Impl::measure_intrinsic_text(Clay_StringSlice text, Clay_TextEleme
     TextIntrinsicMetrics metrics;
     if (!state.text.measure_intrinsic_utf8(value.c_str(), options, &metrics))
         return result;
-    result.unwrappedDimensions = {metrics.bounds.width, config->lineHeight > 0
+    // Intrinsic sizes are allocation requirements, not ink bounds. Round the
+    // horizontal requirement outwards so adding/subtracting container padding
+    // cannot leave paragraph layout a fraction short of the measured advance.
+    // Keep shaping metrics fractional; only the box allocation is quantized.
+    result.unwrappedDimensions = {std::ceil(metrics.bounds.width), config->lineHeight > 0
                                                             ? static_cast<float>(config->lineHeight)
                                                             : metrics.bounds.height};
     result.baseline = metrics.baseline;
