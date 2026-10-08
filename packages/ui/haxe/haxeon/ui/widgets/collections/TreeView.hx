@@ -66,6 +66,10 @@ class TreeView implements View {
 	public var onExpandedChanged:Null<String->Bool->Void>;
 	/** Horizontal indentation between tree hierarchy levels. */
 	public var indentWidth:Float = 16.0;
+	/** Draw vertical indentation guides through all rows inside expanded branches. */
+	public var verticalGuidesOnly:Bool = false;
+	/** Align leaf content in the disclosure column instead of reserving arrow space. */
+	public var compactLeafIndent:Bool = false;
 
 	final fallbackViewportHeight:Float;
 	final expandedKeys:Map<String, Bool>;
@@ -277,7 +281,8 @@ class TreeView implements View {
 					var item = itemBuilder == null ? model.buildItem(nodeKey) : itemBuilder(nodeKey, entry.expanded);
 					if (item == null)
 						throw 'TreeView model returned null for key $nodeKey';
-					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, selectedKey == nodeKey,
+					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
+						compactLeafIndent, selectedKey == nodeKey,
 						function() { select(nodeKey); },
 						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
 						function() { toggleExpanded(nodeKey); },
@@ -507,7 +512,7 @@ class TreeView implements View {
 			var childKey = model.childKeyAt(branch.key, childIndex);
 			if (childKey == null || childKey.length == 0)
 				throw 'TreeView child ${branch.key}:$childIndex has an empty key';
-			var childGuides = branch.guideContinuation.concat([branch.hasNextSibling]);
+			var childGuides = branch.guideContinuation.concat([verticalGuidesOnly || branch.hasNextSibling]);
 			var child = buildBranch(childKey, branch.key, branch.depth + 1,
 				childGuides, childIndex < childCount - 1, branch.rootIndex, childIndex, branch);
 			branch.children.push(child);
@@ -746,6 +751,8 @@ private class TreeViewRow implements View {
 	final child:View;
 	final entry:TreeEntry;
 	final indentWidth:Float;
+	final verticalGuidesOnly:Bool;
+	final compactLeafIndent:Bool;
 	final selected:Bool;
 	final onSelect:Void->Void;
 	final onActivate:Void->Void;
@@ -755,7 +762,8 @@ private class TreeViewRow implements View {
 	final onBuilt:WidgetId->Void;
 	final onContextMenu:UiEvent->Void;
 
-	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float, selected:Bool,
+	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
+			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool,
 			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
 			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
@@ -763,6 +771,8 @@ private class TreeViewRow implements View {
 		this.child = child;
 		this.entry = entry;
 		this.indentWidth = indentWidth;
+		this.verticalGuidesOnly = verticalGuidesOnly;
+		this.compactLeafIndent = compactLeafIndent;
 		this.selected = selected;
 		this.onSelect = onSelect;
 		this.onActivate = onActivate;
@@ -827,28 +837,40 @@ private class TreeViewRow implements View {
 				var continuation = entry.guideContinuation;
 				var hasNext = entry.hasNextSibling;
 				var guideColor = context.theme.tokens.border;
-				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":";
+				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
+					(entry.hasChildren ? "branch" : "leaf") + ":";
 				for (level in 1...depth)
 					guideKey += continuation[level] ? "1" : "0";
 				guideNode.onPaint(function(canvas, geometry) {
 					var path = new PathBuilder();
+					var hasSegments = false;
 					var centerY = geometry.height * 0.5;
 					for (level in 1...depth) if (continuation[level]) {
 						var x = (level - 1) * indentWidth + indentWidth * 0.5;
 						path.moveTo(x, 0.0).lineTo(x, geometry.height);
+						hasSegments = true;
 					}
-					var x = (depth - 1) * indentWidth + indentWidth * 0.5;
-					path.moveTo(x, 0.0).lineTo(x, hasNext ? geometry.height : centerY);
-					path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
-					canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
-				}, guideKey + ":" + indentWidth + ":" + guideColor.red + ":" + guideColor.green + ":" +
+					if (verticalGuidesOnly) {
+						var x = (depth - 1) * indentWidth + indentWidth * 0.5;
+						path.moveTo(x, 0.0).lineTo(x, geometry.height);
+						hasSegments = true;
+					} else {
+						var x = (depth - 1) * indentWidth + indentWidth * 0.5;
+						path.moveTo(x, 0.0).lineTo(x, hasNext ? geometry.height : centerY);
+						path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
+						hasSegments = true;
+					}
+					if (hasSegments)
+						canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
+				}, guideKey + ":" + indentWidth + ":" + (verticalGuidesOnly ? "vertical" : "branch") + ":" + guideColor.red + ":" + guideColor.green + ":" +
 					guideColor.blue + ":" + guideColor.alpha);
 				node.add(guideNode);
 			}
 
 			var disclosure:View = entry.hasChildren
 				? new TreeDisclosure("disclosure-control", entry.expanded, entry.extent, onToggle)
-				: new Spacer("disclosure-spacer", LayoutAxis.fixed(20.0), LayoutAxis.fixed(entry.extent));
+				: new Spacer("disclosure-spacer", LayoutAxis.fixed(compactLeafIndent ? 0.0 : 20.0),
+					LayoutAxis.fixed(entry.extent));
 			node.add(context.withScope(new Key("disclosure"), function() return disclosure.build(context)));
 			node.add(new KeyedView('item:$itemKey', child).build(context));
 			onBuilt(node.id);
