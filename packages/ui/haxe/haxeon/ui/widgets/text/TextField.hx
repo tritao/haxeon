@@ -274,9 +274,12 @@ class TextField implements View {
 				var selectionNode = new RenderNode(context.id("editor-selection"),
 					LayoutVisualKind.Custom, selectionStyle);
 				selectionNode.hitTestSelf = false;
-				selectionNode.onPaint(function(canvas, _) {
-					if (!editor.isDisposed())
-						paintSelection(canvas, editor, context.textInput.isOwner(id), context.theme, additionalSelections);
+				selectionNode.onPaint(function(canvas, geometry) {
+					if (!editor.isDisposed()) {
+						var visible = geometry.visibleLocalBounds();
+						paintSelection(canvas, editor, context.textInput.isOwner(id), context.theme, additionalSelections,
+							editor.scrollOffsetY + visible.y, editor.scrollOffsetY + visible.y + visible.height);
+					}
 				});
 				editorContent.add(selectionNode);
 			}
@@ -442,12 +445,15 @@ class TextField implements View {
 				}
 				publishDiagnostics(caretRect);
 				if (!editor.focused || !context.textInput.isOwner(id) || context.platformSurface == null ||
-					context.platformSurface.isDisposed())
+					context.platformSurface.isDisposed() ||
+					(context.textInput.platformChecked && !context.textInput.platformSupported))
 					return;
-				var viewportHeight = editorContent.resolved == null ? geometry.height :
-					editorContent.resolved.height;
-				var visibleTop = editor.scrollOffsetY;
-				var visibleBottom = visibleTop + viewportHeight;
+				// The field can be document-sized inside an ancestor ScrollView. Its
+				// content height is not the viewport: only publish geometry inside
+				// the resolved ancestor clip, converted back into local text space.
+				var visible = geometry.visibleLocalBounds();
+				var visibleTop = editor.scrollOffsetY + visible.y;
+				var visibleBottom = visibleTop + visible.height;
 				var selectionGeometry:Array<TextRangeRect> = [];
 				if (editor.selectionStart != editor.selectionEnd)
 					for (rect in editor.layout.selectionRangeRects(editor.anchorPosition(),
@@ -831,14 +837,15 @@ class TextField implements View {
 	}
 
 	static function paintSelection(canvas:Canvas, editor:TextEditorState,
-			active:Bool, theme:haxeon.ui.theme.Theme, additional:Array<TextSelection>):Void {
+			active:Bool, theme:haxeon.ui.theme.Theme, additional:Array<TextSelection>,
+			minY:Float, maxY:Float):Void {
 		canvas.translate(0.0, -editor.scrollOffsetY);
 		for (selection in additional)
 			for (rect in editor.layout.selectionRects(new TextPosition(selection.anchor, selection.anchorAffinity),
-				new TextPosition(selection.focus, selection.focusAffinity)))
+				new TextPosition(selection.focus, selection.focusAffinity), minY, maxY))
 				canvas.fillRectIfPositive(rect, active ? theme.textSelection : theme.textSelectionInactive);
 		if (editor.selectionStart != editor.selectionEnd) {
-			for (rect in editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition()))
+			for (rect in editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition(), minY, maxY))
 				canvas.fillRectIfPositive(rect, active ? theme.textSelection : theme.textSelectionInactive);
 		}
 	}
