@@ -42,4 +42,6 @@ enum abstract IconName(Int) from Int to Int {
 	var WindowMaximize = 37;
 	var WindowRestore = 38;
 	var Settings = 39;
+	var NewFolder = 44;
+	var CollapseAll = 45;
 }

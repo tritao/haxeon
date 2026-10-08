@@ -7,6 +7,11 @@ import haxeon.ui.PathBuilder;
 class IconData {
 	public static function build(name:IconName):Path {
 		return switch name {
+			case IconName.NewFolder: new PathBuilder().moveTo(20, 11).lineTo(20, 7).lineTo(10, 7).lineTo(8, 4).lineTo(3, 4).lineTo(3, 20).lineTo(12, 20)
+				.moveTo(15, 17).lineTo(23, 17).moveTo(19, 13).lineTo(19, 21).build();
+			case IconName.CollapseAll: new PathBuilder().moveTo(8, 3).lineTo(21, 3).lineTo(21, 16)
+				.moveTo(3, 8).lineTo(16, 8).lineTo(16, 21).lineTo(3, 21).lineTo(3, 8)
+				.moveTo(6, 14).lineTo(13, 14).build();
 			case IconName.Settings: settings();
 			case IconName.WindowMinimize: new PathBuilder().moveTo(5, 12).lineTo(19, 12).build();
 			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5, 19).lineTo(5, 5).build();

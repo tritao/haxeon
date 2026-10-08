@@ -6,6 +6,7 @@ import haxeon.ui.core.UiEvent;
 
 /** Optional behavior and presentation settings for an advanced tab strip. */
 class TabsOptions {
+	public var headerTrailing:Null<haxeon.ui.core.View>;
 	public var style:Null<LayoutStyle>;
 	public var selectionMode:TabsSelectionMode;
 	public var onTabDragStart:Null<String->UiEvent->Void>;
@@ -16,6 +17,7 @@ class TabsOptions {
 	public var onTabHeaderBuilt:Null<String->RenderNode->Void>;
 
 	public function new() {
+		headerTrailing = null;
 		style = null;
 		selectionMode = TabsSelectionMode.Local;
 		onTabDragStart = null;

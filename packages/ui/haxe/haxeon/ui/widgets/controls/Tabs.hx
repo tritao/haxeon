@@ -51,6 +51,8 @@ class Tabs implements View {
 
 	/** Opt-in header retention; callers include all application-owned header inputs. */
 	public var headerRevision:Null<Void->String>;
+	/** Fixed actions beside the scrolling tab strip. */
+	public var headerTrailing:Null<View> = null;
 	/** Overrides the default scrolling viewport; the caller owns overflow and selected-tab reveal. */
 	public var transformHeaderStrip:Null<(RenderNode, BuildContext)->RenderNode>;
 
@@ -91,6 +93,7 @@ class Tabs implements View {
 			configured.onTabDragStart, configured.onTabDragMove, configured.onTabDragEnd,
 			configured.onTabDragCancel, configured.selectionMode, configured.onTabHeaderBuilt);
 		tabs.onTabContextMenu = configured.onTabContextMenu;
+		tabs.headerTrailing = configured.headerTrailing;
 		return tabs;
 	}
 
@@ -134,7 +137,18 @@ class Tabs implements View {
 			var strip = revision == null ? stripView.build(context) :
 				new RetainedView("tab-headers", function(_) return stripView,
 					function() return active.length + ":" + active + revision()).build(context);
-			root.add(strip);
+			if (headerTrailing != null) {
+				var headerStyle = new LayoutStyle();
+				headerStyle.width = LayoutAxis.grow();
+				headerStyle.direction = LayoutDirection.LeftToRight;
+				headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+				var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
+				header.hitTestSelf = false;
+				strip.layout.style.width = LayoutAxis.grow();
+				header.add(strip);
+				header.add(context.withScope(new Key("header-actions"), function() return headerTrailing.build(context)));
+				root.add(header);
+			} else root.add(strip);
 
 			var selectedItem:Null<TabItem> = null;
 			for (item in items)

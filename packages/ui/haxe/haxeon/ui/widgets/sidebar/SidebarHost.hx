@@ -18,6 +18,10 @@ class SidebarHost implements View {
 	final onSelect:String->Void;
 	final iconProvider:Null<String->Null<haxeon.ui.icons.IconName>>;
 	final activeOnly:Bool;
+	/** Optional fixed header actions for the active destination. */
+	public var headerActions:Null<String->Null<View>> = null;
+	/** Evaluate against the built pane; hidden actions retain their layout space. */
+	public var headerActionsVisible:Null<RenderNode->Bool> = null;
 	public function new(key:String, model:SidebarModel, onSelect:String->Void, ?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
 		this.activeOnly = activeOnly;
 		this.iconProvider = iconProvider;
@@ -39,8 +43,15 @@ class SidebarHost implements View {
 		// clipping here makes Clay treat the whole stack as scroll content and
 		// leaves the page at its intrinsic height instead of sizing its viewport.
 		// Each destination owns its vertical clipping and scrolling.
+		var actions:Null<SidebarHeaderActions> = null;
+		if (headerActions != null) {
+			var content = headerActions(selected.id);
+			if (content != null) { actions = new SidebarHeaderActions(content); options.headerTrailing = actions; }
+		}
 		var tabs = Tabs.withOptions(key, items, selected.id, onSelect, options);
 		var node = tabs.build(context);
+		if (actions != null && actions.node != null && headerActionsVisible != null)
+			actions.node.layout.style.visible = headerActionsVisible(node);
 		node.onResolved(function(bounds) model.rememberWidth(bounds.width));
 		return node;
 	}
@@ -50,4 +61,14 @@ private class SidebarPage implements View {
 	final mode:SidebarMode;
 	public function new(mode:SidebarMode) this.mode = mode;
 	public function build(context:BuildContext):RenderNode return mode.provider().build(context);
+}
+
+private class SidebarHeaderActions implements View {
+	final child:View;
+	public var node(default, null):Null<RenderNode>;
+	public function new(child:View) this.child = child;
+	public function build(context:BuildContext):RenderNode {
+		node = child.build(context);
+		return node;
+	}
 }

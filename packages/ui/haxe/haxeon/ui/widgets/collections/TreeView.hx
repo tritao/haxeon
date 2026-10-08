@@ -184,6 +184,36 @@ class TreeView implements View {
 		return true;
 	}
 
+	/** Collapse known branches in one rebuild; optionally retain one open root level. */
+	public function collapseAll(keepRootsExpanded:Bool = false):Bool {
+		ensureTreeMetrics();
+		var collapsed:Map<String, Bool> = [];
+		for (key => value in expandedKeys) if (value) collapsed.set(key, true);
+		for (branch in branchByKey) if (branch.expanded) collapsed.set(branch.key, true);
+		var changed = false;
+		var opened:Array<String> = [];
+		if (keepRootsExpanded) for (key in rootKeys) {
+			collapsed.remove(key);
+			if (!expansionFor(key)) { opened.push(key); changed = true; }
+			expandedKeys.set(key, true);
+		}
+		for (key in collapsed.keys()) { expandedKeys.set(key, false); changed = true; }
+		if (!changed) return false;
+		if (expandedState != null) {
+			var state:State<Map<String, Bool>> = cast expandedState;
+			state.update(expandedKeys);
+		}
+		expansionRevision++;
+		ensureTreeMetrics();
+		controller.jumpTo(controller.offsetX, 0);
+		if (onExpandedChanged != null) {
+			var notify:String->Bool->Void = cast onExpandedChanged;
+			for (key in collapsed.keys()) notify(key, false);
+			for (key in opened) notify(key, true);
+		}
+		return true;
+	}
+
 	public function toggleExpanded(nodeKey:String):Bool {
 		ensureTreeMetrics();
 		var entry = branchByKey.get(nodeKey);
