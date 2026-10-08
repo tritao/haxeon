@@ -812,6 +812,8 @@ class UiContext {
 
 	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
 		ensureLive();
+		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
+		if (key == 335) key = UiKey.Enter;
 		events.key(kind, key, modifiers, scancode);
 	}
 
