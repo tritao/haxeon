@@ -38,11 +38,11 @@ class MiddleEllipsisText implements View {
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();
       style.clipHorizontal = true;
-      var text = new Text(displayed.value, style, null,
-        textStyle == null ? TextStyleOverride.paragraph(TextWrap.None) : textStyle);
+      var labelOverride = TextStyleOverride.combine(textStyle, TextStyleOverride.paragraph(TextWrap.None));
+      var text = new Text(displayed.value, style, null, labelOverride);
       var node = text.build(context);
       if (node.semantics != null) node.semantics.label = value;
-      var resolved = context.resolveTextRole(TextRole.Body, textStyle);
+      var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
       // Shaping a layout to measure is the expensive part, so remember the answer while its inputs stay the same.
       var memo:EllipsisMemo = context.resourceState(context.id("ellipsis-memo"), function() return new EllipsisMemo(), function(_) {}).value;
       node.onResolved(function(geometry) {
@@ -82,6 +82,11 @@ class MiddleEllipsisText implements View {
         }
         truncated = next != value;
         if (displayed.value != next) displayed.update(next);
+        // Settle the current frame, including a retained label resized in place.
+        if (node.layout.text != next) {
+          node.layout.text = next;
+          context.requestLayoutFeedback();
+        }
       });
       return node;
     });
