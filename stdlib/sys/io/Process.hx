@@ -9,7 +9,8 @@ extern abstract Process(ProcessHandle) {
 	/** Spawn an independent streaming process. Environment entries override inherited values. */
 	@:hlNative("haxeon_runtime", "__process_spawn")
 	public static function spawn(command:String, arguments:Array<String>, cwd:String = "",
-		?environmentKeys:Array<String>, ?environmentValues:Array<String>):ChildProcess;
+		?environmentKeys:Array<String>, ?environmentValues:Array<String>, detached:Bool = false,
+		newProcessGroup:Bool = true):ChildProcess;
 
 	@:hlNative("haxeon_runtime", "__process_run")
 	public static function run(command:String, arguments:Array<String>):Process;

@@ -64,6 +64,8 @@ class TreeView implements View {
 	/** Optional row builder receiving the current expansion state. */
 	public var itemBuilder:Null<(String, Bool)->View>;
 	public var onExpandedChanged:Null<String->Bool->Void>;
+	/** Horizontal indentation between tree hierarchy levels. */
+	public var indentWidth:Float = 16.0;
 
 	final fallbackViewportHeight:Float;
 	final expandedKeys:Map<String, Bool>;
@@ -275,7 +277,7 @@ class TreeView implements View {
 					var item = itemBuilder == null ? model.buildItem(nodeKey) : itemBuilder(nodeKey, entry.expanded);
 					if (item == null)
 						throw 'TreeView model returned null for key $nodeKey';
-					var row = new TreeViewRow("row", nodeKey, item, entry, selectedKey == nodeKey,
+					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, selectedKey == nodeKey,
 						function() { select(nodeKey); },
 						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
 						function() { toggleExpanded(nodeKey); },
@@ -743,6 +745,7 @@ private class TreeViewRow implements View {
 	final itemKey:String;
 	final child:View;
 	final entry:TreeEntry;
+	final indentWidth:Float;
 	final selected:Bool;
 	final onSelect:Void->Void;
 	final onActivate:Void->Void;
@@ -752,13 +755,14 @@ private class TreeViewRow implements View {
 	final onBuilt:WidgetId->Void;
 	final onContextMenu:UiEvent->Void;
 
-	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, selected:Bool,
+	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float, selected:Bool,
 			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
 			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
 		this.itemKey = itemKey;
 		this.child = child;
 		this.entry = entry;
+		this.indentWidth = indentWidth;
 		this.selected = selected;
 		this.onSelect = onSelect;
 		this.onActivate = onActivate;
@@ -779,7 +783,7 @@ private class TreeViewRow implements View {
 			style.direction = LayoutDirection.LeftToRight;
 			style.childAlignY = LayoutAlignmentY.Center;
 			style.childGap = 2.0;
-			style.padding = new Insets(entry.depth * 16.0, 0.0, 0.0, 0.0);
+			style.padding = new Insets(entry.depth * indentWidth, 0.0, 0.0, 0.0);
 			style.background = selected ? context.theme.tokens.selectionHighlight :
 				StyleStateUtil.contains(flags, StyleState.Hovered)
 					? context.theme.tokens.selectionHover : Color.rgba(0.0, 0.0, 0.0, 0.0);
@@ -830,14 +834,14 @@ private class TreeViewRow implements View {
 					var path = new PathBuilder();
 					var centerY = geometry.height * 0.5;
 					for (level in 1...depth) if (continuation[level]) {
-						var x = (level - 1) * 16.0 + 8.0;
+						var x = (level - 1) * indentWidth + indentWidth * 0.5;
 						path.moveTo(x, 0.0).lineTo(x, geometry.height);
 					}
-					var x = (depth - 1) * 16.0 + 8.0;
+					var x = (depth - 1) * indentWidth + indentWidth * 0.5;
 					path.moveTo(x, 0.0).lineTo(x, hasNext ? geometry.height : centerY);
 					path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
 					canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
-				}, guideKey + ":" + guideColor.red + ":" + guideColor.green + ":" +
+				}, guideKey + ":" + indentWidth + ":" + guideColor.red + ":" + guideColor.green + ":" +
 					guideColor.blue + ":" + guideColor.alpha);
 				node.add(guideNode);
 			}
