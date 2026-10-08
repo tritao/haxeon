@@ -286,7 +286,8 @@ class TextEditorState {
 			paragraphStyle.wrap != nextParagraphStyle.wrap ||
 			paragraphStyle.alignment != nextParagraphStyle.alignment ||
 			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
-			paragraphStyle.direction != nextParagraphStyle.direction;
+			paragraphStyle.direction != nextParagraphStyle.direction ||
+			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		if (!changed)
 			return false;
 		textStyle.font = nextTextStyle.font;
@@ -296,6 +297,7 @@ class TextEditorState {
 		paragraphStyle.alignment = nextParagraphStyle.alignment;
 		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
 		paragraphStyle.direction = nextParagraphStyle.direction;
+		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
 		layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
 		renderMeasurement.invalidate();
 		lastLayoutRevision = offsets.revision;
@@ -1080,7 +1082,7 @@ class TextEditorState {
 		return new TextStyle(value.fontSize, value.font, value.letterSpacing);
 
 	static function copyParagraphStyle(value:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(value.wrap, value.alignment, value.lineHeight, value.direction);
+		return new ParagraphStyle(value.wrap, value.alignment, value.lineHeight, value.direction, value.tabWidth);
 
 	static inline function clamp(value:Int, minimum:Int, maximum:Int):Int
 		return value < minimum ? minimum : value > maximum ? maximum : value;

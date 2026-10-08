@@ -620,6 +620,6 @@ private class DockTextWidthCache {
 			"|wrap=" + Std.string(paragraphStyle.wrap) +
 			"|align=" + Std.string(paragraphStyle.alignment) +
 			"|line=" + (paragraphStyle.lineHeight == null ? "none" : Std.string(paragraphStyle.lineHeight)) +
-			"|direction=" + Std.string(paragraphStyle.direction);
+			"|direction=" + Std.string(paragraphStyle.direction) + "|tabs=" + paragraphStyle.tabWidth;
 	}
 }

@@ -115,7 +115,8 @@ class TextEditorLayout {
 			paragraphStyle.wrap != nextParagraphStyle.wrap ||
 			paragraphStyle.alignment != nextParagraphStyle.alignment ||
 			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
-			paragraphStyle.direction != nextParagraphStyle.direction;
+			paragraphStyle.direction != nextParagraphStyle.direction ||
+			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		textStyle.font = nextTextStyle.font;
 		textStyle.fontSize = nextTextStyle.fontSize;
 		textStyle.letterSpacing = nextTextStyle.letterSpacing;
@@ -123,6 +124,7 @@ class TextEditorLayout {
 		paragraphStyle.alignment = nextParagraphStyle.alignment;
 		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
 		paragraphStyle.direction = nextParagraphStyle.direction;
+		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
 
 		var previous = paragraphs;
 		var reusable = new Map<String, Array<TextEditorParagraphRecord>>();
@@ -828,7 +830,7 @@ class TextEditorLayout {
 		return new TextStyle(style.fontSize, style.font, style.letterSpacing);
 
 	static function copyParagraphStyle(style:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction);
+		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction, style.tabWidth);
 
 	static inline function clamp(value:Int, low:Int, high:Int):Int
 		return value < low ? low : (value > high ? high : value);

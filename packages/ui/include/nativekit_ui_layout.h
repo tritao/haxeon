@@ -17,10 +17,10 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 21,
-    NKUI_LAYOUT_TRANSACTION_VERSION = 16,
+    NKUI_LAYOUT_API_VERSION = 22,
+    NKUI_LAYOUT_TRANSACTION_VERSION = 17,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
-    NKUI_LAYOUT_NODE_RECORD_BYTES = 260,
+    NKUI_LAYOUT_NODE_RECORD_BYTES = 264,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
     NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96
 };
@@ -201,7 +201,9 @@ enum {
     /** Haxe-owned resolved geometry revision for shared scene metadata. */
     NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 252,
     /** Haxe-owned compositing revision for shared scene metadata. */
-    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256
+    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256,
+    /** Tab-stop interval in space advances; zero preserves default shaping. */
+    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260
 };
 
 /** Opaque retained layout session used by a Haxe-owned component tree. */

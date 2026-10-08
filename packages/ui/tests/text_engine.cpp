@@ -19,6 +19,50 @@ int main() {
     if (!shared_fonts->valid() || !shared_fonts->add_font(NKUI_TEST_FONT_PATH) ||
         shared_fonts->font_load_count() != 1)
         return 48;
+    // Hard tabs retain one document position while geometry advances to the
+    // next font-relative stop. Reconfiguration must invalidate retained layouts.
+    {
+        auto mono_fonts = std::make_shared<FontCollection>();
+        if (!mono_fonts->add_font(NKUI_TEST_MONO_FONT_PATH)) return 201;
+        TextEngine tabs(mono_fonts);
+        TextLayoutOptions options;
+        options.wrap = TextWrapMode::None;
+        for (float font_size : {12.0f, 24.0f}) {
+            options.font_size = font_size;
+            TextIntrinsicMetrics space;
+            if (!tabs.measure_intrinsic_utf8(" ", options, &space)) return 202;
+            for (uint32_t columns : {2u, 4u, 8u, 4u}) {
+                options.tab_width = columns;
+                const float stop = columns * space.advance_x;
+                if (!tabs.layout_utf8(" \tX\tY\n\tZ", 1000.0f, options)) return 203;
+                const auto after_first = tabs.caret({2, 0});
+                const auto after_second = tabs.caret({4, 0});
+                const auto next_line = tabs.caret({7, 0});
+                if (std::abs(after_first.x - stop) > 0.02f ||
+                    std::abs(after_second.x - 2 * stop) > 0.02f ||
+                    std::abs(next_line.x - stop) > 0.02f) return 204;
+                const auto rects = tabs.selection_rects({1, 0}, {2, 0});
+                if (rects.size() != 1 || std::abs(rects[0].width - (stop - space.advance_x)) > 0.02f) return 205;
+                const auto hit = tabs.hit_test(after_first.x + 0.1f, after_first.y);
+                if (hit.offset != 2) return 206;
+                // A tab that wraps restarts at the first stop on the new row.
+                auto wrapped = options;
+                wrapped.wrap = TextWrapMode::WordCharacter;
+                TextLayoutResult wrapped_result;
+                if (!tabs.layout_utf8("a\tb\tc\td", stop * 1.5f, wrapped, &wrapped_result) ||
+                    wrapped_result.lines.size() < 2) return 209;
+                for (int32_t offset : {2, 4, 6})
+                    if (std::abs(tabs.caret({offset, 0}).x - stop) > 0.02f) return 210;
+                if (!tabs.layout_utf8(" \tX\tY\n\tZ", 1000.0f, options)) return 211;
+                // Editing before a tab must recompute its advance, preserving stops.
+                if (!tabs.edit_utf8(0, 1, "", nullptr) ||
+                    std::abs(tabs.caret({1, 0}).x - stop) > 0.02f) return 207;
+                TextIntrinsicMetrics intrinsic;
+                if (!tabs.measure_intrinsic_utf8("\tX", options, &intrinsic) ||
+                    std::abs(intrinsic.bounds.width - (stop + space.advance_x)) > 0.02f) return 208;
+            }
+        }
+    }
     // Scratch is reusable and does not become part of retained layout ownership.
     {
         TextEngine scratch(shared_fonts);

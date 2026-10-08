@@ -9,7 +9,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 21;
+	const NKUI_LAYOUT_API_VERSION = 22;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
 	/**
 	 * Per-child cross-axis alignment override; zero inherits the parent.
@@ -38,6 +38,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	 * Haxe-owned compositing revision for shared scene metadata.
 	 */
 	const NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256;
+	const NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260;
 	/**
 	 * Haxe-owned paint/content revision used by native raster caches.
 	 */
@@ -88,7 +89,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	const NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 80;
 	const NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 68;
 	const NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 72;
-	const NKUI_LAYOUT_NODE_RECORD_BYTES = 260;
+	const NKUI_LAYOUT_NODE_RECORD_BYTES = 264;
 	/**
 	 * Vertical gap between wrapped rows.
 	 */
@@ -139,7 +140,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	const NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 184;
 	const NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96;
 	const NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16;
-	const NKUI_LAYOUT_TRANSACTION_VERSION = 16;
+	const NKUI_LAYOUT_TRANSACTION_VERSION = 17;
 	/**
 	 * 16-bit opcode identifying one display-list command record.
 	 */
@@ -1454,7 +1455,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	/**
 	 * Paragraph-level wrapping, alignment, and line-height inputs.
 	 */
-	struct nkui_paragraph_style @layout(20, 4) {
+	struct nkui_paragraph_style @layout(24, 4) {
 		/**
 		 * Set to sizeof(nkui_paragraph_style) or a larger compatible structure size.
 		 */
@@ -1466,6 +1467,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 		wrap: nkui_text_wrap @offset(8);
 		alignment: nkui_text_alignment @offset(12);
 		direction: nkui_text_direction @offset(16);
+		tab_width: u32 @offset(20);
 	}
 	/**
 	 * One path operation supplied to nkui_path_create().

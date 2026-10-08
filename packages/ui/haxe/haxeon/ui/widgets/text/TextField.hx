@@ -151,6 +151,9 @@ class TextField implements View {
 		return new TextField(key, "", null, style, label, textStyle, textColor,
 			multiline, document, onEdit);
 
+	/** Tab stops in space advances; zero preserves the default layout behavior. */
+	public var tabWidth:Null<Int> = null;
+
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var id = context.id("field");
@@ -166,7 +169,7 @@ class TextField implements View {
 				resolved = resolved.withTextColor(textColor);
 			var paragraph = new ParagraphStyle(resolved.paragraphStyle.wrap,
 				resolved.paragraphStyle.alignment, resolved.paragraphStyle.lineHeight,
-				resolved.paragraphStyle.direction);
+				resolved.paragraphStyle.direction, tabWidth == null ? resolved.paragraphStyle.tabWidth : tabWidth);
 			paragraph.wrap = multiline ? TextWrap.WordCharacter : TextWrap.None;
 			resolved = new ResolvedTextStyle(resolved.textStyle, paragraph, resolved.textColor);
 			var stored:State<TextEditorState> = acquireState(context, id, value, resolved, document);

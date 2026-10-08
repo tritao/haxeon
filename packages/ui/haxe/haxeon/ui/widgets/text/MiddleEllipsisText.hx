@@ -53,7 +53,7 @@ class MiddleEllipsisText implements View {
           next = memo.result;
         else {
           var paragraph = new ParagraphStyle(TextWrap.None, resolved.paragraphStyle.alignment,
-            resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction);
+            resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction, resolved.paragraphStyle.tabWidth);
           var layout = TextLayout.createStyled(context.fonts, value, 100000.0,
             resolved.textStyle, paragraph);
           next = value;
@@ -103,6 +103,7 @@ private class EllipsisMemo {
   var alignment:Null<TextAlignment> = null;
   var lineHeight:Null<Float> = null;
   var direction:Null<TextDirection> = null;
+  var tabWidth:Int = 0;
   public var result:String = "";
 
   public function new() {}
@@ -110,7 +111,7 @@ private class EllipsisMemo {
   public function matches(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle):Bool
     return this.value != null && this.value == value && this.available == available && font == text.font &&
       fontSize == text.fontSize && letterSpacing == text.letterSpacing && alignment == paragraph.alignment &&
-      lineHeight == paragraph.lineHeight && direction == paragraph.direction;
+      lineHeight == paragraph.lineHeight && direction == paragraph.direction && tabWidth == paragraph.tabWidth;
 
   public function store(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle, result:String):Void {
     this.value = value;
@@ -121,6 +122,7 @@ private class EllipsisMemo {
     alignment = paragraph.alignment;
     lineHeight = paragraph.lineHeight;
     direction = paragraph.direction;
+    tabWidth = paragraph.tabWidth;
     this.result = result;
   }
 }

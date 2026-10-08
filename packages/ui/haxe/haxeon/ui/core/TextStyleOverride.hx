@@ -28,10 +28,11 @@ class TextStyleOverride {
 	public final lineHeight:Null<Float>;
 	public final direction:Null<TextDirection>;
 	public final color:Null<Color>;
+	public final tabWidth:Null<Int>;
 
 	public function new(?font:FontFamily, ?fontSize:Float, ?letterSpacing:Float,
 			?wrap:TextWrap, ?alignment:TextAlignment, ?lineHeight:Float,
-			?direction:TextDirection, ?color:Color) {
+			?direction:TextDirection, ?color:Color, ?tabWidth:Int) {
 		if (fontSize != null && (!finite(fontSize) || fontSize <= 0.0))
 			throw "Text style override font size is invalid";
 		if (letterSpacing != null && !finite(letterSpacing))
@@ -46,6 +47,8 @@ class TextStyleOverride {
 		this.lineHeight = lineHeight;
 		this.direction = direction;
 		this.color = color;
+		if (tabWidth != null && tabWidth < 0) throw "Tab width cannot be negative";
+		this.tabWidth = tabWidth;
 	}
 
 	/** Creates a text-only override without positional null placeholders. */
@@ -55,8 +58,8 @@ class TextStyleOverride {
 
 	/** Creates a paragraph-only override without positional null placeholders. */
 	public static function paragraph(?wrap:TextWrap, ?alignment:TextAlignment,
-			?lineHeight:Float, ?direction:TextDirection):TextStyleOverride
-		return new TextStyleOverride(null, null, null, wrap, alignment, lineHeight, direction);
+			?lineHeight:Float, ?direction:TextDirection, ?tabWidth:Int):TextStyleOverride
+		return new TextStyleOverride(null, null, null, wrap, alignment, lineHeight, direction, null, tabWidth);
 
 	/** Creates a foreground-only override. */
 	public static function foreground(color:Color):TextStyleOverride
@@ -77,7 +80,8 @@ class TextStyleOverride {
 			child.alignment == null ? parent.alignment : child.alignment,
 			child.lineHeight == null ? parent.lineHeight : child.lineHeight,
 			child.direction == null ? parent.direction : child.direction,
-			child.color == null ? parent.color : child.color);
+			child.color == null ? parent.color : child.color,
+			child.tabWidth == null ? parent.tabWidth : child.tabWidth);
 	}
 
 	/** Turns a complete text style into a local override. */
@@ -92,7 +96,7 @@ class TextStyleOverride {
 		if (style == null)
 			return null;
 		return new TextStyleOverride(null, null, null, style.wrap, style.alignment,
-			style.lineHeight == null ? 0.0 : style.lineHeight, style.direction);
+			style.lineHeight == null ? 0.0 : style.lineHeight, style.direction, null, style.tabWidth);
 	}
 
 	static inline function finite(value:Float):Bool

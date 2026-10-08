@@ -50,7 +50,7 @@ static_assert(sizeof(nkui_text_position) == 2 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_caret) == 7 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_rect) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_style) == 4 * sizeof(uint32_t));
-static_assert(sizeof(nkui_paragraph_style) == 5 * sizeof(uint32_t));
+static_assert(sizeof(nkui_paragraph_style) == 6 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_frame_input) == 4 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_measure_constraints) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_measure_result) == 5 * sizeof(uint32_t));
@@ -968,6 +968,7 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, text_wrap) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, text_alignment) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, text_direction) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, node.paragraph_style.tab_width) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, text_flags) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, transform[0]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET, transform[1]) ||
@@ -1140,7 +1141,7 @@ bool text_options_from_api(const nkui_text_style *text_style,
                            const nkui_paragraph_style *paragraph_style,
                            nkui::TextLayoutOptions &out) {
     if (!text_style || !paragraph_style || text_style->struct_size < sizeof(*text_style) ||
-        paragraph_style->struct_size < sizeof(*paragraph_style))
+        paragraph_style->struct_size < offsetof(nkui_paragraph_style, tab_width))
         return false;
     if (text_style->family < NKUI_FONT_FAMILY_DEFAULT ||
         (text_style->family != NKUI_FONT_FAMILY_DEFAULT && text_style->family != NKUI_FONT_FAMILY_EMOJI && text_style->family != NKUI_FONT_FAMILY_MONOSPACE) ||
@@ -1158,6 +1159,7 @@ bool text_options_from_api(const nkui_text_style *text_style,
     out.font_size = text_style->font_size;
     out.letter_spacing = text_style->letter_spacing;
     out.line_height = paragraph_style->line_height;
+    out.tab_width = paragraph_style->struct_size >= sizeof(*paragraph_style) ? paragraph_style->tab_width : 0;
     out.wrap = static_cast<nkui::TextWrapMode>(paragraph_style->wrap);
     out.alignment = static_cast<nkui::TextAlignment>(paragraph_style->alignment);
     out.direction = static_cast<nkui::TextDirection>(paragraph_style->direction);

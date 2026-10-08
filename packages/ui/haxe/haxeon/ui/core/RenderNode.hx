@@ -249,6 +249,7 @@ class RenderNode {
 		layout.paragraphStyle.alignment = style.paragraphStyle.alignment;
 		layout.paragraphStyle.lineHeight = style.paragraphStyle.lineHeight;
 		layout.paragraphStyle.direction = style.paragraphStyle.direction;
+		layout.paragraphStyle.tabWidth = style.paragraphStyle.tabWidth;
 		return this;
 	}
 
@@ -669,7 +670,7 @@ class RenderNode {
 	static function sameParagraphStyle(left:ParagraphStyle, right:ParagraphStyle):Bool
 		return left == right || (left != null && right != null && left.wrap == right.wrap &&
 			left.alignment == right.alignment && left.lineHeight == right.lineHeight &&
-			left.direction == right.direction);
+			left.direction == right.direction && left.tabWidth == right.tabWidth);
 
 	static function sameSemantics(left:Null<Semantics>, right:Null<Semantics>):Bool {
 		if (left == right)

@@ -160,6 +160,7 @@ uint64_t primitive_content_generation(const LayoutPrimitive &primitive,
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.wrap));
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.alignment));
     hash_float(hash, primitive.paragraph_style.line_height);
+    hash_u32(hash, primitive.paragraph_style.tab_width);
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.direction));
     hash_u64(hash, primitive.text_layout_id);
     hash_u32(hash, primitive.text_line_index);
@@ -381,6 +382,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     options.font_size = primitive.text_style.font_size;
                     options.letter_spacing = primitive.text_style.letter_spacing;
                     options.line_height = primitive.paragraph_style.line_height;
+                    options.tab_width = primitive.paragraph_style.tab_width;
                     options.family = primitive.text_style.family;
                     options.wrap = TextWrapMode::None;
                     options.alignment = primitive.paragraph_style.alignment;

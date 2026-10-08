@@ -55,6 +55,7 @@ TextLayoutOptions text_options_for_node(const LayoutNode *node, Clay_TextElement
         options.font_size = node->text_style.font_size;
         options.letter_spacing = node->text_style.letter_spacing;
         options.line_height = node->paragraph_style.line_height;
+        options.tab_width = node->paragraph_style.tab_width;
         options.family = node->text_style.family;
         options.wrap = node->paragraph_style.wrap;
         options.alignment = node->paragraph_style.alignment;
@@ -365,6 +366,7 @@ Clay_TextLayoutResult LayoutEngine::Impl::layout_text(Clay_StringSlice text,
         native_layout.paragraph_style.wrap = options.wrap;
         native_layout.paragraph_style.alignment = options.alignment;
         native_layout.paragraph_style.line_height = options.line_height;
+        native_layout.paragraph_style.tab_width = options.tab_width;
         native_layout.paragraph_style.direction = options.direction;
         native_layout.lines.reserve(shaped.lines.size());
         state.callback_lines.clear();

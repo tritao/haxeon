@@ -106,6 +106,7 @@ class TextLayout extends NativeKitUIResource {
 		paragraphStyle.alignment = ownedParagraphStyle.alignment;
 		paragraphStyle.lineHeight = ownedParagraphStyle.lineHeight;
 		paragraphStyle.direction = ownedParagraphStyle.direction;
+		paragraphStyle.tabWidth = ownedParagraphStyle.tabWidth;
 	}
 
 	/** Applies a codepoint replacement to the retained layout. */
@@ -122,7 +123,7 @@ class TextLayout extends NativeKitUIResource {
 		return new TextStyle(style.fontSize, style.font, style.letterSpacing);
 
 	static function copyParagraphStyle(style:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction);
+		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction, style.tabWidth);
 
 	static function nativeTextStyle(style:TextStyle):nkui_text_style {
 		var result = new nkui_text_style();
@@ -135,6 +136,8 @@ class TextLayout extends NativeKitUIResource {
 	static function nativeParagraphStyle(style:ParagraphStyle):nkui_paragraph_style {
 		var result = new nkui_paragraph_style();
 		result.set_line_height(style.lineHeight == null ? 0.0 : style.lineHeight);
+		if (style.tabWidth < 0) throw "Tab width cannot be negative";
+		result.set_tab_width(style.tabWidth);
 		result.set_wrap(style.wrap);
 		result.set_alignment(style.alignment);
 		result.set_direction(style.direction);
