@@ -504,7 +504,7 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	free(argv); free(env); free(directory);
 	if (error != 0) {
 		for (int i = 0; i < 3; i++) for (int j = 0; j < 2; j++) if (pipes[i][j] >= 0) close(pipes[i][j]);
-		hl_error("Could not start process: %s", strerror(error));
+		hl_error("Could not start process: %s", hl_to_utf16(strerror(error)));
 	}
 	close(pipes[0][0]); close(pipes[1][1]); close(pipes[2][1]);
 	realtime_child_process *p = hl_gc_alloc_finalizer(sizeof(realtime_child_process));
@@ -557,7 +557,7 @@ static int realtime_child_read(realtime_child_process *p, realtime_bytes *bytes,
 	if (count > 0) return (int)count;
 	if (count == 0) { realtime_child_fd_close(fd); return -1; }
 	if (errno == EAGAIN || errno == EWOULDBLOCK) return -2;
-	hl_error("Could not read process output: %s", strerror(errno));
+	hl_error("Could not read process output: %s", hl_to_utf16(strerror(errno)));
 #endif
 	return -1;
 }
@@ -602,7 +602,7 @@ HL_PRIM int HL_NAME(__child_write)(realtime_child_process *p, realtime_bytes *by
 	pthread_sigmask(SIG_SETMASK, &previous, NULL);
 	if (count >= 0) return (int)count;
 	if (saved == EAGAIN || saved == EWOULDBLOCK) return 0;
-	hl_error("Could not write process stdin: %s", strerror(saved));
+	hl_error("Could not write process stdin: %s", hl_to_utf16(strerror(saved)));
 #endif
 	return 0;
 }

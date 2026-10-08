@@ -95,7 +95,7 @@ HL_PRIM realtime_process_identity *HL_NAME(__host_process_identity_open)(int pid
 	int fd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
 	if (fd < 0) {
 		if (errno == ESRCH || errno == ENOSYS || errno == EINVAL) return NULL;
-		hl_error("Could not open manager process handle: %s", strerror(errno));
+		hl_error("Could not open manager process handle: %s", hl_to_utf16(strerror(errno)));
 	}
 	realtime_process_identity *handle = hl_gc_alloc_finalizer(sizeof(realtime_process_identity));
 	memset(handle, 0, sizeof(*handle));
@@ -125,7 +125,7 @@ HL_PRIM bool HL_NAME(__host_process_identity_terminate)(realtime_process_identit
 	if (handle == NULL || handle->closed || handle->fd < 0) return false;
 	if (syscall(SYS_pidfd_send_signal, handle->fd, SIGTERM, NULL, 0) == 0) return true;
 	if (errno == ESRCH) return false;
-	hl_error("Could not stop manager process: %s", strerror(errno));
+	hl_error("Could not stop manager process: %s", hl_to_utf16(strerror(errno)));
 	return false;
 #else
 	(void)handle;
@@ -313,7 +313,7 @@ HL_PRIM int HL_NAME(__host_choose_loopback_port)(void) {
 	return port;
 #else
 	int socket_handle = socket(AF_INET, SOCK_STREAM, 0);
-	if (socket_handle < 0) hl_error("Could not create loopback socket: %s", strerror(errno));
+	if (socket_handle < 0) hl_error("Could not create loopback socket: %s", hl_to_utf16(strerror(errno)));
 	struct sockaddr_in address;
 	memset(&address, 0, sizeof(address));
 	address.sin_family = AF_INET;
@@ -322,7 +322,7 @@ HL_PRIM int HL_NAME(__host_choose_loopback_port)(void) {
 	socklen_t address_length = sizeof(address);
 	if (bind(socket_handle, (struct sockaddr *)&address, sizeof(address)) != 0 ||
 		getsockname(socket_handle, (struct sockaddr *)&address, &address_length) != 0) {
-		int error = errno; close(socket_handle); hl_error("Could not reserve a loopback port: %s", strerror(error));
+		int error = errno; close(socket_handle); hl_error("Could not reserve a loopback port: %s", hl_to_utf16(strerror(error)));
 	}
 	int port = (int)ntohs(address.sin_port);
 	close(socket_handle);
@@ -371,14 +371,14 @@ HL_PRIM realtime_file_lock *HL_NAME(__host_file_lock_acquire)(vstring *path) {
 #endif
 	, 0600);
 	free(owned);
-	if (file < 0) hl_error("Could not open file lock: %s", strerror(errno));
+	if (file < 0) hl_error("Could not open file lock: %s", hl_to_utf16(strerror(errno)));
 	struct stat info;
 	if (fstat(file, &info) != 0 || !S_ISREG(info.st_mode) || info.st_uid != geteuid() ||
 		(info.st_mode & 077) != 0 || info.st_nlink != 1) { close(file); hl_error("Lock path is not a private regular file"); }
 	if (flock(file, LOCK_EX | LOCK_NB) != 0) {
 		int error = errno; close(file);
 		if (error == EWOULDBLOCK || error == EAGAIN) return NULL;
-		hl_error("Could not acquire file lock: %s", strerror(error));
+		hl_error("Could not acquire file lock: %s", hl_to_utf16(strerror(error)));
 	}
 	realtime_file_lock *lock = hl_gc_alloc_finalizer(sizeof(realtime_file_lock));
 	memset(lock, 0, sizeof(*lock));
