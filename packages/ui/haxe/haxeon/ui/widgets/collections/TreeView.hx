@@ -57,7 +57,7 @@ class TreeView implements View {
 	public var onItemClicked:Null<String->Int->Void>;
 	/** Optional non-blocking hint used to draw expand controls without loading children. */
 	public var hasChildrenHint:Null<String->Bool>;
-	/** Explorer-style branch labels toggle on the first click of a sequence. */
+	/** Toggle branches on every primary row click; otherwise toggle only on double-click. */
 	public var expandOnSingleClick:Bool = false;
 	public var onItemContextMenu:Null<String->UiEvent->Void>;
 	public var onItemRename:Null<String->Void>;
@@ -290,7 +290,9 @@ class TreeView implements View {
 							var count = clicks.value.register(nodeKey, event);
 							if (onItemClicked != null) onItemClicked(nodeKey, count);
 							if (entry.hasChildren) {
-								if (count == (expandOnSingleClick ? 1 : 2)) toggleExpanded(nodeKey);
+								// Single-click expansion applies to every click, including the
+								// second click recognized as part of a double-click sequence.
+								if (expandOnSingleClick || count == 2) toggleExpanded(nodeKey);
 							} else if (count == 2 && onItemActivated != null) onItemActivated(nodeKey);
 						},
 						function(event) { handleNodeKey(context, entry, event); },
@@ -911,7 +913,9 @@ private class TreeDisclosure implements View {
 				onToggle();
 				event.stopPropagation();
 			};
-			node.on(UiEventKind.Click, activate);
+			node.on(UiEventKind.Click, function(event) {
+				if (event.button == 0) activate(event);
+			});
 			node.on(UiEventKind.Activate, activate);
 			node.add(new Icon("glyph", expanded ? IconName.ChevronDown : IconName.ChevronRight,
 				16.0, context.theme.tokens.textPrimary).build(context));
