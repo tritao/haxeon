@@ -1000,6 +1000,12 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
             if (item != out.items.end()) {
                 primitive.transform = item->transform;
                 primitive.visible = item->visible;
+                if (primitive.kind == LayoutPrimitiveKind::ClipBegin) {
+                    const auto &style = nodes[item->index].style;
+                    primitive.bounds = intersect_axes(item->clip_bounds, item->world_bounds,
+                                                      style.clip_horizontal, style.clip_vertical);
+                    primitive.transform = LayoutTransform{};
+                }
             }
         }
     }

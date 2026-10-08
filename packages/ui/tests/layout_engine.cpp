@@ -183,6 +183,19 @@ int main(int argc, char **argv) {
         scrolled_row_primitive->transform.ty != -13248.0f)
         return 50;
 
+    // A horizontal snippet viewport inside a vertically scrolled conversation
+    // inherits the vertical clip in viewport space, without translating it twice.
+    scroll_nodes[3].style.clip_horizontal = true;
+    if (!engine.layout(scroll_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
+        return 100;
+    const auto nested_clip = std::find_if(snapshot.primitives.begin(), snapshot.primitives.end(),
+        [](const LayoutPrimitive &primitive) {
+            return primitive.node_id == 323 && primitive.kind == LayoutPrimitiveKind::ClipBegin;
+        });
+    if (nested_clip == snapshot.primitives.end() || nested_clip->bounds.y != 0.0f ||
+        nested_clip->bounds.height != 80.0f || nested_clip->transform.ty != 0.0f)
+        return 101;
+
     // Changing Inspector-like clipped panels must not exhaust Clay's retained
     // scroll-container records over successive layouts.
     LayoutNode churn_root = box(1000, -1);

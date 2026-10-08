@@ -686,10 +686,11 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             const bool has_composite =
                 custom_composites && custom_composites->contains(primitive.node_id);
             // Floating custom layers may be emitted outside ancestor scissor
-            // commands. Resolved geometry still carries their inherited clip.
+            // commands, whose inherited scissors may use pre-scroll coordinates.
+            // Resolved geometry already carries the complete viewport-space clip.
             const bool has_node_clip = scene_item || !clips.empty();
             LayoutRect node_clip = scene_item ? scene_item->clip_bounds : LayoutRect{};
-            if (!clips.empty())
+            if (!clips.empty() && (!scene_item || active_raster_root != no_raster_root))
                 node_clip = scene_item ? intersect(node_clip, clips.back()) : clips.back();
             if (active_raster_root != no_raster_root) {
                 const auto &root = raster_roots[active_raster_root];
