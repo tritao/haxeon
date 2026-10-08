@@ -367,3 +367,4 @@ native-static-codec	42
 static-array-inference	42
 nullable-concrete-interfaces	42
 dynamic-equality-semantics	42
+enum-eq-structural	42
