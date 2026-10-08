@@ -18,6 +18,11 @@ import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleValue;
+import haxeon.ui.style.DecorationChain;
+import haxeon.ui.style.BorderDecoration;
+import haxeon.ui.style.BackgroundDecoration;
+import haxeon.ui.style.EffectChain;
+import haxeon.ui.style.DropShadowEffect;
 
 /** Theme tokens plus the stylesheet generated from those tokens. */
 class Theme {
@@ -406,8 +411,10 @@ class Theme {
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
 			StyleValue.borderColor(tokens.borderStrong), StyleValue.borderWidth(1.0),
-			StyleValue.shadowColor(tokens.selectionPopupShadow),
-			StyleValue.of(StyleProperty.ShadowOffsetY, 2.0), StyleValue.shadowBlur(6.0),
+			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration(), new BorderDecoration()])),
+			// Compositor effects include their ink overflow; shadow parameters alone
+			// do not paint a shadow, and node-local decorations are clipped.
+			StyleValue.effects(EffectChain.of([new DropShadowEffect(0.0, 2.0, 3.0, tokens.selectionPopupShadow)])),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, tokens.radiusSmall),

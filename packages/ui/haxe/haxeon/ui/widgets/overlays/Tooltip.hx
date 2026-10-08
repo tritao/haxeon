@@ -95,7 +95,7 @@ private class AnonymousTooltipContent implements View {
 		var computed = context.resolveStyle(
 			new StyleTarget("tooltip", "tooltip", "tooltip", null, ["tooltip"],
 				context.interactionStates.get(nodeId)), style);
-		var node = new RenderNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
+		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]);
 		node.states = context.interactionStates.get(nodeId);
 		node.computedStyle = computed;
