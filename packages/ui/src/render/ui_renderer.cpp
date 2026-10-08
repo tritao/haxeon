@@ -2370,16 +2370,10 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
     // need coverage interpolation so glyph edges do not lose partial rows/columns.
     const bool integral_pixel_scale = std::abs(glyphs.pixel_scale - integral_scale) < 0.0001f;
     const nkgpu_sampler glyph_sampler = integral_pixel_scale ? state_->sampler : state_->glyph_sampler;
-    // Integer-scale glyphs are drawn 1:1 from the atlas with a nearest sampler, so their placement must be
-    // exact in two steps. First the run origin snaps to a whole device pixel: panes sized by ratio give
-    // fractional origins that change with the window width, and without this every glyph would round
-    // differently as the window resizes, changing the spacing of a line. Then each quad's top-left snaps
-    // to a whole pixel too, so no glyph edge sits on a texel boundary, where which column the sampler
-    // picks depends on the GPU's rounding (a glyph can come out heavier or lose a column). With both,
-    // texels and pixels line up exactly and the result is the same on any hardware and at any width.
-    // Rotated, skewed, or mirrored transforms keep their exact positions.
-    const bool snap_quads = integral_pixel_scale && transform[1] == 0.0f && transform[2] == 0.0f &&
-                            transform[0] > 0.0f && transform[3] > 0.0f;
+    const bool axis_aligned = transform[1] == 0.0f && transform[2] == 0.0f &&
+                              transform[0] > 0.0f && transform[3] > 0.0f;
+    // Preserve run-origin snapping at integer scales.
+    const bool snap_quads = integral_pixel_scale && axis_aligned;
     float snap_x = 0.0f;
     float snap_y = 0.0f;
     if (snap_quads) {
@@ -2419,7 +2413,16 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
                 vertex.alpha = static_cast<uint8_t>(vertex.alpha * opacity);
                 corners[corner] = vertex;
             }
-            if (snap_quads && batch.mode == GlyphMode::Alpha) {
+            // A bitmap drawn at its native size needs a whole-pixel origin,
+            // including at fractional DPI. Compare actual geometry to atlas
+            // texels so rounded/clamped sizes and additional scaling keep their
+            // interpolated placement.
+            const bool native_size_alpha = batch.mode == GlyphMode::Alpha && axis_aligned &&
+                std::abs((corners[1].x - corners[0].x) -
+                         (corners[1].u - corners[0].u) * atlas->second.width) < 0.001f &&
+                std::abs((corners[3].y - corners[0].y) -
+                         (corners[3].v - corners[0].v) * atlas->second.height) < 0.001f;
+            if (batch.mode == GlyphMode::Alpha && (snap_quads || native_size_alpha)) {
                 const float shift_x = std::round(corners[0].x) - corners[0].x;
                 const float shift_y = std::round(corners[0].y) - corners[0].y;
                 for (auto &vertex : corners) {
