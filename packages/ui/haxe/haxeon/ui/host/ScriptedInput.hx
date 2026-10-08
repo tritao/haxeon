@@ -45,6 +45,11 @@ class ScriptedInput {
 
   public function start(now:Float):Void { if (origin < 0) origin = now; }
 
+  /** Null means no deadline is armed. Overdue input must not put the host to sleep. */
+  public function secondsUntilNext(now:Float):Null<Float> {
+    return origin < 0 || complete ? null : Math.max(0.0, origin + events[index].at - now);
+  }
+
   /** Dispatch one due event; the host drains overdue input before requesting the next frame. */
   public function tick(now:Float, pump:NativeKitEvents, window:WindowHandle,
       checkpoint:String->Void, before:Float->Void, after:Float->Void):Bool {

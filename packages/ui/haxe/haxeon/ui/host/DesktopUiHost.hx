@@ -51,6 +51,7 @@ class DesktopUiHost {
 		var script = options.inputScriptPath == null ? null : new ScriptedInput(options.inputScriptPath);
 		var scriptedCount = 0;
 		var scriptedAt = -1.0;
+		var scriptedDeliveredAt = -1.0;
 		var scriptedDispatch = 0.0;
 		var result = 0;
 		var step:Void->Bool = function() return false;
@@ -247,8 +248,9 @@ class DesktopUiHost {
 									// Keep delivered text input even if caret/API requests coalesce.
 									var scriptedFrameCount = scriptedCount;
 									var scriptedFrameAt = scriptedAt;
+									var scriptedFrameDeliveredAt = scriptedDeliveredAt;
 									var scriptedFrameDispatch = scriptedDispatch;
-									scriptedCount = 0; scriptedAt = -1.0; scriptedDispatch = 0.0;
+									scriptedCount = 0; scriptedAt = -1.0; scriptedDeliveredAt = -1.0; scriptedDispatch = 0.0;
 									var textInputRequestedAt = inputRequestedAt;
 									var textInputCount = inputRequestCount;
 									var textInputDispatchSeconds = inputDispatchSeconds;
@@ -292,6 +294,7 @@ class DesktopUiHost {
 											requestSerial: requestSerial,
 											scriptedInputCount: scriptedFrameCount,
 											scriptedInputRequestAgeSeconds: scriptedFrameAt < 0 ? null : frameStartedAt - scriptedFrameAt,
+											scriptedInputDeliveryAgeSeconds: scriptedFrameDeliveredAt < 0 ? null : frameStartedAt - scriptedFrameDeliveredAt,
 											scriptedInputDispatchSeconds: scriptedFrameDispatch,
 											textInputCount: textInputCount,
 											textInputRequestAgeSeconds: textInputRequestedAt < 0.0 ? null : frameStartedAt - textInputRequestedAt,
@@ -358,18 +361,35 @@ class DesktopUiHost {
 				}
 			});
 
+			var checkpoint = function(label:String):Void {
+				var activeScript = script;
+				if (activeScript == null) return;
+				if (recordPath != null) File.appendContent(recordPath, Json.stringify({kind:"checkpoint",
+					label:label, at:Sys.time(), scheduledAt:activeScript.scheduledAt,
+					delivered:activeScript.delivered, appState:(cast runtime.app():DesktopUiApplication).diagnosticState()}) + "\n");
+			};
+			var beforeScriptedInput = function(at:Float):Void {
+				if (scriptedAt < 0) {
+					scriptedAt = at;
+					scriptedDeliveredAt = Sys.time();
+				}
+				scriptedCount++;
+			};
+			var afterScriptedInput = function(seconds:Float):Void { scriptedDispatch += seconds; };
+			var drainScriptedInput = function():Bool {
+				var delivered = false;
+				while (script != null && script.tick(Sys.time(), pump, window, checkpoint,
+					beforeScriptedInput, afterScriptedInput)) delivered = true;
+				return delivered;
+			};
 			step = function() {
 				if (!active) return false;
 				try {
-				var hadEvent = pump.poll();
-				while (script != null && script.tick(Sys.time(), pump, window, function(label) {
-					if (recordPath != null) File.appendContent(recordPath, Json.stringify({kind:"checkpoint",
-						label:label, at:Sys.time(), scheduledAt:script.scheduledAt,
-						delivered:script.delivered, appState:(cast runtime.app():DesktopUiApplication).diagnosticState()}) + "\n");
-				}, function(at) {
-					if (scriptedAt < 0) scriptedAt = at;
-					scriptedCount++;
-				}, function(seconds) { scriptedDispatch += seconds; })) hadEvent = true;
+				// Native polling can render. Deliver already-due scripted input first,
+				// then catch deadlines that elapsed during a native callback.
+				var hadEvent = drainScriptedInput();
+				if (pump.poll()) hadEvent = true;
+				if (drainScriptedInput()) hadEvent = true;
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
@@ -391,7 +411,12 @@ class DesktopUiHost {
 					framePending = true;
 				}
 				if (active && !hadEvent && !frameRequested && !framePending) frameGc.idle();
-				if (active && !hadEvent) pump.wait(1.0 / options.targetFps);
+				if (active && !hadEvent) {
+					var waitSeconds = 1.0 / options.targetFps;
+					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
+					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+					pump.wait(waitSeconds);
+				}
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
 					recordFailure("desktop-host", error);
