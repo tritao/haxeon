@@ -21,7 +21,6 @@ import haxeon.ui.style.StyleValue;
 
 /** Theme tokens plus the stylesheet generated from those tokens. */
 class Theme {
-	static final darkButtonTextOnLight:Color = Color.rgba(0.08, 0.10, 0.14, 1.0);
 	public final tokens:ThemeTokens;
 	public final styles:StyleSheet;
 
@@ -146,7 +145,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").state(StyleState.Selected),
 			[StyleValue.background(buttonSelected)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Focused),
-			[StyleValue.background(buttonFocused)]);
+			[StyleValue.borderColor(tokens.textOnAccent), StyleValue.borderWidth(1.0)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Hovered),
 			[StyleValue.background(buttonHover)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Pressed),
@@ -160,7 +159,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Pressed),
 			[StyleValue.background(tokens.navigationPressed)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Focused),
-			[StyleValue.background(tokens.navigationFocused)]);
+			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Selected),
 			[StyleValue.background(tokens.navigationSelected)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Disabled),
@@ -175,7 +174,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Pressed),
 			[StyleValue.background(tokens.surfaceSunken)]);
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Focused),
-			[StyleValue.background(tokens.surfaceRaised), StyleValue.borderColor(tokens.focusRing)]);
+			[StyleValue.borderColor(tokens.focusRing)]);
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Selected),
 			[StyleValue.background(tokens.selection)]);
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Disabled),
@@ -420,20 +419,28 @@ class Theme {
 	public function textRoleColor(role:TextRole, enabled:Bool):Color
 		return enabled ? textRole(role).color : disabledText;
 
-	/** Chooses a readable foreground for both accent-filled and light neutral buttons. */
-	public function buttonLabelColor(enabled:Bool, background:Color):Color {
-		if (!enabled)
-			return disabledButtonText;
-		if (background == null || background.alpha < 0.5)
-			return body.color;
-		var luminance = channelLuminance(background.red) * 0.2126 +
-			channelLuminance(background.green) * 0.7152 +
-			channelLuminance(background.blue) * 0.0722;
-		if (luminance > 0.179)
-			return channelLuminance(body.color.red) * 0.2126 + channelLuminance(body.color.green) * 0.7152 +
-				channelLuminance(body.color.blue) * 0.0722 <= 0.179 ? body.color : darkButtonTextOnLight;
-		return button.color;
+	/** Resolve the foreground against the actual state background, including custom fills. */
+	public function buttonLabelColor(enabled:Bool, background:Color, ?preferred:Color):Color {
+		if (!enabled) return disabledButtonText;
+		var fill = background == null ? tokens.surface : Color.rgba(
+			background.red * background.alpha + tokens.surface.red * (1 - background.alpha),
+			background.green * background.alpha + tokens.surface.green * (1 - background.alpha),
+			background.blue * background.alpha + tokens.surface.blue * (1 - background.alpha), 1);
+		var foreground = preferred == null ? button.color : preferred;
+		if (contrastRatio(foreground, fill) >= 4.5) return foreground;
+		var white = Color.rgba(1, 1, 1, 1);
+		var black = Color.rgba(0, 0, 0, 1);
+		return contrastRatio(white, fill) >= contrastRatio(black, fill) ? white : black;
 	}
+
+	/** WCAG relative luminance ratio for opaque UI colors. */
+	public static function contrastRatio(left:Color, right:Color):Float {
+		var a = luminance(left), b = luminance(right);
+		return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+	}
+
+	static function luminance(color:Color):Float
+		return channelLuminance(color.red) * 0.2126 + channelLuminance(color.green) * 0.7152 + channelLuminance(color.blue) * 0.0722;
 
 	/** Returns the complete concrete style associated with a semantic role. */
 	public function textRole(role:TextRole):TextRoleStyle {

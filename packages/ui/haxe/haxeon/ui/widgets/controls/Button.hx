@@ -118,9 +118,8 @@ class Button implements View {
 			node.on(UiEventKind.Click, activate);
 			node.on(UiEventKind.Activate, activate);
 		}
-		var foreground = variant == ButtonVariant.Secondary || variant == ButtonVariant.Navigation
-			? (enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled)
-			: context.theme.buttonLabelColor(enabled, resolvedStyle.background);
+		var foreground = context.theme.buttonLabelColor(enabled, resolvedStyle.background,
+			variant == ButtonVariant.Primary ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary);
 		if (leadingView != null)
 			node.add(context.withScope(new Key("leading-view"), function() return leadingView.build(context)));
 		else if (leadingIcon != null)
