@@ -4,7 +4,9 @@ class Main {
 	static function main():Int {
 		var entity = new Entity(-9, 214),
 			absent:Null<Entity> = null,
-			present:Null<Entity> = entity;
+			present:Null<Entity> = entity,
+			readAbsent = function():Bool return absent == null,
+			readPresent = function():Bool return present != null && present.slot == cast -9 && present.generation == cast 214;
 		return sizeof<Transform>() == 24
 			&& alignof<Transform>() == 8
 			&& offsetof<Transform>("x") == 0
@@ -18,6 +20,8 @@ class Main {
 			&& entity.generation == 214
 			&& entity.same(present)
 			&& absent == null
-			&& present != null ? 42 : 1;
+			&& present != null
+			&& readAbsent()
+			&& readPresent() ? 42 : 1;
 	}
 }

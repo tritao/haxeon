@@ -336,6 +336,7 @@ int-const-divide	42
 ereg-split-offsets	42
 dynamic-unbox	42
 nullable-primitives	42
+nullable-struct-capture	42
 loadstore-array-alias	42
 loadstore-call-kill	42
 loadstore-dynamic-field	42

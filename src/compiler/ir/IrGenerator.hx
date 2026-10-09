@@ -826,7 +826,12 @@ class IrGenerator {
 
 	static function unboxMapValue(builder:CfgBuilder, stored:CfgValue, box:CompilerType, target:IrType):CfgValue {
 		var array = abiBoundaryCast(builder, stored, lowerType(box));
-		return elementGet(builder, array, builder.constInt(0), target);
+		var elementType = switch box {
+			case TArray(element): lowerType(element);
+			default: throw 'Map value box $box is not an array';
+		};
+		var value = elementGet(builder, array, builder.constInt(0), elementType);
+		return sameIrType(value.type, target) ? value : abiBoundaryCast(builder, value, target);
 	}
 
 	/** `Map.values` of boxed entries: the native values array holds the boxes, so each is unboxed into a typed array. */
@@ -2270,6 +2275,10 @@ class IrGenerator {
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
+			// Struct and @:value instances are stored inline in HashLink value fields. Keep
+			// Null<V> boxed so nullable captures/cells can represent the absent state instead
+			// of writing a null pointer into a packed inline field.
+			case TNullable(TInstance(NominalKind.Class, name, _)) if (valueClasses.exists(name)): Dyn;
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : nullablePrimitive(lowerType(element));
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));
