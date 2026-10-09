@@ -795,8 +795,8 @@ class LanguageService {
 			for (local in semanticContext.locals)
 				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
 					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
-		if (state.ast == null && state.recoveredAst != null)
-			addRecoveredLocals(state.recoveredAst, position, prefix, result);
+		if (!isCurrent(path))
+			addRecoveredLocals(ast, position, prefix, result);
 		if (semanticContext != null && semanticContext.expected != null)
 			for (symbol in compiler.semanticWorkspace.enumCases(semanticContext.expected, token)) {
 				var label = sourceName(symbol.name),
@@ -804,6 +804,13 @@ class LanguageService {
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
+		// Keep local completion useful in a broken file without waiting for the
+		// workspace-wide index, which may be large or blocked by the same error.
+		if (!isCurrent(path) && result.length > 0) {
+			sortCompletion(result);
+			tagResults(result, state);
+			return completionResult(result);
+		}
 		if (model != null)
 			for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token))
 				if (symbol.name.indexOf(".") < 0) {
@@ -1805,17 +1812,30 @@ class LanguageService {
 
 	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
 		for (fn in ast.functions)
-			if (position >= fn.span.start && position <= fn.span.end) {
-				for (argument in fn.arguments)
-					addMember(argument.name, "variable", argument.name + ":" + typeName(argument.type), prefix, result, 2);
-				for (statement in fn.statements)
-					switch statement {
-						case UninitializedDeclaration(name, type, span) if (span.start <= position):
-							addMember(name, "variable", name + ":" + typeName(type), prefix, result, 2);
-						case VarDeclaration(name, type, _, span) if (span.start <= position):
-							addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix, result, 2);
-						default:
-					}
+			addRecoveredFunctionLocals(fn, position, prefix, result);
+		for (owner in ast.classes)
+			for (fn in owner.methods)
+				addRecoveredFunctionLocals(fn, position, prefix, result);
+		for (owner in ast.interfaces)
+			for (fn in owner.methods)
+				addRecoveredFunctionLocals(fn, position, prefix, result);
+		for (owner in ast.abstracts)
+			for (fn in owner.methods)
+				addRecoveredFunctionLocals(fn, position, prefix, result);
+	}
+
+	static function addRecoveredFunctionLocals(fn:compiler.syntax.Ast.AstFunction, position:Int, prefix:String, result:Array<CompletionItem>):Void {
+		if (position < fn.span.start || position > fn.span.end)
+			return;
+		for (argument in fn.arguments)
+			addMember(argument.name, "variable", argument.name + ":" + typeName(argument.type), prefix, result, 2);
+		for (statement in fn.statements)
+			switch statement {
+				case UninitializedDeclaration(name, type, span) if (span.start <= position):
+					addMember(name, "variable", name + ":" + typeName(type), prefix, result, 2);
+				case VarDeclaration(name, type, _, span) if (span.start <= position):
+					addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix, result, 2);
+				default:
 			}
 	}
 

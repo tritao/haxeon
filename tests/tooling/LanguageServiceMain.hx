@@ -638,6 +638,19 @@ class LanguageServiceMain {
 			throw "incomplete expression discarded its enclosing declaration";
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
+		var brokenLocalService = new LanguageService(),
+			brokenLocalSource = 'class Paths { static function directory(path:String):Int { var slash = path.lastIndexOf("/"); var backslash = path.lastIndexOf("\\\\"); var separator = sl > backslash ? slash : backslash; return separator; } }';
+		brokenLocalService.update("BrokenLocal.hx", brokenLocalSource);
+		try
+			brokenLocalService.analyze("BrokenLocal")
+		catch (_:CompileError) {}
+		var localPrefix = brokenLocalSource.indexOf("sl >") + 2,
+			brokenLocalCompletion = brokenLocalService.complete("BrokenLocal.hx", localPrefix),
+			foundSlash = false;
+		for (item in brokenLocalCompletion)
+			if (item.label == "slash") foundSlash = true;
+		if (!foundSlash)
+			throw "local completion stopped suggesting a declared variable after a type error";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }
