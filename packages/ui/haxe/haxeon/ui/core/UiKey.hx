@@ -11,6 +11,7 @@ class UiKey {
 	public static inline var F2:Int = 291;
 	public static inline var F5:Int = 294;
 	public static inline var F10:Int = 299;
+	public static inline var F12:Int = 301;
 	public static inline var Menu:Int = 348;
 	public static inline var Down:Int = 264;
 	public static inline var Up:Int = 265;

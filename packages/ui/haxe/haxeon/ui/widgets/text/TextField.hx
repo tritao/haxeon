@@ -87,6 +87,8 @@ class TextField implements View {
 	public var onEditIntent:Null<(TextEditIntent, TextEditorLayout)->Bool>;
 	/** Optional aggregate selected text for clipboard copy/cut. */
 	public var selectionTextProvider:Null<Void->Null<String>>;
+	/** Optional pointer action at the text offset; true consumes normal selection handling. */
+	public var onTextPointerDown:Null<Int->UiEvent->Bool>;
 	/** Typed selector classes used by composite fields such as ComboBox. */
 	public var classes:Array<String>;
 	public var enabled:Bool;
@@ -579,6 +581,13 @@ class TextField implements View {
 				return changed;
 			});
 			node.on(UiEventKind.PointerDown, function(event) {
+				var pointerAction = onTextPointerDown;
+				if (enabled && pointerAction != null && textNode.resolved != null) {
+					var geometry:ResolvedLayoutItem = cast textNode.resolved;
+					var point = geometry.viewportToLayout(event.x, event.y);
+					var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+					if (pointerAction(hit.offset, event)) { event.preventDefault(); event.stopPropagation(); return; }
+				}
 				if (!enabled || event.button != 0 || textNode.resolved == null)
 					return;
 				event.capturePointer();
