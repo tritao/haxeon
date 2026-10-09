@@ -195,7 +195,11 @@ class LanguageService {
 	static inline final MAX_COMPLETION_ITEMS = 200;
 	static inline final MAX_REFERENCE_RESULTS = 10000;
 
-	public final compiler:Compiler;
+	public var compiler(default, null):Compiler;
+	final editorSources:Map<String, String> = [];
+	final configurationCompilers:Map<String, Compiler> = [];
+	final configurationOrder:Array<String> = [];
+	var activeConfiguration:Null<String>;
 
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
@@ -207,13 +211,36 @@ class LanguageService {
 		compiler.addSourceRoot("stdlib");
 	}
 
-	public function update(path:String, source:String):ModuleState
+	public function update(path:String, source:String):ModuleState {
+		editorSources.set(path, source);
+		for (candidate in configurationCompilers) if (candidate != compiler) candidate.update(path, source);
 		return compiler.update(path, source);
+	}
 
-	public function remove(path:String):Bool
+	public function remove(path:String):Bool {
+		editorSources.remove(path);
+		for (candidate in configurationCompilers) if (candidate != compiler) candidate.remove(path);
 		return compiler.remove(path);
+	}
 
-	public function configure(identity:String, scopeIdentity:String, defines:Array<String>):Void {
+	public function configure(identity:String, scopeIdentity:String, defines:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration, ffiIdentity:String = ""):Void {
+		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
+		if (activeConfiguration != key) {
+			// Typed declarations and frozen FFI models belong to one configuration.
+			// Keep a small cache for navigation between projects; updates reach every cached scope.
+			var selected = configurationCompilers.get(key);
+			if (selected == null) {
+				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
+				selected.addSourceRoot("stdlib");
+				for (path => source in editorSources) selected.update(path, source);
+				configurationCompilers.set(key, selected);
+			}
+			compiler = selected;
+			activeConfiguration = key;
+			configurationOrder.remove(key);
+			configurationOrder.push(key);
+			while (configurationOrder.length > 3) configurationCompilers.remove(configurationOrder.shift());
+		}
 		editorDefines = [for (define in defines) define => "1"];
 		workspaceIndex.clear();
 		documentationIndex.clear();

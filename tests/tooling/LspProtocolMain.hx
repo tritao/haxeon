@@ -103,7 +103,7 @@ class LspProtocolMain {
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
 			|| Json.parse(watcherRegistration[0]).method != "client/registerCapability"
-			|| Json.parse(watcherRegistration[0]).params.registrations[0].registerOptions.watchers.length != 3)
+			|| Json.parse(watcherRegistration[0]).params.registrations[0].registerOptions.watchers.length != 6)
 			throw "LSP did not register project and source file watchers";
 		if (protocol.handle('{"jsonrpc":"2.0","id":"haxeon/register-watchers","result":null}').length != 0)
 			throw "LSP did not accept the client watcher-registration response";
@@ -1447,6 +1447,89 @@ class LspProtocolMain {
 		}));
 		if (symbols.error != null || symbols.result.length == 0)
 			throw "manifest-backed symbols did not recover after a fix";
+		for (roots in [[base + "/app/src/app"], [base + "/app", base + "/app/src", base + "/app/src/app"], [base]]) {
+			var nested = new LspProtocol();
+			request(nested, Json.stringify({jsonrpc: "2.0", id: 803, method: "initialize", params: {
+				workspaceFolders: [for (root in roots) {uri: "file://" + root, name: root}]
+			}}));
+			var published = nested.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+				textDocument: {uri: uri, version: 1, languageId: "haxe", text: source}
+			}}));
+			if (nested.project.compilerPath(mainPath) != "app/Main.hx" || !nested.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
+				throw "source-folder or nested workspace lost owning manifest dependencies";
+			var clean = false;
+			for (raw in published) {
+				var message:Dynamic = Json.parse(raw);
+				if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri) {
+					if (message.params.diagnostics.length > 0) throw "nested workspace published false import diagnostics: " + raw;
+					clean = true;
+				}
+			}
+			if (!clean) throw "nested workspace did not publish document diagnostics";
+			if (roots.length == 3 && nested.project.configurations.length != 1)
+				throw "overlapping source folders duplicated the manifest configuration";
+			if (!nested.project.isConfiguration(base + "/app/haxeon.json")) throw "manifest edits are not watched";
+		}
+		var deferred = new LspProtocol(), dependencyPath = base + "/lib/code/dep/Value.hx",
+			deferredSource = StringTools.replace(source, "var answer =", 'var expression = new EReg("x", ""); var answer =');
+		deferred.enableDeferredDiagnostics();
+		request(deferred, Json.stringify({jsonrpc: "2.0", id: 809, method: "initialize", params: {rootUri: "file://" + base}}));
+		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: uri, version: 1, languageId: "haxe", text: deferredSource}
+		}}));
+		deferred.analyzePendingDiagnostics();
+		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: "file://" + dependencyPath, version: 1, languageId: "haxe", text: sys.io.File.getContent(dependencyPath)}
+		}}));
+		deferred.analyzePendingDiagnostics();
+		var returnedDefinition = request(deferred, Json.stringify({jsonrpc: "2.0", id: 810, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: deferredSource.lastIndexOf("answer") + 1}
+		}}));
+		if (returnedDefinition.result == null || returnedDefinition.result.uri != uri)
+			throw "definition failed after switching configurations with drained diagnostics: " + Json.stringify(returnedDefinition);
+		var editedSource = StringTools.replace(StringTools.replace(deferredSource, "var answer =", "var newAnswerValue ="), "return answer;", "return newAnswerValue;");
+		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
+			textDocument: {uri: uri, version: 2}, contentChanges: [{text: editedSource}]
+		}}));
+		deferred.analyzePendingDiagnostics();
+		request(deferred, Json.stringify({jsonrpc: "2.0", id: 811, method: "textDocument/documentSymbol", params: {textDocument: {uri: "file://" + dependencyPath}}}));
+		var editedDefinition = request(deferred, Json.stringify({jsonrpc: "2.0", id: 812, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: editedSource.lastIndexOf("newAnswerValue") + 1}
+		}}));
+		if (editedDefinition.result == null || editedDefinition.result.uri != uri || editedDefinition.result.range.start.character != editedSource.indexOf("newAnswerValue"))
+			throw "configuration cache lost unsaved edits or returned a stale definition";
+		Sys.println("PASS: foreground definition reanalyzes its document after configuration switches");
+		Sys.println("PASS: ancestor manifests, overlapping source folders and lazy nested project dependencies");
+		// Project FFI metadata supplies virtual Haxe modules, without native builds.
+		sys.io.File.saveContent(base + "/app/fixture.hxi", 'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 17; }');
+		sys.io.File.saveContent(base + "/app/fixture.hxmap", '{"interface":"fixture","package":"projected","modules":{"functions":"Fixture","types":"FixtureTypes","constants":"FixtureConstants"}}');
+		sys.io.File.saveContent(base + "/app/haxeon.json", '{"version":1,"package":{"name":"demo"},"sourceRoots":["src"],"scopeSourceRoots":false,"ffi":{"interfaces":["fixture.hxi"],"projections":["fixture.hxmap"]}}');
+		var ffiProtocol = new LspProtocol(), ffiSource = "package app; import projected.FixtureConstants; class Main { public static function main():Int { var value = FixtureConstants.VALUE; return value; } }";
+		request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 804, method: "initialize", params: {rootUri: "file://" + base + "/app/src"}}));
+		var ffiMessages = ffiProtocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: uri, version: 1, languageId: "haxe", text: ffiSource}
+		}}));
+		for (raw in ffiMessages) {
+			var message:Dynamic = Json.parse(raw);
+			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
+				throw "manifest FFI projection did not resolve: " + raw;
+		}
+		var ffiHover = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 805, method: "textDocument/hover", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
+		}}));
+		if (ffiHover.result == null) throw "FFI projection did not produce a current semantic snapshot";
+		var oldConfiguration = ffiProtocol.project.configurations[0].id;
+		sys.io.File.saveContent(base + "/app/fixture.hxi", 'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
+		ffiProtocol.handle(watchedFileMessage("file://" + base + "/app/fixture.hxi", 2));
+		if (ffiProtocol.project.configurations[0].id == oldConfiguration) throw "FFI edits did not invalidate project configuration";
+		var afterFfiEdit = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 806, method: "textDocument/documentSymbol", params: {textDocument: {uri: uri}}}));
+		if (afterFfiEdit.result.length == 0) throw "FFI reconfiguration lost the unsaved document overlay";
+		var afterFfiHover = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 807, method: "textDocument/hover", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
+		}}));
+		if (afterFfiHover.result == null) throw "FFI edit did not restore semantic analysis";
+		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");
+
 		deleteTree(base);
 	}
 

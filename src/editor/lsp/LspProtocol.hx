@@ -76,6 +76,7 @@ class LspProtocol {
 	];
 
 	final service:LanguageService;
+	var configurationSource:Null<String>;
 	final documents = new DocumentStore();
 	final profiler = new ProfilerService();
 
@@ -292,7 +293,10 @@ class LspProtocol {
 						watchers: [
 							{globPattern: "**/*.hx", kind: 7},
 							{globPattern: "**/*.hxml", kind: 7},
-							{globPattern: "**/haxe.json", kind: 7}
+							{globPattern: "**/haxe.json", kind: 7},
+							{globPattern: "**/haxeon.json", kind: 7},
+							{globPattern: "**/*.hxi", kind: 7},
+							{globPattern: "**/*.hxmap", kind: 7}
 						]
 					}
 				}
@@ -377,6 +381,7 @@ class LspProtocol {
 		}
 		if (document == null)
 			return [];
+		if (opening) project.includeDocument(document.path, service, path -> documents.forPath(path) != null);
 		var generation = ++analysisGeneration;
 		var path = activateConfiguration(document.path);
 		service.update(path, document.source);
@@ -455,6 +460,7 @@ class LspProtocol {
 		}
 		if (configurationChanged) {
 			project.reload(service, path -> documents.forPath(path) != null);
+			if (configurationSource != null) activateConfiguration(configurationSource);
 			for (module in service.compiler.modules.keys())
 				targets.set(module, true);
 			mutated = true;
@@ -1128,6 +1134,8 @@ class LspProtocol {
 		var module = ModulePath.fromFile(path),
 			targets = [for (target in pendingDiagnosticTargets.keys()) target],
 			started = Sys.time();
+		// Configuration switches can invalidate snapshots after diagnostics have drained.
+		if (targets.indexOf(module) < 0) targets.push(module);
 		targets.sort(function(left, right) {
 			if (left == module)
 				return -1;
@@ -1263,6 +1271,7 @@ class LspProtocol {
 		return activateConfiguration(document.path);
 
 	function activateConfiguration(path:String):String {
+		configurationSource = path;
 		var configuration = project.configurationFor(path);
 		if (configuration != null)
 			configure(configuration);
@@ -1272,7 +1281,7 @@ class LspProtocol {
 	}
 
 	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
-		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy());
+		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi, configuration.ffiIdentity);
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");
