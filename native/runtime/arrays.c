@@ -156,11 +156,11 @@ static void realtime_array_retype(varray *array, hl_type *elementType) {
 		vdynamic *value = values[i];
 		void *slot = hl_aptr(storage, vbyte) + (size_t)i * stride;
 		if (hl_is_ptr(elementType) && !hl_is_dynamic(elementType))
-			*(void **)slot = value == NULL ? NULL : hl_dyn_castp(&value, &hlt_dyn, elementType);
+			hl_gc_store_ref(slot,value == NULL ? NULL : hl_dyn_castp(&value, &hlt_dyn, elementType),elementType);
 		else
 			hl_write_dyn(slot, elementType, value, false);
 	}
-	array->data = storage->data;
+	hl_gc_store_ref(&array->data,storage->data,&hlt_bytes);
 	array->capacity = storage->capacity;
 	array->at = elementType;
 }
@@ -182,7 +182,7 @@ HL_PRIM varray *HL_NAME(__array_check_cast)( varray *array, hl_type *elementType
 static varray *realtime_array_copy(varray *array) {
 	varray *copy = hl_alloc_array(array->at, array->size);
 	if (array->size > 0)
-		memcpy(hl_aptr(copy, vbyte), hl_aptr(array, vbyte), (size_t)array->size * hl_type_size(array->at));
+		hl_gc_copy_values(hl_aptr(copy, vbyte), hl_aptr(array, vbyte), (size_t)array->size * hl_type_size(array->at),array->at);
 	return copy;
 }
 
@@ -192,9 +192,9 @@ static varray *realtime_array_concat(varray *left, varray *right) {
 	varray *result = hl_alloc_array(left->at, left->size + right->size);
 	int stride = hl_type_size(left->at);
 	if (left->size > 0)
-		memcpy(hl_aptr(result, vbyte), hl_aptr(left, vbyte), (size_t)left->size * stride);
+		hl_gc_copy_values(hl_aptr(result, vbyte), hl_aptr(left, vbyte), (size_t)left->size * stride,left->at);
 	if (right->size > 0)
-		memcpy(hl_aptr(result, vbyte) + left->size * stride, hl_aptr(right, vbyte), (size_t)right->size * stride);
+		hl_gc_copy_values(hl_aptr(result, vbyte) + left->size * stride, hl_aptr(right, vbyte), (size_t)right->size * stride,left->at);
 	return result;
 }
 
@@ -217,7 +217,7 @@ static varray *realtime_array_slice(varray *array, int start, int end) {
 	varray *result = hl_alloc_array(array->at, end - start);
 	int stride = hl_type_size(array->at);
 	if (end > start)
-		memcpy(hl_aptr(result, vbyte), hl_aptr(array, vbyte) + start * stride, (size_t)(end - start) * stride);
+		hl_gc_copy_values(hl_aptr(result, vbyte), hl_aptr(array, vbyte) + start * stride, (size_t)(end - start) * stride,array->at);
 	return result;
 }
 
@@ -235,11 +235,11 @@ static varray *realtime_array_splice(varray *array, int position, int length) {
 	int stride = hl_type_size(array->at);
 	vbyte *values = hl_aptr(array, vbyte);
 	if (length > 0) {
-		memcpy(hl_aptr(removed, vbyte), values + position * stride, (size_t)length * stride);
-		memmove(values + position * stride, values + (position + length) * stride,
-			(size_t)(array->size - position - length) * stride);
+		hl_gc_copy_values(hl_aptr(removed, vbyte), values + position * stride, (size_t)length * stride,array->at);
+		hl_gc_move_values(values + position * stride, values + (position + length) * stride,
+			(size_t)(array->size - position - length) * stride,array->at);
 		array->size -= length;
-		memset(values + array->size * stride, 0, (size_t)length * stride);
+		hl_gc_clear_values(values + array->size * stride, (size_t)length * stride,array->at);
 	}
 	return removed;
 }
@@ -266,7 +266,7 @@ static varray *realtime_ref_values(varray *dynamicValues) {
 	vdynamic **source = hl_aptr(dynamicValues, vdynamic *);
 	void **target = hl_aptr(result, void *);
 	for (int i = 0; i < dynamicValues->size; i++)
-		target[i] = source[i];
+		hl_gc_store_ref(&target[i],source[i],&hlt_dyn);
 	return result;
 }
 
@@ -308,10 +308,10 @@ HL_PRIM bool HL_NAME(__array_remove_##SUFFIX)( varray *array, VALUE_TYPE value )
 		if (!(EQUALS)) continue; \
 		int stride = hl_type_size(array->at); \
 		if (index + 1 < array->size) \
-			memmove(hl_aptr(array, vbyte) + index * stride, hl_aptr(array, vbyte) + (index + 1) * stride, \
-				(size_t)(array->size - index - 1) * stride); \
+			hl_gc_move_values(hl_aptr(array, vbyte) + index * stride, hl_aptr(array, vbyte) + (index + 1) * stride, \
+				(size_t)(array->size - index - 1) * stride,array->at); \
 		array->size--; \
-		memset(hl_aptr(array, vbyte) + array->size * stride, 0, (size_t)stride); \
+		hl_gc_clear_values(hl_aptr(array, vbyte) + array->size * stride, (size_t)stride,array->at); \
 		return true; \
 	} \
 	return false; \
@@ -330,11 +330,7 @@ static void realtime_array_reverse(varray *array) {
 	int stride = hl_type_size(array->at);
 	vbyte *values = hl_aptr(array, vbyte);
 	for (int left = 0, right = array->size - 1; left < right; left++, right--)
-		for (int byte = 0; byte < stride; byte++) {
-			vbyte value = values[left * stride + byte];
-			values[left * stride + byte] = values[right * stride + byte];
-			values[right * stride + byte] = value;
-		}
+		hl_gc_swap_values(values + left * stride, values + right * stride, stride, array->at);
 }
 
 #define DEFINE_ARRAY_REVERSE(SUFFIX) \
@@ -354,16 +350,16 @@ HL_PRIM int HL_NAME(__array_push_##SUFFIX)( varray *array, VALUE_TYPE value ) { 
 	if (array->size >= array->capacity) \
 		hl_array_reserve(array, array->size + 1); \
 	array->size++; \
-	((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1] = value; \
+	hl_gc_copy_values(hl_aptr(array, vbyte) + (array->size - 1) * sizeof(VALUE_TYPE), &value, sizeof(value), array->at); \
 	return array->size; \
 } \
 HL_PRIM int HL_NAME(__array_unshift_##SUFFIX)( varray *array, VALUE_TYPE value ) { \
 	if (array->size >= array->capacity) \
 		hl_array_reserve(array, array->size + 1); \
 	int stride = hl_type_size(array->at); \
-	memmove(hl_aptr(array, vbyte) + stride, hl_aptr(array, vbyte), (size_t)array->size * stride); \
+	hl_gc_move_values(hl_aptr(array, vbyte) + stride, hl_aptr(array, vbyte), (size_t)array->size * stride,array->at); \
 	array->size++; \
-	((VALUE_TYPE *)hl_aptr(array, vbyte))[0] = value; \
+	hl_gc_copy_values(hl_aptr(array, vbyte), &value, sizeof(value), array->at); \
 	return array->size; \
 } \
 HL_PRIM void HL_NAME(__array_insert_##SUFFIX)( varray *array, int position, VALUE_TYPE value ) { \
@@ -374,16 +370,16 @@ HL_PRIM void HL_NAME(__array_insert_##SUFFIX)( varray *array, int position, VALU
 		hl_array_reserve(array, array->size + 1); \
 	int stride = hl_type_size(array->at); \
 	vbyte *values = hl_aptr(array, vbyte); \
-	memmove(values + (position + 1) * stride, values + position * stride, (size_t)(array->size - position) * stride); \
+	hl_gc_move_values(values + (position + 1) * stride, values + position * stride, (size_t)(array->size - position) * stride,array->at); \
 	array->size++; \
-	((VALUE_TYPE *)values)[position] = value; \
+	hl_gc_copy_values(values + position * sizeof(VALUE_TYPE), &value, sizeof(value), array->at); \
 } \
 HL_PRIM VALUE_TYPE HL_NAME(__array_pop_##SUFFIX)( varray *array ) { \
 	if (array->size <= 0) \
 		hl_error("Array.pop on an empty array"); \
 	VALUE_TYPE value = ((VALUE_TYPE *)hl_aptr(array, vbyte))[array->size - 1]; \
 	array->size--; \
-	memset(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), 0, hl_type_size(array->at)); \
+	hl_gc_clear_values(hl_aptr(array, vbyte) + array->size * hl_type_size(array->at), hl_type_size(array->at),array->at); \
 	return RESULT(array, value); \
 } \
 HL_PRIM VALUE_TYPE HL_NAME(__array_shift_##SUFFIX)( varray *array ) { \
@@ -392,8 +388,8 @@ HL_PRIM VALUE_TYPE HL_NAME(__array_shift_##SUFFIX)( varray *array ) { \
 	VALUE_TYPE value = ((VALUE_TYPE *)hl_aptr(array, vbyte))[0]; \
 	int stride = hl_type_size(array->at); \
 	array->size--; \
-	memmove(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride); \
-	memset(hl_aptr(array, vbyte) + array->size * stride, 0, stride); \
+	hl_gc_move_values(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride,array->at); \
+	hl_gc_clear_values(hl_aptr(array, vbyte) + array->size * stride, stride,array->at); \
 	return RESULT(array, value); \
 } \
 HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
@@ -404,8 +400,8 @@ HL_PRIM void HL_NAME(__array_resize_##SUFFIX)( varray *array, int length ) { \
 		hl_array_reserve(array, length); \
 	int stride = hl_type_size(array->at); \
 	if (length != old_length) \
-		memset(hl_aptr(array, vbyte) + (length < old_length ? length : old_length) * stride, 0, \
-			(size_t)(length > old_length ? length - old_length : old_length - length) * stride); \
+		hl_gc_clear_values(hl_aptr(array, vbyte) + (length < old_length ? length : old_length) * stride, \
+			(size_t)(length > old_length ? length - old_length : old_length - length) * stride,array->at); \
 	array->size = length; \
 }
 
@@ -464,7 +460,7 @@ static realtime_any_element realtime_any_encode(varray *array, vdynamic *value) 
 }
 
 static void realtime_any_store(varray *array, int index, realtime_any_element element) {
-	memcpy(realtime_any_slot(array, index), &element, hl_type_size(array->at));
+	hl_gc_copy_values(realtime_any_slot(array, index), &element, hl_type_size(array->at),array->at);
 }
 
 static void realtime_any_reserve(varray *array, int size) {
@@ -483,7 +479,7 @@ HL_PRIM void HL_NAME(__array_set_any)( varray *array, int index, vdynamic *value
 	hl_array_ensure(array, index);
 	if (array->size > size) {
 		int stride = hl_type_size(array->at);
-		memset(hl_aptr(array, vbyte) + (size_t)size * stride, 0, (size_t)(array->size - size) * stride);
+		hl_gc_clear_values(hl_aptr(array, vbyte) + (size_t)size * stride, (size_t)(array->size - size) * stride,array->at);
 	}
 	realtime_any_store(array, index, element);
 }
@@ -509,7 +505,7 @@ HL_PRIM void HL_NAME(__array_insert_any)( varray *array, int position, vdynamic 
 	realtime_any_reserve(array, array->size + 1);
 	int stride = hl_type_size(array->at);
 	vbyte *values = hl_aptr(array, vbyte);
-	memmove(values + (position + 1) * stride, values + position * stride, (size_t)(array->size - position) * stride);
+	hl_gc_move_values(values + (position + 1) * stride, values + position * stride, (size_t)(array->size - position) * stride,array->at);
 	array->size++;
 	realtime_any_store(array, position, element);
 }
@@ -519,7 +515,7 @@ HL_PRIM vdynamic *HL_NAME(__array_pop_any)( varray *array ) {
 		hl_error("Array.pop on an empty array");
 	vdynamic *value = realtime_any_read(array, array->size - 1);
 	array->size--;
-	memset(realtime_any_slot(array, array->size), 0, hl_type_size(array->at));
+	hl_gc_clear_values(realtime_any_slot(array, array->size), hl_type_size(array->at),array->at);
 	return value;
 }
 
@@ -529,8 +525,8 @@ HL_PRIM vdynamic *HL_NAME(__array_shift_any)( varray *array ) {
 	vdynamic *value = realtime_any_read(array, 0);
 	int stride = hl_type_size(array->at);
 	array->size--;
-	memmove(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride);
-	memset(hl_aptr(array, vbyte) + array->size * stride, 0, stride);
+	hl_gc_move_values(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride,array->at);
+	hl_gc_clear_values(hl_aptr(array, vbyte) + array->size * stride, stride,array->at);
 	return value;
 }
 
@@ -545,9 +541,9 @@ HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
 	if (index < 0) return false;
 	int stride = hl_type_size(array->at);
 	vbyte *values = hl_aptr(array, vbyte);
-	memmove(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride);
+	hl_gc_move_values(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride,array->at);
 	array->size--;
-	memset(values + array->size * stride, 0, stride);
+	hl_gc_clear_values(values + array->size * stride, stride,array->at);
 	return true;
 }
 
@@ -557,8 +553,8 @@ HL_PRIM varray *HL_NAME(__array_concat_any)( varray *left, varray *right ) {
 		return realtime_array_concat(left, right);
 	varray *result = hl_alloc_array(&hlt_dyn, left->size + right->size);
 	vdynamic **values = hl_aptr(result, vdynamic *);
-	for (int i = 0; i < left->size; i++) values[i] = realtime_any_read(left, i);
-	for (int i = 0; i < right->size; i++) values[left->size + i] = realtime_any_read(right, i);
+	for (int i = 0; i < left->size; i++) hl_gc_store_ref(&values[i],realtime_any_read(left, i),&hlt_dyn);
+	for (int i = 0; i < right->size; i++) hl_gc_store_ref(&values[left->size + i],realtime_any_read(right, i),&hlt_dyn);
 	return result;
 }
 
@@ -574,8 +570,8 @@ HL_PRIM void HL_NAME(__array_resize_any)( varray *array, int length ) {
 	realtime_any_reserve(array, length);
 	int stride = hl_type_size(array->at);
 	if (length != old_length)
-		memset(hl_aptr(array, vbyte) + (length < old_length ? length : old_length) * stride, 0,
-			(size_t)(length > old_length ? length - old_length : old_length - length) * stride);
+		hl_gc_clear_values(hl_aptr(array, vbyte) + (length < old_length ? length : old_length) * stride,
+			(size_t)(length > old_length ? length - old_length : old_length - length) * stride,array->at);
 	array->size = length;
 }
 
@@ -603,7 +599,7 @@ HL_PRIM vstring *HL_NAME(__array_join_bytes)( varray *array, vstring *separator 
 }
 
 HL_PRIM void HL_NAME(array_int_init)( vobj *object ) {
-	*array_int_storage(object) = hl_alloc_bytes(0);
+	hl_gc_store_ref(array_int_storage(object),hl_alloc_bytes(0),&hlt_bytes);
 	*array_int_length(object) = 0;
 }
 
@@ -612,9 +608,9 @@ HL_PRIM void HL_NAME(array_int_push)( vobj *object, int value ) {
 	vbyte *old_storage = *array_int_storage(object);
 	vbyte *new_storage = hl_alloc_bytes((length + 1) * (int)sizeof(int));
 	if (length > 0)
-		memcpy(new_storage, old_storage, length * sizeof(int));
+		hl_gc_copy_values(new_storage, old_storage, length * sizeof(int),&hlt_i32);
 	((int *)new_storage)[length] = value;
-	*array_int_storage(object) = new_storage;
+	hl_gc_store_ref(array_int_storage(object),new_storage,&hlt_bytes);
 	*array_int_length(object) = length + 1;
 }
 

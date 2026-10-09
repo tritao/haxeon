@@ -16,6 +16,8 @@ static inline bool realtime_is_string( vdynamic *value ) {
 static vstring *realtime_string_wrap( uchar *data, int length ) {
 	vstring *result = hl_alloc_string(data,length);
 	if( result == NULL ) hl_fatal("HashLink String type is not registered");
+	// hl_alloc_string initializes its managed backing pointer outside these helpers.
+	hl_gc_record_write(result,sizeof(vstring));
 	return result;
 }
 
@@ -46,7 +48,7 @@ static varray *realtime_string_array( varray *buffers ) {
 	uchar **source = hl_aptr(buffers, uchar *);
 	vstring **target = hl_aptr(result, vstring *);
 	for( int i = 0; i < buffers->size; i++ )
-		target[i] = source[i] == NULL ? NULL : realtime_string_wrap(source[i], (int)ustrlen(source[i]));
+		hl_gc_store_ref(&target[i],source[i] == NULL ? NULL : realtime_string_wrap(source[i],(int)ustrlen(source[i])),hl_string_type);
 	return result;
 }
 

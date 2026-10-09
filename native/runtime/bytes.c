@@ -56,7 +56,7 @@ HL_PRIM realtime_bytes *HL_NAME(__bytes_view)( realtime_bytes *bytes, int offset
 	result->owned_utf8 = NULL;
 	result->owned_utf8_count = 0;
 	result->owned_utf8_capacity = 0;
-	result->owner = bytes;
+	hl_gc_store_ref(&result->owner,bytes,&hlt_bytes);
 	result->roots = NULL;
 	hl_add_root(&result->owner);
 	return result;
@@ -66,7 +66,7 @@ HL_PRIM realtime_bytes *HL_NAME(structWithRoots)( realtime_bytes *bytes, varray 
 	if( bytes == NULL || roots == NULL || roots->size < 1 || hl_type_size(roots->at) != (int)sizeof(void *) )
 		hl_error("HXI structure root storage is invalid");
 	realtime_bytes *result = HL_NAME(__bytes_view)(bytes,0,bytes->length);
-	result->roots = roots;
+	hl_gc_store_ref(&result->roots,roots,&hlt_array);
 	hl_add_root(&result->roots);
 	return result;
 }
@@ -281,6 +281,11 @@ HL_PRIM void HL_NAME(structCopy)( realtime_bytes *bytes, int offset, realtime_by
 	realtime_bytes_bounds(bytes,offset,length);
 	realtime_bytes_bounds(value,0,length);
 	realtime_bytes_owned_utf8_check_range(bytes,offset,length);
+	// Plain records need no ownership snapshot. Views may share backing storage.
+	if( bytes->owned_utf8_count == 0 && value->owned_utf8_count == 0 ) {
+		if( length > 0 ) memmove(bytes->data + offset,value->data,(size_t)length);
+		return;
+	}
 	realtime_bytes *snapshot = HL_NAME(structSlice)(value,0,length);
 	realtime_bytes_owned_utf8_reserve(bytes,bytes->owned_utf8_count + snapshot->owned_utf8_count);
 	realtime_bytes_owned_utf8_remove_range(bytes,offset,length);
@@ -334,9 +339,9 @@ HL_PRIM varray *HL_NAME(__sys_args)( void ) {
 	vstring **arguments = hl_aptr(result, vstring *);
 	for( int index = 0; index < hl_setup.sys_nargs; index++ ) {
 #ifdef HL_WIN
-		arguments[index] = realtime_string_of_ustr((const uchar *)hl_setup.sys_args[index]);
+		hl_gc_store_ref(&arguments[index],realtime_string_of_ustr((const uchar *)hl_setup.sys_args[index]),hl_string_type);
 #else
-		arguments[index] = realtime_string_from_utf8(hl_setup.sys_args[index]);
+		hl_gc_store_ref(&arguments[index],realtime_string_from_utf8(hl_setup.sys_args[index]),hl_string_type);
 #endif
 	}
 	return result;

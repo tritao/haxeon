@@ -414,7 +414,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 			memset(wrapped,0,sizeof(*wrapped));
 			wrapped->finalize = haxeon_native_pointer_finalize;
 			wrapped->value = pointer;
-			result->v.ptr = wrapped;
+			hl_gc_store_ref(&result->v.ptr,wrapped,result->t);
 			return result;
 		}
 		if( strcmp(name,"realtime_bytes") == 0 && callback->pointer_sizes[index] > 0 ) {
@@ -423,7 +423,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 			wrapped->finalize = haxeon_native_scoped_bytes_finalize;
 			wrapped->data = (vbyte *)pointer;
 			wrapped->length = callback->pointer_sizes[index];
-			result->v.ptr = wrapped;
+			hl_gc_store_ref(&result->v.ptr,wrapped,result->t);
 			return result;
 		}
 		*valid = false;
@@ -441,7 +441,7 @@ static vdynamic *haxeon_native_callback_argument( haxeon_native_callback *callba
 		wrapped->data = (vbyte *)value;
 		wrapped->length = callback->argument_sizes[index];
 		result = hl_alloc_dynamic(expected);
-		result->v.ptr = wrapped;
+		hl_gc_store_ref(&result->v.ptr,wrapped,result->t);
 		return result;
 	}
 	case HAXEON_NATIVE_UTF8: case HAXEON_NATIVE_UTF8_NULLABLE: {
@@ -915,7 +915,7 @@ HL_PRIM haxeon_native_callback *HL_NAME(native_callback_create)( realtime_bytes 
 	haxeon_native_callback *callback = haxeon_native_callback_prepare(signature_bytes,pointer_sizes,pointer_nullable);
 	callback->closure_memory = ffi_closure_alloc(sizeof(ffi_closure),&callback->code);
 	if( callback->closure_memory == NULL || callback->code == NULL ) hl_error("Could not allocate executable native callback memory");
-	callback->closure = (vclosure *)value;
+	hl_gc_store_ref(&callback->closure,value,value->t);
 	callback->thread = hl_thread_current();
 	hl_add_root(&callback->closure);
 	if( ffi_prep_closure_loc(callback->closure_memory,&callback->cif,haxeon_native_callback_dispatch,callback,callback->code) != FFI_OK ) {
@@ -1187,7 +1187,7 @@ static vdynamic *haxeon_native_callback_invoke( haxeon_native_callback *callback
 		callback->result_size,&callback->cif,callback->code,arguments,argument_count,NULL,false,&aggregate);
 	if( aggregate != NULL ) {
 		vdynamic *boxed = hl_alloc_dynamic(&hlt_bytes);
-		boxed->v.bytes = hl_alloc_bytes(aggregate->length);
+		hl_gc_store_ref(&boxed->v.bytes,hl_alloc_bytes(aggregate->length),&hlt_bytes);
 		if( aggregate->length > 0 ) memcpy(boxed->v.bytes,aggregate->data,(size_t)aggregate->length);
 		return boxed;
 	}

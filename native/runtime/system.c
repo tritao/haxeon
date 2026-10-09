@@ -36,7 +36,7 @@ HL_PRIM varray *HL_NAME(__sys_environment)( void ) {
 	int index = 0;
 	if( environment != NULL ) {
 		for( const wchar_t *entry = environment; *entry != 0; entry += wcslen(entry) + 1 )
-			target[index++] = realtime_string_from_platform((vbyte *)entry);
+			hl_gc_store_ref(&target[index++],realtime_string_from_platform((vbyte *)entry),hl_string_type);
 		FreeEnvironmentStringsW(environment);
 	}
 #else
@@ -46,7 +46,7 @@ HL_PRIM varray *HL_NAME(__sys_environment)( void ) {
 	varray *result = hl_alloc_array(hl_string_type,count);
 	vstring **target = hl_aptr(result,vstring *);
 	for( int index = 0; index < count; index++ )
-		target[index] = realtime_string_from_utf8(environ[index]);
+		hl_gc_store_ref(&target[index],realtime_string_from_utf8(environ[index]),hl_string_type);
 #endif
 	return result;
 }
