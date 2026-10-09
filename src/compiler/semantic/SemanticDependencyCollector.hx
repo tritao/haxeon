@@ -18,6 +18,7 @@ class SemanticDependencyCollector {
 				addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
 			addTypeDependency(result, owner, SemanticDependencyKind.Signature, fn.result, typeAliases);
 			addBodyDependencies(result, owner, fn.statements, state.name, entry);
+			scanNativeLayoutQueryStatements(result, owner, fn.statements, typeAliases);
 		}
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
@@ -29,8 +30,10 @@ class SemanticDependencyCollector {
 			for (field in classDecl.fields) {
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
 				var initializer = field.initializer;
-				if (initializer != null)
+				if (initializer != null) {
 					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer, initializer, state.name, entry);
+					scanNativeLayoutQueryExpression(result, className + "." + field.name, initializer, typeAliases);
+				}
 			}
 			for (method in classDecl.methods) {
 				var owner = className + "." + method.name;
@@ -38,6 +41,7 @@ class SemanticDependencyCollector {
 					addTypeDependency(result, owner, SemanticDependencyKind.Signature, argument.type, typeAliases);
 				addTypeDependency(result, owner, SemanticDependencyKind.Signature, method.result, typeAliases);
 				addBodyDependencies(result, owner, method.statements, state.name, entry);
+				scanNativeLayoutQueryStatements(result, owner, method.statements, typeAliases);
 			}
 		}
 		return result;
@@ -114,6 +118,115 @@ class SemanticDependencyCollector {
 					addBodyDependencies(result, owner, fallback, module, entry);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
+
+	static function scanNativeLayoutQueryStatements(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>,
+			aliases:AliasTable):Void
+		for (statement in statements)
+			switch statement {
+				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
+				case IndexAssignment(array, offset, expression, _):
+					for (item in [array, offset, expression])
+						scanNativeLayoutQueryExpression(result, owner, item, aliases);
+				case FieldAssignment(object, _, expression, _):
+					scanNativeLayoutQueryExpression(result, owner, object, aliases);
+					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
+				case If(predicate, yes, no, _):
+					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
+					scanNativeLayoutQueryStatements(result, owner, yes, aliases);
+					scanNativeLayoutQueryStatements(result, owner, no, aliases);
+				case While(predicate, body, _):
+					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
+					scanNativeLayoutQueryStatements(result, owner, body, aliases);
+				case DoWhile(body, predicate, _):
+					scanNativeLayoutQueryStatements(result, owner, body, aliases);
+					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
+				case ForIn(_, _, iterable, body, _):
+					scanNativeLayoutQueryExpression(result, owner, iterable, aliases);
+					scanNativeLayoutQueryStatements(result, owner, body, aliases);
+				case Try(body, catches, _):
+					scanNativeLayoutQueryStatements(result, owner, body, aliases);
+					for (clause in catches)
+						scanNativeLayoutQueryStatements(result, owner, clause.statements, aliases);
+				case Switch(expression, cases, fallback, _, _):
+					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
+					for (switchCase in cases) {
+						scanNativeLayoutQueryExpression(result, owner, switchCase.value, aliases);
+						if (switchCase.guard != null)
+							scanNativeLayoutQueryExpression(result, owner, switchCase.guard, aliases);
+						scanNativeLayoutQueryStatements(result, owner, switchCase.statements, aliases);
+					}
+					scanNativeLayoutQueryStatements(result, owner, fallback, aliases);
+				case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
+			}
+
+	static function scanNativeLayoutQueryExpression(result:Map<String, Array<SemanticDependency>>, owner:String, expression:AstExpression,
+			aliases:AliasTable):Void {
+		switch expression {
+			case NativeLayoutQuery(_, type, _, _):
+				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
+			case Member(object, _, _) | Not(object, _) | Negate(object, _) | ThrowExpression(object, _) | PostfixIncrement(object, _, _):
+				scanNativeLayoutQueryExpression(result, owner, object, aliases);
+			case Add(left, right, _) | Sub(left, right, _) | Mul(left, right, _) | Div(left, right, _) | Mod(left, right, _) | BitAnd(left, right, _) |
+				BitXor(left, right, _) | BitOr(left, right, _) | ShiftLeft(left, right, _) | ShiftRight(left, right, _) | UnsignedShiftRight(left, right, _) |
+				Less(left, right, _) | LessEqual(left, right, _) | Greater(left, right, _) | GreaterEqual(left, right, _) | Equal(left, right, _) |
+				NotEqual(left, right, _) | And(left, right, _) | Or(left, right, _) | Range(left, right, _):
+				scanNativeLayoutQueryExpression(result, owner, left, aliases);
+				scanNativeLayoutQueryExpression(result, owner, right, aliases);
+			case Conditional(predicate, yes, no, _):
+				for (item in [predicate, yes, no])
+					scanNativeLayoutQueryExpression(result, owner, item, aliases);
+			case BlockExpression(statements, value, _):
+				scanNativeLayoutQueryStatements(result, owner, statements, aliases);
+				scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case Cast(value, _, _):
+				scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case SwitchExpression(subject, cases, fallback, _):
+				scanNativeLayoutQueryExpression(result, owner, subject, aliases);
+				for (switchCase in cases) {
+					scanNativeLayoutQueryExpression(result, owner, switchCase.value, aliases);
+					if (switchCase.guard != null)
+						scanNativeLayoutQueryExpression(result, owner, switchCase.guard, aliases);
+					scanNativeLayoutQueryExpression(result, owner, switchCase.result, aliases);
+				}
+				if (fallback != null)
+					scanNativeLayoutQueryExpression(result, owner, fallback, aliases);
+			case ObjectLiteral(fields, _):
+				for (field in fields)
+					scanNativeLayoutQueryExpression(result, owner, field.value, aliases);
+			case ArrayLiteral(values, _):
+				for (value in values)
+					scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case MapLiteral(entries, _):
+				for (entry in entries) {
+					scanNativeLayoutQueryExpression(result, owner, entry.key, aliases);
+					scanNativeLayoutQueryExpression(result, owner, entry.value, aliases);
+				}
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
+				scanNativeLayoutQueryExpression(result, owner, iterable, aliases);
+				if (predicate != null)
+					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
+				scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
+				scanNativeLayoutQueryExpression(result, owner, iterable, aliases);
+				if (predicate != null)
+					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
+				scanNativeLayoutQueryExpression(result, owner, key, aliases);
+				scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case Call(_, arguments, _) | ClosureCall(_, arguments, _) | MethodCall(_, _, arguments, _) | New(_, arguments, _) | NewGeneric(_, _, arguments, _):
+				for (argument in arguments)
+					scanNativeLayoutQueryExpression(result, owner, argument, aliases);
+			case NewArray(_, length, _):
+				scanNativeLayoutQueryExpression(result, owner, length, aliases);
+			case Index(array, offset, _):
+				scanNativeLayoutQueryExpression(result, owner, array, aliases);
+				scanNativeLayoutQueryExpression(result, owner, offset, aliases);
+			case Lambda(_, body, _):
+				scanNativeLayoutQueryStatements(result, owner, body, aliases);
+			case IntegerLiteral(_, _) | FloatLiteral(_, _) | StringLiteral(_, _) | BoolLiteral(_, _) | NullLiteral(_) | Unreachable(_) | EmptyExpression(_) |
+				ErrorExpression(_) | Variable(_, _) | NewMap(_, _, _):
+		}
+	}
 
 	public static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
 			type:Null<compiler.syntax.Ast.AstType>, aliases:AliasTable):Void {

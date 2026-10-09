@@ -109,6 +109,27 @@ class NativeLayoutMain {
 		expect(requireLayout(cachedTransform.nativeLayouts, "portable-abi64").size == 24
 			&& cachedLayoutCompiled.module.ints.indexOf(42) >= 0,
 			"retyped class methods must see cached cross-module layouts before folding sizeof/alignof queries");
+		var descriptorCompiler = new Compiler();
+		descriptorCompiler.configure("type-info-cache", "type-info-cache", ["native-abi-target=portable-abi64"]);
+		descriptorCompiler.update("Record.hx", "struct Record { public var x:Int; }");
+		descriptorCompiler.update("Main.hx", "class Main { static function main():Int return typeInfo<Record>().hash.length; }");
+		var firstDescriptorCompile = descriptorCompiler.compile("Main"),
+			firstDescriptorHash = findDescriptorHash(firstDescriptorCompile.module.strings);
+		if (firstDescriptorHash == null)
+			throw "compiled typeInfo call did not publish its descriptor hash";
+		descriptorCompiler.update("Record.hx", "struct Record { public var x:Int; public var y:Int; }");
+		var changedDescriptorCompile = descriptorCompiler.compile("Main"),
+			changedDescriptorHash = findDescriptorHash(changedDescriptorCompile.module.strings);
+		expect(changedDescriptorHash != null && changedDescriptorHash != firstDescriptorHash,
+			'changing a struct schema must change the emitted typeInfo hash: before=$firstDescriptorHash after=$changedDescriptorHash retyped=${changedDescriptorCompile.retyped}');
+		expect(changedDescriptorCompile.retyped.indexOf("Main.main") >= 0, "changing a struct schema must retype callers of typeInfo");
+		var descriptorInvalidated = false;
+		for (artifact in changedDescriptorCompile.invalidations)
+			if (artifact.artifact == "Main.main")
+				for (reason in artifact.reasons)
+					if (reason.kind == compiler.semantic.Invalidation.InvalidationKind.StructuralDependency && reason.cause == "Record")
+						descriptorInvalidated = true;
+		expect(descriptorInvalidated, "changing a struct schema must report the typeInfo layout dependency invalidation");
 		if ([
 			for (object in compiler.ir.IrProgramAssembler.objectsFrom(typed))
 				if (object.name == "Pair" || object.name == "Outer") object
@@ -162,6 +183,14 @@ class NativeLayoutMain {
 			if (layout.target == target)
 				return layout;
 		throw 'Missing native layout for "$target"';
+	}
+
+	static function findDescriptorHash(strings:Array<String>):Null<String> {
+		var hashPattern = new EReg("^[0-9a-f]{64}$", "");
+		for (value in strings)
+			if (hashPattern.match(value))
+				return value;
+		return null;
 	}
 
 	static function field(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>, name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
