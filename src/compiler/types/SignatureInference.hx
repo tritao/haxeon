@@ -49,6 +49,7 @@ class SignatureInference {
 		for (classDecl in program.classes) {
 			inferredClasses.push({
 				name: classDecl.name,
+				isStruct: classDecl.isStruct,
 				isExtern: classDecl.isExtern,
 				typeParameters: classDecl.typeParameters,
 				typeConstraints: classDecl.typeConstraints,

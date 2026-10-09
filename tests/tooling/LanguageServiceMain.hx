@@ -64,14 +64,15 @@ class LanguageServiceMain {
 			throw "source formatting did not preserve conditional compilation";
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");
+			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } struct Point { public var x:Int; } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
 			foundMethod = false,
 			foundAlias = false,
 			foundInterface = false,
-			foundEnum = false;
+			foundEnum = false,
+			foundStruct = false;
 		for (symbol in symbols) {
 			if (symbol.name == "Editor" && symbol.kind == "class")
 				foundClass = true;
@@ -83,8 +84,10 @@ class LanguageServiceMain {
 				foundInterface = true;
 			if (symbol.name == "Kind" && symbol.kind == "enum")
 				foundEnum = true;
+			if (symbol.name == "Point" && symbol.kind == "struct" && symbol.detail == "struct Point")
+				foundStruct = true;
 		}
-		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum)
+		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum || !foundStruct)
 			throw "language service did not expose document symbols";
 		if (symbols[0].revision != 1 || symbols[0].stale)
 			throw "language service did not tag the current semantic snapshot";

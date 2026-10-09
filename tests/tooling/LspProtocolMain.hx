@@ -248,7 +248,7 @@ class LspProtocolMain {
 			watchMainPath = Path.join([watchAppRoot, "Main.hx"]),
 			watchHelperPath = Path.join([watchLibRoot, "Helper.hx"]),
 			watchConfigPath = Path.join([watchRoot, "haxe.json"]),
-			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
+			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nstruct BuildPoint { public var x:Int; }\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
 		sys.FileSystem.createDirectory(watchRoot);
 		sys.FileSystem.createDirectory(watchSourceRoot);
 		sys.FileSystem.createDirectory(watchAppRoot);
@@ -283,14 +283,16 @@ class LspProtocolMain {
 			id: 430,
 			method: "textDocument/documentSymbol",
 			params: {textDocument: {uri: watchMainUri}}
-		})), hasSelectedBuild = false, hasWrongBuild = false;
+		})), hasSelectedBuild = false, hasWrongBuild = false, hasStruct = false;
 		for (symbol in cast(Json.parse(buildSymbols[0]).result, Array<Dynamic>)) {
 			if (symbol.name == "buildSelected")
 				hasSelectedBuild = true;
 			if (symbol.name == "wrongBuild")
 				hasWrongBuild = true;
+			if (symbol.name == "BuildPoint" && symbol.kind == 23)
+				hasStruct = true;
 		}
-		if (!hasSelectedBuild || hasWrongBuild)
+		if (!hasSelectedBuild || hasWrongBuild || !hasStruct)
 			throw "selected build defines did not control LSP symbols";
 		var firstWorkspaceDiagnostics = request(watchProtocol,
 			Json.stringify({

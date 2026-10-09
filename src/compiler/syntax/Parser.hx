@@ -86,9 +86,12 @@ class Parser {
 						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
 					interfaces.push(parseInterface());
-				else if (check(TokenKind.Class))
-					classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration));
-				else if (visibility != null)
+				else if (check(TokenKind.Class) || check(TokenKind.Struct)) {
+					var isStruct = check(TokenKind.Struct);
+					if (isStruct && externDeclaration)
+						fail(current(), "A struct cannot be declared extern");
+					classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata, externDeclaration, isStruct));
+				} else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
 				else if (check(TokenKind.Identifier) && current().text == "abstract") {
 					var start = advance().span;
@@ -521,19 +524,29 @@ class Parser {
 		return result;
 	}
 
-	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false):AstClass {
-		var start = consume(TokenKind.Class).span,
+	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false, isStruct:Bool = false):AstClass {
+		var start = consume(isStruct ? TokenKind.Struct : TokenKind.Class).span,
 			name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
 			interfaces = [];
-		if (match(TokenKind.Extends))
-			base = parseType();
-		while (match(TokenKind.Implements)) {
-			interfaces.push(parseType());
-			while (match(TokenKind.Comma))
+		if (isStruct) {
+			if (match(TokenKind.Extends))
+				fail(previous(), 'Struct "$name" cannot extend a class; use ":" to declare interface conformance');
+			if (match(TokenKind.Implements))
+				fail(previous(), 'Struct "$name" declares interface conformance with ":", not "implements"');
+			if (match(TokenKind.Colon))
+				do
+					interfaces.push(parseType()) while (match(TokenKind.Comma));
+		} else {
+			if (match(TokenKind.Extends))
+				base = parseType();
+			while (match(TokenKind.Implements)) {
 				interfaces.push(parseType());
+				while (match(TokenKind.Comma))
+					interfaces.push(parseType());
+			}
 		}
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [], bodyStart = position;
@@ -613,6 +626,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			isStruct: isStruct,
 			isExtern: isExtern,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,

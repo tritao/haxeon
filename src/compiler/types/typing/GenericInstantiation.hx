@@ -66,7 +66,7 @@ class GenericInstantiation {
 			for (constraint in constraints) {
 				var actual = requiredMapValue(substitutions, constraint.parameter),
 					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-				if (!session.relations.isAssignable(actual, expected))
+				if (!session.relations.satisfiesConstraint(actual, expected))
 					fail("E1003", 'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
 			}
 		var semanticExpected = [for (argument in fn.arguments) argumentType(argument, substitutions)];

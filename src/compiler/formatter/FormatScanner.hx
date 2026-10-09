@@ -402,6 +402,7 @@ class FormatScanner {
 			case "import": TokenKind.Import;
 			case "typedef": TokenKind.Typedef;
 			case "class": TokenKind.Class;
+			case "struct": TokenKind.Struct;
 			case "interface": TokenKind.Interface;
 			case "enum": TokenKind.Enum;
 			case "extends": TokenKind.Extends;

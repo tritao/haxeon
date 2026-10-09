@@ -675,8 +675,8 @@ class LanguageService {
 		for (classDecl in ast.classes) {
 			result.push({
 				name: classDecl.name,
-				kind: "class",
-				detail: 'class ${classDecl.name}',
+				kind: classDecl.isStruct == true ? "struct" : "class",
+				detail: '${classDecl.isStruct == true ? "struct" : "class"} ${classDecl.name}',
 				span: classDecl.span
 			});
 			for (field in classDecl.fields)

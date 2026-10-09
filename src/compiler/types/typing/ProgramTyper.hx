@@ -319,12 +319,17 @@ class ProgramTyper {
 						session.nativeLayoutsByName.set(classDecl.name, layout);
 
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
-		var requestedValue = hasMetadata(classDecl.metadata, "value"),
+		var isStruct = classDecl.isStruct == true,
+			requestedValue = isStruct || hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue;
+		if (isStruct && isNativeValue)
+			BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields', classDecl.span);
+		if (isStruct && classDecl.typeParameters.length > 0)
+			BodyTyper.fail("E1022", 'Generic struct "${classDecl.name}" is not supported yet', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
-		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
+		if ((isValue && !isStruct || isNativeValue) && classDecl.interfaces.length > 0)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
 		if (isNativeValue && classDecl.typeParameters.length > 0)
 			BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
@@ -669,7 +674,8 @@ class ProgramTyper {
 		for (method in interfaceDecl.methods) {
 			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
-				BodyTyper.fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
+				BodyTyper.fail("E1007",
+					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
 			var implementationName = implementation.owner + "." + method.name;
 			if (!session.signatures.exists(implementationName)
 				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))

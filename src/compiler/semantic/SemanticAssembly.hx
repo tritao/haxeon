@@ -428,6 +428,7 @@ class SemanticAssembly {
 				}
 				classes.push({
 					name: className,
+					isStruct: classDecl.isStruct,
 					isExtern: classDecl.isExtern,
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,

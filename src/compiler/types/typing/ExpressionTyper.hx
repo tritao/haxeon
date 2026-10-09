@@ -1204,6 +1204,10 @@ class ExpressionTyper {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2 && TypeRelations.equals(left.type, right.type) && session.relations.isValueClass(left.type)) {
+			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+		}
 		if (operation == 2 && session.relations.isAssignable(left.type, right.type)) {
 			left = coerce(left, right.type, "equality comparison", "E1011");
 			return new TypedExpression(TEqual(left, right), TBool, span);

@@ -111,7 +111,7 @@ class ModuleChangeAnalyzer {
 		for (classDecl in ast.classes) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases),
-				isValue = false,
+				isValue = classDecl.isStruct == true,
 				isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
@@ -122,7 +122,7 @@ class ModuleChangeAnalyzer {
 							isNativeValue = true;
 						case _:
 					}
-			signature += isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
+			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
@@ -222,7 +222,7 @@ class ModuleChangeAnalyzer {
 			wireFields.set(className, wireFieldFingerprint);
 			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
 				structuralChanged.set(className, true);
-			var isValue = false, isNativeValue = false;
+			var isValue = classDecl.isStruct == true, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
 					isValue = true;

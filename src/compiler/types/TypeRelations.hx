@@ -87,6 +87,12 @@ class TypeRelations {
 			return true;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
+		if (isStructType(actual))
+			switch expected {
+				case TInstance(NominalKind.Interface, _, _):
+					return false;
+				default:
+			}
 		if (actual == TNull && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
@@ -156,6 +162,17 @@ class TypeRelations {
 				}
 			default: false;
 		};
+	}
+
+	/** Struct conformance is available to generic constraints without enabling interface boxing. */
+	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
+		if (isStructType(actual))
+			switch expected {
+				case TInstance(NominalKind.Interface, _, _):
+					return nominalReaches(actual, expected);
+				default:
+			}
+		return isAssignable(actual, expected);
 	}
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
@@ -292,17 +309,17 @@ class TypeRelations {
 			default: false;
 		};
 
-	/** Reference types hold null, except @:value classes: their instances are stored inline in fields and are never null. */
+	/** Reference types hold null, except value classes and structs: their values are copied into their storage. */
 	function acceptsNull(type:CompilerType):Bool
 		return isReference(type) && !isValueClass(type);
 
-	/** Whether `type` is a class declared `@:value`, which is a plain (non-record) value structure. */
+	/** Whether `type` is a value class or a struct with non-null value semantics. */
 	public function isValueClass(type:CompilerType):Bool
 		return switch type {
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = declarations.classes.get(name);
 				if (declaration == null) false; else {
-					var found = false;
+					var found = declaration.isStruct == true;
 					for (entry in declaration.metadata)
 						if (entry.name == "value")
 							found = true;
@@ -310,6 +327,15 @@ class TypeRelations {
 				}
 			default: false;
 		};
+
+	function isStructType(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.get(name); declaration != null && declaration.isStruct == true;
+			default: false;
+		};
+
+	public inline function isStruct(type:CompilerType):Bool
+		return isStructType(type);
 
 	/** `Null<V>` for a value class V, which cannot be stored in an inline field. */
 	public function isNullableValueClass(type:CompilerType):Bool

@@ -35,4 +35,10 @@ fi
 "$cli" fmt --line-width 40 "$source_path"
 "$cli" fmt --line-width 40 --check "$source_path"
 
-echo "PASS: built-in formatter CLI stdin, check, and file modes"
+struct_path="$project_dir/Struct.hx"
+printf 'struct Vec2 { public var x:Int; }\n' > "$struct_path"
+"$cli" fmt "$struct_path"
+grep -q '^struct Vec2 {' "$struct_path"
+"$cli" fmt --check "$struct_path"
+
+echo "PASS: built-in formatter CLI stdin, check, file, and struct modes"

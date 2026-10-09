@@ -328,7 +328,7 @@ class DeclarationIndex {
 						continue;
 					default:
 				}
-			if (actual == null || !relations.isAssignable(actual, expected))
+			if (actual == null || !relations.satisfiesConstraint(actual, expected))
 				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"',
 					span);
 		}

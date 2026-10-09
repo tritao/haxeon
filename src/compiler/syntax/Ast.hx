@@ -63,6 +63,10 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
+
+	/** Set when this declaration used the `struct` keyword. */
+	final ?isStruct:Bool;
+
 	final ?isExtern:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
