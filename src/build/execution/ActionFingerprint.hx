@@ -117,7 +117,7 @@ class ActionFingerprint {
 		if (action.outputs.length == 0)
 			return false;
 		for (output in action.outputs)
-			if (!FileSystem.exists(output))
+			if (!FileSystem.exists(output) || FileSystem.isDirectory(output))
 				return false;
 		return true;
 	}

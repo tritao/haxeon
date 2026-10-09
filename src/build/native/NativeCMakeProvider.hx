@@ -34,13 +34,16 @@ class NativeCMakeProvider {
 			identity = shared ? sharedName(source, native.cmake.target, context.environment.projectRoot) : resolvedPackage.name,
 			sharedRoot = shared ? layout.sharedCMakeRoot(identity) : null,
 			buildDirectory = shared ? Path.join([sharedRoot, buildTree]) : Path.join([layout.packageRoot(resolvedPackage.name), buildTree]),
-			output = shared ? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
+			legacyOutput = shared ? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
 				sharedRoot,
 				"out",
 				(context.environment.target.os == TargetOs.Windows ? "" : "lib") + native.cmake.library + context.environment.toolchain.sharedLibrarySuffix
 			])) : (native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
 				native.cmake.library)),
-			outputDirectory = Path.directory(output),
+			outputDirectory = Path.directory(legacyOutput),
+			outputs = native.cmake.libraries.length == 0 ? [legacyOutput] : [for (name in native.cmake.libraries)
+				Path.join([outputDirectory, (context.environment.target.os == TargetOs.Windows ? "" : "lib")
+					+ name + context.environment.toolchain.sharedLibrarySuffix])],
 			runDirectory = shared ? source : resolvedPackage.root,
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
 			configureArguments = [
@@ -59,7 +62,7 @@ class NativeCMakeProvider {
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
 		for (argument in NativeCompilerCache.configureArguments(ccache))
 			configureArguments.push(argument);
-		if (native.cmake.library != null) {
+		if (native.cmake.libraries.length > 0) {
 			configureArguments.push("-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + outputDirectory);
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=" + outputDirectory);
 		}
@@ -77,7 +80,7 @@ class NativeCMakeProvider {
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
 				Process("cmake", configureArguments, runDirectory, compilerCache)),
-			new ExecutionAction(buildId, [configureId], [source], [output], 'Build CMake target ${native.cmake.target} -> $output', Process("cmake", [
+			new ExecutionAction(buildId, [configureId], [source], outputs, 'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}', Process("cmake", [
 				"--build",
 				buildDirectory,
 				"--target",
@@ -118,14 +121,14 @@ class NativeCMakeProvider {
 				var ffiOutput = layout.ffiNativeLibraryPath(resolvedPackage.name, ffiName),
 					linkId = new ActionId('native-link:${artifact.id.key()}'),
 					linkDependencies:Array<ActionId> = [compileId],
-					cmakeLinkInput = cmakeLinkInput(outputDirectory, output, context.environment.target.os, context.environment.target.abi),
-					linkInputs:Array<String> = [thunkObject, cmakeLinkInput];
+					cmakeLinkInputs = [for (output in outputs) cmakeLinkInput(outputDirectory, output, context.environment.target.os, context.environment.target.abi)],
+					linkInputs:Array<String> = [thunkObject].concat(cmakeLinkInputs);
 				for (dependency in artifact.dependencies)
 					if (dependency.kind == ArtifactKind.NativeSharedLibrary)
 						linkDependencies.push(buildId);
 				actions.push(new ExecutionAction(linkId, linkDependencies, linkInputs, [ffiOutput],
 					'Link shared library ${resolvedPackage.name} FFI $ffiName -> $ffiOutput',
-					Process(toolchain.sharedCommand(), toolchain.sharedArguments(ffiOutput, [thunkObject], [cmakeLinkInput], [outputDirectory]),
+					Process(toolchain.sharedCommand(), toolchain.sharedArguments(ffiOutput, [thunkObject], cmakeLinkInputs, [outputDirectory]),
 						resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [linkId]);
 			}

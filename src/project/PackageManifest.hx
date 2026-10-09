@@ -31,11 +31,15 @@ class NativeCMakeManifest {
 	/** Name of a CMake shared-library target whose runtime file Haxeon exposes. */
 	public final library:Null<String>;
 
-	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String) {
+	/** Required runtime library names produced by an aggregate CMake target. */
+	public final libraries:Array<String>;
+
+	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String, ?libraries:Array<String>) {
 		this.source = source;
 		this.target = target;
 		this.inputs = inputs == null ? [] : inputs.copy();
 		this.library = library;
+		this.libraries = library != null ? [library] : libraries == null ? [] : libraries.copy();
 	}
 }
 
@@ -159,11 +163,21 @@ class PackageManifest {
 			if (cmakeData != null) {
 				if (!isObject(cmakeData))
 					throw '$path "native.cmake" must be an object';
-				var library = optionalNullableString(cmakeData, "library", '$path native.cmake');
-				if (library != null && (library.indexOf("/") >= 0 || library.indexOf("\\") >= 0 || library == "." || library == ".."))
-					throw '$path native.cmake "library" must be a library name';
+				var library = optionalNullableString(cmakeData, "library", '$path native.cmake'),
+					libraries = stringArray(cmakeData, "libraries", '$path native.cmake', []);
+				if (Reflect.hasField(cmakeData, "libraries")) {
+					if (library != null) throw '$path native.cmake cannot combine "library" and "libraries"';
+					if (libraries.length == 0) throw '$path native.cmake "libraries" must not be empty';
+				}
+				var names = library == null ? libraries : [library], seen = new Map<String, Bool>();
+				for (name in names) {
+					if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
+						throw '$path native.cmake requires library names without path components';
+					if (seen.exists(name)) throw '$path native.cmake contains duplicate library "$name"';
+					seen.set(name, true);
+				}
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
-					requiredString(cmakeData, "target", '$path native.cmake'), stringArray(cmakeData, "inputs", '$path native.cmake', []), library);
+					requiredString(cmakeData, "target", '$path native.cmake'), stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries);
 			}
 			if (nativeSources.length == 0 && cmake == null)
 				throw '$path "native" requires "sources" or "cmake"';
