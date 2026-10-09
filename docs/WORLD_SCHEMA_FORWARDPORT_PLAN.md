@@ -117,11 +117,12 @@ source checkpoint. No World or root pins will be changed.
 
 ## Current compiler checkpoint and acceptance boundary
 
-The pre-default functional checkpoint was
+The pre-default functional source checkpoint was
 `e6b53658e153562772122c00e1b16daeecb859c8` (`Support generic typeInfo across
-mixed record roots`). The current committed checkpoint is
-`78d459f0` (`Add scalar defaults to native descriptors`), on the accepted-main
-lineage. Its HashLink gitlink remains
+mixed record roots`). The latest functional compiler source checkpoint is
+`78d459f00121eb2933b8480bfa9dff43d7dfb054` (`Add scalar defaults to native
+descriptors`), on the accepted-main lineage. This documentation-only gate
+record follows that source commit. Its HashLink gitlink remains
 `0e739431da931d8e21c98c485afb17f1f3164106`.
 
 At this checkpoint, `typeInfo<T>()` accepts concrete source-declared struct
