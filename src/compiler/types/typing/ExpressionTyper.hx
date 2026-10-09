@@ -847,6 +847,15 @@ class ExpressionTyper {
 					case _: descriptorDefaultConstant(element, initializer);
 				};
 			case TAbstract(_, _, representation): descriptorDefaultConstant(representation, initializer);
+			case TNativeScalar("f32"):
+				var value = floatDefaultLiteral(initializer);
+				if (value == null) null; else {
+					var rounded = NativeTypeDescriptor.float32DefaultValue(value);
+					if (rounded == null)
+						null
+					else
+						FloatValue(cast rounded);
+				};
 			case TNativeScalar(name): var range = NativeTypeDescriptor.narrowIntegerDefaultRange('native-scalar:$name'),
 					integer = integerDefaultLiteral(initializer); range == null || integer == null || integer < range.min || integer > range.max ? null : IntValue(integer);
 			case TInt:
@@ -855,13 +864,7 @@ class ExpressionTyper {
 					case Negate(IntegerLiteral(value, _), _): IntValue(-value);
 					case _: null;
 				};
-			case TFloat: var value:Null<Float> = switch initializer {
-					case IntegerLiteral(number, _): number;
-					case FloatLiteral(number, _): number;
-					case Negate(IntegerLiteral(number, _), _): -number;
-					case Negate(FloatLiteral(number, _), _): -number;
-					case _: null;
-				}; value == null || !Math.isFinite(value) ? null : FloatValue(value);
+			case TFloat: var value = floatDefaultLiteral(initializer); value == null || !Math.isFinite(value) ? null : FloatValue(value);
 			case TString:
 				switch initializer {
 					case StringLiteral(value, _): StringValue(value);
@@ -872,6 +875,15 @@ class ExpressionTyper {
 					case BoolLiteral(value, _): BoolValue(value);
 					case _: null;
 				};
+			case _: null;
+		};
+
+	static function floatDefaultLiteral(initializer:AstExpression):Null<Float>
+		return switch initializer {
+			case IntegerLiteral(value, _): value;
+			case FloatLiteral(value, _): value;
+			case Negate(IntegerLiteral(value, _), _): -value;
+			case Negate(FloatLiteral(value, _), _): -value;
 			case _: null;
 		};
 

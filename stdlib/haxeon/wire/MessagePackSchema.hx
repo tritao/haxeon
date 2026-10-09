@@ -162,17 +162,21 @@ class MessagePackSchema {
 		if (!Reflect.hasField(value, "value"))
 			throw new MessagePackError("Writer descriptor default must include a value");
 		var type = fieldString(value, "type"),
-			constant:Dynamic = Reflect.field(value, "value"),
-			valid = switch type {
-				case "Int": Std.isOfType(constant, Int) && integerDefaultTypeAccepted(node, cast constant);
-				case "Float": (Std.isOfType(constant,
-						Int) || Std.isOfType(constant, Float)) && Math.isFinite(cast constant) && defaultTypeAccepted(node, "Float");
-				case "String": Std.isOfType(constant, String) && defaultTypeAccepted(node, "String");
-				case "Bool": Std.isOfType(constant, Bool) && defaultTypeAccepted(node, "Bool");
-				case "Null": constant == null && nullableDefaultType(node);
-				case _:
-					false;
-			};
+			constant:Dynamic = Reflect.field(value, "value");
+		if (type == "Float"
+			&& containsFloat32(node)
+			&& (Std.isOfType(constant, Float) || Std.isOfType(constant, Int))
+			&& float32DefaultBits(cast constant) == null)
+			throw new MessagePackError('Writer descriptor Float32 default is not finite at "${fieldString(node, "name")}"');
+		var valid = switch type {
+			case "Int": Std.isOfType(constant, Int) && integerDefaultTypeAccepted(node, cast constant);
+			case "Float": (Std.isOfType(constant, Int) || Std.isOfType(constant, Float)) && Math.isFinite(cast constant) && defaultTypeAccepted(node, "Float");
+			case "String": Std.isOfType(constant, String) && defaultTypeAccepted(node, "String");
+			case "Bool": Std.isOfType(constant, Bool) && defaultTypeAccepted(node, "Bool");
+			case "Null": constant == null && nullableDefaultType(node);
+			case _:
+				false;
+		};
 		if (!valid)
 			throw new MessagePackError('Writer descriptor default does not match field type "${fieldString(node, "type")}"');
 	}
@@ -200,10 +204,67 @@ class MessagePackSchema {
 		return false;
 	}
 
-	static function defaultTypeAccepted(node:Dynamic, valueType:String):Bool {
-		if (fieldString(node, "type") == valueType)
-			return true;
+	static function containsFloat32(node:Dynamic):Bool {
 		var fieldType = fieldString(node, "type");
+		if (fieldType == "native-scalar:f32")
+			return true;
+		for (argument in fieldArray(node, "arguments"))
+			if ((fieldString(argument, "name") == "representation"
+				|| (StringTools.startsWith(fieldType, "Null<") && fieldString(argument, "name") == "element"))
+				&& containsFloat32(argument))
+				return true;
+		return false;
+	}
+
+	static function float32DefaultBits(value:Float):Null<Int> {
+		if (!Math.isFinite(value))
+			return null;
+		if (value == 0)
+			return 0;
+		var negative = value < 0,
+			sign = negative ? 0x80000000 : 0,
+			absolute = negative ? -value : value;
+		if (absolute >= 3.4028235677973366e38)
+			return null;
+		if (absolute > 3.4028234663852886e38)
+			return sign | 0x7f7fffff;
+		var exponent = Math.floor(Math.log(absolute) / 0.6931471805599453);
+		if (exponent < -126) {
+			var subnormal = roundBinary32(absolute * Math.pow(2.0, 149.0));
+			return sign | subnormal;
+		}
+		var power = Math.pow(2.0, exponent);
+		while (absolute < power) {
+			exponent--;
+			power *= 0.5;
+		}
+		while (absolute >= power * 2.0) {
+			exponent++;
+			power *= 2.0;
+		}
+		var fraction = roundBinary32((absolute / power - 1.0) * 8388608.0);
+		if (fraction == 8388608) {
+			exponent++;
+			fraction = 0;
+		}
+		if (exponent > 127)
+			return null;
+		return sign | ((exponent + 127) << 23) | fraction;
+	}
+
+	static function roundBinary32(value:Float):Int {
+		var floorValue = Math.floor(value),
+			integer = Std.int(floorValue),
+			remainder = value - floorValue;
+		if (remainder > 0.5 || (remainder == 0.5 && integer % 2 != 0))
+			return integer + 1;
+		return integer;
+	}
+
+	static function defaultTypeAccepted(node:Dynamic, valueType:String):Bool {
+		var fieldType = fieldString(node, "type");
+		if (fieldType == valueType || (valueType == "Float" && fieldType == "native-scalar:f32"))
+			return true;
 		for (argument in fieldArray(node, "arguments"))
 			if (fieldString(argument, "name") == "representation"
 				|| (StringTools.startsWith(fieldType, "Null<") && fieldString(argument, "name") == "element"))
@@ -323,7 +384,7 @@ class MessagePackSchema {
 			appendNullableInt(buffer, fieldNullableInt(node, "size"));
 			appendNullableInt(buffer, fieldNullableInt(node, "alignment"));
 			appendNullableInt(buffer, fieldNullableInt(node, "offset"));
-			appendDefault(buffer, Reflect.field(node, "defaultValue"));
+			appendDefault(buffer, node, Reflect.field(node, "defaultValue"));
 			appendStrings(buffer, fieldArray(node, "annotations"));
 			appendAnnotationValues(buffer, fieldArray(node, "annotationValues"));
 			appendNodes(buffer, fieldArray(node, "fields"));
@@ -332,7 +393,7 @@ class MessagePackSchema {
 		}
 	}
 
-	static function appendDefault(buffer:StringBuf, value:Dynamic):Void {
+	static function appendDefault(buffer:StringBuf, node:Dynamic, value:Dynamic):Void {
 		if (value == null) {
 			append(buffer, "0");
 			return;
@@ -345,9 +406,13 @@ class MessagePackSchema {
 			append(buffer, "n");
 		else if (type == "Int" && Std.isOfType(constant, Int))
 			append(buffer, "i" + Std.string(constant));
-		else if (type == "Float" && (Std.isOfType(constant, Float) || Std.isOfType(constant, Int)))
-			append(buffer, "f" + Std.string(constant));
-		else if (type == "String" && Std.isOfType(constant, String))
+		else if (type == "Float" && (Std.isOfType(constant, Float) || Std.isOfType(constant, Int))) {
+			if (containsFloat32(node)) {
+				var bits = float32DefaultBits(cast constant);
+				append(buffer, bits == null ? "f" + Std.string(constant) : "f32i" + Std.string(bits));
+			} else
+				append(buffer, "f" + Std.string(constant));
+		} else if (type == "String" && Std.isOfType(constant, String))
 			append(buffer, "s" + Std.string(constant));
 		else if (type == "Bool" && Std.isOfType(constant, Bool))
 			append(buffer, Std.string(constant) == "true" ? "b1" : "b0");

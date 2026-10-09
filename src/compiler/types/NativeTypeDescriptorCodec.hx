@@ -80,10 +80,19 @@ class NativeTypeDescriptorCodec {
 	}
 
 	/** Stable JSON companion for tests and tooling that inspect the binary artifact. */
-	public static function toJson(descriptors:Array<NativeTypeDescriptorData>):String
-		return Json.stringify({formatVersion: FORMAT_VERSION, descriptors: [for (descriptor in orderedDescriptors(descriptors)) descriptorJson(descriptor)]},
-			null, "  ")
-			+ "\n";
+	public static function toJson(descriptors:Array<NativeTypeDescriptorData>):String {
+		var replacements:Array<{marker:String, number:String}> = [],
+			json = Json.stringify({
+				formatVersion: FORMAT_VERSION,
+				descriptors: [
+					for (descriptor in orderedDescriptors(descriptors))
+						descriptorJson(descriptor, replacements)
+				]
+			}, null, "  ");
+		for (replacement in replacements)
+			json = StringTools.replace(json, '"${replacement.marker}"', replacement.number);
+		return json + "\n";
+	}
 
 	static function orderedDescriptors(descriptors:Array<NativeTypeDescriptorData>):Array<NativeTypeDescriptorData> {
 		var result = descriptors.copy();
@@ -126,13 +135,32 @@ class NativeTypeDescriptorCodec {
 			return;
 		var valid = switch descriptorDefault.value {
 			case IntValue(value): descriptorDefault.type == "Int" && defaultIntValueAccepted(node, value);
-			case FloatValue(value): descriptorDefault.type == "Float" && defaultTypeAccepted(node, "Float") && Math.isFinite(value);
+			case FloatValue(value): descriptorDefault.type == "Float" && defaultTypeAccepted(node, "Float") && validFloatDefault(node, value);
 			case StringValue(_): descriptorDefault.type == "String" && defaultTypeAccepted(node, "String");
 			case BoolValue(_): descriptorDefault.type == "Bool" && defaultTypeAccepted(node, "Bool");
 			case NullValue: descriptorDefault.type == "Null" && nullableDefaultType(node);
 		};
 		if (!valid)
 			throw 'Native type descriptor field "${node.name}" default does not match its semantic type';
+	}
+
+	static function validFloatDefault(node:NativeTypeDescriptorField, value:Float):Bool {
+		if (!Math.isFinite(value))
+			return false;
+		if (!containsFloat32(node))
+			return true;
+		var rounded = NativeTypeDescriptor.float32DefaultValue(value);
+		return rounded != null && rounded == value;
+	}
+
+	static function containsFloat32(node:NativeTypeDescriptorField):Bool {
+		if (node.type == "native-scalar:f32")
+			return true;
+		for (argument in node.arguments)
+			if ((argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+				&& containsFloat32(argument))
+				return true;
+		return false;
 	}
 
 	static function defaultIntValueAccepted(node:NativeTypeDescriptorField, value:Int):Bool {
@@ -149,7 +177,7 @@ class NativeTypeDescriptorCodec {
 	}
 
 	static function defaultTypeAccepted(node:NativeTypeDescriptorField, valueType:String):Bool {
-		if (node.type == valueType)
+		if (node.type == valueType || (valueType == "Float" && node.type == "native-scalar:f32"))
 			return true;
 		for (argument in node.arguments)
 			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
@@ -281,7 +309,7 @@ class NativeTypeDescriptorCodec {
 		}
 	}
 
-	static function descriptorJson(descriptor:NativeTypeDescriptorData):Dynamic
+	static function descriptorJson(descriptor:NativeTypeDescriptorData, replacements:Array<{marker:String, number:String}>):Dynamic
 		return {
 			version: descriptor.version,
 			name: descriptor.name,
@@ -292,12 +320,12 @@ class NativeTypeDescriptorCodec {
 			alignment: descriptor.alignment,
 			annotations: descriptor.annotations,
 			annotationValues: annotationValuesJson(descriptor.annotationValues),
-			fields: [for (field in descriptor.fields) nodeJson(field)],
-			arguments: [for (argument in descriptor.arguments) nodeJson(argument)],
+			fields: [for (field in descriptor.fields) nodeJson(field, replacements)],
+			arguments: [for (argument in descriptor.arguments) nodeJson(argument, replacements)],
 			hash: descriptor.hash
 		};
 
-	static function nodeJson(node:NativeTypeDescriptorField):Dynamic
+	static function nodeJson(node:NativeTypeDescriptorField, replacements:Array<{marker:String, number:String}>):Dynamic
 		return {
 			name: node.name,
 			type: node.type,
@@ -306,11 +334,11 @@ class NativeTypeDescriptorCodec {
 			size: node.size,
 			alignment: node.alignment,
 			offset: node.offset,
-			defaultValue: defaultJson(node.defaultValue),
+			defaultValue: defaultJson(node, node.defaultValue, replacements),
 			annotations: node.annotations,
 			annotationValues: annotationValuesJson(node.annotationValues),
-			fields: [for (field in node.fields) nodeJson(field)],
-			arguments: [for (argument in node.arguments) nodeJson(argument)],
+			fields: [for (field in node.fields) nodeJson(field, replacements)],
+			arguments: [for (argument in node.arguments) nodeJson(argument, replacements)],
 			recursive: node.recursive
 		};
 
@@ -339,8 +367,70 @@ class NativeTypeDescriptorCodec {
 			case NullValue: null;
 		};
 
-	static function defaultJson(value:Null<NativeTypeDescriptorDefault>):Dynamic
-		return value == null ? null : {type: value.type, value: annotationConstantJson(value.value)};
+	static function defaultJson(node:NativeTypeDescriptorField, value:Null<NativeTypeDescriptorDefault>,
+			replacements:Array<{marker:String, number:String}>):Dynamic {
+		if (value == null)
+			return null;
+		return switch value.value {
+			case FloatValue(number) if (containsFloat32(node)):
+				var marker = '__HAXEON_F32_DEFAULT_${replacements.length}__';
+				replacements.push({marker: marker, number: exactFloat32Decimal(number)});
+				{type: value.type, value: marker};
+			case _:
+				{type: value.type, value: annotationConstantJson(value.value)};
+		};
+	}
+
+	static function exactFloat32Decimal(value:Float):String {
+		var bitsValue = NativeTypeDescriptor.float32DefaultBits(value);
+		if (bitsValue == null)
+			throw "Non-finite Float32 descriptor defaults cannot be serialized";
+		var bits:Int = cast bitsValue,
+			exponent = (bits >>> 23) & 0xff,
+			fraction = bits & 0x7fffff;
+		if (exponent == 0xff)
+			throw "Non-finite Float32 descriptor defaults cannot be serialized";
+		var significand = exponent == 0 ? fraction : 0x800000 | fraction;
+		if (significand == 0)
+			return "0";
+		var power = exponent == 0 ? -149 : exponent - 150,
+			digits = Std.string(significand);
+		if (power >= 0) {
+			for (_ in 0...power)
+				digits = multiplyDecimalDigits(digits, 2);
+			return ((bits >>> 31) == 0 ? "" : "-") + digits;
+		}
+		var decimalPlaces = -power;
+		for (_ in 0...decimalPlaces)
+			digits = multiplyDecimalDigits(digits, 5);
+		var decimal = digits.length <= decimalPlaces ? "0." + StringTools.lpad("", "0",
+			decimalPlaces - digits.length) + digits : digits.substr(0, digits.length - decimalPlaces)
+			+ "."
+			+ digits.substr(digits.length - decimalPlaces);
+		while (StringTools.endsWith(decimal, "0"))
+			decimal = decimal.substr(0, decimal.length - 1);
+		if (StringTools.endsWith(decimal, "."))
+			decimal = decimal.substr(0, decimal.length - 1);
+		return ((bits >>> 31) == 0 ? "" : "-") + decimal;
+	}
+
+	static function multiplyDecimalDigits(value:String, factor:Int):String {
+		var digits:Array<Int> = [], carry = 0;
+		for (index in 0...value.length) {
+			var digit = value.charCodeAt(value.length - index - 1) - "0".code,
+				product = digit * factor + carry;
+			digits.push(product % 10);
+			carry = Std.int(product / 10);
+		}
+		while (carry > 0) {
+			digits.push(carry % 10);
+			carry = Std.int(carry / 10);
+		}
+		var result = new StringBuf();
+		for (index in 0...digits.length)
+			result.add(Std.string(digits[digits.length - index - 1]));
+		return result.toString();
+	}
 
 	static function writeDefault(output:BytesOutput, value:Null<NativeTypeDescriptorDefault>):Void {
 		writeBool(output, value != null);

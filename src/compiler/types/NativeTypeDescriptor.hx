@@ -68,6 +68,65 @@ typedef NativeTypeDescriptorData = {
 class NativeTypeDescriptor {
 	public static inline final VERSION = 4;
 
+	/** Convert a finite Haxe Float to the value representable by the native Float32 scalar. */
+	public static function float32DefaultValue(value:Float):Null<Float> {
+		var bitsValue = float32DefaultBits(value);
+		if (bitsValue == null)
+			return null;
+		var bits:Int = cast bitsValue,
+			sign = ((bits >>> 31) == 0) ? 1.0 : -1.0,
+			exponent = (bits >>> 23) & 0xff,
+			fraction = bits & 0x7fffff;
+		return exponent == 0 ? sign * fraction * Math.pow(2.0, -149.0) : sign * (1.0 + fraction / 8388608.0) * Math.pow(2.0, exponent - 127.0);
+	}
+
+	/** Return the IEEE-754 binary32 bits for a finite value, or null on overflow. */
+	public static function float32DefaultBits(value:Float):Null<Int> {
+		if (!Math.isFinite(value))
+			return null;
+		if (value == 0)
+			return 0;
+		var negative = value < 0,
+			sign = negative ? 0x80000000 : 0,
+			absolute = negative ? -value : value;
+		// Values above this midpoint round to infinity in IEEE-754 binary32.
+		if (absolute >= 3.4028235677973366e38)
+			return null;
+		if (absolute > 3.4028234663852886e38)
+			return sign | 0x7f7fffff;
+		var exponent = Math.floor(Math.log(absolute) / 0.6931471805599453);
+		if (exponent < -126) {
+			var subnormal = roundBinary32(absolute * Math.pow(2.0, 149.0));
+			return sign | subnormal;
+		}
+		var power = Math.pow(2.0, exponent);
+		while (absolute < power) {
+			exponent--;
+			power *= 0.5;
+		}
+		while (absolute >= power * 2.0) {
+			exponent++;
+			power *= 2.0;
+		}
+		var fraction = roundBinary32((absolute / power - 1.0) * 8388608.0);
+		if (fraction == 8388608) {
+			exponent++;
+			fraction = 0;
+		}
+		if (exponent > 127)
+			return null;
+		return sign | ((exponent + 127) << 23) | fraction;
+	}
+
+	static function roundBinary32(value:Float):Int {
+		var floorValue = Math.floor(value),
+			integer = Std.int(floorValue),
+			remainder = value - floorValue;
+		if (remainder > 0.5 || (remainder == 0.5 && integer % 2 != 0))
+			return integer + 1;
+		return integer;
+	}
+
 	/** Haxe Int bounds supported for descriptor defaults on fixed-width native scalars. */
 	public static function narrowIntegerDefaultRange(type:String):Null<{min:Int, max:Int}>
 		return switch type {
@@ -107,7 +166,7 @@ class NativeTypeDescriptor {
 			appendNullableInt(buffer, node.size);
 			appendNullableInt(buffer, node.alignment);
 			appendNullableInt(buffer, node.offset);
-			appendDefault(buffer, node.defaultValue);
+			appendDefault(buffer, node, node.defaultValue);
 			appendStrings(buffer, node.annotations);
 			appendAnnotationValues(buffer, node.annotationValues);
 			appendNodes(buffer, node.fields);
@@ -116,7 +175,7 @@ class NativeTypeDescriptor {
 		}
 	}
 
-	static function appendDefault(buffer:StringBuf, value:Null<NativeTypeDescriptorDefault>):Void {
+	static function appendDefault(buffer:StringBuf, node:NativeTypeDescriptorField, value:Null<NativeTypeDescriptorDefault>):Void {
 		if (value == null) {
 			append(buffer, "0");
 			return;
@@ -127,7 +186,15 @@ class NativeTypeDescriptor {
 			case IntValue(number):
 				append(buffer, "i" + Std.string(number));
 			case FloatValue(number):
-				append(buffer, "f" + Std.string(number));
+				if (containsFloat32(node)) {
+					var bits = float32DefaultBits(number);
+					if (bits == null)
+						append(buffer, "f" + Std.string(number));
+					else {
+						append(buffer, "f32i" + Std.string(bits));
+					}
+				} else
+					append(buffer, "f" + Std.string(number));
 			case StringValue(text):
 				append(buffer, "s" + text);
 			case BoolValue(flag):
@@ -135,6 +202,16 @@ class NativeTypeDescriptor {
 			case NullValue:
 				append(buffer, "n");
 		}
+	}
+
+	static function containsFloat32(node:NativeTypeDescriptorField):Bool {
+		if (node.type == "native-scalar:f32")
+			return true;
+		for (argument in node.arguments)
+			if ((argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+				&& containsFloat32(argument))
+				return true;
+		return false;
 	}
 
 	static function appendStrings(buffer:StringBuf, values:Array<String>):Void {
