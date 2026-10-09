@@ -61,8 +61,9 @@ struct TextEngine::State {
     skb_temp_alloc_t *temporary = nullptr;
     skb_rasterizer_t *rasterizer = nullptr;
     skb_image_atlas_t *atlas = nullptr;
-    uint16_t next_texture_slot = 1;
-    uint16_t texture_namespace = 1;
+    std::vector<AtlasTextureId> atlas_texture_ids;
+    std::shared_ptr<const void> atlas_owner = std::make_shared<int>(0);
+    bool atlas_identity_exhausted = false;
     TextLayoutId next_layout_id = 1;
     TextLayoutId active_layout_id = 0;
     uint64_t layout_use_sequence = 0;
@@ -338,8 +339,7 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
         return true;
 
     const GlyphMode actual_mode = quad_mode(quad, render.requested_mode);
-    const AtlasTextureId atlas_id{static_cast<uint32_t>(
-        skb_image_atlas_get_texture_user_data(render.state->atlas, quad.texture_idx))};
+    const AtlasTextureId atlas_id = render.state->atlas_texture_ids[quad.texture_idx];
     if (!atlas_id.value)
         return false;
     if (render.output->batches.empty() ||
@@ -363,11 +363,16 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
     return true;
 }
 
-void atlas_texture_created(skb_image_atlas_t *atlas, uint8_t texture_index, void *context) {
+// Shared across engines, including standalone layout and compiler engines.
+AtlasTextureIdSequence atlas_texture_ids;
+
+void atlas_texture_created(skb_image_atlas_t *, uint8_t texture_index, void *context) {
     auto &state = *static_cast<TextEngine::State *>(context);
-    const uint32_t id = (uint32_t(1) << 28) | (uint32_t(state.texture_namespace & 0x0FFF) << 16) |
-                        state.next_texture_slot++;
-    skb_image_atlas_set_texture_user_data(atlas, texture_index, id);
+    if (state.atlas_texture_ids.size() <= texture_index)
+        state.atlas_texture_ids.resize(static_cast<size_t>(texture_index) + 1);
+    const auto id = atlas_texture_ids.allocate();
+    state.atlas_texture_ids[texture_index] = id;
+    if (!id.value) state.atlas_identity_exhausted = true;
 }
 
 } // namespace
@@ -499,12 +504,7 @@ bool TextEngine::valid() const {
            state_->rasterizer && state_->atlas;
 }
 
-bool TextEngine::set_atlas_namespace(uint16_t value) {
-    if (!value || value > 0x0FFF || state_->next_texture_slot != 1)
-        return false;
-    state_->texture_namespace = value;
-    return true;
-}
+bool TextEngine::resource_limited() const { return state_->atlas_identity_exhausted; }
 
 bool TextEngine::add_font(const char *path, FontFamily family) {
     return state_->font_collection->add_font(path, family);
@@ -1246,6 +1246,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                               line_end};
     if (!skb_layout_iterate_render_glyphs_range(retained->layout.get(), lines, append_render_glyph, &render))
         return false;
+    if (resource_limited()) return false;
     state_->prepared_batch_count += output.batches.size();
     return true;
 }
@@ -1266,7 +1267,7 @@ bool TextEngine::prepared_glyphs_current(const PreparedGlyphs &glyphs) const {
     for (const auto &batch : glyphs.batches) {
         bool found = false;
         for (int index = 0; index < count; ++index) {
-            if (skb_image_atlas_get_texture_user_data(state_->atlas, index) != batch.atlas.value)
+            if (state_->atlas_texture_ids[index].value != batch.atlas.value)
                 continue;
             found = true;
             if (skb_image_atlas_get_texture_generation(state_->atlas, index) !=
@@ -1720,7 +1721,7 @@ uint64_t TextEngine::atlas_generation_key() const {
     const int count = skb_image_atlas_get_texture_count(state_->atlas);
     for (int index = 0; index < count; ++index) {
         key = key * UINT64_C(1099511628211) ^
-              skb_image_atlas_get_texture_user_data(state_->atlas, index);
+              state_->atlas_texture_ids[index].value;
         key = key * UINT64_C(1099511628211) ^
               skb_image_atlas_get_texture_generation(state_->atlas, index);
     }
@@ -1738,9 +1739,10 @@ bool TextEngine::prepare_glyph_atlas(TextLayoutId id, int32_t line_index, float 
     const skb_range_t lines = line_index < 0
         ? skb_range_t{0, skb_layout_get_lines_count(layout->layout.get())}
         : skb_range_t{line_index, line_index + 1};
-    return skb_layout_prepare_glyphs_range(layout->layout.get(), lines, state_->atlas,
+    const bool prepared = skb_layout_prepare_glyphs_range(layout->layout.get(), lines, state_->atlas,
                                           state_->temporary, state_->rasterizer, raster_scale.value,
                                           raster_mode(mode));
+    return prepared && !resource_limited();
 }
 
 std::vector<AtlasUpload> TextEngine::atlas_uploads(bool include_clean) const {
@@ -1754,8 +1756,7 @@ std::vector<AtlasUpload> TextEngine::atlas_uploads(bool include_clean) const {
         const bool is_dirty = !skb_rect2i_is_empty(dirty);
         if (!is_dirty && !include_clean)
             continue;
-        const AtlasTextureId texture{
-            static_cast<uint32_t>(skb_image_atlas_get_texture_user_data(state_->atlas, index))};
+        const AtlasTextureId texture = state_->atlas_texture_ids[index];
         if (!snapshot.pixels || !texture.value)
             continue;
         const uint8_t bytes_per_pixel =
@@ -1765,7 +1766,7 @@ std::vector<AtlasUpload> TextEngine::atlas_uploads(bool include_clean) const {
                            is_dirty ? dirty.x : 0, is_dirty ? dirty.y : 0,
                            is_dirty ? dirty.width : snapshot.width,
                            is_dirty ? dirty.height : snapshot.height, snapshot.pixels, is_dirty,
-                           snapshot.texture_generation, snapshot.epoch});
+                           snapshot.texture_generation, snapshot.epoch, state_->atlas_owner});
     }
     return uploads;
 }
@@ -1775,7 +1776,7 @@ bool TextEngine::acknowledge_atlas_upload(AtlasTextureId texture, uint64_t dirty
         return false;
     const int count = skb_image_atlas_get_texture_count(state_->atlas);
     for (int index = 0; index < count; ++index) {
-        if (skb_image_atlas_get_texture_user_data(state_->atlas, index) != texture.value)
+        if (state_->atlas_texture_ids[index].value != texture.value)
             continue;
         return skb_image_atlas_ack_texture_dirty(state_->atlas, index, dirty_epoch);
     }

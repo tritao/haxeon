@@ -243,10 +243,17 @@ void compare_text_row_pixels(RenderTask &task) noexcept {
 bool check_cached_text_rows(nk_window window, nk_surface surface) {
     nkui_resource fonts{}, text{}, background{};
     nkui_resource direct_text[2]{};
+    std::vector<nkui_resource> held_resources;
     nkui_display_list list{};
     nkui_layout_session session{};
     nkui_renderer renderer{};
     const bool success = [&]() {
+        // Exercise real rendering above the former atlas namespace boundary.
+        for (int index = 0; index < 4100; ++index) {
+            nkui_resource held{};
+            if (nkui_font_collection_create(&held) != NKUI_OK) return false;
+            held_resources.push_back(held);
+        }
         const nkui_text_style style{sizeof(style), NKUI_FONT_FAMILY_DEFAULT, 18.0f, 0.0f};
         const nkui_paragraph_style paragraph{sizeof(paragraph), 24.0f, NKUI_TEXT_WRAP_NONE,
                                               NKUI_TEXT_ALIGN_START, NKUI_TEXT_DIRECTION_AUTO};
@@ -376,11 +383,34 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
             if (!nk::core::render_executor_physical() && nk_surface_present(surface) != NK_OK)
                 return false;
         }
-        return check(stats[0].raster_cache_misses == 0 &&
+        if (!check(stats[0].raster_cache_misses == 0 &&
                          stats[1].raster_cache_misses >= 2 &&
                          stats[2].raster_cache_misses == stats[1].raster_cache_misses &&
                          stats[2].raster_cache_hits >= stats[1].raster_cache_hits + 2,
-                     "cached text row reuse");
+                     "cached text row reuse")) return false;
+        if (!check(stats[2].atlas_pages > 0, "text created cached atlas pages")) return false;
+        // Release the source engines, then submit empty frames to retire GPU
+        // atlas pages after any queued frame owners have drained.
+        if (nkui_layout_session_destroy(session) != NKUI_OK ||
+            nkui_display_list_destroy(list) != NKUI_OK ||
+            nkui_resource_destroy(text) != NKUI_OK) return false;
+        session = {}; list = {}; text = {};
+        for (auto &reference : direct_text) {
+            if (nkui_resource_destroy(reference) != NKUI_OK) return false;
+            reference = {};
+        }
+        if (nkui_display_list_create(&list) != NKUI_OK) return false;
+        const nkui_frame_info empty_frame{sizeof(empty_frame), 256, 192, 256, 192, 1};
+        for (int repeat = 0; repeat < 3; ++repeat) {
+            if (nkui_renderer_render_frame(renderer, list, surface, &empty_frame) != NKUI_OK)
+                return false;
+            RenderTask barrier{};
+            barrier.function = [](RenderTask &task) noexcept { task.success = true; };
+            if (!dispatch_render_task(barrier)) return false;
+        }
+        nkui_renderer_stats retired{};
+        return check(nkui_renderer_get_stats(renderer, &retired) == NKUI_OK && retired.atlas_pages == 0,
+                     "released text engines retire cached atlas pages");
     }();
     if (renderer.id) nkui_renderer_destroy(renderer);
     if (session.id) nkui_layout_session_destroy(session);
@@ -390,6 +420,7 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
         if (reference.id) nkui_resource_destroy(reference);
     if (background.id) nkui_resource_destroy(background);
     if (fonts.id) nkui_resource_destroy(fonts);
+    for (auto held : held_resources) nkui_resource_destroy(held);
     return success;
 }
 

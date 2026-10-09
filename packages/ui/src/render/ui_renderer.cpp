@@ -93,6 +93,7 @@ struct UiRendererImpl::State {
         AtlasTextureFormat format = AtlasTextureFormat::R8Mask;
         uint8_t bytes_per_pixel = 0;
         uint32_t generation = 0;
+        std::weak_ptr<const void> owner;
         std::vector<uint8_t> pixels;
     };
 
@@ -211,7 +212,7 @@ struct UiRendererImpl::State {
     UiStreamBufferConfig stream_config{};
     uint64_t stream_bytes = 0;
     bool resource_limited = false;
-    std::unordered_map<uint64_t, AtlasImage> atlases;
+    std::unordered_map<AtlasTextureKey, AtlasImage, AtlasTextureKeyHash> atlases;
     std::unordered_map<uint32_t, Target> targets;
     std::unordered_map<TargetPoolKey, std::vector<Target>, TargetPoolKeyHash> transient_target_pool;
     uint64_t transient_target_pool_hits = 0;
@@ -390,8 +391,8 @@ void transform_inverse(float *inverse, const float *transform) {
                                     reciprocal);
 }
 
-uint64_t atlas_key(AtlasTextureId texture, uint32_t generation) {
-    return (static_cast<uint64_t>(texture.value) << 32) | generation;
+AtlasTextureKey atlas_key(AtlasTextureId texture, uint32_t generation) {
+    return {texture, generation};
 }
 
 void copy_atlas_pixels(UiRendererImpl::State::AtlasImage &target, const AtlasUpload &upload,
@@ -407,6 +408,7 @@ bool create_atlas_image(UiRendererImpl::State &state, UiRendererImpl::State::Atl
     atlas.format = upload.format;
     atlas.bytes_per_pixel = upload.bytes_per_pixel;
     atlas.generation = upload.generation;
+    atlas.owner = upload.owner;
     atlas.pixels.resize(static_cast<size_t>(upload.texture_width) * upload.texture_height *
                         upload.bytes_per_pixel);
     copy_atlas_pixels(atlas, upload, true);
@@ -416,6 +418,15 @@ bool create_atlas_image(UiRendererImpl::State &state, UiRendererImpl::State::Atl
                                               &atlas.image)))
         return false;
     return true;
+}
+
+// Run after frame submission: queued uploads keep their source owner alive.
+void trim_atlas_cache(UiRendererImpl::State &state) {
+    for (auto it = state.atlases.begin(); it != state.atlases.end();) {
+        if (!it->second.owner.expired()) { ++it; continue; }
+        nkgpu_image_destroy(state.renderer, it->second.image);
+        it = state.atlases.erase(it);
+    }
 }
 
 void copy_atlas_pixels(UiRendererImpl::State::AtlasImage &target, const AtlasUpload &upload,
@@ -448,7 +459,7 @@ bool valid_atlas_upload(const AtlasUpload &upload) {
 void retire_atlas_generations(UiRendererImpl::State &state, AtlasTextureId texture,
                               uint32_t generation) {
     for (auto iterator = state.atlases.begin(); iterator != state.atlases.end();) {
-        if (static_cast<uint32_t>(iterator->first >> 32) != texture.value ||
+        if (iterator->first.texture.value != texture.value ||
             iterator->second.generation == generation) {
             ++iterator;
             continue;
@@ -2355,16 +2366,20 @@ bool UiRendererImpl::drawBoxShadow(float x, float y, float width, float height,
 }
 
 bool UiRendererImpl::uploadAtlases(TextEngine &engine, bool include_clean) {
+    if (engine.resource_limited()) {
+        state_->resource_limited = true;
+        return fail(*state_, "glyph atlas identity capacity exhausted");
+    }
     for (const auto &upload : engine.atlas_uploads(include_clean)) {
         if (!valid_atlas_upload(upload))
             return fail(*state_, "invalid atlas upload region");
-        const uint64_t key = atlas_key(upload.texture, upload.generation);
+        const auto key = atlas_key(upload.texture, upload.generation);
         auto found = state_->atlases.find(key);
         bool replacing_generation = false;
         if (found == state_->atlases.end()) {
             for (const auto &[existing_key, existing_atlas] : state_->atlases) {
                 (void)existing_atlas;
-                if (static_cast<uint32_t>(existing_key >> 32) == upload.texture.value) {
+                if (existing_key.texture.value == upload.texture.value) {
                     replacing_generation = true;
                     break;
                 }
@@ -2875,6 +2890,7 @@ bool UiRendererImpl::endFrame() {
         state_->has_frame_target = false;
         state_->in_frame = false;
         trim_image_cache(*state_);
+        trim_atlas_cache(*state_);
         return sealed && submitted;
     }
     if (!gpu_result(*state_, nkgpu_end_frame_deferred_present(state_->renderer)))
@@ -2882,6 +2898,7 @@ bool UiRendererImpl::endFrame() {
     state_->in_frame = false;
     state_->has_frame_target = false;
     trim_image_cache(*state_);
+    trim_atlas_cache(*state_);
     return true;
 }
 

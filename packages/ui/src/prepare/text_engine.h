@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "layout/layout_types.h"
+#include "atlas_texture_id.h"
 
 namespace nkui {
 
@@ -47,10 +48,6 @@ struct GlyphVertex {
     uint8_t green;
     uint8_t blue;
     uint8_t alpha;
-};
-
-struct AtlasTextureId {
-    uint32_t value = 0;
 };
 
 struct GlyphBatch {
@@ -173,6 +170,8 @@ struct AtlasUpload {
     bool dirty = false;
     uint32_t generation = 0;
     uint64_t dirty_epoch = 0;
+    // Tracks source lifetime for renderer cache retirement; pixels remain engine-owned.
+    std::shared_ptr<const void> owner;
 };
 
 struct TextEngineStats {
@@ -221,7 +220,7 @@ class TextEngine {
     TextEngine &operator=(const TextEngine &) = delete;
 
     bool valid() const;
-    bool set_atlas_namespace(uint16_t value);
+    bool resource_limited() const;
     /** Changes when atlas pages are created or their glyph coordinates change. */
     uint64_t atlas_generation_key() const;
     /** Rasterize a layout, or one line, without publishing geometry or UVs. */

@@ -6,6 +6,8 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
 
 #ifndef NKUI_TEST_FONT_PATH
 #error NKUI_TEST_FONT_PATH is required
@@ -17,6 +19,49 @@
 using namespace nkui;
 
 int main() {
+    // Atlas IDs do not truncate at 32 bits and exhaustion never wraps.
+    {
+        AtlasTextureIdSequence ids(UINT32_MAX - uint64_t{1});
+        if (ids.allocate().value != UINT32_MAX || ids.allocate().value != uint64_t{UINT32_MAX} + 1)
+            return 230;
+        AtlasTextureIdSequence exhausted(UINT64_MAX - 1);
+        if (exhausted.allocate().value != UINT64_MAX || exhausted.allocate().value ||
+            exhausted.allocate().value) return 231;
+        std::unordered_map<AtlasTextureKey, int, AtlasTextureKeyHash> cache;
+        cache[{{1}, 7}] = 1;
+        cache[{{(uint64_t{1} << 32) | 1}, 7}] = 2;
+        cache[{{1}, 8}] = 3;
+        if (cache.size() != 3 || cache.at({{1}, 7}) != 1) return 232;
+    }
+    // Destroying/recreating engines must not recycle texture identities. Retain
+    // the first engine and its glyphs while crossing the old 4095-engine boundary.
+    {
+        auto fonts = std::make_shared<FontCollection>();
+        if (!fonts->add_font(NKUI_TEST_FONT_PATH)) return 233;
+        TextEngine retained(fonts);
+        PreparedGlyphs first;
+        if (!retained.layout_utf8("retained", 200, 18) ||
+            !retained.prepare_glyphs(0, 0, 1, GlyphMode::Alpha, first) || first.batches.empty()) return 234;
+        std::unordered_set<uint64_t> seen;
+        for (const auto &batch : first.batches) seen.insert(batch.atlas.value);
+        for (int index = 0; index < 4100; ++index) {
+            TextEngine next(fonts);
+            PreparedGlyphs glyphs;
+            if (!next.layout_utf8("replacement", 200, 18) ||
+                !next.prepare_glyphs(0, 0, 1, GlyphMode::Alpha, glyphs) || glyphs.batches.empty()) return 235;
+            for (const auto &upload : next.atlas_uploads(true))
+                if (!upload.texture.value || !seen.insert(upload.texture.value).second) return 236;
+        }
+        if (!retained.prepared_glyphs_current(first)) return 237;
+        const auto uploads = retained.atlas_uploads(true);
+        for (const auto &batch : first.batches) {
+            bool found = false;
+            for (const auto &upload : uploads)
+                if (upload.texture.value == batch.atlas.value && upload.generation == batch.atlas_generation)
+                    found = true;
+            if (!found) return 238;
+        }
+    }
     // Fractional workbench zoom must not shrink a whole-point-rounded bitmap.
     // Such resampling makes some zoom steps blurry while adjacent steps are crisp.
     {

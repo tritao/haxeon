@@ -91,6 +91,20 @@ int main(void) {
     if (nkui_font_collection_create(&fonts) != NKUI_OK ||
         nkui_font_collection_add(fonts, NKUI_TEST_FONT_PATH, NKUI_FONT_FAMILY_DEFAULT) != NKUI_OK)
         return 7;
+    /* Layout resources above slot 4095 must shape normally, including reuse. */
+    nkui_resource held[4100] = {{0}};
+    for (unsigned index = 0; index < 4100; ++index)
+        if (nkui_font_collection_create(&held[index]) != NKUI_OK) return 40;
+    for (unsigned index = 0; index < 3; ++index) {
+        nkui_resource high = {0};
+        nkui_text_metrics high_metrics = {0};
+        if (nkui_text_layout_create(fonts, "high resource slot", 300, 18, &high) != NKUI_OK ||
+            (high.id & 0xFFFFu) <= 4095 ||
+            nkui_text_layout_measure(high, &high_metrics) != NKUI_OK ||
+            high_metrics.width <= 0 || nkui_resource_destroy(high) != NKUI_OK) return 41;
+    }
+    for (unsigned index = 0; index < 4100; ++index)
+        if (nkui_resource_destroy(held[index]) != NKUI_OK) return 42;
     nkui_resource empty_layout = {0};
     if (nkui_text_layout_create_styled(fonts, NULL, 120.0f, &text_style, &paragraph_style,
                                        &empty_layout) != NKUI_OK ||

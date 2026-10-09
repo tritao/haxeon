@@ -31,6 +31,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <iterator>
@@ -1191,30 +1192,58 @@ nkui_result ensure_mutable_font_collection(ResourceSlot &slot) {
     return NKUI_OK;
 }
 
+// Called with resources_mutex held after failed glyph preparation.
+nkui_result text_resource_failure(nkui_result fallback) {
+    for (const auto &slot : resources)
+        if (slot.text && slot.text->resource_limited()) return NKUI_ERROR_RESOURCE_LIMIT;
+    return fallback;
+}
+
+// Opt-in developer diagnostics. Keep failing inputs and native resources alive
+// for a debugger/core dump instead of returning into managed exception cleanup.
+nkui_result text_layout_failure(nkui_result status, const char *stage, nkui_resource fonts,
+                                float width, const nkui::TextLayoutOptions &options,
+                                uint32_t layout_id = 0) {
+    const char *dump = std::getenv("NKUI_DUMP_ON_TEXT_LAYOUT_FAILURE");
+    if (dump && std::strcmp(dump, "1") == 0) {
+        std::fprintf(stderr, "NativeKit UI text layout failure: stage=%s status=%d "
+                             "fonts=%u layout=%u slot=%u width=%g font_size=%g "
+                             "letter_spacing=%g line_height=%g tab_width=%u\n",
+                     stage, static_cast<int>(status), fonts.id, layout_id,
+                     layout_id & 0xFFFF, width, options.font_size,
+                     options.letter_spacing, options.line_height, options.tab_width);
+        std::fflush(stderr);
+        std::abort();
+    }
+    return status;
+}
+
 nkui_result create_text_layout_locked(nkui_resource fonts, const char *text, float width,
                                       const nkui::TextLayoutOptions &options,
                                       nkui_resource *out_layout) {
     auto *font_slot = resolve(fonts, nkui::ResourceKind::FontCollection);
     if (!font_slot || (font_slot->fonts.empty() && !font_slot->system_fallbacks))
-        return NKUI_ERROR_INVALID_HANDLE;
+        return text_layout_failure(NKUI_ERROR_INVALID_HANDLE, "font-collection", fonts, width, options);
     if (!font_slot->font_collection || !font_slot->font_collection->valid())
-        return NKUI_ERROR_INVALID_HANDLE;
+        return text_layout_failure(NKUI_ERROR_INVALID_HANDLE, "font-collection", fonts, width, options);
     const auto shared_fonts = font_slot->font_collection;
     ResourceSlot *layout_slot = nullptr;
     const nkui_result allocated =
         allocate_resource(nkui::ResourceKind::TextLayout, out_layout, &layout_slot);
     if (allocated != NKUI_OK)
-        return allocated;
+        return text_layout_failure(allocated, "resource-allocation", fonts, width, options);
     layout_slot->text = std::make_shared<nkui::TextEngine>(shared_fonts);
-    bool valid = layout_slot->text->valid() &&
-                 layout_slot->text->set_atlas_namespace(static_cast<uint16_t>(out_layout->id));
-    valid = valid && layout_slot->text->layout_utf8(text, width, options);
+    const bool engine_valid = layout_slot->text->valid();
+    const bool shaped = engine_valid && layout_slot->text->layout_utf8(text, width, options);
     // Measurement and caret queries do not need rasterized glyphs. Prepare
     // them only when a render command references this layout.
-    if (!valid) {
+    if (!shaped) {
+        const auto status = text_layout_failure(NKUI_ERROR_INVALID_ARGUMENT,
+            !engine_valid ? "text-engine" : "text-shaping",
+            fonts, width, options, out_layout->id);
         release_resource_slot(*layout_slot);
         out_layout->id = 0;
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return status;
     }
     layout_slot->text_width = width;
     layout_slot->text_options = options;
@@ -1583,7 +1612,7 @@ nkui_result allocate_resource(nkui::ResourceKind kind, nkui_resource *out,
         resources.emplace_back(); // Slot one is reserved for the window render target.
     }
     if (resources.size() >= slot_limit)
-        return NKUI_ERROR_OUT_OF_MEMORY;
+        return NKUI_ERROR_RESOURCE_LIMIT;
     resources.emplace_back();
     resources.back().kind = kind;
     resources.back().externally_alive = true;
@@ -2515,8 +2544,11 @@ extern "C" nkui_result nkui_layout_session_hit_test_into(
 extern "C" nkui_result nkui_text_layout_create(nkui_resource fonts, const char *text, float width,
                                                float font_size, nkui_resource *out_layout) {
     if (!out_layout || !std::isfinite(width) || !std::isfinite(font_size) || width <= 0.0f ||
-        font_size <= 0.0f)
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        font_size <= 0.0f) {
+        nkui::TextLayoutOptions invalid;
+        invalid.font_size = font_size;
+        return text_layout_failure(NKUI_ERROR_INVALID_ARGUMENT, "arguments", fonts, width, invalid);
+    }
     std::lock_guard<std::mutex> lock(resources_mutex);
     nkui::TextLayoutOptions options;
     options.font_size = font_size;
@@ -2528,11 +2560,11 @@ extern "C" nkui_result nkui_text_layout_create_styled(nkui_resource fonts, const
                                                       const nkui_text_style *text_style,
                                                       const nkui_paragraph_style *paragraph_style,
                                                       nkui_resource *out_layout) {
-    if (!out_layout || !std::isfinite(width) || width <= 0.0f)
-        return NKUI_ERROR_INVALID_ARGUMENT;
     nkui::TextLayoutOptions options;
+    if (!out_layout || !std::isfinite(width) || width <= 0.0f)
+        return text_layout_failure(NKUI_ERROR_INVALID_ARGUMENT, "arguments", fonts, width, options);
     if (!text_options_from_api(text_style, paragraph_style, options))
-        return NKUI_ERROR_INVALID_ARGUMENT;
+        return text_layout_failure(NKUI_ERROR_INVALID_ARGUMENT, "styles", fonts, width, options);
     std::lock_guard<std::mutex> lock(resources_mutex);
     return create_text_layout_locked(fonts, text ? text : "", width, options, out_layout);
 }
@@ -3757,7 +3789,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
             break;
     }
     if (!valid)
-        return NKUI_ERROR_INVALID_HANDLE;
+        return text_resource_failure(NKUI_ERROR_INVALID_HANDLE);
     for (auto &bind : owned_text_binds) {
         if (!bind.layout->text->prepared_glyphs_current(*bind.glyphs)) {
             // Atlas preparation elsewhere in this frame can retire an earlier
@@ -3779,7 +3811,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
         }
     }
     if (!valid)
-        return NKUI_ERROR_RENDERING;
+        return text_resource_failure(NKUI_ERROR_RENDERING);
     for (auto &bind : owned_row_binds) {
         if (!bind.layout->text->prepared_glyphs_current(*bind.glyphs)) {
             bind.glyphs = bind.layout->text->published_glyphs_for_line(
@@ -4497,13 +4529,13 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     if (!valid) {
         std::fprintf(stderr, "UIKit render rejected the frame: %s (last step: %s)\n", invalid_reason,
                      frame_stage);
-        return NKUI_ERROR_INVALID_HANDLE;
+        return text_resource_failure(NKUI_ERROR_INVALID_HANDLE);
     }
     for (auto &[layout, glyphs] : prepared_texts) {
         if (!layout->text->prepared_glyphs_current(*glyphs)) {
             if (!layout->text->prepare_glyphs_for_lines(glyphs->first_line, glyphs->end_line,
                     glyphs->origin_x, glyphs->origin_y, glyphs->pixel_scale, glyphs->mode, *glyphs))
-                return NKUI_ERROR_RENDERING;
+                return text_resource_failure(NKUI_ERROR_RENDERING);
             tint_text_glyphs(*glyphs, layout->text_color, layout->text_color_ranges);
         }
     }
