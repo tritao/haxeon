@@ -51,6 +51,8 @@ class UiRendererImpl final : public UiRenderer {
                    const float transform[6], float opacity) override;
     bool drawBoxShadow(float x, float y, float width, float height, const float transform[6],
                        float opacity, const BoxShadowDescriptor &shadow) override;
+    bool drawRectBorder(float x, float y, float width, float height, const float transform[6],
+                        float opacity, const RectBorderDescriptor &border) override;
     bool uploadAtlases(TextEngine &engine, bool include_clean) override;
     bool drawGlyphs(const PreparedGlyphs &glyphs, float opacity) override;
     bool drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6], float origin_x,
@@ -2188,6 +2190,82 @@ bool UiRendererImpl::drawPath(const PreparedPathData &path, uint32_t operation_i
         return fail(*state_, "empty prepared path");
     return draw_mesh(*state_, state_->path_pipeline, mesh.vertices, mesh.indices, &paint,
                      sizeof(paint), paint_image, paint_sampler, state_->solid_vertices);
+}
+
+bool UiRendererImpl::drawRectBorder(float x, float y, float width, float height,
+                                    const float transform[6], float opacity,
+                                    const RectBorderDescriptor &border) {
+    if (!state_->in_pass || !transform || !std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f ||
+        !valid_rect_border(x, y, width, height, border.width, border.color.data()) ||
+        !std::all_of(transform, transform + 6, [](float value) { return std::isfinite(value); }))
+        return fail(*state_, "invalid rectangular border draw");
+
+    if (opacity == 0.0f || border.color[3] == 0.0f)
+        return true;
+    const bool axis_aligned = transform[1] == 0.0f && transform[2] == 0.0f;
+    if (!axis_aligned) {
+        // Rotated/skewed rectangles keep vector antialiasing. Pixel snapping
+        // is meaningful only when their edges follow the device pixel grid.
+        const float edge = std::min({border.width, width * 0.5f, height * 0.5f});
+        NanoVGPath path;
+        const auto rectangle = [&](float left, float top, float right, float bottom) {
+            path.move_to(left, top);
+            path.line_to(right, top);
+            path.line_to(right, bottom);
+            path.line_to(left, bottom);
+            path.close();
+        };
+        rectangle(x, y, x + width, y + height);
+        if (width > 2.0f * edge && height > 2.0f * edge)
+            rectangle(x + edge, y + edge, x + width - edge, y + height - edge);
+        PathPreparationParams params;
+        params.fill_rule = PathFillRule::EvenOdd;
+        std::copy_n(transform, 6, params.transform.begin());
+        PreparedGeometry geometry;
+        PreparedPaint paint{};
+        paint.transform[0] = paint.transform[3] = 1.0f;
+        paint.feather = 1.0f;
+        paint.inner_color = paint.outer_color =
+            {border.color[0], border.color[1], border.color[2], border.color[3]};
+        PreparedPath prepared;
+        return prepare_fill(path, params, geometry) &&
+               prepared.set(PreparedPathKind::Fill, geometry, paint) &&
+               drawPath(prepared.data(), 0, opacity);
+    }
+
+    const float x0 = x * transform[0] + transform[4];
+    const float x1 = (x + width) * transform[0] + transform[4];
+    const float y0 = y * transform[3] + transform[5];
+    const float y1 = (y + height) * transform[3] + transform[5];
+    if (!std::isfinite(x0) || !std::isfinite(x1) || !std::isfinite(y0) || !std::isfinite(y1))
+        return fail(*state_, "rectangular border exceeds device coordinates");
+    // Stay inside the logical bounds so node-local clipping cannot remove a
+    // side. Quantize thickness once per axis, rather than rounding four edges
+    // independently. Reflection uses the same inset border geometry.
+    const float left = std::ceil(std::min(x0, x1));
+    const float right = std::floor(std::max(x0, x1));
+    const float top = std::ceil(std::min(y0, y1));
+    const float bottom = std::floor(std::max(y0, y1));
+    if (right <= left || bottom <= top)
+        return true;
+    const float edge_x = std::min((right - left) * 0.5f,
+        std::max(1.0f, std::floor(border.width * std::abs(transform[0]) + 0.5f)));
+    const float edge_y = std::min((bottom - top) * 0.5f,
+        std::max(1.0f, std::floor(border.width * std::abs(transform[3]) + 0.5f)));
+    const float inner_left = left + edge_x, inner_right = right - edge_x;
+    const float inner_top = top + edge_y, inner_bottom = bottom - edge_y;
+    SolidMesh mesh;
+    mesh.vertices = {{left, top}, {right, top}, {right, bottom}, {left, bottom},
+                     {inner_left, inner_top}, {inner_right, inner_top},
+                     {inner_right, inner_bottom}, {inner_left, inner_bottom}};
+    // One nonoverlapping ring: translucent corners are shaded exactly once.
+    mesh.indices = {0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5,
+                    2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7};
+    const float alpha = border.color[3] * opacity;
+    const std::array<float, 4> color{border.color[0] * alpha, border.color[1] * alpha,
+                                   border.color[2] * alpha, alpha};
+    return draw_mesh(*state_, state_->solid_pipeline, mesh.vertices, mesh.indices,
+                     color.data(), sizeof(color), {}, {}, state_->solid_vertices);
 }
 
 bool UiRendererImpl::drawImage(const PreparedTexture &image, float x, float y, float width,

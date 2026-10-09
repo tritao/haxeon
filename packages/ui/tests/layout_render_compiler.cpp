@@ -104,6 +104,8 @@ class RecordingRenderer final : public UiRenderer {
         ++box_shadow_count;
         return true;
     }
+    bool drawRectBorder(float, float, float, float, const float[6], float,
+                        const RectBorderDescriptor &) override { return true; }
     bool uploadAtlases(TextEngine &, bool) override { return true; }
     bool drawGlyphs(const PreparedGlyphs &, float) override {
         ++text_count;

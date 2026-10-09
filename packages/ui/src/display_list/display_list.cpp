@@ -228,6 +228,17 @@ template <class T> T read(const uint8_t *record) {
 
 } // namespace
 
+bool valid_rect_border(float x, float y, float width, float height,
+                       float border_width, const float color[4]) {
+    if (!valid_rect(x, y, width, height) || !finite(x + width) || !finite(y + height) ||
+        width <= 0.0f || height <= 0.0f || !finite(border_width) || border_width <= 0.0f || !color)
+        return false;
+    for (int i = 0; i < 4; ++i)
+        if (!finite(color[i]) || color[i] < 0.0f || color[i] > 1.0f)
+            return false;
+    return true;
+}
+
 bool valid_custom_effect_descriptor(const CustomEffectDescriptor &effect) {
     return valid_custom_effect_descriptor_impl(effect);
 }
@@ -675,6 +686,20 @@ bool DisplayList::draw_render_target(ResourceId target, float x, float y, float 
     return append(value);
 }
 
+bool DisplayList::draw_rect_border(float x, float y, float width, float height,
+                                   float border_width, const float color[4]) {
+    if (!valid_rect_border(x, y, width, height, border_width, color))
+        return false;
+    auto value = command<DrawRectBorderCommand>(CommandOpcode::DrawRectBorder);
+    value.x = x;
+    value.y = y;
+    value.width = width;
+    value.height = height;
+    value.border_width = border_width;
+    std::copy_n(color, 4, value.color);
+    return append(value);
+}
+
 bool DisplayList::draw_box_shadow(float x, float y, float width, float height, float offset_x,
                                   float offset_y, float blur_sigma, float spread,
                                   const float radii[4], const float color[4]) {
@@ -777,6 +802,13 @@ bool validate_display_list(const uint8_t *data, size_t size, ValidationError *er
             const auto *value = read_command<DrawBoxShadowCommand>(record, header.size);
             if (!value || !valid_box_shadow(*value))
                 return fail(error, offset, index, "invalid box-shadow command");
+            break;
+        }
+        case CommandOpcode::DrawRectBorder: {
+            const auto *value = read_command<DrawRectBorderCommand>(record, header.size);
+            if (!value || !valid_rect_border(value->x, value->y, value->width, value->height,
+                                             value->border_width, value->color))
+                return fail(error, offset, index, "invalid rectangular border command");
             break;
         }
         case CommandOpcode::DrawImage:

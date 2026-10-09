@@ -290,7 +290,9 @@ enum NK_ENUM(nkui_command_opcode) {
     /** Stroke a path using the current paint and the command's stroke style. */
     NKUI_COMMAND_STROKE_PATH = 14,
     /** Paint a geometry-based rounded-rectangle shadow. */
-    NKUI_COMMAND_DRAW_BOX_SHADOW = 15
+    NKUI_COMMAND_DRAW_BOX_SHADOW = 15,
+    /** Paint an inset rectangular border, aligned at the final device transform. */
+    NKUI_COMMAND_DRAW_RECT_BORDER = 16
 };
 
 /** Version value required in every command header. */
@@ -489,6 +491,17 @@ typedef struct nkui_draw_box_shadow_command {
     float radii[4];
     float color[4];
 } nkui_draw_box_shadow_command;
+
+/** Payload for NKUI_COMMAND_DRAW_RECT_BORDER. Color is straight RGBA. */
+typedef struct nkui_draw_rect_border_command {
+    nkui_command_header header;
+    float x;
+    float y;
+    float width;
+    float height;
+    float border_width;
+    float color[4];
+} nkui_draw_rect_border_command;
 
 /** Payload for NKUI_COMMAND_SET_GLOBAL_ALPHA. */
 typedef struct nkui_scalar_command {

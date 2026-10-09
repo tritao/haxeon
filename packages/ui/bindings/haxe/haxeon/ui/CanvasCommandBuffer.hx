@@ -89,6 +89,13 @@ class CanvasCommandBuffer {
 	public function drawText(layout:TextLayout, x:Float, y:Float):Void
 		drawRect(NativeKitUI.CommandOpcode.DrawTextLayout, layout, x, y, 0.0, 0.0);
 
+	public function drawRectBorder(rect:Rect, width:Float, color:Color):Void {
+		header(NativeKitUI.CommandOpcode.DrawRectBorder, 44);
+		float(rect.x); float(rect.y); float(rect.width); float(rect.height);
+		float(width);
+		float(color.red); float(color.green); float(color.blue); float(color.alpha);
+	}
+
 	public function beginLayer(opacity:Float, mode:CompositeMode = CompositeMode.SourceOver,
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		var foreground = effects == null ? [] : effects.normalized().effects;

@@ -167,6 +167,9 @@ class UiRenderer {
     virtual bool drawBoxShadow(float x, float y, float width, float height,
                                const float transform[6], float opacity,
                                const BoxShadowDescriptor &shadow) = 0;
+    /** Insets and aligns rectangular borders in final device space. */
+    virtual bool drawRectBorder(float, float, float, float, const float[6], float,
+                                const RectBorderDescriptor &) = 0;
     virtual bool uploadAtlases(TextEngine &engine, bool include_clean = false) = 0;
     virtual bool drawGlyphs(const PreparedGlyphs &glyphs, float opacity = 1.0f) = 0;
     virtual bool drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6], float origin_x,

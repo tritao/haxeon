@@ -325,9 +325,35 @@ static bool validates_variable_effect_programs() {
     return !list.begin_layer(1.0f, bounds, eight);
 }
 
+static bool validates_rectangular_borders() {
+    DrawRectBorderCommand border{};
+    border.header = {CommandOpcode::DrawRectBorder, 1, sizeof(border)};
+    border.x = 0.25f;
+    border.y = 0.75f;
+    border.width = 40.0f;
+    border.height = 20.0f;
+    border.border_width = 1.0f;
+    border.color[3] = 0.5f;
+    const auto valid = [&] {
+        return validate_display_list(reinterpret_cast<const uint8_t *>(&border), sizeof(border));
+    };
+    if (!valid()) return false;
+    border.border_width = 0;
+    if (valid()) return false;
+    border.border_width = 1;
+    border.color[3] = 1.1f;
+    if (valid()) return false;
+    border.color[3] = 0.5f;
+    border.width = NAN;
+    if (valid()) return false;
+    border.width = 40;
+    --border.header.size;
+    return !valid();
+}
+
 int main() {
     return valid_list_and_growth() && rejects_bad_streams() && accepts_v1_layer_records() &&
-                   validates_variable_effect_programs()
+                   validates_variable_effect_programs() && validates_rectangular_borders()
                ? 0
                : 1;
 }

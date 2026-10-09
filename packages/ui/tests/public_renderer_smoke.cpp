@@ -922,6 +922,81 @@ int main(int argc, char **argv) {
             }
         }
     }
+    if (!result) {
+        // Fractional origins and zoom must give every side the same coverage.
+        // Half-transparent corners must receive exactly one application of paint.
+        nkui_display_list border_list{};
+        if (nkui_display_list_create(&border_list) != NKUI_OK) result = 26;
+        for (float zoom : {0.9f, 1.0f, 1.1f, 1.25f, 1.5f, 2.0f}) {
+            for (float direction : {1.0f, -1.0f}) {
+                if (result) break;
+                std::vector<uint8_t> commands;
+                append(commands, nkui_transform_command{
+                    {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
+                    {direction, 0, 0, direction,
+                     direction > 0 ? 8.2f : 58.6f, direction > 0 ? 8.3f : 40.9f}});
+                append(commands, nkui_draw_rect_border_command{
+                    {NKUI_COMMAND_DRAW_RECT_BORDER, NKUI_COMMAND_VERSION,
+                     sizeof(nkui_draw_rect_border_command)},
+                    0, 0, 50.4f, 32.6f, 1.0f, {1, 1, 1, 0.5f}});
+                const nkui_frame_info info{sizeof(info), width / zoom, height / zoom,
+                                          width, height, zoom};
+                if (nkui_display_list_submit(border_list, commands.data(), commands.size()) != NKUI_OK ||
+                    nkui_renderer_render_frame(renderer, border_list, surface, &info) != NKUI_OK) {
+                    result = 26;
+                    break;
+                }
+                std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                const auto red = [&](int x, int y) {
+                    return pixels[(static_cast<size_t>(height - 1 - y) * width + x) * 4];
+                };
+                const int left = static_cast<int>(std::ceil(8.2f * zoom));
+                const int right = static_cast<int>(std::floor(58.6f * zoom));
+                const int top = static_cast<int>(std::ceil(8.3f * zoom));
+                const int bottom = static_cast<int>(std::floor(40.9f * zoom));
+                const int middle_x = (left + right) / 2, middle_y = (top + bottom) / 2;
+                const int background = red(0, 0);
+                const int expected = (255 + background) / 2;
+                const int value = red(left, middle_y);
+                if (std::abs(value - expected) > 1 || red(right - 1, middle_y) != value ||
+                    red(middle_x, top) != value || red(middle_x, bottom - 1) != value ||
+                    red(left, top) != value || red(right - 1, bottom - 1) != value ||
+                    red(middle_x, middle_y) != background) {
+                    std::fprintf(stderr, "uneven border coverage at zoom %.2f, direction %.0f\n",
+                                 zoom, direction);
+                    result = 26;
+                }
+            }
+        }
+        if (!result) {
+            // A skewed ring must preserve its hollow interior and vector coverage.
+            std::vector<uint8_t> commands;
+            append(commands, nkui_transform_command{
+                {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
+                {0.8f, 0.6f, -0.3f, 1.2f, 64, 32}});
+            append(commands, nkui_draw_rect_border_command{
+                {NKUI_COMMAND_DRAW_RECT_BORDER, NKUI_COMMAND_VERSION,
+                 sizeof(nkui_draw_rect_border_command)},
+                0, 0, 50.4f, 32.6f, 2.0f, {1, 1, 1, 0.5f}});
+            const nkui_frame_info info{sizeof(info), static_cast<float>(width),
+                                      static_cast<float>(height), width, height, 1};
+            if (nkui_display_list_submit(border_list, commands.data(), commands.size()) != NKUI_OK ||
+                nkui_renderer_render_frame(renderer, border_list, surface, &info) != NKUI_OK) {
+                result = 27;
+            } else {
+                std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+                const uint8_t background = pixels[0];
+                size_t painted = 0;
+                for (size_t i = 0; i < pixels.size(); i += 4)
+                    if (pixels[i] > background) ++painted;
+                const size_t center = (static_cast<size_t>(height - 1 - 66) * width + 79) * 4;
+                if (painted < 80 || pixels[center] != background) result = 27;
+            }
+        }
+        nkui_display_list_destroy(border_list);
+    }
     nkui_renderer_stats stats{};
     if (!result &&
         (nkui_renderer_get_stats(renderer, &stats) != NKUI_OK ||

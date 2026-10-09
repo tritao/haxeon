@@ -18,6 +18,7 @@ enum class RenderCommandKind : uint8_t {
     CompositeTarget,
     StrokePath,
     BoxShadow,
+    RectBorder,
 };
 
 enum class RenderPassKind : uint8_t {
@@ -77,6 +78,7 @@ struct RenderCommand {
     /** Optional source revision for layout-produced prepared resources. */
     uint64_t content_generation = 0;
     BoxShadowDescriptor box_shadow{};
+    RectBorderDescriptor rect_border{};
 };
 
 struct RenderPass {

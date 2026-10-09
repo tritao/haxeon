@@ -356,6 +356,27 @@ int main() {
         !shadow_command.opacity)
         return 51;
 
+    DisplayList border;
+    float border_color[] = {0.2f, 0.3f, 0.4f, 0.5f};
+    const auto compile_border = [&](float thickness) {
+        border.reset();
+        return border.begin_layer(1.0f, bounds, effect) &&
+               border.draw_rect_border(0, 0, 32, 24, thickness, border_color) &&
+               border.end_layer() && compositor.compile(border, main_target, plan, &error) &&
+               plan.passes.size() == 4 &&
+               plan.passes[1].commands[0].kind == RenderCommandKind::RectBorder;
+    };
+    if (!compile_border(1)) return 60;
+    const auto border_key = plan.passes[2].cache_key;
+    if (!border_key || !compile_border(1) || plan.passes[2].cache_key != border_key)
+        return 61;
+    border_color[3] = 0.75f;
+    if (!compile_border(1) || plan.passes[2].cache_key == border_key) return 62;
+    const auto recolored_key = plan.passes[2].cache_key;
+    if (!compile_border(2) || plan.passes[2].cache_key == recolored_key) return 63;
+    plan.passes[1].commands[0].rect_border.width = -1;
+    if (schedule_render_plan(plan, pass_order, &schedule_error)) return 64;
+
     DisplayList backdrop;
     EffectDescriptor backdrop_effect{};
     backdrop_effect.kind = EffectKind::ColorMatrix;

@@ -214,6 +214,18 @@ class Canvas {
 		return true;
 	}
 
+	/** Inset rectangular border; device alignment is resolved after all transforms.
+	 * Axis-aligned borders use equal whole-pixel thickness on opposite sides.
+	 * Rotated/skewed borders retain vector antialiasing.
+	 */
+	public function drawRectBorder(rect:Rect, width:Float, color:Color):Void {
+		if (rect == null || color == null || !Math.isFinite(rect.x) || !Math.isFinite(rect.y) ||
+			!Math.isFinite(rect.width) || !Math.isFinite(rect.height) ||
+			rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(width) || width <= 0.0)
+			throw "Rectangular border requires finite positive bounds, width, and a color";
+		commands.drawRectBorder(rect, width, color);
+	}
+
 	/** Adds a rounded solid rectangle and retains its temporary path and paint. */
 	public function fillRoundedRect(rect:Rect, radius:Float, color:Color):Void {
 		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0 ||

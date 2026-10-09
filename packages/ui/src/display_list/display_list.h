@@ -48,6 +48,7 @@ enum class CommandOpcode : uint16_t {
     DrawRenderTarget,
     StrokePath,
     DrawBoxShadow,
+    DrawRectBorder,
 };
 
 enum class CompositeMode : uint32_t {
@@ -152,6 +153,14 @@ struct BoxShadowDescriptor {
     std::array<float, 4> color{};
 };
 
+struct RectBorderDescriptor {
+    float width = 0.0f;
+    std::array<float, 4> color{};
+};
+
+bool valid_rect_border(float x, float y, float width, float height,
+                       float border_width, const float color[4]);
+
 struct CommandHeader {
     CommandOpcode opcode{};
     uint16_t version = 1;
@@ -215,6 +224,16 @@ struct DrawBoxShadowCommand {
     float blur_sigma;
     float spread;
     float radii[4];
+    float color[4];
+};
+
+struct DrawRectBorderCommand {
+    CommandHeader header;
+    float x;
+    float y;
+    float width;
+    float height;
+    float border_width;
     float color[4];
 };
 
@@ -350,6 +369,8 @@ class DisplayList {
                      CompositeMode mode = CompositeMode::SourceOver);
     bool end_layer();
     bool draw_render_target(ResourceId target, float x, float y, float width, float height);
+    bool draw_rect_border(float x, float y, float width, float height, float border_width,
+                          const float color[4]);
     bool draw_box_shadow(float x, float y, float width, float height, float offset_x,
                          float offset_y, float blur_sigma, float spread, const float radii[4],
                          const float color[4]);

@@ -38,7 +38,6 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * Haxe-owned compositing revision for shared scene metadata.
 	 */
 	const NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256;
-	const NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260;
 	/**
 	 * Haxe-owned paint/content revision used by native raster caches.
 	 */
@@ -94,6 +93,10 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * Vertical gap between wrapped rows.
 	 */
 	const NKUI_LAYOUT_NODE_ROW_GAP_OFFSET = 220;
+	/**
+	 * Tab-stop interval in space advances; zero preserves default shaping.
+	 */
+	const NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260;
 	const NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 132;
 	const NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 96;
 	const NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 136;
@@ -205,6 +208,10 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		 * Paint a geometry-based rounded-rectangle shadow.
 		 */
 		NKUI_COMMAND_DRAW_BOX_SHADOW = 15;
+		/**
+		 * Paint an inset rectangular border, aligned at the final device transform.
+		 */
+		NKUI_COMMAND_DRAW_RECT_BORDER = 16;
 	}
 	/**
 	 * Alpha compositing mode supported by the current UI renderer.
@@ -1110,6 +1117,18 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		color: array<f32, 4> @offset(56);
 	}
 	/**
+	 * Payload for NKUI_COMMAND_DRAW_RECT_BORDER. Color is straight RGBA.
+	 */
+	struct nkui_draw_rect_border_command @layout(44, 4) {
+		header: nkui_command_header @offset(0);
+		x: f32 @offset(8);
+		y: f32 @offset(12);
+		width: f32 @offset(16);
+		height: f32 @offset(20);
+		border_width: f32 @offset(24);
+		color: array<f32, 4> @offset(28);
+	}
+	/**
 	 * Payload for image, text-layout, and render-target draw commands.
 	 */
 	struct nkui_draw_rect_command @layout(28, 4) {
@@ -1467,6 +1486,9 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		wrap: nkui_text_wrap @offset(8);
 		alignment: nkui_text_alignment @offset(12);
 		direction: nkui_text_direction @offset(16);
+		/**
+		 * Tab-stop interval in space advances; zero preserves default shaping.
+		 */
 		tab_width: u32 @offset(20);
 	}
 	/**

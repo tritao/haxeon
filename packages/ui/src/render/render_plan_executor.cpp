@@ -51,6 +51,9 @@ void hash_runtime_command_geometry(uint64_t &hash, const RenderCommand &command)
         hash_runtime_float(hash, value);
     for (const float value : command.box_shadow.color)
         hash_runtime_float(hash, value);
+    hash_runtime_float(hash, command.rect_border.width);
+    for (const float value : command.rect_border.color)
+        hash_runtime_float(hash, value);
 }
 
 void hash_runtime_resource(uint64_t &hash, const FrameResources &resources, ResourceId resource) {
@@ -407,6 +410,11 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                 rendered = renderer.drawBoxShadow(command.x, command.y, command.width,
                                                   command.height, command.transform.data(),
                                                   command.opacity, command.box_shadow);
+                break;
+            case RenderCommandKind::RectBorder:
+                rendered = renderer.drawRectBorder(command.x, command.y, command.width,
+                                                   command.height, command.transform.data(),
+                                                   command.opacity, command.rect_border);
                 break;
             }
             if (!rendered)

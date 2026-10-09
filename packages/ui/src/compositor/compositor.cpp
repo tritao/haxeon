@@ -156,6 +156,9 @@ void hash_command(uint64_t &hash, const RenderCommand &command) {
         hash_float(hash, value);
     for (const float value : command.box_shadow.color)
         hash_float(hash, value);
+    hash_float(hash, command.rect_border.width);
+    for (const float value : command.rect_border.color)
+        hash_float(hash, value);
 }
 
 void hash_descriptor(uint64_t &hash, const RenderTargetDescriptor &descriptor) {
@@ -545,6 +548,16 @@ bool Compositor::compile(const DisplayList &display_list, ResourceId main_target
                       command.box_shadow.radii.begin());
             std::copy(std::begin(value.color), std::end(value.color),
                       command.box_shadow.color.begin());
+            apply_state(command, state, current_origin_x, current_origin_y);
+            break;
+        }
+        case CommandOpcode::DrawRectBorder: {
+            const auto value = read<DrawRectBorderCommand>(record);
+            pass->commands.push_back(
+                {RenderCommandKind::RectBorder, {}, value.x, value.y, value.width, value.height});
+            auto &command = pass->commands.back();
+            command.rect_border.width = value.border_width;
+            std::copy(std::begin(value.color), std::end(value.color), command.rect_border.color.begin());
             apply_state(command, state, current_origin_x, current_origin_y);
             break;
         }

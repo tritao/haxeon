@@ -463,6 +463,13 @@ bool schedule_render_plan(const RenderPlan &plan, std::vector<uint32_t> &order,
             return false;
         }
         for (const auto &command : pass.commands) {
+            if (command.kind == RenderCommandKind::RectBorder &&
+                !valid_rect_border(command.x, command.y, command.width, command.height,
+                                   command.rect_border.width, command.rect_border.color.data())) {
+                if (error)
+                    *error = {index, "invalid rectangular border command"};
+                return false;
+            }
             if (command.kind == RenderCommandKind::BoxShadow &&
                 !valid_box_shadow_descriptor(command)) {
                 if (error)

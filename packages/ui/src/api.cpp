@@ -46,6 +46,7 @@
 #include <vector>
 
 static_assert(sizeof(nkui_command_header) == sizeof(nkui::CommandHeader));
+static_assert(sizeof(nkui_draw_rect_border_command) == sizeof(nkui::DrawRectBorderCommand));
 static_assert(sizeof(nkui_text_metrics) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_position) == 2 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_caret) == 7 * sizeof(uint32_t));
@@ -3599,7 +3600,8 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                 if (valid && !owned_resources.bind_image(prepared_id, prepared_images.back(),
                                                          static_cast<uint64_t>(source_resource)))
                     sealable = false;
-            } else if (command.kind == nkui::RenderCommandKind::BoxShadow) {
+            } else if (command.kind == nkui::RenderCommandKind::BoxShadow ||
+                       command.kind == nkui::RenderCommandKind::RectBorder) {
                 command.transform = device_transform(command.transform, frame_info->pixel_scale);
             } else if (command.kind == nkui::RenderCommandKind::GlyphBatch) {
                 const uint32_t source_resource = command.resource.value;
