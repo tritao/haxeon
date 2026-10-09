@@ -88,15 +88,19 @@ class BuildSystemMain {
 		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"]));
 		for (triple in ["linux-x86_64-gnu", "macos-arm64", "windows-x86_64-msvc"])
 			for (shared in [false, true]) {
-				var target = Target.parse(triple), environment = new BuildEnvironment(root, root + "/build", BuildProfile.Debug, target),
+				var target = Target.parse(triple),
+					environment = new BuildEnvironment(root, root + "/build", BuildProfile.Debug, target),
 					context = new LoweringContext(environment, null, project, null, root, null, false, shared),
 					artifact = new Artifact(new ArtifactId("aggregate", ArtifactKind.NativeSharedLibrary, target)),
 					lowered = build.native.NativeCMakeProvider.lowerPackage(project.rootPackage, [artifact], context),
-					action = lowered.actions[1], prefix = target.os == build.Target.TargetOs.Windows ? "" : "lib";
+					action = lowered.actions[1],
+					prefix = target.os == build.Target.TargetOs.Windows ? "" : "lib";
 				expect(action.outputs.length == 2, "aggregate must declare both library outputs");
 				for (name in ["alpha", "beta"])
-					expect([for (output in action.outputs) if (Path.withoutDirectory(output) == prefix + name + environment.toolchain.sharedLibrarySuffix) output].length == 1,
-						"aggregate outputs must use the target's real library filenames");
+					expect([
+						for (output in action.outputs)
+							if (Path.withoutDirectory(output) == prefix + name + environment.toolchain.sharedLibrarySuffix) output
+					].length == 1, "aggregate outputs must use the target's real library filenames");
 				expect(action.outputs.join("\n").indexOf(".hdll") < 0, "aggregate outputs must not include a synthetic HDLL");
 				for (output in action.outputs) {
 					ensureDirectory(Path.directory(output));
@@ -106,8 +110,12 @@ class BuildSystemMain {
 				FileSystem.deleteFile(action.outputs[1]);
 				expect(!ActionFingerprint.outputsExist(action), "a missing secondary library invalidates the action");
 			}
-		for (declaration in ['"libraries":[]', '"libraries":["alpha","alpha"]', '"libraries":["../alpha"]',
-			'"library":"alpha","libraries":["beta"]'])
+		for (declaration in [
+			'"libraries":[]',
+			'"libraries":["alpha","alpha"]',
+			'"libraries":["../alpha"]',
+			'"library":"alpha","libraries":["beta"]'
+		])
 			expectThrows(() -> PackageManifest.parse(root + "/invalid.json",
 				'{"version":1,"native":{"cmake":{"source":"native","target":"aggregate",' + declaration + '}}}'),
 				"invalid CMake library declarations must be rejected");
@@ -115,8 +123,10 @@ class BuildSystemMain {
 	}
 
 	static function testMissingDeclaredOutputs():Void {
-		var root = temporaryDirectory("missing-output"), environment = new BuildEnvironment(root, root + "/build"),
-			output = root + "/absent.so", action = new ExecutionAction(new ActionId("native-cmake-build:missing"), [], [], [output], "missing output",
+		var root = temporaryDirectory("missing-output"),
+			environment = new BuildEnvironment(root, root + "/build"),
+			output = root + "/absent.so",
+			action = new ExecutionAction(new ActionId("native-cmake-build:missing"), [], [], [output], "missing output",
 				Compiler("fixture", [], root, new Map(), () -> 0), true, true),
 			result = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([action]));
 		expect(result.exitCode != 0 && result.actions[0].message.indexOf(output) >= 0,
@@ -126,8 +136,11 @@ class BuildSystemMain {
 				process = new ExecutionAction(new ActionId("missing-process-output"), [], [], [output], "missing process output",
 					Process("sh", ["-c", "exit 0"], root, new Map())),
 				dependent = new ExecutionAction(new ActionId("dependent"), [process.id], [], [], "dependent",
-					Compiler("fixture", [], root, new Map(), () -> { ran = true; return 0; })),
-				failure = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([process, dependent]));
+					Compiler("fixture", [], root, new Map(),
+						() -> {
+							ran = true;
+							return 0;
+						})), failure = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([process, dependent]));
 			expect(failure.exitCode != 0 && !ran, "a missing process output must block dependents in either executor backend");
 		}
 		removeTree(root);

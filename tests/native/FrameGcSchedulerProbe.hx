@@ -28,12 +28,15 @@ class FrameGcSchedulerProbe {
 		var bounded = new FrameGcScheduler(true, true, 0.001);
 		bounded.beginFrame();
 		Gc.step(1000.0);
-		if (Gc.frameRemaining() != 0.0) throw "step did not consume frame allowance";
+		if (Gc.frameRemaining() != 0.0)
+			throw "step did not consume frame allowance";
 		bounded.beginFrame();
-		if (Gc.frameRemaining() != 0.0) throw "duplicate begin reset allowance";
+		if (Gc.frameRemaining() != 0.0)
+			throw "duplicate begin reset allowance";
 		bounded.endFrame();
 		bounded.endFrame();
-		if (bounded.incrementalSlices != 0 || Gc.frameRemaining() != -1.0) throw "end added another slice or leaked allowance";
+		if (bounded.incrementalSlices != 0 || Gc.frameRemaining() != -1.0)
+			throw "end added another slice or leaked allowance";
 		bounded.idle();
 		Sys.println("PASS: frame-boundary incremental slice and idle completion");
 	}

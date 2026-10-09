@@ -23,7 +23,8 @@ import compiler.abi.AbiChangeSchema;
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
 	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken):CompileResult {
-		if (cancellation != null) cancellation.check();
+		if (cancellation != null)
+			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress;
 		var requestStartedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
@@ -38,7 +39,8 @@ class CompilerDriver {
 		var result = compiler.compile(request.entry, cancellation, false);
 		var compiledAt = Sys.time() * 1000.0;
 		var allocationAfterCompile = AllocationMeter.sample();
-		if (cancellation != null) cancellation.check();
+		if (cancellation != null)
+			cancellation.check();
 		var backendStartedAt = Sys.time() * 1000.0;
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
@@ -71,7 +73,8 @@ class CompilerDriver {
 				session.writeHashLink(result.module, request.output);
 			outputIndices = result.functionIndices;
 		}
-		if (cancellation != null) cancellation.check();
+		if (cancellation != null)
+			cancellation.check();
 		var backendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterEncode = AllocationMeter.sample();
 		if (isWasm)

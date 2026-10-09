@@ -41,9 +41,13 @@ class NativeCMakeProvider {
 			])) : (native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name) : layout.cmakeSharedLibraryPath(resolvedPackage.name,
 				native.cmake.library)),
 			outputDirectory = Path.directory(legacyOutput),
-			outputs = native.cmake.libraries.length == 0 ? [legacyOutput] : [for (name in native.cmake.libraries)
-				Path.join([outputDirectory, (context.environment.target.os == TargetOs.Windows ? "" : "lib")
-					+ name + context.environment.toolchain.sharedLibrarySuffix])],
+			outputs = native.cmake.libraries.length == 0 ? [legacyOutput] : [
+				for (name in native.cmake.libraries)
+					Path.join([
+						outputDirectory,
+						(context.environment.target.os == TargetOs.Windows ? "" : "lib") + name + context.environment.toolchain.sharedLibrarySuffix
+					])
+			],
 			runDirectory = shared ? source : resolvedPackage.root,
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
 			configureArguments = [
@@ -80,14 +84,15 @@ class NativeCMakeProvider {
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
 				Process("cmake", configureArguments, runDirectory, compilerCache)),
-			new ExecutionAction(buildId, [configureId], [source], outputs, 'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}', Process("cmake", [
-				"--build",
-				buildDirectory,
-				"--target",
-				native.cmake.target,
-				"--config",
-				configuration
-			], runDirectory, compilerCache), true, true, ninja)
+			new ExecutionAction(buildId, [configureId], [source], outputs, 'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
+				Process("cmake", [
+					"--build",
+					buildDirectory,
+					"--target",
+					native.cmake.target,
+					"--config",
+					configuration
+				], runDirectory, compilerCache), true, true, ninja)
 		], artifactActions:Map<String, Array<ActionId>> = [];
 		for (artifact in artifacts)
 			if (artifact.id.packageId == resolvedPackage.name && artifact.id.kind == ArtifactKind.NativeSharedLibrary)
@@ -121,7 +126,10 @@ class NativeCMakeProvider {
 				var ffiOutput = layout.ffiNativeLibraryPath(resolvedPackage.name, ffiName),
 					linkId = new ActionId('native-link:${artifact.id.key()}'),
 					linkDependencies:Array<ActionId> = [compileId],
-					cmakeLinkInputs = [for (output in outputs) cmakeLinkInput(outputDirectory, output, context.environment.target.os, context.environment.target.abi)],
+					cmakeLinkInputs = [
+						for (output in outputs)
+							cmakeLinkInput(outputDirectory, output, context.environment.target.os, context.environment.target.abi)
+					],
 					linkInputs:Array<String> = [thunkObject].concat(cmakeLinkInputs);
 				for (dependency in artifact.dependencies)
 					if (dependency.kind == ArtifactKind.NativeSharedLibrary)

@@ -107,26 +107,43 @@ class CompilerServer {
 		var stagingSuffix = ".request-" + Std.string(Std.random(0x3fffffff));
 		for (field in ["output", "xmlOutput", "irOutput", "ffiHeader"]) {
 			var destination:Null<String> = Reflect.field(request, field);
-			if (destination == null) continue;
+			if (destination == null)
+				continue;
 			var temporary = destination + stagingSuffix;
 			Reflect.setField(staged, field, temporary);
 			for (suffix in (field == "output" ? ["", ".functions", ".hli", ".hlp", ".live.json", ".live.json.tmp", ".build-id"] : [""]))
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
 		Thread.create(function() {
-			try result = CompilerDriver.compile(cast staged, message -> {
-				cancellation.check();
-				send(client, {message: message});
-			}, session, cancellation)
-			catch (error:Dynamic) failure = error;
+			try
+				result = CompilerDriver.compile(cast staged, message -> {
+					cancellation.check();
+					send(client, {message: message});
+				}, session, cancellation)
+			catch (error:Dynamic)
+				failure = error;
 			done.release();
 		});
 		var disconnected = false;
 		while (!done.wait(0.05)) {
-			if (!disconnected) try {
+			if (!disconnected)
+				try {
+					if (Socket.select([client], [], [], 0).read.length > 0) {
+						// No further bytes are part of this protocol; readability means disconnect or invalid input.
+						try
+							client.input.readByte()
+						catch (_:Dynamic) {}
+						disconnected = true;
+						cancellation.cancel();
+					}
+				} catch (_:Dynamic) {
+					disconnected = true;
+					cancellation.cancel();
+				}
+		}
+		if (!disconnected)
+			try {
 				if (Socket.select([client], [], [], 0).read.length > 0) {
-					// No further bytes are part of this protocol; readability means disconnect or invalid input.
-					try client.input.readByte() catch (_:Dynamic) {}
 					disconnected = true;
 					cancellation.cancel();
 				}
@@ -134,16 +151,12 @@ class CompilerServer {
 				disconnected = true;
 				cancellation.cancel();
 			}
-		}
-		if (!disconnected) try {
-			if (Socket.select([client], [], [], 0).read.length > 0) {
-				disconnected = true;
-				cancellation.cancel();
-			}
-		} catch (_:Dynamic) { disconnected = true; cancellation.cancel(); }
 		if (disconnected || failure != null) {
 			for (output in outputs)
-				try if (FileSystem.exists(output.temporary)) FileSystem.deleteFile(output.temporary) catch (_:Dynamic) {}
+				try
+					if (FileSystem.exists(output.temporary))
+						FileSystem.deleteFile(output.temporary)
+				catch (_:Dynamic) {}
 			if (disconnected) {
 				session.reset();
 				cancellation.check();
@@ -151,7 +164,8 @@ class CompilerServer {
 			throw failure;
 		}
 		for (output in outputs) {
-			if (FileSystem.exists(output.temporary)) FileSystem.rename(output.temporary, output.destination);
+			if (FileSystem.exists(output.temporary))
+				FileSystem.rename(output.temporary, output.destination);
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}

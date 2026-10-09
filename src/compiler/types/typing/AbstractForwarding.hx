@@ -14,7 +14,7 @@ class AbstractForwarding {
 				if (declaration == null || !allowed(declaration, member)) null; else switch underlying {
 					case TInstance(Class, _, _): underlying;
 					default: null;
-					}
+				}
 			default: null;
 		};
 	}

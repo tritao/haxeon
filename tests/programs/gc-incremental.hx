@@ -14,9 +14,11 @@ function main():Int {
 	if (!Gc.incrementalSupported())
 		return 42;
 	Gc.enable(false);
-	if (!Gc.beginFrame(0.0) || Gc.frameRemaining() != 0.0 || Gc.step(1000.0) || Gc.incrementalPending()) return 5;
+	if (!Gc.beginFrame(0.0) || Gc.frameRemaining() != 0.0 || Gc.step(1000.0) || Gc.incrementalPending())
+		return 5;
 	Gc.endFrame();
-	if (Gc.frameRemaining() != -1.0) return 6;
+	if (Gc.frameRemaining() != -1.0)
+		return 6;
 	var head:IncrementalCell = null;
 	for (i in 0...100000)
 		head = new IncrementalCell(i, head);

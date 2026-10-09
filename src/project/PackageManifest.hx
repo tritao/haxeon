@@ -166,14 +166,18 @@ class PackageManifest {
 				var library = optionalNullableString(cmakeData, "library", '$path native.cmake'),
 					libraries = stringArray(cmakeData, "libraries", '$path native.cmake', []);
 				if (Reflect.hasField(cmakeData, "libraries")) {
-					if (library != null) throw '$path native.cmake cannot combine "library" and "libraries"';
-					if (libraries.length == 0) throw '$path native.cmake "libraries" must not be empty';
+					if (library != null)
+						throw '$path native.cmake cannot combine "library" and "libraries"';
+					if (libraries.length == 0)
+						throw '$path native.cmake "libraries" must not be empty';
 				}
-				var names = library == null ? libraries : [library], seen = new Map<String, Bool>();
+				var names = library == null ? libraries : [library],
+					seen = new Map<String, Bool>();
 				for (name in names) {
 					if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
 						throw '$path native.cmake requires library names without path components';
-					if (seen.exists(name)) throw '$path native.cmake contains duplicate library "$name"';
+					if (seen.exists(name))
+						throw '$path native.cmake contains duplicate library "$name"';
 					seen.set(name, true);
 				}
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),

@@ -467,35 +467,41 @@ class WasmFunctionLower {
 		switch instruction {
 			case Phi(_, _):
 			case PointerOffset(output, pointer, byteOffset):
-				emit(body, [LocalGet(requiredLocal(values, pointer.id)), LocalGet(requiredLocal(values, byteOffset.id)), I32Add,
-					LocalSet(requiredLocal(values, output.id))]);
+				emit(body, [
+					LocalGet(requiredLocal(values, pointer.id)),
+					LocalGet(requiredLocal(values, byteOffset.id)),
+					I32Add,
+					LocalSet(requiredLocal(values, output.id))
+				]);
 			case MemoryLoad(output, pointer, size, signed):
 				var load:Array<WasmInstruction> = switch output.type {
 					case F32: [F32Load(0), F64PromoteF32];
 					case F64: [F64Load(0)];
 					case I64: [I64Load(0)];
 					default: switch size {
-						case 1: [signed ? I32Load8S(0) : I32Load8U(0)];
-						case 2: [signed ? I32Load16S(0) : I32Load16U(0)];
-						case 4: [I32Load(0)];
-						default: throw 'Unsupported Wasm raw memory load size $size';
-					};
+							case 1: [signed ? I32Load8S(0) : I32Load8U(0)];
+							case 2: [signed ? I32Load16S(0) : I32Load16U(0)];
+							case 4: [I32Load(0)];
+							default: throw 'Unsupported Wasm raw memory load size $size';
+						};
 				};
-				emit(body, [LocalGet(requiredLocal(values, pointer.id))].concat(load)
-					.concat([LocalSet(requiredLocal(values, output.id))]));
+				emit(body, [LocalGet(requiredLocal(values, pointer.id))].concat(load).concat([LocalSet(requiredLocal(values, output.id))]));
 			case MemoryStore(pointer, value, size):
 				var store:Array<WasmInstruction> = switch value.type {
 					case F32: [F32DemoteF64, F32Store(0)];
 					case F64: [F64Store(0)];
 					case I64: [I64Store(0)];
 					default: switch size {
-						case 1: [I32Store8(0)];
-						case 2: [I32Store16(0)];
-					case 4: [I32Store(0)];
-						default: throw 'Unsupported Wasm raw memory store size $size';
-					};
+							case 1: [I32Store8(0)];
+							case 2: [I32Store16(0)];
+							case 4: [I32Store(0)];
+							default: throw 'Unsupported Wasm raw memory store size $size';
+						};
 				};
-				emit(body, [LocalGet(requiredLocal(values, pointer.id)), LocalGet(requiredLocal(values, value.id))].concat(store));
+				emit(body, [
+					LocalGet(requiredLocal(values, pointer.id)),
+					LocalGet(requiredLocal(values, value.id))
+				].concat(store));
 			case ConstInt(output, value):
 				emit(body, [
 					output.type == I64 ? I64Const(value) : I32Const(value),

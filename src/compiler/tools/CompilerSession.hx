@@ -40,7 +40,10 @@ class CompilerSession {
 	/** Wasm guests import their host services through this stdlib interface. */
 	static function hostInterfaces(target:String):{interfaces:Array<String>, projections:Array<String>}
 		return switch target {
-			case "wasm32" | "wasm-gc" | "wasmgc": {interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"], projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]};
+			case "wasm32" | "wasm-gc" | "wasmgc": {
+					interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
+					projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
+				};
 			case _: {interfaces: [], projections: []};
 		};
 

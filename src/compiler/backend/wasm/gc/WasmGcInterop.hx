@@ -329,7 +329,14 @@ class WasmGcInterop implements WasmInteropRepresentation {
 					};
 					// A C pointer may be absent; by-value aggregates still require their full layout.
 					if (nullablePointer)
-						body = body.concat([I32Const(0), LocalSet(pointer), LocalGet(bytesLocal), RefIsNull, I32Eqz, If(null)]);
+						body = body.concat([
+							I32Const(0),
+							LocalSet(pointer),
+							LocalGet(bytesLocal),
+							RefIsNull,
+							I32Eqz,
+							If(null)
+						]);
 					body = body.concat([
 						LocalGet(bytesLocal),
 						StructGet(plan.managedBytesTypeIndex, 2),
@@ -347,7 +354,8 @@ class WasmGcInterop implements WasmInteropRepresentation {
 					body = body.concat(copyGcBytesToLinear(bytesLocal, pointer));
 					if (!pointerFree)
 						body = body.concat(relocateFixedInputPointerFields(bytesLocal, pointer, size));
-					if (nullablePointer) body.push(End);
+					if (nullablePointer)
+						body.push(End);
 				case Output | InputOutput:
 					if (arguments[index].type != ManagedBytes)
 						throw 'Wasm GC C native "${native.name}" scalar output pointer $index must use managed bytes';

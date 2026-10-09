@@ -10,7 +10,8 @@ class HxiRetainedMain {
 			library = Sys.args()[1],
 			compiler = new Compiler();
 		var target = Sys.getEnv("HAXEON_GC_BOUNDARY_TARGET");
-		if (target == null) target = "x86_64-linux-gnu";
+		if (target == null)
+			target = "x86_64-linux-gnu";
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("retained.hxi",
@@ -35,7 +36,7 @@ class HxiRetainedMain {
 				"function main():Int { hl.Gc.enable(false); var ballast = [for (i in 0...2000000) \"borrowed-ballast\"]; if (hl.Gc.step(0.001) || !hl.Gc.incrementalPending()) return 91; var container = makeContainer();");
 			source = StringTools.replace(source, "return FixtureRetained.check(container, container.get_value());",
 				"var completed = false; for (slice in 0...10000) { if (hl.Gc.step(1000.0)) { completed = true; break; } } if (!completed || ballast[1999999] != \"borrowed-ballast\") return 92; var result = FixtureRetained.check(container, container.get_value()); hl.Gc.enable(true); return result;");
-			compiler.update("Main.hx",source);
+			compiler.update("Main.hx", source);
 		}
 		var result = compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(result.module));

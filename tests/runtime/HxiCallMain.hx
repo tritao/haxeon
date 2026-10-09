@@ -9,7 +9,8 @@ class HxiCallMain {
 			library = Sys.args()[1],
 			compiler = new Compiler();
 		var target = Sys.getEnv("HAXEON_GC_BOUNDARY_TARGET");
-		if (target == null) target = "x86_64-linux-gnu";
+		if (target == null)
+			target = "x86_64-linux-gnu";
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiProjection("fixture.hxmap",
@@ -161,7 +162,8 @@ class HxiCallMain {
 			"return managedFields && utf8 && aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
 		// Opt-in boundary stress keeps the existing ABI/contract assertions intact.
 		if (Sys.getEnv("HAXEON_GC_BOUNDARY_STRESS") == "1") {
-			if (mainSource.indexOf("function main():Int {") < 0 || mainSource.indexOf("return managedFields &&") < 0
+			if (mainSource.indexOf("function main():Int {") < 0
+				|| mainSource.indexOf("return managedFields &&") < 0
 				|| mainSource.indexOf("function(left:Int, right:Int) return left + right") < 0)
 				throw "HXI GC stress source hooks are missing";
 			mainSource = StringTools.replace(mainSource, "function main():Int {",

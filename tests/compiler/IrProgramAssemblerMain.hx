@@ -14,10 +14,15 @@ class IrProgramAssemblerMain {
 		var storageSource = "class Storage { public final length:Int; public function new(length:Int) this.length = length; } "
 			+ "@:forward(length) abstract Buffer(Storage) { public function new(length:Int) this = new Storage(length); } ";
 		Frontend.compile(storageSource + "function main():Int { var buffer = new Buffer(42); return buffer.length; }");
-		for (body in ["var buffer = new Buffer(42); buffer.length = 1; return 0;",
-			"var storage:Storage = new Buffer(42); return 0;"]) {
+		for (body in [
+			"var buffer = new Buffer(42); buffer.length = 1; return 0;",
+			"var storage:Storage = new Buffer(42); return 0;"
+		]) {
 			var rejected = false;
-			try Frontend.compile(storageSource + "function main():Int { " + body + " }") catch (_:Dynamic) rejected = true;
+			try
+				Frontend.compile(storageSource + "function main():Int { " + body + " }")
+			catch (_:Dynamic)
+				rejected = true;
 			expect(rejected, "read-only abstract forwarding grants neither writes nor implicit storage conversion");
 		}
 

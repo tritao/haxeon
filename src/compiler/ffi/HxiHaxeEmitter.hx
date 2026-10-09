@@ -947,7 +947,8 @@ class HxiHaxeEmitter {
 						output.add('\tpublic function set(index:Int, value:$projectedName):Void ${model.name}.__hxi_struct_copy(this.bytes, this.offset(index), value, $size);\n');
 						for (field in fields) {
 							var projectedField = Lambda.find(projectedStruct.fields, value -> value.nativeName == field.name);
-							var fieldName = projectedField.name, fieldOffset = requiredFieldOffset(field);
+							var fieldName = projectedField.name,
+								fieldOffset = requiredFieldOffset(field);
 							var nested = structureType(field.type, declarations, profile);
 							if (nested != null) {
 								output.add('\tpublic function set_$fieldName(index:Int, value:${nested.name}):Void ${model.name}.__hxi_struct_copy(this.bytes, this.offset(index) + $fieldOffset, value, ${nested.size});\n');
@@ -955,11 +956,14 @@ class HxiHaxeEmitter {
 							}
 							// Arrays can be filled by constructing a record and set(); scalar and
 							// nested-record setters cover direct packed publication without views.
-							if (arrayType(field.type, declarations) != null) continue;
+							if (arrayType(field.type, declarations) != null)
+								continue;
 							var value = project(abi.classify(field.type), false, profile);
-							if (value == null || value.code == 11) continue;
+							if (value == null || value.code == 11)
+								continue;
 							var access = value.code == 15 ? "I32" : structAccess(value.code);
-							if (access == null) continue;
+							if (access == null)
+								continue;
 							var write = value.code == 15 ? "value ? 1 : 0" : isHandleAbi(abi.classify(field.type)) ? "value.rawValue()" : "value";
 							output.add('\tpublic function set_$fieldName(index:Int, value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this.bytes, this.offset(index) + $fieldOffset, $write);\n');
 						}

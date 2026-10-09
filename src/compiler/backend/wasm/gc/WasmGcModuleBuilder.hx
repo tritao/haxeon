@@ -83,7 +83,8 @@ class WasmGcModuleBuilder {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case MemoryLoad(_, _, _, _), MemoryStore(_, _, _): requiresLinearMemory = true;
+							case MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
+								requiresLinearMemory = true;
 							default:
 						}
 

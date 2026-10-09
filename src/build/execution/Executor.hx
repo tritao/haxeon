@@ -126,7 +126,8 @@ class Executor implements ExecutionBackend {
 						continue;
 					var status = statuses[index];
 					try {
-						if (status == 0) requireOutputs(item.action);
+						if (status == 0)
+							requireOutputs(item.action);
 						if (status == 0 && isCacheable(item.action)) {
 							ActionFingerprint.save(environment.buildRoot, item.action, item.fingerprint);
 							if (ArtifactCache.isShareable(item.action))
@@ -343,7 +344,8 @@ class Executor implements ExecutionBackend {
 				case Compiler(_, _, _, _, invoke):
 					invoke();
 			};
-			if (status == 0) requireOutputs(action);
+			if (status == 0)
+				requireOutputs(action);
 			if (status == 0 && isCacheable(action)) {
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 				if (ArtifactCache.isShareable(action))
