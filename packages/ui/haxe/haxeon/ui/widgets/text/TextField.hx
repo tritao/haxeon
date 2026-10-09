@@ -71,6 +71,7 @@ class TextField implements View {
 	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
 	public var onSelectionChange:Null<TextSelection->Void>;
 	/** Explicit navigation/edit request for owners that manage an outer viewport. */
+	public var onEditorAction:Null<TextEditorAction->Bool>;
 	public var onCaretRevealRequest:Null<Void->Void>;
 	/** Additional owner-controlled selections; the primary stays in selectionProvider. */
 	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
@@ -635,6 +636,21 @@ class TextField implements View {
 					 event.key == UiKey.Up || event.key == UiKey.Down)) return;
 				var extend = (event.modifiers & UiModifier.Shift) != 0;
 				var command = (event.modifiers & (UiModifier.Control | UiModifier.Super)) != 0;
+				var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection :
+					command && event.key == UiKey.C ? Copy :
+					command && event.key == UiKey.X ? Cut :
+					extend && !command && event.key == UiKey.Delete ? Cut :
+					command && event.key == UiKey.V ? Paste :
+					(event.modifiers & UiModifier.Control) != 0 && event.key == UiKey.Insert ? Copy :
+					extend && event.key == UiKey.Insert ? Paste :
+					command && event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
+				if (action != null && (!readOnly || action == Copy || action == ClearSelection) && onEditorAction != null && onEditorAction(action)) {
+					if (document != null) editor.syncDocument(document);
+					if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
+					refreshState(false);
+					event.preventDefault();
+					return;
+				}
 				if (command && (event.key == UiKey.Z || event.key == UiKey.Y)) {
 					if (historyManagedExternally) return;
 					var previousRevision = editor.documentRevision();
