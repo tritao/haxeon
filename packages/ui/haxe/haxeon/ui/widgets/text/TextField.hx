@@ -89,6 +89,8 @@ class TextField implements View {
 	public var selectionTextProvider:Null<Void->Null<String>>;
 	/** Optional pointer action at the text offset; true consumes normal selection handling. */
 	public var onTextPointerDown:Null<Int->UiEvent->Bool>;
+	/** Hit-tested pointer movement, independent of selection dragging. */
+	public var onTextPointerMove:Null<Int->UiEvent->Void>;
 	/** Typed selector classes used by composite fields such as ComboBox. */
 	public var classes:Array<String>;
 	public var enabled:Bool;
@@ -611,6 +613,13 @@ class TextField implements View {
 				event.preventDefault();
 			});
 			node.on(UiEventKind.PointerMove, function(event) {
+				var pointerMove = onTextPointerMove;
+				if (enabled && pointerMove != null && textNode.resolved != null) {
+					var geometry:ResolvedLayoutItem = cast textNode.resolved;
+					var point = geometry.viewportToLayout(event.x, event.y);
+					var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+					pointerMove(hit.offset, event);
+				}
 				if (!enabled || !editor.draggingSelection || textNode.resolved == null)
 					return;
 				editor.cancelPointerClickIfMoved(event.x, event.y);

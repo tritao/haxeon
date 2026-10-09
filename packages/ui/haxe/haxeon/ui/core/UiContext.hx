@@ -53,6 +53,16 @@ class UiContext {
 	var pendingFocus:Null<WidgetId> = null;
 	/** Called when an active animation needs another host frame. */
 	public var onAnimationFrameRequested:Null<Void->Void>;
+	/** Modifier observation independent of keyboard focus (for pointer affordances). */
+	public var onModifiersChanged:Null<Int->Void>;
+	public var modifiers(default, null):Int = 0;
+
+	function updateModifiers(value:Int):Void {
+		if (modifiers == value) return;
+		modifiers = value;
+		var handler = onModifiersChanged;
+		if (handler != null) handler(value);
+	}
 	var submittedStateRevision:Int;
 	var submittedInteractionRevision:Int;
 	var submittedStyleRevision:Int;
@@ -757,6 +767,7 @@ class UiContext {
 	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		ensureLive();
+		updateModifiers(modifiers);
 		events.pointerMove(x, y, modifiers, pointerId, data);
 		updateCursor();
 	}
@@ -764,6 +775,7 @@ class UiContext {
 	public function pointerDown(x:Float, y:Float, button:Int, modifiers:Int = 0,
 			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
 		ensureLive();
+		updateModifiers(modifiers);
 		events.pointerDown(x, y, button, modifiers, pointerId, data, timestamp);
 		updateCursor();
 	}
@@ -771,6 +783,7 @@ class UiContext {
 	public function pointerUp(x:Float, y:Float, button:Int, modifiers:Int = 0,
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		ensureLive();
+		updateModifiers(modifiers);
 		events.pointerUp(x, y, button, modifiers, pointerId, data);
 		updateCursor();
 	}
@@ -812,11 +825,13 @@ class UiContext {
 
 	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float, modifiers:Int = 0):Void {
 		ensureLive();
+		updateModifiers(modifiers);
 		events.scroll(x, y, deltaX, deltaY, modifiers);
 	}
 
 	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
 		ensureLive();
+		updateModifiers(modifiers);
 		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
 		if (key == 335) key = UiKey.Enter;
 		events.key(kind, key, modifiers, scancode);
