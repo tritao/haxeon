@@ -13,7 +13,8 @@ typedef SpecializationDecision = {
 
 /** Chooses stable concrete or shape-shared representations for generic bodies. */
 class GenericSpecializationPolicy {
-	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType):SpecializationDecision {
+	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType,
+			requiresLayoutSpecialization:Null<CompilerType->Bool> = null):SpecializationDecision {
 		var constraints = fn.typeConstraints;
 		if (constraints != null)
 			for (constraint in constraints)
@@ -21,7 +22,7 @@ class GenericSpecializationPolicy {
 					return {representation: semantic, policy: "constrained"};
 		// Native scalars and records have no runtime shape of their own: a shared body would read
 		// `RawPtr<T>` or `sizeof<T>()` with another type's size, so they specialize exactly.
-		if (NativeLayout.containsNativeLayoutType(semantic))
+		if (requiresLayoutSpecialization == null ? NativeLayout.containsNativeLayoutType(semantic) : requiresLayoutSpecialization(semantic))
 			return {representation: semantic, policy: "layout"};
 		for (argument in fn.arguments)
 			if (containsNested(argument.type, parameter, false))

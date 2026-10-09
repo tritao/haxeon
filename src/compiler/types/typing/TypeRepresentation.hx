@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationPolicy;
 import compiler.syntax.Ast.AstArgument;
@@ -135,12 +136,40 @@ class TypeRepresentation {
 			policies:Array<String> = [];
 		for (parameter in functionTypeParameters(fn)) {
 			var semantic = requiredMapValue(semanticSubstitutions, parameter),
-				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic);
+				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic, type -> requiresLayoutSpecialization(type));
 			substitutions.set(parameter, decision.representation);
 			policies.push(decision.policy);
 		}
 		return {substitutions: substitutions, policies: policies};
 	}
+
+	/** Source Flat structs have layouts too, even though they are represented as class types in the semantic model. */
+	function requiresLayoutSpecialization(type:CompilerType):Bool
+		return NativeLayout.containsNativeLayoutType(type) || containsSourceNativeLayout(type, null);
+
+	function containsSourceNativeLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name)): true;
+			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
+				containsSourceNativeLayout(representation, explored);
+			case TMap(key, value): containsSourceNativeLayout(key, explored) || containsSourceNativeLayout(value, explored);
+			case TFunction(arguments, result):
+				var found = containsSourceNativeLayout(result, explored);
+				for (argument in arguments)
+					if (containsSourceNativeLayout(argument, explored))
+						found = true;
+				found;
+			case TAnonymous(_, fields):
+				var walked = explored == null ? [] : explored, found = false;
+				if (walked.indexOf(fields) < 0) {
+					walked.push(fields);
+					for (field in fields)
+						if (containsSourceNativeLayout(field.type, walked))
+							found = true;
+				}
+				found;
+			case _: false;
+		};
 
 	/** Resolve and adapt one generic call across its shared-body ABI boundary. */
 	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>, arguments:Array<TypedExpression>,

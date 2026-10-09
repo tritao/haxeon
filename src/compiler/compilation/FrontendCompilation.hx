@@ -216,8 +216,11 @@ class FrontendCompilation {
 		for (name in [for (name in objectCache.keys()) name])
 			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
 				objectCache.remove(name);
-		for (object in IrGenerator.objectsFrom(typedNew))
+		var typedObjects = IrGenerator.objectsFrom(typedNew);
+		for (object in typedObjects)
 			objectCache.set(object.name, object);
+		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
+		IrGenerator.bindFlatValueObjects(currentObjects);
 		var allocationAfterObjects = AllocationMeter.sample();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],

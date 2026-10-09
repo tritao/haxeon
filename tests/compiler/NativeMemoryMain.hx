@@ -94,10 +94,42 @@ class NativeMemoryMain {
 		if (!sawU32Field)
 			throw "A managed UInt32 field must use the lossless I32 carrier";
 
+		var incrementalFlat = new Compiler();
+		CompilerIntrinsics.register(incrementalFlat);
+		incrementalFlat.addSourceRoot("stdlib");
+		incrementalFlat.update("model/Packet.hx", "package model; struct Packet { public var value:Int32; }");
+		incrementalFlat.update("app/Reader.hx",
+			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet return span.get(0); }");
+		incrementalFlat.update("Main.hx",
+			"import app.Reader; import model.Packet; import runtime.memory.NativeSpan; import runtime.memory.RawPtr; " +
+			"function main():Int { var pointer:RawPtr<Packet> = RawPtr.nullPtr(), span:NativeSpan<Packet> = new NativeSpan<Packet>(pointer, 1); " +
+			"Reader.copy(span); return 42; }");
+		incrementalFlat.compile("Main");
+		incrementalFlat.update("app/Reader.hx",
+			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet { " +
+			"var packet:Packet = span.get(0); return packet; } }");
+		var incrementalFlatResult = incrementalFlat.compile("Main"), sawFlatGetSpecialization = false, sawFlatMemoryLoad = false;
+		for (fn in incrementalFlatResult.ir.functions)
+			if (fn.name.indexOf("runtime.memory.NativeSpan.get[layout]") >= 0) {
+				sawFlatGetSpecialization = true;
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case MemoryLoad(_, _, _, _): sawFlatMemoryLoad = true;
+							case _:
+						}
+			}
+		if (!incrementalFlatResult.retyped.contains("app.Reader.copy") || !sawFlatGetSpecialization || !sawFlatMemoryLoad)
+			throw 'Incremental Flat RawPtr lowering must preserve its cached layout and exact specialization: retyped=${incrementalFlatResult.retyped}';
+
 		expectCompileError('import runtime.memory.RawPtr; function bad(pointer:RawPtr<String>):String return pointer.load(); function main():Int return 0;',
 			"has no fixed native memory layout");
+		expectCompileError('import runtime.memory.RawPtr; struct Rich { public var text:String; } function bad(pointer:RawPtr<Rich>):String return pointer.ref.text; function main():Int return 0;',
+			"RawPtr.ref requires a Flat struct pointee");
 		expectCompileError('import runtime.memory.RawPtr; @:value @:repr("C") class Pair { public var value:Int32; } function bad(pointer:RawPtr<Pair>):Void { pointer.store(null); } function main():Int return 0;',
 			"address-only and cannot be stored by value");
+		expectCompileError('import runtime.memory.RawPtr; @:value @:repr("C") class Pair { public var value:Int32; } function bad(pointer:RawPtr<Pair>):Int return pointer.ref.value; function main():Int return 0;',
+			"RawPtr.ref requires a Flat struct pointee");
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

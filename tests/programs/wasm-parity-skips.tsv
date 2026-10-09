@@ -8,6 +8,7 @@ short-circuit	skip	Uses trace, which needs host output on Wasm
 date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
+native-memory-flat-struct	skip	The native memory runtime is not implemented on Wasm
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
 object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
