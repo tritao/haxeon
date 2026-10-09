@@ -205,7 +205,7 @@ descriptor-only slice.
 concrete types propagated through nested generic helper calls. The compiler
 does not provide identity for an unresolved generic parameter or a
 runtime-selected type. The full World compile-and-runtime consumer gate has
-has not passed against
+not passed against
 `78d459f00121eb2933b8480bfa9dff43d7dfb054`, so this is not a World
 compatibility checkpoint. At the time of this gate,
 `stdlib/haxeon/wire/MessagePackSchema.hx`
@@ -239,3 +239,51 @@ run did not reach the descriptor assertions or runtime tests, and the
 import project, not validated against World artifacts. Full World compatibility
 therefore remains unverified. The failure log is
 `out/gates/world-a6e1114-run.log`; no World checkout or pin was changed.
+
+## Refreshed compiler/runtime acceptance and current consumer boundary
+
+The compiler/runtime selector was rerun in this isolated review tree after the
+flat `RawPtr` aggregate-lowering edits. It passed 141/141:
+
+```sh
+.tools/haxe/haxe -cp tests --run driver.TestDriver \
+  --root "$PWD" --suite compiler,runtime --jobs 16
+```
+
+The captured output is `out/gates/final-driver-hxi-current.log`; that run used
+private session, source, artifact, and temporary directories under
+`out/gates/final-driver-hxi-*`, with the artifact cache disabled and compiler
+server and ccache disabled. The selector now contains 141 cases, so the older
+“86-case” log name is historical rather than the current case count.
+
+This run was against review-tree HEAD
+`2414f90d440a12de8786fc7508433b49c7e25857` **plus the local, uncommitted flat
+`RawPtr` aggregate-lowering diff** and an untracked flat-memory regression
+fixture. It is working-tree evidence, not a new stable compiler pin. The
+HashLink gitlink remained `0e739431da931d8e21c98c485afb17f1f3164106`. The
+aggregate-memory focused program had also passed 1/1 at the current source
+state (`out/gates/flat-memory-focused3.log`). Bootstrap stages converged and
+the checked-in compiler rebuilt identically for that source state; evidence is
+in `out/gates/bootstrap-flat-memory3.log` and
+`out/gates/self-flat-memory3.log`. The existing Wasm parity result remains 356
+fixtures passed with 15 declared skips at
+`aee78ba4d9b2d5f330132447e7ef51cda994faf5` (`out/gates/wasm-parity-with-flat-structs.log`);
+it was not rerun for this native-memory change and is not evidence for the
+uncommitted diff.
+
+The latest full archived World compile has advanced past the earlier E1022
+aggregate-load failure, but still does not pass. At the current local source
+state it loads 37 sources and stops at
+`NativePointerContractTests.hx:58:3` with `E1005: Field "ref" requires an
+object`; the log is `out/gates/world-a6e1114-run-after-flat-memory3.log`. The
+World descriptor/schema assertions and runtime tests have not been reached.
+`MessagePackSchema.hx` remains an untracked local candidate; the minimal import
+probe compiled, but no World descriptor/default/schema compatibility claim is
+made from that result. This gate does not validate those schema behaviors.
+
+The current `typeInfo<T>()` boundary remains explicit: statically concrete
+source-declared struct types, including types passed through nested generic
+helpers, have descriptor identity. An unresolved generic parameter and a
+runtime-selected type do not; callers must reach `typeInfo<T>()` through an
+instantiation where the compiler can resolve `T` to a concrete type. This is
+not runtime type-token support. No root or sibling pin was promoted.
