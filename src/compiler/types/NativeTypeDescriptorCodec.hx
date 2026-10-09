@@ -2,6 +2,9 @@ package compiler.types;
 
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
@@ -9,7 +12,7 @@ import haxe.io.BytesOutput;
 
 /** Versioned container for the descriptors emitted by a compiled program. */
 class NativeTypeDescriptorCodec {
-	public static inline final FORMAT_VERSION:Int = 1;
+	public static inline final FORMAT_VERSION:Int = 2;
 	static inline final MAGIC = "HTD";
 	static inline final MAX_ITEMS = 0x100000;
 	static inline final MAX_DEPTH = 128;
@@ -31,6 +34,7 @@ class NativeTypeDescriptorCodec {
 			writeNullableInt(output, descriptor.size);
 			writeNullableInt(output, descriptor.alignment);
 			writeStrings(output, descriptor.annotations);
+			writeAnnotationValues(output, descriptor.annotationValues);
 			writeNodes(output, descriptor.fields, 0);
 			writeNodes(output, descriptor.arguments, 0);
 			writeString(output, descriptor.hash);
@@ -58,6 +62,7 @@ class NativeTypeDescriptorCodec {
 					size: readNullableInt(input),
 					alignment: readNullableInt(input),
 					annotations: readStrings(input, bytes.length),
+					annotationValues: readAnnotationValues(input, bytes.length),
 					fields: readNodes(input, bytes.length, 0),
 					arguments: readNodes(input, bytes.length, 0),
 					hash: readString(input, bytes.length)
@@ -75,7 +80,9 @@ class NativeTypeDescriptorCodec {
 
 	/** Stable JSON companion for tests and tooling that inspect the binary artifact. */
 	public static function toJson(descriptors:Array<NativeTypeDescriptorData>):String
-		return Json.stringify({formatVersion: FORMAT_VERSION, descriptors: orderedDescriptors(descriptors)}, null, "  ") + "\n";
+		return Json.stringify({formatVersion: FORMAT_VERSION, descriptors: [for (descriptor in orderedDescriptors(descriptors)) descriptorJson(descriptor)]},
+			null, "  ")
+			+ "\n";
 
 	static function orderedDescriptors(descriptors:Array<NativeTypeDescriptorData>):Array<NativeTypeDescriptorData> {
 		var result = descriptors.copy();
@@ -95,9 +102,20 @@ class NativeTypeDescriptorCodec {
 		if (descriptor.name.length == 0 || descriptor.type.length == 0)
 			throw "Native type descriptor name and type must be nonempty";
 		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type, descriptor.flat, descriptor.portable,
-			descriptor.size, descriptor.alignment, descriptor.annotations, descriptor.fields, descriptor.arguments);
+			descriptor.size, descriptor.alignment, descriptor.annotations, descriptor.annotationValues, descriptor.fields, descriptor.arguments);
 		if (descriptor.hash != expected)
 			throw 'Native type descriptor hash mismatch for "${descriptor.name}"';
+		validateAnnotationValues(descriptor.annotationValues);
+		validateNodeAnnotations(descriptor.fields);
+		validateNodeAnnotations(descriptor.arguments);
+	}
+
+	static function validateNodeAnnotations(nodes:Array<NativeTypeDescriptorField>):Void {
+		for (node in nodes) {
+			validateAnnotationValues(node.annotationValues);
+			validateNodeAnnotations(node.fields);
+			validateNodeAnnotations(node.arguments);
+		}
 	}
 
 	static function writeNodes(output:BytesOutput, nodes:Array<NativeTypeDescriptorField>, depth:Int):Void {
@@ -112,6 +130,7 @@ class NativeTypeDescriptorCodec {
 			writeNullableInt(output, node.alignment);
 			writeNullableInt(output, node.offset);
 			writeStrings(output, node.annotations);
+			writeAnnotationValues(output, node.annotationValues);
 			writeNodes(output, node.fields, depth + 1);
 			writeNodes(output, node.arguments, depth + 1);
 			writeBool(output, node.recursive);
@@ -131,12 +150,142 @@ class NativeTypeDescriptorCodec {
 				alignment: readNullableInt(input),
 				offset: readNullableInt(input),
 				annotations: readStrings(input, limit),
+				annotationValues: readAnnotationValues(input, limit),
 				fields: readNodes(input, limit, depth + 1),
 				arguments: readNodes(input, limit, depth + 1),
 				recursive: readBool(input)
 			});
 		return result;
 	}
+
+	static function writeAnnotationValues(output:BytesOutput, values:Array<NativeTypeAnnotationData>):Void {
+		writeCount(output, values.length);
+		for (annotation in values) {
+			writeString(output, annotation.name);
+			writeCount(output, annotation.arguments.length);
+			for (argument in annotation.arguments) {
+				writeString(output, argument.name);
+				writeString(output, argument.type);
+				switch argument.value {
+					case IntValue(value):
+						output.writeByte(0);
+						output.writeInt32(value);
+					case FloatValue(value):
+						output.writeByte(1);
+						output.writeDouble(value);
+					case StringValue(value):
+						output.writeByte(2);
+						writeString(output, value);
+					case BoolValue(value):
+						output.writeByte(3);
+						writeBool(output, value);
+					case NullValue:
+						output.writeByte(4);
+				}
+			}
+		}
+	}
+
+	static function readAnnotationValues(input:BytesInput, limit:Int):Array<NativeTypeAnnotationData> {
+		var result:Array<NativeTypeAnnotationData> = [];
+		for (_ in 0...readCount(input)) {
+			var name = readString(input, limit),
+				arguments:Array<NativeTypeAnnotationArgument> = [];
+			for (_ in 0...readCount(input)) {
+				var argumentName = readString(input, limit),
+					type = readString(input, limit),
+					value:NativeTypeAnnotationValue = switch input.readByte() {
+						case 0: IntValue(input.readInt32());
+						case 1: FloatValue(input.readDouble());
+						case 2: StringValue(readString(input, limit));
+						case 3: BoolValue(readBool(input));
+						case 4: NullValue;
+						case _: throw "Invalid annotation constant tag in native type descriptor artifact";
+					};
+				arguments.push({name: argumentName, type: type, value: value});
+			}
+			result.push({name: name, arguments: arguments});
+		}
+		validateAnnotationValues(result);
+		return result;
+	}
+
+	static function validateAnnotationValues(values:Array<NativeTypeAnnotationData>):Void {
+		for (annotation in values) {
+			if (annotation.name.length == 0)
+				throw "Native type annotation name must be nonempty";
+			var names:Map<String, Bool> = [];
+			for (argument in annotation.arguments) {
+				if (argument.name.length == 0 || argument.type.length == 0)
+					throw "Native type annotation argument name and type must be nonempty";
+				if (names.exists(argument.name))
+					throw 'Duplicate native type annotation argument "${argument.name}"';
+				names.set(argument.name, true);
+				switch argument.value {
+					case FloatValue(value) if (!Math.isFinite(value)):
+						throw 'Native type annotation "${annotation.name}" has a non-finite floating-point constant';
+					case _:
+				}
+			}
+		}
+	}
+
+	static function descriptorJson(descriptor:NativeTypeDescriptorData):Dynamic
+		return {
+			version: descriptor.version,
+			name: descriptor.name,
+			type: descriptor.type,
+			flat: descriptor.flat,
+			portable: descriptor.portable,
+			size: descriptor.size,
+			alignment: descriptor.alignment,
+			annotations: descriptor.annotations,
+			annotationValues: annotationValuesJson(descriptor.annotationValues),
+			fields: [for (field in descriptor.fields) nodeJson(field)],
+			arguments: [for (argument in descriptor.arguments) nodeJson(argument)],
+			hash: descriptor.hash
+		};
+
+	static function nodeJson(node:NativeTypeDescriptorField):Dynamic
+		return {
+			name: node.name,
+			type: node.type,
+			flat: node.flat,
+			portable: node.portable,
+			size: node.size,
+			alignment: node.alignment,
+			offset: node.offset,
+			annotations: node.annotations,
+			annotationValues: annotationValuesJson(node.annotationValues),
+			fields: [for (field in node.fields) nodeJson(field)],
+			arguments: [for (argument in node.arguments) nodeJson(argument)],
+			recursive: node.recursive
+		};
+
+	static function annotationValuesJson(values:Array<NativeTypeAnnotationData>):Array<Dynamic>
+		return [
+			for (annotation in values)
+				{
+					name: annotation.name,
+					arguments: [
+						for (argument in annotation.arguments)
+							{
+								name: argument.name,
+								type: argument.type,
+								value: annotationConstantJson(argument.value)
+							}
+					]
+				}
+		];
+
+	static function annotationConstantJson(value:NativeTypeAnnotationValue):Dynamic
+		return switch value {
+			case IntValue(value): value;
+			case FloatValue(value): value;
+			case StringValue(value): value;
+			case BoolValue(value): value;
+			case NullValue: null;
+		};
 
 	static function writeStrings(output:BytesOutput, values:Array<String>):Void {
 		writeCount(output, values.length);

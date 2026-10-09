@@ -27,6 +27,12 @@ class StructSyntaxMain {
 			throw "struct generic parameters or colon interface list were parsed incorrectly";
 		if (source.substring(declaration.fields[0].span.start, declaration.fields[0].span.end).indexOf("x:Int") < 0)
 			throw "struct field source span did not cover its declaration";
+		var annotationSource = "@:annotation enum abstract Replicate(Int) { var all; var owner; }",
+			annotationProgram = new Parser(new Lexer(new SourceFile("Annotation.hx", annotationSource)).tokenize()).parseProgram();
+		if (annotationProgram.enumAbstracts.length != 1
+			|| annotationProgram.enumAbstracts[0].metadata.length != 1
+			|| annotationProgram.enumAbstracts[0].metadata[0].name != "annotation")
+			throw "metadata on an annotation enum abstract must survive parsing";
 
 		expectError("struct Point extends Base {}", "cannot extend a class", "extends");
 		expectError("struct Point implements Located {}", 'with ":"', "implements");

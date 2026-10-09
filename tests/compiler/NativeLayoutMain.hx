@@ -59,6 +59,9 @@ class NativeLayoutMain {
 		var unsupportedDescriptorVersion = descriptorBytes.sub(0, descriptorBytes.length);
 		unsupportedDescriptorVersion.set(3, compiler.types.NativeTypeDescriptorCodec.FORMAT_VERSION + 1);
 		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(unsupportedDescriptorVersion), "Unsupported");
+		var legacyDescriptorVersion = descriptorBytes.sub(0, descriptorBytes.length);
+		legacyDescriptorVersion.set(3, 1);
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(legacyDescriptorVersion), "Unsupported");
 		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes.sub(0, descriptorBytes.length - 1)), "Truncated");
 		// portable-abi32 is the Wasm32 C ABI, which aligns 64-bit integers to eight bytes.
 		expect(pair32.size == 24

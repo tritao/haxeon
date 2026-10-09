@@ -130,6 +130,7 @@ typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; fi
 /** Parsed enum abstract, including explicit conversion relationships. */
 typedef AstEnumAbstract = {
 	final name:String;
+	final metadata:Array<AstMetadata>;
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;

@@ -113,6 +113,7 @@ class TestCatalog {
 		"CastContextMain",
 		"HxiAbiMain",
 		"NativeLayoutMain",
+		"NativeAnnotationsMain",
 		"StructSyntaxMain",
 		"StructPropertiesMain",
 		"NativeMemoryMain",

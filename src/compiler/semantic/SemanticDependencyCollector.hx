@@ -23,11 +23,13 @@ class SemanticDependencyCollector {
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 				base = classDecl.base;
+			addAnnotationDependencies(result, className, classDecl.metadata, typeAliases);
 			if (base != null)
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, base, typeAliases);
 			for (interfaceType in classDecl.interfaces)
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases);
 			for (field in classDecl.fields) {
+				addAnnotationDependencies(result, className, field.metadata, typeAliases);
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
 				var initializer = field.initializer;
 				if (initializer != null) {
@@ -45,6 +47,13 @@ class SemanticDependencyCollector {
 			}
 		}
 		return result;
+	}
+
+	static function addAnnotationDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, metadata:Array<compiler.syntax.Ast.AstMetadata>,
+			aliases:AliasTable):Void {
+		for (annotation in metadata)
+			if (aliases.exists(annotation.name))
+				addDependency(result, owner, SemanticDependencyKind.Layout, ModuleCanonicalizer.resolveTypeName(annotation.name, aliases));
 	}
 
 	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,

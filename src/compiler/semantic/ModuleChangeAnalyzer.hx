@@ -103,6 +103,25 @@ class ModuleChangeAnalyzer {
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);
 		}
+		for (abstractDecl in ast.enumAbstracts) {
+			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
+				signature = abstractName
+					+ "["
+					+ fieldMetadataFingerprint(state, abstractDecl.metadata)
+					+ "]("
+					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
+					+ ") from "
+					+ [
+						for (type in abstractDecl.fromTypes)
+							SemanticSignature.parsed(type, ast.aliases)
+					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",") + " {" + [
+						for (value in abstractDecl.values)
+							value.name + "=" + state.source.slice(value.span.start, value.span.end)
+					].join(";") + "}";
+			abstracts.set(abstractName, signature);
+			if (state.abstractFingerprints.get(abstractName) != signature)
+				structuralChanged.set('abstract:$abstractName', true);
+		}
 		for (old in state.abstractFingerprints.keys())
 			if (!abstracts.exists(old))
 				structuralChanged.set('abstract:$old', true);
@@ -123,6 +142,7 @@ class ModuleChangeAnalyzer {
 						case _:
 					}
 			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
+			signature += ":metadata:" + fieldMetadataFingerprint(state, classDecl.metadata);
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
@@ -215,10 +235,19 @@ class ModuleChangeAnalyzer {
 					for (method in classDecl.methods)
 						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
+			var isAnnotationSchema = false;
+			for (metadata in classDecl.metadata)
+				if (metadata.name == "annotation")
+					isAnnotationSchema = true;
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)
 					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
 			].join(";");
+			if (isAnnotationSchema)
+				wireFieldFingerprint += ":annotation-defaults:" + [
+					for (field in classDecl.fields)
+						field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
+				].join(";");
 			wireFields.set(className, wireFieldFingerprint);
 			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
 				structuralChanged.set(className, true);

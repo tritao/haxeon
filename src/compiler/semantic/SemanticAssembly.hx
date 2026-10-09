@@ -413,7 +413,7 @@ class SemanticAssembly {
 						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
 					canonicalFields.push({
 						name: field.name,
-						metadata: field.metadata,
+						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals, classAliases),
 						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
 							enumDeclarations, enumAbstractDeclarations),
 							classAliases, classDecl.typeParameters),
@@ -433,7 +433,7 @@ class SemanticAssembly {
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,
 					isPrivate: classDecl.isPrivate,
-					metadata: classDecl.metadata,
+					metadata: ModuleCanonicalizer.canonicalMetadata(classDecl.metadata, name, entryModule, locals, classAliases),
 					base: canonicalBase,
 					interfaces: [
 						for (interfaceType in classDecl.interfaces)
@@ -553,13 +553,21 @@ class SemanticAssembly {
 			for (fn in functions)
 				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
 		} else {
-			for (change in structuralChanged.keys()) {
+			var structuralQueue:Array<String> = [for (change in structuralChanged.keys()) change],
+				structuralTargets:Map<String, Bool> = [],
+				structuralCursor = 0;
+			while (structuralCursor < structuralQueue.length) {
+				var change = structuralQueue[structuralCursor++];
 				var changedDependency:String = change,
 					separator = changedDependency.indexOf(":"),
 					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length),
 					targetId = context.resolveSemanticType(target);
 				if (targetId == null)
 					targetId = context.resolveSemanticSymbol(target);
+				var targetKey = targetId == null ? target : targetId;
+				if (structuralTargets.exists(targetKey))
+					continue;
+				structuralTargets.set(targetKey, true);
 				for (moduleName in names) {
 					if (!modules.exists(moduleName))
 						continue;
@@ -572,6 +580,12 @@ class SemanticAssembly {
 									target);
 							if (matches) {
 								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target, targetId, Std.string(dependency.kind));
+								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
+									for (classDecl in classes)
+										if (classDecl.name == functionOwner) {
+											structuralQueue.push(functionOwner);
+											break;
+										}
 								var matchedFunction = false;
 								for (fn in functions)
 									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {

@@ -57,6 +57,7 @@ class ProgramTyper {
 					'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
 		session.bindNominalDeclarations();
+		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
 				var aliasType = bodyTyper.lowerType(alias.type);
@@ -232,6 +233,7 @@ class ProgramTyper {
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
+		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
 		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
@@ -243,8 +245,7 @@ class ProgramTyper {
 		var allocationAfterBodies = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
-		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives,
-			bodyTyper.expressionTyper.nativeTypeDescriptors());
+		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives, nativeTypeDescriptors);
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(Finalized);

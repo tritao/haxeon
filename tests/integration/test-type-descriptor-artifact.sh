@@ -29,16 +29,27 @@ const [binaryPath, jsonPath] = process.argv.slice(2);
 const binary = fs.readFileSync(binaryPath);
 const dump = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 assert.equal(binary.subarray(0, 3).toString('ascii'), 'HTD');
-assert.equal(binary.readUInt8(3), 1);
+assert.equal(binary.readUInt8(3), 2);
 assert.equal(binary.readUInt32LE(4), dump.descriptors.length);
-assert.equal(dump.formatVersion, 1);
-assert.deepEqual(dump.descriptors.map(item => item.name), ['InnerRecord', 'ManagedPayload']);
+assert.equal(dump.formatVersion, 2);
+assert.deepEqual(dump.descriptors.map(item => item.name), ['InnerRecord', 'ManagedPayload', 'Range']);
 
 const inner = dump.descriptors[0];
 assert.equal(inner.flat, true);
 assert.equal(inner.size, 8);
 assert.equal(inner.alignment, 4);
 assert.deepEqual(inner.fields.map(field => field.offset), [0, 4]);
+assert.deepEqual(inner.fields[0].annotationValues[0], {
+  name: 'Range',
+  arguments: [
+    { name: 'min', type: 'Float', value: -1.5 },
+    { name: 'max', type: 'Float', value: 4.25 },
+  ],
+});
+assert.deepEqual(inner.fields[1].annotationValues[0], {
+  name: 'Replicate',
+  arguments: [{ name: 'value', type: 'Int', value: 2 }],
+});
 
 const managed = dump.descriptors[1];
 assert.equal(managed.flat, false);

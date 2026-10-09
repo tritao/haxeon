@@ -81,7 +81,7 @@ class Parser {
 					var start = previous().span;
 					if (check(TokenKind.Identifier) && current().text == "abstract") {
 						advance();
-						enumAbstracts.push(parseEnumAbstract(start));
+						enumAbstracts.push(parseEnumAbstract(start, metadata));
 					} else
 						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
@@ -245,7 +245,7 @@ class Parser {
 		};
 	}
 
-	function parseEnumAbstract(start:SourceSpan):AstEnumAbstract {
+	function parseEnumAbstract(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnumAbstract {
 		var name = consume(TokenKind.Identifier).text;
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
@@ -279,6 +279,7 @@ class Parser {
 		var end = consume(TokenKind.RightBrace).span;
 		return {
 			name: name,
+			metadata: metadata,
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,

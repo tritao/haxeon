@@ -23,7 +23,7 @@ function main():Int {
 		return 5;
 	if (info.fields[0].annotations.length != 0 || info.fields[1].annotations.length != 0 || info.fields[2].annotations.length != 0)
 		return 6;
-	if (info.hash != "49856bde4d73d47517451fed037c4e62ef7b91836aa650a2045ba07ff73acd79" || info.hash != typeInfo<Pair>().hash)
+	if (info.hash != "c44d59447215ca7ebbb410c1c61891b5550af04c19094b070a36194e9267094f" || info.hash != typeInfo<Pair>().hash)
 		return 7;
 	return 42;
 }
