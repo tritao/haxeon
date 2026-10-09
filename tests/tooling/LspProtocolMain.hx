@@ -805,9 +805,15 @@ class LspProtocolMain {
 		var blockingService = new BlockingLanguageService(),
 			blockingProtocol = new LspProtocol(blockingService),
 			cancelledResponse:String = null,
-			cancelledDone = new sys.thread.Lock();
+			cancelledDone = new sys.thread.Lock(), navigationDone = new sys.thread.Lock(), coloringDone = new sys.thread.Lock(),
+			priorityOrder:Array<Int> = [], navigationTiming:Dynamic = null;
 		var dispatcher = new LspDispatcher(blockingProtocol, response -> {
 			var parsed:Dynamic = Json.parse(response);
+			if (parsed.id == 881 || parsed.id == 882) priorityOrder.push(parsed.id);
+			if (parsed.id == 881) coloringDone.release();
+			if (parsed.method == "$/haxeon/requestTiming" && parsed.params.id == 882) {
+				navigationTiming = parsed.params; navigationDone.release();
+			}
 			if (parsed.id == 88) {
 				cancelledResponse = response;
 				cancelledDone.release();
@@ -832,10 +838,17 @@ class LspProtocolMain {
 			params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
 		}));
 		blockingService.entered.wait();
+		dispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 881, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: uri}}}));
+		dispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 882, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 1}
+		}}));
 		dispatcher.dispatch('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":88}}');
 		blockingService.resume.release();
 		cancelledDone.wait();
+		if (!navigationDone.wait(10) || !coloringDone.wait(10)) throw "navigation/color priority test timed out";
 		dispatcher.finish();
+		if (priorityOrder.length != 2 || priorityOrder[0] != 882 || navigationTiming.queueMs < 0 || navigationTiming.analysisMs < 0 || navigationTiming.executionMs < navigationTiming.analysisMs)
+			throw "navigation did not outrank coloring or report valid queue/analysis timing";
 		if (Json.parse(cancelledResponse).error.code != -32800)
 			throw "LSP did not cancel an active completion request";
 		var foregroundService = new LanguageService(),
@@ -876,6 +889,27 @@ class LspProtocolMain {
 				foregroundHasMain = true;
 		if (!foregroundHasMain || foregroundProtocol.lastForegroundAnalysisMs < 0)
 			throw "first-open completion did not demand a current semantic snapshot";
+		var interruptedService = new BlockingDiagnosticLanguageService(), interruptedProtocol = new LspProtocol(interruptedService),
+			interruptedDefinition:Dynamic = null, resumedDiagnostics = new sys.thread.Lock(), interruptedDone = new sys.thread.Lock();
+		interruptedService.block = true;
+		var interruptedDispatcher = new LspDispatcher(interruptedProtocol, response -> {
+			var parsed:Dynamic = Json.parse(response);
+			if (parsed.id == 883) { interruptedDefinition = parsed; interruptedDone.release(); }
+			if (parsed.method == "textDocument/publishDiagnostics") resumedDiagnostics.release();
+		}, 4, 20);
+		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
+		}}));
+		if (!interruptedService.entered.wait(10)) throw "background analysis did not start";
+		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 883, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 1}
+		}}));
+		interruptedService.block = false;
+		interruptedService.resume.release();
+		if (!interruptedDone.wait(10) || !resumedDiagnostics.wait(10)) throw "navigation interruption lost diagnostic work";
+		interruptedDispatcher.finish();
+		if (interruptedDefinition.result == null || interruptedDefinition.error != null) throw "navigation failed after interrupting diagnostics";
+		Sys.println("PASS: navigation priority, queue/analysis timings and resumed interrupted diagnostics");
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
 			choiceUri = "file:///workspace/shape/Choice.hx",

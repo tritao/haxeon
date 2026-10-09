@@ -233,6 +233,7 @@ class LspProtocol {
 					throw cancelled
 				catch (_:CompileError) {} catch (_:Dynamic) {}
 		} catch (_:CancellationError) {
+			for (target in targets) pendingDiagnosticTargets.set(target, true);
 			clearDiagnosticToken(token);
 			lastBackgroundAnalysisMs = (Sys.time() - started) * 1000.0;
 			return [];
@@ -1081,6 +1082,7 @@ class LspProtocol {
 	}
 
 	function definition(request:Dynamic, token:CancellationToken):Dynamic {
+		lastForegroundAnalysisMs = 0;
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);

@@ -10,6 +10,7 @@ private typedef LspDispatchTask = {
 	final diagnostics:Bool;
 	final stop:Bool;
 	final generation:Int;
+	final ?submittedAt:Float;
 }
 
 /** Ordered compiler lane with immediate cancellation and debounced diagnostics. */
@@ -53,16 +54,18 @@ class LspDispatcher {
 			|| method == "textDocument/didChange"
 			|| method == "textDocument/didClose"
 			|| method == "workspace/didChangeWatchedFiles";
-		if (changesDocument)
+		var navigation = method == "textDocument/definition";
+		if (changesDocument || navigation)
 			protocol.cancelPendingDiagnostics();
 		if (!enqueue({
 			message: message,
+			submittedAt: Sys.time(),
 			diagnostics: false,
 			stop: false,
 			generation: 0
-		}, true))
+		}, method != "textDocument/semanticTokens/full" && method != "textDocument/semanticTokens/full/delta"))
 			return false;
-		if (changesDocument)
+		if (changesDocument || navigation)
 			scheduleDiagnostics();
 		return method == "exit";
 	}
@@ -104,8 +107,17 @@ class LspDispatcher {
 					for (response in protocol.analyzePendingDiagnostics())
 						emit(response);
 			} else {
+				var started = Sys.time();
 				for (response in protocol.handle(task.message))
 					emit(response);
+				if (messageMethod(task.message) == "textDocument/definition") {
+					var request:Dynamic = Json.parse(task.message);
+					emit(Json.stringify({jsonrpc: "2.0", method: "$/haxeon/requestTiming", params: {
+						id: Reflect.field(request, "id"), method: "textDocument/definition",
+						queueMs: task.submittedAt == null ? 0 : (started - task.submittedAt) * 1000,
+						analysisMs: protocol.lastForegroundAnalysisMs, executionMs: (Sys.time() - started) * 1000
+					}}));
+				}
 				if (protocol.shouldExit())
 					break;
 			}
