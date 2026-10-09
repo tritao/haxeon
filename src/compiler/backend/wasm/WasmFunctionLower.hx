@@ -1349,8 +1349,7 @@ class WasmFunctionLower {
 			case Bytes, ManagedBytes:
 				body.push(Call(bytesDataPointer));
 			case Abstract("realtime_bytes"):
-				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
-				body.push(I32Add);
+				body.push(Call(bytesDataPointer));
 			case _:
 		}
 	}

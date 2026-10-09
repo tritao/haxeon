@@ -24,7 +24,7 @@ class WasmLinearRuntime {
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_exp", "__math_log",
 						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
-						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 						runtimeImport(module, native);
 					default:
 				}
@@ -238,10 +238,28 @@ class WasmLinearRuntime {
 			}
 	}
 
+	/** Bound methods compare by function and receiver, matching HashLink and Wasm GC. */
+	static function addCompareMethods(module:WasmModule, name:String):Int {
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [], [
+			LocalGet(0), LocalGet(1), I32Eq,
+			If(null), I32Const(1), Return, End,
+			LocalGet(0), I32Eqz, LocalGet(1), I32Eqz, I32Or,
+			If(null), I32Const(0), Return, End,
+			LocalGet(0), I32Load(0), I32Const(WasmLayout.CLOSURE_TYPE_ID), I32Eq,
+			LocalGet(1), I32Load(0), I32Const(WasmLayout.CLOSURE_TYPE_ID), I32Eq, I32And,
+			I32Eqz, If(null), I32Const(0), Return, End,
+			LocalGet(0), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+			LocalGet(1), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), I32Eq,
+			LocalGet(0), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
+			LocalGet(1), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET), I32Eq, I32And, Return
+		]));
+	}
+
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
+			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
 				"__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
@@ -258,7 +276,7 @@ class WasmLinearRuntime {
 				]));
 			case "__math_fmod": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, WasmFmod.locals(),
 					WasmFmod.body()));
-			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit":
+			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
 			case "__int64_to_string": addInt64ToString(module, native.name, allocator);
@@ -558,6 +576,12 @@ class WasmLinearRuntime {
 		var builder = new WasmFunctionBuilder("__haxeon_bytes_data_pointer", {parameters: [I32], results: [I32]}),
 			bytes = builder.parameter("bytes", 0),
 			data = builder.local("data", I32);
+		builder.localGet(bytes);
+		builder.emit(I32Eqz);
+		builder.emit(If(null));
+		builder.i32Const(0);
+		builder.return_();
+		builder.emit(End);
 		builder.localGet(bytes);
 		builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 		builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
