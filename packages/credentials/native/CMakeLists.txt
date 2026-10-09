@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.21)
+project(haxeon_nativekit_credentials LANGUAGES C CXX)
+
+if(DEFINED HAXEON_NATIVE_OUTPUT_DIR)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
+endif()
+if(DEFINED HAXEON_TARGET)
+    message(STATUS "Building NativeKit credentials for ${HAXEON_TARGET}")
+endif()
+
+set(NK_BUILD_CREDENTIALS ON CACHE BOOL "" FORCE)
+set(NK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(NK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../vendor/nativekit" nativekit)

@@ -104,7 +104,7 @@ static vstring *realtime_string_from_utf8( const char *utf8 ) {
 }
 
 /* Read once per native-library instance; concurrent first calls may cache the same value. */
-static atomic_int realtime_bytes_ascii_mode = ATOMIC_VAR_INIT(-1);
+static atomic_int realtime_bytes_ascii_mode = -1;
 static bool realtime_bytes_ascii_enabled( void ) {
 	int mode = atomic_load_explicit(&realtime_bytes_ascii_mode,memory_order_relaxed);
 	if( mode < 0 ) {

@@ -25,6 +25,8 @@ class EventDispatcher {
 	var platformPointerCaptured:Bool;
 	/** Outcome of the most recent routed command invocation. */
 	public var lastCommandResult(default, null):Null<CommandResult>;
+	/** Accessibility escape from editor Tab shortcuts; widgets retain first refusal. */
+	public var tabMovesFocus:Bool = false;
 	/** Optional host hook for command palettes, status bars, and diagnostics. */
 	public var onCommandResult:Null<CommandResult->Void>;
 	/** Optional elapsed-time probe for pointer release stages. */
@@ -258,14 +260,14 @@ class EventDispatcher {
 	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
 		var node = focus.focusedNode();
 		if (node == null) {
-			if (kind == UiEventKind.KeyDown)
-				routeCommand(key, modifiers, []);
+			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)
+				routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
 			return;
 		}
 		var path = HitTest.pathTo(node);
 		if (path.length == 0) {
-			if (kind == UiEventKind.KeyDown)
-				routeCommand(key, modifiers, []);
+			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)
+				routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
 			return;
 		}
 		var event = new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, key,
@@ -275,13 +277,19 @@ class EventDispatcher {
 			cancelCapturedPointerFor(node.id);
 		if (event.defaultPrevented)
 			return;
+		if (tabMovesFocus && key == UiKey.Tab && (modifiers & ~UiModifier.Shift) == 0 &&
+			(kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)) {
+			moveFocus((modifiers & UiModifier.Shift) != 0);
+			return;
+		}
 		// A modal focus trap owns keyboard input, including keys its focused child
 		// does not handle. Do not let those keys invoke commands behind the modal.
 		var inModal = false;
 		for (entry in path)
 			if (entry.focusTrap)
 				inModal = true;
-		if (!inModal && kind == UiEventKind.KeyDown && routeCommand(key, modifiers, path)) {
+		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
+			routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat)) {
 			event.preventDefault();
 			return;
 		}
@@ -312,7 +320,7 @@ class EventDispatcher {
 		return true;
 	}
 
-	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>):Bool {
+	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false):Bool {
 		if (commandRegistry == null)
 			return false;
 		var scopes:Array<String> = [];
@@ -320,7 +328,7 @@ class EventDispatcher {
 			if (entry.commandScope != null)
 				scopes.push(entry.commandScope);
 		lastCommandResult = commandRegistry.dispatchContextInScopes(key, modifiers,
-			commandContext, scopes);
+			commandContext, scopes, repeated);
 		if (onCommandResult != null)
 			onCommandResult(lastCommandResult);
 		return lastCommandResult.succeeded;

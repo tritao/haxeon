@@ -66,6 +66,7 @@ if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
 endif()
 set(HAXEON_STATIC_LIBFFI_ROOT "${CMAKE_SOURCE_DIR}/.tools/libffi-static")
 if(WIN32)
+  target_link_libraries(haxeon_runtime PRIVATE advapi32 bcrypt ws2_32)
   # The runtime has both /MD and /MDd configurations, so its static libffi
   # archive must use the matching MSVC CRT for each configuration.
   set(HAXEON_LIBFFI_RELEASE_ROOT "${HAXEON_STATIC_LIBFFI_ROOT}/msvc-release")

@@ -37,6 +37,8 @@ fi
     --root="$haxeon_dir/packages/platform/src" \
     --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
     --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
+    --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net.hxi" \
+    --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap" \
     --ffi-interface="$module_dir/bindings/nativekit-ui.hxi" \
     --ffi-projection="$module_dir/bindings/nativekit-ui.hxmap" \
     "$module_dir/tests/haxeon/Transaction.hx" \

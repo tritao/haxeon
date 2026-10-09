@@ -27,5 +27,5 @@ class TextRoleStyle {
 		return new TextStyleOverride(textStyle.font, textStyle.fontSize,
 			textStyle.letterSpacing, paragraphStyle.wrap, paragraphStyle.alignment,
 			paragraphStyle.lineHeight == null ? 0.0 : paragraphStyle.lineHeight,
-			paragraphStyle.direction, color);
+			paragraphStyle.direction, color, paragraphStyle.tabWidth);
 }

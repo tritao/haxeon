@@ -1049,6 +1049,14 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		NK_EVENT_RESOURCE_COMMIT_COMPLETE = 804;
 		/**
+		 * A cached URI resource became ready; source is its asset handle.
+		 */
+		NK_EVENT_RESOURCE_CACHE_READY = 805;
+		/**
+		 * A cached URI resource failed to load; source is its asset handle.
+		 */
+		NK_EVENT_RESOURCE_CACHE_LOAD_FAILED = 806;
+		/**
 		 * HTTP response headers became available.
 		 */
 		NK_EVENT_HTTP_HEADERS = 900;
@@ -1064,6 +1072,63 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 * An HTTP request reached its terminal state.
 		 */
 		NK_EVENT_HTTP_COMPLETE = 903;
+		/**
+		 * A non-looping audio voice reached its natural end; source is its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_COMPLETE = 904;
+		/**
+		 * An asynchronous audio voice became ready; source is its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_READY = 905;
+		/**
+		 * An asynchronous audio voice failed to load; source is its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_LOAD_FAILED = 906;
+		/**
+		 * An asynchronous audio clip became ready; source is its clip handle.
+		 */
+		NK_EVENT_AUDIO_CLIP_READY = 907;
+		/**
+		 * An asynchronous audio clip failed to load; source is its clip handle.
+		 */
+		NK_EVENT_AUDIO_CLIP_LOAD_FAILED = 908;
+		/**
+		 * The process-wide audio playback device started; source is invalid.
+		 */
+		NK_EVENT_AUDIO_DEVICE_STARTED = 909;
+		/**
+		 * The process-wide audio playback device stopped; source is invalid.
+		 */
+		NK_EVENT_AUDIO_DEVICE_STOPPED = 910;
+		/**
+		 * The process-wide audio playback device was rerouted; source is invalid.
+		 */
+		NK_EVENT_AUDIO_DEVICE_REROUTED = 911;
+		/**
+		 * The audio backend reported that playback was interrupted; source is invalid.
+		 */
+		NK_EVENT_AUDIO_DEVICE_INTERRUPTION_BEGAN = 912;
+		/**
+		 * The audio backend reported that playback interruption ended; source is invalid.
+		 */
+		NK_EVENT_AUDIO_DEVICE_INTERRUPTION_ENDED = 913;
+		/**
+		 * A playing voice was stopped to admit a higher-priority voice; source is the victim voice.
+		 */
+		NK_EVENT_AUDIO_VOICE_STOLEN = 914;
+		/**
+		 * A playing voice was admitted logically but not rendered because its bus was full; source is
+		 * its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_VIRTUALIZED = 915;
+		/**
+		 * A virtualized voice was promoted back to the audio backend; source is its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_RESUMED = 916;
+		/**
+		 * A streaming voice's provider read or seek failed; source is its voice handle.
+		 */
+		NK_EVENT_AUDIO_VOICE_STREAM_FAILED = 917;
 		/**
 		 * A plugin service call reached its terminal state.
 		 */
@@ -2212,6 +2277,23 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 * Highest pointer-button value reserved for state queries.
 		 */
 		NK_POINTER_BUTTON_LAST = 7;
+	}
+	/**
+	 * Loading lifecycle for one cached URI resource asset.
+	 */
+	enum nk_resource_asset_load_state : u32 {
+		/**
+		 * The resource bytes are still loading.
+		 */
+		NK_RESOURCE_ASSET_LOADING = 0;
+		/**
+		 * The complete resource bytes are available.
+		 */
+		NK_RESOURCE_ASSET_READY = 1;
+		/**
+		 * The resource failed to load; the result query reports the failure.
+		 */
+		NK_RESOURCE_ASSET_LOAD_FAILED = 2;
 	}
 	flags nk_resource_commit_flags : u32 {
 		/**
@@ -3376,6 +3458,67 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 */
 	extern fn nk_raw_pointer_motion_supported() -> nk_bool;
 	/**
+	 * Copies complete cached bytes into a caller-owned buffer. The required size
+	 * is returned through inout_size, including when the buffer is too small.
+	 * Safe from worker threads.
+	 */
+	extern fn nk_resource_asset_copy_data(asset: nk_resource_asset, buffer: ptr<void>, inout_size: ptr<u64> @inout) -> nk_result;
+	/**
+	 * Releases one caller-owned cached resource asset view; UI-thread-only.
+	 */
+	extern fn nk_resource_asset_destroy(asset: nk_resource_asset) -> nk_result;
+	/**
+	 * Returns the loading state of a cached resource asset; safe from worker threads.
+	 */
+	extern fn nk_resource_asset_get_load_state(asset: nk_resource_asset, out_state: ptr<nk_resource_asset_load_state> @out) -> nk_result;
+	/**
+	 * Returns the load result, or NK_OK while the asset is ready or loading; safe from worker threads.
+	 */
+	extern fn nk_resource_asset_get_result(asset: nk_resource_asset, out_result: ptr<nk_result> @out) -> nk_result;
+	/**
+	 * Returns the complete cached byte count once the asset is ready; safe from worker threads.
+	 */
+	extern fn nk_resource_asset_get_size(asset: nk_resource_asset, out_size: ptr<u64> @out) -> nk_result;
+	/**
+	 * Copies the cached asset URI into a caller-owned UTF-8 buffer; safe from worker threads.
+	 */
+	extern fn nk_resource_asset_get_uri(asset: nk_resource_asset, buffer: nullable<ptr<c_char>> @out_buffer("inout_size"), inout_size: ptr<u32> @inout) -> nk_result;
+	/**
+	 * Cancels pending loads and removes every cache entry.
+	 */
+	extern fn nk_resource_cache_clear(cache: nk_resource_cache) -> nk_result;
+	/**
+	 * Creates an empty URI resource cache. Cache operations are UI-thread-only.
+	 */
+	extern fn nk_resource_cache_create(out_cache: ptr<nk_resource_cache> @out @owned) -> nk_result;
+	/**
+	 * Cancels pending loads, removes all entries, and destroys a resource cache.
+	 */
+	extern fn nk_resource_cache_destroy(cache: nk_resource_cache) -> nk_result;
+	/**
+	 * Returns an owned asset view for a URI already present in the cache.
+	 */
+	extern fn nk_resource_cache_find(cache: nk_resource_cache, uri: utf8, out_asset: ptr<nk_resource_asset> @out @owned) -> nk_result;
+	/**
+	 * Returns the number of URI entries currently retained by the cache.
+	 */
+	extern fn nk_resource_cache_get_count(cache: nk_resource_cache, out_count: ptr<u32> @out) -> nk_result;
+	/**
+	 * Loads complete readable resource bytes synchronously, or returns an existing
+	 * cached entry. The returned asset is an independent owned view; destroying it
+	 * does not remove the cache entry.
+	 */
+	extern fn nk_resource_cache_load(cache: nk_resource_cache, resource: ptr<const<nk_resource>>, out_asset: ptr<nk_resource_asset> @out @owned) -> nk_result;
+	/**
+	 * Starts loading complete readable resource bytes, or joins an existing cache
+	 * load. A ready or failed entry returns NK_INVALID_REQUEST_ID.
+	 */
+	extern fn nk_resource_cache_load_async(cache: nk_resource_cache, resource: ptr<const<nk_resource>>, out_asset: ptr<nk_resource_asset> @out @owned, out_request: ptr<nk_request_id> @out) -> nk_result;
+	/**
+	 * Removes one URI entry; existing asset views retain their data.
+	 */
+	extern fn nk_resource_cache_remove(cache: nk_resource_cache, uri: utf8) -> nk_result;
+	/**
 	 * Closes a resource stream and invalidates its handle. Closing does not imply durable commit.
 	 * Browser callers that must retain unsaved state on failure must wait for a successful
 	 * nk_resource_commit() completion before closing.
@@ -3403,9 +3546,17 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	/**
 	 * Starts an asynchronous read of the complete URI resource. Completion is
 	 * delivered through NK_EVENT_RESOURCE_DATA_COMPLETE; its event data contains
-	 * the loaded bytes and its result reports the fetch outcome.
+	 * the loaded bytes and its result reports the fetch outcome. Use
+	 * nk_resource_load_cancel() to abort a pending load.
 	 */
 	extern fn nk_resource_load_async(resource: ptr<const<nk_resource>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	/**
+	 * Cancels a pending asynchronous resource load. No completion event is
+	 * delivered for a successfully cancelled request; a backend completion that
+	 * races with cancellation is consumed by NativeKit. This function is
+	 * UI-thread-only.
+	 */
+	extern fn nk_resource_load_cancel(request: nk_request_id) -> nk_result;
 	/**
 	 * Opens a URI-backed stream on the UI thread. Stream operations copy bytes
 	 * synchronously and may be called from worker threads. A successful read may
@@ -6630,6 +6781,8 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * Identifier for one asynchronous operation; it is not a resource handle.
 	 */
 	type nk_request_id = u64;
+	handle nk_resource_asset : u32 @destroy("nk_resource_asset_destroy");
+	handle nk_resource_cache : u32 @destroy("nk_resource_cache_destroy");
 	handle nk_resource_stream : u32 @destroy("nk_resource_close");
 	/**
 	 * A generation-checked handle for one enumerated physical sensor.
@@ -6665,7 +6818,7 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	/**
 	 * One bounded native step. The callback must be a native function and must
 	 * not call UI-only APIs. It may retain no pointer to the context or output
-	 * structures after returning. Managed Haxe callbacks are not safe here.
+	 * structures after returning. Managed runtime callbacks are not safe here.
 	 */
 	callback nk_task_step_fn = fn(arg0: ptr<const<nk_task_step_context>>, arg1: ptr<nk_task_step_output>) -> nk_task_step_result;
 	/**

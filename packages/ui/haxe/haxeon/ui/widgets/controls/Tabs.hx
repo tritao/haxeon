@@ -25,8 +25,11 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.style.StyleTarget;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollController;
+import haxeon.ui.widgets.scroll.ScrollView;
 
-/** Stateful tab strip and selected page composed from Haxe buttons and views. */
+/** Scrollable tab strip and selected page composed from Haxe buttons and views. */
 class Tabs implements View {
 	final key:Key;
 	public final items:Array<TabItem>;
@@ -48,6 +51,9 @@ class Tabs implements View {
 
 	/** Opt-in header retention; callers include all application-owned header inputs. */
 	public var headerRevision:Null<Void->String>;
+	/** Fixed actions beside the scrolling tab strip. */
+	public var headerTrailing:Null<View> = null;
+	/** Overrides the default scrolling viewport; the caller owns overflow and selected-tab reveal. */
 	public var transformHeaderStrip:Null<(RenderNode, BuildContext)->RenderNode>;
 
 	public function new(key:String, items:Array<TabItem>, selectedKey:String = "",
@@ -87,6 +93,7 @@ class Tabs implements View {
 			configured.onTabDragStart, configured.onTabDragMove, configured.onTabDragEnd,
 			configured.onTabDragCancel, configured.selectionMode, configured.onTabHeaderBuilt);
 		tabs.onTabContextMenu = configured.onTabContextMenu;
+		tabs.headerTrailing = configured.headerTrailing;
 		return tabs;
 	}
 
@@ -124,13 +131,24 @@ class Tabs implements View {
 			var stripView = new TabsStripView(function(buildContext) {
 				var strip = buildStrip(buildContext, rootComputed, active, select);
 				var transform:Null<(RenderNode, BuildContext)->RenderNode> = transformHeaderStrip;
-				return transform == null ? strip : transform(strip, buildContext);
+				return transform == null ? scrollStrip(strip, buildContext, active) : transform(strip, buildContext);
 			});
 			var revision:Null<Void->String> = headerRevision;
 			var strip = revision == null ? stripView.build(context) :
 				new RetainedView("tab-headers", function(_) return stripView,
 					function() return active.length + ":" + active + revision()).build(context);
-			root.add(strip);
+			if (headerTrailing != null) {
+				var headerStyle = new LayoutStyle();
+				headerStyle.width = LayoutAxis.grow();
+				headerStyle.direction = LayoutDirection.LeftToRight;
+				headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+				var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
+				header.hitTestSelf = false;
+				strip.layout.style.width = LayoutAxis.grow();
+				header.add(strip);
+				header.add(context.withScope(new Key("header-actions"), function() return headerTrailing.build(context)));
+				root.add(header);
+			} else root.add(strip);
 
 			var selectedItem:Null<TabItem> = null;
 			for (item in items)
@@ -259,6 +277,44 @@ class Tabs implements View {
 			});
 		}
 		return strip;
+	}
+
+	/** Keep intrinsic header widths; overflow belongs to a clipped viewport, not the labels. */
+	function scrollStrip(strip:RenderNode, context:BuildContext, active:String):RenderNode {
+		var state = context.state(context.id("tab-scroll-state"), new TabsScrollState()).value;
+		strip.layout.style.width = LayoutAxis.fit();
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.stretch();
+		var scroll = new ScrollView("tab-viewport",
+			new TabsStripView(function(_) return strip), style,
+			ScrollAxis.Horizontal, state.controller);
+		scroll.showScrollbar = false;
+		scroll.onScroll = function(event) {
+			if (event.deltaX == 0 && state.controller.scrollBy(event.deltaY, 0)) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+		};
+		var viewport = scroll.build(context);
+		for (index in 0...items.length) if (items[index].key == active) {
+			var header = strip.children[index];
+			// ScrollView updates metrics before resolving the header. Geometry is
+			// untransformed here, so compare against the controller's current offset.
+			header.onResolved(function(tab) {
+				if (viewport.resolved == null) return;
+				var bounds = viewport.resolved;
+				var left = tab.x - bounds.x;
+				if (state.selected == active && state.width == bounds.width &&
+					state.left == left && state.tabWidth == tab.width) return;
+				state.selected = active; state.width = bounds.width;
+				state.left = left; state.tabWidth = tab.width;
+				var next = state.controller.offsetX;
+				if (tab.width > bounds.width || left < next) next = left;
+				else if (left + tab.width > next + bounds.width) next = left + tab.width - bounds.width;
+				if (state.controller.jumpTo(next, 0)) context.requestLayoutFeedback();
+			});
+		}
+		return viewport;
 	}
 
 	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode):RenderNode {
@@ -430,4 +486,13 @@ private class TabsStripView implements View {
 	final buildStrip:BuildContext->RenderNode;
 	public function new(buildStrip:BuildContext->RenderNode) this.buildStrip = buildStrip;
 	public function build(context:BuildContext):RenderNode return buildStrip(context);
+}
+
+private class TabsScrollState {
+	public final controller = new ScrollController();
+	public var selected:String = "";
+	public var width:Float = -1;
+	public var left:Float = -1;
+	public var tabWidth:Float = -1;
+	public function new() {}
 }

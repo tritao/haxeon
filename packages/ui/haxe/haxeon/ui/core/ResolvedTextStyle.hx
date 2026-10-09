@@ -25,7 +25,8 @@ class ResolvedTextStyle {
 			override == null || override.wrap == null ? paragraphStyle.wrap : override.wrap,
 			override == null || override.alignment == null ? paragraphStyle.alignment : override.alignment,
 			override == null || override.lineHeight == null ? paragraphStyle.lineHeight : override.lineHeight,
-			override == null || override.direction == null ? paragraphStyle.direction : override.direction);
+			override == null || override.direction == null ? paragraphStyle.direction : override.direction,
+			override == null || override.tabWidth == null ? paragraphStyle.tabWidth : override.tabWidth);
 		this.textColor = override == null || override.color == null ? textColor : override.color;
 	}
 

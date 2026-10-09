@@ -6,7 +6,7 @@
 #include <vector>
 
 static_assert(NKUI_LAYOUT_NODE_RECORD_BYTES ==
-                  NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET + sizeof(uint32_t),
+                  NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET + sizeof(uint32_t),
               "layout node record size must include every defined field");
 
 namespace {

@@ -115,7 +115,8 @@ class TextEditorLayout {
 			paragraphStyle.wrap != nextParagraphStyle.wrap ||
 			paragraphStyle.alignment != nextParagraphStyle.alignment ||
 			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
-			paragraphStyle.direction != nextParagraphStyle.direction;
+			paragraphStyle.direction != nextParagraphStyle.direction ||
+			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		textStyle.font = nextTextStyle.font;
 		textStyle.fontSize = nextTextStyle.fontSize;
 		textStyle.letterSpacing = nextTextStyle.letterSpacing;
@@ -123,6 +124,7 @@ class TextEditorLayout {
 		paragraphStyle.alignment = nextParagraphStyle.alignment;
 		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
 		paragraphStyle.direction = nextParagraphStyle.direction;
+		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
 
 		var previous = paragraphs;
 		var reusable = new Map<String, Array<TextEditorParagraphRecord>>();
@@ -481,6 +483,10 @@ class TextEditorLayout {
 		ensureLive();
 		if (paragraphs.length == 0)
 			return new TextPosition(0, 0);
+		// Blank space below the document selects its end, independently of
+		// horizontal position. Within the last line, retain normal hit testing.
+		if (y >= contentHeight)
+			return new TextPosition(offsets.codepointCount, 0);
 		var record = paragraphAtY(y);
 		var hit = record.layout.hitTest(x, y - record.y);
 		return new TextPosition(clamp(hit.offset + record.start, record.start, record.end), hit.affinity);
@@ -507,29 +513,53 @@ class TextEditorLayout {
 			value.slope, value.direction);
 	}
 
-	public function selectionRects(start:TextPosition, end:TextPosition):Array<Rect> {
+	public function selectionRects(start:TextPosition, end:TextPosition,
+			minY:Float = -1.0e30, maxY:Float = 1.0e30):Array<Rect> {
 		ensureLive();
 		if (start == null || end == null)
 			throw "Text selection endpoints cannot be null";
-		var first = clamp(start.offset, 0, offsets.codepointCount);
-		var last = clamp(end.offset, 0, offsets.codepointCount);
-		if (last < first) {
-			var swap = first;
-			first = last;
-			last = swap;
-		}
+		if (!Math.isFinite(minY) || !Math.isFinite(maxY) || maxY < minY)
+			throw "Text selection geometry bounds are invalid";
+		// Hits identify glyph edges, not necessarily logical insertion offsets.
+		// Order the resolved offsets while keeping each affinity with its glyph.
+		var startOffset = offsetFromPosition(start), endOffset = offsetFromPosition(end);
+		var forward = startOffset <= endOffset;
+		var firstPosition = forward ? start : end;
+		var lastPosition = forward ? end : start;
+		var first = forward ? startOffset : endOffset;
+		var last = forward ? endOffset : startOffset;
 		if (first == last)
 			return [];
 		var result:Array<Rect> = [];
-		for (record in paragraphs) {
+		var low = 0;
+		var high = paragraphs.length;
+		while (low < high) {
+			var middle = (low + high) >> 1;
+			if (paragraphs[middle].y + paragraphs[middle].height <= minY)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		for (index in low...paragraphs.length) {
+			var record = paragraphs[index];
+			if (record.y >= maxY) break;
 			var localStart:Int = first > record.start ? first : record.start;
 			var localEnd:Int = last < record.end ? last : record.end;
 			if (localEnd <= localStart)
 				continue;
+			// Interior paragraphs use canonical insertion edges. Only the paragraph
+			// containing an original endpoint may interpret that endpoint's affinity.
+			var useFirstPosition = localStart == first && firstPosition.offset >= record.start &&
+				firstPosition.offset < record.end;
+			var useLastPosition = localEnd == last && lastPosition.offset >= record.start &&
+				lastPosition.offset <= record.end;
 			for (rect in record.layout.selectionRects(
-				new TextPosition(localStart - record.start, start.affinity),
-				new TextPosition(localEnd - record.start, end.affinity)))
-				result.push(new Rect(rect.x, rect.y + record.y, rect.width, rect.height));
+				new TextPosition((useFirstPosition ? firstPosition.offset : localStart) - record.start,
+					useFirstPosition ? firstPosition.affinity : 0),
+				new TextPosition((useLastPosition ? lastPosition.offset : localEnd) - record.start,
+					useLastPosition ? lastPosition.affinity : 0)))
+				if (rect.y + record.y < maxY && rect.y + record.y + rect.height > minY)
+					result.push(new Rect(rect.x, rect.y + record.y, rect.width, rect.height));
 		}
 		return result;
 	}
@@ -718,6 +748,8 @@ class TextEditorLayout {
 		return clamp(record.start + moved, record.start, record.end);
 	}
 
+	public function isDisposed():Bool return disposed;
+
 	public function dispose():Void {
 		if (disposed)
 			return;
@@ -807,7 +839,7 @@ class TextEditorLayout {
 		return new TextStyle(style.fontSize, style.font, style.letterSpacing);
 
 	static function copyParagraphStyle(style:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction);
+		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction, style.tabWidth);
 
 	static inline function clamp(value:Int, low:Int, high:Int):Int
 		return value < low ? low : (value > high ? high : value);

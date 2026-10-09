@@ -80,6 +80,12 @@ struct TextEngine::State {
     uint32_t last_scale_key = 0;
     uint32_t scale_generation = 0;
     std::unordered_map<uint64_t, std::weak_ptr<const PreparedGlyphs>> published_glyphs;
+    // The public buffer API asks for size and contents separately. Retain one
+    // bounded query so neither that pair nor repeated paints rewalks the text.
+    TextLayoutId selection_layout_id = 0;
+    uint64_t selection_layout_generation = 0;
+    TextPosition selection_start{}, selection_end{};
+    std::vector<TextRect> selection_rectangles;
 };
 
 namespace {
@@ -511,6 +517,15 @@ bool TextEngine::measure_intrinsic_utf8(const char *text, const TextLayoutOption
         options.line_height < 0.0f)
         return false;
 
+    float tab_increment = 0.0f;
+    if (options.tab_width > 0) {
+        auto space_options = options;
+        space_options.tab_width = 0;
+        TextIntrinsicMetrics space;
+        if (!measure_intrinsic_utf8(" ", space_options, &space)) return false;
+        tab_increment = space.advance_x * options.tab_width;
+        if (!std::isfinite(tab_increment) || tab_increment <= 0.0f) return false;
+    }
     TextScratchScope scratch(state_->temporary);
     constexpr std::size_t max_cached_measurements = 8192;
     const uint64_t font_generation = state_->font_collection->generation();
@@ -522,6 +537,7 @@ bool TextEngine::measure_intrinsic_utf8(const char *text, const TextLayoutOption
     cache_key.push_back('\0');
     const float key_floats[] = {options.font_size, options.letter_spacing, options.line_height};
     cache_key.append(reinterpret_cast<const char *>(key_floats), sizeof(key_floats));
+    cache_key.append(reinterpret_cast<const char *>(&options.tab_width), sizeof(options.tab_width));
     const uint32_t key_family = static_cast<uint32_t>(options.family);
     cache_key.append(reinterpret_cast<const char *>(&key_family), sizeof(key_family));
     if (const auto cached = state_->intrinsic_cache.find(cache_key);
@@ -542,7 +558,8 @@ bool TextEngine::measure_intrinsic_utf8(const char *text, const TextLayoutOption
                                        skb_rgba(255, 255, 255, 255))};
     const skb_attribute_t layout_attributes[] = {
         skb_attribute_make_text_wrap(SKB_WRAP_NONE),
-        skb_attribute_make_horizontal_align(SKB_ALIGN_START)};
+        skb_attribute_make_horizontal_align(SKB_ALIGN_START),
+        skb_attribute_make_tab_stop_increment(tab_increment)};
     const skb_layout_params_t params = {.font_collection = state_->font_collection->state_->fonts,
                                         .layout_width = 1000000.0f,
                                         .layout_attributes =
@@ -557,8 +574,10 @@ bool TextEngine::measure_intrinsic_utf8(const char *text, const TextLayoutOption
     const float native_baseline = line_count > 0 ? skb_layout_get_line_at(layout, 0).baseline : 0.0f;
     const bool has_baseline = line_count > 0 && std::isfinite(native_baseline);
     const float baseline = has_baseline ? native_baseline - bounds.y : 0.0f;
+    const float advance_x = skb_layout_get_caret_info_at(layout,
+        {skb_layout_get_text_count(layout), SKB_AFFINITY_NONE}).x;
     skb_layout_destroy(layout);
-    const TextIntrinsicMetrics metrics{{bounds.x, bounds.y, bounds.width, bounds.height}, baseline,
+    const TextIntrinsicMetrics metrics{{bounds.x, bounds.y, bounds.width, bounds.height}, advance_x, baseline,
                                        has_baseline};
     if (state_->intrinsic_cache.size() >= max_cached_measurements)
         state_->intrinsic_cache.clear();
@@ -585,6 +604,15 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
         !std::isfinite(options.letter_spacing) || !std::isfinite(options.line_height) ||
         options.line_height < 0.0f)
         return false;
+    float tab_increment = 0.0f;
+    if (options.tab_width > 0) {
+        auto space_options = options;
+        space_options.tab_width = 0;
+        TextIntrinsicMetrics space;
+        if (!measure_intrinsic_utf8(" ", space_options, &space)) return false;
+        tab_increment = space.advance_x * options.tab_width;
+        if (!std::isfinite(tab_increment) || tab_increment <= 0.0f) return false;
+    }
     TextScratchScope scratch(state_->temporary);
     const uint64_t font_generation = state_->font_collection->generation();
     for (auto &entry : state_->layouts) {
@@ -593,6 +621,7 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
             cached.width == width && cached.options.font_size == options.font_size &&
             cached.options.letter_spacing == options.letter_spacing &&
             cached.options.line_height == options.line_height &&
+            cached.options.tab_width == options.tab_width &&
             cached.options.family == options.family && cached.options.wrap == options.wrap &&
             cached.options.alignment == options.alignment &&
             cached.options.direction == options.direction) {
@@ -626,7 +655,8 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
                                        skb_rgba(255, 255, 255, 255))};
     const skb_attribute_t layout_attributes[] = {
         skb_attribute_make_text_wrap(wrap), skb_attribute_make_horizontal_align(align),
-        skb_attribute_make_text_base_direction(base_direction)};
+        skb_attribute_make_text_base_direction(base_direction),
+        skb_attribute_make_tab_stop_increment(tab_increment)};
     const skb_layout_params_t params = {.font_collection = state_->font_collection->state_->fonts,
                                         .layout_width = width,
                                         .layout_attributes =
@@ -968,7 +998,7 @@ bool TextEngine::prepare_glyphs_for_line(uint32_t line_index, float origin_x, fl
 
 bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                          float origin_y, float pixel_scale, GlyphMode mode,
-                                         PreparedGlyphs &output) {
+                                         PreparedGlyphs &output, GlyphPreparation preparation) {
     const auto *layout = find_layout(*state_, id);
     if (!layout || line_index >= layout->result.lines.size() ||
         line_index >= layout->line_ranges.size())
@@ -976,30 +1006,34 @@ bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, f
     const auto &line = layout->result.lines[line_index];
     const auto range = layout->line_ranges[line_index];
     return prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode, output, range.start,
-                                   range.end, line.bounds.x, line.bounds.y, static_cast<int32_t>(line_index));
+                                   range.end, line.bounds.x, line.bounds.y, static_cast<int32_t>(line_index), -1,
+                                   preparation);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::published_glyphs(TextLayoutId id, float origin_x,
                                                                    float origin_y,
                                                                    float pixel_scale,
                                                                    GlyphMode mode, GlyphTint tint,
-                                                                   const std::vector<GlyphColorRange> &ranges) {
-    return publish_glyphs(id, -1, origin_x, origin_y, pixel_scale, mode, tint, ranges);
+                                                                   const std::vector<GlyphColorRange> &ranges,
+                                                                   GlyphPreparation preparation) {
+    return publish_glyphs(id, -1, origin_x, origin_y, pixel_scale, mode, tint, ranges, -1, preparation);
 }
 
 std::shared_ptr<const PreparedGlyphs>
 TextEngine::published_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                       float origin_y, float pixel_scale, GlyphMode mode,
-                                      GlyphTint tint, const std::vector<GlyphColorRange> &ranges) {
+                                      GlyphTint tint, const std::vector<GlyphColorRange> &ranges,
+                                      GlyphPreparation preparation) {
     return publish_glyphs(id, static_cast<int32_t>(line_index), origin_x, origin_y, pixel_scale,
-                          mode, tint, ranges);
+                          mode, tint, ranges, -1, preparation);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id,
                                                                  int32_t line_index, float origin_x,
                                                                  float origin_y, float pixel_scale,
                                                                  GlyphMode mode, GlyphTint tint,
-                                                                   const std::vector<GlyphColorRange> &ranges, int32_t end_line) {
+                                                                   const std::vector<GlyphColorRange> &ranges, int32_t end_line,
+                                                                   GlyphPreparation preparation) {
     const auto *layout = find_layout(*state_, id);
     if (!layout || pixel_scale <= 0.0f || !valid_glyph_color_ranges(ranges))
         return {};
@@ -1088,11 +1122,11 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         return {};
     const bool prepared =
         end_line >= 0 ? prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode,
-                                                *snapshot, -1, -1, 0, 0, line_index, end_line)
+                                                *snapshot, -1, -1, 0, 0, line_index, end_line, preparation)
         : line_index < 0 ? prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode,
-                                                 *snapshot, -1, -1, 0.0f, 0.0f)
+                                                 *snapshot, -1, -1, 0.0f, 0.0f, -1, -1, preparation)
                        : prepare_glyphs_for_line(id, static_cast<uint32_t>(line_index), origin_x,
-                                                 origin_y, pixel_scale, mode, *snapshot);
+                                                 origin_y, pixel_scale, mode, *snapshot, preparation);
     if (!prepared)
         return {};
 
@@ -1117,7 +1151,8 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
 bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float origin_y,
                                          float pixel_scale, GlyphMode mode, PreparedGlyphs &output,
                                          int32_t line_start, int32_t line_end, float line_x,
-                                         float line_y, int32_t line_index, int32_t end_line) {
+                                         float line_y, int32_t line_index, int32_t end_line,
+                                         GlyphPreparation preparation) {
     const auto *retained = find_layout(*state_, id);
     if (!retained || pixel_scale <= 0.0f)
         return false;
@@ -1150,7 +1185,8 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
     const skb_range_t lines = line_index < 0
         ? skb_range_t{0, skb_layout_get_lines_count(retained->layout.get())}
         : skb_range_t{line_index, end_line < 0 ? line_index + 1 : end_line};
-    if (!skb_layout_prepare_glyphs_range(retained->layout.get(), lines, state_->atlas, state_->temporary,
+    if (preparation == GlyphPreparation::Rasterize &&
+        !skb_layout_prepare_glyphs_range(retained->layout.get(), lines, state_->atlas, state_->temporary,
                                          state_->rasterizer, pixel_scale, raster_mode(mode)))
         return false;
     if (std::getenv("NKUI_DEBUG_GLYPHS") && retained->options.font_size == 18.0f) {
@@ -1437,6 +1473,14 @@ std::vector<TextRect> TextEngine::selection_rects(TextPosition start, TextPositi
     const auto *layout = active_layout(*state_);
     if (!layout)
         return rectangles;
+    const auto generation = skb_layout_get_generation(layout->layout.get());
+    if (state_->selection_layout_id == state_->active_layout_id &&
+        state_->selection_layout_generation == generation &&
+        state_->selection_start.offset == start.offset &&
+        state_->selection_start.affinity == start.affinity &&
+        state_->selection_end.offset == end.offset &&
+        state_->selection_end.affinity == end.affinity)
+        return state_->selection_rectangles;
     const skb_text_range_t range = {
         {start.offset, static_cast<skb_caret_affinity_t>(start.affinity)},
         {end.offset, static_cast<skb_caret_affinity_t>(end.affinity)}};
@@ -1472,6 +1516,17 @@ std::vector<TextRect> TextEngine::selection_rects(TextPosition start, TextPositi
             }
         }
         normalized.push_back(rect);
+    }
+    constexpr std::size_t maximum_cached_selection_rectangles = 256;
+    if (normalized.size() <= maximum_cached_selection_rectangles) {
+        state_->selection_layout_id = state_->active_layout_id;
+        state_->selection_layout_generation = generation;
+        state_->selection_start = start;
+        state_->selection_end = end;
+        state_->selection_rectangles = normalized;
+    } else {
+        state_->selection_layout_id = 0;
+        state_->selection_rectangles.clear();
     }
     return normalized;
 }
@@ -1527,6 +1582,35 @@ TextEngineStats TextEngine::stats() const {
 
 std::vector<AtlasUpload> TextEngine::pending_atlas_uploads() const {
     return atlas_uploads(false);
+}
+
+uint64_t TextEngine::atlas_generation_key() const {
+    uint64_t key = 0;
+    if (!state_->atlas)
+        return key;
+    const int count = skb_image_atlas_get_texture_count(state_->atlas);
+    for (int index = 0; index < count; ++index) {
+        key = key * UINT64_C(1099511628211) ^
+              skb_image_atlas_get_texture_user_data(state_->atlas, index);
+        key = key * UINT64_C(1099511628211) ^
+              skb_image_atlas_get_texture_generation(state_->atlas, index);
+    }
+    return key;
+}
+
+bool TextEngine::prepare_glyph_atlas(TextLayoutId id, int32_t line_index, float pixel_scale,
+                                     GlyphMode mode) {
+    const auto *layout = find_layout(*state_, id);
+    if (!layout || !std::isfinite(pixel_scale) || pixel_scale <= 0.0f || line_index < -1 ||
+        (line_index >= 0 && static_cast<std::size_t>(line_index) >= layout->result.lines.size()))
+        return false;
+    TextScratchScope scratch(state_->temporary);
+    const skb_range_t lines = line_index < 0
+        ? skb_range_t{0, skb_layout_get_lines_count(layout->layout.get())}
+        : skb_range_t{line_index, line_index + 1};
+    return skb_layout_prepare_glyphs_range(layout->layout.get(), lines, state_->atlas,
+                                          state_->temporary, state_->rasterizer, pixel_scale,
+                                          raster_mode(mode));
 }
 
 std::vector<AtlasUpload> TextEngine::atlas_uploads(bool include_clean) const {

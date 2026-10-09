@@ -293,7 +293,7 @@ class WasmLinearDynamicArrays {
 			var stringEqual = context.functions.get("__string_equal");
 			if (stringEqual == null)
 				stringEqual = helper("__haxeon_array_string_equal", equalName -> WasmLinearRuntime.addStringEqual(module, equalName));
-			return WasmLinearRuntime.addDynamicEqual(module, name, stringEqual);
+			return WasmLinearRuntime.addDynamicEqual(module, name, stringEqual, context.program);
 		});
 	}
 

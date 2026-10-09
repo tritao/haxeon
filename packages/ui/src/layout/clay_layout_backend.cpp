@@ -55,6 +55,7 @@ TextLayoutOptions text_options_for_node(const LayoutNode *node, Clay_TextElement
         options.font_size = node->text_style.font_size;
         options.letter_spacing = node->text_style.letter_spacing;
         options.line_height = node->paragraph_style.line_height;
+        options.tab_width = node->paragraph_style.tab_width;
         options.family = node->text_style.family;
         options.wrap = node->paragraph_style.wrap;
         options.alignment = node->paragraph_style.alignment;
@@ -249,7 +250,11 @@ LayoutEngine::Impl::measure_intrinsic_text(Clay_StringSlice text, Clay_TextEleme
     TextIntrinsicMetrics metrics;
     if (!state.text.measure_intrinsic_utf8(value.c_str(), options, &metrics))
         return result;
-    result.unwrappedDimensions = {metrics.bounds.width, config->lineHeight > 0
+    // Intrinsic sizes are allocation requirements, not ink bounds. Round the
+    // horizontal requirement outwards so adding/subtracting container padding
+    // cannot leave paragraph layout a fraction short of the measured advance.
+    // Keep shaping metrics fractional; only the box allocation is quantized.
+    result.unwrappedDimensions = {std::ceil(metrics.bounds.width), config->lineHeight > 0
                                                             ? static_cast<float>(config->lineHeight)
                                                             : metrics.bounds.height};
     result.baseline = metrics.baseline;
@@ -361,6 +366,7 @@ Clay_TextLayoutResult LayoutEngine::Impl::layout_text(Clay_StringSlice text,
         native_layout.paragraph_style.wrap = options.wrap;
         native_layout.paragraph_style.alignment = options.alignment;
         native_layout.paragraph_style.line_height = options.line_height;
+        native_layout.paragraph_style.tab_width = options.tab_width;
         native_layout.paragraph_style.direction = options.direction;
         native_layout.lines.reserve(shaped.lines.size());
         state.callback_lines.clear();
@@ -378,7 +384,7 @@ Clay_TextLayoutResult LayoutEngine::Impl::layout_text(Clay_StringSlice text,
             state.callback_lines.push_back(
                 {{line.bounds.width, line.bounds.height},
                  {static_cast<int32_t>(line.text_length), line_chars, text.chars},
-                 {line.bounds.x, 0.0f}});
+                 {line.bounds.x, line.bounds.y}});
         }
         result.baseline = native_layout.first_line_baseline;
         result.hasBaseline = native_layout.has_baseline && std::isfinite(result.baseline);
@@ -1000,6 +1006,12 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
             if (item != out.items.end()) {
                 primitive.transform = item->transform;
                 primitive.visible = item->visible;
+                if (primitive.kind == LayoutPrimitiveKind::ClipBegin) {
+                    const auto &style = nodes[item->index].style;
+                    primitive.bounds = intersect_axes(item->clip_bounds, item->world_bounds,
+                                                      style.clip_horizontal, style.clip_vertical);
+                    primitive.transform = LayoutTransform{};
+                }
             }
         }
     }

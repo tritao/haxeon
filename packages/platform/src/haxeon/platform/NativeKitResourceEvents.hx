@@ -21,6 +21,8 @@ class NativeKitResourceEvents {
 			ResourceDrop(c.source,h.get_x(),h.get_y(),NativeKitEventBytes.readOptionalString(c.data,h.get_text_offset(),32),d.items);
 		case EventKind.ResourceCommitComplete:
 			ResourceCommit(c.request, c.result, (c.flags & 1) != 0);
+		case EventKind.ResourceCacheReady: ResourceAssetReady(c.source, c.request);
+		case EventKind.ResourceCacheLoadFailed: ResourceAssetLoadFailed(c.source, c.request, c.result);
 		default:null;
 	}
 }

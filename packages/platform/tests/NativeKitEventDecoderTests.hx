@@ -43,6 +43,17 @@ class NativeKitEventDecoderTests {
 			case Resources(kind, _, result, accepted, items): kind == EventKind.DialogResourcesComplete && result == 0 && !accepted && items.length == 0;
 			case _: false;
 		};
+		var resourceCacheEventsOk = switch [
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.ResourceCacheReady,
+				handle(24), haxe.Int64.ofInt(25), 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.ResourceCacheLoadFailed,
+				handle(25), haxe.Int64.ofInt(26), Result.ErrorUnknown, 0, 0, empty))
+		] {
+			case [ResourceAssetReady(source, request), ResourceAssetLoadFailed(failedSource, failedRequest, result)]:
+				source.rawValue() == 24 && Std.string(request) == "25" && failedSource.rawValue() == 25 &&
+				Std.string(failedRequest) == "26" && result == Result.ErrorUnknown;
+			case _: false;
+		};
 		var editPayload = haxe.io.Bytes.alloc(50);
 		putU32(editPayload, 0, TextEditAction.Compose);
 		putU32(editPayload, 4, 48); putU32(editPayload, 8, 2);
@@ -115,10 +126,79 @@ class NativeKitEventDecoderTests {
 			case TaskComplete(source, result, data): source.rawValue() == 21 && result == 0 && data == taskPayload;
 			case _: false;
 		};
+		var audioContext = new NativeKitEventContext(EventKind.AudioVoiceComplete,
+			handle(16), zero, 0, 0, 0, empty);
+		var audioOk = switch NativeKitEvent.decodeContext(audioContext) {
+			case AudioVoiceComplete(source): source.rawValue() == 16;
+			case _: false;
+		};
+		var audioTransitionEventsOk = switch [
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioVoiceStolen,
+				handle(21), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioVoiceVirtualized,
+				handle(22), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioVoiceResumed,
+				handle(23), zero, 0, 0, 0, empty))
+		] {
+			case [AudioVoiceStolen(stolen), AudioVoiceVirtualized(virtualized), AudioVoiceResumed(resumed)]:
+				stolen.rawValue() == 21 && virtualized.rawValue() == 22 && resumed.rawValue() == 23;
+			case _: false;
+		};
+		var audioReadyContext = new NativeKitEventContext(EventKind.AudioVoiceReady,
+			handle(17), zero, 0, 0, 0, empty);
+		var audioReadyOk = switch NativeKitEvent.decodeContext(audioReadyContext) {
+			case AudioVoiceReady(source): source.rawValue() == 17;
+			case _: false;
+		};
+		var audioFailedContext = new NativeKitEventContext(EventKind.AudioVoiceLoadFailed,
+			handle(18), zero, Result.ErrorUnknown, 0, 0, empty);
+		var audioFailedOk = switch NativeKitEvent.decodeContext(audioFailedContext) {
+			case AudioVoiceLoadFailed(source, result):
+				source.rawValue() == 18 && result == Result.ErrorUnknown;
+			case _: false;
+		};
+		var audioClipReadyContext = new NativeKitEventContext(EventKind.AudioClipReady,
+			handle(19), haxe.Int64.ofInt(19), Result.Ok, 0, 0, empty);
+		var audioClipReadyOk = switch NativeKitEvent.decodeContext(audioClipReadyContext) {
+			case AudioClipReady(source, request):
+				source.rawValue() == 19 && Std.string(request) == "19";
+			case _: false;
+		};
+		var audioClipFailedContext = new NativeKitEventContext(EventKind.AudioClipLoadFailed,
+			handle(20), haxe.Int64.ofInt(20), Result.ErrorUnknown, 0, 0, empty);
+		var audioClipFailedOk = switch NativeKitEvent.decodeContext(audioClipFailedContext) {
+			case AudioClipLoadFailed(source, request, result):
+				source.rawValue() == 20 && Std.string(request) == "20" && result == Result.ErrorUnknown;
+			case _: false;
+		};
+		var audioStreamFailedContext = new NativeKitEventContext(EventKind.AudioVoiceStreamFailed,
+			handle(24), zero, Result.ErrorUnknown, 0, 0, empty);
+		var audioStreamFailedOk = switch NativeKitEvent.decodeContext(audioStreamFailedContext) {
+			case AudioVoiceStreamFailed(source, result):
+				source.rawValue() == 24 && result == Result.ErrorUnknown;
+			case _: false;
+		};
+		var audioDeviceEventsOk = switch [
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioDeviceStarted, handle(0), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioDeviceStopped, handle(0), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioDeviceRerouted, handle(0), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioDeviceInterruptionBegan, handle(0), zero, 0, 0, 0, empty)),
+			NativeKitEvent.decodeContext(new NativeKitEventContext(EventKind.AudioDeviceInterruptionEnded, handle(0), zero, 0, 0, 0, empty))
+		] {
+			case [AudioDeviceStarted, AudioDeviceStopped, AudioDeviceRerouted,
+				AudioDeviceInterruptionBegan, AudioDeviceInterruptionEnded]: true;
+			case _: false;
+		};
 
 		if (!messageOk) throw "message completion decoding failed";
 		if (!resourcesOk) throw "resource completion decoding failed";
-		return rawOk && nonMatch && editOk && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk && taskOk
+		if (!resourceCacheEventsOk) throw "resource cache event decoding failed";
+		return rawOk && nonMatch && editOk && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk && taskOk && audioOk
+			&& audioReadyOk && audioFailedOk
+			&& audioClipReadyOk && audioClipFailedOk
+			&& audioTransitionEventsOk
+			&& audioStreamFailedOk
+			&& audioDeviceEventsOk
 			&& throws(function() { NativeKitEventBytes.requireSize(haxe.io.Bytes.alloc(3), 4); })
 			&& throws(function() { NativeKitEventBytes.readU32(haxe.io.Bytes.alloc(3), 0); })
 			&& throws(function() { NativeKitEventBytes.decodeClipboardFiles(unterminated, 1); })

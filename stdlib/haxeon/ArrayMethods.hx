@@ -22,6 +22,24 @@ class ArrayMethods {
 		return result;
 	}
 
+	/**
+		The last index at which `value` is found, searching back from `fromIndex` (the end by default; a negative one counts
+		from the end), or -1. Elements compare as `==` does for their type.
+	**/
+	public static function lastIndexOf<T>(values:Array<T>, value:T, ?fromIndex:Int):Int {
+		var index = fromIndex == null ? values.length - 1 : fromIndex;
+		if (index >= values.length)
+			index = values.length - 1;
+		else if (index < 0)
+			index = values.length + index;
+		while (index >= 0) {
+			if (values[index] == value)
+				return index;
+			index--;
+		}
+		return -1;
+	}
+
 	/** Joins elements that are not Strings (which the runtime joins directly) through `Std.string`. */
 	public static function join<T>(values:Array<T>, separator:String):String {
 		var parts:Array<String> = [];

@@ -4,10 +4,12 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitEventContext;
 import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.NativeKitAudioEvents;
 import haxeon.platform.NativeKitInputEvents;
 import haxeon.platform.NativeKitResourceEvents;
 import haxeon.platform.NativeKitServiceEvents;
 import haxeon.platform.NativeKitWindowEvents;
+import haxeon.platform.NativeKitHttpEvents;
 
 /** Owns one polled NativeKit event and releases its native payload exactly once. */
 class NativeKitEvent {
@@ -45,6 +47,7 @@ class NativeKitEvent {
 			return None;
 		var value = NativeKitWindowEvents.decode(context);
 		if (value == null) value = NativeKitInputEvents.decode(context);
+		if (value == null) value = NativeKitAudioEvents.decode(context);
 		if (value == null) value = NativeKitServiceEvents.decode(context);
 		if (value == null) value = NativeKitResourceEvents.decode(context);
 		return value != null ? value : Raw(context.kind, context.source, context.request,
@@ -52,8 +55,18 @@ class NativeKitEvent {
 	}
 
 	/** Decodes known event formats without releasing this event. */
-	public function decode():NativeKitEventValue
+	public function decode():NativeKitEventValue {
+		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete ||
+			kind == EventKind.HttpDataAvailable || kind == EventKind.HttpProgress)
+			return NativeKitHttpEvents.decode(this);
 		return decodeContext(snapshot());
+	}
+
+	@:allow(haxeon.platform.NativeKitHttpEvents)
+	private function nativeEvent():Event {
+		ensureOpen();
+		return event;
+	}
 
 	/** Decodes and releases the event, including when decoding throws. */
 	public function take():NativeKitEventValue {

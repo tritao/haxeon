@@ -452,6 +452,27 @@ int main() {
         floating_paint->scissor_x != 78.0f || floating_paint->scissor_y != 54.0f ||
         floating_paint->scissor_width != 1.5f || floating_paint->scissor_height != 3.0f)
         return 291;
+    // Floating Clay scissors can retain pre-scroll coordinates. The resolved
+    // scene clip already includes every ancestor in viewport space.
+    auto stale_clip_snapshot = floating_snapshot;
+    LayoutPrimitive stale_clip;
+    stale_clip.kind = LayoutPrimitiveKind::ClipBegin;
+    stale_clip.bounds = {52.0f, 336.0f, 100.0f, 80.0f};
+    LayoutPrimitive stale_clip_end;
+    stale_clip_end.kind = LayoutPrimitiveKind::ClipEnd;
+    stale_clip_snapshot.primitives.insert(stale_clip_snapshot.primitives.begin(), stale_clip);
+    stale_clip_snapshot.primitives.push_back(stale_clip_end);
+    LayoutRenderFrame stale_clip_frame;
+    if (!compiler.compile(stale_clip_snapshot, main_target, 1.5f, stale_clip_frame,
+                          &compile_error, false, engine.text_engine(), &custom_paints))
+        return 304;
+    const auto &stale_commands = stale_clip_frame.plan().passes.front().commands;
+    const auto stale_paint = std::find_if(stale_commands.begin(), stale_commands.end(),
+        [](const RenderCommand &command) { return command.custom_payload; });
+    if (stale_paint == stale_commands.end() || !stale_paint->has_scissor ||
+        stale_paint->scissor_x != 78.0f || stale_paint->scissor_y != 54.0f ||
+        stale_paint->scissor_width != 1.5f || stale_paint->scissor_height != 3.0f)
+        return 305;
     LayoutRenderCompiler::RasterPaintNodes floating_raster_nodes{2};
     LayoutRenderFrame floating_raster_frame;
     if (!compiler.compile(floating_snapshot, main_target, 1.5f, floating_raster_frame,
@@ -469,6 +490,83 @@ int main() {
         }
     if (!clipped_raster_paint)
         return 293;
+
+    // Cached terminal rows are floating custom painters. Their final
+    // composite retains the viewport clip; empty clips allocate no cache target.
+    for (const bool empty_clip : {false, true}) {
+        auto cached_custom_snapshot = floating_snapshot;
+        for (auto &item : cached_custom_snapshot.items) if (item.id == 2) {
+            item.visual_kind = LayoutVisualKind::Custom;
+            item.clip_bounds = {52.0f, 36.0f, 1.0f, empty_clip ? 0.0f : 2.0f};
+        }
+        LayoutRenderFrame cached_custom_frame;
+        if (!compiler.compile(cached_custom_snapshot, main_target, 1.5f,
+                              cached_custom_frame, &compile_error, false,
+                              engine.text_engine(), &custom_paints, &floating_raster_nodes))
+            return 294;
+        bool clipped_composite = false;
+        for (const auto &pass : cached_custom_frame.plan().passes)
+            for (const auto &command : pass.commands)
+                if (command.kind == RenderCommandKind::CompositeTarget && command.has_scissor &&
+                    command.scissor_x == 78.0f && command.scissor_y == 54.0f &&
+                    command.scissor_width == 1.5f &&
+                    command.scissor_height == (empty_clip ? 0.0f : 3.0f))
+                    clipped_composite = true;
+        if (clipped_composite == empty_clip) return 295;
+        int raster_passes = 0;
+        for (const auto &pass : cached_custom_frame.plan().passes) {
+            if (pass.kind != RenderPassKind::Raster) continue;
+            ++raster_passes;
+            const auto &bounds = cached_custom_snapshot.find(2)->bounds;
+            if (pass.target_descriptor.width != std::ceil(bounds.width * 1.5f) ||
+                pass.target_descriptor.height != std::ceil(bounds.height * 1.5f)) return 296;
+        }
+        if (raster_passes != (empty_clip ? 0 : 1)) return 297;
+    }
+
+    // Local row pixels and their scissor do not depend on screen placement.
+    // Fractional DPI allocates enough physical pixels without stretching the row.
+    for (const float scale : {1.0f, 1.1f, 1.5f, 2.0f}) {
+        auto row_snapshot = floating_snapshot;
+        for (auto &item : row_snapshot.items) if (item.id == 2) {
+            item.visual_kind = LayoutVisualKind::Custom;
+            item.clip_bounds = {0, 0, 320, 200};
+        }
+        LayoutRenderFrame row_frame, moved_row_frame;
+        if (!compiler.compile(row_snapshot, main_target, scale, row_frame, &compile_error,
+                              false, engine.text_engine(), &custom_paints, &floating_raster_nodes))
+            return 298;
+        for (auto &primitive : row_snapshot.primitives) if (primitive.node_id == 2) {
+            primitive.transform.tx += 17;
+            primitive.transform.ty += 9;
+        }
+        if (!compiler.compile(row_snapshot, main_target, scale, moved_row_frame, &compile_error,
+                              false, engine.text_engine(), &custom_paints, &floating_raster_nodes))
+            return 299;
+        const RenderPass *cached = nullptr, *moved_cached = nullptr;
+        for (const auto &pass : row_frame.plan().passes)
+            if (pass.kind == RenderPassKind::Raster) cached = &pass;
+        for (const auto &pass : moved_row_frame.plan().passes)
+            if (pass.kind == RenderPassKind::Raster) moved_cached = &pass;
+        if (!cached || !moved_cached || cached->commands.empty() ||
+            cached->commands.size() != moved_cached->commands.size()) return 300;
+        const auto bounds = row_snapshot.find(2)->bounds;
+        if (cached->target_descriptor.width != std::ceil(static_cast<double>(bounds.width) * scale) ||
+            cached->target_descriptor.height != std::ceil(static_cast<double>(bounds.height) * scale))
+            return 301;
+        for (std::size_t i = 0; i < cached->commands.size(); ++i) {
+            const auto &a = cached->commands[i], &b = moved_cached->commands[i];
+            if (a.transform != b.transform || a.scissor_x != b.scissor_x ||
+                a.scissor_y != b.scissor_y || a.scissor_width != b.scissor_width ||
+                a.scissor_height != b.scissor_height ||
+                a.content_generation != b.content_generation) return 302;
+        }
+        const auto &a = row_frame.plan().passes.back().commands.front();
+        const auto &b = moved_row_frame.plan().passes.back().commands.front();
+        if (a.width != bounds.width || a.height != bounds.height ||
+            std::abs(b.transform[4] - a.transform[4] - 17 * scale) > 0.001f ||
+            std::abs(b.transform[5] - a.transform[5] - 9 * scale) > 0.001f) return 303;
+    }
 
     // Framework-owned layer metadata wraps retained custom pixels in a
     // separate target. The draw plan remains free of the outer layer, so a
@@ -1452,6 +1550,77 @@ int main() {
                              &session_execution_error) ||
         session_backend.pass_count == 0 || session_backend.path_count == 0)
         return 63;
+
+    // Later labels force the compact atlas to grow. Every earlier binding,
+    // including the immutable set used by threaded rendering, must refer to
+    // the final atlas dimensions and generation rather than its initial UVs.
+    for (bool retained : {false, true}) {
+        LayoutSnapshot growing_snapshot = snapshot;
+        growing_snapshot.primitives.clear();
+        growing_snapshot.text_layouts.clear();
+        TextEngine retained_engine(shared_fonts);
+        for (unsigned index = 0; index < 16; ++index) {
+            LayoutPrimitive text;
+            text.kind = LayoutPrimitiveKind::Text;
+            text.node_id = 200 + index;
+            text.visible = true;
+            text.bounds = {0, static_cast<float>(index * 40), 2000, 80};
+            text.text = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+            text.text_style.font_size = 16.0f + index * 2;
+            text.color = {0, 0, 0, 1};
+            if (retained) {
+                TextLayoutOptions options;
+                options.font_size = text.text_style.font_size;
+                options.wrap = TextWrapMode::None;
+                TextLayoutResult result;
+                if (!retained_engine.layout_utf8(text.text.c_str(), text.bounds.width, options, &result))
+                    return 69;
+                text.text_layout_id = result.id;
+                LayoutTextLayout descriptor;
+                descriptor.id = result.id;
+                for (const auto &line : result.lines)
+                    descriptor.lines.push_back({line.text_offset, line.text_length,
+                                                {line.bounds.x, line.bounds.y, line.bounds.width, line.bounds.height}});
+                growing_snapshot.text_layouts.push_back(std::move(descriptor));
+            }
+            growing_snapshot.primitives.push_back(std::move(text));
+        }
+        LayoutRenderFrame growing_frame;
+        if (!compiler.compile(growing_snapshot, main_target, 1.0f, growing_frame, &compile_error, false,
+                              retained ? &retained_engine : nullptr))
+            return 65;
+        const auto uploads = growing_frame.text_engine()->atlas_uploads(true);
+        bool grew = false;
+        unsigned bindings = 0;
+        uint64_t emitted_batches = 0;
+        for (const auto &upload : uploads)
+            grew = grew || upload.generation > 1;
+        for (const auto &pass : growing_frame.plan().passes) {
+            for (const auto &command : pass.commands) {
+                if (command.kind != RenderCommandKind::GlyphBatch)
+                    continue;
+                ++bindings;
+                const auto *glyphs = growing_frame.resources().text(command.resource);
+                if (!glyphs || growing_frame.owned_resources().text(command.resource) != glyphs)
+                    return 66;
+                emitted_batches += glyphs->batches.size();
+                for (const auto &batch : glyphs->batches) {
+                    if (std::none_of(uploads.begin(), uploads.end(), [&](const AtlasUpload &upload) {
+                            return upload.texture.value == batch.atlas.value &&
+                                   upload.generation == batch.atlas_generation;
+                        }))
+                        return 67;
+                }
+            }
+        }
+        if (!grew || bindings != growing_snapshot.primitives.size())
+            return 68;
+        // Atlas preparation must not allocate geometry for discarded early drafts.
+        // Each label's batches are generated exactly once, after all atlas growth.
+        if (growing_frame.text_engine()->stats().prepared_batch_count != emitted_batches)
+            return 70;
+
+    }
 
     std::cout << "PASS: layout snapshot compiles through NativeKit render plan\n";
     return 0;

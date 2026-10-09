@@ -19,6 +19,8 @@ class SettingOptions {
 	public var restartRequired:Bool;
 	/** Saved like any other setting but never shown in the settings dialog. */
 	public var internal:Bool;
+	/** Keep explicitly chosen defaults when absence means automatic/inherited behavior. */
+	public var preserveExplicitDefault:Bool = false;
 
 	public function new() {
 		label = null;

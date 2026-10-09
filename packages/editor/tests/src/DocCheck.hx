@@ -37,7 +37,21 @@ class DocCheck {
   map.replaceCodepointsIncremental(2,3,"\n");
   check(!map.isGraphemeBoundary(2),"edited CR/LF grapheme");
  }
+ static function viewportLook():Void {
+  for (direction in haxeon.editor.ViewportLook.lightDirections()) {
+   var length=Math.sqrt(direction[0]*direction[0]+direction[1]*direction[1]+direction[2]*direction[2]);
+   check(Math.abs(length-1)<0.000001,"viewport light directions are unit vectors");
+  }
+  for (preset in 0...haxeon.editor.ViewportLook.PresetNames.length) {
+   check(haxeon.editor.ViewportLook.intensities(preset).length==3,"one intensity per viewport light");
+   check(haxeon.editor.ViewportLook.sky(preset).length==3&&haxeon.editor.ViewportLook.ground(preset).length==3,"ambient colors are RGB");
+  }
+  var rejected=false;
+  try haxeon.editor.ViewportLook.sky(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic) rejected=true;
+  check(rejected,"unknown viewport lighting preset is rejected");
+ }
  static function main():Void {
+  viewportLook();
   asciiGraphemes();
   var content=new StringBuf();
   for (i in 0...260) content.add(StringTools.lpad(Std.string(i),"0",4)+" Café e\u0301 🙂 🧑‍💻 漢字 שלום\n");

@@ -38,6 +38,8 @@ class Popup implements View {
 	public var layerZIndex:Int;
 	/** Paint a square menu surface and its shadow beneath the popup content. */
 	public var menuSurface:Bool;
+	/** Space kept between an anchored popup and the window edges. */
+	public var viewportMargin:Float = 0.0;
 	/**
 	 * Open to the left of the anchor when the popup does not fit to its right
 	 * but fits to its left, as native context menus do. Otherwise the popup is
@@ -203,8 +205,9 @@ class Popup implements View {
 					}
 					if (top + geometry.height > bounds.height)
 						top = anchor.y - bounds.y - geometry.height;
-					left = Math.max(0.0, Math.min(left, bounds.width - geometry.width));
-					top = Math.max(0.0, Math.min(top, bounds.height - geometry.height));
+					var margin = Math.max(0.0, viewportMargin);
+					left = Math.max(margin, Math.min(left, bounds.width - geometry.width - margin));
+					top = Math.max(margin, Math.min(top, bounds.height - geometry.height - margin));
 					if (Math.abs(panel.layout.style.positionX - left) > 0.01 ||
 						Math.abs(panel.layout.style.positionY - top) > 0.01) {
 						panel.layout.style.positionX = left;

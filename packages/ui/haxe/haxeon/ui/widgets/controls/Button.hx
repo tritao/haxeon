@@ -32,6 +32,8 @@ class Button implements View {
 	public final label:String;
 	/** Optional full name when compact visible text abbreviates an action. */
 	public var accessibilityLabel:Null<String>;
+	/** Optional label presentation; the button retains its full semantic label. */
+	public var labelView:Null<View> = null;
 	public final style:LayoutStyle;
 	/** Typed selector classes used by composite controls and application styles. */
 	public var classes:Array<String>;
@@ -116,14 +118,15 @@ class Button implements View {
 			node.on(UiEventKind.Click, activate);
 			node.on(UiEventKind.Activate, activate);
 		}
-		var foreground = variant == ButtonVariant.Secondary || variant == ButtonVariant.Navigation
-			? (enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled)
-			: context.theme.buttonLabelColor(enabled, resolvedStyle.background);
+		var foreground = context.theme.buttonLabelColor(enabled, resolvedStyle.background,
+			variant == ButtonVariant.Primary ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary);
 		if (leadingView != null)
 			node.add(context.withScope(new Key("leading-view"), function() return leadingView.build(context)));
 		else if (leadingIcon != null)
 			node.add(new Icon("leading-icon", leadingIcon, iconSize, foreground).build(context));
-		if (label.length > 0) {
+		if (labelView != null) {
+			node.add(context.withScope(new Key("label"), function() return labelView.build(context)));
+		} else if (label.length > 0) {
 			var labelNode = context.withScope(new Key("label"), function() {
 				var text = new RenderNode(context.id("label"), LayoutVisualKind.Text);
 				text.layout.text = label;

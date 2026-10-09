@@ -35,6 +35,9 @@ extern function fileSystemFullPath(path:String):String;
 @:hlNative("haxeon_runtime", "__sys_read_dir")
 extern function fileSystemReadDirectory(path:String):Array<String>;
 
+@:hlNative("haxeon_runtime", "__sys_read_dir_entries")
+extern function fileSystemReadDirectoryEntriesRaw(path:String):Array<String>;
+
 @:hlNative("haxeon_runtime", "__sys_metadata")
 extern function fileSystemMetadata(path:String):Null<Array<Int>>;
 
@@ -62,6 +65,16 @@ function fileSystemFullPath(path:String):String
 
 function fileSystemReadDirectory(path:String):Array<String>
 	return runtime.MemoryFileSystem.readDirectory(path);
+
+function fileSystemReadDirectoryEntriesRaw(path:String):Array<String> {
+	var names = runtime.MemoryFileSystem.readDirectory(path);
+	var entries:Array<String> = [];
+	for (name in names) {
+		entries.push(name);
+		entries.push(runtime.MemoryFileSystem.isDirectory(runtime.MemoryFileSystem.normalize(path + "/" + name)) ? "d" : "f");
+	}
+	return entries;
+}
 
 function fileSystemMetadata(path:String):Null<Array<Int>>
 	return runtime.MemoryFileSystem.stat(path);
@@ -97,6 +110,18 @@ class FileSystem {
 	public static inline function readDirectory(path:String):Array<String>
 		return fileSystemReadDirectory(path);
 
+	/** Lists child names and their directory kinds using one native enumeration. */
+	public static function readDirectoryEntries(path:String):Array<FileSystemEntry> {
+		var raw = fileSystemReadDirectoryEntriesRaw(path);
+		var entries:Array<FileSystemEntry> = [];
+		var index = 0;
+		while (index + 1 < raw.length) {
+			entries.push(new FileSystemEntry(raw[index], raw[index + 1] == "d"));
+			index += 2;
+		}
+		return entries;
+	}
+
 	/** Lightweight metadata for change detection, or null when the path is unavailable. */
 	public static function metadata(path:String):Null<FileMetadata> {
 		var values = fileSystemMetadata(path);
@@ -127,5 +152,15 @@ class FileMetadata {
 		this.size = size;
 		this.modified = modified;
 		this.changed = changed;
+	}
+}
+
+class FileSystemEntry {
+	public final name:String;
+	public final isDirectory:Bool;
+
+	public function new(name:String, isDirectory:Bool) {
+		this.name = name;
+		this.isDirectory = isDirectory;
 	}
 }

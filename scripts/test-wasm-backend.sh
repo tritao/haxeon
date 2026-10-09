@@ -283,6 +283,7 @@ const cases = [
 	["out/wasm-cli-gc-closures.wasm", 42],
 	["out/wasm-gc-dynamic.wasm", 42],
 	["out/wasm-cli-gc-dynamic.wasm", 42],
+	["out/wasm-gc-native-pointer-reflect.wasm", 42],
 	["out/wasm-gc-exceptions.wasm", 42],
 	["out/wasm-cli-gc-exceptions.wasm", 42],
 	["out/wasm-gc-strings.wasm", 42],

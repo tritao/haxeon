@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-audio-lab"
+  },
+  "entry": "Main",
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-audio": {
+      "path": "../../packages/audio"
+    },
+    "haxeon-ui": {
+      "path": "../../packages/ui"
+    }
+  },
+  "native": {
+    "cmake": {
+      "source": ".",
+      "target": "audio_lab_native",
+      "inputs": [
+        "CMakeLists.txt",
+        "../../packages/ui/CMakeLists.txt",
+        "../../vendor/nativekit/CMakeLists.txt",
+        "../../vendor/nativekit/modules/audio/CMakeLists.txt"
+      ],
+      "library": "nativekit_ui"
+    }
+  },
+  "target": "host",
+  "outputDir": "build"
+}

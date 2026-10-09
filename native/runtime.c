@@ -1,4 +1,14 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #define HL_NAME(n) realtime_##n
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 #include <hl.h>
 #include <hlmodule.h>
 #include <math.h>
@@ -9,12 +19,6 @@
 #include <errno.h>
 #include <stdatomic.h>
 #include <ffi.h>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
 
 /* Keep this as the stable build entry point. The implementation is organized
    by runtime domain below while remaining one translation unit, which lets the
@@ -32,6 +36,8 @@
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"
 #include "runtime/processes.c"
+#include "runtime/child_processes.c"
+#include "runtime/host_state.c"
 #include "runtime/native_call.c"
 #include "runtime/memory.c"
 #include "runtime/module_runtime.c"

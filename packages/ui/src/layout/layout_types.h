@@ -54,6 +54,7 @@ struct ParagraphStyle {
     TextWrapMode wrap = TextWrapMode::WordCharacter;
     TextAlignment alignment = TextAlignment::Start;
     float line_height = 0.0f;
+    uint32_t tab_width = 0;
     TextDirection direction = TextDirection::Auto;
 };
 

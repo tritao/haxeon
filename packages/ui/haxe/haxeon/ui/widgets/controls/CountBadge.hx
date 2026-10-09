@@ -32,7 +32,7 @@ class CountBadge implements View {
 		style.radiusTopLeft = style.radiusTopRight = style.radiusBottomLeft = style.radiusBottomRight = 9;
 		var node = new RenderNode(context.id("count-badge"), LayoutVisualKind.Box, style);
 		node.setStyleIdentity("count-badge", "count-badge");
-		node.add(new Text(Std.string(count), null, context.theme.tokens.textPrimary, TextStyleOverride.text(11)).build(context));
+		node.add(new Text(Std.string(count), null, context.theme.tokens.textPrimary, new TextStyleOverride(null, 11, null, haxeon.ui.TextWrap.None)).build(context));
 		node.walk(function(child) child.hitTestSelf = false);
 		return node;
 	}

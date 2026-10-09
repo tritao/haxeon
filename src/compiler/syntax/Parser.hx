@@ -566,9 +566,6 @@ class Parser {
 						default:
 							break;
 					}
-					if (current().kind != TokenKind.Public && current().kind != TokenKind.Private && current().kind != TokenKind.Static
-						&& current().kind != TokenKind.Inline && current().kind != TokenKind.Final)
-						break;
 				}
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,

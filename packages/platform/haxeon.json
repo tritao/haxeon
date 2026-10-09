@@ -9,10 +9,12 @@
   "scopeSourceRoots": false,
   "ffi": {
     "interfaces": [
-      "bindings/nativekit.hxi"
+      "bindings/nativekit.hxi",
+      "bindings/nativekit-net.hxi"
     ],
     "projections": [
-      "bindings/nativekit.hxmap"
+      "bindings/nativekit.hxmap",
+      "bindings/nativekit-net.hxmap"
     ]
   },
   "target": "host"

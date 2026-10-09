@@ -1,0 +1,21 @@
+cmake_minimum_required(VERSION 3.21)
+project(haxeon_audio_lab LANGUAGES C CXX)
+get_filename_component(HAXEON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+set(NATIVEKIT_DIR "${HAXEON_ROOT}/vendor/nativekit" CACHE PATH "NativeKit source directory")
+set(NK_BUILD_SHARED ON CACHE BOOL "Build shared runtimes" FORCE)
+set(NK_BUILD_AUDIO ON CACHE BOOL "Enable audio" FORCE)
+set(NK_BUILD_GPU ON CACHE BOOL "Enable the UI GPU dependency" FORCE)
+set(NK_BUILD_TESTS OFF CACHE BOOL "Build dependency tests" FORCE)
+set(NK_BUILD_EXAMPLES OFF CACHE BOOL "Build dependency examples" FORCE)
+add_subdirectory("${NATIVEKIT_DIR}" nativekit)
+set(NKUI_NATIVEKIT_DIR "${NATIVEKIT_DIR}" CACHE PATH "NativeKit source for UI" FORCE)
+add_subdirectory("${HAXEON_ROOT}/packages/ui" ui)
+if(HAXEON_NATIVE_OUTPUT_DIR)
+    foreach(runtime IN ITEMS nativekit nativekit_gpu nativekit_ui)
+        set_target_properties(${runtime} PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
+            RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
+            ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
+    endforeach()
+endif()
+add_custom_target(audio_lab_native DEPENDS nativekit nativekit_gpu nativekit_ui)

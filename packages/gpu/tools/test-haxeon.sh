@@ -38,6 +38,8 @@ fi
     --root="$platform_dir/src" \
     --ffi-interface="$platform_dir/bindings/nativekit.hxi" \
     --ffi-projection="$platform_dir/bindings/nativekit.hxmap" \
+    --ffi-interface="$platform_dir/bindings/nativekit-net.hxi" \
+    --ffi-projection="$platform_dir/bindings/nativekit-net.hxmap" \
     --ffi-interface="$gpu_dir/bindings/nativekit-gpu.hxi" \
     --ffi-projection="$gpu_dir/bindings/nativekit-gpu.hxmap" \
     "$gpu_dir/tests/Triangle.hx" \
@@ -65,6 +67,8 @@ fi
     "$gpu_dir/src/haxeon/gpu/RenderPassDesc.hx" \
     "$platform_dir/src/haxeon/platform/GraphicsImageRef.hx" \
     "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitHttpEvents.hx" \
+    "$platform_dir/src/haxeon/platform/NativeKitHttpResponse.hx" \
     "$platform_dir/src/haxeon/platform/NativeKitEvents.hx" \
     "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
     "$platform_dir/src/haxeon/platform/NativeKitEventContext.hx" \

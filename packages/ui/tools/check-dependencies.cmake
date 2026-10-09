@@ -1,5 +1,5 @@
-if(NOT DEFINED NK_REPO_DIR OR NOT EXISTS "${NK_REPO_DIR}/../.git")
-    message(FATAL_ERROR "NK_REPO_DIR must point to UIKit in the Materia Git checkout")
+if(NOT DEFINED NK_REPO_DIR OR NOT EXISTS "${NK_REPO_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "NK_REPO_DIR must point to the Haxeon UI package")
 endif()
 
 set(dependencies budouxc clay harfbuzz libunibreak nanovg sheenbidi skribidi)
@@ -14,8 +14,8 @@ set(licenses
 
 foreach(dependency IN LISTS dependencies)
     execute_process(
-        COMMAND git -C "${NK_REPO_DIR}/.." ls-files -s --
-            "uikit/vendor/${dependency}"
+        COMMAND git -C "${NK_REPO_DIR}" ls-files -s --
+            "vendor/${dependency}"
         RESULT_VARIABLE git_result
         OUTPUT_VARIABLE git_output
         ERROR_VARIABLE git_error
@@ -55,4 +55,4 @@ foreach(license IN LISTS licenses)
     endif()
 endforeach()
 
-message(STATUS "PASS: UIKit dependency revisions and licenses are reproducible")
+message(STATUS "PASS: Haxeon UI dependency revisions and licenses are reproducible")

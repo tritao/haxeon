@@ -286,7 +286,8 @@ class TextEditorState {
 			paragraphStyle.wrap != nextParagraphStyle.wrap ||
 			paragraphStyle.alignment != nextParagraphStyle.alignment ||
 			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
-			paragraphStyle.direction != nextParagraphStyle.direction;
+			paragraphStyle.direction != nextParagraphStyle.direction ||
+			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		if (!changed)
 			return false;
 		textStyle.font = nextTextStyle.font;
@@ -296,6 +297,7 @@ class TextEditorState {
 		paragraphStyle.alignment = nextParagraphStyle.alignment;
 		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
 		paragraphStyle.direction = nextParagraphStyle.direction;
+		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
 		layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
 		renderMeasurement.invalidate();
 		lastLayoutRevision = offsets.revision;
@@ -818,6 +820,15 @@ class TextEditorState {
 		return replace(selectionEnd, next, "");
 	}
 
+	/** Dragging beyond the document selects its boundary, independent of horizontal position.
+	 * Inside the document, use the viewport-clamped Y so edge scrolling stays incremental. */
+	public function hitTestSelectionDrag(x:Float, documentY:Float, viewportY:Float):TextPosition {
+		ensureLive();
+		if (documentY <= 0.0) return new TextPosition(0, 0);
+		if (documentY >= layout.measure().height) return new TextPosition(offsets.codepointCount, 0);
+		return hitTest(x, viewportY);
+	}
+
 	public function hitTest(x:Float, y:Float):TextPosition {
 		ensureLive();
 		var hit = layout.hitTest(x, y);
@@ -1071,7 +1082,7 @@ class TextEditorState {
 		return new TextStyle(value.fontSize, value.font, value.letterSpacing);
 
 	static function copyParagraphStyle(value:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(value.wrap, value.alignment, value.lineHeight, value.direction);
+		return new ParagraphStyle(value.wrap, value.alignment, value.lineHeight, value.direction, value.tabWidth);
 
 	static inline function clamp(value:Int, minimum:Int, maximum:Int):Int
 		return value < minimum ? minimum : value > maximum ? maximum : value;

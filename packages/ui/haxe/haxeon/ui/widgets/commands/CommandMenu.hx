@@ -19,6 +19,7 @@ class CommandMenu implements View {
 	public final y:Float;
 	public var onDismiss:Null<Void->Void>;
 	public var onResult:Null<CommandResult->Void>;
+	public var selectFirstOnOpen:Bool = false;
 
 	public function new(key:String, commandIds:Array<String>, x:Float = 0.0, y:Float = 0.0,
 			?registry:CommandRegistry, ?invocationContext:CommandContext,
@@ -50,6 +51,8 @@ class CommandMenu implements View {
 					onResult(result);
 			}, command.isEnabled(actualContext)));
 		}
-		return new Menu(key, items, x, y, onDismiss).build(context);
+		var menu = new Menu(key, items, x, y, onDismiss);
+		menu.selectFirstOnOpen = selectFirstOnOpen;
+		return menu.build(context);
 	}
 }

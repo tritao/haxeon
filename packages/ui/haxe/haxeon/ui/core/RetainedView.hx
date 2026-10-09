@@ -1,7 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.style.StyleState;
-
 /** Reuses a stable render subtree while an application-owned revision key is unchanged. */
 class RetainedView implements View {
 	final builder:BuildContext->View;
@@ -44,7 +42,8 @@ class RetainedView implements View {
 			throw 'Retained view "$key" returned no view';
 		var root = view.build(context);
 		var usedStates = context.stateIdsUsedSince(marker);
-		cache.replace(cacheKey, root, usedStates, context.stateRevisions(usedStates));
+		cache.replace(cacheKey, root, usedStates, context.stateRevisions(usedStates),
+			new InteractionStateSnapshot(context.currentRoot(root)));
 		return root;
 	}
 }
@@ -55,10 +54,11 @@ private class RetainedViewCache {
 	public function new()
 		entry = null;
 
-	public function replace(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>):Void {
+	public function replace(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+			interactions:InteractionStateSnapshot):Void {
 		if (entry != null && entry.root != root)
 			entry.root.detach();
-		entry = new RetainedViewEntry(key, root, stateIds, stateRevisions);
+		entry = new RetainedViewEntry(key, root, stateIds, stateRevisions, interactions);
 	}
 
 	public function dispose():Void {
@@ -73,12 +73,15 @@ private class RetainedViewEntry {
 	public var root(default, null):RenderNode;
 	public final stateIds:Array<Int>;
 	final stateRevisions:Array<Int>;
+	final interactions:InteractionStateSnapshot;
 
-	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>) {
+	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+		interactions:InteractionStateSnapshot) {
 		this.key = key;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
+		this.interactions = interactions;
 	}
 
 	/** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
@@ -91,12 +94,6 @@ private class RetainedViewEntry {
 		for (index in 0...current.length)
 			if (current[index] != stateRevisions[index])
 				return false;
-		var mask = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
-		var result = true;
-		context.currentRoot(root).walk(function(node) {
-			if (node.recordsInteraction && (node.states & mask) != (context.interactionStates.get(node.id) & mask))
-				result = false;
-		});
-		return result;
+		return interactions.matches(context);
 	}
 }

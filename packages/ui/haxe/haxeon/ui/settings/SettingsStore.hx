@@ -98,9 +98,9 @@ class SettingsStore {
 		adopt(definition);
 		var normalized = definition.normalize(value);
 		var previous = get(path);
-		if (PropertyValueTools.same(previous, normalized))
+		if (PropertyValueTools.same(previous, normalized) && (!definition.preserveExplicitDefault || overrides.exists(path)))
 			return null;
-		if (PropertyValueTools.same(definition.defaultValue, normalized))
+		if (!definition.preserveExplicitDefault && PropertyValueTools.same(definition.defaultValue, normalized))
 			overrides.remove(path);
 		else
 			overrides.set(path, normalized);
@@ -235,7 +235,7 @@ class SettingsStore {
 		var decoded = decode(definition, unknown.get(definition.path));
 		unknown.remove(definition.path);
 		if (decoded != null && definition.validate(decoded) == null
-			&& !PropertyValueTools.same(definition.defaultValue, definition.normalize(decoded)))
+			&& (definition.preserveExplicitDefault || !PropertyValueTools.same(definition.defaultValue, definition.normalize(decoded))))
 			overrides.set(definition.path, definition.normalize(decoded));
 	}
 

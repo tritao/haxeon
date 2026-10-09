@@ -55,13 +55,21 @@ class TreeView implements View {
 	public var onItemActivated:Null<String->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
 	public var onItemClicked:Null<String->Int->Void>;
-	/** Explorer-style branch labels toggle on the first click of a sequence. */
+	/** Optional non-blocking hint used to draw expand controls without loading children. */
+	public var hasChildrenHint:Null<String->Bool>;
+	/** Toggle branches on every primary row click; otherwise toggle only on double-click. */
 	public var expandOnSingleClick:Bool = false;
 	public var onItemContextMenu:Null<String->UiEvent->Void>;
 	public var onItemRename:Null<String->Void>;
 	/** Optional row builder receiving the current expansion state. */
 	public var itemBuilder:Null<(String, Bool)->View>;
 	public var onExpandedChanged:Null<String->Bool->Void>;
+	/** Horizontal indentation between tree hierarchy levels. */
+	public var indentWidth:Float = 16.0;
+	/** Draw vertical indentation guides through all rows inside expanded branches. */
+	public var verticalGuidesOnly:Bool = false;
+	/** Align leaf content in the disclosure column instead of reserving arrow space. */
+	public var compactLeafIndent:Bool = false;
 
 	final fallbackViewportHeight:Float;
 	final expandedKeys:Map<String, Bool>;
@@ -76,8 +84,7 @@ class TreeView implements View {
 	var cachedEstimatedExtent:Float;
 	var rootInitialExpansion:Map<String, Bool>;
 	var expandedBranches:Map<String, TreeBranch>;
-	var indexByKey:Map<String, Int>;
-	var entryByKey:Map<String, TreeEntry>;
+	var branchByKey:Map<String, TreeBranch>;
 	var cachedUniform:Bool;
 	var extentIndex:Null<VirtualExtentIndex>;
 	var itemIds:Map<String, WidgetId>;
@@ -100,6 +107,7 @@ class TreeView implements View {
 		this.onSelectionChanged = onSelectionChanged;
 		this.onItemActivated = onItemActivated;
 		onItemClicked = null;
+		hasChildrenHint = null;
 		onItemContextMenu = null;
 		onItemRename = null;
 		this.onExpandedChanged = onExpandedChanged;
@@ -124,8 +132,7 @@ class TreeView implements View {
 		cachedEstimatedExtent = 0.0;
 		rootInitialExpansion = new Map();
 		expandedBranches = new Map();
-		indexByKey = new Map();
-		entryByKey = new Map();
+		branchByKey = new Map();
 		cachedUniform = false;
 		extentIndex = null;
 		itemIds = new Map();
@@ -134,7 +141,7 @@ class TreeView implements View {
 	/** Selects a visible node. Passing null clears selection without a callback. */
 	public function select(nextKey:Null<String>):Bool {
 		ensureTreeMetrics();
-		if (nextKey != null && (nextKey.length == 0 || !indexByKey.exists(nextKey)))
+		if (nextKey != null && (nextKey.length == 0 || !branchByKey.exists(nextKey)))
 			throw "TreeView selection key is not visible";
 		if (nextKey == selectedKey)
 			return false;
@@ -148,13 +155,8 @@ class TreeView implements View {
 	/** Expands or collapses a visible node. */
 	public function setExpanded(nodeKey:String, expanded:Bool):Bool {
 		ensureTreeMetrics();
-		var entry = entryByKey.get(nodeKey);
-		if (entry == null) {
-			var index = indexByKey.get(nodeKey);
-			if (index == null)
-				return false;
-			entry = entryAt(index);
-		}
+		var entry = branchByKey.get(nodeKey);
+		if (entry == null) return false;
 		ensureEntryDetails(entry);
 		if (!entry.hasChildren || entry.expanded == expanded)
 			return false;
@@ -169,44 +171,101 @@ class TreeView implements View {
 			var state:State<Map<String, Bool>> = cast expandedState;
 			state.update(expandedKeys);
 		}
+		if (expanded) expandBranch(entry); else collapseBranch(entry);
 		expansionRevision++;
-		cachedExpansionRevision = -1;
+		cachedExpansionRevision = expansionRevision;
+		updateVisibleMetrics();
+		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
+			selectedKey = null;
+			updateSelectedState(null);
+		}
 		if (onExpandedChanged != null)
 			onExpandedChanged(nodeKey, expanded);
 		return true;
 	}
 
+	/** Collapse known branches in one rebuild; optionally retain one open root level. */
+	public function collapseAll(keepRootsExpanded:Bool = false):Bool {
+		ensureTreeMetrics();
+		var collapsed:Map<String, Bool> = [];
+		for (key => value in expandedKeys) if (value) collapsed.set(key, true);
+		for (branch in branchByKey) if (branch.expanded) collapsed.set(branch.key, true);
+		var changed = false;
+		var opened:Array<String> = [];
+		if (keepRootsExpanded) for (key in rootKeys) {
+			collapsed.remove(key);
+			if (!expansionFor(key)) { opened.push(key); changed = true; }
+			expandedKeys.set(key, true);
+		}
+		for (key in collapsed.keys()) { expandedKeys.set(key, false); changed = true; }
+		if (!changed) return false;
+		if (expandedState != null) {
+			var state:State<Map<String, Bool>> = cast expandedState;
+			state.update(expandedKeys);
+		}
+		expansionRevision++;
+		ensureTreeMetrics();
+		controller.jumpTo(controller.offsetX, 0);
+		if (onExpandedChanged != null) {
+			var notify:String->Bool->Void = cast onExpandedChanged;
+			for (key in collapsed.keys()) notify(key, false);
+			for (key in opened) notify(key, true);
+		}
+		return true;
+	}
+
 	public function toggleExpanded(nodeKey:String):Bool {
 		ensureTreeMetrics();
-		var entry = entryByKey.get(nodeKey);
-		if (entry == null) {
-			var index = indexByKey.get(nodeKey);
-			if (index == null)
-				return false;
-			entry = entryAt(index);
-		}
+		var entry = branchByKey.get(nodeKey);
+		if (entry == null) return false;
 		return setExpanded(nodeKey, !entry.expanded);
 	}
 
 	public function isExpanded(nodeKey:String):Bool {
 		ensureTreeMetrics();
-		var entry = entryByKey.get(nodeKey);
-		if (entry == null) {
-			var index = indexByKey.get(nodeKey);
-			if (index == null)
-				return false;
-			entry = entryAt(index);
+		var entry = branchByKey.get(nodeKey);
+		return entry != null && entry.expanded;
+	}
+
+	/** Refreshes visible branches after model data changes, without rebuilding unrelated branches. */
+	public function refreshBranches(nodeKeys:Array<String>, modelRevision:Int):Bool {
+		if (nodeKeys == null || nodeKeys.length == 0 || extentIndex == null ||
+			cachedExpansionRevision != expansionRevision || modelRevision != cachedModelRevision + 1)
+			return false;
+		for (nodeKey in nodeKeys)
+			if (!branchByKey.exists(nodeKey)) return false;
+
+		var metricsChanged = false;
+		for (nodeKey in nodeKeys) {
+			var branch = branchByKey.get(nodeKey);
+			if (branch == null) return false;
+			for (child in branch.children) removeBranch(child);
+			branch.children.resize(0);
+			branch.detailsKnown = false;
+			if (branch.expanded) {
+				populateExpandedBranch(branch);
+				updateAncestorVisibleCounts(branch.parentBranch);
+				metricsChanged = true;
+			} else {
+				ensureEntryDetails(branch);
+			}
 		}
-		return entry.expanded;
+		cachedModelRevision = modelRevision;
+		if (metricsChanged) updateVisibleMetrics();
+		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
+			selectedKey = null;
+			updateSelectedState(null);
+		}
+		return true;
 	}
 
 	/** Scrolls a visible node to the top of the viewport. */
 	public function scrollTo(nodeKey:String):Bool {
 		ensureTreeMetrics();
-		var index = indexByKey.get(nodeKey);
+		var index = indexOfKey(nodeKey);
 		if (index == null)
 			throw "TreeView scroll key is not visible";
-		return controller.jumpTo(controller.offsetX, extentOffset(index));
+		return controller.jumpTo(controller.offsetX, extentOffset(cast index));
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -228,7 +287,7 @@ class TreeView implements View {
 			selectedState = selection;
 			selectedKey = selection.value == "" ? null : selection.value;
 			ensureTreeMetrics();
-			if (selectedKey != null && !indexByKey.exists(selectedKey)) {
+			if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 				selectedKey = null;
 				selection.update("");
 			}
@@ -248,12 +307,12 @@ class TreeView implements View {
 				for (index in window.first...window.last) {
 					var entry = entryAt(index);
 					ensureEntryDetails(entry);
-					entryByKey.set(entry.key, entry);
 					var nodeKey = entry.key;
 					var item = itemBuilder == null ? model.buildItem(nodeKey) : itemBuilder(nodeKey, entry.expanded);
 					if (item == null)
 						throw 'TreeView model returned null for key $nodeKey';
-					var row = new TreeViewRow("row", nodeKey, item, entry, selectedKey == nodeKey,
+					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
+						compactLeafIndent, selectedKey == nodeKey,
 						function() { select(nodeKey); },
 						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
 						function() { toggleExpanded(nodeKey); },
@@ -261,7 +320,9 @@ class TreeView implements View {
 							var count = clicks.value.register(nodeKey, event);
 							if (onItemClicked != null) onItemClicked(nodeKey, count);
 							if (entry.hasChildren) {
-								if (count == (expandOnSingleClick ? 1 : 2)) toggleExpanded(nodeKey);
+								// Single-click expansion applies to every click, including the
+								// second click recognized as part of a double-click sequence.
+								if (expandOnSingleClick || count == 2) toggleExpanded(nodeKey);
 							} else if (count == 2 && onItemActivated != null) onItemActivated(nodeKey);
 						},
 						function(event) { handleNodeKey(context, entry, event); },
@@ -351,19 +412,42 @@ class TreeView implements View {
 	}
 
 	function adjacentKey(nodeKey:String, delta:Int):Null<String> {
-		var current = indexByKey.get(nodeKey);
+		var current = indexOfKey(nodeKey);
 		if (current == null || visibleCount == 0)
 			return null;
-		var next = Std.int(Math.max(0, Math.min(visibleCount - 1, current + delta)));
+		var currentIndex:Int = cast current;
+		var next = Std.int(Math.max(0, Math.min(visibleCount - 1, currentIndex + delta)));
 		return entryAt(next).key;
 	}
 
 	function firstChildKey(parentKey:String):Null<String> {
-		var parent = indexByKey.get(parentKey);
+		var parent = indexOfKey(parentKey);
 		if (parent == null || parent + 1 >= visibleCount)
 			return null;
-		var child = entryAt(parent + 1);
+		var parentIndex:Int = cast parent;
+		var child = entryAt(parentIndex + 1);
 		return child.parentKey == parentKey ? child.key : null;
+	}
+
+	function indexOfKey(nodeKey:String):Null<Int> {
+		var branch = branchByKey.get(nodeKey);
+		if (branch == null) return null;
+		var path:Array<TreeBranch> = [];
+		var root = branch;
+		while (root.parentBranch != null) {
+			path.unshift(root);
+			root = cast root.parentBranch;
+		}
+		if (root.rootIndex < 0 || root.rootIndex >= rootKeys.length) return null;
+		var index = rootOffsets[root.rootIndex];
+		for (node in path) {
+			var parent = node.parentBranch;
+			if (parent == null) return null;
+			index++;
+			for (siblingIndex in 0...node.siblingIndex)
+				index += parent.children[siblingIndex].visibleCount;
+		}
+		return index;
 	}
 
 	function visibleNodeCount():Int {
@@ -389,7 +473,6 @@ class TreeView implements View {
 		if (rootCount < 0)
 			throw "TreeView root count must be non-negative";
 		var roots:Array<String> = [];
-		var visibleKeys:Map<String, Bool> = new Map();
 		var rootMetadata = model.rootRange(0, rootCount);
 		if (rootMetadata == null || rootMetadata.length != rootCount)
 			throw "TreeView root range returned an invalid number of entries";
@@ -401,9 +484,6 @@ class TreeView implements View {
 			var rootKey = metadata.key;
 			if (rootKey == null || rootKey.length == 0)
 				throw 'TreeView root $index has an empty key';
-			if (visibleKeys.exists(rootKey))
-				throw 'TreeView contains a duplicate visible key $rootKey';
-			visibleKeys.set(rootKey, true);
 			rootInitialExpansion.set(rootKey, metadata.initiallyExpanded);
 			roots.push(rootKey);
 		}
@@ -412,90 +492,106 @@ class TreeView implements View {
 		rootKeys = roots;
 		rootOffsets = [0];
 		expandedBranches = new Map();
+		branchByKey = new Map();
 		visibleCount = 0;
 		for (rootIndex in 0...roots.length) {
 			var rootKey = roots[rootIndex];
-			var branch = buildBranch(rootKey, null, 0, visibleKeys, [],
-				rootIndex < roots.length - 1);
-			if (branch == null)
-				visibleCount++;
-			else {
-				expandedBranches.set(rootKey, branch);
-				visibleCount += branch.visibleCount;
-			}
+			var branch = buildBranch(rootKey, null, 0, [], rootIndex < roots.length - 1,
+				rootIndex, rootIndex, null);
+			expandedBranches.set(rootKey, branch);
+			visibleCount += branch.visibleCount;
 			rootOffsets.push(visibleCount);
 		}
 
-		indexByKey = new Map();
-		entryByKey = new Map();
-		for (index in 0...roots.length)
-			indexByKey.set(roots[index], rootOffsets[index]);
-		for (index in 0...roots.length) {
-			var rootKey = roots[index];
-			var rootBranch = expandedBranches.get(rootKey);
-			if (rootBranch != null)
-				registerBranch(rootBranch, rootOffsets[index] + 1);
-		}
 		cachedModelRevision = modelRevision;
 		cachedExpansionRevision = expansionRevision;
 		extentIndex = new VirtualExtentIndex(visibleCount, estimatedExtent,
 			fallbackViewportHeight, controller.offsetY,
 			virtualization.leadingOverscan, virtualization.trailingOverscan);
-		if (selectedKey != null && !indexByKey.exists(selectedKey)) {
+		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 			selectedKey = null;
 			updateSelectedState(null);
 		}
 	}
 
 	function buildBranch(nodeKey:String, parentKey:Null<String>, depth:Int,
-			visibleKeys:Map<String, Bool>, guideContinuation:Array<Bool>, hasNextSibling:Bool):Null<TreeBranch> {
-		var requestedExpanded = expansionFor(nodeKey);
-		if (!requestedExpanded)
-			return null;
-		var childCount = model.childCount(nodeKey);
-		if (childCount < 0)
-			throw 'TreeView child count for $nodeKey must be non-negative';
+			guideContinuation:Array<Bool>, hasNextSibling:Bool, rootIndex:Int,
+			siblingIndex:Int, parentBranch:Null<TreeBranch>):TreeBranch {
+		if (branchByKey.exists(nodeKey))
+			throw 'TreeView contains a duplicate visible key $nodeKey';
 		var branch = new TreeBranch(nodeKey, parentKey, depth, cachedEstimatedExtent,
-			guideContinuation, hasNextSibling);
-		branch.detailsKnown = true;
-		branch.hasChildren = childCount > 0;
-		if (!branch.hasChildren) {
-			branch.expanded = false;
-			return branch;
-		}
-		branch.expanded = true;
-		for (childIndex in 0...childCount) {
-			var childKey = model.childKeyAt(nodeKey, childIndex);
-			if (childKey == null || childKey.length == 0)
-				throw 'TreeView child $nodeKey:$childIndex has an empty key';
-			if (visibleKeys.exists(childKey))
-				throw 'TreeView contains a duplicate visible key $childKey';
-			visibleKeys.set(childKey, true);
-			var childGuides = guideContinuation.concat([hasNextSibling]);
-			var childHasNext = childIndex < childCount - 1;
-			var nested = buildBranch(childKey, nodeKey, depth + 1, visibleKeys,
-				childGuides, childHasNext);
-			branch.children.push(nested == null
-				? new TreeBranch(childKey, nodeKey, depth + 1, cachedEstimatedExtent,
-					childGuides, childHasNext)
-				: nested);
-		}
-		branch.visibleCount = 1;
-		for (child in branch.children)
-			branch.visibleCount += child.visibleCount;
+			guideContinuation, hasNextSibling, parentBranch, rootIndex, siblingIndex);
+		branchByKey.set(nodeKey, branch);
+		if (expansionFor(nodeKey)) populateExpandedBranch(branch);
 		return branch;
 	}
 
-	function registerBranch(branch:TreeBranch, startIndex:Int):Void {
-		var nextIndex = startIndex;
-		for (child in branch.children) {
-			if (indexByKey.exists(child.key) && indexByKey.get(child.key) != nextIndex)
-				throw 'TreeView contains a duplicate visible key ${child.key}';
-			indexByKey.set(child.key, nextIndex);
-			if (child.expanded)
-				registerBranch(child, nextIndex + 1);
-			nextIndex += child.visibleCount;
+	function populateExpandedBranch(branch:TreeBranch):Void {
+		var childCount = model.childCount(branch.key);
+		if (childCount < 0)
+			throw 'TreeView child count for ${branch.key} must be non-negative';
+		branch.detailsKnown = true;
+		branch.hasChildren = childCount > 0 || (hasChildrenHint != null && hasChildrenHint(branch.key));
+		if (!branch.hasChildren) {
+			branch.expanded = false;
+			branch.visibleCount = 1;
+			return;
 		}
+		branch.expanded = true;
+		branch.children.resize(0);
+		branch.visibleCount = 1;
+		for (childIndex in 0...childCount) {
+			var childKey = model.childKeyAt(branch.key, childIndex);
+			if (childKey == null || childKey.length == 0)
+				throw 'TreeView child ${branch.key}:$childIndex has an empty key';
+			var childGuides = branch.guideContinuation.concat([verticalGuidesOnly || branch.hasNextSibling]);
+			var child = buildBranch(childKey, branch.key, branch.depth + 1,
+				childGuides, childIndex < childCount - 1, branch.rootIndex, childIndex, branch);
+			branch.children.push(child);
+			branch.visibleCount += child.visibleCount;
+		}
+	}
+
+	function expandBranch(branch:TreeBranch):Void {
+		populateExpandedBranch(branch);
+		updateAncestorVisibleCounts(branch.parentBranch);
+	}
+
+	function collapseBranch(branch:TreeBranch):Void {
+		for (child in branch.children) removeBranch(child);
+		branch.children.resize(0);
+		branch.expanded = false;
+		branch.visibleCount = 1;
+		updateAncestorVisibleCounts(branch.parentBranch);
+	}
+
+	function removeBranch(branch:TreeBranch):Void {
+		for (child in branch.children) removeBranch(child);
+		branchByKey.remove(branch.key);
+	}
+
+	function updateAncestorVisibleCounts(branch:Null<TreeBranch>):Void {
+		var current = branch;
+		while (current != null) {
+			var count = 1;
+			if (current.expanded) for (child in current.children) count += child.visibleCount;
+			current.visibleCount = count;
+			current = current.parentBranch;
+		}
+	}
+
+	function updateVisibleMetrics():Void {
+		visibleCount = 0;
+		rootOffsets = [0];
+		for (rootKey in rootKeys) {
+			var branch = expandedBranches.get(rootKey);
+			if (branch != null) visibleCount += branch.visibleCount;
+			rootOffsets.push(visibleCount);
+		}
+		var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight : fallbackViewportHeight;
+		extentIndex = new VirtualExtentIndex(visibleCount, cachedEstimatedExtent,
+			viewportHeight, controller.offsetY,
+			virtualization.leadingOverscan, virtualization.trailingOverscan);
 	}
 
 	function entryAt(index:Int):TreeEntry {
@@ -514,15 +610,7 @@ class TreeView implements View {
 		var rootKey = rootKeys[rootIndex];
 		var rootBranch = expandedBranches.get(rootKey);
 		var localIndex = index - rootOffsets[rootIndex];
-		var result:TreeEntry;
-		if (rootBranch == null)
-			result = entryByKey.get(rootKey);
-		else
-			result = branchEntryAt(rootBranch, localIndex);
-		if (result == null)
-			result = new TreeEntry(rootKey, null, 0, false, false, cachedEstimatedExtent, false);
-		entryByKey.set(result.key, result);
-		return result;
+		return branchEntryAt(rootBranch, localIndex);
 	}
 
 	function branchEntryAt(branch:TreeBranch, index:Int):TreeEntry {
@@ -540,6 +628,11 @@ class TreeView implements View {
 	function ensureEntryDetails(entry:TreeEntry):Void {
 		if (entry.detailsKnown)
 			return;
+		if (hasChildrenHint != null) {
+			entry.hasChildren = hasChildrenHint(entry.key);
+			entry.detailsKnown = true;
+			return;
+		}
 		var childCount = model.childCount(entry.key);
 		if (childCount < 0)
 			throw 'TreeView child count for ${entry.key} must be non-negative';
@@ -666,12 +759,19 @@ private class TreeEntry {
 
 private class TreeBranch extends TreeEntry {
 	public final children:Array<TreeBranch>;
+	public final rootIndex:Int;
+	public final siblingIndex:Int;
+	public var parentBranch:Null<TreeBranch>;
 	public var visibleCount:Int;
 
 	public function new(key:String, parentKey:Null<String>, depth:Int, extent:Float,
-			guideContinuation:Array<Bool>, hasNextSibling:Bool) {
+			guideContinuation:Array<Bool>, hasNextSibling:Bool,
+			parentBranch:Null<TreeBranch>, rootIndex:Int, siblingIndex:Int) {
 		super(key, parentKey, depth, false, false, extent, false,
 			guideContinuation, hasNextSibling);
+		this.parentBranch = parentBranch;
+		this.rootIndex = rootIndex;
+		this.siblingIndex = siblingIndex;
 		children = [];
 		visibleCount = 1;
 	}
@@ -682,6 +782,9 @@ private class TreeViewRow implements View {
 	final itemKey:String;
 	final child:View;
 	final entry:TreeEntry;
+	final indentWidth:Float;
+	final verticalGuidesOnly:Bool;
+	final compactLeafIndent:Bool;
 	final selected:Bool;
 	final onSelect:Void->Void;
 	final onActivate:Void->Void;
@@ -691,13 +794,17 @@ private class TreeViewRow implements View {
 	final onBuilt:WidgetId->Void;
 	final onContextMenu:UiEvent->Void;
 
-	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, selected:Bool,
+	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
+			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool,
 			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
 			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
 		this.itemKey = itemKey;
 		this.child = child;
 		this.entry = entry;
+		this.indentWidth = indentWidth;
+		this.verticalGuidesOnly = verticalGuidesOnly;
+		this.compactLeafIndent = compactLeafIndent;
 		this.selected = selected;
 		this.onSelect = onSelect;
 		this.onActivate = onActivate;
@@ -718,7 +825,7 @@ private class TreeViewRow implements View {
 			style.direction = LayoutDirection.LeftToRight;
 			style.childAlignY = LayoutAlignmentY.Center;
 			style.childGap = 2.0;
-			style.padding = new Insets(entry.depth * 16.0, 0.0, 0.0, 0.0);
+			style.padding = new Insets(entry.depth * indentWidth, 0.0, 0.0, 0.0);
 			style.background = selected ? context.theme.tokens.selectionHighlight :
 				StyleStateUtil.contains(flags, StyleState.Hovered)
 					? context.theme.tokens.selectionHover : Color.rgba(0.0, 0.0, 0.0, 0.0);
@@ -762,28 +869,40 @@ private class TreeViewRow implements View {
 				var continuation = entry.guideContinuation;
 				var hasNext = entry.hasNextSibling;
 				var guideColor = context.theme.tokens.border;
-				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":";
+				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
+					(entry.hasChildren ? "branch" : "leaf") + ":";
 				for (level in 1...depth)
 					guideKey += continuation[level] ? "1" : "0";
 				guideNode.onPaint(function(canvas, geometry) {
 					var path = new PathBuilder();
+					var hasSegments = false;
 					var centerY = geometry.height * 0.5;
 					for (level in 1...depth) if (continuation[level]) {
-						var x = (level - 1) * 16.0 + 8.0;
+						var x = (level - 1) * indentWidth + indentWidth * 0.5;
 						path.moveTo(x, 0.0).lineTo(x, geometry.height);
+						hasSegments = true;
 					}
-					var x = (depth - 1) * 16.0 + 8.0;
-					path.moveTo(x, 0.0).lineTo(x, hasNext ? geometry.height : centerY);
-					path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
-					canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
-				}, guideKey + ":" + guideColor.red + ":" + guideColor.green + ":" +
+					if (verticalGuidesOnly) {
+						var x = (depth - 1) * indentWidth + indentWidth * 0.5;
+						path.moveTo(x, 0.0).lineTo(x, geometry.height);
+						hasSegments = true;
+					} else {
+						var x = (depth - 1) * indentWidth + indentWidth * 0.5;
+						path.moveTo(x, 0.0).lineTo(x, hasNext ? geometry.height : centerY);
+						path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
+						hasSegments = true;
+					}
+					if (hasSegments)
+						canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
+				}, guideKey + ":" + indentWidth + ":" + (verticalGuidesOnly ? "vertical" : "branch") + ":" + guideColor.red + ":" + guideColor.green + ":" +
 					guideColor.blue + ":" + guideColor.alpha);
 				node.add(guideNode);
 			}
 
 			var disclosure:View = entry.hasChildren
 				? new TreeDisclosure("disclosure-control", entry.expanded, entry.extent, onToggle)
-				: new Spacer("disclosure-spacer", LayoutAxis.fixed(20.0), LayoutAxis.fixed(entry.extent));
+				: new Spacer("disclosure-spacer", LayoutAxis.fixed(compactLeafIndent ? 0.0 : 20.0),
+					LayoutAxis.fixed(entry.extent));
 			node.add(context.withScope(new Key("disclosure"), function() return disclosure.build(context)));
 			node.add(new KeyedView('item:$itemKey', child).build(context));
 			onBuilt(node.id);
@@ -824,7 +943,9 @@ private class TreeDisclosure implements View {
 				onToggle();
 				event.stopPropagation();
 			};
-			node.on(UiEventKind.Click, activate);
+			node.on(UiEventKind.Click, function(event) {
+				if (event.button == 0) activate(event);
+			});
 			node.on(UiEventKind.Activate, activate);
 			node.add(new Icon("glyph", expanded ? IconName.ChevronDown : IconName.ChevronRight,
 				16.0, context.theme.tokens.textPrimary).build(context));
