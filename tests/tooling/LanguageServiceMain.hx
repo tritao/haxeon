@@ -236,6 +236,9 @@ class LanguageServiceMain {
 		var importSource = "package editor; import editor.util.Math; function main():Int { return Math.add(20, 22); }";
 		importService.update("editor/Main.hx", importSource);
 		importService.compile("editor.Main");
+		var importedTokens = importService.semanticTokens("editor/Main.hx");
+		if ([for (token in importedTokens) if (token.span.start == importSource.indexOf("Math.add") + "Math.".length && token.type == "function") token].length != 1)
+			throw "semantic tokens did not classify an imported function through the workspace index";
 		var importedPosition = importSource.indexOf("Math.add") + "Math.".length,
 			importedDefinition = importService.definition("editor/Main.hx", importedPosition),
 			importedReferences = importService.references("editor/Main.hx", importedPosition),
@@ -370,6 +373,11 @@ class LanguageServiceMain {
 		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";
 		typeService.update("usecase/Main.hx", typeSource);
 		typeService.compile("usecase.Main");
+		var importedTypes = typeService.semanticTokens("usecase/Main.hx");
+		for (position in [typeSource.indexOf("extends Entity") + "extends ".length, typeSource.indexOf("entity:Entity") + "entity:".length,
+			typeSource.indexOf(":Entity return") + 1])
+			if ([for (token in importedTypes) if (token.span.start == position && token.type == "class") token].length != 1)
+				throw "semantic tokens did not classify an imported class reference";
 		var typePosition = typeSource.indexOf(":Entity return") + 1,
 			typeDefinition = typeService.definition("usecase/Main.hx", typePosition),
 			explicitTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typePosition),

@@ -897,6 +897,7 @@ class LanguageService {
 			result:Array<SemanticToken> = [],
 			tokens = state == null ? null : effectiveTokens(state),
 			model = state == null ? null : effectiveSemanticModel(state);
+		var semanticTypes:Map<String, String> = [];
 		if (state == null || tokens == null)
 			return result;
 		for (index in 0...tokens.length) {
@@ -907,7 +908,7 @@ class LanguageService {
 				continue;
 			var type:Null<String> = switch lexical.kind {
 				case Identifier: var semantic = semanticTokenType(model,
-						lexical.span.start); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+						lexical.span.start, semanticTypes); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
 				case StringLiteral: "string";
@@ -1416,11 +1417,19 @@ class LanguageService {
 			&& next == "=".code;
 	}
 
-	static function semanticTokenType(model:Null<SemanticModel>, position:Int):String {
-		var symbol = model == null ? null : model.index.symbolAt(position);
+	function semanticTokenType(model:Null<SemanticModel>, position:Int, cache:Map<String, String>):String {
+		var id = model == null ? null : model.index.symbolIdAt(position + 1);
+		if (id == null) return "variable";
+		var key = Std.string(id), cached = cache.get(key);
+		if (cached != null) return cached;
+		var symbol = model.index.symbol(id);
+		if (symbol == null) {
+			var resolved = compiler.semanticWorkspace.indexedSymbol(id);
+			if (resolved != null) symbol = resolved.symbol;
+		}
 		if (symbol == null)
 			return "variable";
-		return switch symbol.kind {
+		var type = switch symbol.kind {
 			case DeclarationKind.Alias, DeclarationKind.Abstract: "type";
 			case DeclarationKind.Class: "class";
 			case DeclarationKind.Interface: "interface";
