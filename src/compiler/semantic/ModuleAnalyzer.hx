@@ -230,9 +230,12 @@ class ModuleAnalyzer {
 			for (caseDecl in enumDecl.cases)
 				for (parameter in caseDecl.params)
 					addModuleTypeDependency(parameter.type, state, dependencies);
-		for (interfaceDecl in ast.interfaces)
+		for (interfaceDecl in ast.interfaces) {
+			for (base in interfaceDecl.bases)
+				addModuleTypeDependency(base, state, dependencies);
 			for (method in interfaceDecl.methods)
 				addFunctionTypeDependencies(method, state, dependencies);
+		}
 		for (classDecl in ast.classes) {
 			var base = classDecl.base;
 			if (base != null) {

@@ -6,11 +6,8 @@
 
 function main():Int {
 	var info = typeInfo<Pair>();
-	if (info.name != "Pair"
-		|| info.size != sizeof<Pair>()
-		|| info.alignment != alignof<Pair>()
-		|| info.size != 24
-		|| info.alignment != 8)
+	if (info.name != "Pair" || info.sourceKind != "native-value" || info.interfaces.length != 0 || info.size != sizeof<Pair>()
+		|| info.alignment != alignof<Pair>() || info.size != 24 || info.alignment != 8)
 		return 1;
 	if (info.fields.length != 3 || info.fields[0].name != "tag" || info.fields[0].offset != offsetof<Pair>("tag"))
 		return 2;
@@ -22,7 +19,7 @@ function main():Int {
 		return 5;
 	if (info.fields[0].annotations.length != 0 || info.fields[1].annotations.length != 0 || info.fields[2].annotations.length != 0)
 		return 6;
-	if (info.hash != "158ead62c03ad8566d6e4e242cd28be1651c9cb63acf8a00b242ff193a0262f4" || info.hash != typeInfo<Pair>().hash)
+	if (info.hash != "6b6d0c437fdebe780b8ad2b7f610d4981fdbbc70761ea5019c1b22e20e494b15" || info.hash != typeInfo<Pair>().hash)
 		return 7;
 	return 42;
 }

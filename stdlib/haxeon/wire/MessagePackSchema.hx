@@ -9,6 +9,18 @@ typedef MessagePackSchemaDefaultValue = {
 	final value:Dynamic;
 }
 
+enum abstract MessagePackSchemaSourceKind(String) {
+	var Struct = "struct";
+	var Class = "class";
+	var NativeValue = "native-value";
+}
+
+/** Source declaration facts whose absence on legacy artifacts means unknown. */
+typedef MessagePackSchemaSourceFacts = {
+	final sourceKind:MessagePackSchemaSourceKind;
+	final interfaces:Array<String>;
+}
+
 /**
 	Validated view of a compiler-emitted `.descriptors.json` artifact.
 
@@ -16,8 +28,10 @@ typedef MessagePackSchemaDefaultValue = {
 	use their field names, semantic type identities, or source defaults.
  */
 class MessagePackSchema {
-	public static inline final FORMAT_VERSION:Int = 3;
-	static inline final DESCRIPTOR_VERSION:Int = 4;
+	public static inline final FORMAT_VERSION:Int = 4;
+	static inline final LEGACY_FORMAT_VERSION:Int = 3;
+	static inline final DESCRIPTOR_VERSION:Int = 5;
+	static inline final LEGACY_DESCRIPTOR_VERSION:Int = 4;
 	static inline final MAX_BYTES:Int = 16 * 1024 * 1024;
 	static inline final MAX_ITEMS:Int = 0x100000;
 	static inline final MAX_DEPTH:Int = 128;
@@ -36,7 +50,7 @@ class MessagePackSchema {
 			var artifact:Dynamic = haxe.Json.parse(json),
 				formatVersion:Dynamic = Reflect.field(artifact, "formatVersion"),
 				descriptorsValue:Dynamic = Reflect.field(artifact, "descriptors");
-			if (formatVersion != FORMAT_VERSION || !Std.isOfType(descriptorsValue, Array))
+			if ((formatVersion != FORMAT_VERSION && formatVersion != LEGACY_FORMAT_VERSION) || !Std.isOfType(descriptorsValue, Array))
 				throw new MessagePackError("Unsupported writer descriptor artifact format or missing descriptors");
 			var descriptors:Array<Dynamic> = cast descriptorsValue;
 			if (descriptors.length > MAX_ITEMS)
@@ -44,7 +58,7 @@ class MessagePackSchema {
 			var identities:Map<String, Bool> = [],
 				byHashType:Map<String, Dynamic> = [];
 			for (descriptor in descriptors) {
-				validateDescriptor(descriptor);
+				validateDescriptor(descriptor, formatVersion);
 				var name = fieldString(descriptor, "name"),
 					identity = name.length + ":" + name + fieldString(descriptor, "type");
 				if (identities.exists(identity))
@@ -67,6 +81,25 @@ class MessagePackSchema {
 	public function requireDescriptor(hash:String, type:String):Void {
 		if (!descriptors.exists(descriptorKey(hash, type)))
 			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
+	}
+
+	/** Returns null for a validated legacy descriptor that predates source conformance facts. */
+	public function sourceFacts(hash:String, type:String):Null<MessagePackSchemaSourceFacts> {
+		var descriptor = requireDescriptorValue(hash, type);
+		if (fieldInt(descriptor, "version") != DESCRIPTOR_VERSION)
+			return null;
+		return {
+			sourceKind: cast fieldString(descriptor, "sourceKind"),
+			interfaces: [for (value in fieldArray(descriptor, "interfaces")) cast value]
+		};
+	}
+
+	/** Requests the source declaration facts; fails closed when a legacy writer descriptor lacks them. */
+	public function requireSourceFacts(hash:String, type:String):MessagePackSchemaSourceFacts {
+		var facts = sourceFacts(hash, type);
+		if (facts == null)
+			throw new MessagePackError('Writer descriptor "$type" has no source conformance facts');
+		return facts;
 	}
 
 	/**
@@ -101,12 +134,20 @@ class MessagePackSchema {
 	static function descriptorKey(hash:String, type:String):String
 		return hash.length + ":" + hash + type;
 
-	static function validateDescriptor(value:Dynamic):Void {
+	static function validateDescriptor(value:Dynamic, formatVersion:Int):Void {
 		requireObject(value, "descriptor");
-		if (fieldInt(value, "version") != DESCRIPTOR_VERSION
+		var descriptorVersion = fieldInt(value, "version");
+		if ((formatVersion == LEGACY_FORMAT_VERSION && descriptorVersion != LEGACY_DESCRIPTOR_VERSION)
+			|| (formatVersion == FORMAT_VERSION && descriptorVersion != DESCRIPTOR_VERSION)
 			|| fieldString(value, "name").length == 0
 			|| fieldString(value, "type").length == 0)
 			throw new MessagePackError("Unsupported or incomplete writer descriptor");
+		if (descriptorVersion == DESCRIPTOR_VERSION) {
+			var sourceKind = fieldString(value, "sourceKind"),
+				interfaces = fieldArray(value, "interfaces");
+			if (!validSourceKind(sourceKind) || !canonicalInterfaces(interfaces))
+				throw new MessagePackError("Writer descriptor has invalid source conformance facts");
+		}
 		var flat = fieldBool(value, "flat");
 		fieldBool(value, "portable");
 		validateLayout(flat, fieldNullableInt(value, "size"), fieldNullableInt(value, "alignment"), null);
@@ -121,6 +162,57 @@ class MessagePackSchema {
 		var hash = fieldString(value, "hash");
 		if (!~/^[0-9a-f]{64}$/.match(hash) || hash != descriptorHash(value))
 			throw new MessagePackError('Writer descriptor content hash mismatch for "${fieldString(value, "name")}"');
+	}
+
+	function requireDescriptorValue(hash:String, type:String):Dynamic {
+		var descriptor = descriptors.get(descriptorKey(hash, type));
+		if (descriptor == null)
+			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
+		return descriptor;
+	}
+
+	static function validSourceKind(value:String):Bool
+		return value == "struct" || value == "class" || value == "native-value";
+
+	static function canonicalInterfaces(values:Array<Dynamic>):Bool {
+		checkItems(values.length);
+		var previous:Null<String> = null;
+		for (value in values) {
+			if (!Std.isOfType(value, String))
+				return false;
+			var identity:String = cast value;
+			if (!validInterfaceIdentity(identity) || (previous != null && Reflect.compare(previous, identity) >= 0))
+				return false;
+			previous = identity;
+		}
+		return true;
+	}
+
+	static function validInterfaceIdentity(value:String):Bool {
+		if (!StringTools.startsWith(value, "interface:"))
+			return false;
+		var open = value.indexOf("<"), length = value.length,
+			prefixLength = "interface:".length;
+		if (open <= prefixLength || length <= open + 1 || !StringTools.endsWith(value, ">"))
+			return false;
+		var name = value.substring(prefixLength, open);
+		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".") || name.indexOf("..") >= 0)
+			return false;
+		var depth = 0;
+		for (index in open...length) {
+			var code = value.charCodeAt(index);
+			if (code <= 32 || code == 127)
+				return false;
+			switch code {
+				case 60: depth++;
+				case 62:
+					depth--;
+					if (depth < 0 || (depth == 0 && index != length - 1))
+						return false;
+				case _:
+			}
+		}
+		return depth == 0;
 	}
 
 	static function validateNodes(nodes:Array<Dynamic>, depth:Int, uniqueNames:Bool):Void {
@@ -359,10 +451,15 @@ class MessagePackSchema {
 
 	static function descriptorHash(descriptor:Dynamic):String {
 		var canonical = new StringBuf();
+		var version = fieldInt(descriptor, "version");
 		append(canonical, fieldString(descriptor, "type"));
-		append(canonical, Std.string(DESCRIPTOR_VERSION));
+		append(canonical, Std.string(version));
 		append(canonical, fieldString(descriptor, "name"));
 		append(canonical, fieldString(descriptor, "type"));
+		if (version == DESCRIPTOR_VERSION) {
+			append(canonical, fieldString(descriptor, "sourceKind"));
+			appendStrings(canonical, fieldArray(descriptor, "interfaces"));
+		}
 		append(canonical, fieldBool(descriptor, "flat") ? "1" : "0");
 		append(canonical, fieldBool(descriptor, "portable") ? "1" : "0");
 		appendNullableInt(canonical, fieldNullableInt(descriptor, "size"));

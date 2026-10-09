@@ -586,6 +586,12 @@ class SemanticAssembly {
 											structuralQueue.push(functionOwner);
 											break;
 										}
+								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
+									for (interfaceDecl in interfaces)
+										if (interfaceDecl.name == functionOwner) {
+											structuralQueue.push(functionOwner);
+											break;
+										}
 								var matchedFunction = false;
 								for (fn in functions)
 									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {

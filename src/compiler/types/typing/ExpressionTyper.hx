@@ -418,6 +418,18 @@ class ExpressionTyper {
 					isFinal: true
 				},
 				{
+					name: "sourceKind",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "interfaces",
+					type: TArray(TString),
+					optional: false,
+					isFinal: true
+				},
+				{
 					name: "flat",
 					type: TBool,
 					optional: false,
@@ -472,11 +484,13 @@ class ExpressionTyper {
 					isFinal: true
 				}
 			],
-			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v3", descriptorFields),
+			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v4", descriptorFields),
 			descriptorExpression = ObjectLiteral([
 				objectField("version", IntegerLiteral(descriptor.version, span), span),
 				objectField("name", StringLiteral(descriptor.name, span), span),
 				objectField("type", StringLiteral(descriptor.type, span), span),
+				objectField("sourceKind", StringLiteral(descriptor.sourceKind, span), span),
+				objectField("interfaces", stringArray(descriptor.interfaces, span), span),
 				objectField("flat", BoolLiteral(descriptor.flat, span), span),
 				objectField("portable", BoolLiteral(descriptor.portable, span), span),
 				objectField("size", nullableInteger(descriptor.size, span), span),
@@ -499,7 +513,9 @@ class ExpressionTyper {
 		names.sort(Reflect.compare);
 		var descriptors:Array<NativeTypeDescriptorData> = [];
 		for (name in names) {
-			var descriptor = buildNativeTypeDescriptor(TInstance(NominalKind.Class, name, []));
+			var declaration = session.classDecls.get(name),
+				kind = hasCRepresentation(declaration) ? NominalKind.NativeValue : NominalKind.Class,
+				descriptor = buildNativeTypeDescriptor(TInstance(kind, name, []));
 			if (descriptor != null)
 				descriptors.push(descriptor);
 		}
@@ -743,11 +759,15 @@ class ExpressionTyper {
 		if (declaration == null)
 			return null;
 		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], typedMetadata(declaration.metadata), []),
-			identity = SemanticSignature.type(resolved);
+			identity = SemanticSignature.type(resolved),
+			sourceKind = descriptorSourceKind(declaration),
+			interfaces = descriptorInterfaces(resolved);
 		return {
 			version: NativeTypeDescriptor.VERSION,
 			name: root.name,
 			type: root.type,
+			sourceKind: sourceKind,
+			interfaces: interfaces,
 			flat: root.flat,
 			portable: root.portable,
 			size: root.size,
@@ -756,9 +776,25 @@ class ExpressionTyper {
 			annotationValues: root.annotationValues,
 			fields: root.fields,
 			arguments: root.arguments,
-			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, root.flat, root.portable, root.size, root.alignment, root.annotations,
-				root.annotationValues, root.fields, root.arguments)
+			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, sourceKind, interfaces, root.flat, root.portable, root.size, root.alignment,
+				root.annotations, root.annotationValues, root.fields, root.arguments)
 		};
+	}
+
+	static function descriptorSourceKind(declaration:AstClass):String
+		return if (declaration.isStruct == true) "struct" else if (hasCRepresentation(declaration)) "native-value" else "class";
+
+	function descriptorInterfaces(type:CompilerType):Array<String> {
+		var unique:Map<String, Bool> = [], values:Array<String> = [];
+		for (interfaceType in session.declarations.inheritance.inheritedInterfaces(type)) {
+			var identity = SemanticSignature.type(interfaceType);
+			if (!unique.exists(identity)) {
+				unique.set(identity, true);
+				values.push(identity);
+			}
+		}
+		values.sort(Reflect.compare);
+		return values;
 	}
 
 	function descriptorNode(fieldName:String, type:CompilerType, offset:Null<Int>, annotations:Array<String>,

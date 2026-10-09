@@ -13,7 +13,7 @@ import haxe.io.BytesOutput;
 
 /** Versioned container for the descriptors emitted by a compiled program. */
 class NativeTypeDescriptorCodec {
-	public static inline final FORMAT_VERSION:Int = 3;
+	public static inline final FORMAT_VERSION:Int = 4;
 	static inline final MAGIC = "HTD";
 	static inline final MAX_ITEMS = 0x100000;
 	static inline final MAX_DEPTH = 128;
@@ -30,6 +30,8 @@ class NativeTypeDescriptorCodec {
 			writeCount(output, descriptor.version);
 			writeString(output, descriptor.name);
 			writeString(output, descriptor.type);
+			writeString(output, descriptor.sourceKind);
+			writeStrings(output, descriptor.interfaces);
 			writeBool(output, descriptor.flat);
 			writeBool(output, descriptor.portable);
 			writeNullableInt(output, descriptor.size);
@@ -58,6 +60,8 @@ class NativeTypeDescriptorCodec {
 					version: readCount(input),
 					name: readString(input, bytes.length),
 					type: readString(input, bytes.length),
+					sourceKind: readString(input, bytes.length),
+					interfaces: readStrings(input, bytes.length),
 					flat: readBool(input),
 					portable: readBool(input),
 					size: readNullableInt(input),
@@ -111,8 +115,12 @@ class NativeTypeDescriptorCodec {
 			throw 'Unsupported native type descriptor schema version ${descriptor.version}';
 		if (descriptor.name.length == 0 || descriptor.type.length == 0)
 			throw "Native type descriptor name and type must be nonempty";
-		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type, descriptor.flat, descriptor.portable,
-			descriptor.size, descriptor.alignment, descriptor.annotations, descriptor.annotationValues, descriptor.fields, descriptor.arguments);
+		if (!NativeTypeDescriptor.validSourceKind(descriptor.sourceKind)
+			|| !NativeTypeDescriptor.canonicalInterfaces(descriptor.interfaces))
+			throw 'Native type descriptor has invalid source conformance facts for "${descriptor.name}"';
+		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type, descriptor.sourceKind, descriptor.interfaces,
+			descriptor.flat, descriptor.portable, descriptor.size, descriptor.alignment, descriptor.annotations, descriptor.annotationValues,
+			descriptor.fields, descriptor.arguments);
 		if (descriptor.hash != expected)
 			throw 'Native type descriptor hash mismatch for "${descriptor.name}"';
 		validateAnnotationValues(descriptor.annotationValues);
@@ -314,6 +322,8 @@ class NativeTypeDescriptorCodec {
 			version: descriptor.version,
 			name: descriptor.name,
 			type: descriptor.type,
+			sourceKind: descriptor.sourceKind,
+			interfaces: descriptor.interfaces,
 			flat: descriptor.flat,
 			portable: descriptor.portable,
 			size: descriptor.size,

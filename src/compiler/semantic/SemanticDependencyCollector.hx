@@ -20,6 +20,11 @@ class SemanticDependencyCollector {
 			addBodyDependencies(result, owner, fn.statements, state.name, entry);
 			scanNativeLayoutQueryStatements(result, owner, fn.statements, typeAliases);
 		}
+		for (interfaceDecl in ast.interfaces) {
+			var interfaceName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, interfaceDecl.name);
+			for (base in interfaceDecl.bases)
+				addTypeDependency(result, interfaceName, SemanticDependencyKind.Layout, base, typeAliases);
+		}
 		for (classDecl in ast.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 				base = classDecl.base;

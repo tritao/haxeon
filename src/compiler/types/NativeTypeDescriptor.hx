@@ -53,6 +53,13 @@ typedef NativeTypeDescriptorData = {
 	final version:Int;
 	final name:String;
 	final type:String;
+
+	/** Original source declaration category, independent of the compiler's nominal `class:` type spelling. */
+	final sourceKind:String;
+
+	/** Canonical, sorted effective interface conformance facts for the root declaration. */
+	final interfaces:Array<String>;
+
 	final flat:Bool;
 	final portable:Bool;
 	final size:Null<Int>;
@@ -66,7 +73,50 @@ typedef NativeTypeDescriptorData = {
 
 /** Stable, recursively length-prefixed content hashing for compiler-emitted type descriptors. */
 class NativeTypeDescriptor {
-	public static inline final VERSION = 4;
+	public static inline final VERSION = 5;
+
+	public static function validSourceKind(value:String):Bool
+		return value == "struct" || value == "class" || value == "native-value";
+
+	/** SemanticSignature spelling for a canonical, fully substituted interface identity. */
+	public static function validInterfaceIdentity(value:String):Bool {
+		if (value == null || !StringTools.startsWith(value, "interface:"))
+			return false;
+		var open = value.indexOf("<"), length = value.length;
+		if (open <= "interface:".length || length <= open + 1 || !StringTools.endsWith(value, ">"))
+			return false;
+		var name = value.substring("interface:".length, open);
+		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".") || name.indexOf("..") >= 0)
+			return false;
+		var depth = 0;
+		for (index in open...length) {
+			var code = value.charCodeAt(index);
+			if (code <= 32 || code == 127)
+				return false;
+			switch code {
+				case 60:
+					depth++;
+				case 62:
+					depth--;
+					if (depth < 0 || (depth == 0 && index != length - 1))
+						return false;
+				case _:
+			}
+		}
+		return depth == 0;
+	}
+
+	public static function canonicalInterfaces(values:Array<String>):Bool {
+		if (values == null)
+			return false;
+		var previous:Null<String> = null;
+		for (value in values) {
+			if (!validInterfaceIdentity(value) || (previous != null && Reflect.compare(previous, value) >= 0))
+				return false;
+			previous = value;
+		}
+		return true;
+	}
 
 	/** Convert a finite Haxe Float to the value representable by the native Float32 scalar. */
 	public static function float32DefaultValue(value:Float):Null<Float> {
@@ -137,14 +187,16 @@ class NativeTypeDescriptor {
 			case _: null;
 		};
 
-	public static function contentHash(identity:String, name:String, type:String, flat:Bool, portable:Bool, size:Null<Int>, alignment:Null<Int>,
-			annotations:Array<String>, annotationValues:Array<NativeTypeAnnotationData>, fields:Array<NativeTypeDescriptorField>,
-			arguments:Array<NativeTypeDescriptorField>):String {
+	public static function contentHash(identity:String, name:String, type:String, sourceKind:String, interfaces:Array<String>, flat:Bool, portable:Bool,
+			size:Null<Int>, alignment:Null<Int>, annotations:Array<String>, annotationValues:Array<NativeTypeAnnotationData>,
+			fields:Array<NativeTypeDescriptorField>, arguments:Array<NativeTypeDescriptorField>):String {
 		var canonical = new StringBuf();
 		append(canonical, identity);
 		append(canonical, Std.string(VERSION));
 		append(canonical, name);
 		append(canonical, type);
+		append(canonical, sourceKind);
+		appendStrings(canonical, interfaces);
 		append(canonical, flat ? "1" : "0");
 		append(canonical, portable ? "1" : "0");
 		appendNullableInt(canonical, size);

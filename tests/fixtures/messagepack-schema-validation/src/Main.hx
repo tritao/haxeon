@@ -1,6 +1,20 @@
 import haxe.Json;
 import haxeon.wire.MessagePackSchema;
+import haxeon.wire.MessagePackSchema.MessagePackSchemaSourceKind;
 import sys.io.File;
+
+interface SchemaResource {
+}
+interface SchemaRole {
+}
+interface SchemaBase extends SchemaResource {
+}
+interface GenericMarker < T > {
+}
+
+@:value @:repr("C") class SchemaNative {
+  public var count:Int;
+}
 
 struct SchemaLeaf {
   public var zero:Int = 0;
@@ -9,7 +23,7 @@ struct SchemaLeaf {
   public var ratio:Float32 = 0.1;
   public var absent:Int;
 }
-struct SchemaRoot {
+struct SchemaRoot:SchemaBase, GenericMarker<Int>, SchemaRole {
   public var leaf:SchemaLeaf;
   public var title:String = "root";
 }
@@ -33,6 +47,16 @@ function main():Int {
   var json = File.getContent(artifactPath),
     info:Dynamic = typeInfo<SchemaRoot>(), schema = MessagePackSchema.fromJson(json);
   schema.requireDescriptor(info.hash, info.type);
+  var sourceFacts = schema.requireSourceFacts(info.hash, info.type);
+  if (sourceFacts.sourceKind != MessagePackSchemaSourceKind.Struct || sourceFacts.interfaces.join(",")
+    != "interface:GenericMarker<Int>,interface:SchemaBase<>,interface:SchemaResource<>,interface:SchemaRole<>") return 8;
+  sourceFacts.interfaces.pop();
+  if (schema.requireSourceFacts(info.hash, info.type).interfaces.length != 4) return 9;
+  var nativeInfo:Dynamic = typeInfo<SchemaNative>();
+  schema.requireDescriptor(nativeInfo.hash, nativeInfo.type);
+  var nativeFacts = schema.requireSourceFacts(nativeInfo.hash, nativeInfo.type);
+  if (nativeInfo.type != "native-value:SchemaNative<>" || nativeFacts.sourceKind
+    != MessagePackSchemaSourceKind.NativeValue || nativeFacts.interfaces.length != 0) return 15;
   var zero = schema.fieldDefaultValue(info.hash, info.type, ["leaf", "zero"]), optional = schema.fieldDefaultValue(
     info.hash,
     info.type,
@@ -74,6 +98,39 @@ function main():Int {
   if (!rejects(function() schema.fieldDefaultValue(info.hash, info.type, ["leaf", "missing"]))) return 3;
   if (!rejects(function() MessagePackSchema.fromJson(StringTools.replace(json,
     info.hash, StringTools.lpad("", "0", 64))))) return 4;
+  var sourceKindTamper:Dynamic = Json.parse(json), sourceKindDescriptors:Array<Dynamic> = cast Reflect.field(
+    sourceKindTamper,
+    "descriptors"
+  );
+  for (descriptor in sourceKindDescriptors) if (Reflect.field(descriptor, "hash") == info.hash) Reflect.setField(
+    descriptor,
+    "sourceKind",
+    "class"
+  );
+  if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(sourceKindTamper)))) return 10;
+  var interfaceOrderTamper:Dynamic = Json.parse(json), interfaceDescriptors:Array<Dynamic> = cast Reflect.field(
+    interfaceOrderTamper,
+    "descriptors"
+  );
+  for (descriptor in interfaceDescriptors) if (Reflect.field(descriptor, "hash") == info.hash) Reflect.setField(
+    descriptor,
+    "interfaces",
+    [
+      "interface:SchemaRole<>",
+      "interface:SchemaResource<>"
+    ]
+  );
+  if (!rejects(function() MessagePackSchema.fromJson(Json.stringify(interfaceOrderTamper)))) return 11;
+  var legacyPath = Sys.getEnv("HAXEON_SCHEMA_LEGACY_ARTIFACT");
+  if (legacyPath == null) throw "HAXEON_SCHEMA_LEGACY_ARTIFACT must name the pre-conformance fixture";
+  var legacy = MessagePackSchema.fromJson(File.getContent(legacyPath)),
+    legacyHash = "c53ad0bec33902b10b2cb636be67e3b3c5e32eb198e08ea7fe8e76f88272e9ee",
+    legacyType = "class:LegacySchemaProbe<>";
+  legacy.requireDescriptor(legacyHash, legacyType);
+  if (legacy.sourceFacts(legacyHash, legacyType) != null) return 12;
+  if (!rejects(function() legacy.requireSourceFacts(legacyHash, legacyType))) return 13;
+  var legacyDefault = legacy.fieldDefaultValue(legacyHash, legacyType, ["value"]);
+  if (legacyDefault == null || legacyDefault.type != "Int" || legacyDefault.value != 7) return 14;
   var wrongType:Dynamic = Json.parse(json),
     descriptors:Array<Dynamic> = cast Reflect.field(wrongType, "descriptors"), root:Dynamic = null;
   for (descriptor in descriptors) if (Reflect.field(descriptor, "hash") == info.hash) root = descriptor;

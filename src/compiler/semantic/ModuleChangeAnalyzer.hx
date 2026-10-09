@@ -235,17 +235,6 @@ class ModuleChangeAnalyzer {
 					for (method in classDecl.methods)
 						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
-			var wireFieldFingerprint = [
-				for (field in classDecl.fields)
-					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
-			].join(";");
-			wireFieldFingerprint += ":field-defaults:" + [
-				for (field in classDecl.fields)
-					if (!field.isStatic) field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
-			].join(";");
-			wireFields.set(className, wireFieldFingerprint);
-			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
-				structuralChanged.set(className, true);
 			var isValue = classDecl.isStruct == true, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
@@ -256,6 +245,24 @@ class ModuleChangeAnalyzer {
 							isNativeValue = true;
 						case _:
 					}
+			var wireFieldFingerprint = [
+				for (field in classDecl.fields)
+					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
+			].join(";");
+			wireFieldFingerprint += ":field-defaults:" + [
+				for (field in classDecl.fields)
+					if (!field.isStatic) field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
+			].join(";");
+			var sourceKind = classDecl.isStruct == true ? "struct" : isNativeValue ? "native-value" : "class",
+				declaredInterfaces = [
+					for (interfaceType in classDecl.interfaces)
+						SemanticSignature.parsed(interfaceType, ast.aliases)
+				];
+			declaredInterfaces.sort(Reflect.compare);
+			wireFieldFingerprint += ":source-kind:" + sourceKind + ":interfaces:" + declaredInterfaces.join(";");
+			wireFields.set(className, wireFieldFingerprint);
+			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
+				structuralChanged.set(className, true);
 			var typeResult = types.declareClass(className, baseName, classFields, classMethods, isValue && !isNativeValue);
 			if (compiledOnce && typeResult.compatibility != Compatible)
 				structuralChanged.set(className, true);

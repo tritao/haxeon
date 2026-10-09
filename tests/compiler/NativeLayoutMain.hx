@@ -239,7 +239,8 @@ class NativeLayoutMain {
 		Reflect.setField(malformedNarrowDescriptor, "fields", malformedNarrowFields);
 		Reflect.setField(malformedNarrowDescriptor, "hash",
 			compiler.types.NativeTypeDescriptor.contentHash(malformedNarrowDescriptor.type, malformedNarrowDescriptor.name, malformedNarrowDescriptor.type,
-				malformedNarrowDescriptor.flat, malformedNarrowDescriptor.portable, malformedNarrowDescriptor.size, malformedNarrowDescriptor.alignment,
+				malformedNarrowDescriptor.sourceKind, malformedNarrowDescriptor.interfaces, malformedNarrowDescriptor.flat,
+				malformedNarrowDescriptor.portable, malformedNarrowDescriptor.size, malformedNarrowDescriptor.alignment,
 				malformedNarrowDescriptor.annotations, malformedNarrowDescriptor.annotationValues, malformedNarrowDescriptor.fields,
 				malformedNarrowDescriptor.arguments));
 		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.encode([cast malformedNarrowDescriptor]), "does not match its semantic type");
@@ -256,7 +257,8 @@ class NativeLayoutMain {
 		Reflect.setField(malformedFloat32Descriptor, "fields", malformedFloat32Fields);
 		Reflect.setField(malformedFloat32Descriptor, "hash",
 			compiler.types.NativeTypeDescriptor.contentHash(malformedFloat32Descriptor.type, malformedFloat32Descriptor.name, malformedFloat32Descriptor.type,
-				malformedFloat32Descriptor.flat, malformedFloat32Descriptor.portable, malformedFloat32Descriptor.size, malformedFloat32Descriptor.alignment,
+				malformedFloat32Descriptor.sourceKind, malformedFloat32Descriptor.interfaces, malformedFloat32Descriptor.flat,
+				malformedFloat32Descriptor.portable, malformedFloat32Descriptor.size, malformedFloat32Descriptor.alignment,
 				malformedFloat32Descriptor.annotations, malformedFloat32Descriptor.annotationValues, malformedFloat32Descriptor.fields,
 				malformedFloat32Descriptor.arguments));
 		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.encode([cast malformedFloat32Descriptor]),
