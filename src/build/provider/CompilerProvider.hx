@@ -104,7 +104,7 @@ class CompilerProvider {
 						runtimeLibraryEnvironment(context.compilerHome),
 						() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
 		};
-		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions", output + ".hli", output + ".live.json"],
+		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions", output + ".hli", output + ".live.json", output + ".build-id"],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke),
 			false);

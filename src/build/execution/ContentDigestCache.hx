@@ -1,6 +1,5 @@
 package build.execution;
 
-import haxe.crypto.Sha256;
 import sys.FileSystem;
 import sys.io.File;
 #if (target.threaded && !eval)
@@ -35,7 +34,7 @@ class ContentDigestCache {
 					+ stat.ctime.getTime(),
 				value = values.get(key);
 			if (value == null) {
-				value = Sha256.make(File.getBytes(path)).toHex();
+				value = ContentDigest.make(File.getBytes(path)).toHex();
 				values.set(key, value);
 			}
 			#if (target.threaded && !eval)
