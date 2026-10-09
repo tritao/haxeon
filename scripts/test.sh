@@ -140,6 +140,7 @@ wasm_stages=$!
 run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatter.sh"
 run_timed native-call-integration "$root_dir/tests/integration/test-native-call.sh"
 run_timed hxi-call-integration "$root_dir/tests/integration/test-hxi-call.sh"
+run_timed world-native-record-layout-integration "$root_dir/tests/integration/test-world-native-record-layout.sh"
 
 # These project tests build below their own mktemp project roots and use
 # separate source caches, so they can share runner slots without racing on the

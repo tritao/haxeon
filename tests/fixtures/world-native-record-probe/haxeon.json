@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "package": { "name": "world-native-record-probe" },
+  "entry": "Main",
+  "sourceRoots": ["src"],
+  "target": "host",
+  "defines": ["native-abi-target=portable-abi64"],
+  "outputDir": "../../../out/world-e1022/native-record-probe"
+}

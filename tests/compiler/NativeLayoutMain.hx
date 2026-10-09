@@ -97,6 +97,18 @@ class NativeLayoutMain {
 			hxiLongRecord = requireClass(hxiTargetCompiler.lastTypedProgram.classes, "LongRecord");
 		expect(requireLayout(hxiLongRecord.nativeLayouts, "x86_64-pc-windows-msvc").size == 4 && hxiCompiled.module.ints.indexOf(4) >= 0,
 			"the registered HXI target must reach record layout and query constant folding");
+		var cachedLayoutCompiler = new Compiler();
+		cachedLayoutCompiler.configure("native-layout-cached", "native-layout-cached", ["native-abi-target=portable-abi64"]);
+		cachedLayoutCompiler.update("Transform.hx", '@:value @:repr("C") class Transform { public var x:Float; public var y:Float; public var z:Float; }');
+		var cachedMain = 'class Main { static function main():Int return sizeof<Transform>() == 24 ? 42 : 1; }';
+		cachedLayoutCompiler.update("Main.hx", cachedMain);
+		cachedLayoutCompiler.compile("Main");
+		cachedLayoutCompiler.update("Main.hx", StringTools.replace(cachedMain, "sizeof<Transform>() == 24", "alignof<Transform>() == 8"));
+		var cachedLayoutCompiled = cachedLayoutCompiler.compile("Main"),
+			cachedTransform = requireClass(cachedLayoutCompiler.lastTypedProgram.classes, "Transform");
+		expect(requireLayout(cachedTransform.nativeLayouts, "portable-abi64").size == 24
+			&& cachedLayoutCompiled.module.ints.indexOf(42) >= 0,
+			"retyped class methods must see cached cross-module layouts before folding sizeof/alignof queries");
 		if ([
 			for (object in compiler.ir.IrProgramAssembler.objectsFrom(typed))
 				if (object.name == "Pair" || object.name == "Outer") object

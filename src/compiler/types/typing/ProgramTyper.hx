@@ -46,6 +46,8 @@ class ProgramTyper {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
+		if (cachedMetadata != null)
+			bindCachedNativeLayouts(cachedMetadata.classes);
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
 			var emptySubstitutions:Map<String, CompilerType> = [];
@@ -182,7 +184,7 @@ class ProgramTyper {
 			] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
 			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
 		if (cachedMetadata == null)
 			for (enumDecl in typedEnums)
@@ -204,10 +206,12 @@ class ProgramTyper {
 						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
 				}
 			}
-		if (cachedMetadata == null)
+		if (cachedMetadata == null) {
 			typedClasses = layoutNativeClasses(typedClasses);
-		else
+			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
+		} else {
 			bindCachedNativeLayouts(typedClasses);
+		}
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
 		for (fn in program.functions)
@@ -324,7 +328,7 @@ class ProgramTyper {
 					if (layout.target == session.nativeAbiTarget)
 						session.nativeLayoutsByName.set(classDecl.name, layout);
 
-	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, deferMethodBodies:Bool = false):TypedClass {
 		var isStruct = classDecl.isStruct == true,
 			requestedValue = isStruct || hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
@@ -429,39 +433,6 @@ class ProgramTyper {
 				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
-		var typedMethods:Array<TypedFunction> = [],
-			instanceInitializers:Array<TypedField> = [],
-			hasConstructor = false;
-		for (field in fields)
-			if (!field.isStatic && field.initializer != null)
-				instanceInitializers.push(field);
-		for (method in classDecl.methods) {
-			if (BodyTyper.isGeneric(method))
-				continue;
-			var qualified = classDecl.name + "." + method.name,
-				typeBody = selected == null || selected.exists(qualified),
-				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
-			if (method.name == "new") {
-				hasConstructor = true;
-				if (typeBody && instanceInitializers.length > 0)
-					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
-			}
-			typedMethods.push(typedMethod);
-		}
-		if (!hasConstructor && instanceInitializers.length > 0 && (selected == null || selected.exists(classDecl.name + ".new")))
-			typedMethods.push({
-				name: classDecl.name + ".new",
-				owner: classDecl.name,
-				isStatic: false,
-				isConstructor: true,
-				arguments: [],
-				result: TVoid,
-				statements: instanceInitializerStatements(instanceInitializers, classDecl.name),
-				cells: [],
-				cellCaptures: [],
-				span: classDecl.span
-			});
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
 			baseName = BodyTyper.inheritanceName(parsedBase);
@@ -478,9 +449,75 @@ class ProgramTyper {
 					if (!StructProperties.isConstraintSyntax(interfaceType)) BodyTyper.inheritanceName(interfaceType)
 			],
 			fields: fields,
-			methods: typedMethods,
+			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions),
 			span: classDecl.span
 		};
+	}
+
+	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration];
+		return [
+			for (typed in classes) {
+				var declaration = byName.get(typed.name);
+				if (declaration == null) typed else {
+					var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
+					{
+						name: typed.name,
+						isValue: typed.isValue,
+						isFlat: typed.isFlat,
+						isPortable: typed.isPortable,
+						isNativeValue: typed.isNativeValue,
+						nativeLayouts: typed.nativeLayouts,
+						base: typed.base,
+						interfaces: typed.interfaces,
+						fields: typed.fields,
+						methods: typeClassMethods(declaration, typed.fields, selected, false, substitutions),
+						span: typed.span
+					};
+				}
+			}
+		];
+	}
+
+	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>, deferBodies:Bool,
+			substitutions:Map<String, CompilerType>):Array<TypedFunction> {
+		var typedMethods:Array<TypedFunction> = [],
+			instanceInitializers:Array<TypedField> = [],
+			hasConstructor = false;
+		for (field in fields)
+			if (!field.isStatic && field.initializer != null)
+				instanceInitializers.push(field);
+		for (method in classDecl.methods) {
+			if (BodyTyper.isGeneric(method))
+				continue;
+			var qualified = classDecl.name + "." + method.name,
+				typeBody = !deferBodies && (selected == null || selected.exists(qualified)),
+				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
+					substitutions) : methodSignature(method, classDecl.name, substitutions);
+			if (method.name == "new") {
+				hasConstructor = true;
+				if (typeBody && instanceInitializers.length > 0)
+					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
+			}
+			typedMethods.push(typedMethod);
+		}
+		if (!hasConstructor
+			&& instanceInitializers.length > 0
+			&& !deferBodies
+			&& (selected == null || selected.exists(classDecl.name + ".new")))
+			typedMethods.push({
+				name: classDecl.name + ".new",
+				owner: classDecl.name,
+				isStatic: false,
+				isConstructor: true,
+				arguments: [],
+				result: TVoid,
+				statements: instanceInitializerStatements(instanceInitializers, classDecl.name),
+				cells: [],
+				cellCaptures: [],
+				span: classDecl.span
+			});
+		return typedMethods;
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
