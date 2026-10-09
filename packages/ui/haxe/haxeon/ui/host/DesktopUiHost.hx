@@ -78,6 +78,8 @@ class DesktopUiHost {
 			var init = new InitOptions();
 			init.set_api_version(NativeKit.nk_api_version());
 			init.set_event_queue_capacity(options.eventQueueCapacity);
+			init.set_application_id(options.applicationId);
+			init.set_application_name(options.title);
 			if (NativeKit.nk_init(init) != Result.Ok)
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
