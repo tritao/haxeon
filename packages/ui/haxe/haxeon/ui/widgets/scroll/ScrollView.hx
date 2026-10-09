@@ -14,6 +14,7 @@ import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -37,6 +38,8 @@ class ScrollView implements View {
 	public var showScrollbar:Bool;
 	/** Expand content to fill a short viewport while retaining intrinsic scroll overflow. */
 	public var fillViewport:Bool = false;
+	/** Optional intrinsic content dimensions for clipped or virtualized document widgets. */
+	public var contentExtentProvider:Null<(Float, Float)->{width:Float, height:Float}>;
 	/** Null inherits the application environment policy. */
 	public var scrollbarVisibility:Null<Int> = null;
 	/** Optional non-scrolling ancestor with the same vertical extent. */
@@ -100,6 +103,9 @@ class ScrollView implements View {
 			});
 
 			var contentStyle = new LayoutStyle();
+			// Explicit document extents must not become the viewport's minimum layout size.
+			// Keep that content outside parent flow; its provider owns the scroll range.
+			if (contentExtentProvider != null) contentStyle.positioning = LayoutPositioning.Absolute;
 			contentStyle.width = axis == ScrollAxis.Vertical ? LayoutAxis.stretch() : fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
 			contentStyle.height = axis == ScrollAxis.Horizontal || fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
 			contentStyle.transform = Transform2D.identity().translated(-controller.offsetX,
@@ -110,17 +116,27 @@ class ScrollView implements View {
 				return context.withScope(new Key("content"), function() return child.build(context));
 			});
 			translatedContent.add(content);
+			var horizontalVisibility = context.resourceState(context.id("horizontal-scrollbar-visibility"),
+				function() return new ScrollbarVisibilityController(), function(value) value.dispose());
+			horizontalVisibility.value.bindSource(controller);
+			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
+			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
+			viewport.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
+			viewport.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
 			binding.value.attach(controller, context.animations, function(_) {
 				translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX, -controller.offsetY);
 				visibility.value.reveal();
+				horizontalVisibility.value.reveal();
 				context.commands.refresh();
 			});
 
 			viewport.add(translatedContent);
 			var overlayHost = scrollbarOverlayHost == null ? viewport : scrollbarOverlayHost;
 			var scrollbar = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Horizontal
-				? addVerticalScrollbar(context, overlayHost, visibility.value, visibilityChanged) : null;
+				? addScrollbar(context, overlayHost, visibility.value, visibilityChanged, true) : null;
 
+			var horizontal = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Vertical
+				? addScrollbar(context, overlayHost, horizontalVisibility.value, visibilityChanged, false) : null;
 			translatedContent.onResolved(function(geometry) {
 				var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
 				// The viewport's content bounds include the overlay scrollbar. Its
@@ -129,6 +145,11 @@ class ScrollView implements View {
 					geometry.contentBounds.x + geometry.contentBounds.width);
 				var contentHeight = Math.max(geometry.height,
 					geometry.contentBounds.y + geometry.contentBounds.height);
+				if (contentExtentProvider != null) {
+					var intrinsic = contentExtentProvider(viewportGeometry.width, viewportGeometry.height);
+					contentWidth = Math.max(viewportGeometry.width, intrinsic.width);
+					contentHeight = Math.max(viewportGeometry.height, intrinsic.height);
+				}
 				// Clamping notifies the binding and mutates the style; compare with the pre-clamp transform.
 				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
@@ -140,8 +161,11 @@ class ScrollView implements View {
 					context.requestLayoutFeedback();
 				}
 				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0 && controller.viewportHeight > 0);
-				if (scrollbar != null && updateVerticalScrollbar(scrollbar, overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width))
+				if (scrollbar != null && updateScrollbar(scrollbar, overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width, overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height, true))
 					context.requestLayoutFeedback();
+				horizontalVisibility.value.setAvailable(horizontal != null && controller.maxScrollX > 0 && controller.viewportWidth > 0);
+				if (horizontal != null && updateScrollbar(horizontal, overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width,
+					overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height, false)) context.requestLayoutFeedback();
 			});
 			viewport.on(UiEventKind.Scroll, function(event) {
 				if (onScroll != null)
@@ -150,6 +174,7 @@ class ScrollView implements View {
 					return;
 				var dx = axis == ScrollAxis.Horizontal || axis == ScrollAxis.Both ? event.deltaX : 0.0;
 				var dy = axis == ScrollAxis.Vertical || axis == ScrollAxis.Both ? event.deltaY : 0.0;
+				if (axis != ScrollAxis.Vertical && (event.modifiers & UiModifier.Shift) != 0 && dx == 0) { dx = dy; dy = 0; }
 				if (dx != 0 || dy != 0) visibility.value.reveal();
 				if (controller.scrollBy(dx, dy))
 					event.stopPropagation();
@@ -193,74 +218,57 @@ class ScrollView implements View {
 		});
 	}
 
-	function addVerticalScrollbar(context:BuildContext, viewport:RenderNode, visibility:ScrollbarVisibilityController, changed:Void->Void):RenderNode {
-		var trackWidth = ScrollbarHitWidth;
-		var inset = ScrollbarInset;
-		var trackHeight = Math.max(0.0, controller.viewportHeight - inset * 2.0);
-		var thumbHeight = controller.contentHeight <= 0.0 ? 0.0 : Math.max(24.0,
-			trackHeight * controller.viewportHeight / controller.contentHeight);
-		if (thumbHeight > trackHeight)
-			thumbHeight = trackHeight;
-		var travel = Math.max(0.0, trackHeight - thumbHeight);
-		var thumbY = inset + (controller.maxScrollY <= 0.0 ? 0.0 :
-			controller.offsetY / controller.maxScrollY * travel);
+	/** One scrollbar implementation shares painting, capture and accessibility for both axes. */
+	function addScrollbar(context:BuildContext, viewport:RenderNode, visibility:ScrollbarVisibilityController,
+			changed:Void->Void, vertical:Bool):RenderNode {
+		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();
 		trackStyle.positioning = LayoutPositioning.Absolute;
-		trackStyle.positionX = Math.max(0.0, controller.viewportWidth - trackWidth - inset);
-		trackStyle.positionY = inset;
-		trackStyle.width = LayoutAxis.fixed(trackWidth);
-		trackStyle.height = LayoutAxis.fixed(trackHeight);
-		trackStyle.visible = controller.maxScrollY > 0.0 && controller.viewportHeight > 0.0;
-		// The full track remains a pointer target even while its paint is transparent.
-		trackStyle.radiusTopLeft = trackStyle.radiusTopRight = trackWidth * 0.5;
-		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = trackWidth * 0.5;
 		trackStyle.zIndex = 100;
-		var track = new RenderNode(context.id("vertical-scrollbar-track"),
-			LayoutVisualKind.Box, trackStyle);
-		track.setStyleIdentity("scrollbar-track", key.value, key.value, null,
-			["scrollbar", "vertical"]);
+		trackStyle.radiusTopLeft = trackStyle.radiusTopRight = ScrollbarHitWidth * 0.5;
+		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
+		var track = new RenderNode(context.id(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
+		track.setStyleIdentity("scrollbar-track", key.value, key.value, null, ["scrollbar", name]);
 		var thumbStyle = new LayoutStyle();
 		thumbStyle.positioning = LayoutPositioning.Absolute;
-		thumbStyle.positionX = 0.0;
-		thumbStyle.positionY = thumbY - inset;
-		thumbStyle.width = LayoutAxis.fixed(trackWidth);
-		thumbStyle.height = LayoutAxis.fixed(thumbHeight);
-		thumbStyle.visible = trackStyle.visible;
-		// Keep the generous drag target independent of the slimmer visual thumb.
-		thumbStyle.radiusTopLeft = thumbStyle.radiusTopRight = (trackWidth - 2.0) * 0.5;
-		thumbStyle.radiusBottomLeft = thumbStyle.radiusBottomRight = (trackWidth - 2.0) * 0.5;
 		thumbStyle.zIndex = 101;
-		var thumbId = context.id("vertical-scrollbar-thumb");
+		var thumbId = context.id(name + "-scrollbar-thumb");
 		var thumb = new RenderNode(thumbId, LayoutVisualKind.Box, thumbStyle);
-		thumb.setStyleIdentity("scrollbar-thumb", key.value, key.value, null,
-			["scrollbar", "vertical"]);
-		thumb.focusable = trackStyle.visible;
-		var semantics = new Semantics(AccessibilityRole.Slider, "Vertical scroll position");
+		thumb.setStyleIdentity("scrollbar-thumb", key.value, key.value, null, ["scrollbar", name]);
+		var semantics = new Semantics(AccessibilityRole.Slider, vertical ? "Vertical scroll position" : "Horizontal scroll position");
 		semantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;
 		semantics.numericMinimum = 0.0;
-		semantics.numericMaximum = controller.maxScrollY;
-		semantics.numericValue = controller.offsetY;
-		semantics.orientation = AccessibilityOrientation.Vertical;
+		semantics.orientation = vertical ? AccessibilityOrientation.Vertical : AccessibilityOrientation.Horizontal;
 		thumb.semantics = semantics;
 		var visualStyle = new LayoutStyle();
 		visualStyle.positioning = LayoutPositioning.Absolute;
-		visualStyle.height = LayoutAxis.grow();
 		visualStyle.radiusTopLeft = visualStyle.radiusTopRight = 5.0;
 		visualStyle.radiusBottomLeft = visualStyle.radiusBottomRight = 5.0;
-		var visual = new RenderNode(context.id("vertical-scrollbar-thumb-visual"), LayoutVisualKind.Box, visualStyle);
+		var visual = new RenderNode(context.id(name + "-scrollbar-thumb-visual"), LayoutVisualKind.Box, visualStyle);
 		visual.hitTestSelf = false;
 		thumb.add(visual);
+		track.add(thumb);
+		viewport.add(track);
+		var maximum = function() return vertical ? controller.maxScrollY : controller.maxScrollX;
+		var offset = function() return vertical ? controller.offsetY : controller.offsetX;
+		var extent = function() return vertical ? controller.viewportHeight : controller.viewportWidth;
+		var jump = function(value:Float) return vertical ? controller.jumpTo(controller.offsetX, value) : controller.jumpTo(value, controller.offsetY);
+		var travel = function() return Math.max(0.0, vertical ? trackStyle.height.value - thumbStyle.height.value : trackStyle.width.value - thumbStyle.width.value);
 		var updatePaint = function() {
 			var opacity = visibility.opacity;
 			var active = visibility.hovered || visibility.dragging || visibility.focused;
 			var color = context.theme.tokens.textSecondary;
-			track.layout.style.background = Color.rgba(color.red, color.green, color.blue,
-				color.alpha * opacity * (active ? 0.06 : 0.0));
-			visualStyle.width = LayoutAxis.fixed(active ? 10.0 : 8.0);
-			visualStyle.positionX = active ? 1.0 : 2.0;
-			visualStyle.background = Color.rgba(color.red, color.green, color.blue,
-				color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
-			// Only the track receives pointer input while the thumb is hidden.
+			trackStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (active ? 0.06 : 0.0));
+			if (vertical) {
+				visualStyle.width = LayoutAxis.fixed(active ? 10.0 : 8.0);
+				visualStyle.height = LayoutAxis.grow();
+				visualStyle.positionX = active ? 1.0 : 2.0;
+			} else {
+				visualStyle.height = LayoutAxis.fixed(active ? 10.0 : 8.0);
+				visualStyle.width = LayoutAxis.grow();
+				visualStyle.positionY = active ? 1.0 : 2.0;
+			}
+			visualStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
 			thumb.hitTestSelf = opacity > 0;
 		};
 		visibility.attach(context.animations, function() { updatePaint(); changed(); });
@@ -270,122 +278,88 @@ class ScrollView implements View {
 		thumb.on(UiEventKind.Focus, function(_) visibility.setFocused(true));
 		thumb.on(UiEventKind.Blur, function(_) visibility.setFocused(false));
 		thumb.on(UiEventKind.FocusLost, function(_) visibility.setFocused(false));
-		var dragState:State<ScrollbarDragState> = context.resourceState(thumbId,
-			function() return new ScrollbarDragState(), function(_) {});
+		var dragState:State<ScrollbarDragState> = context.resourceState(thumbId, function() return new ScrollbarDragState(), function(_) {});
 		thumb.on(UiEventKind.PointerDown, function(event) {
-			if (event.button != 0)
-				return;
-			dragState.value.dragging = true;
-			visibility.setFocused(false);
-			visibility.setDragging(true);
-			dragState.value.pointerY = event.y;
-			dragState.value.lastPointerY = event.y;
-			dragState.value.offsetY = controller.offsetY;
-			dragState.value.maxScrollY = controller.maxScrollY;
-			dragState.value.travel = Math.max(0.0, track.layout.style.height.value - thumb.layout.style.height.value);
-			dragState.update(dragState.value);
-			event.capturePointer();
-			event.stopPropagation();
-			event.preventDefault();
+			if (event.button != 0) return;
+			var drag = dragState.value;
+			drag.dragging = true;
+			drag.pointer = drag.lastPointer = vertical ? event.y : event.x;
+			drag.offset = offset(); drag.maximum = maximum(); drag.travel = travel();
+			visibility.setFocused(false); visibility.setDragging(true);
+			dragState.update(drag);
+			event.capturePointer(); event.stopPropagation(); event.preventDefault();
 		});
-		// Metrics may change while the pointer is captured (window resize or reflow).
-		// Rebase at the last pointer position so subsequent movement uses the new range.
 		track.onResolved(function(_) {
 			var drag = dragState.value;
-			var travel = Math.max(0.0, track.layout.style.height.value - thumb.layout.style.height.value);
-			if (drag.dragging && (drag.maxScrollY != controller.maxScrollY || drag.travel != travel)) {
-				drag.pointerY = drag.lastPointerY;
-				drag.offsetY = controller.offsetY;
-				drag.maxScrollY = controller.maxScrollY;
-				drag.travel = travel;
+			if (drag.dragging && (drag.maximum != maximum() || drag.travel != travel())) {
+				drag.pointer = drag.lastPointer; drag.offset = offset();
+				drag.maximum = maximum(); drag.travel = travel();
 			}
 		});
 		thumb.on(UiEventKind.PointerMove, function(event) {
-			dragState.value.lastPointerY = event.y;
-			var travel = Math.max(0.0, track.layout.style.height.value -
-				thumb.layout.style.height.value);
-			if (!dragState.value.dragging || travel <= 0.0)
-				return;
-			controller.jumpTo(controller.offsetX, dragState.value.offsetY +
-				(event.y - dragState.value.pointerY) * controller.maxScrollY / travel);
+			var drag = dragState.value;
+			drag.lastPointer = vertical ? event.y : event.x;
+			if (!drag.dragging || travel() <= 0.0) return;
+			jump(drag.offset + (drag.lastPointer - drag.pointer) * maximum() / travel());
 			event.preventDefault();
 		});
-		var finishDrag = function(event:UiEvent) {
-			if (!dragState.value.dragging)
-				return;
-			dragState.value.dragging = false;
-			visibility.setDragging(false);
-			dragState.update(dragState.value);
-			event.releasePointer();
-			event.preventDefault();
+		var finish = function(event:UiEvent) {
+			if (!dragState.value.dragging) return;
+			dragState.value.dragging = false; visibility.setDragging(false);
+			dragState.update(dragState.value); event.releasePointer(); event.preventDefault();
 		};
-		thumb.on(UiEventKind.PointerUp, finishDrag);
-		thumb.on(UiEventKind.PointerCancel, finishDrag);
-		thumb.on(UiEventKind.AccessibilityIncrement, function(event) {
-			if (controller.scrollBy(0.0, Math.max(40.0, controller.viewportHeight * 0.1)))
-				event.preventDefault();
-		});
-		thumb.on(UiEventKind.AccessibilityDecrement, function(event) {
-			if (controller.scrollBy(0.0, -Math.max(40.0, controller.viewportHeight * 0.1)))
-				event.preventDefault();
-		});
+		thumb.on(UiEventKind.PointerUp, finish); thumb.on(UiEventKind.PointerCancel, finish);
+		thumb.on(UiEventKind.AccessibilityIncrement, function(event) { if (jump(offset() + Math.max(40.0, extent() * 0.1))) event.preventDefault(); });
+		thumb.on(UiEventKind.AccessibilityDecrement, function(event) { if (jump(offset() - Math.max(40.0, extent() * 0.1))) event.preventDefault(); });
 		track.on(UiEventKind.PointerDown, function(event) {
-			if (event.button != 0 || track.resolved == null)
-				return;
+			if (event.button != 0 || track.resolved == null) return;
 			visibility.reveal();
-			var thumbHeight = thumb.layout.style.height.value;
-			var travel = Math.max(0.0, track.layout.style.height.value - thumbHeight);
 			var geometry:ResolvedLayoutItem = cast track.resolved;
 			var local = geometry.viewportToLayout(event.x, event.y);
-			var pointerY = local.y - geometry.y;
-			var requestedThumbY = Math.max(0.0,
-				Math.min(travel, pointerY - thumbHeight * 0.5));
-			controller.jumpTo(controller.offsetX, travel <= 0.0 ? 0.0 :
-				requestedThumbY / travel * controller.maxScrollY);
+			var pointer = vertical ? local.y - geometry.y : local.x - geometry.x;
+			var thumbExtent = vertical ? thumbStyle.height.value : thumbStyle.width.value;
+			jump(travel() <= 0 ? 0 : Math.max(0.0, Math.min(travel(), pointer - thumbExtent * 0.5)) / travel() * maximum());
 			event.preventDefault();
 		});
-		track.add(thumb);
-		viewport.add(track);
+		updateScrollbar(track, controller.viewportWidth, controller.viewportHeight, vertical);
 		return track;
 	}
 
-	function updateVerticalScrollbar(track:RenderNode, width:Float):Bool {
-		var thumb = track.children[0];
-		var trackStyle = track.layout.style;
-		var thumbStyle = thumb.layout.style;
-		var inset = ScrollbarInset;
-		var trackHeight = Math.max(0.0, controller.viewportHeight - inset * 2.0);
-		var thumbHeight = controller.contentHeight <= 0.0 ? 0.0 : Math.max(24.0,
-			trackHeight * controller.viewportHeight / controller.contentHeight);
-		thumbHeight = Math.min(thumbHeight, trackHeight);
-		var travel = Math.max(0.0, trackHeight - thumbHeight);
-		var thumbY = controller.maxScrollY <= 0.0 ? 0.0 :
-			controller.offsetY / controller.maxScrollY * travel;
-		var visible = controller.maxScrollY > 0.0 && controller.viewportHeight > 0.0;
-		var trackX = Math.max(0.0, width - ScrollbarHitWidth - inset);
-		var changed = trackStyle.positionX != trackX ||
-			trackStyle.height.value != trackHeight || thumbStyle.height.value != thumbHeight ||
-			thumbStyle.positionY != thumbY || trackStyle.visible != visible;
-		trackStyle.positionX = trackX;
-		trackStyle.height = LayoutAxis.fixed(trackHeight);
-		trackStyle.visible = visible;
-		thumbStyle.height = LayoutAxis.fixed(thumbHeight);
-		thumbStyle.positionY = thumbY;
-		thumbStyle.visible = visible;
-		thumb.focusable = visible;
+	function updateScrollbar(track:RenderNode, width:Float, height:Float, vertical:Bool):Bool {
+		var thumb = track.children[0], trackStyle = track.layout.style, thumbStyle = thumb.layout.style;
+		var viewportExtent = vertical ? controller.viewportHeight : controller.viewportWidth;
+		var contentExtent = vertical ? controller.contentHeight : controller.contentWidth;
+		var maximum = vertical ? controller.maxScrollY : controller.maxScrollX;
+		var offset = vertical ? controller.offsetY : controller.offsetX;
+		var length = Math.max(0.0, viewportExtent - ScrollbarInset * 2.0);
+		var thumbLength = contentExtent <= 0 ? 0 : Math.min(length, Math.max(24.0, length * viewportExtent / contentExtent));
+		var along = maximum <= 0 ? 0 : offset / maximum * Math.max(0, length - thumbLength);
+		var cross = Math.max(0, (vertical ? width : height) - ScrollbarHitWidth - ScrollbarInset);
+		var visible = maximum > 0 && viewportExtent > 0;
+		var changed = trackStyle.visible != visible || (vertical ?
+			trackStyle.height.value != length || thumbStyle.height.value != thumbLength || thumbStyle.positionY != along || trackStyle.positionX != cross :
+			trackStyle.width.value != length || thumbStyle.width.value != thumbLength || thumbStyle.positionX != along || trackStyle.positionY != cross);
+		trackStyle.positionX = vertical ? cross : ScrollbarInset;
+		trackStyle.positionY = vertical ? ScrollbarInset : cross;
+		trackStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : length);
+		trackStyle.height = LayoutAxis.fixed(vertical ? length : ScrollbarHitWidth);
+		thumbStyle.positionX = vertical ? 0 : along;
+		thumbStyle.positionY = vertical ? along : 0;
+		thumbStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : thumbLength);
+		thumbStyle.height = LayoutAxis.fixed(vertical ? thumbLength : ScrollbarHitWidth);
+		trackStyle.visible = thumbStyle.visible = thumb.focusable = visible;
 		var semantics:Semantics = cast thumb.semantics;
-		semantics.numericMaximum = controller.maxScrollY;
-		semantics.numericValue = controller.offsetY;
+		semantics.numericMaximum = maximum; semantics.numericValue = offset;
 		return changed;
 	}
 }
 
 private class ScrollbarDragState {
 	public var dragging:Bool = false;
-	public var pointerY:Float = 0.0;
-	public var lastPointerY:Float = 0.0;
-	public var offsetY:Float = 0.0;
-	public var maxScrollY:Float = 0.0;
+	public var pointer:Float = 0.0;
+	public var lastPointer:Float = 0.0;
+	public var offset:Float = 0.0;
+	public var maximum:Float = 0.0;
 	public var travel:Float = 0.0;
 	public function new() {}
 }
