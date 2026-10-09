@@ -367,6 +367,7 @@ test-shards	42
 array-key-value-comprehension	42
 enum-array-contains	42
 float-div-pow2	42
+native-float32-casts	42
 counted-array-loops	42
 bytes-ascii-decode	42
 jit-inline-allocation	42

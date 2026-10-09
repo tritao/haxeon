@@ -29,6 +29,16 @@ struct Bounds {
   }
 }
 
+struct NativeHandle {
+  public var slot:Int32;
+  public var generation:Int32;
+
+  public function new(slot:Int, generation:Int) {
+    this.slot = cast slot;
+    this.generation = cast generation;
+  }
+}
+
 @:value class LegacyPoint {
   public var x:Int;
   public function new(x:Int) this.x = x;
@@ -68,5 +78,10 @@ function main():Int {
   if (!(legacyFirst == legacySame)) return 9;
   legacySame.x = 19;
   if (legacyFirst == legacySame) return 10;
+  var nativeFirst = new NativeHandle(4, 9);
+  var nativeSame = new NativeHandle(4, 9);
+  var nativeDifferent = new NativeHandle(4, 10);
+  if (!(nativeFirst == nativeSame) || nativeFirst != nativeSame) return 11;
+  if (nativeFirst == nativeDifferent || !(nativeFirst != nativeDifferent)) return 12;
   return 42;
 }

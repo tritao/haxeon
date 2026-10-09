@@ -60,7 +60,7 @@ class EqualityGenerator {
 		if (!requests.exists(key))
 			requests.set(key, {type: type, origin: root.origin, span: root.span});
 		switch type {
-			case TInt, TInt64, TFloat, TBool, TString, TBytes, TNull:
+			case TInt, TInt64, TFloat, TBool, TString, TBytes, TNull, TNativeScalar(_):
 			case TAbstract(_, _, representation):
 				collect(session, representation, root, reachable, requests);
 			case TNullable(element):

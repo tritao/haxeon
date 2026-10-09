@@ -72,7 +72,7 @@ class IrOpportunityCensus {
 						});
 						if (bounds.proven(array, index, block.id))
 							count(2);
-					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _), IntToInt64(_, _):
+					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _), FloatToFloat(_, _), IntToInt64(_, _):
 						if (depth > 0)
 							count(4);
 					case NewObject(out, _):

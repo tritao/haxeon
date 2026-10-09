@@ -1529,8 +1529,10 @@ class IrGenerator {
 					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
 					checkedCast(builder, builder.toDyn(source),
 					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
-					builder.intToFloat(source); else
-					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+					builder.intToFloat(source); else if ((source.type == F64
+					&& target == F32)
+					|| (source.type == F32 && target == F64)) builder.floatToFloat(source,
+						target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',

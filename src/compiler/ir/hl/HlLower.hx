@@ -731,6 +731,8 @@ class HlLower {
 						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case FloatToInt(output, value):
 						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case FloatToFloat(output, value):
+						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case BeginTry(catchBlock, _):
@@ -1277,9 +1279,9 @@ class HlLower {
 	static function keepsArrayBounds(instruction:IrInstruction):Bool
 		return switch instruction {
 			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), ToDyn(_, _),
-				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
-				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _),
-				FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
+				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _),
+				BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
+				Equal(_, _, _), FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
 			default: false;
 		};
 

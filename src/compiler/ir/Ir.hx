@@ -72,6 +72,7 @@ enum IrInstruction {
 	IntToFloat(output:IrValue, value:IrValue);
 	IntToInt64(output:IrValue, value:IrValue);
 	FloatToInt(output:IrValue, value:IrValue);
+	FloatToFloat(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry(catchBlock:Int);

@@ -246,8 +246,8 @@ class IrFunctionStateCodec {
 			case MemoryLoad(output, pointer, _, _):
 				collectValue(output, values);
 				collectValue(pointer, values);
-			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), SafeCast(output, value),
-				InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value), IteratorNew(output, value),
+			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), FloatToFloat(output, value),
+				SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value), ArraySize(output, value), IteratorNew(output, value),
 				IteratorHasNext(output, value), IteratorNext(output, value), EnumIndex(output, value), EnumField(output, value, _, _):
 				collectValue(output, values);
 				collectValue(value, values);

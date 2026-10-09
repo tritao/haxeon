@@ -74,3 +74,18 @@ for (const descriptor of dump.descriptors)
 
 process.stdout.write('PASS: build emits versioned descriptor binary and recursive JSON dump\n');
 NODE
+
+HAXEON_COMPILER_SESSION_DIR="$output_dir/schema-validation/compiler-session" \
+HAXEON_SOURCE_CACHE="$output_dir/schema-validation/source-cache" \
+HAXEON_DISABLE_ARTIFACT_CACHE=1 HAXEON_COMPILER_SERVER=0 HAXEON_CCACHE=0 \
+	"$repo_dir/scripts/haxeon" build --project="$repo_dir/tests/fixtures/messagepack-schema-validation/haxeon.json"
+schema_output="$output_dir/schema-validation/host/main.hl"
+schema_status=0
+HAXEON_SCHEMA_VALIDATION_ARTIFACT="$schema_output.descriptors.json" \
+	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	"$repo_dir/.tools/hashlink/hl" "$schema_output" || schema_status=$?
+if [[ $schema_status -ne 42 ]]; then
+	echo "MessagePackSchema validation fixture returned $schema_status, expected 42" >&2
+	exit 1
+fi
+echo "PASS: runtime MessagePackSchema validates recursive descriptor defaults and rejects malformed artifacts"

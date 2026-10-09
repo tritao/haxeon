@@ -256,6 +256,10 @@ class IrVerifier {
 				require(values, value);
 				if (value.type != F64 || out.type != I32)
 					throw "IR Float-to-Int conversion requires F64 input and I32 output";
+			case FloatToFloat(out, value):
+				require(values, value);
+				if (!((value.type == F64 && out.type == F32) || (value.type == F32 && out.type == F64)))
+					throw "IR Float-to-Float conversion requires F64/F32 or F32/F64 types";
 			case SafeCast(out, value):
 				require(values, value);
 				if (!IrTypeTools.isDynamic(value.type))

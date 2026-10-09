@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 5;
+	static inline final VERSION = 6;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -29,6 +29,7 @@ class IrInstructionCodec {
 		"IntToFloat" => true,
 		"IntToInt64" => true,
 		"FloatToInt" => true,
+		"FloatToFloat" => true,
 		"SafeCast" => true,
 		"BeginTry" => true,
 		"EndTry" => true,
@@ -161,6 +162,8 @@ class IrInstructionCodec {
 				writeTwoValues(output, "IntToInt64", outputValue, value);
 			case FloatToInt(outputValue, value):
 				writeTwoValues(output, "FloatToInt", outputValue, value);
+			case FloatToFloat(outputValue, value):
+				writeTwoValues(output, "FloatToFloat", outputValue, value);
 			case SafeCast(outputValue, value):
 				writeTwoValues(output, "SafeCast", outputValue, value);
 			case BeginTry(catchBlock, afterBlock):
@@ -341,6 +344,9 @@ class IrInstructionCodec {
 			case "FloatToInt":
 				arity(2);
 				FloatToInt(readValue(input, values), readValue(input, values));
+			case "FloatToFloat":
+				arity(2);
+				FloatToFloat(readValue(input, values), readValue(input, values));
 			case "SafeCast":
 				arity(2);
 				SafeCast(readValue(input, values), readValue(input, values));
