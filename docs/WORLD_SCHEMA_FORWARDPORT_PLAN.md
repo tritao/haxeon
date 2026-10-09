@@ -117,10 +117,12 @@ source checkpoint. No World or root pins will be changed.
 
 ## Current compiler checkpoint and acceptance boundary
 
-The latest committed review-tree checkpoint is
+The pre-default functional checkpoint was
 `e6b53658e153562772122c00e1b16daeecb859c8` (`Support generic typeInfo across
-mixed record roots`), on the accepted-main lineage. Its HashLink gitlink is
-still `0e739431da931d8e21c98c485afb17f1f3164106`.
+mixed record roots`). The current committed checkpoint is
+`78d459f0` (`Add scalar defaults to native descriptors`), on the accepted-main
+lineage. Its HashLink gitlink remains
+`0e739431da931d8e21c98c485afb17f1f3164106`.
 
 At this checkpoint, `typeInfo<T>()` accepts concrete source-declared struct
 roots, including ordinary Flat and rich structs, and legacy C value records.
@@ -133,17 +135,11 @@ type parameter or runtime-selected type. The generic and mixed-root
 regressions are `tests/programs/typeinfo-generic.hx` and
 `tests/programs/typeinfo-mixed-layout.hx`.
 
-This is not yet World schema support. `NativeTypeDescriptorField` has no
-ordinary field initializer/default property, so descriptors cannot preserve
-the absent-versus-zero-versus-explicit-null distinction or nested default
-values required by World. `stdlib/haxeon/wire/MessagePackSchema.hx` and its
-`fromJson`, `requireDescriptor`, and `fieldDefaultValue` APIs are also absent.
-The descriptor binary/JSON artifact format is version 2 and its descriptor
-tree schema is version 3; it does not encode ordinary field defaults. The
-full World consumer has not been run against `e6b53658`. The World gate at
-`a6e1114` records an `E2001` for the missing schema module against the earlier
-`77b2df1` compiler checkpoint; that result is not a passing consumer test for
-this branch.
+At `e6b53658`, descriptor defaults and the runtime schema API were not
+implemented: its artifact format was version 2 and its descriptor tree schema
+was version 3. The World gate at `a6e1114` records an `E2001` for the missing
+schema module against the earlier `77b2df1` compiler checkpoint; it is not a
+passing consumer test for this branch.
 
 Acceptance evidence for this checkpoint:
 
@@ -169,3 +165,47 @@ No World pin or sibling checkout was changed. Until World reports its full
 consumer run against a candidate compiler checkpoint, do not describe this
 layout/typeInfo result as full World compatibility or add further descriptor
 schema behavior based only on the older `E2001` baseline.
+
+## Final driver checkpoint
+
+The scalar-default descriptor slice is committed at
+`78d459f00121eb2933b8480bfa9dff43d7dfb054`. It records
+ordinary field defaults as typed values with absent-versus-present
+distinction, includes them in recursive descriptor hashes and artifact
+invalidation, and advances the binary artifact to format 3 and the descriptor
+tree to schema 4. Supported defaults are constant scalar literals, including
+zero and explicit null; executable/computed and collection defaults remain
+unsupported. Narrow integer defaults are range checked.
+
+The exact compiler/runtime selector on this checkpoint passed 141/141 with:
+
+```sh
+.tools/haxe/haxe -cp tests --run driver.TestDriver \
+  --root "$PWD" --suite compiler,runtime --jobs 16
+```
+
+The same isolated checkout also passed the all-suite driver, 529/529. Logs are
+`out/gates/final-driver-86-exact.log` and
+`out/gates/final-driver-86-current.log`; each run used its own session, source,
+artifact, and temporary directories below `out/gates/`. The focused defaults
+driver passed 4/4 and the descriptor artifact integration passed; see
+`out/gates/defaults-focused-final.log` and
+`out/gates/defaults-artifact-integration.log`.
+
+Bootstrap evidence for the default slice is in
+`out/gates/bootstrap-world-defaults.log`; the checked-in compiler rebuilt
+identically in `out/gates/bootstrap-world-defaults-self.log`. The last Wasm
+parity run remains the independent 356-fixture result (15 declared skips) at
+`aee78ba4d9b2d5f330132447e7ef51cda994faf5`, recorded in
+`out/gates/wasm-parity-with-flat-structs.log`; parity was not rerun for this
+descriptor-only slice.
+
+`typeInfo<T>()` resolves concrete source-declared struct types, including
+concrete types propagated through nested generic helper calls. The compiler
+does not provide identity for an unresolved generic parameter or a
+runtime-selected type. The full World compile-and-runtime consumer gate has
+not yet been run against `78d459f00121eb2933b8480bfa9dff43d7dfb054`, so this is
+not a World compatibility checkpoint. At the time of this gate,
+`stdlib/haxeon/wire/MessagePackSchema.hx`
+was a separate untracked candidate and was not part of this compiler commit or
+the driver evidence. No root or sibling pin was promoted.
