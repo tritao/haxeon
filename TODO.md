@@ -29,3 +29,20 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   Beartooth decided against C#-style delegates or events as a language
   feature and relies on this type for UI and tools instead (its engine
   events are queued channels, a separate thing).
+- **No HTTP server.** NativeKit has the `nk_http` client and `nk_transport`
+  listeners, but nothing serves HTTP. Beartooth needs one for the game
+  server's asset endpoint and for its asset service (Beartooth
+  `plans/NET.md` ND-D14, `plans/ASSETS.md` AS-D9):
+  - HTTP/1.1 with keep-alive, request and header size limits, streamed
+    request bodies (uploads are verified while they arrive) and file
+    responses with `Range`;
+  - Server-Sent Events, or a long-poll, for watching channel heads;
+  - polled from the host event loop like `haxeon.rpc`, with bounded queues;
+  - no TLS: a reverse proxy terminates it.
+
+  Either bind a small C library through HXI or build on `nk_transport`'s TCP
+  listener; decide by measured throughput and the size of the binding.
+- **No BLAKE3.** Beartooth addresses stored bytes by BLAKE3-256
+  (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
+  SIMD paths, through HXI: one-shot and streaming hashing, checked against
+  the official test vectors.
