@@ -20,6 +20,16 @@ class Color {
 		this.alpha = alpha;
 	}
 
+	/** Source-over composition, including both colors' transparency. */
+	public function compositeOver(background:Color):Color {
+		var opacity = alpha + background.alpha * (1 - alpha);
+		if (opacity <= 0) return Color.rgba(0, 0, 0, 0);
+		var behind = background.alpha * (1 - alpha);
+		return Color.rgba((red * alpha + background.red * behind) / opacity,
+			(green * alpha + background.green * behind) / opacity,
+			(blue * alpha + background.blue * behind) / opacity, opacity);
+	}
+
 	public static function rgba(red:Float, green:Float, blue:Float, alpha:Float = 1.0):Color
 		return new Color(red, green, blue, alpha);
 

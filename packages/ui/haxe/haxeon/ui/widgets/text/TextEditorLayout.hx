@@ -331,6 +331,101 @@ class TextEditorLayout {
 		return new LayoutMeasureResult(measuredWidth, measuredHeight, baseline, measuredHasBaseline);
 	}
 
+	/** Whitespace is a paint-only decoration; source offsets and shaping stay unchanged. */
+	public function paintWhitespace(canvas:Canvas, mode:String, selections:Array<TextSelection>,
+			color:Color, selectedColor:Color, minY:Float, maxY:Float, minX:Float, maxX:Float):Void {
+		if (mode == "off") return;
+		var ranges = [for (selection in selections) if (selection.anchor != selection.focus)
+			{start: Std.int(Math.min(selection.anchor, selection.focus)), end: Std.int(Math.max(selection.anchor, selection.focus))}];
+		ranges.sort((a, b) -> a.start - b.start);
+		var merged:Array<{start:Int, end:Int}> = [];
+		for (range in ranges) {
+			if (merged.length > 0 && merged[merged.length - 1].end >= range.start)
+				merged[merged.length - 1].end = Std.int(Math.max(merged[merged.length - 1].end, range.end));
+			else merged.push(range);
+		}
+		if (mode != "all" && merged.length == 0) return;
+		var dots = [new haxeon.ui.PathBuilder(), new haxeon.ui.PathBuilder()];
+		var arrows = [new haxeon.ui.PathBuilder(), new haxeon.ui.PathBuilder()];
+		var dotCounts = [0, 0], arrowCounts = [0, 0];
+		var rangeIndex = 0;
+		var low = 0, high = paragraphs.length;
+		while (low < high) {
+			var middle = (low + high) >> 1;
+			if (paragraphs[middle].y + paragraphs[middle].height <= minY) low = middle + 1;
+			else high = middle;
+		}
+		for (index in low...paragraphs.length) {
+			var record = paragraphs[index];
+			if (record.y >= maxY) break;
+			var visibleTop = Math.max(0, minY - record.y);
+			var visibleBottom = Math.min(record.height, maxY - record.y);
+			var a = record.layout.hitTest(0, visibleTop).offset;
+			var b = record.layout.hitTest(record.layout.width, visibleTop).offset;
+			var c = record.layout.hitTest(0, Math.max(visibleTop, visibleBottom - 0.01)).offset;
+			var d = record.layout.hitTest(record.layout.width, Math.max(visibleTop, visibleBottom - 0.01)).offset;
+			var first = Math.max(0, Math.min(Math.min(a, b), Math.min(c, d)) - 2);
+			var last = Math.min(record.end - record.start, Math.max(Math.max(a, b), Math.max(c, d)) + 2);
+			for (token in record.whitespaceTokens()) {
+				if (token.end <= first) continue;
+				if (token.start >= last) break;
+				// Ordinary selections expose indentation without adding line-ending glyphs.
+				if (token.kind == 2 && mode != "all") continue;
+				var absolute = record.start + token.start;
+				while (rangeIndex < merged.length && merged[rangeIndex].end <= absolute) rangeIndex++;
+				var selected = rangeIndex < merged.length && merged[rangeIndex].start < record.start + token.end;
+				if (mode != "all" && !selected) continue;
+				var caret = record.layout.caret(new TextPosition(token.start, 0));
+				var top = record.y + caret.y + Math.min(caret.ascender, caret.descender);
+				var height = Math.abs(caret.descender - caret.ascender);
+				var left = caret.x, right = caret.x;
+				if (token.kind == 2) {
+					var rects = record.layout.selectionRects(new TextPosition(token.start, 0), new TextPosition(token.end, 0));
+					if (rects.length == 0) continue;
+					left = rects[0].x;
+					right = left + Math.max(7, textStyle.fontSize * 0.6);
+				} else {
+					var endCaret = record.layout.caret(new TextPosition(token.end, 0));
+					left = Math.min(caret.x, endCaret.x); right = Math.max(caret.x, endCaret.x);
+				}
+				if (top + height <= minY || top >= maxY || right < minX || left > maxX) continue;
+				var target = selected ? 1 : 0;
+				var y = top + height * 0.55;
+				if (token.kind == 0) {
+					var diameter = Math.max(1.2, textStyle.fontSize * 0.1);
+					dots[target].roundRect((left + right - diameter) / 2, y - diameter / 2, diameter, diameter, diameter / 2);
+					dotCounts[target]++;
+				} else {
+					var padding = token.kind == 2 ? 0.0 : Math.min(2, (right - left) * 0.15);
+					var from = left + padding, to = right - padding;
+					if (token.kind == 1) {
+						// A tab's geometry owns its full advance; the symbol remains compact.
+						var markerWidth = Math.min(to - from, textStyle.fontSize * 0.5);
+						var center = (left + right) / 2;
+						from = center - markerWidth / 2;
+						to = center + markerWidth / 2;
+					}
+					var size = Math.min(textStyle.fontSize * (token.kind == 2 ? 0.2 : 0.14), (to - from) * 0.3);
+					if (size <= 0) continue;
+					var path = arrows[target];
+					if (token.kind == 2) {
+						path.moveTo(to, y - textStyle.fontSize * 0.4).lineTo(to, y).lineTo(from, y);
+						path.moveTo(from + size, y - size).lineTo(from, y).lineTo(from + size, y + size);
+					} else {
+						path.moveTo(from, y).lineTo(to, y);
+						path.moveTo(to - size, y - size).lineTo(to, y).lineTo(to - size, y + size);
+					}
+					arrowCounts[target]++;
+				}
+			}
+		}
+		for (index in 0...2) {
+			var ink = index == 1 ? selectedColor : color;
+			if (dotCounts[index] > 0) canvas.fillTransient(dots[index].build(), ink);
+			if (arrowCounts[index] > 0) canvas.strokeTransient(arrows[index].build(), ink, Math.max(0.7, textStyle.fontSize / 18));
+		}
+	}
+
 	/** Paints retained paragraphs intersecting the visible document range. */
 	public function paint(canvas:Canvas, color:Color, minY:Float = 0.0,
 			maxY:Float = 1.0e30, minX:Float = 0.0, maxX:Float = 1.0e30,
@@ -854,6 +949,28 @@ class TextEditorParagraphRecord {
 	public var renderColor:Null<Color>;
 	public var renderRanges:Null<Array<TextColorRange>>;
 	public final layout:TextLayout;
+	var whitespaceText:Null<String>;
+	var whitespace:Array<{start:Int, end:Int, kind:Int}> = [];
+
+	public function whitespaceTokens():Array<{start:Int, end:Int, kind:Int}> {
+		if (whitespaceText == text) return whitespace;
+		whitespaceText = text;
+		whitespace = [];
+		var unit = 0, point = 0;
+		while (unit < text.length) {
+			var code = text.charCodeAt(unit);
+			var units = code >= 0xd800 && code <= 0xdbff && unit + 1 < text.length &&
+				text.charCodeAt(unit + 1) >= 0xdc00 && text.charCodeAt(unit + 1) <= 0xdfff ? 2 : 1;
+			var count = 1;
+			var kind = code == 32 ? 0 : code == 9 ? 1 :
+				(code == 10 || code == 13 || code == 0x85 || code == 0x2028 || code == 0x2029) ? 2 : -1;
+			if (code == 13 && unit + 1 < text.length && text.charCodeAt(unit + 1) == 10) { units = 2; count = 2; }
+			if (kind >= 0) whitespace.push({start: point, end: point + count, kind: kind});
+			unit += units; point += count;
+		}
+		return whitespace;
+	}
+
 
 	public function new(text:String, layout:TextLayout) {
 		this.text = text;

@@ -443,6 +443,31 @@ class Theme {
 		return contrastRatio(white, fill) >= contrastRatio(black, fill) ? white : black;
 	}
 
+	/** Keeps decorative ink muted where possible, with contrast measured after blending. */
+	public static function contrastingDecoration(preferred:Color, background:Color):Color {
+		// Neutral gray keeps whitespace subordinate to text. Aim for a modest
+		// decorative contrast rather than the stronger contrast of readable text.
+		var gray = (preferred.red + preferred.green + preferred.blue) / 3;
+		var ink = Color.rgba(gray, gray, gray, preferred.alpha).compositeOver(background);
+		var ratio = contrastRatio(ink, background);
+		if (ratio >= 2 && ratio <= 2.5) return ink;
+		var white = Color.rgba(1, 1, 1), black = Color.rgba(0, 0, 0);
+		var backgroundGray = (background.red + background.green + background.blue) / 3;
+		var target = ratio > 2.5 ? Color.rgba(backgroundGray, backgroundGray, backgroundGray) :
+			contrastRatio(white, background) >= contrastRatio(black, background) ? white : black;
+		var low = 0.0, high = 1.0;
+		for (_ in 0...12) {
+			var amount = (low + high) / 2;
+			var candidate = Color.rgba(gray + (target.red - gray) * amount,
+				gray + (target.green - gray) * amount, gray + (target.blue - gray) * amount);
+			if ((contrastRatio(candidate, background) > 2.25) == (ratio > 2.5)) low = amount;
+			else high = amount;
+		}
+		var amount = (low + high) / 2;
+		return Color.rgba(gray + (target.red - gray) * amount,
+			gray + (target.green - gray) * amount, gray + (target.blue - gray) * amount);
+	}
+
 	/** WCAG relative luminance ratio for opaque UI colors. */
 	public static function contrastRatio(left:Color, right:Color):Float {
 		var a = luminance(left), b = luminance(right);

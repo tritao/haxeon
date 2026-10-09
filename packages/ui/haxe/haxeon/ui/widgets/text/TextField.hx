@@ -48,6 +48,9 @@ import haxeon.editor.TextDocument;
 class TextField implements View {
 	public final key:String;
 	public var value:String;
+	/** Paint-only whitespace visibility: off, selection, or all. */
+	public var renderWhitespace:String = "off";
+	public var whitespaceColor:Null<Color>;
 	public var label:Null<String>;
 	/** Muted visual hint shown only while the editor is empty. */
 	public var placeholder:Null<String>;
@@ -287,6 +290,32 @@ class TextField implements View {
 					}
 				});
 				editorContent.add(selectionNode);
+			}
+			if (renderWhitespace != "off") {
+				var whitespaceStyle = new LayoutStyle();
+				whitespaceStyle.width = LayoutAxis.grow();
+				whitespaceStyle.height = LayoutAxis.grow();
+				whitespaceStyle.positioning = LayoutPositioning.Absolute;
+				whitespaceStyle.zIndex = 3;
+				var whitespaceNode = new RenderNode(context.id("editor-whitespace"), LayoutVisualKind.Custom, whitespaceStyle);
+				whitespaceNode.hitTestSelf = false;
+				whitespaceNode.onPaint(function(canvas, geometry) {
+					if (editor.isDisposed()) return;
+					var visible = geometry.visibleLocalBounds();
+					var selections = additionalSelections.copy();
+					selections.push(new TextSelection(editor.selectionAnchor, editor.selectionFocus));
+					var normal = whitespaceColor == null ? context.theme.mutedText : whitespaceColor;
+					var editorBackground = node.layout.style.background.compositeOver(context.theme.tokens.surface);
+					var selectionFill = context.textInput.isOwner(id) ? context.theme.textSelection : context.theme.textSelectionInactive;
+					var background = selectionFill.compositeOver(editorBackground);
+					var selected = haxeon.ui.theme.Theme.contrastingDecoration(normal, background);
+					normal = haxeon.ui.theme.Theme.contrastingDecoration(normal, editorBackground);
+					canvas.translate(0, -editor.scrollOffsetY);
+					editor.layout.paintWhitespace(canvas, renderWhitespace, selections, normal, selected,
+						editor.scrollOffsetY + visible.y, editor.scrollOffsetY + visible.y + visible.height,
+						visible.x, visible.x + visible.width);
+				});
+				editorContent.add(whitespaceNode);
 			}
 			var showsPlaceholder = editor.documentLength() == 0 && placeholder != null &&
 				placeholder.length > 0;
