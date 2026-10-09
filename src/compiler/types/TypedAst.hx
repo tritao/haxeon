@@ -10,6 +10,8 @@ class TypedExpression {
 	public final type:CompilerType;
 	public final span:SourceSpan;
 	public final stableFlowValue:Bool;
+	/** Source symbol retained when a compile-time constant becomes a literal. */
+	public final semanticReference:Null<String>;
 
 	/** Map whose keys are represented by this array, when the value originated from Map.keys(). */
 	public final mapKeySource:Null<TypedExpression>;
@@ -17,13 +19,14 @@ class TypedExpression {
 	/** Declared storage type for a captured value whose flow type may be narrowed. */
 	public final storageType:Null<CompilerType>;
 
-	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType) {
+	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType, ?semanticReference:String) {
 		this.expression = expression;
 		this.type = type;
 		this.span = span;
 		this.stableFlowValue = stableFlowValue;
 		this.mapKeySource = mapKeySource;
 		this.storageType = storageType;
+		this.semanticReference = semanticReference;
 	}
 }
 

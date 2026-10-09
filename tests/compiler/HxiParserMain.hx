@@ -222,6 +222,13 @@ class HxiParserMain {
 			layoutFunctions = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.style"),
 			layoutTypes = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Types"),
 			layoutConstants = Lambda.find(layoutModules, module -> module.path == "nativekit.ffi.Constants");
+		if (layoutTypes == null || layoutFunctions == null || layoutConstants == null) throw "split projection modules missing";
+		var fieldOrigin = layoutTypes.origins.get("Point.get_textValue"),
+			constantOrigin = layoutConstants.origins.get("StyleConstants.LIB_VERSION"), functionOrigin = layoutFunctions.origins.get("lib_check_value");
+		expect(fieldOrigin != null && fieldOrigin.file.path == "style.hxi" && fieldOrigin.file.slice(fieldOrigin.start, fieldOrigin.end).indexOf("text_value") >= 0,
+			"projected field accessors should retain their ABI field source");
+		expect(constantOrigin != null && functionOrigin != null && constantOrigin.file.path == "style.hxi" && functionOrigin.file.path == "style.hxi",
+			"split constants and functions should retain their ABI declaration sources");
 		expect(layoutModules.length == 3
 			&& layoutFunctions != null
 			&& layoutFunctions.source.indexOf("package nativekit.ffi;") >= 0

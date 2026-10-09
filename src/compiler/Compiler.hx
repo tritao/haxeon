@@ -235,6 +235,7 @@ class Compiler {
 	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
 	final ffiProjectionPaths:Map<String, String> = [];
 	final ffiProjectionCache:Map<String, Array<HxiProjectedModule>> = [];
+	final ffiSourceOrigins:Map<String, Map<String, compiler.Source.SourceSpan>> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
 	var objectCache:Map<String, IrObject> = [];
@@ -449,10 +450,29 @@ class Compiler {
 		}
 		if (projections.length > 0)
 			for (projection in projections)
-				if (projection.source.length > 0)
+				if (projection.source.length > 0) {
+					ffiSourceOrigins.set(projection.path + ".hx", projection.origins);
 					update(projection.path + ".hx", projection.source);
+				}
 				else
 					sourceGeneration++;
+	}
+
+	/** Resolve generated declarations and their helper members to the owning ABI source. */
+	public function ffiSourceOrigin(path:String, name:String):Null<compiler.Source.SourceSpan> {
+		var origins = ffiSourceOrigins.get(path);
+		if (origins == null) return null;
+		var candidate = name;
+		while (candidate.length > 0) {
+			var origin = origins.get(candidate);
+			if (origin != null) return origin;
+			var dot = candidate.indexOf(".");
+			if (dot < 0) break;
+			candidate = candidate.substr(dot + 1);
+		}
+		// Synthesized methods such as SurfaceHandle.invalid() belong to their type.
+		var member = name.lastIndexOf(".");
+		return member < 0 ? null : ffiSourceOrigin(path, name.substr(0, member));
 	}
 
 	function ffiAbi(model:HxiInterface, composition:FfiComposition):HxiAbi {

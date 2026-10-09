@@ -1518,8 +1518,13 @@ class LspProtocolMain {
 			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
 		}}));
 		if (ffiHover.result == null) throw "FFI projection did not produce a current semantic snapshot";
+		var ffiDefinition = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 813, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
+		}}));
+		if (ffiDefinition.result == null || ffiDefinition.result.uri != "file://" + base + "/app/fixture.hxi")
+			throw "projected FFI constant definition did not reach its ABI declaration: " + Json.stringify(ffiDefinition);
 		var oldConfiguration = ffiProtocol.project.configurations[0].id;
-		sys.io.File.saveContent(base + "/app/fixture.hxi", 'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
+		sys.io.File.saveContent(base + "/app/fixture.hxi", '// Updated ABI\ninterface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
 		ffiProtocol.handle(watchedFileMessage("file://" + base + "/app/fixture.hxi", 2));
 		if (ffiProtocol.project.configurations[0].id == oldConfiguration) throw "FFI edits did not invalidate project configuration";
 		var afterFfiEdit = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 806, method: "textDocument/documentSymbol", params: {textDocument: {uri: uri}}}));
@@ -1528,6 +1533,12 @@ class LspProtocolMain {
 			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
 		}}));
 		if (afterFfiHover.result == null) throw "FFI edit did not restore semantic analysis";
+		var reloadedDefinition = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 814, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
+		}}));
+		if (reloadedDefinition.result == null || reloadedDefinition.result.uri != "file://" + base + "/app/fixture.hxi" || reloadedDefinition.result.range.start.line != 1)
+			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
+
 		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");
 
 		deleteTree(base);

@@ -841,6 +841,7 @@ class SemanticIndex {
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
+		if (expression.semanticReference != null) bindNamed(resolve, expression.semanticReference, expression.span);
 		completionTypes.push({span: expression.span, type: expression.type});
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):

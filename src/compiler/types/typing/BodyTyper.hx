@@ -1749,7 +1749,7 @@ class BodyTyper {
 	/** Resolve an inline static field to its memoized compile-time value. */
 	function inlineStaticFieldExpression(owner:String, name:String, span:SourceSpan):Null<TypedExpression> {
 		var resolved = resolveInlineConstant(owner, name, span);
-		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span);
+		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span, false, null, null, owner + "." + name);
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {

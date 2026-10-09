@@ -5,6 +5,15 @@ import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
 	static function main():Void {
+		var inlineService = new LanguageService(), inlineSource = "class Constants { public static inline final VALUE:Int = 42; } function main():Int return Constants.VALUE;";
+		inlineService.update("InlineNavigation.hx", inlineSource);
+		inlineService.compile("InlineNavigation");
+		var inlinePosition = inlineSource.lastIndexOf("VALUE") + 1, inlineDefinition = inlineService.definition("InlineNavigation.hx", inlinePosition);
+		if (inlineDefinition == null || inlineDefinition.path != "InlineNavigation.hx" ||
+			inlineDefinition.span.file.slice(inlineDefinition.span.start, inlineDefinition.span.end).indexOf("VALUE") < 0 ||
+			inlineService.references("InlineNavigation.hx", inlinePosition).length != 2)
+			throw "constant folding discarded declaration or reference identity";
+
 		var library = new LanguageService();
 		library.update("Helper.hx", "class Helper { public static function value():Int return 42; }");
 		library.analyze("Helper");

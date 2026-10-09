@@ -1085,7 +1085,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
-		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
+		return location == null ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function typeDefinition(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1093,7 +1093,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
-		return location == null ? null : locationJson(location.path, location.span.start, location.span.end);
+		return location == null ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function implementations(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -1243,8 +1243,8 @@ class LspProtocol {
 		};
 	}
 
-	function locationJson(path:String, start:Int, end:Int):Dynamic {
-		var target = documentForPath(path);
+	function locationJson(path:String, start:Int, end:Int, ?source:compiler.Source.SourceFile):Dynamic {
+		var target = source == null ? documentForPath(path) : new LspDocument(documents.uri(project.diskPath(path)), path, 0, source.text);
 		return {uri: documents.uri(project.diskPath(path)), range: target.range(start, end)};
 	}
 

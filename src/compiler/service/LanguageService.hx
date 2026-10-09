@@ -1096,12 +1096,7 @@ class LanguageService {
 		if (target == null)
 			return null;
 		var resolved = compiler.semanticWorkspace.indexedSymbol(target);
-		return resolved == null ? null : {
-			path: resolved.symbol.declaration.file.path,
-			span: resolved.symbol.declaration,
-			revision: snapshotRevision(resolved.state),
-			stale: snapshotRevision(resolved.state) != resolved.state.revision
-		};
+		return resolved == null ? null : definitionLocation(resolved.state, resolved.symbol);
 	}
 
 	public function implementations(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
@@ -1135,12 +1130,15 @@ class LanguageService {
 		if (context == null)
 			return null;
 		var resolved = context.symbol == null ? null : compiler.semanticWorkspace.indexedSymbol(context.symbol);
-		return resolved == null ? null : {
-			path: resolved.symbol.declaration.file.path,
-			span: resolved.symbol.declaration,
-			revision: snapshotRevision(resolved.state),
-			stale: snapshotRevision(resolved.state) != resolved.state.revision
-		};
+		return resolved == null ? null : definitionLocation(resolved.state, resolved.symbol);
+	}
+
+	function definitionLocation(state:ModuleState, symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
+		var origin = compiler.ffiSourceOrigin(symbol.declaration.file.path, symbol.name);
+		return origin == null ? {
+			path: symbol.declaration.file.path, span: symbol.declaration,
+			revision: snapshotRevision(state), stale: snapshotRevision(state) != state.revision
+		} : {path: origin.file.path, span: origin, revision: 0, stale: false};
 	}
 
 	public function references(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
@@ -1438,8 +1436,10 @@ class LanguageService {
 			case DeclarationKind.TypeParameter: "typeParameter";
 			case DeclarationKind.Function: "function";
 			case DeclarationKind.Member:
-				model.index.signature(symbol.id) != null ? "method" : Std.string(symbol.id).indexOf(":local:") >= 0 ? "variable" : "property";
+				compiler.semanticWorkspace.indexedSignature(symbol.id) != null ? "method" : Std.string(symbol.id).indexOf(":local:") >= 0 ? "variable" : "property";
 		};
+		cache.set(key, type);
+		return type;
 	}
 
 	static function isParameterToken(tokens:Array<compiler.syntax.Token>, index:Int):Bool {

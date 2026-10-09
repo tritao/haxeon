@@ -380,11 +380,11 @@ class HxiHaxeEmitter {
 			result:Array<HxiProjectedModule> = [];
 		var splitTypes = typeModule != null && typeModule != functionModule,
 			splitConstants = constantModule != null && constantModule != functionModule;
-		result.push({path: packagePrefix + functionModule, source: sourceRaw(plan, splitTypes ? "functions" : "all")});
+		result.push({path: packagePrefix + functionModule, source: sourceRaw(plan, splitTypes ? "functions" : "all"), origins: HxiSourceOrigins.forModule(plan, splitTypes ? "functions" : "all")});
 		if (splitTypes)
-			result.push({path: packagePrefix + typeModule, source: sourceRaw(plan, "types")});
+			result.push({path: packagePrefix + typeModule, source: sourceRaw(plan, "types"), origins: HxiSourceOrigins.forModule(plan, "types")});
 		if (splitConstants)
-			result.push({path: packagePrefix + constantModule, source: sourceRaw(plan, "constants")});
+			result.push({path: packagePrefix + constantModule, source: sourceRaw(plan, "constants"), origins: HxiSourceOrigins.forModule(plan, "constants")});
 		return result;
 	}
 
