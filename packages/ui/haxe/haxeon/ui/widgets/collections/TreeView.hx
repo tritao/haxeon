@@ -63,6 +63,10 @@ class TreeView implements View {
 	public var onItemRename:Null<String->Void>;
 	/** Optional row builder receiving the current expansion state. */
 	public var itemBuilder:Null<(String, Bool)->View>;
+	/** Return false to defer a requested expansion; toggles identify repeated pointer/activation intent. */
+	public var onExpansionRequested:Null<(String, Bool, Bool)->Bool>;
+	/** Called even when no visible branch needs collapsing, so pending requests can be canceled. */
+	public var onCollapseAll:Null<Void->Void>;
 	public var onExpandedChanged:Null<String->Bool->Void>;
 	/** Horizontal indentation between tree hierarchy levels. */
 	public var indentWidth:Float = 16.0;
@@ -153,13 +157,14 @@ class TreeView implements View {
 	}
 
 	/** Expands or collapses a visible node. */
-	public function setExpanded(nodeKey:String, expanded:Bool):Bool {
+	public function setExpanded(nodeKey:String, expanded:Bool, toggle:Bool = false):Bool {
 		ensureTreeMetrics();
 		var entry = branchByKey.get(nodeKey);
 		if (entry == null) return false;
 		ensureEntryDetails(entry);
-		if (!entry.hasChildren || entry.expanded == expanded)
-			return false;
+		if (!entry.hasChildren) return false;
+		if (onExpansionRequested != null && !onExpansionRequested(nodeKey, expanded, toggle)) return true;
+		if (entry.expanded == expanded) return false;
 		var next = copyExpanded(expandedKeys);
 		next.set(nodeKey, expanded);
 		expandedKeys.clear();
@@ -186,6 +191,7 @@ class TreeView implements View {
 
 	/** Collapse known branches in one rebuild; optionally retain one open root level. */
 	public function collapseAll(keepRootsExpanded:Bool = false):Bool {
+		if (onCollapseAll != null) onCollapseAll();
 		ensureTreeMetrics();
 		var collapsed:Map<String, Bool> = [];
 		for (key => value in expandedKeys) if (value) collapsed.set(key, true);
@@ -218,7 +224,7 @@ class TreeView implements View {
 		ensureTreeMetrics();
 		var entry = branchByKey.get(nodeKey);
 		if (entry == null) return false;
-		return setExpanded(nodeKey, !entry.expanded);
+		return setExpanded(nodeKey, !entry.expanded, true);
 	}
 
 	public function isExpanded(nodeKey:String):Bool {
@@ -389,6 +395,8 @@ class TreeView implements View {
 					setExpanded(entry.key, false);
 					return;
 				}
+				// Also cancel a deferred expansion whose branch is still visually closed.
+				if (entry.hasChildren) setExpanded(entry.key, false);
 				if (entry.parentKey != null)
 					nextKey = entry.parentKey;
 			case UiKey.Right:
