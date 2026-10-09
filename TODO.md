@@ -49,3 +49,17 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
   SIMD paths, through HXI: one-shot and streaming hashing, checked against
   the official test vectors.
+- **No generator for shader interfaces.** NativeKit's shader toolchain
+  (NativeKit ADR 0021) emits a versioned JSON reflection per program
+  (`nkgpu-shader-reflection/1`). Add a generator in `packages/gpu/tools`
+  that turns it into checked-in `.hx` modules, the way HXI bindings are
+  generated and checked:
+  - uniform blocks as `@:repr("C")` records with explicit padding, so the C
+    layout equals std140, asserted with `sizeof` and `offsetof`;
+  - a typed descriptor per program: its variants as an enum, binding slots,
+    and the attribute layout a vertex packer must match;
+  - creation through the program's C table by ID;
+  - a `--check` mode for CI.
+
+  It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
+  itself is a deferred plan in [docs/SHADERS.md](docs/SHADERS.md).
