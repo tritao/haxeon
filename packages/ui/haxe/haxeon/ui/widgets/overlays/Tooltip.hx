@@ -23,6 +23,10 @@ class Tooltip implements View {
 	public var fillAnchor:Bool = false;
 	/** Optional condition checked when the pointer enters the anchor. */
 	public var showWhen:Null<Void->Bool> = null;
+	/** Require pointer motion over the anchor, rather than layout-induced hover. */
+	public var requirePointerMovement:Bool = false;
+	/** Change this value to dismiss a tooltip when its surrounding content moves. */
+	public var dismissRevision:Int = 0;
 
 	public function new(key:String, anchor:View, content:View, x:Float = 0.0, y:Float = -28.0) {
 		if (anchor == null || content == null)
@@ -37,6 +41,11 @@ class Tooltip implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var state:State<Bool> = context.state(context.id("visible"), false);
+			var pointer = context.resourceState(context.id("pointer-state"), function() return new TooltipPointerState(), function(_) {}).value;
+			if (pointer.dismissRevision != dismissRevision) {
+				pointer.dismissRevision = dismissRevision;
+				if (state.value) state.update(false);
+			}
 			var tooltipStyle = new LayoutStyle();
 			tooltipStyle.positioning = LayoutPositioning.Absolute;
 			tooltipStyle.positionX = x;
@@ -70,7 +79,12 @@ class Tooltip implements View {
 			var tooltipNode = root.children[1];
 			tooltipNode.layout.style.visible = state.value;
 			anchorNode.on(UiEventKind.HoverEnter, function(_) {
-				state.update(showWhen == null || showWhen());
+				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
+			});
+			if (requirePointerMovement) anchorNode.on(UiEventKind.PointerMove, function(event) {
+				var moved = !pointer.known || pointer.x != event.x || pointer.y != event.y;
+				pointer.x = event.x; pointer.y = event.y; pointer.known = true;
+				if (moved && !state.value && (showWhen == null || showWhen())) state.update(true);
 			});
 			anchorNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
 			tooltipNode.on(UiEventKind.HoverEnter, function(_) { state.update(true); });
@@ -104,4 +118,12 @@ private class AnonymousTooltipContent implements View {
 		node.add(child);
 		return node;
 	}
+}
+
+private class TooltipPointerState {
+	public var dismissRevision:Int = -1;
+	public var known:Bool = false;
+	public var x:Float = 0;
+	public var y:Float = 0;
+	public function new() {}
 }
