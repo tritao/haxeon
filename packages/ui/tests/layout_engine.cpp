@@ -427,6 +427,9 @@ int main(int argc, char **argv) {
     clip_root.style.width = {LayoutSizing::Fixed, 100.0f};
     clip_root.style.height = {LayoutSizing::Fixed, 80.0f};
     LayoutNode clip_parent = box(411, 0);
+    // An escaped overlay must discard actual ancestor scissors, not only its immediate bounds.
+    clip_parent.style.clip_horizontal = true;
+    clip_parent.style.clip_vertical = true;
     clip_parent.style.width = {LayoutSizing::Fixed, 40.0f};
     clip_parent.style.height = {LayoutSizing::Fixed, 30.0f};
     LayoutNode clipped_layer = box(412, 1);

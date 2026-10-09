@@ -869,10 +869,16 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
         const bool visible = parent_visible && node.style.visible;
         const LayoutRect transformed = transform_bounds(node_bounds[index], transform);
         LayoutRect item_clip = parent_clip;
-        if (node.style.positioning == LayoutPositioning::Absolute && node.style.clip_to_parent) {
-            const LayoutRect transformed_parent_bounds =
-                transform_bounds(parent_bounds, parent_transform);
-            item_clip = intersect_axes(item_clip, transformed_parent_bounds, true, true);
+        if (node.style.positioning == LayoutPositioning::Absolute) {
+            if (node.style.clip_to_parent) {
+                const LayoutRect transformed_parent_bounds =
+                    transform_bounds(parent_bounds, parent_transform);
+                item_clip = intersect_axes(item_clip, transformed_parent_bounds, true, true);
+            } else {
+                // Match Clay's CLAY_CLIP_TO_NONE floating root. Custom painters,
+                // text, effects and hit geometry must all escape ancestor scissors.
+                item_clip = viewport;
+            }
         }
         LayoutItem item{};
         item.id = node.id;

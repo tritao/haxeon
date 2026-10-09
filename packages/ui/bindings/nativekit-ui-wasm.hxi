@@ -1130,6 +1130,9 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		y: f32 @offset(12);
 		width: f32 @offset(16);
 		height: f32 @offset(20);
+		/**
+		 * Logical width; zero requests a one-device-pixel hairline.
+		 */
 		border_width: f32 @offset(24);
 		color: array<f32, 4> @offset(28);
 	}

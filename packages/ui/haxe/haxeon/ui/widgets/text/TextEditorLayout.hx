@@ -303,6 +303,30 @@ class TextEditorLayout {
 		return caret(new TextPosition(offsets.paragraphRangeAtIndex(index).start, 0));
 	}
 
+	/** Resolved visual rows, including wrapped continuations and the final empty row.
+	 * Offsets are absolute codepoints; vertical bounds are in document coordinates.
+	 */
+	public function visualRows():Array<{start:Int, end:Int, top:Float, bottom:Float}> {
+		ensureLive();
+		var rows:Array<{start:Int, end:Int, top:Float, bottom:Float}> = [];
+		for (record in paragraphs) {
+			for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
+				var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
+				var range = record.layout.lineRangeAt(hit.offset);
+				rows.push({start: record.start + range.start, end: record.start + range.end,
+					top: record.y + rect.y, bottom: record.y + rect.y + rect.height});
+			}
+			var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
+			var top = record.y + last.y + Math.min(last.ascender, last.descender);
+			var bottom = record.y + last.y + Math.max(last.ascender, last.descender);
+			if (rows.length == 0 || top >= rows[rows.length - 1].bottom - 0.01)
+				rows.push({start: record.end, end: record.end, top: top, bottom: bottom});
+		}
+		for (index in 0...rows.length - 1)
+			rows[index].end = Std.int(Math.min(rows[index].end, rows[index + 1].start));
+		return rows;
+	}
+
 	/** Logical paragraph containing a vertical position in the shaped document. */
 	public function paragraphIndexAtY(y:Float):Int {
 		ensureLive();
