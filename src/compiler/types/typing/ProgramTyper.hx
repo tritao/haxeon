@@ -368,7 +368,7 @@ class ProgramTyper {
 			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
-			if (!requestedValue && !isNativeValue && NativeLayout.containsNativeLayoutType(type))
+			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
 			if (!field.isStatic && session.relations.isNullableValueClass(type))
 				BodyTyper.fail("E1022",
@@ -685,9 +685,9 @@ class ProgramTyper {
 				}
 		], result = substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions);
 		for (argument in arguments)
-			if (NativeLayout.containsNativeLayoutType(argument.type))
+			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet', method.span);
-		if (NativeLayout.containsNativeLayoutType(result))
+		if (NativeLayout.containsUnsupportedRuntimeValueType(result))
 			BodyTyper.fail("E1022", 'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet', method.span);
 		return {
 			name: owner + "." + method.name,

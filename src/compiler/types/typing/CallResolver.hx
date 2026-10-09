@@ -1598,7 +1598,7 @@ class CallResolver {
 		}
 		if (name == "indexOf") {
 			switch element {
-				case TInt, TFloat, TBool, TString:
+				case TInt, TFloat, TBool, TString, TNativeScalar("u32"):
 				default:
 					if (RuntimeType.arrayName(element) != "ref")
 						fail("E1016", "Array.indexOf currently supports primitive, String, and reference arrays only", span);

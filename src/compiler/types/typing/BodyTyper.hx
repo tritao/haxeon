@@ -255,11 +255,11 @@ class BodyTyper {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
 			var argumentValueType = argumentType(argument, substitutions);
-			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType))
+			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
 				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
 		}
 		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
-		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
+		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);

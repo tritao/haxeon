@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "package": { "name": "native-u32-runtime-values" },
+  "entry": "NativeU32RuntimeValues",
+  "sourceRoots": ["../../programs"],
+  "target": "host",
+  "outputDir": "../../../out/native-u32-runtime-values/project"
+}

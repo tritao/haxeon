@@ -23,6 +23,37 @@ class NativeLayout {
 	public static function containsNativeLayoutType(type:CompilerType):Bool
 		return containsNativeLayoutWithin(type, null);
 
+	/**
+	 * Whether a type still needs native-memory-only handling to be represented
+	 * as an ordinary Haxe runtime value. UInt32 is the one fixed-width scalar
+	 * with a lossless i32 carrier on both supported runtime backends. Its
+	 * supported containers are limited to Array. This is a bit-preserving
+	 * storage and call boundary only; it does not enable unsigned arithmetic,
+	 * nullable UInt32, map values, enum payloads, or foreign by-value calls.
+	 */
+	public static function containsUnsupportedRuntimeValueType(type:CompilerType):Bool
+		return containsUnsupportedRuntimeValueWithin(type, null);
+
+	static function containsUnsupportedRuntimeValueWithin(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+		return switch type {
+			case TNativeScalar("u32"): false;
+			case TNullable(TNativeScalar("u32")): true;
+			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
+			case TAbstract(_, _, representation), TArray(representation):
+				containsUnsupportedRuntimeValueWithin(representation, explored);
+			case TNullable(_) | TIterator(_) | TMap(_, _) | TFunction(_, _): containsNativeLayoutType(type);
+			case TAnonymous(_, fields):
+				var walked = explored == null ? [] : explored, found = false;
+				if (walked.indexOf(fields) < 0) {
+					walked.push(fields);
+					for (field in fields)
+						if (containsUnsupportedRuntimeValueWithin(field.type, walked))
+							found = true;
+				}
+				found;
+			case _: false;
+		};
+
 	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
 	static function containsNativeLayoutWithin(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {

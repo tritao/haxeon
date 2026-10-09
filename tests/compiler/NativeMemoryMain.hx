@@ -56,6 +56,44 @@ class NativeMemoryMain {
 		if (!restoredF32Load)
 			throw "Native pointer memory instructions and F32 types must survive IR persistence";
 
+		var u32Compiler = new Compiler();
+		CompilerIntrinsics.register(u32Compiler);
+		u32Compiler.addSourceRoot("stdlib");
+		u32Compiler.update("NativeU32RuntimeValues.hx", File.getContent("tests/programs/NativeU32RuntimeValues.hx"));
+		var u32Result = u32Compiler.compile("NativeU32RuntimeValues"),
+			u32RoundTrip:Null<compiler.ir.IrFunction> = null,
+			u32ArrayRoundTrip:Null<compiler.ir.IrFunction> = null;
+		for (fn in u32Result.ir.functions)
+			if (StringTools.endsWith(fn.name, "roundTripTick"))
+				u32RoundTrip = fn;
+			else if (StringTools.endsWith(fn.name, "roundTripTicks"))
+				u32ArrayRoundTrip = fn;
+		if (u32RoundTrip == null
+			|| u32RoundTrip.arguments.length != 1
+			|| u32RoundTrip.arguments[0].type != I32
+			|| u32RoundTrip.result != I32)
+			throw "UInt32 runtime value parameters and results must use the lossless I32 carrier";
+		var u32ArrayInputIsI32 = u32ArrayRoundTrip != null
+			&& u32ArrayRoundTrip.arguments.length == 1
+			&& switch u32ArrayRoundTrip.arguments[0].type {
+				case Array(I32): true;
+				case _: false;
+			};
+		var u32ArrayResultIsI32 = u32ArrayRoundTrip != null && switch u32ArrayRoundTrip.result {
+			case Array(I32): true;
+			case _: false;
+		};
+		if (!u32ArrayInputIsI32 || !u32ArrayResultIsI32)
+			throw "Array<UInt32> parameters and results must use the existing i32 array runtime ABI";
+		var sawU32Field = false;
+		for (object in u32Result.ir.objects)
+			if (StringTools.endsWith(object.name, "TickValue"))
+				for (field in object.fields)
+					if (field.name == "tick" && field.type == I32)
+						sawU32Field = true;
+		if (!sawU32Field)
+			throw "A managed UInt32 field must use the lossless I32 carrier";
+
 		expectCompileError('import runtime.memory.RawPtr; function bad(pointer:RawPtr<String>):String return pointer.load(); function main():Int return 0;',
 			"has no fixed native memory layout");
 		expectCompileError('import runtime.memory.RawPtr; @:value @:repr("C") class Pair { public var value:Int32; } function bad(pointer:RawPtr<Pair>):Void { pointer.store(null); } function main():Int return 0;',
