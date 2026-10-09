@@ -34,6 +34,7 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
+import compiler.types.StructProperties;
 
 typedef ExpressionTypeCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
@@ -185,43 +186,56 @@ class ExpressionTyper {
 		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
 		if (kind == TypeInfo)
 			return typeNativeTypeInfo(resolved, span, scope);
-		switch resolved {
-			case TInstance(NominalKind.NativeValue, name, _):
-				var layout = session.nativeLayoutsByName.get(name);
-				if (layout == null)
-					fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
-				switch kind {
-					case SizeOf: size = layout.size;
-					case AlignOf: size = layout.alignment;
-					case OffsetOf:
-						if (field == null)
-							fail("E1022", "offsetof requires a field name", span);
-						var found:Null<Int> = null;
-						for (candidate in layout.fields)
-							if (candidate.name == field)
-								found = candidate.offset;
-						if (found == null)
-							fail("E1022", 'Native value "$name" has no field "$field"', span);
-						size = cast found;
-					case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
-				}
-			case _:
-				if (kind == OffsetOf)
-					fail("E1022", "offsetof requires a native value record type", span);
-				var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
-					fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
-					cast null;
-				},
-					layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
-				if (layout == null)
-					fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
-				size = switch kind {
-					case SizeOf: layout.size;
-					case AlignOf: layout.align;
-					case OffsetOf: 0;
-					case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
-				};
-		}
+		var recordName:Null<String> = switch resolved {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			case TInstance(NominalKind.Class, name, _) if (isFlatStruct(name)): name;
+			case _: null;
+		};
+		if (recordName != null)
+			return typeRecordLayoutQuery(recordName, kind, field, span);
+		if (kind == OffsetOf)
+			fail("E1022", "offsetof requires a flat struct or native value record type", span);
+		var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
+			fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
+			cast null;
+		}, layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
+		if (layout == null)
+			fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
+		size = switch kind {
+			case SizeOf: layout.size;
+			case AlignOf: layout.align;
+			case OffsetOf: 0;
+			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+		};
+		return new TypedExpression(TIntLiteral(size), TInt, span);
+	}
+
+	function isFlatStruct(name:String):Bool {
+		var declaration = session.classDecls.get(name);
+		return declaration != null
+			&& declaration.isStruct == true
+			&& StructProperties.satisfies(session.declarations, TInstance(NominalKind.Class, name, []), StructProperties.FLAT_TYPE_NAME);
+	}
+
+	function typeRecordLayoutQuery(name:String, kind:compiler.syntax.Ast.NativeLayoutQueryKind, field:Null<String>, span:SourceSpan):TypedExpression {
+		var layout = session.nativeLayoutsByName.get(name);
+		if (layout == null)
+			fail("E1022", 'Record "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+		var size = switch kind {
+			case SizeOf: layout.size;
+			case AlignOf: layout.alignment;
+			case OffsetOf:
+				if (field == null)
+					fail("E1022", "offsetof requires a field name", span);
+				var found:Null<Int> = null;
+				for (candidate in layout.fields)
+					if (candidate.name == field)
+						found = candidate.offset;
+				if (found == null)
+					fail("E1022", 'Record "$name" has no field "$field"', span);
+				cast found;
+			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+		};
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
 

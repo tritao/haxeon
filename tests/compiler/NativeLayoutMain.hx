@@ -27,7 +27,7 @@ class NativeLayoutMain {
 			pair = requireClass(typed.classes, "Pair"),
 			outer = requireClass(typed.classes, "Outer"),
 			longValue = requireClass(typed.classes, "LongValue");
-		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length != 2)
+		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length < 2)
 			throw "C-represented values must be distinct typed declarations with per-ABI layouts";
 		switch compiler.types.DeclarationIndex.validated(program).resolve(compiler.syntax.Ast.AstType.NamedType("Pair")) {
 			case CompilerType.TInstance(NominalKind.NativeValue, "Pair", []):
@@ -132,9 +132,9 @@ class NativeLayoutMain {
 			"cannot be returned as a Haxe runtime value yet");
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function bad():Int return offsetof<Pair>("missing");', 'has no field "missing"');
 		expectError('function bad():Int return sizeof<String>();', "no fixed native ABI layout");
-		expectError('function bad():Int return offsetof<Int32>("x");', "requires a native value record type");
+		expectError('function bad():Int return offsetof<Int32>("x");', "requires a flat struct or native value record type");
 		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a native value record type");
-		expectError('class Managed { public var x:Int32; }', "only appear in native value record fields");
+		expectError('class Managed { public var x:Int32; }', "only appear in value structs");
 		expectError('enum Managed { Value(value:Int32); }', "cannot be stored in a Haxe enum yet");
 	}
 

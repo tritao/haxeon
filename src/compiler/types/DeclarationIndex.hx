@@ -10,6 +10,7 @@ import compiler.semantic.ModuleCanonicalizer;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.StructProperties;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -64,6 +65,10 @@ class DeclarationIndex {
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
+
+	final typeConstraints:Map<String, Array<compiler.syntax.Ast.AstTypeConstraint>> = [];
+	final typeParametersByOwner:Map<String, Array<String>> = [];
+
 	public final inheritance:NominalInheritance;
 	public final conversions:AbstractConversionGraph;
 
@@ -127,6 +132,7 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			declare(DeclarationKind.Function, fn.name, fn.span);
+		indexProgramTypeConstraints(program);
 		recursiveAliases = findRecursiveAliases();
 		inheritance = new NominalInheritance(this);
 		conversions = new AbstractConversionGraph(this, false);
@@ -158,6 +164,79 @@ class DeclarationIndex {
 
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
+
+	public function typeParameterSatisfies(actual:CompilerType, expected:CompilerType):Bool
+		return typeParameterSatisfiesWithin(actual, expected, []);
+
+	function typeParameterSatisfiesWithin(actual:CompilerType, expected:CompilerType, visiting:Array<String>):Bool
+		return switch actual {
+			case TTypeParameter(owner, parameter):
+				var ownerName = Std.string(owner),
+					key = '$ownerName:$parameter';
+				if (visiting.indexOf(key) >= 0) false; else {
+					var constraints = typeConstraints.get(key),
+						parameters = typeParametersByOwner.get(ownerName),
+						substitutions:Map<String, CompilerType> = [];
+					if (parameters != null)
+						for (name in parameters)
+							substitutions.set(name, TTypeParameter(owner, name));
+					var found = false;
+					if (constraints != null)
+						for (constraint in constraints) {
+							var bound = resolve(constraint.type, constraint.span, substitutions);
+							if (TypeRelations.equals(bound, expected)
+								|| inheritance.reaches(bound, expected)
+								|| (representationName(bound) == StructProperties.PORTABLE_TYPE_NAME
+									&& representationName(expected) == StructProperties.FLAT_TYPE_NAME)
+								|| typeParameterSatisfiesWithin(bound, expected, visiting.concat([key])))
+								found = true;
+						}
+					found;
+				}
+			case _: false;
+		};
+
+	static function representationName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.Interface, name, _) if (StructProperties.isConstraintName(name)): name;
+			case _: null;
+		};
+
+	function indexProgramTypeConstraints(program:AstProgram):Void {
+		for (alias in program.aliases)
+			indexTypeParameters(alias.name, alias.typeParameters, alias.typeConstraints);
+		for (enumDecl in program.enums)
+			indexTypeParameters(enumDecl.name, enumDecl.typeParameters, enumDecl.typeConstraints);
+		for (abstractDecl in program.abstracts) {
+			indexTypeParameters(abstractDecl.name, abstractDecl.typeParameters, abstractDecl.typeConstraints);
+			for (method in abstractDecl.methods)
+				indexTypeParameters(abstractDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+		}
+		for (interfaceDecl in program.interfaces) {
+			indexTypeParameters(interfaceDecl.name, interfaceDecl.typeParameters, interfaceDecl.typeConstraints);
+			for (method in interfaceDecl.methods)
+				indexTypeParameters(interfaceDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+		}
+		for (classDecl in program.classes) {
+			indexTypeParameters(classDecl.name, classDecl.typeParameters, classDecl.typeConstraints);
+			for (method in classDecl.methods)
+				indexTypeParameters(classDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+		}
+		for (fn in program.functions)
+			indexTypeParameters(fn.name, fn.typeParameters == null ? [] : fn.typeParameters, fn.typeConstraints);
+	}
+
+	function indexTypeParameters(owner:String, parameters:Array<String>, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Void {
+		typeParametersByOwner.set(owner, parameters);
+		if (constraints != null)
+			for (constraint in constraints) {
+				var key = '$owner:${constraint.parameter}',
+					entries = typeConstraints.get(key);
+				if (entries == null)
+					typeConstraints.set(key, entries = []);
+				entries.push(constraint);
+			}
+	}
 
 	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
@@ -204,6 +283,8 @@ class DeclarationIndex {
 					case "CULongLong": TNativeScalar("c_ulong_long");
 					case "CSize": TNativeScalar("c_size");
 					case "CWChar": TNativeScalar("c_wchar");
+					case "Flat": TInstance(NominalKind.Interface, StructProperties.FLAT_TYPE_NAME, []);
+					case "Portable": TInstance(NominalKind.Interface, StructProperties.PORTABLE_TYPE_NAME, []);
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
@@ -322,15 +403,12 @@ class DeclarationIndex {
 		for (constraint in constraints) {
 			var actual = substitutions.get(constraint.parameter),
 				expected = resolve(constraint.type, constraint.span, substitutions);
-			if (actual != null)
-				switch actual {
-					case TTypeParameter(_, _):
-						continue;
-					default:
-				}
-			if (actual == null || !relations.satisfiesConstraint(actual, expected))
-				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"',
+			if (actual == null || !relations.satisfiesConstraint(actual, expected)) {
+				var detail = actual == null ? null : relations.constraintFailure(actual, expected);
+				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"'
+					+ (detail == null ? "" : ': $detail'),
 					span);
+			}
 		}
 	}
 
@@ -661,7 +739,7 @@ class DeclarationIndex {
 			var decl = classes.get(name);
 			for (interfaceType in decl.interfaces) {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span));
-				if (interfaceName == null || !interfaces.exists(interfaceName))
+				if (interfaceName == null || (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
 					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
 			}
 		}
@@ -792,6 +870,8 @@ class DeclarationIndex {
 	}
 
 	function visitInterface(name:String, visiting:Map<String, Bool>):Void {
+		if (StructProperties.isConstraintName(name))
+			return;
 		if (!interfaces.exists(name))
 			fail('Unknown interface "$name"', fallbackSpan);
 		var decl = interfaces.get(name);
@@ -836,6 +916,8 @@ class DeclarationIndex {
 	}
 
 	function declareType(name:String, kind:DeclarationKind, span:SourceSpan):Void {
+		if (name == "Flat" || name == "Portable")
+			fail('Type name "$name" is reserved for a compiler representation constraint', span);
 		var typeKinds:Array<DeclarationKind> = [
 			DeclarationKind.Alias,
 			DeclarationKind.Enum,

@@ -58,6 +58,7 @@ class NativeLayout {
 			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): Pointer(Primitive("void"));
 			case TAbstract(_, _, representation): fieldType(representation);
 			case TInstance(NominalKind.NativeValue, name, _): Named(name);
+			case TInstance(NominalKind.Class, name, []): Named(name);
 			case _: throw 'Type $type is not an unmanaged native field type';
 		};
 
@@ -86,7 +87,7 @@ class NativeLayout {
 		}
 		return {
 			target: target,
-			size: alignUp(cursor, recordAlignment),
+			size: cursor == 0 ? 1 : alignUp(cursor, recordAlignment),
 			alignment: recordAlignment,
 			fields: placed
 		};

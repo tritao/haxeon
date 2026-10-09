@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.StructProperties;
 
 /** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {
@@ -87,6 +88,8 @@ class TypeRelations {
 			return true;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
+		if (StructProperties.isConstraintType(expected))
+			return false;
 		if (isStructType(actual))
 			switch expected {
 				case TInstance(NominalKind.Interface, _, _):
@@ -166,6 +169,13 @@ class TypeRelations {
 
 	/** Struct conformance is available to generic constraints without enabling interface boxing. */
 	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
+		switch actual {
+			case TTypeParameter(_, _):
+				return declarations.typeParameterSatisfies(actual, expected);
+			case _:
+		}
+		if (StructProperties.isConstraintType(expected))
+			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
 		if (isStructType(actual))
 			switch expected {
 				case TInstance(NominalKind.Interface, _, _):
@@ -174,6 +184,22 @@ class TypeRelations {
 			}
 		return isAssignable(actual, expected);
 	}
+
+	public function constraintFailure(actual:CompilerType, expected:CompilerType):Null<String> {
+		if (!StructProperties.isConstraintType(expected)
+			|| StructProperties.satisfies(declarations, actual, representationConstraintName(expected)))
+			return null;
+		var constraintName = representationConstraintName(expected),
+			property = constraintName == StructProperties.FLAT_TYPE_NAME ? "Flat" : "Portable",
+			fieldPath = StructProperties.failurePath(declarations, actual, constraintName);
+		return fieldPath == null ? 'type ${compiler.semantic.SemanticSignature.type(actual)} is not $property' : 'field "$fieldPath" is not $property';
+	}
+
+	static function representationConstraintName(type:CompilerType):String
+		return switch type {
+			case TInstance(NominalKind.Interface, name, _): name;
+			case _: throw 'Not a representation constraint: $type';
+		};
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
 		return equalsWithin(left, right, null);

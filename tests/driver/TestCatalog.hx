@@ -114,6 +114,7 @@ class TestCatalog {
 		"HxiAbiMain",
 		"NativeLayoutMain",
 		"StructSyntaxMain",
+		"StructPropertiesMain",
 		"NativeMemoryMain",
 	];
 

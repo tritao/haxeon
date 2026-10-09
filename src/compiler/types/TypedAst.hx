@@ -341,6 +341,8 @@ typedef TypedField = {
 typedef TypedClass = {
 	final name:String;
 	final isValue:Bool;
+	final isFlat:Bool;
+	final isPortable:Bool;
 
 	/** C-layout record with no HashLink object or value-structure representation. */
 	final isNativeValue:Bool;
