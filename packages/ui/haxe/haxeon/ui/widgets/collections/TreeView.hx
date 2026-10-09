@@ -72,6 +72,8 @@ class TreeView implements View {
 	public var indentWidth:Float = 16.0;
 	/** Draw vertical indentation guides through all rows inside expanded branches. */
 	public var verticalGuidesOnly:Bool = false;
+	/** Reveal indentation guides while the tree is hovered or any descendant has focus. */
+	public var guidesOnInteraction:Bool = false;
 	/** Align leaf content in the disclosure column instead of reserving arrow space. */
 	public var compactLeafIndent:Bool = false;
 
@@ -276,6 +278,12 @@ class TreeView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
+			var guideVisibility = context.resourceState(context.id("guide-visibility"),
+				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
+			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(context.id("tree")), StyleState.Hovered)
+				|| guideVisibility.hasFocus(context);
+			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
+			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
 			var clicks:State<PointerClickSequence> = context.state(context.id("click-sequence"), new PointerClickSequence());
 			var expansion:State<Map<String, Bool>> = context.state(
 				context.id("expanded-state"), expandedKeys);
@@ -318,7 +326,7 @@ class TreeView implements View {
 					if (item == null)
 						throw 'TreeView model returned null for key $nodeKey';
 					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
-						compactLeafIndent, selectedKey == nodeKey,
+						compactLeafIndent, selectedKey == nodeKey, guideOpacity,
 						function() { select(nodeKey); },
 						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
 						function() { toggleExpanded(nodeKey); },
@@ -362,6 +370,8 @@ class TreeView implements View {
 			root.semantics = semantics;
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
+			root.states = context.interactionStates.get(root.id);
+			guideVisibility.root = root;
 			return root;
 		});
 	}
@@ -785,6 +795,41 @@ private class TreeBranch extends TreeEntry {
 	}
 }
 
+/** One fade per tree, shared by all virtualized rows and stopped when the tree unmounts. */
+private class TreeGuideVisibility {
+	public var root:Null<RenderNode>;
+	final animation:haxeon.ui.animation.AnimationController;
+	var target:Float = 0.0;
+
+	public function new(context:BuildContext) {
+		animation = new haxeon.ui.animation.AnimationController(context.animations);
+	}
+
+	public function hasFocus(context:BuildContext):Bool {
+		return root != null && focusedWithin(root, context);
+	}
+
+	function focusedWithin(node:RenderNode, context:BuildContext):Bool {
+		if (StyleStateUtil.contains(context.interactionStates.get(node.id), StyleState.Focused)) return true;
+		for (child in node.children) if (focusedWithin(child, context)) return true;
+		return false;
+	}
+
+	public function configure(visible:Bool, reducedMotion:Bool):Void {
+		var next = visible ? 1.0 : 0.0;
+		if (reducedMotion) {
+			target = next;
+			if (animation.active || animation.value != next) animation.play(next, next, 0.0);
+		} else if (target != next) {
+			target = next;
+			animation.play(animation.value, next, 0.1);
+		}
+	}
+
+	public function opacity():Float return animation.value;
+	public function dispose():Void { animation.stop(); root = null; }
+}
+
 private class TreeViewRow implements View {
 	final key:String;
 	final itemKey:String;
@@ -794,6 +839,7 @@ private class TreeViewRow implements View {
 	final verticalGuidesOnly:Bool;
 	final compactLeafIndent:Bool;
 	final selected:Bool;
+	final guideOpacity:Float;
 	final onSelect:Void->Void;
 	final onActivate:Void->Void;
 	final onToggle:Void->Void;
@@ -803,7 +849,7 @@ private class TreeViewRow implements View {
 	final onContextMenu:UiEvent->Void;
 
 	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
-			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool,
+			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool, guideOpacity:Float,
 			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
 			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
@@ -814,6 +860,7 @@ private class TreeViewRow implements View {
 		this.verticalGuidesOnly = verticalGuidesOnly;
 		this.compactLeafIndent = compactLeafIndent;
 		this.selected = selected;
+		this.guideOpacity = guideOpacity;
 		this.onSelect = onSelect;
 		this.onActivate = onActivate;
 		this.onToggle = onToggle;
@@ -876,7 +923,8 @@ private class TreeViewRow implements View {
 				var depth = entry.depth;
 				var continuation = entry.guideContinuation;
 				var hasNext = entry.hasNextSibling;
-				var guideColor = context.theme.tokens.border;
+				var border = context.theme.tokens.border;
+				var guideColor = Color.rgba(border.red, border.green, border.blue, border.alpha * guideOpacity);
 				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
 					(entry.hasChildren ? "branch" : "leaf") + ":";
 				for (level in 1...depth)
@@ -900,7 +948,7 @@ private class TreeViewRow implements View {
 						path.moveTo(x, centerY).lineTo(x + 10.0, centerY);
 						hasSegments = true;
 					}
-					if (hasSegments)
+					if (hasSegments && guideColor.alpha > 0.0)
 						canvas.strokeTransient(path.build(), guideColor, 1.0, LineCap.Butt, LineJoin.Miter);
 				}, guideKey + ":" + indentWidth + ":" + (verticalGuidesOnly ? "vertical" : "branch") + ":" + guideColor.red + ":" + guideColor.green + ":" +
 					guideColor.blue + ":" + guideColor.alpha);
