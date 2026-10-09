@@ -137,11 +137,12 @@ native build and smoke passed. No Materia or sibling checkout was modified.
 
 All commands below were run in this review worktree with local outputs/caches:
 
-- Compiler driver suite: 86 passed, 0 failed at source checkpoint
-  `61d3419c8a5a25c7798a217aff90eebb9eca3299`, before the later Wasm-only
-  lowering port. After that port, the focused `WasmBackendMain` driver and the
-  complete Wasm parity suite below passed; the full 86-case driver suite was
-  not rerun. The final closeout changes after those gates were formatting-only.
+- Final compiler driver run at source checkpoint
+  `aee78ba4d9b2d5f330132447e7ef51cda994faf5`: 524 passed, 0 failed across all
+  driver suites, including the compiler-focused cases, after the Wasm-only
+  lowering port. Command: `.tools/haxe/haxe -cp tests --run
+  driver.TestDriver --root "$PWD" --jobs 16`. Log:
+  `out/gates/compiler-driver-final-20261009.log`.
 - Wasm parity: 356 fixtures agree across Wasm32, Wasm GC, and HashLink; 15
   declared skips. This includes the nested narrow-store and `UInt32` cases.
 - `scripts/test-hxi-value-records.sh`: HXI fixed-layout ABI checks pass for
@@ -168,9 +169,10 @@ All commands below were run in this review worktree with local outputs/caches:
 Detailed compiler/bootstrap logs are in ignored `out/gates/`. The compiler
 aggregate `scripts/test.sh` was not run as a single command; its affected
 driver, parity, HXI, and consumer stages were run directly as listed above.
-The driver, HXI, and ProcKit runs preceded the Wasm-only lowering port; no HL,
-runtime, or HXI changes followed those runs. The final formatter/bootstrap
-closeout and World layout integration logs are also in `out/gates/`.
+The earlier HXI and ProcKit runs preceded the Wasm-only lowering port; no HL,
+runtime, or HXI changes followed those runs. The final all-suite driver run,
+formatter/bootstrap closeout, and World layout integration logs are in
+`out/gates/`.
 
 ## Isolation record
 
