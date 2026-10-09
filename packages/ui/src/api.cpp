@@ -3436,6 +3436,8 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
         if (!nkui::scale_render_plan_parameters(pass, frame_info->pixel_scale))
             return NKUI_ERROR_INVALID_ARGUMENT;
     }
+    if (!nkui::resolve_render_target_sampling(plan, frame_info->pixel_scale))
+        return NKUI_ERROR_INVALID_ARGUMENT;
     add_effect_cache_pixel_scale(plan, frame_info->pixel_scale);
     ++renderer_slot->stats.display_list_count;
     renderer_slot->stats.display_list_bytes += list_slot->list->size();
@@ -4044,6 +4046,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                          load_existing != 0);
 
     auto &plan = session_state->frame.plan();
+    if (!nkui::resolve_render_target_sampling(plan, frame_info->pixel_scale))
+        return NKUI_ERROR_INVALID_ARGUMENT;
     add_effect_cache_pixel_scale(plan, frame_info->pixel_scale);
     accumulate_render_plan_stats(renderer_slot->stats, plan);
     for (const auto node_id : compiled_custom_nodes) {

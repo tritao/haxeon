@@ -117,11 +117,12 @@ class RecordingRenderer final : public UiRenderer {
         ++text_count;
         return true;
     }
-    bool compositeImage(ResourceId, float, float, float, float, const float[6], float) override {
+    bool compositeImage(ResourceId, float, float, float, float, const float[6], float,
+                        const std::array<float, 2> &) override {
         return true;
     }
     bool compositeImage(nk_graphics_image, float, float, float, float, const float[6],
-                        float) override {
+                        float, const std::array<float, 2> &) override {
         return true;
     }
     bool applyEffect(ResourceId, const EffectDescriptor &) override {
@@ -636,6 +637,8 @@ int main() {
                                });
         });
     if (content_pass == split_frame.plan().passes.end() ||
+        content_pass->target_descriptor.width != std::ceil(button_item->bounds.width * 1.5f) ||
+        content_pass->target_descriptor.height != std::ceil(button_item->bounds.height * 1.5f) ||
         content_pass->commands.front().scissor_x != 1.5f ||
         content_pass->commands.front().scissor_y != 3.0f ||
         content_pass->commands.front().scissor_width != 4.5f ||
@@ -646,6 +649,12 @@ int main() {
         std::none_of(split_frame.plan().passes.begin(), split_frame.plan().passes.end(),
                      [](const RenderPass &pass) { return pass.kind == RenderPassKind::Mask; }))
         return 222;
+    for (const auto &pass : split_frame.plan().passes)
+        for (const auto &command : pass.commands)
+            if (command.kind == RenderCommandKind::CompositeTarget &&
+                command.resource.value == content_pass->target.value && command.width == 0 && command.height == 0 &&
+                (command.transform[0] != 1 || command.transform[3] != 1))
+                return 304;
     const auto wrapped_content = std::find_if(
         split_frame.plan().passes.begin(), split_frame.plan().passes.end(),
         [content_target = content_pass->target](const RenderPass &pass) {

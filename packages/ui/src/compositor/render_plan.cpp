@@ -310,6 +310,34 @@ void add_edge(std::vector<std::vector<uint32_t>> &edges, std::vector<uint32_t> &
 
 } // namespace
 
+bool resolve_render_target_sampling(RenderPlan &plan, float pixel_scale) {
+    if (!std::isfinite(pixel_scale) || pixel_scale <= 0)
+        return false;
+    std::unordered_map<uint32_t, const RenderTargetDescriptor *> targets;
+    for (const auto &pass : plan.passes)
+        if (pass.target_descriptor.logical_width > 0 && pass.target_descriptor.logical_height > 0)
+            targets[pass.target.value] = &pass.target_descriptor;
+    for (auto &pass : plan.passes) {
+        for (auto &command : pass.commands) {
+            command.source_uv_extent = {1, 1};
+            if (command.kind != RenderCommandKind::CompositeTarget ||
+                command.width <= 0 || command.height <= 0)
+                continue;
+            const auto found = targets.find(command.resource.value);
+            if (found == targets.end())
+                continue;
+            const auto &target = *found->second;
+            // Targets with implicit device dimensions retain their native extent.
+            if (target.width <= 0 || target.height <= 0)
+                continue;
+            command.source_uv_extent = {
+                std::min(1.0f, target.logical_width * pixel_scale / target.width),
+                std::min(1.0f, target.logical_height * pixel_scale / target.height)};
+        }
+    }
+    return true;
+}
+
 bool scale_render_plan_parameters(RenderPass &pass, float pixel_scale) {
     if (!std::isfinite(pixel_scale) || pixel_scale <= 0.0f)
         return false;
@@ -420,7 +448,17 @@ bool append_embedded_render_plan(const RenderPlan &source, const RenderPlanEmbed
                     command.scissor_y -= target_origin_delta_y;
                 }
             }
-            command.transform = scale_transform(command.transform, options.pixel_scale);
+            if (command.kind == RenderCommandKind::CompositeTarget &&
+                (command.width <= 0.0f || command.height <= 0.0f)) {
+                // An implicit quad takes its extent from the already scaled
+                // texture. Scale its logical position, never those pixel extents.
+                command.x *= options.pixel_scale;
+                command.y *= options.pixel_scale;
+                command.transform[4] *= options.pixel_scale;
+                command.transform[5] *= options.pixel_scale;
+            } else {
+                command.transform = scale_transform(command.transform, options.pixel_scale);
+            }
             command.scissor_x *= options.pixel_scale;
             command.scissor_y *= options.pixel_scale;
             command.scissor_width *= options.pixel_scale;
@@ -463,6 +501,14 @@ bool schedule_render_plan(const RenderPlan &plan, std::vector<uint32_t> &order,
             return false;
         }
         for (const auto &command : pass.commands) {
+            if (command.kind == RenderCommandKind::CompositeTarget &&
+                !std::all_of(command.source_uv_extent.begin(), command.source_uv_extent.end(),
+                             [](float extent) { return std::isfinite(extent) && extent > 0 && extent <= 1; })) {
+                if (error)
+                    *error = {index, "invalid target sampling extent"};
+                return false;
+            }
+
             if (command.kind == RenderCommandKind::RectBorder &&
                 !valid_rect_border(command.x, command.y, command.width, command.height,
                                    command.rect_border.width, command.rect_border.color.data())) {

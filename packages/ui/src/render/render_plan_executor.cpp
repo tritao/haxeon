@@ -51,6 +51,8 @@ void hash_runtime_command_geometry(uint64_t &hash, const RenderCommand &command)
         hash_runtime_float(hash, value);
     for (const float value : command.box_shadow.color)
         hash_runtime_float(hash, value);
+    for (const float value : command.source_uv_extent)
+        hash_runtime_float(hash, value);
     hash_runtime_float(hash, command.rect_border.width);
     for (const float value : command.rect_border.color)
         hash_runtime_float(hash, value);
@@ -394,11 +396,12 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                 if (const auto *image = resources.graphics_image(command.resource))
                     rendered = renderer.compositeImage(*image, command.x, command.y, command.width,
                                                        command.height, command.transform.data(),
-                                                       command.opacity);
+                                                       command.opacity, command.source_uv_extent);
                 else
                     rendered = renderer.compositeImage(command.resource, command.x, command.y,
                                                        command.width, command.height,
-                                                       command.transform.data(), command.opacity);
+                                                       command.transform.data(), command.opacity,
+                                                       command.source_uv_extent);
                 break;
             case RenderCommandKind::Image: {
                 const auto *image = resources.image(command.resource);

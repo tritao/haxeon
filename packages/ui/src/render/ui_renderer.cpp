@@ -58,9 +58,11 @@ class UiRendererImpl final : public UiRenderer {
     bool drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6], float origin_x,
                     float origin_y, float opacity) override;
     bool compositeImage(ResourceId target, float x, float y, float width, float height,
-                        const float transform[6], float opacity) override;
+                        const float transform[6], float opacity,
+                        const std::array<float, 2> &source_uv_extent) override;
     bool compositeImage(nk_graphics_image image, float x, float y, float width, float height,
-                        const float transform[6], float opacity) override;
+                        const float transform[6], float opacity,
+                        const std::array<float, 2> &source_uv_extent) override;
     bool applyEffect(ResourceId source, const EffectDescriptor &effect) override;
     bool applyEffectRegion(ResourceId source, const EffectDescriptor &effect, float x, float y,
                            float width, float height) override;
@@ -2539,18 +2541,22 @@ float render_target_v(const UiRendererImpl::State &state, float top_fraction) {
 }
 
 std::vector<TextureVertex> composite_vertices(float x, float y, float width, float height,
-                                              const float transform[6], float top_v, float bottom_v) {
+                                              const float transform[6], float top_v, float bottom_v, float right_u = 1.0f) {
     const auto point = [transform](float px, float py, float u, float v) {
         return TextureVertex{px * transform[0] + py * transform[2] + transform[4],
                              px * transform[1] + py * transform[3] + transform[5], u, v};
     };
-    return {point(x, y, 0.0f, top_v), point(x + width, y, 1.0f, top_v),
-            point(x + width, y + height, 1.0f, bottom_v), point(x, y + height, 0.0f, bottom_v)};
+    return {point(x, y, 0.0f, top_v), point(x + width, y, right_u, top_v),
+            point(x + width, y + height, right_u, bottom_v), point(x, y + height, 0.0f, bottom_v)};
 }
 
-bool valid_composite(UiRendererImpl::State &state, const float transform[6], float opacity) {
+bool valid_composite(UiRendererImpl::State &state, const float transform[6], float opacity,
+                     const std::array<float, 2> &source_uv_extent) {
     if (!state.in_pass || !transform || !std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f)
         return fail(state, "invalid image composite");
+    for (float extent : source_uv_extent)
+        if (!std::isfinite(extent) || extent <= 0 || extent > 1)
+            return fail(state, "invalid target sampling extent");
     for (int index = 0; index < 6; ++index)
         if (!std::isfinite(transform[index]))
             return fail(state, "image transform is not finite");
@@ -2559,9 +2565,27 @@ bool valid_composite(UiRendererImpl::State &state, const float transform[6], flo
 
 bool draw_composite(UiRendererImpl::State &state, float x, float y, float width, float height,
                     const float transform[6], float opacity, nkgpu_image image,
-                    nk_graphics_image external_image, nkgpu_sampler sampler) {
-    const auto vertices = composite_vertices(x, y, width, height, transform,
-                                             render_target_v(state, 0.0f), render_target_v(state, 1.0f));
+                    nk_graphics_image external_image, nkgpu_sampler sampler,
+                    const std::array<float, 2> &source_uv_extent,
+                    int source_width = 0, int source_height = 0) {
+    auto vertices = composite_vertices(x, y, width, height, transform,
+                                             render_target_v(state, 0.0f),
+                                             render_target_v(state, source_uv_extent[1]), source_uv_extent[0]);
+    constexpr float texel_tolerance = 0.01f;
+    // Native-size target texels need the same pixel phase through every
+    // intermediate composite. Fractional translations otherwise accumulate
+    // nearest-sampling ties and can duplicate a one-pixel edge.
+    if (source_width > 0 && source_height > 0 &&
+        transform[1] == 0 && transform[2] == 0 && transform[0] > 0 && transform[3] > 0 &&
+        std::abs(vertices[1].x - vertices[0].x - source_width * source_uv_extent[0]) <= texel_tolerance &&
+        std::abs(vertices[3].y - vertices[0].y - source_height * source_uv_extent[1]) <= texel_tolerance) {
+        const float dx = std::floor(vertices[0].x + 0.5f) - vertices[0].x;
+        const float dy = std::floor(vertices[0].y + 0.5f) - vertices[0].y;
+        for (auto &vertex : vertices) {
+            vertex.x += dx;
+            vertex.y += dy;
+        }
+    }
     const std::vector<uint32_t> indices = {0, 1, 2, 0, 2, 3};
     const std::array<float, 4> tint = {opacity, opacity, opacity, opacity};
     return draw_mesh(state, state.composite_pipeline, vertices, indices, tint.data(), sizeof(tint),
@@ -2773,8 +2797,9 @@ bool UiRendererImpl::applyMask(ResourceId source, const MaskDescriptor &mask,
 }
 
 bool UiRendererImpl::compositeImage(ResourceId target_id, float x, float y, float width,
-                                    float height, const float transform[6], float opacity) {
-    if (!valid_composite(*state_, transform, opacity))
+                                    float height, const float transform[6], float opacity,
+                                    const std::array<float, 2> &source_uv_extent) {
+    if (!valid_composite(*state_, transform, opacity, source_uv_extent))
         return false;
     const auto *found = resolve_target(*state_, target_id);
     if (!found || !found->image.id)
@@ -2792,15 +2817,16 @@ bool UiRendererImpl::compositeImage(ResourceId target_id, float x, float y, floa
             return fail(*state_, "surface filter is unsupported");
     }
     return draw_composite(*state_, x, y, width, height, transform, opacity, {}, found->image,
-                          sampler);
+                          sampler, source_uv_extent, found->width, found->height);
 }
 
 bool UiRendererImpl::compositeImage(nk_graphics_image image, float x, float y, float width,
-                                    float height, const float transform[6], float opacity) {
-    if (!valid_composite(*state_, transform, opacity) || !image.id)
+                                    float height, const float transform[6], float opacity,
+                                    const std::array<float, 2> &source_uv_extent) {
+    if (!valid_composite(*state_, transform, opacity, source_uv_extent) || !image.id)
         return fail(*state_, "invalid graphics-image composite");
     return draw_composite(*state_, x, y, width, height, transform, opacity, {}, image,
-                          state_->surface_sampler);
+                          state_->surface_sampler, source_uv_extent);
 }
 
 bool UiRendererImpl::endPass() {

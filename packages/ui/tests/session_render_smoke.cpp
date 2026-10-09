@@ -984,6 +984,85 @@ int main() {
         nkui_resource_destroy(custom_paint);
     }
 
+    if (!result) {
+        // Keep one retained border open while the host changes its render scale.
+        // Isolating it exercises the same content/composite path as tooltips.
+        nkui_display_list border_list{}, composite_list{};
+        nkui_display_list_create(&border_list);
+        nkui_display_list_create(&composite_list);
+        std::vector<uint8_t> border_commands, composite_commands;
+        append_bytes(border_commands, nkui_draw_rect_border_command{
+            {NKUI_COMMAND_DRAW_RECT_BORDER, NKUI_COMMAND_VERSION,
+             sizeof(nkui_draw_rect_border_command)},
+            0, 0, 50.4f, 32.6f, 1, {1, 1, 1, 1}});
+        nkui_layer_command layer{};
+        layer.header = {NKUI_COMMAND_BEGIN_LAYER, NKUI_LAYER_COMMAND_VERSION, sizeof(layer) + sizeof(nkui_effect_op_command)};
+        layer.opacity = 0.99f;
+        layer.composite_mode = NKUI_COMPOSITE_SOURCE_OVER;
+        layer.width = 50.4f;
+        layer.height = 32.6f;
+        layer.flags = NKUI_LAYER_ISOLATED | NKUI_LAYER_HAS_BOUNDS;
+        layer.foreground_count = 1;
+        nkui_effect_op_command shadow{};
+        shadow.kind = NKUI_EFFECT_DROP_SHADOW;
+        shadow.color_matrix[0] = 3;
+        shadow.color_matrix[3] = 2;
+        shadow.color_matrix[7] = 0.25f;
+        append_bytes(composite_commands, layer);
+        append_bytes(composite_commands, shadow);
+        append_bytes(composite_commands, nkui_command_header{
+            NKUI_COMMAND_END_LAYER, NKUI_COMMAND_VERSION, sizeof(nkui_command_header)});
+        if (nkui_display_list_submit(border_list, border_commands.data(), border_commands.size()) != NKUI_OK ||
+            nkui_display_list_submit(composite_list, composite_commands.data(), composite_commands.size()) != NKUI_OK)
+            result = 90;
+        for (float zoom : {1.0f, 1.1f, 1.2f, 1.25f, 1.4f, 1.5f, 1.75f, 2.0f, 2.25f, 0.9f, 1.0f}) {
+            if (result) break;
+            auto tree = transaction(framebuffer_width / zoom, framebuffer_height / zoom);
+            const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
+            write_u32(tree, node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_CUSTOM);
+            write_float(tree, node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 50.4f);
+            write_float(tree, node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 32.6f);
+            write_float(tree, node + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 8.2f);
+            write_float(tree, node + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 8.3f);
+            write_u32(tree, node + NKUI_LAYOUT_NODE_RECORD_BYTES + NKUI_LAYOUT_NODE_FLAGS_OFFSET, 0);
+            const nkui_layout_frame_input input{sizeof(input), framebuffer_width / zoom,
+                                                framebuffer_height / zoom, 0};
+            const nkui_frame_info info{sizeof(info), framebuffer_width / zoom, framebuffer_height / zoom,
+                                       framebuffer_width, framebuffer_height, zoom};
+            const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &input);
+            const auto painted = nkui_layout_session_set_custom_paint(session, 2, border_list);
+            const auto composited = nkui_layout_session_set_custom_paint_composite(session, 2, composite_list);
+            const auto rendered = nkui_layout_session_render_frame(renderer, session, surface, &info, 0);
+            if (submitted != NKUI_OK || painted != NKUI_OK || composited != NKUI_OK || rendered != NKUI_OK) {
+                std::fprintf(stderr, "border zoom frame failed: %.2f submit=%d paint=%d composite=%d render=%d\n",
+                             zoom, submitted, painted, composited, rendered);
+                result = 90;
+                break;
+            }
+            std::vector<uint8_t> pixels(framebuffer_width * framebuffer_height * 4);
+            glReadPixels(0, 0, framebuffer_width, framebuffer_height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            const auto ink = [&](int x, int y) {
+                return pixels[((framebuffer_height - 1 - y) * framebuffer_width + x) * 4] > 200;
+            };
+            const int cx = static_cast<int>((8.2f + 25.2f) * zoom);
+            const int cy = static_cast<int>((8.3f + 16.3f) * zoom);
+            int left = 0, right = 0, top = 0, bottom = 0;
+            for (int x = 0; x < framebuffer_width; ++x)
+                if (ink(x, cy)) (x < cx ? left : right)++;
+            for (int y = 0; y < framebuffer_height; ++y)
+                if (ink(cx, y)) (y < cy ? top : bottom)++;
+            if (!left || left != right || !top || top != bottom) {
+                std::fprintf(stderr, "retained border sides differ at zoom %.2f: %d %d %d %d\n",
+                             zoom, left, right, top, bottom);
+                result = 91;
+            }
+        }
+        nkui_layout_session_clear_custom_paints(session);
+        nkui_layout_session_clear_custom_paint_composite(session, 2);
+        nkui_display_list_destroy(composite_list);
+        nkui_display_list_destroy(border_list);
+    }
+
     if (nkui_layout_session_destroy(session) != NKUI_OK ||
         nkui_layout_session_destroy(session) != NKUI_ERROR_INVALID_HANDLE)
         result = 17;

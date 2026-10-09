@@ -570,6 +570,15 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             if (finite_rect(primitive.bounds)) {
                 content_pass.target_descriptor.logical_width = primitive.bounds.width;
                 content_pass.target_descriptor.logical_height = primitive.bounds.height;
+                // Content commands are already in device coordinates. Allocate
+                // the same device extent before the outer effect samples them.
+                const double width = std::ceil(static_cast<double>(primitive.bounds.width) * pixel_scale);
+                const double height = std::ceil(static_cast<double>(primitive.bounds.height) * pixel_scale);
+                if (!std::isfinite(width) || !std::isfinite(height) ||
+                    width > std::numeric_limits<int>::max() || height > std::numeric_limits<int>::max())
+                    return fail(error, primitive_index, "custom composite dimensions exceed target limit");
+                content_pass.target_descriptor.width = std::max(1, static_cast<int>(width));
+                content_pass.target_descriptor.height = std::max(1, static_cast<int>(height));
             }
             out.plan_.passes.push_back(std::move(content_pass));
             const std::size_t content_pass_index = out.plan_.passes.size() - 1;

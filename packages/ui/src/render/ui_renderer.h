@@ -175,9 +175,11 @@ class UiRenderer {
     virtual bool drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6], float origin_x,
                             float origin_y, float opacity = 1.0f) = 0;
     virtual bool compositeImage(ResourceId target, float x, float y, float width, float height,
-                                const float transform[6], float opacity) = 0;
+                                const float transform[6], float opacity,
+                                const std::array<float, 2> &source_uv_extent = {1, 1}) = 0;
     virtual bool compositeImage(nk_graphics_image image, float x, float y, float width,
-                                float height, const float transform[6], float opacity) = 0;
+                                float height, const float transform[6], float opacity,
+                                const std::array<float, 2> &source_uv_extent = {1, 1}) = 0;
     /** Applies one backend-neutral effect to the currently active target. */
     virtual bool applyEffect(ResourceId source, const EffectDescriptor &effect) = 0;
     /** Applies an effect while sampling a bounded source rectangle, used by backdrop capture. */

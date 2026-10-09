@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstring>
+#include <cmath>
 #include <limits>
 #include <string>
 #include <unordered_map>
@@ -376,6 +377,31 @@ int main() {
     if (!compile_border(2) || plan.passes[2].cache_key == recolored_key) return 63;
     plan.passes[1].commands[0].rect_border.width = -1;
     if (schedule_render_plan(plan, pass_order, &schedule_error)) return 64;
+
+    // Sampling uses the logical content domain, excluding whole-pixel
+    // allocation padding. An implicit native-size quad still uses all texels.
+    RenderPlan sampling_plan;
+    RenderPass sampling_source;
+    sampling_source.target = make_resource_id(ResourceKind::RenderTarget, 1, 490);
+    sampling_source.target_descriptor.logical_width = 50.4f;
+    sampling_source.target_descriptor.logical_height = 32.6f;
+    sampling_source.target_descriptor.width = 56;
+    sampling_source.target_descriptor.height = 36;
+    sampling_plan.passes.push_back(sampling_source);
+    RenderPass sampling_output;
+    sampling_output.target = main_target;
+    sampling_output.commands.push_back({RenderCommandKind::CompositeTarget, sampling_source.target,
+                                       0, 0, 50.4f, 32.6f});
+    sampling_output.commands.push_back({RenderCommandKind::CompositeTarget, sampling_source.target});
+    sampling_plan.passes.push_back(sampling_output);
+    if (!resolve_render_target_sampling(sampling_plan, 1.1f)) return 65;
+    const auto &uv = sampling_plan.passes[1].commands[0].source_uv_extent;
+    if (std::abs(uv[0] - 55.44f / 56) > 0.00001f ||
+        std::abs(uv[1] - 35.86f / 36) > 0.00001f ||
+        sampling_plan.passes[1].commands[1].source_uv_extent != std::array<float, 2>{1, 1})
+        return 66;
+    sampling_plan.passes[1].commands[0].source_uv_extent[0] = -1;
+    if (schedule_render_plan(sampling_plan, pass_order, &schedule_error)) return 67;
 
     DisplayList backdrop;
     EffectDescriptor backdrop_effect{};

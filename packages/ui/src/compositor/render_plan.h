@@ -79,6 +79,8 @@ struct RenderCommand {
     uint64_t content_generation = 0;
     BoxShadowDescriptor box_shadow{};
     RectBorderDescriptor rect_border{};
+    /** Logical content excludes the padding from whole-pixel target allocation. */
+    std::array<float, 2> source_uv_extent{1.0f, 1.0f};
 };
 
 struct RenderPass {
@@ -153,6 +155,9 @@ struct RenderPlanEmbedError {
  */
 bool append_embedded_render_plan(const RenderPlan &source, const RenderPlanEmbedOptions &options,
                                  RenderPlan &destination, RenderPlanEmbedError *error = nullptr);
+
+/** Resolves bounded target sampling without stretching allocation padding. */
+bool resolve_render_target_sampling(RenderPlan &plan, float pixel_scale);
 
 /** Scales effect, mask, and backdrop-region parameters for a device pixel ratio. */
 bool scale_render_plan_parameters(RenderPass &pass, float pixel_scale);
