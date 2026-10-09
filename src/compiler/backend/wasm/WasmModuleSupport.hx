@@ -30,7 +30,7 @@ class WasmModuleSupport {
 
 	public static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
 		for (native in program.cNatives) {
-			if (!used.exists(native.name))
+			if (!used.exists(native.name) || native.library == WasmCryptoRuntime.LIBRARY)
 				continue;
 			var type:WasmFunctionType = WasmCAbi.of(native)
 				.importType([for (argument in native.arguments) requireValueType(argument)], resultTypes(native.result));

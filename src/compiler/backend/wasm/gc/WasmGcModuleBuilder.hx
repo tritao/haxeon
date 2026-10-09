@@ -119,6 +119,7 @@ class WasmGcModuleBuilder {
 				if (reflection != null)
 					functions.set(native.name, reflection);
 			}
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives);
 		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
 		// needs every class's toString index and is defined later.
 		if (usedNatives.exists("__std_string"))
@@ -647,7 +648,7 @@ class WasmGcModuleBuilder {
 
 	static function addGcCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
 		for (native in program.cNatives) {
-			if (!used.exists(native.name))
+			if (!used.exists(native.name) || native.library == compiler.backend.wasm.WasmCryptoRuntime.LIBRARY)
 				continue;
 			var parameters:Array<WasmValueType> = [];
 			if (isGcPointerRelease(program, native))

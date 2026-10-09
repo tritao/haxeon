@@ -2,6 +2,11 @@ package haxe.crypto;
 
 import haxe.io.Bytes;
 
+#if !wasm
+@:hlNative("haxeon_runtime", "__sha256")
+extern function nativeMake(input:Bytes):Bytes;
+#end
+
 /** SHA-256 over UTF-8 strings or byte buffers. */
 class Sha256 {
   static final constants:Array<Int> = [
@@ -27,6 +32,17 @@ class Sha256 {
   }
 
   public static function make(input:Bytes):Bytes {
+    #if wasm
+    var output = Bytes.alloc(32);
+    haxeon.wasm.HaxeonCrypto.sha256(input, output, Bytes.alloc(416));
+    return output;
+    #else
+    return nativeMake(input);
+    #end
+  }
+
+  /** Portable implementation retained for browser targets and parity tests. */
+  public static function portableMake(input:Bytes):Bytes {
     var length = input.length;
     var padded = ((length + 9 + 63) >> 6) << 6;
     var bytes = Bytes.alloc(padded);

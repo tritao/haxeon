@@ -1,0 +1,6 @@
+// Internal C ABI. The compiler links these functions into the guest; they are never host imports.
+interface HaxeonCrypto @target("portable-abi32") @library("haxeon_crypto") {
+  extern fn sha256(input: ptr<const<u8>> @in_array("length"), length: u32,
+    output: ptr<u8> @in_array("output_length"), output_length: u32,
+    scratch: ptr<const<u8>> @in_array("scratch_length"), scratch_length: u32) -> void @symbol("haxeon_sha256");
+}

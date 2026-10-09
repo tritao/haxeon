@@ -12,8 +12,8 @@ before and for `wasm32` with clang, and linked by Haxeon into every `wasm32`
 module. The allocator and sweep are there already; the rest waits on the object
 model (see [Long term](#long-term-hashlinks-object-model)).
 
-The `wasm-gc` backend, which the browser editor uses by default, is unaffected:
-the browser collects its objects.
+The `wasm-gc` backend, which the browser editor uses by default, keeps browser-managed
+objects. It shares the object-independent cryptographic kernels described below.
 
 ## Why
 
@@ -81,3 +81,29 @@ model change would replace them:
   speed, and HashLink's reference bitmaps would replace the table.
 - **Arrays, maps, strings and bytes in C** against the current `wasm32` layouts.
   That moves the code to C but keeps two runtimes and two object models.
+
+## Shared SHA-256 kernel
+
+`haxe.crypto.Sha256.make` and `encode` use the same synchronous C SHA-256 kernel
+on HashLink, `wasm32`, and `wasm-gc`. The implementation lives in
+`native/shared/sha256.h`; thin wrappers adapt HashLink byte buffers and the Wasm
+C ABI. It owns no persistent state and leaves the input unchanged.
+
+`scripts/build-wasm-runtime.sh` also builds the committed
+`stdlib/haxeon/wasm/crypto-runtime.wasm`. `WasmCryptoRuntime` links it only when a
+crypto function is used, through `HaxeonCrypto.hxi` and the existing C ABI bridge.
+The resulting application needs no JavaScript crypto imports or asynchronous API.
+On `wasm-gc`, the bridge copies managed bytes into temporary linear memory and
+copies the digest back. Scratch space is caller-owned and aligned; the kernel
+needs no global, data segment, allocator, or stack pointer.
+
+Tools compiled with upstream Haxe use `build.execution.ContentDigest` to adapt
+its HashLink Bytes ABI to the same kernel. Other upstream Haxe targets keep their
+standard SHA-256 implementation. `Sha256.portableMake` retains the Haxe reference
+implementation for differential testing and benchmarking.
+
+Run `tests/integration/test-sha256-runtime.sh` after building the native runtime.
+It checks known digests, padding boundaries, a million-byte input, unaligned byte
+views, input preservation, and reference parity on all three backends. It needs
+Node with Wasm GC support. `tests/bench/sha256/Sha256Benchmark.hx` provides native
+and exported browser benchmarks; timings depend on the engine and ABI copy cost.
