@@ -205,8 +205,37 @@ descriptor-only slice.
 concrete types propagated through nested generic helper calls. The compiler
 does not provide identity for an unresolved generic parameter or a
 runtime-selected type. The full World compile-and-runtime consumer gate has
-not yet been run against `78d459f00121eb2933b8480bfa9dff43d7dfb054`, so this is
-not a World compatibility checkpoint. At the time of this gate,
+has not passed against
+`78d459f00121eb2933b8480bfa9dff43d7dfb054`, so this is not a World
+compatibility checkpoint. At the time of this gate,
 `stdlib/haxeon/wire/MessagePackSchema.hx`
 was a separate untracked candidate and was not part of this compiler commit or
 the driver evidence. No root or sibling pin was promoted.
+
+## Archived World consumer probe
+
+After the driver record, the exact World `libs/world` tree at
+`a6e111460e92b9c81651609b930d11f7a69f2178` was extracted read-only into
+`out/world-consumer-a6e1114/`. With the separate worktree candidate
+`MessagePackSchema.hx` visible on the compiler stdlib path, the minimal
+World-shaped import project compiled. Its log is
+`out/gates/schema-minimal-current.log`.
+
+The full `WorldTests` compile-and-run command did not pass. It loaded 37 sources
+and stopped at `world/World.hx:96` with:
+
+```text
+E1022: Type "TInstance(class,FlatDefaults,[])" has no fixed native memory layout for "portable-abi64"
+```
+
+This is the generic callback's `RawPtr<T>.load()` with `T` concretely
+specialized to World `FlatDefaults`. It is distinct from the earlier missing
+`MessagePackSchema` import and shows that generic type substitution succeeds,
+but the raw-memory load path still accepts only scalar ABI layouts. The
+compiler's `RawPtr` contract currently says records are rejected; aggregate
+load/store is not implemented by its scalar memory intrinsic. This consumer
+run did not reach the descriptor assertions or runtime tests, and the
+`MessagePackSchema` candidate has only been compile-checked through the minimal
+import project, not validated against World artifacts. Full World compatibility
+therefore remains unverified. The failure log is
+`out/gates/world-a6e1114-run.log`; no World checkout or pin was changed.
