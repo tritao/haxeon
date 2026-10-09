@@ -8,11 +8,12 @@ import compiler.types.TypedAst.ValueCopyLayout;
 /**
  * Value classes have value semantics: binding an instance to a new location (a variable, argument, return value or
  * field) gives that location its own copy. Without it, HashLink's inline slots and Wasm's heap objects alias
- * differently, and the same program means two things. An instance whose fields are all `final` (and hold no mutable
- * value class) cannot be told apart from its copy, so it is shared.
+ * differently, and the same program means two things. This includes immutable instances: a packed field read can
+ * point inside its parent, so sharing that address with a new location would not give the location owned storage.
+ * Scalar replacement and copy elision remove copies when the uses prove that sharing is safe.
  */
 class ValueCopy {
-	/** `value` as bound to a location of `type`: wrapped in a copy unless it is fresh or the class is immutable. */
+	/** `value` as bound to a location of `type`: wrapped in a copy unless it is fresh. */
 	public static function bind(session:TypingSession, value:TypedExpression, type:CompilerType):TypedExpression {
 		if (isFresh(value))
 			return value;
@@ -40,18 +41,15 @@ class ValueCopy {
 			|| declaration.typeParameters.length > 0
 			|| visiting.indexOf(name) >= 0)
 			return null;
-		var fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}> = [],
-			mutable = false;
+		var fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}> = [];
 		for (field in declaration.fields) {
 			if (field.isStatic || !hasStorage(field))
 				continue;
 			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span);
 			var nested = layoutOf(session, fieldType, visiting.concat([name]));
-			if (!field.isFinal || nested != null)
-				mutable = true;
 			fields.push({name: field.name, type: fieldType, nested: nested});
 		}
-		return mutable ? {name: name, fields: fields} : null;
+		return {name: name, fields: fields};
 	}
 
 	static function hasMetadata(declaration:compiler.syntax.Ast.AstClass, name:String):Bool {

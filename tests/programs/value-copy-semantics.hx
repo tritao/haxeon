@@ -114,7 +114,7 @@ function main():Int {
 	duplicate.first.start = 77;
 	if (pair.first.start != 1)
 		failures += 128;
-	// A fresh value is not copied again, and an immutable one is shared without anyone noticing.
+	// A fresh value is not copied again; an immutable binding has the same field values.
 	var fresh = new Span(3, 3);
 	fresh.start = 4;
 	var shared = h.frozen;

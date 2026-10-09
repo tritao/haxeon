@@ -39,9 +39,11 @@ copy: a variable (`var b = a`, also with an inferred type), an argument, a retur
 element or map. Writes through a place still write in place (`h.span.start = 3`, and a method called on a place
 mutates it), so a receiver is not copied. A fresh value (a `new`, a call result) is not copied again.
 
-The typer inserts a `TCopy` node where `coerce` binds a place to a mutable value class, and the IR generator expands it
-to a new object with the same field values, copying nested mutable value classes in turn. A class whose fields are all
-`final` (and hold no mutable value class) is shared, since it cannot be told from its copy. Before this, HashLink
+The typer inserts a `TCopy` node where `coerce` binds a place to a value class, including conversion to Dynamic, and
+the IR generator expands it to a new object with the same field values, copying nested value classes in turn.
+Immutable values need owned storage too: a packed field read can point inside its parent, and a dynamic box holding
+that interior pointer does not keep the parent alive through heap marking. Copies must also preserve the old value
+when the parent's inline slot is replaced. Scalar replacement and copy elision remove copies where safe. Before this, HashLink
 stored value fields inline and handed out pointers into the parent while Wasm used ordinary references, so
 `var alias = h.span; h.span = new Span(5, 6)` meant two different things; the parity suite now runs the same value
 class programs on all three targets with no skips.
