@@ -700,6 +700,12 @@ class FrameworkSmoke {
 		if (!externalScrollbarValid(context)) throw "external scrollbar placement or input regression";
 		if (!scrollbarVisibilityValid(context)) throw "scrollbar visibility regression";
 		if (!smoothScrollValid(context)) throw "smooth scrolling motion or lifetime regression";
+		if (Sys.getEnv("NKUI_SCROLL_TEST_ONLY") == "1") {
+			context.dispose();
+			fonts.dispose();
+			Sys.println("PASS: scrollbar pane hover, fade timing, reduced motion and controller lifetime");
+			return 0;
+		}
 		if (!sidebarValid(context)) throw "sidebar registry, persistence or lazy provider regression";
 		if (!dockWorkspaceValid(context))
 			return 231;
@@ -5202,91 +5208,167 @@ class FrameworkSmoke {
 		if (!context.focusWidget(thumb.id)) return false;
 		context.key(UiEventKind.KeyDown, UiKey.PageDown);
 		if (controller.offsetY <= 20) return false;
-		root = context.submit(view, frame); track = root.children[0]; thumb = track.children[0];
+		frame.deltaSeconds = 0.3; root = context.submit(view, frame); track = root.children[0]; thumb = track.children[0];
 		var thumbBounds = thumb.globalBounds(), before = controller.offsetY;
 		context.pointerDown(thumbBounds.x + 4, thumbBounds.y + thumbBounds.height / 2, 0);
 		context.pointerMove(-20, thumbBounds.y + thumbBounds.height / 2 + 15);
 		if (controller.offsetY <= before) return false;
 		context.pointerUp(-20, thumbBounds.y + thumbBounds.height / 2 + 15, 0);
 		frame.deltaSeconds = 0.8; root = context.submit(view, frame);
-		var color = root.children[0].children[0].layout.style.background;
+		var color = root.children[0].children[0].children[0].layout.style.background;
 		if (color == null || color.alpha != 0) return false;
 		frame.deltaSeconds = 0; context.submit(new Text("external-unmounted"), frame);
 		return context.animations.activeCount == 0;
 	}
 
+	static function scrollbarVisual(root:RenderNode):RenderNode {
+		return root.children[1].children[0].children[0];
+	}
+
 	static function scrollbarAlpha(root:RenderNode):Float {
-		var color = root.children[1].children[0].layout.style.background;
+		var color = scrollbarVisual(root).layout.style.background;
 		return color == null ? -1.0 : color.alpha;
+	}
+
+	static function scrollbarCheck(value:Bool, message:String):Void {
+		if (!value) throw "Scrollbar visibility: " + message;
 	}
 
 	static function scrollbarVisibilityValid(context:UiContext):Bool {
 		var clock = new AnimationScheduler();
 		var visibility = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
-		visibility.attach(clock, function() {}); visibility.setAvailable(true);
-		if (visibility.opacity != 0) return false;
-		visibility.reveal(); clock.advance(0.49);
-		if (visibility.opacity != 1) return false;
+		visibility.attach(clock, function() {});
+		visibility.setAvailable(true);
+		scrollbarCheck(visibility.opacity == 0, "new scrollbar is hidden");
+		visibility.reveal();
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 1, "reveal schedules a fade");
+		clock.advance(0.15);
+		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-in");
+		visibility.reveal(); clock.advance(0.15);
+		scrollbarCheck(visibility.opacity == 1, "repeated activity preserves fade progress");
+		clock.advance(0.49);
+		scrollbarCheck(visibility.opacity == 1, "idle delay follows completed fade-in");
 		clock.advance(0.11);
-		if (visibility.opacity < 0.49 || visibility.opacity > 0.51) return false;
-		visibility.setHovered(true); clock.advance(1);
-		if (visibility.opacity != 1 || clock.activeCount != 0) return false;
-		visibility.setDragging(true); visibility.setHovered(false); clock.advance(1);
-		if (visibility.opacity != 1 || clock.activeCount != 0) return false;
-		visibility.setDragging(false); clock.advance(0.71);
-		if (visibility.opacity != 0 || clock.activeCount != 0) return false;
+		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-out");
+		clock.advance(0.11);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "idle animation stops");
+
+		visibility.setViewportHovered(true); clock.advance(0.15);
+		visibility.setAvailable(true);
+		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "layout does not interrupt the fade");
+		clock.advance(0.15); clock.advance(2);
+		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "pane hover holds without continuous animation");
+		visibility.setHovered(true); visibility.setViewportHovered(false);
+		clock.advance(2);
+		scrollbarCheck(visibility.opacity == 1, "external track hover holds visibility");
+		visibility.setDragging(true); visibility.setHovered(false); clock.advance(2);
+		scrollbarCheck(visibility.opacity == 1, "dragging holds visibility");
+		visibility.setFocused(true); visibility.setDragging(false); clock.advance(2);
+		scrollbarCheck(visibility.opacity == 1, "keyboard focus holds visibility");
+		visibility.setFocused(false); clock.advance(0.1);
+		var fading = visibility.opacity;
+		visibility.setViewportHovered(true);
+		scrollbarCheck(visibility.opacity == fading && fading > 0 && fading < 1, "re-entry reverses without an opacity jump");
+		clock.advance(0.3);
+		visibility.setAvailable(false);
+		scrollbarCheck(visibility.opacity == 0 && visibility.viewportHovered && clock.activeCount == 0, "overflow loss preserves pane hover");
+		visibility.setAvailable(true);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 1, "new overflow fades in under a stationary pointer");
+		clock.advance(0.3);
+
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, true);
-		visibility.reveal(); clock.advance(0.49);
-		if (visibility.opacity != 1) return false;
-		clock.advance(0.02); if (visibility.opacity != 0) return false;
-		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Always, false);
-		if (visibility.opacity != 1 || clock.activeCount != 0) return false;
+		visibility.setViewportHovered(false);
+		scrollbarCheck(visibility.opacity == 0, "reduced motion hides immediately on exit");
+		visibility.setViewportHovered(true);
+		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "reduced motion reveals immediately");
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
-		visibility.setHovered(true); if (visibility.opacity != 0) return false;
-		visibility.setHovered(false);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "hidden policy overrides hover");
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Always, false);
+		scrollbarCheck(visibility.opacity == 1 && clock.activeCount == 0, "always policy does not animate");
+		visibility.setAvailable(false);
+		scrollbarCheck(visibility.opacity == 0, "no scrollbar without overflow");
+		visibility.setAvailable(true);
+		scrollbarCheck(visibility.opacity == 1, "always policy restores on overflow");
+		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden, false);
 		visibility.configure(haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto, false);
-		visibility.reveal(); visibility.dispose(); if (clock.activeCount != 0) return false;
+		scrollbarCheck(clock.activeCount == 1, "auto policy fades in while hovered");
+		visibility.dispose();
+		scrollbarCheck(clock.activeCount == 0, "unmount cancels animation");
+
+		var coarseClock = new AnimationScheduler(), fineClock = new AnimationScheduler();
+		var coarse = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
+		var fine = new haxeon.ui.widgets.scroll.ScrollbarVisibilityController();
+		coarse.attach(coarseClock, function() {}); fine.attach(fineClock, function() {});
+		coarse.setAvailable(true); fine.setAvailable(true);
+		coarse.reveal(); fine.reveal(); coarseClock.advance(0.9);
+		for (_ in 0...9) fineClock.advance(0.1);
+		scrollbarCheck(Math.abs(coarse.opacity - fine.opacity) < 0.001, "frame-rate-independent phase timing");
+		coarse.dispose(); fine.dispose();
 
 		var oldPolicy = context.buildContext.environment.scrollbarVisibility;
 		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
+		context.pointerMove(-20, -20);
 		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(180); style.height = LayoutAxis.fixed(80);
 		var content = new LayoutStyle(); content.width = LayoutAxis.fixed(180); content.height = LayoutAxis.fixed(600);
 		var frame = new LayoutFrame(180, 80); frame.deltaSeconds = 0;
 		var controller = new ScrollController();
 		var view = new ScrollView("visibility-regression", new Column("content", [], content), style, ScrollAxis.Vertical, controller);
 		var root = context.submit(view, frame);
-		var paintRevision = root.children[1].children[0].contentRevision;
-		if (scrollbarAlpha(root) != 0 || root.children[1].children[0].hitTestSelf) return false;
+		var restingAlpha = context.buildContext.theme.tokens.textSecondary.alpha * 0.4;
+		var activeAlpha = context.buildContext.theme.tokens.textSecondary.alpha * 0.65;
+		scrollbarCheck(scrollbarAlpha(root) == 0 && !root.children[1].children[0].hitTestSelf, "transparent thumb has no pointer target");
+		context.pointerMove(20, 20);
+		root = context.submit(view, frame);
+		scrollbarCheck(scrollbarAlpha(root) == 0, "pane entry starts at zero opacity");
+		frame.deltaSeconds = 0.15; root = context.submit(view, frame);
+		scrollbarCheck(scrollbarAlpha(root) > 0 && scrollbarAlpha(root) < restingAlpha,
+			"pane hover animates actual thumb paint: alpha=" + scrollbarAlpha(root) + " resting=" + restingAlpha);
+		root = context.submit(view, frame);
+		scrollbarCheck(Math.abs(scrollbarAlpha(root) - restingAlpha) < 0.001 &&
+			controller.offsetY == 0 && controller.viewportWidth == 180, "pane hover reveals without scrolling or reserving width");
+		context.pointerMove(40, 40);
+		frame.deltaSeconds = 1; root = context.submit(view, frame);
+		scrollbarCheck(Math.abs(scrollbarAlpha(root) - restingAlpha) < 0.001, "moving between descendants does not hide the scrollbar");
 		var track:ResolvedLayoutItem = cast root.children[1].resolved;
 		context.pointerMove(track.x + 5, track.y + 50);
-		root = context.submit(view, frame);
-		if (scrollbarAlpha(root) != 1 || controller.offsetY != 0 || controller.viewportWidth != 180
-			|| root.children[1].children[0].contentRevision <= paintRevision) return false;
-		paintRevision = root.children[1].children[0].contentRevision;
+		frame.deltaSeconds = 0; root = context.submit(view, frame);
+		scrollbarCheck(Math.abs(scrollbarAlpha(root) - activeAlpha) < 0.001, "track hover retains stronger styling");
 		context.pointerMove(20, 20);
-		frame.deltaSeconds = 0.49; root = context.submit(view, frame);
-		if (scrollbarAlpha(root) != 1) return false;
-		frame.deltaSeconds = 0.11; root = context.submit(view, frame);
-		if (scrollbarAlpha(root) <= 0 || scrollbarAlpha(root) >= 1
-			|| root.children[1].children[0].contentRevision <= paintRevision) return false;
-		frame.deltaSeconds = 0.11; root = context.submit(view, frame);
-		if (scrollbarAlpha(root) != 0) return false;
-		frame.deltaSeconds = 0;
-		context.scroll(20, 20, 0, 40); root = context.submit(view, frame);
-		if (scrollbarAlpha(root) != 1 || controller.offsetY != 40) return false;
-		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden;
+		frame.deltaSeconds = 1; root = context.submit(view, frame);
+		scrollbarCheck(Math.abs(scrollbarAlpha(root) - restingAlpha) < 0.001, "leaving the track inside the pane keeps it visible");
+		context.pointerMove(220, 100);
+		frame.deltaSeconds = 0.1; root = context.submit(view, frame);
+		scrollbarCheck(scrollbarAlpha(root) > 0 && scrollbarAlpha(root) < restingAlpha, "pane exit fades out immediately");
 		root = context.submit(view, frame);
-		if (root.children.length != 1 || controller.offsetY != 40 || context.animations.activeCount != 0) return false;
+		scrollbarCheck(scrollbarAlpha(root) == 0, "pane exit finishes hiding");
+
+		context.scroll(20, 20, 0, 40);
+		frame.deltaSeconds = 0.15; root = context.submit(view, frame);
+		scrollbarCheck(controller.offsetY == 40 && scrollbarAlpha(root) > 0 && scrollbarAlpha(root) < restingAlpha,
+			"scroll activity fades in without requiring pane hover");
+
+		frame.deltaSeconds = 0;
+		context.pointerMove(20, 20); root = context.submit(view, frame);
+		content.height = LayoutAxis.fixed(20);
+		view = new ScrollView("visibility-regression", new Column("content", [], content), style, ScrollAxis.Vertical, controller);
+		root = context.submit(view, frame);
+		scrollbarCheck(!root.children[1].layout.style.visible && context.animations.activeCount == 0, "no hover animation without overflow");
+		content.height = LayoutAxis.fixed(600);
+		view = new ScrollView("visibility-regression", new Column("content", [], content), style, ScrollAxis.Vertical, controller);
+		root = context.submit(view, frame);
+		frame.deltaSeconds = 0.15; root = context.submit(view, frame);
+		scrollbarCheck(scrollbarAlpha(root) > 0 && scrollbarAlpha(root) < restingAlpha, "overflow restoration reveals under a stationary pointer");
+
+		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Hidden;
+		frame.deltaSeconds = 0; root = context.submit(view, frame);
+		scrollbarCheck(root.children.length == 1 && context.animations.activeCount == 0, "hidden policy removes track and animation");
 		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
 		root = context.submit(view, frame); root = context.submit(view, frame);
-		if (scrollbarAlpha(root) != 1) return false;
-		context.buildContext.environment.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Auto;
-		context.pointerMove(track.x + 5, track.y + 50);
-		root = context.submit(view, frame);
-		context.pointerMove(20, 20);
+		scrollbarCheck(Math.abs(scrollbarAlpha(root) - restingAlpha) < 0.001, "always policy paints immediately");
 		context.submit(new Text("unmounted"), frame);
 		context.buildContext.environment.scrollbarVisibility = oldPolicy;
-		return context.animations.activeCount == 0;
+		scrollbarCheck(context.animations.activeCount == 0, "view unmount cancels visibility animation");
+		return true;
 	}
 
 	static function smoothScrollValid(context:UiContext):Bool {
@@ -5312,6 +5394,7 @@ class FrameworkSmoke {
 		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(200); style.height = LayoutAxis.fixed(100);
 		var content = new LayoutStyle(); content.width = LayoutAxis.fixed(200); content.height = LayoutAxis.fixed(1000);
 		var frame = new LayoutFrame(200, 100); frame.deltaSeconds = 0;
+		context.events.cancelPointers();
 		var mounted = new ScrollController(); mounted.configureAnimation(true);
 		context.submit(new ScrollView("smooth-lifetime", new Column("content", [], content), style, ScrollAxis.Vertical, mounted), frame);
 		context.scroll(20, 20, 0, 100);
@@ -5319,6 +5402,9 @@ class FrameworkSmoke {
 		frame.deltaSeconds = 1.0 / 60.0;
 		context.submit(new ScrollView("smooth-lifetime", new Column("content", [], content), style, ScrollAxis.Vertical, mounted), frame);
 		if (mounted.offsetY <= 40 || mounted.offsetY >= 100) return false;
+		// Keep the pointer outside while testing binding ownership; pane hover
+		// legitimately schedules the replacement scrollbar's fade-in.
+		context.pointerMove(-20, -20);
 		var replacement = new ScrollController(); replacement.configureAnimation(true);
 		frame.deltaSeconds = 0;
 		context.submit(new ScrollView("smooth-lifetime", new Column("content", [], content), style, ScrollAxis.Vertical, replacement), frame);
@@ -5327,7 +5413,8 @@ class FrameworkSmoke {
 		if (context.animations.activeCount != 2) return false;
 		// Moving a supplied controller creates the new mount before retiring the old one.
 		context.submit(new ScrollView("smooth-moved", new Column("content", [], content), style, ScrollAxis.Vertical, replacement), frame);
-		if (context.animations.activeCount != 1) throw "old scroll mount detached replacement binding";
+		if (context.animations.activeCount != 1)
+			throw "old scroll mount detached replacement binding: animations=" + context.animations.activeCount;
 		context.animations.advance(1.0 / 60.0);
 		if (replacement.offsetY <= 40) return false;
 		context.submit(new Text("unmounted"), frame);

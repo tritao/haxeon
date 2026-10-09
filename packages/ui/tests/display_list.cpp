@@ -338,7 +338,9 @@ static bool validates_rectangular_borders() {
         return validate_display_list(reinterpret_cast<const uint8_t *>(&border), sizeof(border));
     };
     if (!valid()) return false;
-    border.border_width = 0;
+    border.border_width = 0; // Device hairline is a valid retained command.
+    if (!valid()) return false;
+    border.border_width = -1;
     if (valid()) return false;
     border.border_width = 1;
     border.color[3] = 1.1f;

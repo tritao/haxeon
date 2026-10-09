@@ -994,7 +994,7 @@ int main() {
         append_bytes(border_commands, nkui_draw_rect_border_command{
             {NKUI_COMMAND_DRAW_RECT_BORDER, NKUI_COMMAND_VERSION,
              sizeof(nkui_draw_rect_border_command)},
-            0, 0, 50.4f, 32.6f, 1, {1, 1, 1, 1}});
+            0, 0, 50.4f, 32.6f, 0, {1, 1, 1, 1}});
         nkui_layer_command layer{};
         layer.header = {NKUI_COMMAND_BEGIN_LAYER, NKUI_LAYER_COMMAND_VERSION, sizeof(layer) + sizeof(nkui_effect_op_command)};
         layer.opacity = 0.99f;
@@ -1051,7 +1051,7 @@ int main() {
                 if (ink(x, cy)) (x < cx ? left : right)++;
             for (int y = 0; y < framebuffer_height; ++y)
                 if (ink(cx, y)) (y < cy ? top : bottom)++;
-            if (!left || left != right || !top || top != bottom) {
+            if (left != 1 || right != 1 || top != 1 || bottom != 1) {
                 std::fprintf(stderr, "retained border sides differ at zoom %.2f: %d %d %d %d\n",
                              zoom, left, right, top, bottom);
                 result = 91;

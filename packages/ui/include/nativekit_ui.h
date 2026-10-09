@@ -499,6 +499,7 @@ typedef struct nkui_draw_rect_border_command {
     float y;
     float width;
     float height;
+    /** Logical width; zero requests a one-device-pixel hairline. */
     float border_width;
     float color[4];
 } nkui_draw_rect_border_command;

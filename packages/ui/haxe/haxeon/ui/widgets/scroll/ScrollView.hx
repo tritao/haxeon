@@ -20,6 +20,7 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.style.StyleTarget;
+import haxeon.ui.style.StyleState;
 
 /** Clipped Haxe scroll container translated from its persistent controller offset. */
 class ScrollView implements View {
@@ -89,6 +90,14 @@ class ScrollView implements View {
 			visibility.value.bindSource(controller);
 			var policy:Int = scrollbarVisibility == null ? context.environment.scrollbarVisibility : scrollbarVisibility;
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
+
+			visibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
+			viewport.on(UiEventKind.HoverEnter, function(event) {
+				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(true);
+			});
+			viewport.on(UiEventKind.HoverLeave, function(event) {
+				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(false);
+			});
 
 			var contentStyle = new LayoutStyle();
 			contentStyle.width = axis == ScrollAxis.Vertical ? LayoutAxis.stretch() : fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();

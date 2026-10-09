@@ -231,7 +231,7 @@ template <class T> T read(const uint8_t *record) {
 bool valid_rect_border(float x, float y, float width, float height,
                        float border_width, const float color[4]) {
     if (!valid_rect(x, y, width, height) || !finite(x + width) || !finite(y + height) ||
-        width <= 0.0f || height <= 0.0f || !finite(border_width) || border_width <= 0.0f || !color)
+        width <= 0.0f || height <= 0.0f || !finite(border_width) || border_width < 0.0f || !color)
         return false;
     for (int i = 0; i < 4; ++i)
         if (!finite(color[i]) || color[i] < 0.0f || color[i] > 1.0f)

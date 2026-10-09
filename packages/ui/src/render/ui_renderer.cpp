@@ -2208,7 +2208,11 @@ bool UiRendererImpl::drawRectBorder(float x, float y, float width, float height,
     if (!axis_aligned) {
         // Rotated/skewed rectangles keep vector antialiasing. Pixel snapping
         // is meaningful only when their edges follow the device pixel grid.
-        const float edge = std::min({border.width, width * 0.5f, height * 0.5f});
+        const float scale = std::max(std::hypot(transform[0], transform[1]),
+                                     std::hypot(transform[2], transform[3]));
+        if (scale == 0.0f) return true;
+        const float logical_width = border.width == 0.0f ? 1.0f / scale : border.width;
+        const float edge = std::min({logical_width, width * 0.5f, height * 0.5f});
         NanoVGPath path;
         const auto rectangle = [&](float left, float top, float right, float bottom) {
             path.move_to(left, top);
@@ -2243,7 +2247,8 @@ bool UiRendererImpl::drawRectBorder(float x, float y, float width, float height,
         return fail(*state_, "rectangular border exceeds device coordinates");
     // Stay inside the logical bounds so node-local clipping cannot remove a
     // side. Quantize thickness once per axis, rather than rounding four edges
-    // independently. Reflection uses the same inset border geometry.
+    // independently. Width zero is a device hairline and remains one pixel
+    // at any render scale. Reflection uses the same inset border geometry.
     const float left = std::ceil(std::min(x0, x1));
     const float right = std::floor(std::max(x0, x1));
     const float top = std::ceil(std::min(y0, y1));

@@ -367,7 +367,7 @@ int main() {
                plan.passes.size() == 4 &&
                plan.passes[1].commands[0].kind == RenderCommandKind::RectBorder;
     };
-    if (!compile_border(1)) return 60;
+    if (!compile_border(0) || !compile_border(1)) return 60;
     const auto border_key = plan.passes[2].cache_key;
     if (!border_key || !compile_border(1) || plan.passes[2].cache_key != border_key)
         return 61;
