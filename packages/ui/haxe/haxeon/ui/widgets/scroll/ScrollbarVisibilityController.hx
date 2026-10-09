@@ -9,9 +9,9 @@ class ScrollbarVisibilityController implements Animation {
 	var policy:Int = ScrollbarVisibility.Auto;
 	var reducedMotion:Bool = false;
 	var available:Bool = false;
-	var hovered:Bool = false;
-	var dragging:Bool = false;
-	var focused:Bool = false;
+	public var hovered(default, null):Bool = false;
+	public var dragging(default, null):Bool = false;
+	public var focused(default, null):Bool = false;
 	var remaining:Float = 0.0;
 	var scheduler:Null<AnimationScheduler>;
 	var changed:Null<Void->Void>;
@@ -51,9 +51,9 @@ class ScrollbarVisibilityController implements Animation {
 		} else if (policy == ScrollbarVisibility.Always || (policy == ScrollbarVisibility.Auto && held())) setOpacity(1);
 	}
 
-	public function setHovered(value:Bool):Void { hovered = value; interactionChanged(); }
-	public function setDragging(value:Bool):Void { dragging = value; interactionChanged(); }
-	public function setFocused(value:Bool):Void { focused = value; interactionChanged(); }
+	public function setHovered(value:Bool):Void { if (hovered == value) return; hovered = value; interactionChanged(); }
+	public function setDragging(value:Bool):Void { if (dragging == value) return; dragging = value; interactionChanged(); }
+	public function setFocused(value:Bool):Void { if (focused == value) return; focused = value; interactionChanged(); }
 
 	public function reveal():Void {
 		if (!available || policy == ScrollbarVisibility.Hidden) return;
@@ -64,8 +64,11 @@ class ScrollbarVisibilityController implements Animation {
 	}
 
 	function interactionChanged():Void {
+		var previousOpacity = opacity;
 		if (held()) reveal();
 		else if (available && policy == ScrollbarVisibility.Auto && opacity > 0) schedule();
+		// Hover/drag styling can change even when the scrollbar is already visible.
+		if (opacity == previousOpacity && changed != null) changed();
 	}
 
 	function held():Bool return hovered || dragging || focused;

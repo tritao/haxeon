@@ -36,6 +36,8 @@ class Menu implements View {
 	public final y:Float;
 	public var onDismiss:Void->Void;
 	public var hasDismissHandler(default, null):Bool;
+	/** Keyboard invocation selects an item; pointer invocation focuses only the menu. */
+	public var selectFirstOnOpen:Bool = false;
 
 	public function new(key:String, items:Array<MenuItem>, x:Float = 0.0, y:Float = 0.0,
 			?onDismiss:Void->Void) {
@@ -51,6 +53,15 @@ class Menu implements View {
 		var children:Array<KeyedView> = [];
 		var widestItem = 220.0;
 		for (item in items) {
+			if (item.separatorBefore && children.length > 0) {
+				var separatorStyle = new LayoutStyle();
+				separatorStyle.width = LayoutAxis.grow();
+				separatorStyle.height = LayoutAxis.fixed(1);
+				separatorStyle.background = context.theme.tokens.border;
+				var separator = new haxeon.ui.widgets.layout.Spacer(item.key + "-separator", separatorStyle.width, separatorStyle.height);
+				separator.style.background = separatorStyle.background;
+				children.push(new KeyedView(item.key + "-separator", separator));
+			}
 			var button = new Button(item.label, null, function() {
 				if (item.hasSelectHandler)
 					item.onSelect();
@@ -62,6 +73,8 @@ class Menu implements View {
 			button.enabled = item.enabled;
 			button.semanticRole = AccessibilityRole.MenuItem;
 			button.semanticActions = AccessibilityAction.Select;
+			if (item.shortcut != null && item.shortcut.length > 0)
+				button.trailingView = new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(12));
 			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
 				["menu-item", "navigation"], ["button"], 0), button.style);
 			var itemStyle = computed.toLayoutStyle();
@@ -76,7 +89,14 @@ class Menu implements View {
 			if (context.fonts != null) {
 				var measurement = TextLayout.createStyled(context.fonts, item.label, 100000.0,
 					typography.textStyle, typography.paragraphStyle);
-				widestItem = Math.max(widestItem, Math.ceil(measurement.measure().width) + itemStyle.padding.left + itemStyle.padding.right);
+				var shortcutWidth = 0.0;
+				if (item.shortcut != null && item.shortcut.length > 0) {
+					var shortcutLayout = TextLayout.createStyled(context.fonts, item.shortcut, 100000.0,
+						typography.textStyle, typography.paragraphStyle);
+					shortcutWidth = shortcutLayout.measure().width + 32;
+					shortcutLayout.dispose();
+				}
+				widestItem = Math.max(widestItem, Math.ceil(measurement.measure().width + shortcutWidth) + itemStyle.padding.left + itemStyle.padding.right);
 				measurement.dispose();
 			}
 			var label = new MiddleEllipsisText("menu-label", item.label, false, labelStyle);
@@ -120,8 +140,30 @@ class Menu implements View {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem && node.enabled)
 				focusableItems.push(node);
 		});
-		if (menuViewport != null && focusableItems.length == 0) menuViewport.focusable = true;
-		root.on(UiEventKind.KeyDown, function(event) {
+		// Keep the modal keyboard owner independent of the highlighted action.
+		root.focusable = !selectFirstOnOpen || focusableItems.length == 0;
+		var initialFocusPending = context.state(root.id, true);
+		root.onResolved(function(_) {
+			if (!initialFocusPending.value) return;
+			initialFocusPending.update(false);
+			var initial = selectFirstOnOpen && focusableItems.length > 0 ? focusableItems[0] : root;
+			context.requestFocusAfterLayout(initial.id);
+		});
+		root.on(UiEventKind.PointerMove, function(event) {
+			var node = root.find(event.target);
+			while (node != null && node != root) {
+				if (node.enabled && node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem) {
+					context.requestFocus(node.id);
+					break;
+				}
+				node = node.parent;
+			}
+		}, "capture");
+		var navigate = function(event:haxeon.ui.core.UiEvent) {
+			if (event.target.equals(root.id) && (event.key == UiKey.Enter || event.key == UiKey.Space)) {
+				event.preventDefault();
+				return;
+			}
 			if (event.defaultPrevented || (event.key != UiKey.Down && event.key != UiKey.Up))
 				return;
 			if (focusableItems.length > 0) {
@@ -150,7 +192,12 @@ class Menu implements View {
 				if (!context.requestFocus(target.id)) context.requestFocusAfterLayout(target.id);
 			}
 			event.preventDefault();
-		}, "capture");
+		};
+		root.on(UiEventKind.KeyDown, navigate, "capture");
+		root.on(UiEventKind.KeyRepeat, navigate, "capture");
+		// Capture visits ancestors only; the neutral menu can itself be the target.
+		root.on(UiEventKind.KeyDown, navigate);
+		root.on(UiEventKind.KeyRepeat, navigate);
 		var semantics = new Semantics(AccessibilityRole.Menu, "Menu");
 		semantics.states |= AccessibilityState.Modal;
 		if (hasDismissHandler)

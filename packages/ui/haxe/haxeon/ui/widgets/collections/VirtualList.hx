@@ -34,6 +34,7 @@ class VirtualList implements View {
 	final itemBuilder:Int->View;
 	final keyForIndex:Null<Int->String>;
 	final fallbackViewportHeight:Float;
+	final suppliedController:Bool;
 
 	public function new(key:String, itemCount:Int, itemHeight:Float, itemBuilder:Int->View,
 			?viewportStyle:LayoutStyle, ?keyForIndex:Int->String, ?controller:ScrollController,
@@ -47,6 +48,7 @@ class VirtualList implements View {
 		this.itemHeight = itemHeight;
 		this.itemBuilder = itemBuilder;
 		this.keyForIndex = keyForIndex;
+		this.suppliedController = controller != null;
 		this.controller = controller == null ? new ScrollController() : controller;
 		this.fallbackViewportHeight = viewportHeight;
 		this.viewportStyle = viewportStyle == null ? defaultViewportStyle(viewportHeight) :
@@ -58,9 +60,12 @@ class VirtualList implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var stateId = context.id("scroll-state");
-			var stored:State<ScrollController> = context.state(stateId, controller);
-			controller = stored.value;
+			// Retain an internally owned controller, but never replace one supplied
+			// by the caller. Keyboard reveal and scrolling must share one instance.
+			if (!suppliedController) {
+				var stored:State<ScrollController> = context.state(context.id("scroll-state"), controller);
+				controller = stored.value;
+			}
 			var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight :
 				(viewportStyle.height.sizing == LayoutSizing.Fixed ? viewportStyle.height.value :
 				fallbackViewportHeight);

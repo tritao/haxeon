@@ -26,6 +26,16 @@ class StateStore {
 		revision = 0;
 	}
 
+	/** Resolve hash collisions without aliasing state belonging to another scoped path. */
+	public function resolveWidgetId(path:String):WidgetId {
+		var value = KeyScope.widgetIdForPath(path).value;
+		while (paths.exists(value) && paths.get(value) != path)
+			value = value == 0x7fffffff ? 1 : value + 1;
+		var id = new WidgetId(value);
+		rememberPath(id, path);
+		return id;
+	}
+
 	/** Records the scoped key path used to make a widget ID for diagnostics. */
 	public function rememberPath(id:WidgetId, path:String):Void {
 		if (id != null && path != null && paths.get(id.value) != path)

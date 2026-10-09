@@ -1158,8 +1158,18 @@ class CallResolver {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
 			var leftValue = typeExpressionValue(arguments[0], scope),
-				rightValue = typeExpression(arguments[1], scope, leftValue.type, false),
-				left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
+				rightValue = typeExpression(arguments[1], scope, leftValue.type, false);
+			// Haxe compares the constructor and then each argument, recursively, so an enum known here gets the structural
+			// comparison the compiler generates for it; the dynamic comparison below is for values it only knows as Dynamic.
+			switch leftValue.type {
+				case TInstance(NominalKind.Enum, _, _):
+					EqualityGenerator.request(session, leftValue.type, session.currentContext.name, span);
+					return new TypedExpression(TCall(EqualityGenerator.equalsName(leftValue.type),
+						[leftValue, coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")]),
+						TBool, span);
+				default:
+			}
+			var left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
 				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
 			// Type.enumEq is a dynamic equality operation at runtime.  Keep the
 			// source-level builtin in the typer, but lower it through the shared

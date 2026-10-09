@@ -31,6 +31,7 @@ struct TextLayoutOptions {
     float font_size = 16.0f;
     float letter_spacing = 0.0f;
     float line_height = 0.0f;
+    uint32_t tab_width = 0;
     FontFamily family = FontFamily::Default;
     TextWrapMode wrap = TextWrapMode::WordCharacter;
     TextAlignment alignment = TextAlignment::Start;
@@ -136,6 +137,8 @@ struct TextRect {
 
 struct TextIntrinsicMetrics {
     TextRect bounds{};
+    /** Final insertion x, including trailing whitespace (single-line measurements). */
+    float advance_x = 0.0f;
     float baseline = 0.0f;
     bool has_baseline = false;
 };

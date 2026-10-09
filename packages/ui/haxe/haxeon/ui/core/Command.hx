@@ -3,6 +3,8 @@ package haxeon.ui.core;
 /** An application action exposed to menus, toolbars, palettes, and shortcuts. */
 class Command {
 	public final id:String;
+	/** Opt in to OS key repeats for editing actions; destructive/menu actions default off. */
+	public var repeatable:Bool = false;
 	public final label:String;
 	public final shortcut:Null<Shortcut>;
 	final alternateShortcuts:Array<Shortcut>;

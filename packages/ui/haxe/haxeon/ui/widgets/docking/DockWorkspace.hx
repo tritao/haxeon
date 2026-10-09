@@ -22,6 +22,7 @@ import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextWrap;
 import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
@@ -37,7 +38,6 @@ import haxeon.ui.widgets.docking.DockTabDropTarget;
 import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
 import haxeon.ui.widgets.controls.TabsOptions;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.style.StyleState;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
@@ -408,11 +408,11 @@ private class DockPanelView implements View {
 		if (observed)
 			context.reportBuild("panel:" + descriptor.id, buildStarted - preparationStarted,
 				Sys.time() - buildStarted, root);
-		if (cacheKey != null)
-			{
-				var usedStates = context.stateIdsUsedSince(stateMarker);
-				panelCache.put(descriptor.id, cacheKey, root, usedStates, context.stateRevisions(usedStates));
-			}
+		if (cacheKey != null) {
+			var usedStates = context.stateIdsUsedSince(stateMarker);
+			panelCache.put(descriptor.id, cacheKey, root, usedStates, context.stateRevisions(usedStates),
+				new InteractionStateSnapshot(context.currentRoot(root)));
+		}
 		return root;
 	}
 }
@@ -451,7 +451,8 @@ private class DockPaneView implements View {
 		var root = create().build(context);
 		if (cacheKey != null) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
-			cache.put(key, cacheKey, root, usedStates, context.stateRevisions(usedStates), interaction.targetsSince(targetMark),
+			cache.put(key, cacheKey, root, usedStates, context.stateRevisions(usedStates),
+				new InteractionStateSnapshot(context.currentRoot(root)), interaction.targetsSince(targetMark),
 				interaction.tabTargetsSince(tabMark));
 		}
 		return root;
@@ -468,11 +469,13 @@ private class DockPanelCache {
 		return entries.get(panelId);
 
 	public function put(panelId:String, key:String, root:RenderNode, stateIds:Array<Int>,
-			stateRevisions:Array<Int>, ?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>):Void {
+			stateRevisions:Array<Int>, interactions:InteractionStateSnapshot,
+			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>):Void {
 		var previous = entries.get(panelId);
 		if (previous != null && previous.root != root)
 			previous.root.detach();
-		entries.set(panelId, new DockPanelCacheEntry(key, root, stateIds, stateRevisions, targets, tabTargets));
+		entries.set(panelId, new DockPanelCacheEntry(key, root, stateIds, stateRevisions,
+			interactions, targets, tabTargets));
 	}
 
 	public function retain(context:BuildContext):Void {
@@ -489,13 +492,16 @@ private class DockPanelCacheEntry {
 	public final targets:Array<DockDropTarget>;
 	public final tabTargets:Array<DockTabDropTarget>;
 	final stateRevisions:Array<Int>;
+	final interactions:InteractionStateSnapshot;
 
-	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>, ?targets:Array<DockDropTarget>,
+	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+			interactions:InteractionStateSnapshot, ?targets:Array<DockDropTarget>,
 			?tabTargets:Array<DockTabDropTarget>) {
 		this.key = key;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
+		this.interactions = interactions;
 		this.targets = targets == null ? [] : targets;
 		this.tabTargets = tabTargets == null ? [] : tabTargets;
 	}
@@ -511,13 +517,7 @@ private class DockPanelCacheEntry {
 		for (index in 0...current.length)
 			if (current[index] != stateRevisions[index])
 				return false;
-		var mask = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
-		var result = true;
-		context.currentRoot(root).walk(function(node) {
-			if (node.recordsInteraction && (node.states & mask) != (context.interactionStates.get(node.id) & mask))
-				result = false;
-		});
-		return result;
+		return interactions.matches(context);
 	}
 }
 
@@ -620,6 +620,6 @@ private class DockTextWidthCache {
 			"|wrap=" + Std.string(paragraphStyle.wrap) +
 			"|align=" + Std.string(paragraphStyle.alignment) +
 			"|line=" + (paragraphStyle.lineHeight == null ? "none" : Std.string(paragraphStyle.lineHeight)) +
-			"|direction=" + Std.string(paragraphStyle.direction);
+			"|direction=" + Std.string(paragraphStyle.direction) + "|tabs=" + paragraphStyle.tabWidth;
 	}
 }

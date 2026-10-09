@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-filesystem-tests"
+  },
+  "entry": "haxeon.filesystem.tests.FileSystemSmoke",
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "target": "host",
+  "dependencies": {
+    "haxeon-filesystem": {
+      "path": ".."
+    }
+  }
+}

@@ -8,7 +8,8 @@ private typedef ChildProcessHandle = hl.Abstract<"realtime_child_process">;
  * Reads return a positive byte count, -1 for EOF, or -2 for would-block.
  * I/O errors throw. Zero-length reads/writes return zero.
  * Call close() to release ownership; it kills and reaps a still-running child.
- * The streaming backend currently supports POSIX hosts; Windows spawn throws.
+ * POSIX and Windows hosts use bounded nonblocking pipes. On Windows, stdin writes are
+ * copied to a bounded queue and drained by a native worker thread.
  */
 extern abstract ChildProcess(ChildProcessHandle) {
 	@:hlNative("haxeon_runtime", "__child_read_stdout")

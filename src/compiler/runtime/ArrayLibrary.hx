@@ -10,7 +10,7 @@ class ArrayLibrary {
 	public static inline var CLASS_NAME = "haxeon.ArrayMethods";
 
 	/** Keep in step with the functions in `stdlib/haxeon/ArrayMethods.hx`. */
-	static final METHODS:Array<String> = ["filter", "map", "join"];
+	static final METHODS:Array<String> = ["filter", "map", "join", "lastIndexOf"];
 
 	public static function provides(methodName:String):Bool
 		return METHODS.indexOf(methodName) >= 0;

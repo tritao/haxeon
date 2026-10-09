@@ -370,8 +370,17 @@ HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
 	return hl_dyn_compare(left,right);
 }
 
+/* Constructors without arguments are one value in Haxe, but each evaluation here allocates its own,
+   so two of them are equal when they are the same constructor of the same enum. */
+static bool realtime_nullary_enum_equal(vdynamic *left, vdynamic *right) {
+	if( left == NULL || right == NULL || left->t != right->t || left->t->kind != HENUM )
+		return false;
+	int index = ((venum *)left)->index;
+	return index == ((venum *)right)->index && left->t->tenum->constructs[index].nparams == 0;
+}
+
 HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
-	return HL_NAME(__reflect_compare)(left, right) == 0;
+	return realtime_nullary_enum_equal(left, right) || HL_NAME(__reflect_compare)(left, right) == 0;
 }
 
 HL_PRIM bool HL_NAME(__string_starts_with)( vstring *value, vstring *prefix ) {

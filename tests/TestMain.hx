@@ -68,6 +68,9 @@ class TestMain {
 		return new Located(value, SourceProvenance.generated("malformed-test-fixture"));
 
 	static function main():Void {
+		for (modifiers in ["override public", "public override", "private override", "public inline override", "override public inline"])
+			new Parser(new Lexer(new SourceFile("override-modifiers.hx",
+				'class Child { $modifiers function dispose():Void {} }')).tokenize()).parseProgram();
 		var lexicalForms = new Lexer(new SourceFile("lexical-forms.hx", "// line\n/* block */ 'text' ? @")).tokenize();
 		if (lexicalForms.length != 4
 			|| lexicalForms[0].kind != compiler.syntax.Token.TokenKind.StringLiteral

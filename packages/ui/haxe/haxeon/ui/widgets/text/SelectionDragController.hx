@@ -13,6 +13,7 @@ class SelectionDragController implements Animation {
 	var selectAt:(Float, Float)->Void;
 	var scroll:Float->Bool;
 	var handle:Null<AnimationHandle>;
+	var selectionPending:Bool = false;
 	var x:Float = 0.0;
 	var y:Float = 0.0;
 
@@ -48,12 +49,25 @@ class SelectionDragController implements Animation {
 		var speed = velocity();
 		if (speed == 0.0) return false;
 		if (deltaSeconds <= 0.0) return true;
-		if (!scroll(speed * Math.min(deltaSeconds, 0.1))) return false;
-		selectAt(x, y);
+		if (!scroll(speed * Math.min(deltaSeconds, 0.1))) {
+			// Re-hit-test even at the scroll limit: the previous frame may have
+			// moved the document underneath a stationary pointer.
+			selectAt(x, y);
+			return false;
+		}
+		selectionPending = true;
 		return true;
 	}
 
+	/** Scroll transforms are authoritative only after layout resolves. */
+	public function layoutResolved():Void {
+		if (!selectionPending) return;
+		selectionPending = false;
+		if (!editor.isDisposed() && editor.draggingSelection) selectAt(x, y);
+	}
+
 	public function stop():Void {
+		selectionPending = false;
 		if (handle != null) handle.cancel();
 		handle = null;
 	}

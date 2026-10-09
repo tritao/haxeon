@@ -24,6 +24,7 @@
 #include "render/render_plan_executor.h"
 #include "render/ui_renderer.h"
 
+#include <list>
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -49,7 +50,7 @@ static_assert(sizeof(nkui_text_position) == 2 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_caret) == 7 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_rect) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_text_style) == 4 * sizeof(uint32_t));
-static_assert(sizeof(nkui_paragraph_style) == 5 * sizeof(uint32_t));
+static_assert(sizeof(nkui_paragraph_style) == 6 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_frame_input) == 4 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_measure_constraints) == 5 * sizeof(uint32_t));
 static_assert(sizeof(nkui_layout_measure_result) == 5 * sizeof(uint32_t));
@@ -110,6 +111,10 @@ struct ResourceSlot {
     std::unordered_map<int32_t, nkui::PreparedGlyphs> scaled_text_glyphs;
     nkui_color text_color{1.0f, 1.0f, 1.0f, 1.0f};
     std::vector<nkui::GlyphColorRange> text_color_ranges;
+    // A row texture is useful only when placement repeats. Moving text keeps
+    // the direct glyph path instead of creating one-use render targets.
+    bool row_placement_known = false;
+    std::array<float, 6> row_placement{};
     uint64_t text_content_revision = 1;
     float text_width = 0.0f;
     nkui::TextLayoutOptions text_options{};
@@ -191,6 +196,7 @@ struct PathCacheKeyHash {
 };
 
 struct PreparedPathCacheEntry {
+    std::list<PathCacheKey>::iterator recency;
     std::shared_ptr<const nkui::PreparedGeometry> geometry;
 };
 
@@ -228,6 +234,7 @@ struct RendererSlot {
     bool active = false;
     nkui::Compositor compositor;
     std::unordered_map<PathCacheKey, PreparedPathCacheEntry, PathCacheKeyHash> paths;
+    std::list<PathCacheKey> path_recency;
     std::vector<CustomEffectRegistrationStorage> custom_effects;
     std::size_t registered_custom_effects = 0;
     nkui::UiGpuStats retired_gpu{};
@@ -628,15 +635,13 @@ void execute_render_submission(RenderSubmission &submission) {
                     {nkui::make_resource_id(nkui::ResourceKind::RenderTarget, 1, 1),
                      submission.frame_target},
                     &execution_error);
-#if defined(NKGPU_TESTING)
-                if (!success && nk::core::render_executor_physical())
+                if (!success)
                     std::fprintf(stderr,
                                  "nativekit ui: render submission failed at pass=%u command=%u: %s "
                                  "(renderer=%s, gpu=%s)\n",
                                  execution_error.pass_index, execution_error.command_index,
                                  execution_error.message ? execution_error.message : "unknown",
                                  renderer_impl->lastError(), nkgpu_last_error());
-#endif
             }
         }
         /* Stats are protected by renderers_mutex.  Do not reacquire it while
@@ -963,6 +968,7 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, text_wrap) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, text_alignment) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, text_direction) ||
+                !read_node_u32(record, NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, node.paragraph_style.tab_width) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, text_flags) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, transform[0]) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET, transform[1]) ||
@@ -1135,7 +1141,7 @@ bool text_options_from_api(const nkui_text_style *text_style,
                            const nkui_paragraph_style *paragraph_style,
                            nkui::TextLayoutOptions &out) {
     if (!text_style || !paragraph_style || text_style->struct_size < sizeof(*text_style) ||
-        paragraph_style->struct_size < sizeof(*paragraph_style))
+        paragraph_style->struct_size < offsetof(nkui_paragraph_style, tab_width))
         return false;
     if (text_style->family < NKUI_FONT_FAMILY_DEFAULT ||
         (text_style->family != NKUI_FONT_FAMILY_DEFAULT && text_style->family != NKUI_FONT_FAMILY_EMOJI && text_style->family != NKUI_FONT_FAMILY_MONOSPACE) ||
@@ -1153,6 +1159,7 @@ bool text_options_from_api(const nkui_text_style *text_style,
     out.font_size = text_style->font_size;
     out.letter_spacing = text_style->letter_spacing;
     out.line_height = paragraph_style->line_height;
+    out.tab_width = paragraph_style->struct_size >= sizeof(*paragraph_style) ? paragraph_style->tab_width : 0;
     out.wrap = static_cast<nkui::TextWrapMode>(paragraph_style->wrap);
     out.alignment = static_cast<nkui::TextAlignment>(paragraph_style->alignment);
     out.direction = static_cast<nkui::TextDirection>(paragraph_style->direction);
@@ -1293,6 +1300,7 @@ uint64_t geometry_memory_bytes(const nkui::PreparedGeometry &geometry) {
 
 void clear_path_cache(RendererSlot &renderer) {
     renderer.paths.clear();
+    renderer.path_recency.clear();
     renderer.stats.path_geometry_bytes_retained = 0;
 }
 
@@ -1468,12 +1476,10 @@ PreparedPathCacheEntry *prepare_cached_path(RendererSlot &renderer, nkui_resourc
     const PathCacheKey key = path_cache_key(path_handle, transform, pixel_scale, command);
     if (const auto found = renderer.paths.find(key); found != renderer.paths.end()) {
         ++renderer.stats.path_cache_hits;
+        renderer.path_recency.splice(renderer.path_recency.begin(), renderer.path_recency, found->second.recency);
         return &found->second;
     }
     ++renderer.stats.path_cache_misses;
-    constexpr size_t max_cached_paths = 256;
-    if (renderer.paths.size() >= max_cached_paths)
-        clear_path_cache(renderer);
     if (!path.path || !path.path->valid())
         return nullptr;
     nkui::PathPreparationParams params;
@@ -1502,9 +1508,20 @@ PreparedPathCacheEntry *prepare_cached_path(RendererSlot &renderer, nkui_resourc
     renderer.stats.path_geometry_bytes_allocated += geometry_bytes;
     {
         auto cached_geometry = std::make_shared<const nkui::PreparedGeometry>(std::move(geometry));
+        // Evict only the least recently used geometry. Clearing the entire
+        // cache lets transient paths repeatedly discard frequently drawn icons.
+        constexpr size_t max_cached_paths = 256;
+        if (renderer.paths.size() >= max_cached_paths) {
+            const auto victim = renderer.paths.find(renderer.path_recency.back());
+            renderer.stats.path_geometry_bytes_retained -= geometry_memory_bytes(*victim->second.geometry);
+            renderer.paths.erase(victim);
+            renderer.path_recency.pop_back();
+        }
         auto [found, inserted] = renderer.paths.emplace(key, PreparedPathCacheEntry{});
         if (!inserted)
             return &found->second;
+        renderer.path_recency.push_front(key);
+        found->second.recency = renderer.path_recency.begin();
         found->second.geometry = std::move(cached_geometry);
         renderer.stats.path_geometry_bytes_retained += geometry_bytes;
         return &found->second;
@@ -1594,6 +1611,8 @@ void release_resource_slot(ResourceSlot &slot) {
     slot.visible_line_glyphs.clear();
     slot.text_color = {1.0f, 1.0f, 1.0f, 1.0f};
     slot.text_color_ranges.clear();
+    slot.row_placement_known = false;
+    slot.row_placement = {};
     slot.text_content_revision = 1;
     slot.text_width = 0.0f;
     slot.text_options = {};
@@ -4273,6 +4292,16 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 const auto visible = visible_text_line_range(*layout, command, command.transform,
                                                                *frame_info, pass.target_descriptor);
                 const uint32_t row_count = visible.second - visible.first;
+                auto placement = command.transform;
+                // Whole-pixel movement can reuse canonical row textures; only
+                // a changed subpixel phase or linear transform requires direct drawing.
+                const float origin_x = command.x * command.transform[0] + command.y * command.transform[2] + command.transform[4];
+                const float origin_y = command.x * command.transform[1] + command.y * command.transform[3] + command.transform[5];
+                placement[4] = origin_x - std::floor(origin_x);
+                placement[5] = origin_y - std::floor(origin_y);
+                const bool stable_placement = layout->row_placement_known && layout->row_placement == placement;
+                layout->row_placement = placement;
+                layout->row_placement_known = true;
                 // Small single-line paragraphs use the same row cache. Keep
                 // very long unwrapped lines on the direct single-row path.
                 if ((row_count > 1 || (row_count == 1 && layout->text->text_count() <= 2048)) &&
@@ -4311,7 +4340,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                             sealable = false;
                         if (!valid)
                             break;
-                        if (row_count <= 96 && command.transform[1] == 0.0f &&
+                        if (stable_placement && row_count <= 96 && command.transform[1] == 0.0f &&
                             command.transform[2] == 0.0f && command.transform[0] > 0.0f &&
                             command.transform[3] > 0.0f && !row->vertices.empty()) {
                             float min_y = INFINITY, max_y = -INFINITY;

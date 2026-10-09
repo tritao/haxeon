@@ -160,6 +160,7 @@ uint64_t primitive_content_generation(const LayoutPrimitive &primitive,
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.wrap));
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.alignment));
     hash_float(hash, primitive.paragraph_style.line_height);
+    hash_u32(hash, primitive.paragraph_style.tab_width);
     hash_u32(hash, static_cast<uint32_t>(primitive.paragraph_style.direction));
     hash_u64(hash, primitive.text_layout_id);
     hash_u32(hash, primitive.text_line_index);
@@ -381,6 +382,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     options.font_size = primitive.text_style.font_size;
                     options.letter_spacing = primitive.text_style.letter_spacing;
                     options.line_height = primitive.paragraph_style.line_height;
+                    options.tab_width = primitive.paragraph_style.tab_width;
                     options.family = primitive.text_style.family;
                     options.wrap = TextWrapMode::None;
                     options.alignment = primitive.paragraph_style.alignment;
@@ -686,10 +688,11 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             const bool has_composite =
                 custom_composites && custom_composites->contains(primitive.node_id);
             // Floating custom layers may be emitted outside ancestor scissor
-            // commands. Resolved geometry still carries their inherited clip.
+            // commands, whose inherited scissors may use pre-scroll coordinates.
+            // Resolved geometry already carries the complete viewport-space clip.
             const bool has_node_clip = scene_item || !clips.empty();
             LayoutRect node_clip = scene_item ? scene_item->clip_bounds : LayoutRect{};
-            if (!clips.empty())
+            if (!clips.empty() && (!scene_item || active_raster_root != no_raster_root))
                 node_clip = scene_item ? intersect(node_clip, clips.back()) : clips.back();
             if (active_raster_root != no_raster_root) {
                 const auto &root = raster_roots[active_raster_root];
@@ -723,6 +726,16 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                                           current_main_pass, &node_local_to_world,
                                           has_node_clip ? &node_clip : nullptr,
                                           content_revision);
+            if (has_node_clip && (node_clip.width <= 0.0f || node_clip.height <= 0.0f))
+                return true;
+            const double raster_width = std::ceil(static_cast<double>(primitive.bounds.width) * pixel_scale);
+            const double raster_height = std::ceil(static_cast<double>(primitive.bounds.height) * pixel_scale);
+            if (raster_width <= 0 || raster_height <= 0)
+                return true;
+            if (!std::isfinite(raster_width) || !std::isfinite(raster_height) ||
+                raster_width > std::numeric_limits<int>::max() ||
+                raster_height > std::numeric_limits<int>::max())
+                return fail(error, primitive_index, "raster cache dimensions exceed target limit");
             if (transient_target_slot > std::numeric_limits<uint16_t>::max())
                 return fail(error, primitive_index, "raster cache target limit exceeded");
             const ResourceId raster_target = make_resource_id(
@@ -730,18 +743,30 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             RenderPass raster_pass;
             raster_pass.target = raster_target;
             raster_pass.kind = RenderPassKind::Raster;
+            // Cache in the painter's local plane, independent of viewport placement.
+            const LayoutRect local_bounds{0.0f, 0.0f, primitive.bounds.width,
+                                          primitive.bounds.height};
+            raster_pass.target_descriptor.logical_width = local_bounds.width;
+            raster_pass.target_descriptor.logical_height = local_bounds.height;
+            raster_pass.target_descriptor.width = static_cast<int>(raster_width);
+            raster_pass.target_descriptor.height = static_cast<int>(raster_height);
             out.plan_.passes.push_back(std::move(raster_pass));
             const std::size_t raster_pass_index = out.plan_.passes.size() - 1;
+            const std::array<float, 6> local_transform{1, 0, 0, 1, 0, 0};
             if (!append_custom_plan(*found->second, primitive_index, raster_target,
-                                    raster_pass_index, &node_local_to_world,
-                                    has_node_clip ? &node_clip : nullptr,
-                                    content_revision))
+                                    raster_pass_index, &local_transform,
+                                    &local_bounds, content_revision))
                 return false;
             out.plan_.dependencies.push_back({raster_target, main_target});
             RenderPass continuation;
             continuation.target = main_target;
             continuation.load_existing = true;
-            RenderCommand composite{RenderCommandKind::CompositeTarget, raster_target};
+            RenderCommand composite{RenderCommandKind::CompositeTarget, raster_target,
+                                    0.0f, 0.0f, local_bounds.width, local_bounds.height};
+            composite.transform = device_transform(transform_layout(node_local_to_world), pixel_scale);
+            // Apply the inherited viewport clip only at composition, so moving
+            // or partially revealing the painter can reuse its local pixels.
+            if (has_node_clip) set_scissor(composite, node_clip, pixel_scale);
             continuation.commands.push_back(std::move(composite));
             out.plan_.passes.push_back(std::move(continuation));
             current_main_pass = out.plan_.passes.size() - 1;

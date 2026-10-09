@@ -38,11 +38,11 @@ class MiddleEllipsisText implements View {
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();
       style.clipHorizontal = true;
-      var text = new Text(displayed.value, style, null,
-        textStyle == null ? TextStyleOverride.paragraph(TextWrap.None) : textStyle);
+      var labelOverride = TextStyleOverride.combine(textStyle, TextStyleOverride.paragraph(TextWrap.None));
+      var text = new Text(displayed.value, style, null, labelOverride);
       var node = text.build(context);
       if (node.semantics != null) node.semantics.label = value;
-      var resolved = context.resolveTextRole(TextRole.Body, textStyle);
+      var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
       // Shaping a layout to measure is the expensive part, so remember the answer while its inputs stay the same.
       var memo:EllipsisMemo = context.resourceState(context.id("ellipsis-memo"), function() return new EllipsisMemo(), function(_) {}).value;
       node.onResolved(function(geometry) {
@@ -53,29 +53,40 @@ class MiddleEllipsisText implements View {
           next = memo.result;
         else {
           var paragraph = new ParagraphStyle(TextWrap.None, resolved.paragraphStyle.alignment,
-            resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction);
+            resolved.paragraphStyle.lineHeight, resolved.paragraphStyle.direction, resolved.paragraphStyle.tabWidth);
           var layout = TextLayout.createStyled(context.fonts, value, 100000.0,
             resolved.textStyle, paragraph);
           next = value;
-          if (layout.measure().width > available + 1.0) {
-            var document = new TextDocument(value);
-            var low = 0, high = document.codepointCount;
-            while (low < high) {
-              var count = (low + high + 1) >> 1;
-              var prefix = middle ? (count + 1) >> 1 : count;
-              var candidate = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (count - prefix), document.codepointCount);
-              layout.setText(candidate);
-              if (layout.measure().width <= available) low = count;
-              else high = count - 1;
+          if (layout.measure().width > available) {
+            // The marker must satisfy the same bound as every candidate. If it
+            // cannot fit, return no paintable text rather than a clipped marker.
+            layout.setText("…");
+            if (layout.measure().width > available) next = "";
+            else {
+              var document = new TextDocument(value);
+              var low = 0, high = document.codepointCount;
+              while (low < high) {
+                var count = (low + high + 1) >> 1;
+                var prefix = middle ? (count + 1) >> 1 : count;
+                var candidate = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (count - prefix), document.codepointCount);
+                layout.setText(candidate);
+                if (layout.measure().width <= available) low = count;
+                else high = count - 1;
+              }
+              var prefix = middle ? (low + 1) >> 1 : low;
+              next = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (low - prefix), document.codepointCount);
             }
-            var prefix = middle ? (low + 1) >> 1 : low;
-            next = document.sliceCodepoints(0, prefix) + "…" + document.sliceCodepoints(document.codepointCount - (low - prefix), document.codepointCount);
           }
           layout.dispose();
           memo.store(value, available, resolved.textStyle, resolved.paragraphStyle, next);
         }
         truncated = next != value;
         if (displayed.value != next) displayed.update(next);
+        // Settle the current frame, including a retained label resized in place.
+        if (node.layout.text != next) {
+          node.layout.text = next;
+          context.requestLayoutFeedback();
+        }
       });
       return node;
     });
@@ -92,6 +103,7 @@ private class EllipsisMemo {
   var alignment:Null<TextAlignment> = null;
   var lineHeight:Null<Float> = null;
   var direction:Null<TextDirection> = null;
+  var tabWidth:Int = 0;
   public var result:String = "";
 
   public function new() {}
@@ -99,7 +111,7 @@ private class EllipsisMemo {
   public function matches(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle):Bool
     return this.value != null && this.value == value && this.available == available && font == text.font &&
       fontSize == text.fontSize && letterSpacing == text.letterSpacing && alignment == paragraph.alignment &&
-      lineHeight == paragraph.lineHeight && direction == paragraph.direction;
+      lineHeight == paragraph.lineHeight && direction == paragraph.direction && tabWidth == paragraph.tabWidth;
 
   public function store(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle, result:String):Void {
     this.value = value;
@@ -110,6 +122,7 @@ private class EllipsisMemo {
     alignment = paragraph.alignment;
     lineHeight = paragraph.lineHeight;
     direction = paragraph.direction;
+    tabWidth = paragraph.tabWidth;
     this.result = result;
   }
 }

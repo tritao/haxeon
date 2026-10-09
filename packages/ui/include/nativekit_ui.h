@@ -690,6 +690,8 @@ typedef struct nkui_paragraph_style {
     nkui_text_wrap wrap;
     nkui_text_alignment alignment;
     nkui_text_direction direction;
+    /** Tab-stop interval in space advances; zero preserves default shaping. */
+    uint32_t tab_width;
 } nkui_paragraph_style;
 
 /** Bounding rectangle returned for a text layout. */

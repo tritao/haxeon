@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-filesystem"
+  },
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "ffi": {
+    "interfaces": [
+      "bindings/nativekit-filesystem.hxi"
+    ],
+    "projections": [
+      "bindings/nativekit-filesystem.hxmap"
+    ]
+  },
+  "target": "host",
+  "native": {
+    "cmake": {
+      "source": "native",
+      "target": "nativekit_filesystem",
+      "library": "nativekit_filesystem",
+      "inputs": [
+        "../../vendor/nativekit/CMakeLists.txt",
+        "../../vendor/nativekit/cmake",
+        "../../vendor/nativekit/vendor/libwebsockets",
+        "../../vendor/nativekit/modules/filesystem"
+      ]
+    }
+  },
+  "dependencies": {
+    "haxeon-platform": {
+      "path": "../platform"
+    }
+  }
+}

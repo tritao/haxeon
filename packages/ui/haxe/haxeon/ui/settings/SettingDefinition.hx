@@ -26,6 +26,7 @@ class SettingDefinition {
 	public final advanced:Bool;
 	public final restartRequired:Bool;
 	public final internal:Bool;
+	public final preserveExplicitDefault:Bool;
 
 	public function new(path:String, type:PropertyType, defaultValue:PropertyValue, ?settings:SettingOptions) {
 		var config = settings == null ? new SettingOptions() : settings;
@@ -56,6 +57,7 @@ class SettingDefinition {
 		this.advanced = config.advanced;
 		this.restartRequired = config.restartRequired;
 		this.internal = config.internal;
+		this.preserveExplicitDefault = config.preserveExplicitDefault;
 		var keys:Map<String, Bool> = new Map();
 		for (item in options) {
 			if (item == null || keys.exists(item.key))

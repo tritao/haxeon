@@ -7,6 +7,27 @@ import haxeon.ui.PathBuilder;
 class IconData {
 	public static function build(name:IconName):Path {
 		return switch name {
+			case IconName.ArrowUp: new PathBuilder().moveTo(12, 19).lineTo(12, 5).moveTo(5, 12).lineTo(12, 5).lineTo(19, 12).build();
+			case IconName.ArrowDown: new PathBuilder().moveTo(12, 5).lineTo(12, 19).moveTo(5, 12).lineTo(12, 19).lineTo(19, 12).build();
+			case IconName.ArrowLeft: new PathBuilder().moveTo(19, 12).lineTo(5, 12).moveTo(12, 5).lineTo(5, 12).lineTo(12, 19).build();
+			case IconName.ArrowRight: new PathBuilder().moveTo(5, 12).lineTo(19, 12).moveTo(12, 5).lineTo(19, 12).lineTo(12, 19).build();
+			case IconName.NewFolder: new PathBuilder().moveTo(20, 11).lineTo(20, 7).lineTo(10, 7).lineTo(8, 4).lineTo(3, 4).lineTo(3, 20).lineTo(12, 20)
+				.moveTo(15, 17).lineTo(23, 17).moveTo(19, 13).lineTo(19, 21).build();
+			case IconName.CollapseAll: new PathBuilder().moveTo(8, 3).lineTo(21, 3).lineTo(21, 16)
+				.moveTo(3, 8).lineTo(16, 8).lineTo(16, 21).lineTo(3, 21).lineTo(3, 8)
+				.moveTo(6, 14).lineTo(13, 14).build();
+			case IconName.Settings: settings();
+			case IconName.WindowMinimize: new PathBuilder().moveTo(5, 12).lineTo(19, 12).build();
+			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5, 19).lineTo(5, 5).build();
+			case IconName.WindowRestore: new PathBuilder().moveTo(8, 8).lineTo(8, 4).lineTo(20, 4).lineTo(20, 16).lineTo(16, 16)
+				.moveTo(4, 8).lineTo(16, 8).lineTo(16, 20).lineTo(4, 20).lineTo(4, 8).build();
+			case IconName.Check: new PathBuilder().moveTo(4, 12).lineTo(9, 17).lineTo(20, 6).build();
+			case IconName.Remote: new PathBuilder().moveTo(15, 3).lineTo(21, 9).lineTo(15, 15)
+				.moveTo(9, 9).lineTo(3, 15).lineTo(9, 21).build();
+			case IconName.Bell: new PathBuilder().moveTo(18, 8)
+				.cubicTo(18, 4.69, 15.31, 2, 12, 2).cubicTo(8.69, 2, 6, 4.69, 6, 8)
+				.cubicTo(6, 15, 3, 15, 3, 17).lineTo(21, 17).cubicTo(21, 15, 18, 15, 18, 8)
+				.moveTo(10, 21).cubicTo(11, 22.33, 13, 22.33, 14, 21).build();
 			case IconName.AlertTriangle: new PathBuilder().moveTo(12, 3).lineTo(22, 21).lineTo(2, 21).lineTo(12, 3)
 				.moveTo(12, 9).lineTo(12, 14).moveTo(12, 17).lineTo(12, 17.2).build();
 			case IconName.ErrorCircle: new PathBuilder().moveTo(22, 12).cubicTo(22, 17.52, 17.52, 22, 12, 22)
@@ -66,6 +87,21 @@ class IconData {
 				.moveTo(20, 12).lineTo(10, 12).cubicTo(6, 12, 4, 14, 4, 18).build();
 			case _: throw "Unsupported icon name";
 		};
+	}
+
+	static function settings():Path {
+		var path = new PathBuilder();
+		for (index in 0...32) {
+			var angle = -Math.PI / 2 + index * Math.PI / 16;
+			var radius = index % 4 == 0 || index % 4 == 3 ? 8 : 10;
+			var x = 12 + Math.cos(angle) * radius, y = 12 + Math.sin(angle) * radius;
+			if (index == 0) path.moveTo(x, y); else path.lineTo(x, y);
+		}
+		path.close();
+		path.moveTo(15, 12).cubicTo(15, 13.657, 13.657, 15, 12, 15)
+			.cubicTo(10.343, 15, 9, 13.657, 9, 12).cubicTo(9, 10.343, 10.343, 9, 12, 9)
+			.cubicTo(13.657, 9, 15, 10.343, 15, 12);
+		return path.build();
 	}
 
 	static function magnet():Path

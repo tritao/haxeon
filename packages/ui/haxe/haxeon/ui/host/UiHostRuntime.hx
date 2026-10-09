@@ -21,6 +21,11 @@ class UiHostRuntime {
 	public var framebufferHeight(get, never):Int;
 	public var scale(get, never):Float;
 	public var rendered(default, null):Int = 0;
+	public var lastPrepareSeconds(default, null):Float = 0.0;
+	public var lastApplicationSubmitSeconds(default, null):Float = 0.0;
+	public var lastContextRenderSeconds(default, null):Float = 0.0;
+	public var lastPrepareAllocatedBytes(default, null):Float = 0.0;
+	public var lastSubmitAllocatedBytes(default, null):Float = 0.0;
 	public var lastFrameAllocatedBytes(default, null):Float = 0.0;
 	/** The most recent skipped frame; cleared by the next successful render. */
 	public var lastRenderResourceError(default, null):Null<String> = null;
@@ -36,17 +41,19 @@ class UiHostRuntime {
 	var frame:LayoutFrame;
 	var frameInfo:FrameInfo;
 	final frameState:UiHostFrameState;
+	final zoomChanged:Null<Float->Void>;
 	var disposed:Bool = false;
 	var started:Bool = false;
 	var callbackDepth:Int = 0;
 	var disposeRequested:Bool = false;
 
 	public function new(session:UiHostSession, context:UiHostContext, window:WindowHandle,
-			surface:SurfaceHandle, width:Int, height:Int) {
+			surface:SurfaceHandle, width:Int, height:Int, ?zoomChanged:Float->Void) {
 		this.session = session;
 		this.context = context;
 		this.window = window;
 		this.surface = surface;
+		this.zoomChanged = zoomChanged;
 		frameState = new UiHostFrameState(width, height);
 		context.onZoomChanged = applyZoom;
 		frameState.setZoom(context.zoom);
@@ -104,6 +111,7 @@ class UiHostRuntime {
 	public function setScale(value:Float):Void frameState.setScale(value);
 
 	function applyZoom(value:Float):Void {
+		if (zoomChanged != null) zoomChanged(value);
 		frameState.setZoom(value);
 		if (input != null) input.coordinateScale = value;
 		if (application != null) {
@@ -121,20 +129,30 @@ class UiHostRuntime {
 		var allocatedAt = AllocationProbe.now();
 		try {
 			callbackDepth++;
+			var phaseStarted = Sys.time();
+			var phaseAllocated = AllocationProbe.now();
 			var renderSurface = Surface.fromNativeHandle(surface);
 			context.setGpuRenderer(renderer.prepare(renderSurface));
+			lastPrepareSeconds = Sys.time() - phaseStarted;
+			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
+			phaseStarted = Sys.time();
+			phaseAllocated = AllocationProbe.now();
 			frame.setViewport(frameState.layoutWidth, frameState.layoutHeight);
 			frame.deltaSeconds = frameState.nextDelta(timeSeconds);
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
 			application.submit(frame);
+			lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
+			lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			context.repaintOnly = false;
 			if (session.state != UiHostLifecycle.Running || disposeRequested) {
 				callbackDepth--;
 				if (callbackDepth == 0 && disposeRequested) disposeNow();
 				return false;
 			}
+			phaseStarted = Sys.time();
 			application.context().render(renderer, renderSurface, frameInfo);
+			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
 			lastRenderResourceError = null;
 			rendered++;

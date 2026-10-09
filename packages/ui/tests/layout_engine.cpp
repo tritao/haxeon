@@ -43,6 +43,45 @@ int main(int argc, char **argv) {
     if (!engine.valid() || !engine.add_font(NKUI_TEST_FONT_PATH))
         return 3;
 
+    // Fit-sized floating text must not wrap from rounding through its padding,
+    // nor inherit the width of its narrow anchor. Truly constrained text wraps.
+    for (float font_size : {11.0f, 12.0f, 13.0f, 14.0f, 15.5f, 18.0f}) {
+        auto anchor = box(900, -1);
+        anchor.style.width = {LayoutSizing::Fixed, 24.0f};
+        anchor.style.height = {LayoutSizing::Fixed, 24.0f};
+        auto tooltip = box(901, 0);
+        tooltip.style.positioning = LayoutPositioning::Absolute;
+        tooltip.style.clip_to_parent = false;
+        tooltip.style.width = {LayoutSizing::Fit, 0.0f, 0.0f, 320.0f};
+        tooltip.style.padding_left = tooltip.style.padding_right = 10.0f;
+        auto label = text(902, 1, "Open");
+        label.style.width = {LayoutSizing::Fit, 0.0f};
+        label.text_style.font_size = font_size;
+        label.paragraph_style.wrap = TextWrapMode::WordCharacter;
+        LayoutSnapshot tip_snapshot;
+        LayoutError tip_error;
+        std::vector<LayoutNode> tip_nodes{anchor, tooltip, label};
+        if (!engine.layout(tip_nodes, 800, 600, 0, tip_snapshot, &tip_error)) return 90;
+        auto paragraph = std::find_if(tip_snapshot.text_layouts.begin(), tip_snapshot.text_layouts.end(),
+            [](const LayoutTextLayout &value) { return value.node_id == 902; });
+        if (paragraph == tip_snapshot.text_layouts.end() || paragraph->lines.size() != 1) {
+            std::cerr << "fit tooltip wrapped at font size " << font_size << "\n";
+            return 91;
+        }
+        for (float scale : {1.0f, 1.25f, 1.5f, 1.75f, 2.0f}) {
+            PreparedGlyphs prepared;
+            if (!engine.text_engine()->prepare_glyphs_for_line(paragraph->id, 0, 0, 0, scale,
+                    GlyphMode::Alpha, prepared)) return 95;
+            if (prepared.vertices.empty() || prepared.source_ranges.empty() ||
+                prepared.source_ranges.back().end != 4) return 96;
+        }
+        tip_nodes[1].style.width = {LayoutSizing::Fixed, 35.0f};
+        if (!engine.layout(tip_nodes, 800, 600, 0, tip_snapshot, &tip_error)) return 92;
+        paragraph = std::find_if(tip_snapshot.text_layouts.begin(), tip_snapshot.text_layouts.end(),
+            [](const LayoutTextLayout &value) { return value.node_id == 902; });
+        if (paragraph == tip_snapshot.text_layouts.end() || paragraph->lines.size() < 2) return 93;
+    }
+
     std::vector<LayoutNode> nodes;
     LayoutNode root = box(1, -1);
     root.style.width = {LayoutSizing::Fixed, 420.0f};
@@ -182,6 +221,19 @@ int main(int argc, char **argv) {
     if (scrolled_row_primitive == snapshot.primitives.end() ||
         scrolled_row_primitive->transform.ty != -13248.0f)
         return 50;
+
+    // A horizontal snippet viewport inside a vertically scrolled conversation
+    // inherits the vertical clip in viewport space, without translating it twice.
+    scroll_nodes[3].style.clip_horizontal = true;
+    if (!engine.layout(scroll_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
+        return 100;
+    const auto nested_clip = std::find_if(snapshot.primitives.begin(), snapshot.primitives.end(),
+        [](const LayoutPrimitive &primitive) {
+            return primitive.node_id == 323 && primitive.kind == LayoutPrimitiveKind::ClipBegin;
+        });
+    if (nested_clip == snapshot.primitives.end() || nested_clip->bounds.y != 0.0f ||
+        nested_clip->bounds.height != 80.0f || nested_clip->transform.ty != 0.0f)
+        return 101;
 
     // Changing Inspector-like clipped panels must not exhaust Clay's retained
     // scroll-container records over successive layouts.

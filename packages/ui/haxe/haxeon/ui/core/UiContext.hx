@@ -362,8 +362,13 @@ class UiContext {
 					" parent=" + (missingNode == null || missingNode.parent == null ? "?" : missingNode.parent.styleType) +
 					" parentVisible=" + (missingNode == null || missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
 			}
-			if (!buildContext.consumeLayoutFeedback() || layoutPass == 1)
+			if (!buildContext.consumeLayoutFeedback())
 				break;
+			// Dependent geometry (text reflow, scroll extent, overlay placement)
+			// must settle before publishing the frame. Never silently discard
+			// a requested pass; fail explicitly if callbacks cannot converge.
+			if (layoutPass >= 7)
+				throw "UI layout feedback did not converge after 8 passes";
 			resolved = session.submit(next.layout, frame);
 			layoutPass++;
 		}
@@ -812,6 +817,8 @@ class UiContext {
 
 	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
 		ensureLive();
+		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
+		if (key == 335) key = UiKey.Enter;
 		events.key(kind, key, modifiers, scancode);
 	}
 
@@ -1024,10 +1031,10 @@ class UiContext {
 			if (right <= left || bottom <= top)
 				return;
 			var region = new WindowDecorationRegion();
-			region.set_x(left);
-			region.set_y(top);
-			region.set_width(right - left);
-			region.set_height(bottom - top);
+			region.set_x(left * platformCoordinateScale);
+			region.set_y(top * platformCoordinateScale);
+			region.set_width((right - left) * platformCoordinateScale);
+			region.set_height((bottom - top) * platformCoordinateScale);
 			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
 			region.set_kind(kind);
 			region.set_cursor_shape(node.windowDecorationCursor == null

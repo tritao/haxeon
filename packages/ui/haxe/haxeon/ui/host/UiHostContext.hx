@@ -8,6 +8,8 @@ import nativekit.ffi.NativeKit;
 /** Live, platform-neutral services available to a hosted application. */
 class UiHostContext {
 	public final fonts:FontCollection;
+	/** Present only when the desktop host has enabled custom native chrome. */
+	public var windowControls:Null<WindowControls> = null;
 	/** Application zoom is independent of the monitor pixel scale. */
 	public var zoom(get, set):Float;
 	var applicationZoom:Float = 1.0;
