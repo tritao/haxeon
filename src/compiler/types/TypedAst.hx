@@ -425,6 +425,7 @@ typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.T
 /** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {
 	final nativeAbiTarget:String;
+	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
 	final enums:Array<TypedEnum>;
 	final interfaces:Array<TypedInterface>;
 	final classes:Array<TypedClass>;

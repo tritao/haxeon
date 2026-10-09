@@ -7,6 +7,7 @@ import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedClass;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 
 typedef AnonymousTypeRegistrar = CompilerType->Void;
 
@@ -48,9 +49,10 @@ class TypedProgramAssembler {
 	}
 
 	public function assemble(enums:Array<TypedEnum>, interfaces:Array<TypedInterface>, classes:Array<TypedClass>, functions:Array<TypedFunction>,
-			natives:Array<TypedNative>):TypedProgram {
+			natives:Array<TypedNative>, nativeTypeDescriptors:Array<NativeTypeDescriptorData>):TypedProgram {
 		return {
 			nativeAbiTarget: session.nativeAbiTarget,
+			nativeTypeDescriptors: nativeTypeDescriptors,
 			enums: enums,
 			interfaces: interfaces,
 			classes: classes,

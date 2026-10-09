@@ -38,6 +38,28 @@ class NativeLayoutMain {
 			pair64 = requireLayout(pair.nativeLayouts, "portable-abi64"),
 			outer32 = requireLayout(outer.nativeLayouts, "portable-abi32"),
 			outer64 = requireLayout(outer.nativeLayouts, "portable-abi64");
+		var pairDescriptor = requireDescriptor(typed.nativeTypeDescriptors, "Pair"),
+			outerDescriptor = requireDescriptor(typed.nativeTypeDescriptors, "Outer");
+		expect(pairDescriptor.size == pair64.size
+			&& pairDescriptor.alignment == pair64.alignment
+			&& descriptorField(pairDescriptor.fields, "value").offset == field(pair64.fields, "value").offset
+			&& descriptorField(pairDescriptor.fields, "ratio").offset == field(pair64.fields, "ratio").offset,
+			"descriptor source data must agree with sizeof, alignof, and offsetof layout facts");
+		expect(outerDescriptor.fields.length == 2 && descriptorField(outerDescriptor.fields, "first").fields.length == 3,
+			"descriptor artifact must recursively describe nested records whether queried directly or not");
+		var descriptorBytes = compiler.types.NativeTypeDescriptorCodec.encode(typed.nativeTypeDescriptors),
+			decodedDescriptors = compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes);
+		expect(descriptorBytes.get(0) == 72
+			&& descriptorBytes.get(1) == 84
+			&& descriptorBytes.get(2) == 68
+			&& descriptorBytes.get(3) == compiler.types.NativeTypeDescriptorCodec.FORMAT_VERSION,
+			"descriptor binary artifact must carry its magic and format version");
+		expect(compiler.types.NativeTypeDescriptorCodec.toJson(decodedDescriptors) == compiler.types.NativeTypeDescriptorCodec.toJson(typed.nativeTypeDescriptors),
+			"descriptor binary round-trip must preserve the stable JSON representation");
+		var unsupportedDescriptorVersion = descriptorBytes.sub(0, descriptorBytes.length);
+		unsupportedDescriptorVersion.set(3, compiler.types.NativeTypeDescriptorCodec.FORMAT_VERSION + 1);
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(unsupportedDescriptorVersion), "Unsupported");
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes.sub(0, descriptorBytes.length - 1)), "Truncated");
 		// portable-abi32 is the Wasm32 C ABI, which aligns 64-bit integers to eight bytes.
 		expect(pair32.size == 24
 			&& pair32.alignment == 8
@@ -185,6 +207,22 @@ class NativeLayoutMain {
 		throw 'Missing native layout for "$target"';
 	}
 
+	static function requireDescriptor(descriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>,
+			name:String):compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData {
+		for (descriptor in descriptors)
+			if (descriptor.name == name)
+				return descriptor;
+		throw 'Missing native type descriptor "$name"';
+	}
+
+	static function descriptorField(fields:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField>,
+			name:String):compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField {
+		for (field in fields)
+			if (field.name == name)
+				return field;
+		throw 'Missing descriptor field "$name"';
+	}
+
 	static function findDescriptorHash(strings:Array<String>):Null<String> {
 		var hashPattern = new EReg("^[0-9a-f]{64}$", "");
 		for (value in strings)
@@ -226,5 +264,14 @@ class NativeLayoutMain {
 			if (error.diagnostic.message.indexOf(expected) < 0)
 				throw error;
 		}
+	}
+
+	static function expectDescriptorCodecError(action:Void->Void, expected:String):Void {
+		try {
+			action();
+			throw 'expected descriptor codec error containing "$expected"';
+		} catch (error:Dynamic)
+			if (Std.string(error).indexOf(expected) < 0)
+				throw error;
 	}
 }

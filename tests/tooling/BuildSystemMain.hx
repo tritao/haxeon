@@ -530,6 +530,12 @@ class BuildSystemMain {
 		// The compiler reads only FFI interfaces, so it does not wait for native package actions and the two build side by side.
 		var compileAction = compilerAction(execution);
 		expect(compileAction != null && compileAction.dependencies.length == 0, "the Haxe compiler request must not wait for native package actions");
+		var hasDescriptorBinary = false, hasDescriptorJson = false;
+		for (output in compileAction.outputs) {
+			hasDescriptorBinary = hasDescriptorBinary || StringTools.endsWith(output, ".descriptors");
+			hasDescriptorJson = hasDescriptorJson || StringTools.endsWith(output, ".descriptors.json");
+		}
+		expect(hasDescriptorBinary && hasDescriptorJson, "project module builds must track both descriptor sidecar outputs");
 		expect(execution.actions.length > 1, "the native package actions are still part of the plan");
 		// ... but whatever runs the module waits for everything built for it, the native libraries it loads included.
 		if (Sys.systemName() != "Windows") {

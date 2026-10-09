@@ -253,27 +253,10 @@ class ExpressionTyper {
 		var name = descriptorRecordName(resolved);
 		if (name == null)
 			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.type(resolved)}"', span);
-		var declaration = session.classDecls.get(name);
-		if (declaration == null)
+		var descriptor = buildNativeTypeDescriptor(resolved);
+		if (descriptor == null)
 			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
-		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], []),
-			identity = SemanticSignature.type(resolved),
-			hash = NativeTypeDescriptor.contentHash(identity, name, root.type, root.flat, root.portable, root.size, root.alignment, root.annotations,
-				root.fields, root.arguments),
-			descriptor:NativeTypeDescriptorData = {
-				version: NativeTypeDescriptor.VERSION,
-				name: root.name,
-				type: root.type,
-				flat: root.flat,
-				portable: root.portable,
-				size: root.size,
-				alignment: root.alignment,
-				annotations: root.annotations,
-				fields: root.fields,
-				arguments: root.arguments,
-				hash: hash
-			},
-			nodeFields:Array<AnonymousField> = [],
+		var nodeFields:Array<AnonymousField> = [],
 			nodeType:CompilerType = TAnonymous("$haxeon.TypeInfoNode.v2", nodeFields);
 		nodeFields.push({
 			name: "name",
@@ -426,6 +409,47 @@ class ExpressionTyper {
 				objectField("hash", StringLiteral(descriptor.hash, span), span)
 			], span);
 		return typeExpressionCallback(descriptorExpression, scope, descriptorType, false);
+	}
+
+	/** Descriptors for every source struct and legacy C record in this typed program. */
+	public function nativeTypeDescriptors():Array<NativeTypeDescriptorData> {
+		var names = [
+			for (name in session.classDecls.keys())
+				if (isStructDeclaration(session.classDecls.get(name))) name
+		];
+		names.sort(Reflect.compare);
+		var descriptors:Array<NativeTypeDescriptorData> = [];
+		for (name in names) {
+			var descriptor = buildNativeTypeDescriptor(TInstance(NominalKind.Class, name, []));
+			if (descriptor != null)
+				descriptors.push(descriptor);
+		}
+		return descriptors;
+	}
+
+	function buildNativeTypeDescriptor(resolved:CompilerType):Null<NativeTypeDescriptorData> {
+		var name = descriptorRecordName(resolved);
+		if (name == null)
+			return null;
+		var declaration = session.classDecls.get(name);
+		if (declaration == null)
+			return null;
+		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], []),
+			identity = SemanticSignature.type(resolved);
+		return {
+			version: NativeTypeDescriptor.VERSION,
+			name: root.name,
+			type: root.type,
+			flat: root.flat,
+			portable: root.portable,
+			size: root.size,
+			alignment: root.alignment,
+			annotations: root.annotations,
+			fields: root.fields,
+			arguments: root.arguments,
+			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, root.flat, root.portable, root.size, root.alignment, root.annotations,
+				root.fields, root.arguments)
+		};
 	}
 
 	function descriptorNode(fieldName:String, type:CompilerType, offset:Null<Int>, annotations:Array<String>,

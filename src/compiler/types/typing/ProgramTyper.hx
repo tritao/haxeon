@@ -243,7 +243,8 @@ class ProgramTyper {
 		var allocationAfterBodies = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
-		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives);
+		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives,
+			bodyTyper.expressionTyper.nativeTypeDescriptors());
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(Finalized);
