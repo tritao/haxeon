@@ -121,6 +121,8 @@ class SplitView implements View {
 					divider.layout.style.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
 					divider.layout.style.childAlignX = LayoutAlignmentX.Center;
 					divider.layout.style.childAlignY = LayoutAlignmentY.Center;
+					// Main-axis centering uses distribution; alignment centers the cross axis.
+					divider.layout.style.childDistribution = LayoutDistribution.Center;
 					var visual = new RenderNode(context.id("divider-visual"), LayoutVisualKind.Box,
 						visualStyle);
 					visual.hitTestSelf = false;
