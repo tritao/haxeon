@@ -40,8 +40,11 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   - polled from the host event loop like `haxeon.rpc`, with bounded queues;
   - no TLS: a reverse proxy terminates it.
 
-  Either bind a small C library through HXI or build on `nk_transport`'s TCP
-  listener; decide by measured throughput and the size of the binding.
+  The server itself belongs in NativeKit as `nk_http_server`: llhttp for
+  parsing on a private libuv I/O loop, with file responses served on the I/O
+  thread (NativeKit ADR 0020, proposed pending a spike). Haxeon binds it
+  through HXI and polls its events. HashLink's `uv.hdll` then has to share
+  NativeKit's libuv or be disabled, so the process links one copy.
 - **No BLAKE3.** Beartooth addresses stored bytes by BLAKE3-256
   (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
   SIMD paths, through HXI: one-shot and streaming hashing, checked against
