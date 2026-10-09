@@ -1781,6 +1781,9 @@ class BodyTyper {
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedObject.type, name);
 		if (name == "length" && forwardedArray != null)
 			return new TypedExpression(TArrayLength(session.representation.boundaryCast(typedObject, forwardedArray)), TInt, span);
+		var forwardedClass = AbstractForwarding.classStorage(session, typedObject.type, name);
+		if (forwardedClass != null)
+			return typedMember(session.representation.boundaryCast(typedObject, forwardedClass), name, span);
 		if (name == "length" && sameType(typedObject.type, TString))
 			return new TypedExpression(TStringLength(typedObject), TInt, span);
 		if (name == "code")

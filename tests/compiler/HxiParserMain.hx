@@ -392,7 +392,7 @@ class HxiParserMain {
 		var pointerOutputSource = HxiProjection.source(pointerOutputs),
 			pointerOutputNative = HxiProjection.cNatives(pointerOutputs)[0];
 		expect(pointerOutputSource.indexOf("function new() { var bytes = haxe.io.Bytes.alloc(") >= 0
-			&& pointerOutputSource.indexOf("roots[0] = bytes; this = pointer_outputs.__hxi_struct_with_roots(bytes, roots);") >= 0
+			&& pointerOutputSource.indexOf("bytes.set(index, 0); this = bytes;") >= 0
 			&& pointerOutputSource.indexOf("function create_owned():Null<OwnedContext>") >= 0
 			&& pointerOutputSource.indexOf("function create_borrowed():Null<Context>") >= 0
 			&& pointerOutputSource.indexOf("function create_required():Context") >= 0

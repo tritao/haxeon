@@ -6,6 +6,19 @@ import compiler.types.Type.CompilerType;
 
 /** Read-only forwarding declared on an abstract, without implicit conversion to its storage type. */
 class AbstractForwarding {
+	/** Named field reads only; forwarding never grants assignment or implicit conversion. */
+	public static function classStorage(session:TypingSession, type:CompilerType, member:String):Null<CompilerType> {
+		return switch type {
+			case TAbstract(name, _, underlying):
+				var declaration = session.declarations.abstracts.get(name);
+				if (declaration == null || !allowed(declaration, member)) null; else switch underlying {
+					case TInstance(Class, _, _): underlying;
+					default: null;
+					}
+			default: null;
+		};
+	}
+
 	public static function arrayStorage(session:TypingSession, type:CompilerType, member:Null<String>):Null<CompilerType> {
 		return switch type {
 			case TAbstract(name, _, underlying):

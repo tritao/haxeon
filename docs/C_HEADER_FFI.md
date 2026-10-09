@@ -517,6 +517,34 @@ and `set_field` methods support native-endian integer and floating-point scalar
 fields. Nested fixed-layout structures use typed copy getters and setters, and
 `ptr<struct>` parameters pass the managed backing storage to C. Validation
 rejects misaligned, overlapping, and out-of-bounds fields before projection.
+
+Records proven pointer-free, including nested records, aliases, and fixed arrays,
+use the managed byte storage directly without an extra reference-retention array.
+Their copy getters, setters, and packed arrays still copy the record data; records
+containing pointers keep the retention bookkeeping described below.
+
+Each pointer-free record `T` also projects a `TBuffer` abstract for owned contiguous
+storage. `new TBuffer(count)` allocates zeroed records and initializes any
+`@struct_size` fields. Its immutable `length` and checked indices prevent writes
+outside the allocated records. `set_field(index, value)` writes scalar or nested
+record fields directly into the buffer; fixed array fields can be populated in a
+regular record and copied with `set(index, record)`. `copy(index)` returns an
+independent record. Setters reuse the storage without allocating record wrappers.
+
+These are erased nominal wrappers over one shared `haxe.io.StructBufferStorage`
+implementation. Allocation, native-endian struct-size initialization, and bounds
+checks are shared rather than emitted as a runtime class for every record.
+Buffer instance methods use the compiler's existing on-demand abstract lowering:
+unused methods have no executable body or per-buffer-type reflection metadata in
+the final module. Declared types/signatures remain available during compilation.
+
+A counted borrowed `ptr<T>` field additionally gets `set_field_packed(TBuffer)`.
+This retains the backing bytes and writes the pointer and element count without
+repacking. It borrows mutable storage: later buffer writes are visible through
+the containing struct. Reuse is appropriate only after readers have finished;
+independent retained snapshots require separate buffers. Buffers are limited to
+256 MiB, and pointer-bearing records keep the existing array packing API.
+
 Borrowed pointers to opaque types can be marked with field-level `@borrowed`;
 their generated accessors read and write `NativePointer` handles and preserve
 `nullable<...>` behavior. The source handle must remain live for as long as C

@@ -11,6 +11,15 @@ class IrProgramAssemblerMain {
 		var simple = Frontend.compile("function main():Int return 42;");
 		expect(hasNative(simple, "__exit"), "every executable program should include the exit native");
 		expect(!hasNative(simple, "__array_alloc_i32"), "unused runtime families should not be assembled");
+		var storageSource = "class Storage { public final length:Int; public function new(length:Int) this.length = length; } "
+			+ "@:forward(length) abstract Buffer(Storage) { public function new(length:Int) this = new Storage(length); } ";
+		Frontend.compile(storageSource + "function main():Int { var buffer = new Buffer(42); return buffer.length; }");
+		for (body in ["var buffer = new Buffer(42); buffer.length = 1; return 0;",
+			"var storage:Storage = new Buffer(42); return 0;"]) {
+			var rejected = false;
+			try Frontend.compile(storageSource + "function main():Int { " + body + " }") catch (_:Dynamic) rejected = true;
+			expect(rejected, "read-only abstract forwarding grants neither writes nor implicit storage conversion");
+		}
 
 		var arrays = Frontend.compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }");
 		expect(hasNative(arrays, "__array_alloc_i32"), "array operations should select the array runtime family");

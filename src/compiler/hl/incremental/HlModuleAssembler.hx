@@ -164,6 +164,10 @@ class HlModuleAssembler {
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
 		var reuseLowered = initialized && !reload;
+		// A domain reload rediscovers native imports without preserving their old slots.
+		// Cached object prototypes contain absolute function indices, just like opcodes.
+		if (initialized && reload)
+			discardPublishedSymbols();
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
