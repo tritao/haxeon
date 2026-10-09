@@ -1318,6 +1318,46 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");
 		}
+		if (name == "fun_compare") {
+			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
+				throw "Invalid Wasm GC Reflect.compareMethods signature";
+			var left = argumentLocals[0],
+				right = argumentLocals[1],
+				closure = plan.closureTypeIndex;
+			return [
+				LocalGet(left),
+				RefCast({nullable: true, heap: Eq}),
+				LocalGet(right),
+				RefCast({nullable: true, heap: Eq}),
+				RefEq,
+				LocalSet(outputLocal),
+				LocalGet(left),
+				RefTest({nullable: false, heap: Type(closure)}),
+				LocalGet(right),
+				RefTest({nullable: false, heap: Type(closure)}),
+				I32And,
+				If(null),
+				LocalGet(left),
+				RefCast({nullable: false, heap: Type(closure)}),
+				StructGet(closure, 0),
+				LocalGet(right),
+				RefCast({nullable: false, heap: Type(closure)}),
+				StructGet(closure, 0),
+				I32Eq,
+				LocalGet(left),
+				RefCast({nullable: false, heap: Type(closure)}),
+				StructGet(closure, 1),
+				RefCast({nullable: true, heap: Eq}),
+				LocalGet(right),
+				RefCast({nullable: false, heap: Type(closure)}),
+				StructGet(closure, 1),
+				RefCast({nullable: true, heap: Eq}),
+				RefEq,
+				I32And,
+				LocalSet(outputLocal),
+				End
+			];
+		}
 		if (name == "__reflect_is_object") {
 			if (output.type != Bool || arguments.length != 1 || arguments[0].type != Dyn || argumentLocals.length != 1)
 				throw "Invalid Wasm GC Reflect.isObject signature";

@@ -12,7 +12,7 @@ HL_PRIM realtime_iterator *HL_NAME(__iterator_new)(vdynamic *value) {
 	if (value == NULL || value->t->kind != HARRAY)
 		hl_error("Iterator source must be an Array");
 	realtime_iterator *iterator = (realtime_iterator *)hl_gc_alloc_raw(sizeof(realtime_iterator));
-	iterator->values = (varray *)value;
+	hl_gc_store_ref(&iterator->values,value,&hlt_array);
 	iterator->position = 0;
 	return iterator;
 }

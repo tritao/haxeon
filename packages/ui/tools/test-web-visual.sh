@@ -242,7 +242,8 @@ for visual_case in "${cases[@]}"; do
             --expect-direction "$caret_direction")
     fi
     [[ "$update" == false ]] || arguments+=(--update)
-    python3 "$repo_dir/tools/web_visual.py" "${arguments[@]}"
+    PYTHONPATH="$nativekit_dir/tools${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 "$repo_dir/tools/web_visual.py" "${arguments[@]}"
     kill "$browser_pid" 2>/dev/null || true
     wait "$browser_pid" 2>/dev/null || true
     browser_pid=""

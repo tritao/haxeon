@@ -210,6 +210,7 @@ class WasmLinearModuleBuilder {
 		WasmModuleSupport.addCNativeImports(module, functions, program, usedCNatives);
 		WasmLinearRuntime.addImports(linear, usedNatives);
 		linkRuntime();
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);

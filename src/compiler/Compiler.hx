@@ -73,7 +73,13 @@ class FfiConfiguration {
 	final projections:Array<FfiProjectionSource>;
 
 	public function new(?interfaces:Array<FfiInterfaceSource>, ?projections:Array<FfiProjectionSource>) {
-		this.interfaces = interfaces == null ? [] : [for (source in interfaces) {path: source.path, text: source.text}];
+		this.interfaces = interfaces == null ? [] : compiler.ffi.HxiInterfaceOrder.dependenciesFirst([
+			for (source in interfaces)
+				{
+					path: source.path,
+					text: source.text
+				}
+		]);
 		this.projections = projections == null ? [] : [for (source in projections) {path: source.path, text: source.text}];
 	}
 

@@ -126,6 +126,8 @@ class Executor implements ExecutionBackend {
 						continue;
 					var status = statuses[index];
 					try {
+						if (status == 0)
+							requireOutputs(item.action);
 						if (status == 0 && isCacheable(item.action)) {
 							ActionFingerprint.save(environment.buildRoot, item.action, item.fingerprint);
 							if (ArtifactCache.isShareable(item.action))
@@ -342,6 +344,8 @@ class Executor implements ExecutionBackend {
 				case Compiler(_, _, _, _, invoke):
 					invoke();
 			};
+			if (status == 0)
+				requireOutputs(action);
 			if (status == 0 && isCacheable(action)) {
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 				if (ArtifactCache.isShareable(action))
@@ -351,6 +355,13 @@ class Executor implements ExecutionBackend {
 		} catch (error:Dynamic) {
 			return new ActionResult(action.id, 1, false, false, null, Std.string(error));
 		}
+	}
+
+	/** A successful process must actually produce every output it promised. */
+	static function requireOutputs(action:ExecutionAction):Void {
+		for (output in action.outputs)
+			if (!sys.FileSystem.exists(output) || sys.FileSystem.isDirectory(output))
+				throw 'Action ${action.id} did not produce required output $output';
 	}
 
 	/**

@@ -48,7 +48,7 @@ static void realtime_string_buffer_reserve( realtime_string_buffer *buffer, int 
 	uchar *data = (uchar *)hl_gc_alloc_noptr((size_t)capacity * sizeof(uchar));
 	if( buffer->length > 0 )
 		memcpy(data, buffer->data, (size_t)buffer->length * sizeof(uchar));
-	buffer->data = data;
+	hl_gc_store_ref(&buffer->data,data,&hlt_bytes);
 	buffer->capacity = capacity;
 }
 
@@ -191,19 +191,19 @@ HL_PRIM varray *HL_NAME(__string_split)( vstring *value, vstring *separator ) {
 	vstring **parts = hl_aptr(result,vstring *);
 	if( delimiter_length == 0 ) {
 		for( int index = 0; index < text_length; index++ )
-			parts[index] = realtime_string_slice(text,index,index + 1);
+			hl_gc_store_ref(&parts[index],realtime_string_slice(text,index,index + 1),hl_string_type);
 		return result;
 	}
 	int part = 0, start = 0;
 	for( int index = 0; index <= text_length - delimiter_length; ) {
 		if( memcmp(text + index,delimiter,delimiter_length * sizeof(uchar)) == 0 ) {
-			parts[part++] = realtime_string_slice(text,start,index);
+			hl_gc_store_ref(&parts[part++],realtime_string_slice(text,start,index),hl_string_type);
 			index += delimiter_length;
 			start = index;
 		} else
 			index++;
 	}
-	parts[part] = realtime_string_slice(text,start,text_length);
+	hl_gc_store_ref(&parts[part],realtime_string_slice(text,start,text_length),hl_string_type);
 	return result;
 }
 

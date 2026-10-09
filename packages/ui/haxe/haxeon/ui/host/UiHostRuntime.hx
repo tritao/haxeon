@@ -27,6 +27,9 @@ class UiHostRuntime {
 	public var lastPrepareAllocatedBytes(default, null):Float = 0.0;
 	public var lastSubmitAllocatedBytes(default, null):Float = 0.0;
 	public var lastFrameAllocatedBytes(default, null):Float = 0.0;
+	/** Capture-only phase timings; normal rendering does not read the clock. */
+	public var measureFrameTimings:Bool = false;
+	public var lastPaintSeconds(default, null):Float = 0.0;
 	/** The most recent skipped frame; cleared by the next successful render. */
 	public var lastRenderResourceError(default, null):Null<String> = null;
 	public var surfaceReady(get, never):Bool;
@@ -153,6 +156,7 @@ class UiHostRuntime {
 			phaseStarted = Sys.time();
 			application.context().render(renderer, renderSurface, frameInfo);
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
+			lastPaintSeconds = lastContextRenderSeconds;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
 			lastRenderResourceError = null;
 			rendered++;

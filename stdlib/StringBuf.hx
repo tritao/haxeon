@@ -54,8 +54,22 @@ class StringBuf {
 		totalLength += value.length;
 	}
 
-	public inline function toString():String {
-		return parts.join("");
+	public function toString():String {
+		// Wasm array joins concatenate the growing prefix. Copy UTF-8 chunks once instead.
+		var chunks:Array<haxe.io.Bytes> = [];
+		var size = 0;
+		for (part in parts) {
+			var bytes = haxe.io.Bytes.ofString(part);
+			chunks.push(bytes);
+			size += bytes.length;
+		}
+		var output = haxe.io.Bytes.alloc(size);
+		var offset = 0;
+		for (chunk in chunks) {
+			output.blit(offset, chunk, 0, chunk.length);
+			offset += chunk.length;
+		}
+		return output.toString();
 	}
 }
 #else

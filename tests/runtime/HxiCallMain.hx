@@ -8,12 +8,15 @@ class HxiCallMain {
 		var output = Sys.args()[0],
 			library = Sys.args()[1],
 			compiler = new Compiler();
+		var target = Sys.getEnv("HAXEON_GC_BOUNDARY_TARGET");
+		if (target == null)
+			target = "x86_64-linux-gnu";
 		CompilerIntrinsics.register(compiler);
 		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiProjection("fixture.hxmap",
 			'{"interface":"Fixture","resultPolicies":{"FixtureResult":{"successValue":"FORTY_TWO","errorType":"FixtureError","checkedSuffix":"_checked"}}}');
 		compiler.addFfiInterface("fixture.hxi",
-			'interface Fixture @target("x86_64-linux-gnu") @library("$library") {\n'
+			'interface Fixture @target("$target") @library("$library") {\n'
 			+ '\topaque fixture_context;\n'
 			+ '\thandle fixture_surface : u32;\n'
 			+ '\tenum FixtureResult : i32 { TEN = 10; ELEVEN = 11; TWENTY_ONE = 21; FORTY_TWO = 42; }\n'
@@ -157,6 +160,20 @@ class HxiCallMain {
 			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.Ten, FixtureResult.Eleven) == FixtureResult.TwentyOne && ");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return managedFields && utf8 && aggregateCallbacks && systemCalls && callbacks && structure && buffers && pointers && ");
+		// Opt-in boundary stress keeps the existing ABI/contract assertions intact.
+		if (Sys.getEnv("HAXEON_GC_BOUNDARY_STRESS") == "1") {
+			if (mainSource.indexOf("function main():Int {") < 0
+				|| mainSource.indexOf("return managedFields &&") < 0
+				|| mainSource.indexOf("function(left:Int, right:Int) return left + right") < 0)
+				throw "HXI GC stress source hooks are missing";
+			mainSource = StringTools.replace(mainSource, "function main():Int {",
+				"function exercise():Int { hl.Gc.enable(false); var ballast = [for (i in 0...2000000) \"gc-ballast\"]; if (hl.Gc.step(0.001) || !hl.Gc.incrementalPending()) return 91; ");
+			mainSource = StringTools.replace(mainSource, "function(left:Int, right:Int) return left + right",
+				"function(left:Int, right:Int) { if (!hl.Gc.incrementalPending()) throw \"callback ran outside pending GC\"; hl.Gc.step(0.001); return left + right; }");
+			mainSource = StringTools.replace(mainSource, "return managedFields &&",
+				"var gcCapture = [42]; var gcCallback = new FixtureBinaryCallback(function(left:Int, right:Int) return gcCapture[0]); var completed = false; for (slice in 0...10000) { if (hl.Gc.step(1000.0)) { completed = true; break; } } if (!completed || ballast[1999999] != \"gc-ballast\") return 92; if (Fixture.callCallback(gcCallback, 1, 2) != 42 || !gcCallback.close() || Fixture.checkOptions(options) != 42 || labelBox.get_label().get_value() != \"original\") return 93; return managedFields &&");
+			mainSource += " function main():Int { var status = exercise(); hl.Gc.major(); hl.Gc.enable(true); return status; }";
+		}
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));

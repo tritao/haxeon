@@ -9,6 +9,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 output="$root_dir/stdlib/haxeon/wasm/linear-runtime.wasm"
+crypto_output="$root_dir/stdlib/haxeon/wasm/crypto-runtime.wasm"
 clang=${HAXEON_WASM_CLANG:-}
 if [[ -z "$clang" ]]; then
 	for candidate in "$root_dir/../nativekit/.tools/emsdk/upstream/bin/clang" "$root_dir/../../materia/nativekit/.tools/emsdk/upstream/bin/clang"; do
@@ -35,9 +36,15 @@ trap 'rm -rf -- "${temp_dir:?}"' EXIT
 	-Wl,--no-entry -Wl,--import-memory -Wl,--strip-all -Wl,--allow-undefined \
 	-o "$temp_dir/linear-runtime.wasm" "$root_dir"/native/wasm/*.c
 
+"$clang" --target=wasm32 -O2 -nostdlib -mbulk-memory -fno-exceptions -ffreestanding \
+	-Wall -Wextra -Werror \
+	-Wl,--no-entry -Wl,--import-memory -Wl,--strip-all \
+	-o "$temp_dir/crypto-runtime.wasm" "$root_dir"/native/wasm/crypto/*.c
+
 # The linker merges functions only: no data, globals, table or elements, and memory comes from the module.
-node - "$temp_dir/linear-runtime.wasm" <<'JS'
-const module = new WebAssembly.Module(require("fs").readFileSync(process.argv[2]));
+node - "$temp_dir/linear-runtime.wasm" "$temp_dir/crypto-runtime.wasm" <<'JS'
+for (const runtimePath of process.argv.slice(2)) {
+const module = new WebAssembly.Module(require("fs").readFileSync(runtimePath));
 for (const entry of WebAssembly.Module.imports(module)) {
   const allowed = (entry.module === "env" && entry.name === "memory" && entry.kind === "memory")
     || (entry.module === "haxeon_guest" && entry.kind === "function");
@@ -45,7 +52,7 @@ for (const entry of WebAssembly.Module.imports(module)) {
 }
 for (const entry of WebAssembly.Module.exports(module))
   if (entry.kind !== "function") throw new Error(`the wasm32 runtime exports ${entry.kind} ${entry.name}`);
-const bytes = require("fs").readFileSync(process.argv[2]);
+const bytes = require("fs").readFileSync(runtimePath);
 for (let offset = 8; offset < bytes.length;) {
   const id = bytes[offset++];
   let size = 0, shift = 0, byte;
@@ -53,11 +60,14 @@ for (let offset = 8; offset < bytes.length;) {
   if ([4, 6, 9, 11, 12].includes(id)) throw new Error(`the wasm32 runtime has section ${id}; it may only define functions`);
   offset += size;
 }
+}
 JS
 if [[ "${1:-}" == "--check" ]]; then
 	cmp -s "$temp_dir/linear-runtime.wasm" "$output" || { echo "build-wasm-runtime.sh: $output is stale; rebuild it" >&2; exit 1; }
-	echo "linear-runtime.wasm is up to date"
+	cmp -s "$temp_dir/crypto-runtime.wasm" "$crypto_output" || { echo "build-wasm-runtime.sh: $crypto_output is stale; rebuild it" >&2; exit 1; }
+	echo "Wasm runtimes are up to date"
 else
 	cp "$temp_dir/linear-runtime.wasm" "$output"
+	cp "$temp_dir/crypto-runtime.wasm" "$crypto_output"
 	echo "built $output ($(wc -c < "$output") bytes)"
 fi

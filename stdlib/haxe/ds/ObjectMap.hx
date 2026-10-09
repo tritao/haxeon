@@ -1,5 +1,40 @@
 package haxe.ds;
 
+#if wasm
+/** Identity-keyed storage without HashLink handles. Wasm references have no stable identity hash. */
+class ObjectMap<K, V> {
+	final keys:Array<K> = [];
+	final values:Array<V> = [];
+
+	public function new() {}
+
+	public function set(key:K, value:V):Void {
+		var index = keys.indexOf(key);
+		if (index < 0) {
+			keys.push(key);
+			values.push(value);
+		} else
+			values[index] = value;
+	}
+
+	public function get(key:K):Null<V> {
+		var index = keys.indexOf(key);
+		return index < 0 ? null : values[index];
+	}
+
+	public function exists(key:K):Bool
+		return keys.indexOf(key) >= 0;
+
+	public function remove(key:K):Bool {
+		var index = keys.indexOf(key);
+		if (index < 0)
+			return false;
+		keys.splice(index, 1);
+		values.splice(index, 1);
+		return true;
+	}
+}
+#else
 @:hlNative("std", "hoalloc")
 extern function objectMapAlloc():hl.Abstract<"hl_obj_map">;
 
@@ -34,3 +69,4 @@ class ObjectMap<K, V> {
 	public function remove(key:K):Bool
 		return objectMapRemove(handle, key);
 }
+#end

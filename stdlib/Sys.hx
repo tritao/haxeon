@@ -41,6 +41,9 @@ extern function sysFullPath(path:String):String;
 @:hlNative("haxeon_runtime", "__sys_exe_path")
 extern function sysExecutablePath():String;
 
+@:hlNative("haxeon_runtime", "__sys_program_path")
+extern function sysProgramPath():String;
+
 @:hlNative("haxeon_runtime", "__sys_get_env")
 extern function sysGetEnv(name:String):Null<String>;
 
@@ -68,6 +71,9 @@ function sysFullPath(path:String):String
 	return runtime.MemoryFileSystem.normalize(path);
 
 function sysExecutablePath():String
+	return "";
+
+function sysProgramPath():String
 	return "";
 
 function sysGetEnv(name:String):Null<String>
@@ -187,6 +193,10 @@ class Sys {
 
 	public static inline function fullPath(path:String):String
 		return sysFullPath(path);
+
+	/** Path of the loaded program (the .hl module on HashLink). */
+	public static inline function programPath():String
+		return sysProgramPath();
 
 	public static inline function executablePath():String
 		return sysExecutablePath();

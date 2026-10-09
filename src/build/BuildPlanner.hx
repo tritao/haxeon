@@ -101,6 +101,8 @@ class BuildPlanner {
 					sharedDetails.set("cmake.target", resolvedPackage.manifest.native.cmake.target);
 					if (resolvedPackage.manifest.native.cmake.library != null)
 						sharedDetails.set("cmake.library", resolvedPackage.manifest.native.cmake.library);
+					if (resolvedPackage.manifest.native.cmake.libraries.length > 0)
+						sharedDetails.set("cmake.libraries", haxe.Json.stringify(resolvedPackage.manifest.native.cmake.libraries));
 				}
 				artifacts.push(new Artifact(sharedId, objects, sharedDetails));
 			}

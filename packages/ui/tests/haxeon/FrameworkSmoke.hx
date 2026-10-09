@@ -2884,6 +2884,28 @@ class FrameworkSmoke {
 		if (cacheResolver.cacheHits != 2 || cachedThird.get(StyleProperty.Background).red != 0.3 ||
 			cachedThird.get(StyleProperty.Width).value != 0.0)
 			return 231;
+		var colorResolver = new StyleResolver();
+		var colorTarget = new StyleTarget("text");
+		var red = Color.rgba(1, 0, 0), blue = Color.rgba(0, 0, 1);
+		var colored = colorResolver.resolve(colorTarget, null, null, null, null, null, red);
+		var sameColor = colorResolver.resolve(colorTarget, null, null, null, null, null, Color.rgba(1, 0, 0));
+		var coloredSource = colored.source(StyleProperty.TextColor);
+		if (coloredSource == null) throw "Missing local text provenance";
+		if (!colored.sharesValuesWith(sameColor) || colorResolver.cacheHits != 1 ||
+			coloredSource.selector != "text" ||
+			coloredSource.layer != "local")
+			throw "Local text color must retain cache sharing and provenance";
+		var blueStyle = colorResolver.resolve(colorTarget, null, null, null, null, null, blue);
+		var noColor = colorResolver.resolve(colorTarget);
+		var noColorSource = noColor.source(StyleProperty.TextColor);
+		if (noColorSource == null) throw "Missing framework text provenance";
+		if (blueStyle.get(StyleProperty.TextColor).blue != 1 ||
+			noColorSource.layer != "framework")
+			throw "Text color variants and absent overrides must resolve independently";
+		colored.set(StyleProperty.TextColor, blue, null);
+		var redAgain = colorResolver.resolve(colorTarget, null, null, null, null, null, red);
+		if (redAgain.get(StyleProperty.TextColor).red != 1)
+			throw "Mutating a returned colored style must preserve the cache";
 		var localAxis = new LayoutStyle();
 		localAxis.width = LayoutAxis.fit(100.0, 500.0);
 		var localAxisResolver = new StyleResolver();

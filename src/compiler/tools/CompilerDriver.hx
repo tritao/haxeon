@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.Compiler.CompileResult;
+import compiler.service.CancellationToken;
 import compiler.ffi.CHeaderEmitter;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
@@ -21,7 +22,9 @@ import compiler.abi.AbiChangeSchema;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession):CompileResult {
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken):CompileResult {
+		if (cancellation != null)
+			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress;
 		var requestStartedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
@@ -33,9 +36,11 @@ class CompilerDriver {
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
-		var result = compiler.compile(request.entry, null, false);
+		var result = compiler.compile(request.entry, cancellation, false);
 		var compiledAt = Sys.time() * 1000.0;
 		var allocationAfterCompile = AllocationMeter.sample();
+		if (cancellation != null)
+			cancellation.check();
 		var backendStartedAt = Sys.time() * 1000.0;
 		if (request.dumpFunction >= 0)
 			dumpFunction(result, request.dumpFunction, report);
@@ -68,6 +73,8 @@ class CompilerDriver {
 				session.writeHashLink(result.module, request.output);
 			outputIndices = result.functionIndices;
 		}
+		if (cancellation != null)
+			cancellation.check();
 		var backendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterEncode = AllocationMeter.sample();
 		if (isWasm)
@@ -98,6 +105,7 @@ class CompilerDriver {
 			FileSystem.rename(temporary, manifest);
 			compiler.acknowledgePublication(result.revision);
 		}
+		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.make(File.getBytes(request.output)).toHex());
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.irOutput != null)

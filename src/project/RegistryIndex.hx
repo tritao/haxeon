@@ -136,6 +136,8 @@ class RegistryIndex {
 			var cmake:Dynamic = {source: native.cmake.source, target: native.cmake.target};
 			if (native.cmake.library != null)
 				Reflect.setField(cmake, "library", native.cmake.library);
+			else if (native.cmake.libraries.length > 0)
+				Reflect.setField(cmake, "libraries", native.cmake.libraries);
 			Reflect.setField(value, "cmake", cmake);
 		}
 		return value;

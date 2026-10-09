@@ -6,23 +6,24 @@ import NativeKitUI.UiPathVerb;
 /** Mutable encoder for immutable Path geometry. */
 class PathBuilder {
 	var elements:Array<nkui_path_element>;
+	final elementScratch:Array<nkui_path_element> = [];
 
 	public function new() {
 		elements = [];
 	}
 
 	public function clear():PathBuilder {
-		elements = [];
+		elements.resize(0);
 		return this;
 	}
 
 	public function moveTo(x:Float, y:Float):PathBuilder {
-		append(UiPathVerb.MoveTo, [x, y]);
+		append(UiPathVerb.MoveTo, 2, x, y);
 		return this;
 	}
 
 	public function lineTo(x:Float, y:Float):PathBuilder {
-		append(UiPathVerb.LineTo, [x, y]);
+		append(UiPathVerb.LineTo, 2, x, y);
 		return this;
 	}
 
@@ -53,22 +54,22 @@ class PathBuilder {
 	}
 
 	public function quadraticTo(controlX:Float, controlY:Float, x:Float, y:Float):PathBuilder {
-		append(UiPathVerb.QuadraticTo, [controlX, controlY, x, y]);
+		append(UiPathVerb.QuadraticTo, 4, controlX, controlY, x, y);
 		return this;
 	}
 
 	public function cubicTo(control1X:Float, control1Y:Float, control2X:Float, control2Y:Float, x:Float, y:Float):PathBuilder {
-		append(UiPathVerb.BezierTo, [control1X, control1Y, control2X, control2Y, x, y]);
+		append(UiPathVerb.BezierTo, 6, control1X, control1Y, control2X, control2Y, x, y);
 		return this;
 	}
 
 	public function arcTo(tangent1X:Float, tangent1Y:Float, tangent2X:Float, tangent2Y:Float, radius:Float):PathBuilder {
-		append(UiPathVerb.ArcTo, [tangent1X, tangent1Y, tangent2X, tangent2Y, radius]);
+		append(UiPathVerb.ArcTo, 5, tangent1X, tangent1Y, tangent2X, tangent2Y, radius);
 		return this;
 	}
 
 	public function close():PathBuilder {
-		append(UiPathVerb.Close, []);
+		append(UiPathVerb.Close);
 		return this;
 	}
 
@@ -80,11 +81,18 @@ class PathBuilder {
 		return new Path(made.out_path);
 	}
 
-	function append(verb:UiPathVerb, values:Array<Float>):Void {
-		var element = new nkui_path_element();
+	function append(verb:UiPathVerb, count:Int = 0, a:Float = 0.0, b:Float = 0.0, c:Float = 0.0,
+			d:Float = 0.0, e:Float = 0.0, f:Float = 0.0):Void {
+		var index = elements.length;
+		if (index == elementScratch.length) elementScratch.push(new nkui_path_element());
+		var element = elementScratch[index];
 		element.set_verb(verb);
-		for (index in 0...values.length)
-			element.set_values(index, values[index]);
+		if (count > 0) element.set_values(0, a);
+		if (count > 1) element.set_values(1, b);
+		if (count > 2) element.set_values(2, c);
+		if (count > 3) element.set_values(3, d);
+		if (count > 4) element.set_values(4, e);
+		if (count > 5) element.set_values(5, f);
 		elements.push(element);
 	}
 }

@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 python3 - "$repo_dir" <<'PY'
-import json, os, pathlib, socket, struct, subprocess, sys, tempfile, time
+import hashlib, json, os, pathlib, socket, struct, subprocess, sys, tempfile, time
 
 repo = pathlib.Path(sys.argv[1])
 env = os.environ.copy()
@@ -33,6 +33,10 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         p = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--project', str(manifest), *extra], env=environment,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
         assert (p.returncode == 0) == success, p.stdout
+        if success:
+            binary = root / 'build/host/main.hl'
+            if binary.exists():
+                assert binary.with_name(binary.name + '.build-id').read_text() == hashlib.sha256(binary.read_bytes()).hexdigest()
         return p.stdout
     def run(expected, output='host/main.hl'):
         p = subprocess.run([str(repo / '.tools/hashlink/hl'), str(root / 'build' / output)], env=env, timeout=20)
@@ -98,6 +102,23 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         assert 'reusing compiler session' in build()
         assert (root / 'build/host/main.hl.functions').is_file()
         state = next(states.glob('*.json'))
+        # Closing a requester cancels its transaction and leaves the worker reusable.
+        descriptor = json.loads(state.read_text())
+        cancelled_output = root / 'build/cancelled.hl'
+        cancelled_output.write_bytes(b'previous successful publication')
+        with socket.create_connection(('127.0.0.1', descriptor['port']), timeout=5) as client:
+            arguments = ['--target=hl', '--entry=Main', '--root=' + str(root / 'src'),
+                         '--output=' + str(cancelled_output), str(main)]
+            body = json.dumps({'token': descriptor['token'], 'arguments': arguments}).encode()
+            client.sendall(struct.pack('<i', len(body)) + body)
+            # The first progress message precedes request preparation and compilation.
+            assert client.recv(4096), 'worker did not begin cancellation fixture'
+        source('14')
+        build()
+        run(14)
+        assert cancelled_output.read_bytes() == b'previous successful publication', 'cancellation damaged previous bytecode'
+        assert not list((root / 'build').glob('cancelled.hl.request-*')), 'cancelled staging artifacts leaked'
+        assert json.loads(state.read_text())['token'] == descriptor['token'], 'cancellation killed the shared worker'
         old_token = json.loads(state.read_text())['token']
         stop(state)
         source('13')
@@ -112,7 +133,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         assert len(set(states.glob('*.hl')) - workers) == 1, 'one-shot build did not use a compiled compiler'
         source('unknown_value')
         build(success=False, extra=('--output=build/fallback.hl',), environment=fallback)
-        print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, restart, and compiled one-shot fallback')
+        print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, disconnect cancellation, restart, and compiled one-shot fallback')
     finally:
         for state in states.glob('*.json'):
             stop(state)

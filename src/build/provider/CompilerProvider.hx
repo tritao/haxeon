@@ -21,8 +21,7 @@ class CompilerProvider {
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "", compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
-			sourcePaths:Array<String> = [],
-			arguments = [
+			sourcePaths:Array<String> = [], arguments = [
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry
@@ -100,14 +99,19 @@ class CompilerProvider {
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
 				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
-					() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
-						runtimeLibraryEnvironment(context.compilerHome),
-						() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
+				() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
+					runtimeLibraryEnvironment(context.compilerHome),
+					() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
 		};
-		return new ExecutionAction(actionId, dependencies, inputs, [output, output + ".functions", output + ".hli", output + ".live.json"],
+		return new ExecutionAction(actionId, dependencies, inputs, [
+			output,
+			output + ".functions",
+			output + ".hli",
+			output + ".live.json",
+			output + ".build-id"
+		],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke),
-			false);
+			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke), false);
 	}
 
 	static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {

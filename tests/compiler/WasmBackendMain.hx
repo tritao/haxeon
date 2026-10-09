@@ -54,6 +54,27 @@ class WasmBackendMain {
 		var runtimeOps = WasmRuntimeAbi.operations(Frontend.compile("function main():Int { var value = 40; return value + 2; }"));
 		if (runtimeOps.length != 0)
 			throw "Scalar Wasm IR should not require runtime operations";
+		var rawPointerBuilder = new IrBuilder();
+		rawPointerBuilder.returnValue(rawPointerBuilder.cNativeCall("inspect_raw_pointer", [rawPointerBuilder.argument("address", RawPtr)], RawPtr));
+		var rawPointerProgram = Frontend.compile("function main():Int return 42;");
+		rawPointerProgram.entryPoint = "main";
+		rawPointerProgram.functions = [
+			new IrFunction("main", rawPointerBuilder.arguments, RawPtr, rawPointerBuilder.blocks)
+		];
+		rawPointerProgram.cNatives.push({
+			name: "inspect_raw_pointer",
+			library: "fixture",
+			symbol: "inspect_raw_pointer",
+			signature: "p>p",
+			pointerOwnership: "",
+			pointerRelease: null,
+			pointerLength: null,
+			pointerNullable: false,
+			arguments: [RawPtr],
+			argumentModes: [Value],
+			result: RawPtr
+		});
+		File.saveBytes("out/wasm-gc-raw-pointer.wasm", new WasmBackend().compile(rawPointerProgram, {target: WasmGc, debugNames: true}).bytes);
 		var generatedNativeBuilder = new IrBuilder(),
 			generatedNativeArgument = generatedNativeBuilder.constInt(1);
 		generatedNativeBuilder.call("__std_string", [generatedNativeArgument], Bytes);

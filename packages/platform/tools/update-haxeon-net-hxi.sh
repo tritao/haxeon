@@ -8,11 +8,16 @@ platform_dir="$haxeon_dir/packages/platform"
 gpu_dir="$haxeon_dir/packages/gpu"
 output="$platform_dir/bindings/nativekit-net.hxi"
 
-if [[ ${1:-} == "--check" ]]; then
+if [[ $# -gt 1 ]]; then
+    echo "usage: tools/update-haxeon-net-hxi.sh [--check | --output=PATH]" >&2
+    exit 2
+elif [[ ${1:-} == "--check" ]]; then
     destination=$(mktemp)
     trap 'rm -f -- "$destination"' EXIT
+elif [[ ${1:-} == --output=?* ]]; then
+    destination=${1#--output=}
 elif [[ $# -ne 0 ]]; then
-    echo "usage: tools/update-haxeon-net-hxi.sh [--check]" >&2
+    echo "usage: tools/update-haxeon-net-hxi.sh [--check | --output=PATH]" >&2
     exit 2
 else
     destination="$output"
@@ -40,4 +45,4 @@ if [[ ${1:-} == "--check" ]] && ! cmp -s "$output" "$destination"; then
     exit 1
 fi
 
-echo "update-haxeon-net-hxi: wrote $output"
+echo "update-haxeon-net-hxi: wrote $destination"

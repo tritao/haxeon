@@ -1,6 +1,7 @@
 package compiler.ffi;
 
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.Compiler.FfiInterfaceSource;
 
 /**
  * Orders FFI interface sources so each comes after the interfaces it depends
@@ -15,14 +16,14 @@ class HxiInterfaceOrder {
 	 * that no listed file provides, and cycles, are left alone for the compiler
 	 * to report.
 	 */
-	public static function dependenciesFirst(sources:Array<{path:String, text:String}>):Array<{path:String, text:String}> {
+	public static function dependenciesFirst(sources:Array<FfiInterfaceSource>):Array<FfiInterfaceSource> {
 		var models:Array<HxiInterface> = [for (source in sources) HxiParser.parse(source.path, source.text)];
 		var indexByName:Map<String, Int> = [];
 		for (index in 0...models.length)
 			if (!indexByName.exists(models[index].name))
 				indexByName.set(models[index].name, index);
 		var state:Array<Int> = [for (_ in sources) 0]; // 0 unvisited, 1 visiting, 2 done
-		var ordered:Array<{path:String, text:String}> = [];
+		var ordered:Array<FfiInterfaceSource> = [];
 		function visit(index:Int):Void {
 			if (state[index] != 0)
 				return;

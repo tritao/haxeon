@@ -51,7 +51,8 @@ class ConversionResolver {
 				conversion == null ? session.representation.boundaryCast(value,
 					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
 			case ToDynamic:
-				new TypedExpression(TToDynamic(value), expected, value.span);
+				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
+				new TypedExpression(TToDynamic(ValueCopy.bind(session, value, value.type)), expected, value.span);
 			case ToInterface(name):
 				new TypedExpression(TToInterface(value, name), expected, value.span);
 			case WrapNullable:

@@ -38,7 +38,20 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
 endif()
 option(HL_JIT_AARCH64_OLD "Use the legacy direct HL-bytecode AArch64 JIT" ${HAXEON_AARCH64_JIT_DEFAULT})
 
+option(HAXEON_GC_APPLE_SOFTWARE_TEST "Build unvalidated Apple AArch64 software GC test backend" OFF)
+if(HAXEON_GC_APPLE_SOFTWARE_TEST)
+  if(NOT APPLE OR NOT HAXEON_AARCH64_JIT_DEFAULT)
+    message(FATAL_ERROR "Apple software GC tests require an Apple AArch64 target")
+  endif()
+  if(HL_JIT_AARCH64_OLD)
+    message(FATAL_ERROR "Apple software GC tests require -DHL_JIT_AARCH64_OLD=OFF (shared JIT barriers)")
+  endif()
+endif()
+
 add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
+if(HAXEON_GC_APPLE_SOFTWARE_TEST)
+  target_compile_definitions(libhl PRIVATE HL_GC_APPLE_SOFTWARE_TEST=1)
+endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   # Keep development binaries from replacing the optimized VM used by tools
   # and performance captures. Each preset has its own CMake build directory.

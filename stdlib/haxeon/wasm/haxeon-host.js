@@ -42,7 +42,7 @@ var HaxeonWasmHost = (() => {
    *   print       receives each complete line the guest prints (default console.log)
    *   printError  receives each stderr line (default console.error); stream flush emits partial lines
    *   wrap        optional (module, name, fn) => fn applied to each forwarded C function, e.g. to time calls
-   *   allocate    optional size => address of shared memory for a host error message, with release(address);
+   *   allocate    optional size => address of shared memory for native arenas and host errors, with release(address);
    *   release     both default to the Emscripten module's malloc and free when it exports them
    * Returns {instance, exports, unavailable}, where unavailable lists the import modules the host could not
    * provide. Calling one of their functions throws haxeon.wasm.HostError into the guest, which Haxe code catches
@@ -109,6 +109,18 @@ var HaxeonWasmHost = (() => {
         sys_exit: code => { throw new HaxeonExit(code); }
       },
       haxeon_runtime: {
+        native_alloc: size => {
+          if (size <= 0) return fail("Native memory allocation size must be positive");
+          if (typeof allocate !== "function") return fail("The host does not provide native memory allocation");
+          const address = allocate(size);
+          if (!address) return fail("Native memory allocation failed");
+          return address;
+        },
+        native_free: address => {
+          if (!address) return;
+          if (typeof release !== "function") return fail("The host does not provide native memory release");
+          release(address);
+        },
         __math_ceil: Math.ceil, __math_floor: Math.floor, __math_round: Math.round,
         __math_is_finite: Number.isFinite, __math_is_nan: Number.isNaN,
         __math_fmod: (left, right) => left % right, __math_pow: Math.pow, __math_sqrt: Math.sqrt,

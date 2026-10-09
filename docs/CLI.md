@@ -156,7 +156,15 @@ CMake package stamps are never shared as if they were complete library artifacts
 Set `native.cmake.library` to the name of an ordinary shared-library CMake
 target when the package's HXI interface loads that library directly. Haxeon
 places the library in the package's native runtime directory and includes that
-directory when running dependents. Omit `library` for CMake targets that produce
+directory when running dependents. For an aggregate target, use
+`"libraries": ["foo_core", "foo_io"]` instead of `library`. Every listed name is
+a required shared-library output; Haxeon supplies the target platform's prefix
+and suffix and verifies that all outputs exist after CMake succeeds. Do not
+declare optional libraries unless that package's CMake configuration enables them.
+The aggregate target can depend directly on its library targets without creating
+a stamp file. CMake still runs on every build to check its own dependency graph,
+so deleting any listed library causes CMake to rebuild it.
+Omit both `library` and `libraries` for CMake targets that produce
 the package's `<package>.hdll` output themselves.
 Native implementation changes do not invalidate independently compiled bytecode;
 Haxe sources, FFI interfaces/projections, compiler sources, and the standard
@@ -325,4 +333,3 @@ The workspace file lists the member projects. Paths are relative to the file:
   `haxeon.test.Shards.run`, which gives every group to exactly one shard for any N (heavier groups first, each to the
   lightest shard so far, from the groups' `weight`s) and runs them all when started without `--shard`. The groups must not
   depend on each other. Shard counts do not change what runs, only how it is spread across the machine's cores.
-
