@@ -3,6 +3,7 @@ package compiler.backend.wasm.gc;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrObjectField;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModuleSupport;
@@ -106,27 +107,246 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function newObject(typeName:String, destination:Int):Array<WasmInstruction>
-		return [
-			StructNewDefault(plan.objectType(typeName)),
-			LocalSet(destination),
-			LocalGet(destination),
-			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
-			StructSet(plan.objectType(typeName), 0)
-		];
+	public function newObject(typeName:String, destination:Int):Array<WasmInstruction> {
+		var typeIndex = plan.objectType(typeName),
+			body:Array<WasmInstruction> = [
+				StructNewDefault(plan.objectType(typeName)),
+				LocalSet(destination),
+				LocalGet(destination),
+				I32Const(WasmModuleSupport.typeId(Obj(typeName))),
+				StructSet(typeIndex, 0)
+			];
+		var declaration:Null<compiler.ir.Ir.IrObject> = null;
+		for (object in plan.program.objects)
+			if (object.name == typeName)
+				declaration = object;
+		if (declaration != null) {
+			var nativeLayout = declaration.nativeLayout;
+			if (nativeLayout != null)
+				body = body.concat([
+					LocalGet(destination),
+					I32Const(nativeLayout.size),
+					ArrayNewDefault(plan.byteArrayTypeIndex),
+					StructSet(typeIndex, 1),
+					LocalGet(destination),
+					I32Const(0),
+					StructSet(typeIndex, 2)
+				]);
+		}
+		return body;
+	}
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName),
-			fieldIndex = plan.objectFieldIndex(objectName, fieldName);
+			field:IrObjectField = plan.objectField(objectName, fieldName);
+		if (field.nativeLayout != null)
+			return field.nativeLayout.inlineRecord ? inlineRecordGet(field, destination, objectName,
+				objectLocal) : nativeFieldGet(field, destination, objectName, objectLocal);
+		var fieldIndex = plan.objectFieldIndex(objectName, fieldName);
 		return [LocalGet(objectLocal), StructGet(typeIndex, fieldIndex), LocalSet(destination)];
 	}
 
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName),
-			fieldIndex = plan.objectFieldIndex(objectName, fieldName);
+			field:IrObjectField = plan.objectField(objectName, fieldName);
+		if (field.nativeLayout != null)
+			return field.nativeLayout.inlineRecord ? inlineRecordSet(field, objectName, objectLocal,
+				valueLocal) : nativeFieldSet(field, objectName, objectLocal, valueLocal);
+		var fieldIndex = plan.objectFieldIndex(objectName, fieldName);
 		return [LocalGet(objectLocal), LocalGet(valueLocal), StructSet(typeIndex, fieldIndex)];
+	}
+
+	function nativeFieldGet(field:IrObjectField, destination:Int, objectName:String, objectLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Flat Wasm GC field "${field.name}" is missing layout metadata';
+		var data = allocateLocal(Ref({nullable: true, heap: Type(plan.byteArrayTypeIndex)})),
+			offset = allocateLocal(I32),
+			body:Array<WasmInstruction> = objectPayloadLocation(objectName, objectLocal, native.offset, data, offset);
+		var load:Array<WasmInstruction>;
+		if (field.type == I32 || field.type == Bool || field.type == RawPtr) {
+			if (native.size == 1 || native.size == 2 || native.size == 4)
+				load = loadBytesI32(data, offset, native.size, native.signed);
+			else
+				throw 'Unsupported flat Wasm GC field storage ${native.size} bytes for ${Std.string(field.type)}';
+		} else if (field.type == I64) {
+			if (native.size == 4)
+				load = loadBytesI32(data, offset, 4, native.signed).concat([native.signed ? I64ExtendI32S : I64ExtendI32U]);
+			else if (native.size == 8)
+				load = loadBytesI64(data, offset, 8, false);
+			else
+				throw 'Unsupported flat Wasm GC field storage ${native.size} bytes for ${Std.string(field.type)}';
+		} else if (field.type == F32 && native.size == 4)
+			load = loadBytesI32(data, offset, 4, false).concat([F32ReinterpretI32, F64PromoteF32]);
+		else if (field.type == F64 && native.size == 8)
+			load = loadBytesI64(data, offset, 8, false).concat([F64ReinterpretI64]);
+		else
+			throw 'Unsupported flat Wasm GC field storage ${native.size} bytes for ${Std.string(field.type)}';
+		body = body.concat(load);
+		body.push(LocalSet(destination));
+		return body;
+	}
+
+	function nativeFieldSet(field:IrObjectField, objectName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Flat Wasm GC field "${field.name}" is missing layout metadata';
+		var isWide = native.size == 8,
+			bits = allocateLocal(isWide ? I64 : I32),
+			data = allocateLocal(Ref({
+				nullable: true,
+				heap: Type(plan.byteArrayTypeIndex)
+			})),
+			baseOffset = allocateLocal(I32),
+			body:Array<WasmInstruction> = [];
+		if (field.type == F32 && native.size == 4)
+			body = [LocalGet(valueLocal), F32DemoteF64, I32ReinterpretF32, LocalSet(bits)];
+		else if ((field.type == F32 || field.type == F64) && native.size == 8)
+			body = [LocalGet(valueLocal), I64ReinterpretF64, LocalSet(bits)];
+		else if (field.type == I64 && native.size == 4)
+			body = [LocalGet(valueLocal), I32WrapI64, LocalSet(bits)];
+		else if (field.type == I64 && native.size == 8)
+			body = [LocalGet(valueLocal), LocalSet(bits)];
+		else if ((field.type == I32 || field.type == Bool || field.type == RawPtr)
+			&& (native.size == 1 || native.size == 2 || native.size == 4))
+			body = [LocalGet(valueLocal), LocalSet(bits)];
+		else
+			throw 'Unsupported flat Wasm GC field storage ${native.size} bytes for ${Std.string(field.type)}';
+		body = body.concat(objectPayloadLocation(objectName, objectLocal, native.offset, data, baseOffset));
+		for (byteIndex in 0...native.size) {
+			body.push(LocalGet(data));
+			body.push(LocalGet(baseOffset));
+			if (byteIndex > 0) {
+				body.push(I32Const(byteIndex));
+				body.push(I32Add);
+			}
+			body.push(LocalGet(bits));
+			if (byteIndex > 0) {
+				body.push(isWide ? I64Const(byteIndex * 8) : I32Const(byteIndex * 8));
+				body.push(isWide ? I64ShrU : I32ShrU);
+			}
+			if (isWide)
+				body.push(I32WrapI64);
+			body.push(ArraySet(plan.byteArrayTypeIndex));
+		}
+		return body;
+	}
+
+	function inlineRecordGet(field:IrObjectField, destination:Int, objectName:String, objectLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Inline flat Wasm GC field "${field.name}" is missing layout metadata';
+		var childName = switch field.type {
+			case Obj(name): name;
+			case _: throw 'Inline flat Wasm GC field "${field.name}" is not a source struct';
+		}, childType = plan.objectType(childName);
+		return [
+			StructNewDefault(childType),
+			LocalSet(destination),
+			LocalGet(destination),
+			I32Const(WasmModuleSupport.typeId(Obj(childName))),
+			StructSet(childType, 0),
+			LocalGet(destination),
+			LocalGet(objectLocal),
+			StructGet(plan.objectType(objectName), 1),
+			StructSet(childType, 1),
+			LocalGet(destination),
+			LocalGet(objectLocal),
+			StructGet(plan.objectType(objectName), 2),
+			I32Const(native.offset),
+			I32Add,
+			StructSet(childType, 2)
+		];
+	}
+
+	function inlineRecordSet(field:IrObjectField, objectName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Inline flat Wasm GC field "${field.name}" is missing layout metadata';
+		var childName = switch field.type {
+			case Obj(name): name;
+			case _: throw 'Inline flat Wasm GC field "${field.name}" is not a source struct';
+		}, parentData = allocateLocal(Ref({nullable: true, heap: Type(plan.byteArrayTypeIndex)})), childData = allocateLocal(Ref({
+			nullable: true,
+			heap: Type(plan.byteArrayTypeIndex)
+		})), parentOffset = allocateLocal(I32), childOffset = allocateLocal(I32), body:Array<WasmInstruction> = [];
+		body = body.concat(objectPayloadLocation(objectName, objectLocal, native.offset, parentData, parentOffset));
+		body = body.concat(objectPayloadLocation(childName, valueLocal, 0, childData, childOffset));
+		for (byteIndex in 0...native.size)
+			body = body.concat([
+				LocalGet(parentData),
+				LocalGet(parentOffset),
+				I32Const(byteIndex),
+				I32Add,
+				LocalGet(childData),
+				LocalGet(childOffset),
+				I32Const(byteIndex),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				ArraySet(plan.byteArrayTypeIndex)
+			]);
+		return body;
+	}
+
+	function objectPayloadLocation(objectName:String, objectLocal:Int, fieldOffset:Int, data:Int, offset:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(objectLocal),
+			StructGet(plan.objectType(objectName), 1),
+			LocalSet(data),
+			LocalGet(objectLocal),
+			StructGet(plan.objectType(objectName), 2),
+			I32Const(fieldOffset),
+			I32Add,
+			LocalSet(offset)
+		];
+	}
+
+	function loadBytesI32(data:Int, offset:Int, size:Int, signed:Bool):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [LocalGet(data), LocalGet(offset), ArrayGetUnsigned(plan.byteArrayTypeIndex)];
+		for (byte in 1...size)
+			body = body.concat([
+				LocalGet(data),
+				LocalGet(offset),
+				I32Const(byte),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				I32Const(byte * 8),
+				I32Shl,
+				I32Or
+			]);
+		if (signed && size < 4) {
+			var shift = 32 - size * 8;
+			body = body.concat([I32Const(shift), I32Shl, I32Const(shift), I32ShrS]);
+		}
+		return body;
+	}
+
+	function loadBytesI64(data:Int, offset:Int, size:Int, signed:Bool):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [
+			LocalGet(data),
+			LocalGet(offset),
+			ArrayGetUnsigned(plan.byteArrayTypeIndex),
+			I64ExtendI32U
+		];
+		for (byte in 1...size)
+			body = body.concat([
+				LocalGet(data),
+				LocalGet(offset),
+				I32Const(byte),
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex),
+				I64ExtendI32U,
+				I64Const(byte * 8),
+				I64Shl,
+				I64Or
+			]);
+		if (signed && size < 8) {
+			var shift = 64 - size * 8;
+			body = body.concat([I64Const(shift), I64Shl, I64Const(shift), I64ShrS]);
+		}
+		return body;
 	}
 
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {

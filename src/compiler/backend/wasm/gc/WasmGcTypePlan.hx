@@ -134,6 +134,15 @@ class WasmGcTypePlan {
 		return fields.get(fieldName);
 	}
 
+	public function objectField(objectName:String, fieldName:String):IrObjectField {
+		var fields = flattenedObjectFields.get(objectName);
+		if (fields != null)
+			for (field in fields)
+				if (field.name == fieldName)
+					return field;
+		throw 'Unknown field "$objectName.$fieldName" in Wasm GC type plan';
+	}
+
 	/** Returns class type indices that can satisfy a Haxe virtual interface cast. */
 	/** Classes implementing an interface, cached: every interface type test over Dynamic values asks for them. */
 	public function interfaceImplementors(interfaceName:String):Array<Int> {
@@ -568,8 +577,14 @@ class WasmGcTypePlan {
 						mutable: true
 					}
 				];
-			for (field in fields)
-				wasmFields.push({type: Value(valueType(field.type)), mutable: true});
+			if (object.nativeLayout != null)
+				wasmFields = wasmFields.concat([
+					{type: Value(Ref({nullable: true, heap: Type(byteArrayTypeIndex)})), mutable: true},
+					{type: Value(I32), mutable: true}
+				]);
+			else
+				for (field in fields)
+					wasmFields.push({type: Value(valueType(field.type)), mutable: true});
 			setType(objectType(object.name), false, supertypes, Struct(wasmFields));
 		}
 		if (objectRootTypeIndex >= 0)
