@@ -97,9 +97,12 @@ class DesktopUiHost {
 			windowOptions.set_width(initialWidth);
 			windowOptions.set_height(initialHeight);
 			windowOptions.set_title(options.title);
+			// Assign window icons before Windows creates its taskbar button.
+			var deferShowForIcon = options.icons != null && Sys.systemName() == "Windows";
 			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
 				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
-			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0));
+			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0) |
+				(deferShowForIcon ? WindowFlags.Hidden : 0));
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
@@ -144,6 +147,8 @@ class DesktopUiHost {
 				if (NativeKit.nk_window_set_icons(window, pixels, images) != Result.Ok)
 					throw "Window icons failed: " + NativeKit.nk_last_error();
 			}
+			if (deferShowForIcon && NativeKit.nk_window_show(window, true) != Result.Ok)
+				throw "Window show failed: " + NativeKit.nk_last_error();
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
 			var surfaceOptions = new SurfaceOptions();
