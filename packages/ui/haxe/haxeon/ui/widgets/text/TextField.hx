@@ -163,6 +163,8 @@ class TextField implements View {
 	public var tabWidth:Null<Int> = null;
 	/** Explicit wrapping policy; null retains the normal single/multiline defaults. */
 	public var wrap:Null<TextWrap> = null;
+	/** Use lexical identifier boundaries for code selection and word commands. */
+	public var codeWordBoundaries:Bool = false;
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
@@ -190,6 +192,7 @@ class TextField implements View {
 				if (!context.requestPatch(id))
 					stored.update(editor);
 			};
+			editor.layout.codeWordBoundaries = codeWordBoundaries;
 			editor.configureTail(followTail && readOnly);
 			var documentChanged = document != null
 				? editor.syncDocument(document)

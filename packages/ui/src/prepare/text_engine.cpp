@@ -9,6 +9,8 @@
 #include "skribidi/skb_layout.h"
 #include "skribidi/skb_rasterizer.h"
 
+#include <SheenBidi/SBCodepoint.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -41,6 +43,7 @@ static std::shared_ptr<const skb_layout_t> own_native_layout(
 }
 
 struct TextEngine::State {
+    bool code_word_boundaries = false;
     struct RetainedLayout {
         // Read-only generations can be retained by indexed pieces without
         // later edits mutating or freeing their native data.
@@ -1321,7 +1324,54 @@ TextCaret TextEngine::caret(TextPosition position) const {
     return {result.x, result.y, result.ascender, result.descender, result.slope, result.direction};
 }
 
+// Code selection is lexical rather than natural-language word segmentation.
+// Classify whole graphemes: combining marks and emoji sequences stay intact.
+enum class CodeWordClass { Identifier, Whitespace, Punctuation, AtomicSymbol };
+
+static CodeWordClass code_word_class(const skb_layout_t *layout, int32_t offset) {
+    const auto props = skb_layout_get_text_property_at(layout, offset);
+    const uint32_t scalar = skb_layout_get_text_at(layout, offset);
+    if ((props.flags & SKB_TEXT_PROP_EMOJI) != 0)
+        return CodeWordClass::AtomicSymbol;
+    const auto category = SBCodepointGetGeneralCategory(scalar);
+    if (category == SBGeneralCategorySO) return CodeWordClass::AtomicSymbol;
+    if (SBGeneralCategoryIsSeparator(category) || scalar == '\t' || scalar == '\n' || scalar == '\r' ||
+        scalar == '\v' || scalar == '\f')
+        return CodeWordClass::Whitespace;
+    if (SBGeneralCategoryIsLetter(category) || SBGeneralCategoryIsMark(category) ||
+        SBGeneralCategoryIsNumber(category) || category == SBGeneralCategoryPC)
+        return CodeWordClass::Identifier;
+    return CodeWordClass::Punctuation;
+}
+
+static TextRange code_word_range(const skb_layout_t *layout, int32_t offset) {
+    const int32_t count = skb_layout_get_text_count(layout);
+    if (count == 0) return {};
+    int32_t start = std::clamp(offset, 0, count);
+    if (start == count) start = skb_layout_get_prev_grapheme_offset(layout, start);
+    // Align to the containing grapheme, rather than rounding to its nearest edge.
+    if (start > 0)
+        start = skb_layout_get_prev_grapheme_offset(layout,
+                    skb_layout_get_next_grapheme_offset(layout, start));
+    int32_t end = skb_layout_get_next_grapheme_offset(layout, start);
+    const auto kind = code_word_class(layout, start);
+    if (kind == CodeWordClass::AtomicSymbol) return {start, end};
+    while (start > 0) {
+        const auto previous = skb_layout_get_prev_grapheme_offset(layout, start);
+        if (code_word_class(layout, previous) != kind) break;
+        start = previous;
+    }
+    while (end < count && code_word_class(layout, end) == kind)
+        end = skb_layout_get_next_grapheme_offset(layout, end);
+    return {start, end};
+}
+
+void TextEngine::set_code_word_boundaries(bool enabled) {
+    state_->code_word_boundaries = enabled;
+}
+
 TextPosition TextEngine::word_start(TextPosition position) const {
+    if (state_->code_word_boundaries) return {word_range_at(position.offset).start, SKB_AFFINITY_TRAILING};
     const auto *layout = active_layout(*state_);
     if (!layout)
         return {};
@@ -1332,6 +1382,7 @@ TextPosition TextEngine::word_start(TextPosition position) const {
 }
 
 TextPosition TextEngine::word_end(TextPosition position) const {
+    if (state_->code_word_boundaries) return {word_range_at(position.offset).end, SKB_AFFINITY_TRAILING};
     const auto *layout = active_layout(*state_);
     if (!layout)
         return {};
@@ -1365,6 +1416,7 @@ TextRange TextEngine::word_range_at(int32_t offset) const {
     if (text_count <= 0)
         return {};
 
+    if (state_->code_word_boundaries) return code_word_range(layout, offset);
     const int32_t safe_offset = std::clamp(offset, 0, text_count);
     const skb_text_position_t position{safe_offset, SKB_AFFINITY_LEADING};
     const skb_text_position_t start = skb_layout_get_word_start_at(layout, position);
@@ -1411,6 +1463,24 @@ int32_t TextEngine::move_word(int32_t offset, int32_t direction, bool mac_style)
     const auto previous_grapheme = [layout](int32_t value) {
         return skb_layout_get_prev_grapheme_offset(layout, value);
     };
+    if (state_->code_word_boundaries) {
+        if (direction > 0) {
+            if (mac_style) {
+                while (next < text_count && code_word_class(layout, next) == CodeWordClass::Whitespace)
+                    next = next_grapheme(next);
+            }
+            if (next < text_count) next = code_word_range(layout, next).end;
+            if (!mac_style) {
+                while (next < text_count && code_word_class(layout, next) == CodeWordClass::Whitespace)
+                    next = next_grapheme(next);
+            }
+        } else {
+            while (next > 0 && code_word_class(layout, previous_grapheme(next)) == CodeWordClass::Whitespace)
+                next = previous_grapheme(next);
+            if (next > 0) next = code_word_range(layout, previous_grapheme(next)).start;
+        }
+        return next;
+    }
     constexpr uint8_t word_break = SKB_TEXT_PROP_WORD_BREAK;
     constexpr uint8_t whitespace = SKB_TEXT_PROP_WHITESPACE;
     constexpr uint8_t punctuation = SKB_TEXT_PROP_PUNCTUATION;

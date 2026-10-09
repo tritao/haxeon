@@ -145,6 +145,16 @@ showcase and framework tests live under `examples/ui_haxeon` and
 `tests/haxeon`; generated bindings are checked with
 `tools/check-hxi.sh`.
 
+Code editors opt into `TextField.codeWordBoundaries` (also available on `TextArea`
+and `TextEditorLayout`). The default remains natural-language segmentation.
+The native layout owns the shared policy used by double-click selection, word
+selection dragging, word navigation, and word deletion. Code mode groups Unicode
+letters, marks, numbers, and connector punctuation into identifiers; punctuation
+and whitespace form separate runs, while emoji graphemes stay indivisible.
+CamelCase and snake_case remain whole identifiers. Standard forward word movement
+includes trailing whitespace; macOS forward movement stops at the run end.
+Changing this policy does not reshape text or invalidate glyph geometry.
+
 Retained `TextLayout` foreground overrides use `setColorRanges` with sorted,
 disjoint `TextColorRange` values. Offsets count Unicode codepoints, and each
 shaped cluster uses its first codepoint's color. Ranges reuse measured geometry

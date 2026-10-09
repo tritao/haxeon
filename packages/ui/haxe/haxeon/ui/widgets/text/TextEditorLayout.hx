@@ -22,6 +22,8 @@ import haxeon.editor.TextDocument;
 class TextEditorLayout {
 	static inline var paragraphsPerLayout:Int = 64;
 	static inline var maximumParagraphsPerLayout:Int = 128;
+	/** Explicit code editing policy, independent of wrapping and syntax highlighting. */
+	public var codeWordBoundaries:Bool = false;
 	public var text(get, never):String;
 	public var width(default, null):Float;
 	/** Changes whenever edits or shaping constraints recompute paragraph geometry. */
@@ -784,6 +786,7 @@ class TextEditorLayout {
 		ensureLive();
 		var record = paragraphAtOffset(position.offset);
 		var local = clamp(position.offset - record.start, 0, record.end - record.start);
+		record.layout.setCodeWordBoundaries(codeWordBoundaries);
 		var range = record.layout.wordRange(new TextPosition(local, position.affinity));
 		return [record.start + range[0], record.start + range[1]];
 	}
@@ -792,6 +795,7 @@ class TextEditorLayout {
 		ensureLive();
 		var record = paragraphAtOffset(offset);
 		var local = clamp(offset - record.start, 0, record.end - record.start);
+		record.layout.setCodeWordBoundaries(codeWordBoundaries);
 		var range = record.layout.wordRangeAt(local);
 		return new TextRange(record.start + range.start, record.start + range.end);
 	}
@@ -814,6 +818,7 @@ class TextEditorLayout {
 		var recordIndex = paragraphIndexAtOffset(offset);
 		var record = paragraphs[recordIndex];
 		var local = clamp(offset - record.start, 0, record.end - record.start);
+		record.layout.setCodeWordBoundaries(codeWordBoundaries);
 		var moved = record.layout.moveWord(local, direction, macStyle);
 		if (moved == local && local >= record.end - record.start && direction > 0 &&
 			recordIndex + 1 < paragraphs.length)

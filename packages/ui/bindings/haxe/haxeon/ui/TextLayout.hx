@@ -176,6 +176,16 @@ class TextLayout extends NativeKitUIResource {
 		return [result.out_start, result.out_end];
 	}
 
+	var codeWordBoundaries:Bool = false;
+
+	/** Select identifier and punctuation runs; ordinary text defaults to prose words. */
+	public function setCodeWordBoundaries(enabled:Bool):Void {
+		if (codeWordBoundaries == enabled) return;
+		UiResult.check(NativeKitUI.nkui_text_layout_set_code_word_boundaries(nativeHandle(), enabled ? 1 : 0),
+			"textLayout.setCodeWordBoundaries");
+		codeWordBoundaries = enabled;
+	}
+
 	static function nativePosition(position:TextPosition):nkui_text_position {
 		var result = new nkui_text_position();
 		result.set_offset(position.offset);

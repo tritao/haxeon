@@ -289,6 +289,7 @@ class TextEngine {
     TextPosition hit_test(float x, float y) const;
     int32_t offset_from_position(TextPosition position) const;
     TextCaret caret(TextPosition position) const;
+    void set_code_word_boundaries(bool enabled);
     TextPosition word_start(TextPosition position) const;
     TextPosition word_end(TextPosition position) const;
     int32_t next_grapheme(int32_t offset) const;

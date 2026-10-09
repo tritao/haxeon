@@ -2911,6 +2911,15 @@ extern "C" nkui_result nkui_text_layout_move_paragraph(nkui_resource layout, int
     return NKUI_OK;
 }
 
+extern "C" nkui_result nkui_text_layout_set_code_word_boundaries(nkui_resource layout, uint8_t enabled) {
+    if (enabled > 1) return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(resources_mutex);
+    auto *slot = resolve(layout, nkui::ResourceKind::TextLayout);
+    if (!slot || !slot->text) return NKUI_ERROR_INVALID_HANDLE;
+    slot->text->set_code_word_boundaries(enabled != 0);
+    return NKUI_OK;
+}
+
 extern "C" nkui_result nkui_text_layout_word_range(nkui_resource layout,
                                                    nkui_text_position position, int32_t *out_start,
                                                    int32_t *out_end) {

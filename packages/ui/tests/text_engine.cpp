@@ -2,6 +2,7 @@
 #include "prepare/text_raster.h"
 
 #include <cstring>
+#include <cstdio>
 #include <cmath>
 #include <limits>
 #include <string>
@@ -19,6 +20,44 @@
 using namespace nkui;
 
 int main() {
+    // Code boundaries are opt-in and shared by selection and word commands.
+    {
+        TextEngine code;
+        if (!code.add_font(NKUI_TEST_FONT_PATH)) return 240;
+        if (!code.layout_utf8("platform.HostFileDialogs foo_bar->value :: next", 800, 18)) return 241;
+        code.set_code_word_boundaries(true);
+        const auto check = [&](int offset, int start, int end) {
+            const auto range = code.word_range_at(offset);
+            if (range.start != start || range.end != end) {
+                std::fprintf(stderr, "word at %d: [%d,%d), expected [%d,%d)\n", offset, range.start, range.end, start, end);
+                return false;
+            }
+            return true;
+        };
+        if (!check(0, 0, 8) || !check(7, 0, 8) || !check(8, 8, 9) ||
+            !check(9, 9, 24) || !check(23, 9, 24) || !check(27, 25, 32) ||
+            !check(32, 32, 34) || !check(41, 40, 42)) return 242;
+        for (uint8_t affinity : {uint8_t{1}, uint8_t{2}}) {
+            if (code.offset_from_position(code.word_start({8, affinity})) != 8 ||
+                code.offset_from_position(code.word_end({8, affinity})) != 9) return 243;
+        }
+        if (code.move_word(0, 1, false) != 8 || code.move_word(8, 1, false) != 9 ||
+            code.move_word(9, 1, false) != 25 || code.move_word(9, 1, true) != 24 ||
+            code.move_word(25, -1, false) != 9 || code.move_word(9, -1, false) != 8 ||
+            code.move_word(8, -1, false) != 0) return 244;
+        if (!code.layout_utf8("café.e\xCC\x81_name 中文 😀😀", 800, 18)) return 245;
+        if (!check(3, 0, 4) || !check(4, 4, 5) || !check(6, 5, 12) ||
+            !check(13, 13, 15) || !check(16, 16, 17) || !check(17, 17, 18) ||
+            code.move_word(5, 1, false) != 13) return 246;
+        code.set_code_word_boundaries(false);
+        if (!code.layout_utf8("platform.HostFileDialogs", 800, 18)) return 247;
+        const auto prose = code.word_range_at(9);
+        if (prose.start != 0 || prose.end != 24) return 248;
+        code.set_code_word_boundaries(true);
+        if (!code.layout_utf8("", 800, 18) || !check(0, 0, 0) || code.move_word(0, 1, false) != 0)
+            return 249;
+    }
+
     // Atlas IDs do not truncate at 32 bits and exhaustion never wraps.
     {
         AtlasTextureIdSequence ids(UINT32_MAX - uint64_t{1});

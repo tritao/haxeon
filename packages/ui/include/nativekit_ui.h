@@ -1024,7 +1024,12 @@ NKUI_API nkui_result nkui_text_layout_previous_grapheme(nkui_resource layout, in
 NKUI_API nkui_result nkui_text_layout_align_grapheme(nkui_resource layout, int32_t offset,
                                                      int32_t *out_offset NKUI_OUT);
 
-/** Returns the Skribidi word range containing the code-point `offset`. */
+/** Opts into identifier, whitespace and punctuation runs for code editing.
+ * Defaults to natural-language word boundaries. Does not change shaping.
+ */
+NKUI_API nkui_result nkui_text_layout_set_code_word_boundaries(nkui_resource layout, uint8_t enabled);
+
+/** Returns the word range containing the code-point `offset` under the selected policy. */
 NKUI_API nkui_result nkui_text_layout_word_range_at(nkui_resource layout, int32_t offset,
                                                     int32_t *out_start NKUI_OUT,
                                                     int32_t *out_end NKUI_OUT);

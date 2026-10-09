@@ -939,6 +939,11 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_text_layout_previous_grapheme(layout: nkui_resource, offset: i32, out_offset: ptr<i32> @out) -> nkui_result;
 	/**
+	 * Opts into identifier, whitespace and punctuation runs for code editing.
+	 * Defaults to natural-language word boundaries. Does not change shaping.
+	 */
+	extern fn nkui_text_layout_set_code_word_boundaries(layout: nkui_resource, enabled: u8) -> nkui_result;
+	/**
 	 * Sets the color used when this retained text layout is drawn.
 	 */
 	extern fn nkui_text_layout_set_color(layout: nkui_resource, color: nkui_color) -> nkui_result;
@@ -965,7 +970,7 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_text_layout_word_range(layout: nkui_resource, position: nkui_text_position, out_start: ptr<i32> @out, out_end: ptr<i32> @out) -> nkui_result;
 	/**
-	 * Returns the Skribidi word range containing the code-point `offset`.
+	 * Returns the word range containing the code-point `offset` under the selected policy.
 	 */
 	extern fn nkui_text_layout_word_range_at(layout: nkui_resource, offset: i32, out_start: ptr<i32> @out, out_end: ptr<i32> @out) -> nkui_result;
 	/**

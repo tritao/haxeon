@@ -65,6 +65,45 @@ class SelectionDragTests {
 	}
 
 	public static function run(fonts:FontCollection, context:UiContext):Void {
+		var code = new TextEditorState(fonts, "platform.HostFileDialogs\nfoo_bar->value");
+		code.layout.codeWordBoundaries = true;
+		code.updateLayout(600.0);
+		// Exercise real glyph hits on both halves of the dot and adjacent letters.
+		for (offset in [7, 8, 9]) {
+			var before = code.layout.caret(new TextPosition(offset, 1));
+			var after = code.layout.caret(new TextPosition(offset + 1, 1));
+			for (fraction in [0.25, 0.75]) {
+				var hit = code.hitTest(before.x + (after.x - before.x) * fraction,
+					before.y + (before.ascender + before.descender) * 0.5);
+				code.beginPointerSelection(hit, 2, false);
+				var start = offset == 7 ? 0 : offset;
+				var end = offset == 7 ? 8 : (offset == 8 ? 9 : 24);
+				if (code.selectionStart != start || code.selectionEnd != end)
+					throw "Code double-click crossed a dot boundary: glyph " + offset + " fraction " + fraction +
+						" hit " + hit.offset + "/" + hit.affinity + " selected " + code.selectionStart + ":" + code.selectionEnd;
+			}
+		}
+		code.beginPointerSelection(new TextPosition(2, 2), 2, false);
+		code.extendPointerSelection(new TextPosition(12, 2));
+		if (code.selectionStart != 0 || code.selectionEnd != 24) throw "Code word drag lost identifier boundaries";
+		code.beginPointerSelection(new TextPosition(12, 2), 2, false);
+		code.extendPointerSelection(new TextPosition(2, 2));
+		if (code.selectionAnchor != 24 || code.selectionFocus != 0) throw "Code backward word drag lost anchor";
+		code.beginPointerSelection(new TextPosition(12, 2), 3, false);
+		if (code.selectionStart != 0 || code.selectionEnd != 25) throw "Code triple-click lost whole line";
+		code.placeCaret(9, false);
+		code.moveCaretByWord(-1, true);
+		if (code.selectionStart != 8 || code.selectionEnd != 9) throw "Word extension did not isolate dot";
+		code.placeCaret(9, false);
+		if (!code.deleteWord(-1) || code.text != "platformHostFileDialogs\nfoo_bar->value")
+			throw "Backward word deletion crossed identifier boundary";
+		code.dispose();
+		var deletion = new TextEditorState(fonts, "foo_bar->value");
+		deletion.layout.codeWordBoundaries = true;
+		deletion.placeCaret(7, false);
+		if (!deletion.deleteWord(1) || deletion.text != "foo_barvalue")
+			throw "Forward word deletion did not preserve identifiers";
+		deletion.dispose();
 		firstCharacterHighlightValid(fonts, "ABC\nDEF", 4);
 		firstCharacterHighlightValid(fonts, "é🙂\nDEF", 4);
 		firstCharacterHighlightValid(fonts, "אבג\nDEF", 4);

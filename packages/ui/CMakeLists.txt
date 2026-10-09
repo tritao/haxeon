@@ -79,7 +79,7 @@ target_include_directories(nativekit_ui PRIVATE "${NKUI_VENDOR_DIR}/nanovg/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/src")
 target_include_directories(nativekit_ui PRIVATE "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
 target_link_libraries(nativekit_ui PUBLIC NativeKit::gpu
-    PRIVATE nkui_skribidi nkui_nanovg_core)
+    PRIVATE nkui_skribidi nkui_sheenbidi nkui_nanovg_core)
 if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
@@ -177,7 +177,7 @@ if(NK_BUILD_TESTS)
         target_include_directories(nativekit_ui_stream_buffers_test PRIVATE src
             "${NKUI_NATIVEKIT_DIR}/modules/gpu/src")
         target_link_libraries(nativekit_ui_stream_buffers_test PRIVATE
-            NativeKit::ui NativeKit::gpu NativeKit::nativekit nkui_nanovg_core nkui_skribidi)
+            NativeKit::ui NativeKit::gpu NativeKit::nativekit nkui_nanovg_core nkui_skribidi nkui_sheenbidi)
         find_package(OpenGL REQUIRED)
         target_link_libraries(nativekit_ui_stream_buffers_test PRIVATE OpenGL::GL)
         add_test(NAME nativekit_ui_stream_buffers COMMAND ${NKUI_BACKEND_XVFB_RUN} -a
@@ -220,7 +220,7 @@ if(NK_BUILD_TESTS)
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf"
         NKUI_TEST_MONO_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexMono-Regular.ttf"
         NKUI_TEST_COLOR_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/NotoColorEmoji-Regular.ttf")
-    target_link_libraries(nativekit_ui_text_engine_test PRIVATE nkui_skribidi)
+    target_link_libraries(nativekit_ui_text_engine_test PRIVATE nkui_skribidi nkui_sheenbidi)
     add_test(NAME nativekit_ui_text_engine COMMAND nativekit_ui_text_engine_test)
     add_executable(nativekit_ui_compositor_test
         tests/compositor.cpp
@@ -249,7 +249,7 @@ if(NK_BUILD_TESTS)
         src "${NKUI_VENDOR_DIR}/clay")
     target_compile_definitions(nativekit_ui_layout_engine_test PRIVATE
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    target_link_libraries(nativekit_ui_layout_engine_test PRIVATE nkui_skribidi)
+    target_link_libraries(nativekit_ui_layout_engine_test PRIVATE nkui_skribidi nkui_sheenbidi)
     add_test(NAME nativekit_ui_layout_engine COMMAND nativekit_ui_layout_engine_test)
     add_executable(nativekit_ui_clay_measure_element_test
         "${NKUI_VENDOR_DIR}/clay/tests/measure_element.cpp")
@@ -297,7 +297,7 @@ if(NK_BUILD_TESTS)
         src "${NKUI_VENDOR_DIR}/clay")
     target_compile_definitions(nativekit_ui_layout_invariants_test PRIVATE
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    target_link_libraries(nativekit_ui_layout_invariants_test PRIVATE nkui_skribidi)
+    target_link_libraries(nativekit_ui_layout_invariants_test PRIVATE nkui_skribidi nkui_sheenbidi)
     add_test(NAME nativekit_ui_layout_invariants COMMAND nativekit_ui_layout_invariants_test)
     add_executable(nativekit_ui_layout_render_compiler_test
         tests/layout_render_compiler.cpp
@@ -318,7 +318,7 @@ if(NK_BUILD_TESTS)
     target_compile_definitions(nativekit_ui_layout_render_compiler_test PRIVATE
         NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
     target_link_libraries(nativekit_ui_layout_render_compiler_test PRIVATE
-        nkui_nanovg_core nkui_skribidi NativeKit::nativekit)
+        nkui_nanovg_core nkui_skribidi nkui_sheenbidi NativeKit::nativekit)
     add_test(NAME nativekit_ui_layout_render_compiler
         COMMAND nativekit_ui_layout_render_compiler_test)
     add_executable(nativekit_ui_layout_session_test
