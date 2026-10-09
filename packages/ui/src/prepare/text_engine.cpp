@@ -293,8 +293,26 @@ struct RenderGlyphContext {
     int32_t line_end = -1;
 };
 
+// Hard line breaks participate in layout and editing, never in glyph painting.
+bool is_hard_line_break(uint32_t codepoint) {
+    return codepoint == 0x0a || codepoint == 0x0d || codepoint == 0x85 ||
+           codepoint == 0x2028 || codepoint == 0x2029;
+}
+
+bool is_line_break_glyph(const skb_layout_t *layout, const skb_layout_render_glyph_t &glyph) {
+    if (glyph.text_range.start < 0 || glyph.text_range.end <= glyph.text_range.start ||
+        glyph.text_range.end > skb_layout_get_text_count(layout))
+        return false;
+    for (int32_t offset = glyph.text_range.start; offset < glyph.text_range.end; ++offset)
+        if (!is_hard_line_break(skb_layout_get_text_at(layout, offset)))
+            return false;
+    return true;
+}
+
 bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) {
     auto &render = *static_cast<RenderGlyphContext *>(context);
+    if (is_line_break_glyph(render.layout, *glyph))
+        return true;
     if (render.line_start >= 0 &&
         (glyph->text_range.end <= render.line_start || glyph->text_range.start >= render.line_end))
         return true;
@@ -1489,6 +1507,103 @@ std::vector<TextRect> TextEngine::selection_rects(TextPosition start, TextPositi
             {rect.x, rect.y, rect.width, rect.height});
     };
     skb_layout_iterate_text_range_bounds(layout->layout.get(), range, collect, &rectangles);
+
+    // Replace font-dependent control-character advances with a compact marker.
+    // This affects selection painting only; offsets, shaping and caret geometry
+    // continue to include the original line-break grapheme (including CRLF).
+    struct BreakSpan {
+        float left, right, top;
+        TextRect marker;
+    };
+    std::vector<BreakSpan> break_spans;
+    struct BreakSelectionContext {
+        const skb_layout_t *layout;
+        skb_range_t selected;
+        std::vector<BreakSpan> *spans;
+    } breaks{layout->layout.get(),
+             skb_layout_get_offset_range_from_text_range(layout->layout.get(), range),
+             &break_spans};
+    const auto collect_break = [](const skb_layout_render_glyph_t *glyph, void *context) {
+        auto &value = *static_cast<BreakSelectionContext *>(context);
+        if (glyph->text_range.end <= value.selected.start ||
+            glyph->text_range.start >= value.selected.end ||
+            !is_line_break_glyph(value.layout, *glyph))
+            return true;
+        const auto position = skb_text_position_t{glyph->text_range.start,
+                                                  static_cast<skb_caret_affinity_t>(0)};
+        const auto line = skb_layout_get_line_at(value.layout,
+                                                 skb_layout_get_line_index(value.layout, position));
+        const float top = line.baseline + line.ascender;
+        const float height = line.descender - line.ascender;
+        const float left = glyph->offset_x;
+        const float right = left + std::max(0.0f, glyph->advance_x);
+        const float marker_width = std::max(1.0f, glyph->font_size * 0.25f);
+        const float marker_x = skb_is_rtl(static_cast<skb_text_direction_t>(glyph->direction)) ? right - marker_width : left;
+        value.spans->push_back({left, right, top, {marker_x, top, marker_width, height}});
+        return true;
+    };
+    const int32_t first_line = skb_layout_get_line_index(layout->layout.get(), range.start);
+    const int32_t last_line = skb_layout_get_line_index(layout->layout.get(), range.end);
+    skb_layout_iterate_render_glyphs_range(layout->layout.get(),
+        {std::min(first_line, last_line), std::max(first_line, last_line) + 1},
+        collect_break, &breaks);
+    if (!break_spans.empty()) {
+        std::sort(break_spans.begin(), break_spans.end(), [](const BreakSpan &a, const BreakSpan &b) {
+            return a.top != b.top ? a.top < b.top : a.left < b.left;
+        });
+        std::vector<TextRect> text_rectangles;
+        text_rectangles.reserve(rectangles.size() + break_spans.size());
+        constexpr float epsilon = 0.01f;
+        for (const auto &rect : rectangles) {
+            auto span = std::lower_bound(break_spans.begin(), break_spans.end(), rect.y - epsilon,
+                [](const BreakSpan &item, float top) { return item.top < top; });
+            float cursor = rect.x;
+            const float right = rect.x + rect.width;
+            for (; span != break_spans.end() && span->top <= rect.y + epsilon; ++span) {
+                if (span->right <= cursor || span->left >= right) continue;
+                if (span->left > cursor)
+                    text_rectangles.push_back({cursor, rect.y, span->left - cursor, rect.height});
+                cursor = std::min(right, std::max(cursor, span->right));
+            }
+            if (cursor < right)
+                text_rectangles.push_back({cursor, rect.y, right - cursor, rect.height});
+        }
+        for (const auto &span : break_spans)
+            text_rectangles.push_back(span.marker);
+        rectangles = std::move(text_rectangles);
+    }
+
+    // Glyph ascenders/descenders exclude the row's leading. Selection backgrounds
+    // cover the logical row instead, so adjacent lines share the same boundary.
+    // Keep fractional layout coordinates: independent rounding or overlapping
+    // rectangles would introduce seams or double-blended selection colors.
+    struct SelectionRow {
+        float glyph_top;
+        float top;
+        float height;
+    };
+    std::vector<SelectionRow> selection_rows;
+    const int32_t line_count = skb_layout_get_lines_count(layout->layout.get());
+    const int32_t row_start = std::max(0, std::min(first_line, last_line));
+    const int32_t row_end = std::min(line_count, std::max(first_line, last_line) + 1);
+    selection_rows.reserve(row_end - row_start);
+    for (int32_t index = row_start; index < row_end; ++index) {
+        const auto line = skb_layout_get_line_at(layout->layout.get(), index);
+        selection_rows.push_back({line.baseline + line.ascender,
+                                  line.bounds.y, line.bounds.height});
+    }
+    std::sort(selection_rows.begin(), selection_rows.end(),
+        [](const SelectionRow &a, const SelectionRow &b) { return a.glyph_top < b.glyph_top; });
+    constexpr float row_epsilon = 0.01f;
+    for (auto &rect : rectangles) {
+        const auto row = std::lower_bound(selection_rows.begin(), selection_rows.end(),
+            rect.y - row_epsilon,
+            [](const SelectionRow &item, float top) { return item.glyph_top < top; });
+        if (row != selection_rows.end() && std::abs(row->glyph_top - rect.y) <= row_epsilon) {
+            rect.y = row->top;
+            rect.height = row->height;
+        }
+    }
 
     // Visual runs in mixed-direction text may produce touching or overlapping
     // bounds on the same line. Returning those independently causes translucent
