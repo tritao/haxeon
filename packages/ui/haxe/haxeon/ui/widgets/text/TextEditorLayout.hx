@@ -520,13 +520,14 @@ class TextEditorLayout {
 			throw "Text selection endpoints cannot be null";
 		if (!Math.isFinite(minY) || !Math.isFinite(maxY) || maxY < minY)
 			throw "Text selection geometry bounds are invalid";
-		var first = clamp(start.offset, 0, offsets.codepointCount);
-		var last = clamp(end.offset, 0, offsets.codepointCount);
-		if (last < first) {
-			var swap = first;
-			first = last;
-			last = swap;
-		}
+		// Hits identify glyph edges, not necessarily logical insertion offsets.
+		// Order the resolved offsets while keeping each affinity with its glyph.
+		var startOffset = offsetFromPosition(start), endOffset = offsetFromPosition(end);
+		var forward = startOffset <= endOffset;
+		var firstPosition = forward ? start : end;
+		var lastPosition = forward ? end : start;
+		var first = forward ? startOffset : endOffset;
+		var last = forward ? endOffset : startOffset;
 		if (first == last)
 			return [];
 		var result:Array<Rect> = [];
@@ -546,9 +547,17 @@ class TextEditorLayout {
 			var localEnd:Int = last < record.end ? last : record.end;
 			if (localEnd <= localStart)
 				continue;
+			// Interior paragraphs use canonical insertion edges. Only the paragraph
+			// containing an original endpoint may interpret that endpoint's affinity.
+			var useFirstPosition = localStart == first && firstPosition.offset >= record.start &&
+				firstPosition.offset < record.end;
+			var useLastPosition = localEnd == last && lastPosition.offset >= record.start &&
+				lastPosition.offset <= record.end;
 			for (rect in record.layout.selectionRects(
-				new TextPosition(localStart - record.start, start.affinity),
-				new TextPosition(localEnd - record.start, end.affinity)))
+				new TextPosition((useFirstPosition ? firstPosition.offset : localStart) - record.start,
+					useFirstPosition ? firstPosition.affinity : 0),
+				new TextPosition((useLastPosition ? lastPosition.offset : localEnd) - record.start,
+					useLastPosition ? lastPosition.affinity : 0)))
 				if (rect.y + record.y < maxY && rect.y + record.y + rect.height > minY)
 					result.push(new Rect(rect.x, rect.y + record.y, rect.width, rect.height));
 		}

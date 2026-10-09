@@ -14,7 +14,60 @@ import haxeon.ui.widgets.text.Utf8Text;
 
 /** Drag boundaries and selection synchronization after scroll layout. */
 class SelectionDragTests {
+	/** Exercise real shaping hits, including two edges sharing a glyph offset. */
+	static function firstCharacterHighlightValid(fonts:FontCollection, text:String, laterLine:Int):Void {
+		var editor = new TextEditorState(fonts, text);
+		editor.updateLayout(200.0);
+		var first = editor.layout.caret(new TextPosition(0, 0));
+		var next = editor.layout.caret(new TextPosition(editor.layout.nextGrapheme(0), 0));
+		var firstY = first.y + (first.ascender + first.descender) * 0.5;
+		var firstX = first.x + (next.x - first.x) * 0.1;
+		var expected = editor.layout.selectionRects(new TextPosition(0, 0),
+			new TextPosition(editor.layout.nextGrapheme(0), 0));
+		if (expected.length == 0) throw "First-character geometry fixture is empty";
+		for (startOffset in [0, laterLine]) {
+			var caret = editor.layout.caret(new TextPosition(startOffset, 0));
+			var after = editor.layout.caret(new TextPosition(editor.layout.nextGrapheme(startOffset), 0));
+			var hit = editor.hitTest(caret.x + (after.x - caret.x) * 0.75,
+				caret.y + (caret.ascender + caret.descender) * 0.5);
+			for (top in [-1.0, 0.0, firstY]) {
+				editor.beginPointerSelection(hit, 1, false);
+				editor.extendPointerSelection(editor.hitTestSelectionDrag(firstX, top, top));
+				if (editor.selectionFocus != 0 || editor.selectionAnchor != editor.layout.nextGrapheme(startOffset))
+					throw "Dragging from a glyph edge changed the logical selection";
+				var anchor = editor.anchorPosition(), focus = editor.focusPosition();
+				var rectangles = editor.layout.selectionRects(anchor, focus);
+				var reversed = editor.layout.selectionRects(focus, anchor);
+				if (rectangles.length == 0 || rectangles.length != reversed.length)
+					throw "A nonempty backward drag lost its selection highlight";
+				for (index in 0...rectangles.length) {
+					var a = rectangles[index], b = reversed[index];
+					if (a.x != b.x || a.y != b.y || a.width != b.width || a.height != b.height)
+						throw "Selection paint geometry depended on drag direction";
+				}
+				for (glyph in expected) {
+					var x = glyph.x + glyph.width / 2, y = glyph.y + glyph.height / 2;
+					var covered = false;
+					for (rect in rectangles)
+						if (rect.x <= x && x < rect.x + rect.width && rect.y <= y && y < rect.y + rect.height)
+							covered = true;
+					if (!covered) throw "Backward drag omitted the first grapheme from its highlight";
+				}
+			}
+		}
+		// Starting at insertion zero and returning there is still an empty range.
+		editor.beginPointerSelection(editor.hitTest(firstX, firstY), 1, false);
+		editor.extendPointerSelection(editor.hitTestSelectionDrag(firstX, -1.0, 0.0));
+		if (editor.selectionStart != editor.selectionEnd ||
+			editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition()).length != 0)
+			throw "An empty drag acquired an artificial character selection";
+		editor.dispose();
+	}
+
 	public static function run(fonts:FontCollection, context:UiContext):Void {
+		firstCharacterHighlightValid(fonts, "ABC\nDEF", 4);
+		firstCharacterHighlightValid(fonts, "é🙂\nDEF", 4);
+		firstCharacterHighlightValid(fonts, "אבג\nDEF", 4);
 		var semanticDrag = new TextEditorState(fonts, "first second\nthird fourth\nfifth");
 		for (x in [-100.0, 0.0, 40.0, 1000.0]) {
 			semanticDrag.beginPointerSelection(new TextPosition(15, 0), 1, false);
