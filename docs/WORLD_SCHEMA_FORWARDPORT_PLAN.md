@@ -240,7 +240,7 @@ import project, not validated against World artifacts. Full World compatibility
 therefore remains unverified. The failure log is
 `out/gates/world-a6e1114-run.log`; no World checkout or pin was changed.
 
-## Refreshed compiler/runtime acceptance and current consumer boundary
+## Intermediate Flat aggregate checkpoint (superseded)
 
 The compiler/runtime selector was rerun in this isolated review tree after the
 flat `RawPtr` aggregate-lowering edits. It passed 141/141:
@@ -271,15 +271,16 @@ fixtures passed with 15 declared skips at
 it was not rerun for this native-memory change and is not evidence for the
 uncommitted diff.
 
-The latest full archived World compile has advanced past the earlier E1022
-aggregate-load failure, but still does not pass. At the current local source
-state it loads 37 sources and stops at
-`NativePointerContractTests.hx:58:3` with `E1005: Field "ref" requires an
-object`; the log is `out/gates/world-a6e1114-run-after-flat-memory3.log`. The
-World descriptor/schema assertions and runtime tests have not been reached.
-`MessagePackSchema.hx` remains an untracked local candidate; the minimal import
-probe compiled, but no World descriptor/default/schema compatibility claim is
-made from that result. This gate does not validate those schema behaviors.
+An intermediate archived World compile after Flat aggregate lowering stopped
+at `NativePointerContractTests.hx:58:3` with `E1005: Field "ref" requires an
+object`; the log is `out/gates/world-a6e1114-run-after-flat-memory3.log`. A
+subsequent `.ref` lowering pass advanced farther but reached the Dynamic
+`NativeSpan.get()` stride blocker recorded in the pre-fix checkpoint below.
+These runs predate commit `64d87e61` and are not results for its source. The
+World descriptor/schema assertions and runtime tests have not been reached in
+this lane. `MessagePackSchema.hx` remains an untracked local candidate; the
+minimal import probe does not validate World descriptor/default/schema
+behavior.
 
 The current `typeInfo<T>()` boundary remains explicit: statically concrete
 source-declared struct types, including types passed through nested generic
@@ -288,11 +289,11 @@ runtime-selected type do not; callers must reach `typeInfo<T>()` through an
 instantiation where the compiler can resolve `T` to a concrete type. This is
 not runtime type-token support. No root or sibling pin was promoted.
 
-## Current source acceptance checkpoint
+## Pre-fix final-driver checkpoint (superseded by 64d87e61)
 
 The compiler/runtime selector was rerun against review-tree HEAD
 `2feb14e7c2edbb156f3931de7918d2b317ad50c0` plus its preserved local source
-changes. It passed 141/141:
+changes, before the source-aware generic layout repair. It passed 141/141:
 
 ```sh
 .tools/haxe/haxe -cp tests --run driver.TestDriver \
@@ -300,18 +301,18 @@ changes. It passed 141/141:
 ```
 
 The captured log is `out/gates/final-driver-world-coordination-current.log`.
-This selector does not include the program fixture suite. In particular, the
-focused `native-memory-flat-struct` program currently fails to compile; its
-captured failure is `out/gates/rawptr-ref-program.log`. A captured
+This selector did not include the program fixture suite. At that source state,
+the focused `native-memory-flat-struct` program failed to compile; its captured
+failure is `out/gates/rawptr-ref-program.log`. A captured
 `NativeSpan<FlatPacket>.get()` call reaches `NativeSpan.at()` with `T=Dynamic`,
 and `RawPtr.offset` correctly reports that it cannot derive a fixed element
-layout. The full archived World attempt reaches the same blocker at
+layout. The full archived World attempt reached the same blocker at
 `NativeSpan.hx:86:10` after loading 37 sources; see
 `out/gates/world-a6e1114-native-span-debug.log`. Thus the 141-case selector
 does not close the active pointer/capture issue and does not establish full
 World compatibility.
 
-Existing bootstrap evidence for the current compiler source is
+Existing bootstrap evidence for that pre-fix compiler source is
 `out/gates/bootstrap-world-native-span-debug.log`: bootstrap stages converged
 after two self-host stages. Existing Wasm parity evidence remains 356 fixtures
 passed with 15 declared skips at
@@ -320,10 +321,69 @@ passed with 15 declared skips at
 this documentation checkpoint. The runtime pin remains
 `0e739431da931d8e21c98c485afb17f1f3164106`.
 
-The exact `typeInfo<T>()` boundary above remains unchanged. The local
-`MessagePackSchema.hx` candidate has only passed its minimal import probe; the
-full descriptor/default/schema consumer assertions are still unverified. The
-World lane owns the full consumer run and will report concrete gaps before
-this lane resumes descriptor-pipeline work. No World or sibling pin was
-changed, and the source tree is still dirty, so this is working-tree gate
-evidence rather than a stable compiler checkpoint.
+The exact `typeInfo<T>()` boundary above remains unchanged. No World or sibling
+pin was changed in this pre-fix checkpoint.
+
+## Flat generic NativeSpan repair
+
+The bounded source fix is committed at
+`64d87e61ba94f54809e1ed017aceacac669ab2ff` (`Preserve Flat layouts in captured
+NativeSpan reads`). The runtime gitlink remains
+`0e739431da931d8e21c98c485afb17f1f3164106`.
+
+The root cause was shape erasure, not loss of the captured value's source
+type. The `NativeSpan.get()` call received concrete `T=FlatPacket`, but the
+generic policy only recognized HXI native scalars and native value records as
+layout-sensitive. Source Flat structs are represented semantically as class
+instances, so the policy selected a shared `Dynamic` body. That body called
+`NativeSpan.at()` and then `RawPtr.offset(Dynamic)`, which cannot infer a byte
+stride and correctly emitted E1022. The fix consults the current native layout
+registry when choosing generic representations, keeping source Flat records
+exact for layout-dependent bodies. Incremental IR lowering now binds these
+layouts from the retained object cache as well as newly typed objects.
+
+The same commit completes Flat aggregate `RawPtr.load()`/`store()` lowering and
+`RawPtr.ref` projections. Loads and stores recursively use selected scalar
+field widths, signedness, and offsets. `pointer.ref.field` reads through that
+layout and direct or nested field writes target the selected offsets; `.ref`
+does not carry an owner or lifetime check. Rich managed records and address-
+only native value records remain rejected for `.ref`.
+
+The compiler regression `tests/compiler/NativeMemoryMain.hx` checks that an
+incrementally retyped cross-module reader retains its concrete
+`NativeSpan.get[layout]` specialization and native memory load. The program
+fixture `tests/programs/native-memory-flat-struct.hx` checks Flat `sizeof`,
+alignment, field offsets, aggregate load/store, pointer stride, direct and
+nested `.ref` writes, and captured `NativeSpan.get()` invocation against real
+fields. The native-memory fixture is an explicit Wasm skip because the native
+memory runtime has no Wasm implementation.
+
+Gates on the committed source or its equivalent pre-commit source state:
+
+- Full driver: 530 passed, 0 failed,
+  `out/gates/world-flat-generic-specialization-driver-final.log`.
+- Focused incremental compiler regression: 1 passed, 0 failed,
+  `out/gates/native-memory-flat-incremental-compiler.log`.
+- Focused captured Flat pointer program passed 1/1 at
+  `out/gates/native-span-flat-specialization.log`; the full driver also ran
+  this fixture after the incremental-cache assertion was added.
+- Bootstrap converged after two self-host stages at
+  `out/gates/bootstrap-world-flat-generic-specialization-final.log`; the
+  checked-in compiler rebuilt identically at
+  `out/gates/bootstrap-world-flat-generic-specialization-final-self.log`.
+- Wasm parity passed 360 required fixtures with 16 explicit skips at
+  `out/gates/world-flat-generic-specialization-wasm-parity.log`. This run was
+  after the source-aware specialization and Flat fixture/skip were added; the
+  only later code change was incremental cached-layout retention, covered by
+  the compiler regression and final full driver.
+
+This compiler commit is ready for World-owned consumer validation; this lane
+did not rerun the full World suite after the fix. The World descriptor,
+defaults, and schema assertions therefore remain unverified here, and no full
+World compatibility claim is made. The separate local
+`stdlib/haxeon/wire/MessagePackSchema.hx` candidate remains untracked and was
+not included in commit `64d87e61`. The `typeInfo<T>()` boundary is unchanged:
+compile-time concrete source-declared struct types can have descriptor
+identity, including through nested generic calls; unresolved generic
+parameters and runtime-selected types do not provide runtime type tokens. No
+World or sibling pin was changed.
