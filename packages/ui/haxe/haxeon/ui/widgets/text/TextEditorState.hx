@@ -71,6 +71,7 @@ class TextEditorState {
 	var lastPointerClickArmed:Bool;
 	var pointerClickPending:Bool;
 	var viewportHeight:Float;
+	var caretRevealPending:Bool = false;
 	var desiredVerticalX:Float;
 	var hasDesiredVerticalX:Bool;
 	var caretBlinkResetTime:Float;
@@ -520,6 +521,7 @@ class TextEditorState {
 	}
 
 	public function selectAll():Bool {
+		preserveViewport();
 		breakHistoryGroup();
 		var first = selectionStart != 0 || selectionEnd != offsets.codepointCount ||
 			selectionAnchor != 0 || selectionFocus != offsets.codepointCount ||
@@ -721,6 +723,18 @@ class TextEditorState {
 		scrollOffsetY = maximum;
 		renderMeasurement.invalidate();
 		return true;
+	}
+
+	/** Selection state and viewport movement are independent; layout only consumes explicit requests. */
+	public function requestCaretReveal():Void caretRevealPending = true;
+
+	public function preserveViewport():Void caretRevealPending = false;
+
+	public function resolveCaretReveal(height:Float):Bool {
+		setViewportHeight(height);
+		if (!caretRevealPending || !Math.isFinite(height) || height <= 0.0) return false;
+		caretRevealPending = false;
+		return ensureCaretVisible(height);
 	}
 
 	/** Adjusts internal scrolling so the active caret or selection remains in the viewport. */

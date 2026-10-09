@@ -67,6 +67,8 @@ class TextField implements View {
 	public var selectionProvider:Null<Void->TextSelection>;
 	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
 	public var onSelectionChange:Null<TextSelection->Void>;
+	/** Explicit navigation/edit request for owners that manage an outer viewport. */
+	public var onCaretRevealRequest:Null<Void->Void>;
 	/** Additional owner-controlled selections; the primary stays in selectionProvider. */
 	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
 	/** Handles navigation of all selections when additional carets are present. */
@@ -358,16 +360,17 @@ class TextField implements View {
 			}
 			node.add(editorContent);
 
-			var refreshState = function() {
+			var refreshState = function(revealCaret:Bool = true) {
+				if (revealCaret) {
+					editor.requestCaretReveal();
+					if (onCaretRevealRequest != null) onCaretRevealRequest();
+				} else editor.preserveViewport();
 				if (document == null || onChange != null)
 					value = editor.layoutText();
 				semantics.setValueProvider(function() return editor.text, editor.documentLength());
 				semantics.selectionStart = editor.selectionStart;
 				semantics.selectionEnd = editor.selectionEnd;
 				refresh();
-				if (multiline && editorContent.resolved != null &&
-					editor.ensureCaretVisible(editorContent.resolved.height))
-					refresh();
 			};
 			var publishSelection = function() {
 				var handler = onSelectionChange;
@@ -375,9 +378,9 @@ class TextField implements View {
 					handler(new TextSelection(editor.selectionAnchor, editor.selectionFocus,
 						editor.selectionAnchorAffinity, editor.selectionFocusAffinity));
 			};
-			var updateState = function() {
+			var updateState = function(revealCaret:Bool = true) {
 				publishSelection();
-				refreshState();
+				refreshState(revealCaret);
 			};
 			var delegateEdit = function(intent:TextEditIntent):Bool {
 				var handler = onEditIntent;
@@ -481,7 +484,7 @@ class TextField implements View {
 						editor.setViewportHeight(geometry.height);
 						if (editor.tailFollowing && editor.scrollToEnd())
 							refresh();
-					} else if (editor.ensureCaretVisible(geometry.height))
+					} else if (editor.resolveCaretReveal(geometry.height))
 						refresh();
 				}
 			});
@@ -492,7 +495,7 @@ class TextField implements View {
 				drag.layoutResolved();
 				if (onLayoutResolved != null) onLayoutResolved(editor.layout, geometry);
 				if (multiline && !readOnly && editorContent.resolved != null &&
-					editor.ensureCaretVisible(editorContent.resolved.height))
+					editor.resolveCaretReveal(editorContent.resolved.height))
 					refresh();
 				syncCursor(geometry);
 			});
@@ -535,7 +538,7 @@ class TextField implements View {
 					pointer.y - geometry.y + editor.scrollOffsetY, point.y - geometry.y + editor.scrollOffsetY);
 				if (editor.extendPointerSelection(position)) {
 					editor.resetCaretBlink(Sys.time());
-					updateState();
+					updateState(false);
 				}
 			};
 			drag.configure(context.animations, editor, function() return textNode.resolved, extendDrag, function(delta) {
@@ -559,7 +562,7 @@ class TextField implements View {
 					context.gestures.timeSeconds(), event.x, event.y);
 				var changed = editor.beginPointerSelection(position, clickCount, extend);
 				if (changed)
-					updateState();
+					updateState(false);
 				editor.draggingSelection = true;
 				event.preventDefault();
 			});
@@ -646,7 +649,7 @@ class TextField implements View {
 					if (command && (event.key == UiKey.Home || event.key == UiKey.End))
 						navigation = DocumentBoundary(event.key == UiKey.End, extend);
 					if (navigation != null && onNavigationIntent(navigation, editor.layout)) {
-						refresh();
+						refreshState();
 						editor.resetCaretBlink(Sys.time());
 						event.preventDefault();
 						return;
@@ -756,7 +759,7 @@ class TextField implements View {
 					if (textEdited)
 						publishTextChange(previousRevision);
 					else
-						updateState();
+						updateState(!(command && event.key == UiKey.A));
 				}
 				if (handled) {
 					editor.resetCaretBlink(Sys.time());
